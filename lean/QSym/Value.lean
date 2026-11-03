@@ -32,6 +32,20 @@ def mask {α : Type} [Zero α] : Option Bool → Option α → Option α
 
 noncomputable def conj (x : Option ℂ) : Option ℂ := x.map star
 
+def not (p : Option Bool) : Option Bool := p.map Bool.not
+def and : Option Bool → Option Bool → Option Bool
+  | some false, _ => some false
+  | some true, q => q
+  | none, _ => none
+def or : Option Bool → Option Bool → Option Bool
+  | some true, _ => some true
+  | some false, q => q
+  | none, _ => none
+noncomputable def lt (a b : Option ℝ) : Option Bool := do
+  let x ← a; let y ← b; pure (decide (x < y))
+noncomputable def le (a b : Option ℝ) : Option Bool := do
+  let x ← a; let y ← b; pure (decide (x ≤ y))
+
 def Defined {α : Type} (x : Option α) : Prop := ∃ v, x = some v
 
 theorem add_zero_right {α : Type} [AddZeroClass α] (x : Option α) :
@@ -86,6 +100,23 @@ theorem defined_mask {α : Type} [Zero α] (p : Option Bool) (x : Option α) :
 theorem defined_conj (x : Option ℂ) : Defined (conj x) ↔ Defined x := by
   cases x <;> simp [conj, Defined]
 
+theorem defined_not (p : Option Bool) : Defined (not p) ↔ Defined p := by
+  cases p <;> simp [not, Defined]
+theorem defined_and (p q : Option Bool) :
+    Defined (and p q) ↔ p = some false ∨ (p = some true ∧ Defined q) := by
+  cases p with
+  | none => simp [and, Defined]
+  | some p => cases p <;> simp [and, Defined]
+theorem defined_or (p q : Option Bool) :
+    Defined (or p q) ↔ p = some true ∨ (p = some false ∧ Defined q) := by
+  cases p with
+  | none => simp [or, Defined]
+  | some p => cases p <;> simp [or, Defined]
+theorem defined_lt (a b : Option ℝ) : Defined (lt a b) ↔ Defined a ∧ Defined b := by
+  cases a <;> cases b <;> simp [lt, Defined]
+theorem defined_le (a b : Option ℝ) : Defined (le a b) ↔ Defined a ∧ Defined b := by
+  cases a <;> cases b <;> simp [le, Defined]
+
 theorem defined_guarded_inv {α : Type} [Zero α] [Inv α] (x : Option α) :
     Defined (mask (nonzero x) (inv x)) ↔ Defined x := by
   classical
@@ -93,7 +124,7 @@ theorem defined_guarded_inv {α : Type} [Zero α] [Inv α] (x : Option α) :
   | none => simp [nonzero, mask, Defined]
   | some v => by_cases h : v = 0 <;> simp [nonzero, inv, mask, Defined, h]
 
--- These are regression theorems, including the deliberately forbidden 0*x rule.
+-- Strict evaluation is unchanged by simplifications that extend its domain.
 theorem inverse_zero : inv (some (0 : ℝ)) = none := by simp [inv]
 theorem strict_zero_undefined : mul (some (0 : ℝ)) none = none := rfl
 theorem masked_undefined : mask (some false) (none : Option ℝ) = some 0 := rfl

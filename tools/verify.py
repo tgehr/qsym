@@ -27,7 +27,7 @@ def main():
 	def check(path,succeeds=True):
 		cmd=[args.lean] if args.lean else [args.lake,"env","lean"]
 		completed=subprocess.run(cmd+[str(path.resolve())],cwd=ROOT/"lean",
-			stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+			stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=180)
 		if succeeds:
 			if completed.returncode:
 				raise RuntimeError(completed.stdout)
@@ -37,7 +37,7 @@ def main():
 				raise RuntimeError(f"invalid proof was accepted: {path.name}")
 			if not any(s in completed.stdout for s in ("unsolved goals","type mismatch")):
 				raise RuntimeError("negative test failed for the wrong reason:\n"+completed.stdout)
-		print(("checked " if succeeds else "rejected ")+path.name)
+		print(("checked " if succeeds else "rejected ")+path.name,flush=True)
 
 	# Recheck generated theorems here so their full axiom reports are audited,
 	# even when Lake reused cached build outputs.
@@ -45,6 +45,11 @@ def main():
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"build/Syntax.lean")
+	scalars=sorted((ROOT/"build/scalar").glob("*.lean"))
+	if len(scalars)!=28:
+		raise RuntimeError("expected 28 scalar certificates")
+	for file in scalars:
+		check(file)
 	files=sorted((ROOT/"build/certificates").glob("*.lean"))
 	if len(files)!=7:
 		raise RuntimeError("expected seven freshly generated certificates")
@@ -54,14 +59,14 @@ def main():
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
 	bad_rules=negative/"bad.qs"
-	bad_rules.write_text("rule bad(x:ℝ):0·x⇒0;\n",encoding="utf-8")
+	bad_rules.write_text("rule bad(x:ℝ):1·x⇒0;\n",encoding="utf-8")
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad.d"),
 		str(negative/"BadRule.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadRule.lean",succeeds=False)
 
 	good=(ROOT/"build/certificates/Guarded.lean").read_text()
 	corrupt,count=re.subn(
-		r"(theorem simplification \(ρ : Env\) : .*? = )\(Expr.eval ρ n\d+\)( :=)",
+		r"(theorem simplification \(ρ : Env\).*? = )\(Expr.eval ρ n\d+\)( :=)",
 		r"\g<1>some (42 : ℝ)\2",good,count=1)
 	if count!=1:
 		raise RuntimeError("could not construct the tampering test")
@@ -72,6 +77,6 @@ def main():
 if __name__=="__main__":
 	try:
 		main()
-	except (RuntimeError,subprocess.CalledProcessError) as error:
+	except (RuntimeError,subprocess.CalledProcessError,subprocess.TimeoutExpired) as error:
 		print(error,file=sys.stderr)
 		sys.exit(1)

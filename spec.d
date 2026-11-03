@@ -64,23 +64,28 @@ struct Parser{
 			// A signed payload must remain available to real()/complex(), including long.min.
 			if(token.kind==TokenKind.integer){
 				auto p=integer(true);
-				return postfix(p);
+				if(token.kind==TokenKind.power||token.text=="^")
+					return pattern("$neg",[postfix(pattern("$neg",[p]))]);
+				return p;
 			}
 			return pattern("$neg",[factor(depth+1)]);
 		}
 		if(take("⅟")) return pattern("$inv",[factor(depth+1)]);
+		if(take("!")) return pattern("not",[factor(depth+1)]);
 		return postfix(primary(depth));
 	}
 	private Pattern postfix(Pattern p){
-		uint count;
-		while(token.text=="⁻¹"||token.text=="^"){
-			enforce(++count<128,"rule pattern nesting limit exceeded");
-			if(!take("⁻¹")){
-				expect("^"); auto parens=take("("); expect("-");
-				enforce(integer().number==1,"only exponent -1 is supported");
+		if(token.kind==TokenKind.power||token.text=="^"){
+			long exponent;
+			if(token.kind==TokenKind.power){ exponent=to!long(token.text); next(); }
+			else{
+				expect("^"); auto parens=take("("); auto negative=take("-");
+				exponent=integer(negative).number;
 				if(parens) expect(")");
 			}
-			p=pattern("$inv",[p]);
+			enforce(exponent>=-(cast(long)uint.max)&&exponent<=uint.max,"exponent exceeds uint range");
+			if(exponent!=-1) p=pattern("$pow",[p,integerPattern(exponent<0?-exponent:exponent)]);
+			if(exponent<0) p=pattern("$inv",[p]);
 		}
 		return p;
 	}
@@ -104,13 +109,31 @@ struct Parser{
 		}
 		return p;
 	}
-	private Pattern expression(uint depth=0){
+	private Pattern comparison(uint depth){
 		auto p=sum(depth);
-		if(take("!=")){
+		Pattern combined;
+		while(token.text=="!="||token.text=="="||token.text=="<"||token.text==">"||token.text=="<="||token.text==">="){
+			auto op=token.text; next();
 			auto q=sum(depth);
-			enforce(q.name=="#"&&q.number==0,"only nonzero comparisons (x≠0) are supported");
-			p=pattern("$nonzero",[p]);
+			Pattern predicate;
+			if(op=="!="||op=="="){
+				auto difference=q.name=="#"&&q.number==0?p:pattern("$add",[p,pattern("$neg",[q])]);
+				predicate=pattern("$nonzero",[difference]);
+				if(op=="=") predicate=pattern("not",[predicate]);
+			}else predicate=pattern(op=="<"||op==">"?"ltR":"leR",op==">"||op==">="?[q,p]:[p,q]);
+			combined=combined is null?predicate:pattern("and",[combined,predicate]);
+			p=q;
 		}
+		return combined is null?p:combined;
+	}
+	private Pattern conjunction(uint depth){
+		auto p=comparison(depth);
+		while(take("&&")) p=pattern("and",[p,comparison(depth)]);
+		return p;
+	}
+	private Pattern expression(uint depth=0){
+		auto p=conjunction(depth);
+		while(take("||")) p=pattern("or",[p,conjunction(depth)]);
 		return p;
 	}
 	Rule[] parse(){
@@ -153,7 +176,7 @@ struct Parser{
 bool isConstructor(string n){
 	return ["real","complex","true","false","addR","addC","mulR","mulC",
 		"invR","invC","nonzeroR","nonzeroC","maskR","maskC","conj",
-		"lebesgue","puncture","densityAt","forget"].canFind(n);
+		"lebesgue","puncture","densityAt","forget","powR","powC","not","and","or","ltR","leR"].canFind(n);
 }
 
 private Pattern pattern(string name,Pattern[] args){
@@ -173,6 +196,9 @@ private Signature signature(string name){
 	alias R=Sort.real_,C=Sort.complex,B=Sort.boolean,D=Sort.density,M=Sort.measure;
 	switch(name){
 		case "true","false":return Signature(B,[]);
+		case "not":return Signature(B,[B]);
+		case "and","or":return Signature(B,[B,B]);
+		case "ltR","leR":return Signature(B,[R,R]);
 		case "lebesgue":return Signature(D,[]);
 		case "addR","mulR":return Signature(R,[R,R]);
 		case "addC","mulC":return Signature(C,[C,C]);
@@ -208,6 +234,9 @@ private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 	foreach(arg;p.args) args~=possible(arg,parameters,depth+1);
 	uint result;
 	switch(p.name){
+		case "$pow","powR","powC":
+			enforce(arity==2&&p.args[1].name=="#"&&p.args[1].number>=0&&p.args[1].number<=uint.max,"natural exponent expected");
+			result=args[0]&(p.name=="$pow"?scalars:bit(p.name=="powR"?Sort.real_:Sort.complex)); break;
 		case "$add","$mul":
 			enforce(arity==2,"binary operator arity mismatch");
 			result=scalars&args[0]&args[1]; break;
@@ -242,6 +271,7 @@ private Pattern lower(Pattern p,Sort s){
 	if(p.variable) return p;
 	auto suffix=s==Sort.real_?"R":"C";
 	switch(p.name){
+		case "$pow","powR","powC":return pattern("pow"~suffix,[lower(p.args[0],s),p.args[1]]);
 		case "#":return literal(p.number,s);
 		case "real","complex":return p;
 		case "$add":return pattern("add"~suffix,[lower(p.args[0],s),lower(p.args[1],s)]);
@@ -271,6 +301,12 @@ private Sort infer(Pattern p,Parameter[] parameters){
 		p.variable=true; p.sort=v.sort; return p.sort;
 	}
 	enforce(isConstructor(p.name),"unknown constructor or unbound variable: "~p.name);
+	if(p.name=="powR"||p.name=="powC"){
+		p.sort=p.name=="powR"?Sort.real_:Sort.complex;
+		enforce(p.args.length==2&&p.args[1].name=="#"&&p.args[1].number>=0&&p.args[1].number<=uint.max,"natural exponent expected");
+		enforce(infer(p.args[0],parameters)==p.sort,"power type mismatch");
+		return p.sort;
+	}
 	if(p.name=="real"||p.name=="complex"){
 		enforce(p.args.length==(p.name=="real"?1:2),"literal arity mismatch");
 		foreach(arg;p.args) enforce(arg.name=="#","literal integer expected");
@@ -289,7 +325,7 @@ private size_t cost(Pattern p,ref Table!(string,uint) uses){
 	size_t n=1;
 	// Integer payloads aren't IR nodes.
 	if(p.name!="real"&&p.name!="complex")
-		foreach(arg;p.args) n+=cost(arg,uses);
+		foreach(arg;p.args) if(arg.name!="#") n+=cost(arg,uses);
 	return n;
 }
 void validate(ref Rule r){
@@ -349,6 +385,11 @@ unittest{
 		"rule r(x:Real):addR(maskR(nonzeroR(x),invR(x)),real(0))=>maskR(nonzeroR(x),invR(x));");
 	same("rule r(x:ℝ):⅟x+0⇒x^(-1);",
 		"rule r(x:Real):addR(invR(x),real(0))=>invR(x);");
+	same("rule r(x:ℝ):x³+0⇒x^3;","rule r(x:Real):addR(powR(x,3),real(0))=>powR(x,3);");
+	same("rule r(x:ℝ):[0≤x<1]+0⇒[0≤x∧x<1];",
+		"rule r(x:Real):addR(maskR(and(leR(real(0),x),ltR(x,real(1))),real(1)),real(0))=>maskR(and(leR(real(0),x),ltR(x,real(1))),real(1));");
+	same("rule r():[true]·(-2^2)⇒-4;",
+		"rule r():maskR(true,mulR(real(-1),powR(mulR(real(-1),real(-2)),2)))=>real(-4);");
 	same("rule r(x:ℝ):-x+0⇒−x;",
 		"rule r(x:Real):addR(mulR(real(-1),x),real(0))=>mulR(real(-1),x);");
 	same("rule r(z:ℂ):z−0⇒z;",
@@ -368,8 +409,9 @@ unittest{
 	foreach(s;[
 		"rule r(x:ℝ,z:ℂ):x+z⇒z;",
 		"rule r(x:ℝ):[x]⇒0;",
-		"rule r(x:ℝ):[x≠1]⇒0;",
-		"rule r(x:ℝ):x^2⇒x;",
+		"rule r(x:ℂ):[x<1]⇒0;",
+		"rule r(x:ℝ):x^x⇒x;",
+		"rule r(x:ℝ):x^2^3⇒x;",
 		"rule r(x:ℝ):x+0⇒x; garbage",
 		"rule r(x:ℝ):x+0⇒x; rule r(x:ℝ):x+0⇒x;",
 		"rule r(α:ℝ,α:ℝ):α+0⇒α;",

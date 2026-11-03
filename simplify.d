@@ -1,6 +1,7 @@
 module qsym.simplify;
 import qsym.ir;
 import qsym.generated.rules;
+import qsym.algebra:Algebra;
 import std.exception:enforce;
 @safe:
 
@@ -9,9 +10,12 @@ struct Options{
 	DensityMode densityMode=DensityMode.preserve;
 	bool trace=false;
 	size_t maxRewrites=100_000;
+	size_t maxTerms=256;
+	size_t maxAlgebraWork=1_000_000;
+	size_t maxCoefficientWords=512;
 }
 struct Applied{ Term before; Rewrite rule; }
-struct Step{ Term before,rebuilt,result; Applied[] applied; }
+struct Step{ Term before,rebuilt,result; Applied[] applied; Term algebraInput; }
 struct Result{
 	Term input;
 	/// In distributionOnly mode this is forget(input), with type Measure.
@@ -23,8 +27,8 @@ struct Result{
 }
 
 /// Proof search only. Generated Lean certificates are the trust boundary.
-/// All child rewriting uses pointwise partial-value equality. Erasure happens
-/// once, at the requested root, and cannot flow back to densityAt.
+/// Results agree with the original wherever the original was defined; the
+/// result may have a larger domain. Erasure remains an explicit root operation.
 Result simplify(Arena a,Term input,Options options=Options.init){
 	a.check(input);
 	auto root=input;
@@ -38,6 +42,7 @@ Result simplify(Arena a,Term input,Options options=Options.init){
 	auto order=a.postorder(root);
 	Term[] memo=new Term[a.length];
 	size_t remaining=options.maxRewrites;
+	auto algebra=new Algebra(a,options.maxTerms,options.maxAlgebraWork,options.maxCoefficientWords);
 	foreach(i;order){
 		auto original=a.at(i);
 		auto n=a.node(original);
@@ -56,19 +61,22 @@ Result simplify(Arena a,Term input,Options options=Options.init){
 			if(options.trace) applied~=Applied(current,r);
 			current=r.result; --remaining;
 		}
-		memo[i]=current;
-		if(options.trace) result.steps~=Step(original,rebuilt,current,applied);
+		auto normalized=remaining?algebra.normalize(current):current;
+		memo[i]=normalized;
+		if(options.trace) result.steps~=Step(original,rebuilt,normalized,applied,current);
 	}
+	result.exhausted|=algebra.exhausted;
 	result.output=memo[root.id];
 	return result;
 }
 
-enum Equivalence{ sameNormalForm,unknown }
-/// Different normal forms do not prove inequivalence.
+enum Equivalence{ agreeOnCommonDomain,unknown }
+/// A shared normal form proves agreement where BOTH inputs are defined. It
+/// does not prove equality of domains; different forms remain inconclusive.
 Equivalence equivalent(Arena a,Term left,Term right,Options options=Options.init){
 	enforce(a.sort(left)==a.sort(right),"equivalence requires equal types");
 	return simplify(a,left,options).output==simplify(a,right,options).output
-		?Equivalence.sameNormalForm:Equivalence.unknown;
+		?Equivalence.agreeOnCommonDomain:Equivalence.unknown;
 }
 
 unittest{
@@ -79,7 +87,7 @@ unittest{
 	auto r=simplify(a,a.add(a.mul(x,one),zero),Options(DensityMode.preserve,true));
 	assert(r.output==x&&r.traced&&!r.exhausted);
 	auto bad=a.mul(zero,a.inv(zero));
-	assert(simplify(a,bad).output==bad); // strict 0*undefined is undefined
+	assert(simplify(a,bad).output==zero); // extends the empty original domain
 	assert(simplify(a,a.mask(a.boolean(false),a.inv(zero))).output==zero);
 	auto d=a.puncture(a.lebesgue());
 	assert(simplify(a,d).output==d);
@@ -87,7 +95,7 @@ unittest{
 	assert(erased.output==a.forget(a.lebesgue()));
 	assert(a.sort(erased.output)==Sort.measure);
 	assert(equivalent(a,d,a.lebesgue())==Equivalence.unknown);
-	assert(equivalent(a,d,a.lebesgue(),Options(DensityMode.distributionOnly))==Equivalence.sameNormalForm);
+	assert(equivalent(a,d,a.lebesgue(),Options(DensityMode.distributionOnly))==Equivalence.agreeOnCommonDomain);
 	auto limited=simplify(a,a.add(x,zero),Options(DensityMode.preserve,true,0));
 	assert(limited.exhausted&&limited.output==a.add(x,zero));
 	auto z=a.variable(Sort.complex,0);

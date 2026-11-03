@@ -40,6 +40,30 @@ Rewrite rewrite(Arena a,Term root,bool trace){
 				auto v_x=a.child(root,1);
 				return Rewrite(true,v_x,"r_complex_one_mul",trace?[v_x]:null);
 			}
+			if(a.node(root).op==Op.mul&&a.sort(root)==Sort.real_&&a.node(a.child(root,1)).op==Op.realLit&&a.sort(a.child(root,1))==Sort.real_&&a.node(a.child(root,1)).value==0L){
+				auto v_x=a.child(root,0);
+				return Rewrite(true,a.real_((0L)),"r_real_mul_zero",trace?[v_x]:null);
+			}
+			if(a.node(root).op==Op.mul&&a.sort(root)==Sort.real_&&a.node(a.child(root,0)).op==Op.realLit&&a.sort(a.child(root,0))==Sort.real_&&a.node(a.child(root,0)).value==0L){
+				auto v_x=a.child(root,1);
+				return Rewrite(true,a.real_((0L)),"r_real_zero_mul",trace?[v_x]:null);
+			}
+			if(a.node(root).op==Op.mul&&a.sort(root)==Sort.real_&&a.node(a.child(root,1)).op==Op.inv&&a.sort(a.child(root,1))==Sort.real_&&a.child(a.child(root,1),0)==a.child(root,0)){
+				auto v_x=a.child(root,0);
+				return Rewrite(true,a.real_((1L)),"r_real_div_self",trace?[v_x]:null);
+			}
+			if(a.node(root).op==Op.mul&&a.sort(root)==Sort.complex&&a.node(a.child(root,1)).op==Op.complexLit&&a.sort(a.child(root,1))==Sort.complex&&a.node(a.child(root,1)).value==0L&&a.node(a.child(root,1)).imaginary==0L){
+				auto v_x=a.child(root,0);
+				return Rewrite(true,a.complex((0L),(0L)),"r_complex_mul_zero",trace?[v_x]:null);
+			}
+			if(a.node(root).op==Op.mul&&a.sort(root)==Sort.complex&&a.node(a.child(root,0)).op==Op.complexLit&&a.sort(a.child(root,0))==Sort.complex&&a.node(a.child(root,0)).value==0L&&a.node(a.child(root,0)).imaginary==0L){
+				auto v_x=a.child(root,1);
+				return Rewrite(true,a.complex((0L),(0L)),"r_complex_zero_mul",trace?[v_x]:null);
+			}
+			if(a.node(root).op==Op.mul&&a.sort(root)==Sort.complex&&a.node(a.child(root,1)).op==Op.inv&&a.sort(a.child(root,1))==Sort.complex&&a.child(a.child(root,1),0)==a.child(root,0)){
+				auto v_x=a.child(root,0);
+				return Rewrite(true,a.complex((1L),(0L)),"r_complex_div_self",trace?[v_x]:null);
+			}
 			break;
 		case Op.mask:
 			if(a.node(root).op==Op.mask&&a.sort(root)==Sort.real_&&a.node(a.child(root,0)).op==Op.boolLit&&a.sort(a.child(root,0))==Sort.boolean&&a.node(a.child(root,0)).value==1){
@@ -58,6 +82,14 @@ Rewrite rewrite(Arena a,Term root,bool trace){
 				auto v_x=a.child(root,1);
 				return Rewrite(true,a.complex((0L),(0L)),"r_complex_mask_false",trace?[v_x]:null);
 			}
+			if(a.node(root).op==Op.mask&&a.sort(root)==Sort.real_&&a.node(a.child(root,1)).op==Op.realLit&&a.sort(a.child(root,1))==Sort.real_&&a.node(a.child(root,1)).value==0L){
+				auto v_p=a.child(root,0);
+				return Rewrite(true,a.real_((0L)),"r_real_mask_zero",trace?[v_p]:null);
+			}
+			if(a.node(root).op==Op.mask&&a.sort(root)==Sort.complex&&a.node(a.child(root,1)).op==Op.complexLit&&a.sort(a.child(root,1))==Sort.complex&&a.node(a.child(root,1)).value==0L&&a.node(a.child(root,1)).imaginary==0L){
+				auto v_p=a.child(root,0);
+				return Rewrite(true,a.complex((0L),(0L)),"r_complex_mask_zero",trace?[v_p]:null);
+			}
 			break;
 		case Op.conj:
 			if(a.node(root).op==Op.conj&&a.sort(root)==Sort.complex&&a.node(a.child(root,0)).op==Op.conj&&a.sort(a.child(root,0))==Sort.complex){
@@ -69,6 +101,16 @@ Rewrite rewrite(Arena a,Term root,bool trace){
 			if(a.node(root).op==Op.forget&&a.sort(root)==Sort.measure&&a.node(a.child(root,0)).op==Op.puncture&&a.sort(a.child(root,0))==Sort.density){
 				auto v_d=a.child(a.child(root,0),0);
 				return Rewrite(true,a.forget(v_d),"r_erase_puncture",trace?[v_d]:null);
+			}
+			break;
+		case Op.inv:
+			if(a.node(root).op==Op.inv&&a.sort(root)==Sort.real_&&a.node(a.child(root,0)).op==Op.inv&&a.sort(a.child(root,0))==Sort.real_){
+				auto v_x=a.child(a.child(root,0),0);
+				return Rewrite(true,v_x,"r_real_inv_inv",trace?[v_x]:null);
+			}
+			if(a.node(root).op==Op.inv&&a.sort(root)==Sort.complex&&a.node(a.child(root,0)).op==Op.inv&&a.sort(a.child(root,0))==Sort.complex){
+				auto v_x=a.child(a.child(root,0),0);
+				return Rewrite(true,v_x,"r_complex_inv_inv",trace?[v_x]:null);
 			}
 			break;
 		default:break;

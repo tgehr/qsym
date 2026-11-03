@@ -21,7 +21,7 @@ import qsym.spec;
 	assert(simplify(a,t).output==x);
 	// Sharing: both arguments point at the same subterm.
 	auto sharedTerm=a.add(a.add(x,z),a.add(x,z));
-	assert(simplify(a,sharedTerm).output==a.add(x,x));
+	assert(simplify(a,sharedTerm).output==a.mul(a.real_(2),x));
 }
 
 void main(){}

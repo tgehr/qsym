@@ -20,6 +20,8 @@ structure Env where
 inductive Expr : Ty → Type where
   | real (n : Int) : Expr .real
   | complex (re im : Int) : Expr .complex
+  | ratR (q : ℚ) : Expr .real
+  | ratC (re im : ℚ) : Expr .complex
   | bool (b : Bool) : Expr .bool
   | varR (i : Nat) : Expr .real
   | varC (i : Nat) : Expr .complex
@@ -30,8 +32,15 @@ inductive Expr : Ty → Type where
   | mulC : Expr .complex → Expr .complex → Expr .complex
   | invR : Expr .real → Expr .real
   | invC : Expr .complex → Expr .complex
+  | powR : Expr .real → Nat → Expr .real
+  | powC : Expr .complex → Nat → Expr .complex
   | nonzeroR : Expr .real → Expr .bool
   | nonzeroC : Expr .complex → Expr .bool
+  | not : Expr .bool → Expr .bool
+  | and : Expr .bool → Expr .bool → Expr .bool
+  | or : Expr .bool → Expr .bool → Expr .bool
+  | ltR : Expr .real → Expr .real → Expr .bool
+  | leR : Expr .real → Expr .real → Expr .bool
   | maskR : Expr .bool → Expr .real → Expr .real
   | maskC : Expr .bool → Expr .complex → Expr .complex
   | conj : Expr .complex → Expr .complex
@@ -44,6 +53,8 @@ namespace Expr
 noncomputable def eval (ρ : Env) : {s : Ty} → Expr s → Option s.denote
   | _, .real n => some (n : ℝ)
   | _, .complex r i => some ((r : ℂ) + (i : ℂ) * Complex.I)
+  | _, .ratR q => some (q : ℝ)
+  | _, .ratC r i => some ((r : ℂ) + (i : ℂ) * Complex.I)
   | _, .bool b => some b
   | _, .varR i => some (ρ.real i)
   | _, .varC i => some (ρ.complex i)
@@ -54,8 +65,15 @@ noncomputable def eval (ρ : Env) : {s : Ty} → Expr s → Option s.denote
   | _, .mulC a b => Value.mul (eval ρ a) (eval ρ b)
   | _, .invR a => Value.inv (eval ρ a)
   | _, .invC a => Value.inv (eval ρ a)
+  | _, .powR a n => (eval ρ a).map (· ^ n)
+  | _, .powC a n => (eval ρ a).map (· ^ n)
   | _, .nonzeroR a => Value.nonzero (eval ρ a)
   | _, .nonzeroC a => Value.nonzero (eval ρ a)
+  | _, .not p => Value.not (eval ρ p)
+  | _, .and p q => Value.and (eval ρ p) (eval ρ q)
+  | _, .or p q => Value.or (eval ρ p) (eval ρ q)
+  | _, .ltR a b => Value.lt (eval ρ a) (eval ρ b)
+  | _, .leR a b => Value.le (eval ρ a) (eval ρ b)
   | _, .maskR p a => Value.mask (eval ρ p) (eval ρ a)
   | _, .maskC p a => Value.mask (eval ρ p) (eval ρ a)
   | _, .conj a => Value.conj (eval ρ a)

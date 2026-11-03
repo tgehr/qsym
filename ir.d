@@ -6,13 +6,14 @@ import std.exception:enforce;
 import std.conv:to;
 import qsym.buffer:Buffer;
 import qsym.table:Table;
+public import qsym.number:BigInt,Rational,Number;
 
 @safe:
 
 enum Sort:ubyte{ real_,complex,boolean,density,measure }
 enum Op:ubyte{
 	realLit,complexLit,boolLit,variable,add,mul,inv,nonzero,
-	mask,conj,lebesgue,puncture,densityAt,forget
+	mask,conj,lebesgue,puncture,densityAt,forget,numberLit,pow,not_,and_,or_,lt,le
 }
 
 /// Public handles carry ownership; internal edges are compact arena-local IDs.
@@ -40,6 +41,8 @@ final class Arena{
 	private bool closed;
 	private Buffer!Node nodes;
 	private Table!(Node,uint,hash) table;
+	private Number[] numbers;
+	private Table!(string,uint) numberIndex;
 
 	private static size_t hash(Node n)pure nothrow @nogc{
 		ulong h=14695981039346656037UL;
@@ -84,6 +87,31 @@ final class Arena{
 	Term complex(long r,long i=0){
 		return intern(Node(Op.complexLit,Sort.complex,0,uint.max,uint.max,r,i));
 	}
+	Term real_(Rational r){ return number(Number(r),Sort.real_); }
+	Term complex(Rational r,Rational i=Rational.init){ return number(Number(r,i),Sort.complex); }
+	Term number(Number v,Sort s){
+		enforce(!closed,"arena is closed");
+		enforce(s==Sort.real_||s==Sort.complex,"number requires a scalar type");
+		enforce(s!=Sort.real_||v.im.zero,"real number has an imaginary component");
+		if(v.re.small&&v.im.small)
+			return s==Sort.real_?real_(v.re.integer):complex(v.re.integer,v.im.integer);
+		auto key=v.toString;
+		auto i=numberIndex.get(key,uint.max);
+		if(i==uint.max){
+			enforce(numbers.length<uint.max,"number pool exceeds 32-bit limit");
+			i=cast(uint)numbers.length; numbers~=v; numberIndex.set(key,i);
+		}
+		return intern(Node(Op.numberLit,s,0,uint.max,uint.max,i));
+	}
+	bool isNumber(Term t)const{ auto op=node(t).op; return op==Op.realLit||op==Op.complexLit||op==Op.numberLit; }
+	Number number(Term t)const{
+		return number(node(t));
+	}
+	Number number(Node n)const{
+		enforce(n.op==Op.realLit||n.op==Op.complexLit||n.op==Op.numberLit,"expected a number");
+		if(n.op==Op.numberLit) enforce(n.value>=0&&n.value<numbers.length,"invalid number index");
+		return n.op==Op.numberLit?numbers[cast(size_t)n.value]:Number(n.value,n.imaginary);
+	}
 	Term boolean(bool b){ return intern(Node(Op.boolLit,Sort.boolean,0,uint.max,uint.max,b)); }
 	Term variable(Sort s,uint i){
 		enforce(s==Sort.real_||s==Sort.complex||s==Sort.boolean,
@@ -101,8 +129,29 @@ final class Arena{
 	}
 	Term add(Term a,Term b){ return binary(Op.add,a,b); }
 	Term mul(Term a,Term b){ return binary(Op.mul,a,b); }
+	Term neg(Term a){ scalar(a); return mul(number(Number(-1),sort(a)),a); }
+	Term sub(Term a,Term b){ return add(a,neg(b)); }
+	Term div(Term a,Term b){ return mul(a,inv(b)); }
 	Term inv(Term a){ scalar(a); return intern(Node(Op.inv,sort(a),1,a.id)); }
+	Term pow(Term a,uint n){ scalar(a); return intern(Node(Op.pow,sort(a),1,a.id,uint.max,n)); }
 	Term nonzero(Term a){ scalar(a); return intern(Node(Op.nonzero,Sort.boolean,1,a.id)); }
+	Term equal(Term a,Term b){ return not_(nonzero(sub(a,b))); }
+	Term not_(Term a){
+		enforce(sort(a)==Sort.boolean,"not requires Bool");
+		return intern(Node(Op.not_,Sort.boolean,1,a.id));
+	}
+	private Term logical(Op op,Term a,Term b){
+		enforce(sort(a)==Sort.boolean&&sort(b)==Sort.boolean,"logical operation requires Bool");
+		return intern(Node(op,Sort.boolean,2,a.id,b.id));
+	}
+	Term and_(Term a,Term b){ return logical(Op.and_,a,b); }
+	Term or_(Term a,Term b){ return logical(Op.or_,a,b); }
+	private Term comparison(Op op,Term a,Term b){
+		enforce(sort(a)==Sort.real_&&sort(b)==Sort.real_,"ordering requires Real");
+		return intern(Node(op,Sort.boolean,2,a.id,b.id));
+	}
+	Term lt(Term a,Term b){ return comparison(Op.lt,a,b); }
+	Term le(Term a,Term b){ return comparison(Op.le,a,b); }
 	Term mask(Term p,Term a){
 		enforce(sort(p)==Sort.boolean,"mask predicate must be Bool");
 		scalar(a);
@@ -133,11 +182,17 @@ final class Arena{
 		auto n=node(original);
 		enforce(cs.length==n.arity,"wrong arity");
 		final switch(n.op){
-			case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue:
+			case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue,Op.numberLit:
 				return original;
 			case Op.add:return add(cs[0],cs[1]);
 			case Op.mul:return mul(cs[0],cs[1]);
 			case Op.inv:return inv(cs[0]);
+			case Op.pow:return pow(cs[0],cast(uint)n.value);
+			case Op.not_:return not_(cs[0]);
+			case Op.and_:return and_(cs[0],cs[1]);
+			case Op.or_:return or_(cs[0],cs[1]);
+			case Op.lt:return lt(cs[0],cs[1]);
+			case Op.le:return le(cs[0],cs[1]);
 			case Op.nonzero:return nonzero(cs[0]);
 			case Op.mask:return mask(cs[0],cs[1]);
 			case Op.conj:return conj(cs[0]);
@@ -147,22 +202,18 @@ final class Arena{
 		}
 	}
 
-	/// Iterative reachability followed by ID order. Arena edges always point
-	/// backwards, so ascending IDs are a topological order. O(R log R) for R
-	/// reachable nodes; no recursion and no repeated shrinking/append of slices.
+	/// Iterative left-to-right DFS: linear work, no recursion, and traversal
+	/// independent of arena allocation order (including budget-limited runs).
 	uint[] postorder(Term root){
-		import std.algorithm:sort;
 		check(root);
 		bool[] seen=new bool[nodes.length];
-		uint[] result=[root.id];
-		seen[root.id]=true;
-		size_t cursor;
-		while(cursor<result.length){
-			auto n=nodes[result[cursor++]];
-			if(n.arity>=1&&!seen[n.a]){ seen[n.a]=true; result~=n.a; }
-			if(n.arity==2&&!seen[n.b]){ seen[n.b]=true; result~=n.b; }
+		uint[] result,stack=[root.id];
+		while(stack.length){
+			auto id=stack[$-1],n=nodes[id];
+			if(n.arity>=1&&!seen[n.a]){ stack~=n.a; continue; }
+			if(n.arity==2&&!seen[n.b]){ stack~=n.b; continue; }
+			seen[id]=true; result~=id; --stack.length;
 		}
-		sort(result);
 		return result;
 	}
 
@@ -189,6 +240,8 @@ struct Session{
 		handle.closed=true;
 		handle.nodes=typeof(handle.nodes).init;
 		handle.table=typeof(handle.table).init;
+		handle.numbers=null;
+		handle.numberIndex=typeof(handle.numberIndex).init;
 		handle=null;
 	}
 	~this()nothrow{ close(); }
@@ -215,6 +268,8 @@ string dump(Arena a,Term root){
 		if(n.op==Op.realLit||n.op==Op.complexLit||n.op==Op.boolLit||n.op==Op.variable)
 			result~=" "~to!string(n.value);
 		if(n.op==Op.complexLit) result~=" "~to!string(n.imaginary)~"i";
+		if(n.op==Op.numberLit) result~=" "~a.number(a.at(i)).toString;
+		if(n.op==Op.pow) result~=" "~to!string(n.value);
 		result~="\n";
 	}
 	return result;

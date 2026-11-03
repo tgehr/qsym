@@ -28,6 +28,8 @@ test: generate
 	./build/rulec tests/syntax.qs build/syntax.d build/Syntax.lean
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/generated.d build/syntax.d -of=build/syntax-tests
 	./build/syntax-tests
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/scalar.d -of=build/scalar-tests
+	./build/scalar-tests --DRT-testmode=run-main build/scalar
 
 demo: build/qsym
 	./build/qsym demo

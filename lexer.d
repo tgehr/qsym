@@ -9,7 +9,7 @@ import std.conv:to;
 import std.string:startsWith;
 @safe:
 
-enum TokenKind{ end,identifier,integer,symbol }
+enum TokenKind{ end,identifier,integer,symbol,power }
 struct Token{ TokenKind kind; string text; size_t offset; }
 
 struct Lexer{
@@ -34,13 +34,21 @@ struct Lexer{
 	Token next(){
 		ws(); auto start=pos;
 		if(pos==source.length) return Token(TokenKind.end,"",pos);
-		foreach(s;["=>","⇒","→","!=","≠","⁻¹"]){
+		foreach(s;["=>","⇒","→","!=","≠","<=","≤",">=","≥","==","&&","||"]){
 			if(source[pos..$].startsWith(s)){
 				pos+=s.length;
-				return Token(TokenKind.symbol,s=="⇒"||s=="→"?"=>":s=="≠"?"!=":s,start);
+				return Token(TokenKind.symbol,s=="⇒"||s=="→"?"=>":s=="≠"?"!=":s=="≤"?"<=":s=="≥"?">=":s=="=="?"=":s,start);
 			}
 		}
 		auto c=cur();
+		if(c=='⁻'||superscript(c)>=0){
+			string exponent;
+			if(c=='⁻'){ exponent="-"; advance(); }
+			auto begin=pos;
+			while(pos<source.length&&superscript(cur())>=0){ exponent~=cast(char)('0'+superscript(cur())); advance(); }
+			if(pos==begin) throw new Exception("superscript exponent expected");
+			return Token(TokenKind.power,exponent,start);
+		}
 		if(isDigit(c)){
 			do{ advance(); }while(pos<source.length&&isDigit(cur()));
 			return Token(TokenKind.integer,source[start..pos],start);
@@ -56,10 +64,17 @@ struct Lexer{
 			case '·','⋅','×':symbol="*"; break;
 			case '÷':symbol="/"; break;
 			case '−':symbol="-"; break;
-			case '(',')','[',']',',',':',';','+','-','*','/','^','⅟','ⅈ':symbol=source[start..pos]; break;
+			case '∧':symbol="&&"; break;
+			case '∨':symbol="||"; break;
+			case '¬':symbol="!"; break;
+			case '(',')','[',']',',',':',';','+','-','*','/','^','⅟','ⅈ','<','>','=','!':symbol=source[start..pos]; break;
 			default:throw new Exception("unexpected character '"~source[start..pos]~"' at byte "~to!string(start));
 		}
 		return Token(TokenKind.symbol,symbol,start);
+	}
+	private static int superscript(dchar c){
+		foreach(i,x;"⁰¹²³⁴⁵⁶⁷⁸⁹"d) if(c==x) return cast(int)i;
+		return -1;
 	}
 }
 

@@ -28,14 +28,14 @@ DomainBounds domain(Arena a,Term root){
 		string f;
 		bool total;
 		final switch(n.op){
-			case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue:
+			case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue,Op.numberLit:
 				f="True"; total=true; break;
-			case Op.add,Op.mul,Op.densityAt:
+			case Op.add,Op.mul,Op.densityAt,Op.lt,Op.le:
 				total=top[n.a]&&top[n.b];
 				f=total?"True":"(D(%"~to!string(n.a)~") and D(%"~to!string(n.b)~"))"; break;
 			case Op.inv:
 				f="defined(%"~to!string(n.a)~") and value(%"~to!string(n.a)~") != 0"; break;
-			case Op.nonzero,Op.conj,Op.puncture,Op.forget:
+			case Op.nonzero,Op.conj,Op.puncture,Op.forget,Op.pow,Op.not_:
 				f=formulas[n.a]; total=top[n.a]; break;
 			case Op.mask:
 				if(isGuardedInverse(a,t)){
@@ -48,6 +48,13 @@ DomainBounds domain(Arena a,Term root){
 					else f="(value(%"~to!string(n.a)~") = false or (value(%"~
 						to!string(n.a)~") = true and D(%"~to!string(n.b)~")))";
 				}
+				break;
+			case Op.and_,Op.or_:
+				auto p=a.node(a.at(n.a));
+				auto stop=n.op==Op.and_?0:1;
+				total=top[n.a]&&(top[n.b]||p.op==Op.boolLit&&p.value==stop);
+				f=total?"True":"(value(%"~to!string(n.a)~") = "~(stop?"true":"false")~
+					" or (value(%"~to!string(n.a)~") = "~(stop?"false":"true")~" and D(%"~to!string(n.b)~")))";
 				break;
 		}
 		formulas[i]=f; top[i]=total;
