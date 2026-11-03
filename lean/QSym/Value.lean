@@ -31,6 +31,7 @@ def mask {α : Type} [Zero α] : Option Bool → Option α → Option α
   | none, _ => none
 
 noncomputable def conj (x : Option ℂ) : Option ℂ := x.map star
+noncomputable def abs (x : Option ℝ) : Option ℝ := x.map (fun v => |v|)
 
 def not (p : Option Bool) : Option Bool := p.map Bool.not
 def and : Option Bool → Option Bool → Option Bool

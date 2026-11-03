@@ -35,7 +35,7 @@ DomainBounds domain(Arena a,Term root){
 				f=total?"True":"(D(%"~to!string(n.a)~") and D(%"~to!string(n.b)~"))"; break;
 			case Op.inv:
 				f="defined(%"~to!string(n.a)~") and value(%"~to!string(n.a)~") != 0"; break;
-			case Op.nonzero,Op.conj,Op.puncture,Op.forget,Op.pow,Op.not_:
+			case Op.nonzero,Op.conj,Op.puncture,Op.forget,Op.pow,Op.not_,Op.abs:
 				f=formulas[n.a]; total=top[n.a]; break;
 			case Op.mask:
 				if(isGuardedInverse(a,t)){

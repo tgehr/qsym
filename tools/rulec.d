@@ -19,6 +19,7 @@ string dOp(string n){
 		case "invR","invC":return "inv";
 		case "nonzeroR","nonzeroC":return "nonzero";
 		case "powR","powC":return "pow";
+		case "absR":return "abs";
 		case "ltR":return "lt";
 		case "leR":return "le";
 		case "not","and","or":return n~"_";

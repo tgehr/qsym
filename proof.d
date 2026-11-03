@@ -30,6 +30,7 @@ string leanConstructor(Arena a,Node n){
 		case Op.mul:op="mul"~suffix; break;
 		case Op.inv:op="inv"~suffix; break;
 		case Op.pow:return "(.pow"~suffix~" "~name(n.a)~" "~to!string(n.value)~")";
+		case Op.abs:op="absR"; break;
 		case Op.not_:op="not"; break;
 		case Op.and_:op="and"; break;
 		case Op.or_:op="or"; break;
@@ -64,6 +65,7 @@ private string semantic(Arena a,Node n){
 		case Op.mul:return "Value.mul "~ev(n.a)~" "~ev(n.b);
 		case Op.inv:return "Value.inv "~ev(n.a);
 		case Op.pow:return ev(n.a)~".map (fun x => x ^ "~to!string(n.value)~")";
+		case Op.abs:return "Value.abs "~ev(n.a);
 		case Op.not_:return "Value.not "~ev(n.a);
 		case Op.and_:return "Value.and "~ev(n.a)~" "~ev(n.b);
 		case Op.or_:return "Value.or "~ev(n.a)~" "~ev(n.b);
@@ -99,7 +101,7 @@ private string domainCode(Arena a,Term t){
 			cond=dc(n.a);
 			proof="exact (Value."~(n.op==Op.nonzero?"defined_nonzero":n.op==Op.not_?"defined_not":"defined_conj")~
 				" "~ev(n.a)~").trans "~ds(n.a); break;
-		case Op.pow:
+		case Op.pow,Op.abs:
 			cond=dc(n.a);
 			proof="exact (Value.defined_map _ "~ev(n.a)~").trans "~ds(n.a); break;
 		case Op.puncture,Op.forget:
@@ -184,7 +186,7 @@ string exportLean(Arena a,Result result){
 				case Op.le:lemma="refines_le "~h1~" "~h2; break;
 				case Op.mask:lemma="refines_mask "~h1~" "~h2; break;
 				case Op.densityAt:lemma="refines_densityAt "~h1~" "~h2; break;
-				case Op.pow,Op.puncture,Op.forget:lemma="refines_map _ "~h1; break;
+				case Op.pow,Op.abs,Op.puncture,Op.forget:lemma="refines_map _ "~h1; break;
 				default:assert(0,"unexpected congruence");
 			}
 			s~="    exact Value."~lemma~"\n";
@@ -221,10 +223,10 @@ string exportLean(Arena a,Result result){
 	s~="#print axioms definedness\n";
 	if(domain(a,result.input).everywhere){
 		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" := by\n"~
-			"  apply (definedness ρ).mpr\n  simp [";
+			"  apply (definedness ρ).mpr\n  simp only [";
 		string[] defs;
 		foreach(i,used;needed) if(used){ defs~="d"~to!string(i); defs~=name(cast(uint) i); }
-		s~=defs.join(", ")~", Expr.eval]\n#print axioms everywhere_defined\n";
+		s~=defs.join(", ")~", Expr.eval]\n  all_goals qsym_defined\n#print axioms everywhere_defined\n";
 	}
 	return s~"end QSym.Certificate\n";
 }

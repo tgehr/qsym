@@ -113,6 +113,16 @@ Rewrite rewrite(Arena a,Term root,bool trace){
 				return Rewrite(true,v_x,"r_complex_inv_inv",trace?[v_x]:null);
 			}
 			break;
+		case Op.abs:
+			if(a.node(root).op==Op.abs&&a.sort(root)==Sort.real_&&a.node(a.child(root,0)).op==Op.abs&&a.sort(a.child(root,0))==Sort.real_){
+				auto v_x=a.child(a.child(root,0),0);
+				return Rewrite(true,a.abs(v_x),"r_real_abs_abs",trace?[v_x]:null);
+			}
+			if(a.node(root).op==Op.abs&&a.sort(root)==Sort.real_&&a.node(a.child(root,0)).op==Op.mul&&a.sort(a.child(root,0))==Sort.real_&&a.node(a.child(a.child(root,0),0)).op==Op.realLit&&a.sort(a.child(a.child(root,0),0))==Sort.real_&&a.node(a.child(a.child(root,0),0)).value==-1L){
+				auto v_x=a.child(a.child(root,0),1);
+				return Rewrite(true,a.abs(v_x),"r_real_abs_neg",trace?[v_x]:null);
+			}
+			break;
 		default:break;
 	}
 	return Rewrite(false,root);

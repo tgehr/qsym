@@ -145,4 +145,16 @@ theorem r_complex_mask_zero (ρ : Env) (v_p : Expr .bool) :
 
 #print axioms r_complex_mask_zero
 
+theorem r_real_abs_abs (ρ : Env) (v_x : Expr .real) :
+    Value.Refines (Expr.eval ρ (.absR (.absR v_x))) (Expr.eval ρ (.absR v_x)) := by
+  qsym_rule
+
+#print axioms r_real_abs_abs
+
+theorem r_real_abs_neg (ρ : Env) (v_x : Expr .real) :
+    Value.Refines (Expr.eval ρ (.absR (.mulR (.real (-1)) v_x))) (Expr.eval ρ (.absR v_x)) := by
+  qsym_rule
+
+#print axioms r_real_abs_neg
+
 end QSym.Generated

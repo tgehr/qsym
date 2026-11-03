@@ -45,6 +45,7 @@ struct Parser{
 		enforce(depth<128,"rule pattern nesting limit exceeded");
 		if(take("(")){ auto p=expression(depth+1); expect(")"); return p; }
 		if(take("[")){ auto p=expression(depth+1); expect("]"); return pattern("$iverson",[p]); }
+		if(take("|")){ auto p=expression(depth+1); expect("|"); return pattern("absR",[p]); }
 		if(take("ⅈ")) return pattern("complex",[integerPattern(0),integerPattern(1)]);
 		if(token.kind==TokenKind.integer) return integer();
 		auto p=new Pattern(ident());
@@ -55,6 +56,7 @@ struct Parser{
 			}
 		}
 		if(p.name=="inv"||p.name=="nonzero"||p.name=="mask") p.name="$"~p.name;
+		if(p.name=="abs") p.name="absR";
 		return p;
 	}
 	private Pattern factor(uint depth){
@@ -157,7 +159,7 @@ struct Parser{
 						default:throw new Exception("unknown sort: "~ty);
 					}
 					foreach(old;r.parameters) enforce(old.name!=name,"duplicate parameter");
-					enforce(!isConstructor(name)&&name!="inv"&&name!="nonzero"&&name!="mask","parameter shadows a constructor");
+					enforce(!isConstructor(name)&&name!="inv"&&name!="nonzero"&&name!="mask"&&name!="abs","parameter shadows a constructor");
 					r.parameters~=Parameter(name,s);
 				}while(take(","));
 				expect(")");
@@ -176,7 +178,7 @@ struct Parser{
 bool isConstructor(string n){
 	return ["real","complex","true","false","addR","addC","mulR","mulC",
 		"invR","invC","nonzeroR","nonzeroC","maskR","maskC","conj",
-		"lebesgue","puncture","densityAt","forget","powR","powC","not","and","or","ltR","leR"].canFind(n);
+		"lebesgue","puncture","densityAt","forget","powR","powC","not","and","or","ltR","leR","absR"].canFind(n);
 }
 
 private Pattern pattern(string name,Pattern[] args){
@@ -202,7 +204,7 @@ private Signature signature(string name){
 		case "lebesgue":return Signature(D,[]);
 		case "addR","mulR":return Signature(R,[R,R]);
 		case "addC","mulC":return Signature(C,[C,C]);
-		case "invR":return Signature(R,[R]);
+		case "invR","absR":return Signature(R,[R]);
 		case "invC","conj":return Signature(C,[C]);
 		case "nonzeroR":return Signature(B,[R]);
 		case "nonzeroC":return Signature(B,[C]);
@@ -386,6 +388,7 @@ unittest{
 	same("rule r(x:ℝ):⅟x+0⇒x^(-1);",
 		"rule r(x:Real):addR(invR(x),real(0))=>invR(x);");
 	same("rule r(x:ℝ):x³+0⇒x^3;","rule r(x:Real):addR(powR(x,3),real(0))=>powR(x,3);");
+	same("rule r(x:ℝ):|x|+0⇒abs(x);","rule r(x:Real):addR(absR(x),real(0))=>absR(x);");
 	same("rule r(x:ℝ):[0≤x<1]+0⇒[0≤x∧x<1];",
 		"rule r(x:Real):addR(maskR(and(leR(real(0),x),ltR(x,real(1))),real(1)),real(0))=>maskR(and(leR(real(0),x),ltR(x,real(1))),real(1));");
 	same("rule r():[true]·(-2^2)⇒-4;",
@@ -410,6 +413,7 @@ unittest{
 		"rule r(x:ℝ,z:ℂ):x+z⇒z;",
 		"rule r(x:ℝ):[x]⇒0;",
 		"rule r(x:ℂ):[x<1]⇒0;",
+		"rule r(x:ℂ):|x|+0⇒x;",
 		"rule r(x:ℝ):x^x⇒x;",
 		"rule r(x:ℝ):x^2^3⇒x;",
 		"rule r(x:ℝ):x+0⇒x; garbage",

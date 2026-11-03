@@ -13,7 +13,7 @@ public import qsym.number:BigInt,Rational,Number;
 enum Sort:ubyte{ real_,complex,boolean,density,measure }
 enum Op:ubyte{
 	realLit,complexLit,boolLit,variable,add,mul,inv,nonzero,
-	mask,conj,lebesgue,puncture,densityAt,forget,numberLit,pow,not_,and_,or_,lt,le
+	mask,conj,lebesgue,puncture,densityAt,forget,numberLit,pow,not_,and_,or_,lt,le,abs
 }
 
 /// Public handles carry ownership; internal edges are compact arena-local IDs.
@@ -134,6 +134,10 @@ final class Arena{
 	Term div(Term a,Term b){ return mul(a,inv(b)); }
 	Term inv(Term a){ scalar(a); return intern(Node(Op.inv,sort(a),1,a.id)); }
 	Term pow(Term a,uint n){ scalar(a); return intern(Node(Op.pow,sort(a),1,a.id,uint.max,n)); }
+	Term abs(Term a){
+		enforce(sort(a)==Sort.real_,"absolute value requires Real");
+		return intern(Node(Op.abs,Sort.real_,1,a.id));
+	}
 	Term nonzero(Term a){ scalar(a); return intern(Node(Op.nonzero,Sort.boolean,1,a.id)); }
 	Term equal(Term a,Term b){ return not_(nonzero(sub(a,b))); }
 	Term not_(Term a){
@@ -188,6 +192,7 @@ final class Arena{
 			case Op.mul:return mul(cs[0],cs[1]);
 			case Op.inv:return inv(cs[0]);
 			case Op.pow:return pow(cs[0],cast(uint)n.value);
+			case Op.abs:return abs(cs[0]);
 			case Op.not_:return not_(cs[0]);
 			case Op.and_:return and_(cs[0],cs[1]);
 			case Op.or_:return or_(cs[0],cs[1]);

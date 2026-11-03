@@ -116,20 +116,38 @@ macro "qsym_scalar" : tactic => `(tactic| (
     classical
     intro v hv
     simp only [Value.add, Value.mul, Value.inv, Value.nonzero, Value.mask, Value.conj,
-      Value.not, Value.and, Value.or, Value.lt, Value.le,
+      Value.not, Value.and, Value.or, Value.lt, Value.le, Value.abs,
       Option.map, Option.bind] at hv ⊢
     repeat' first
       | simp_all (config := {failIfUnchanged := true})
       | qsym_split_and
       | split at *
     all_goals subst_vars
+    all_goals try (simp_all [abs_mul, abs_inv, abs_pow])
     all_goals try norm_num at *
     all_goals try field_simp
     all_goals try ring_nf at *
     all_goals try simp_all [Complex.I_sq]
     all_goals try norm_num [Complex.I_pow_eq_pow_mod] at *
     all_goals try ring
+    all_goals try (simp only [abs_eq_max_neg, max_def] at *; split_ifs at * <;> nlinarith)
+    all_goals try ring
+    all_goals try (simp only [← decide_not, decide_eq_decide] at *)
+    all_goals try positivity
+    all_goals try nlinarith
+    all_goals try (constructor <;> intro h <;> nlinarith)
   )
+))
+
+macro "qsym_defined" : tactic => `(tactic| (
+  classical
+  try simp only [Value.add, Value.mul, Value.inv, Value.nonzero, Value.mask, Value.conj,
+    Value.not, Value.and, Value.or, Value.lt, Value.le, Value.abs,
+    Option.map, Option.bind]
+  repeat' first
+    | simp_all (config := {failIfUnchanged := true})
+    | split at *
+  all_goals try (simp only [← not_lt]; tauto)
 ))
 
 macro "qsym_rule" : tactic => `(tactic| (

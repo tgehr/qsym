@@ -34,6 +34,7 @@ inductive Expr : Ty → Type where
   | invC : Expr .complex → Expr .complex
   | powR : Expr .real → Nat → Expr .real
   | powC : Expr .complex → Nat → Expr .complex
+  | absR : Expr .real → Expr .real
   | nonzeroR : Expr .real → Expr .bool
   | nonzeroC : Expr .complex → Expr .bool
   | not : Expr .bool → Expr .bool
@@ -67,6 +68,7 @@ noncomputable def eval (ρ : Env) : {s : Ty} → Expr s → Option s.denote
   | _, .invC a => Value.inv (eval ρ a)
   | _, .powR a n => (eval ρ a).map (· ^ n)
   | _, .powC a n => (eval ρ a).map (· ^ n)
+  | _, .absR a => Value.abs (eval ρ a)
   | _, .nonzeroR a => Value.nonzero (eval ρ a)
   | _, .nonzeroC a => Value.nonzero (eval ρ a)
   | _, .not p => Value.not (eval ρ p)

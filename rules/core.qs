@@ -24,3 +24,5 @@ rule complex_zero_mul(x:ℂ):0·x⇒0;
 rule complex_div_self(x:ℂ):x·x⁻¹⇒1;
 rule complex_inv_inv(x:ℂ):(x⁻¹)⁻¹⇒x;
 rule complex_mask_zero(p:𝔹):[p]·complex(0,0)⇒complex(0,0);
+rule real_abs_abs(x:ℝ):abs(|x|)⇒|x|;
+rule real_abs_neg(x:ℝ):|−x|⇒|x|;

@@ -1,6 +1,7 @@
 module qsym.algebra;
 import qsym.ir;
 import qsym.table:Table;
+import qsym.order:Order,Limit;
 import std.algorithm:sort;
 import std.conv:to;
 @safe:
@@ -29,7 +30,6 @@ int compare(Arena a,Term x,Term y){
 private struct Factor{ Term atom; long exponent; }
 private struct Monomial{ Number coefficient; Factor[] factors; }
 private alias Polynomial=Monomial[];
-private class Limit:Exception{ this(){ super("algebra budget exhausted"); } }
 
 final class Algebra{
 	private Arena a;
@@ -37,9 +37,11 @@ final class Algebra{
 	private Table!(uint,uint) index;
 	private Polynomial[] forms;
 	private uint depth;
+	private Order orderAnalysis;
 	bool exhausted;
 	this(Arena a,size_t maxTerms,size_t work,size_t maxWords){
 		this.a=a; this.maxTerms=maxTerms; remaining=work; this.maxWords=maxWords;
+		orderAnalysis=new Order(a,&spend,maxWords);
 	}
 	private void spend(size_t n=1){
 		if(n>remaining) throw new Limit;
@@ -245,6 +247,8 @@ final class Algebra{
 			++depth; scope(exit) --depth;
 			auto n=a.node(t);
 			if(a.isNumber(t)){ remember(t,constant(a.number(t))); return t; }
+			auto reduced=orderAnalysis.reduce(t);
+			if(reduced!=t) return normalize(reduced);
 			Polynomial p;
 			switch(n.op){
 				case Op.add,Op.mul:
@@ -265,11 +269,18 @@ final class Algebra{
 					if(a.isNumber(a.at(n.a))&&a.number(a.at(n.a)).zero) return t;
 					p=inverse(form(a.at(n.a)),a.at(n.a)); break;
 				case Op.conj:p=conjugate(form(a.at(n.a))); break;
+				case Op.abs:
+					auto child=a.node(a.at(n.a));
+					if(child.op==Op.mul) return normalize(a.mul(normalize(a.abs(a.at(child.a))),normalize(a.abs(a.at(child.b)))));
+					if(child.op==Op.inv) return normalize(a.inv(normalize(a.abs(a.at(child.a)))));
+					if(child.op==Op.pow) return normalize(a.pow(normalize(a.abs(a.at(child.a))),cast(uint)child.value));
+					if(child.op==Op.mask) return normalize(a.mask(a.at(child.a),normalize(a.abs(a.at(child.b)))));
+					return t;
 				case Op.nonzero:
 					if(a.isNumber(a.at(n.a))) return a.boolean(!a.number(a.at(n.a)).zero);
 					auto child=a.node(a.at(n.a));
 					if(child.op==Op.inv) return a.boolean(true);
-					if(child.op==Op.pow&&child.value>0||child.op==Op.conj) return normalize(a.nonzero(a.at(child.a)));
+					if(child.op==Op.pow&&child.value>0||child.op==Op.conj||child.op==Op.abs) return normalize(a.nonzero(a.at(child.a)));
 					if(child.op==Op.mul) return normalize(a.and_(normalize(a.nonzero(a.at(child.a))),normalize(a.nonzero(a.at(child.b)))));
 					return t;
 				case Op.mask:
@@ -280,6 +291,8 @@ final class Algebra{
 						if(body.a==n.a) return a.at(n.b);
 						return normalize(a.mask(normalize(a.and_(a.at(n.a),a.at(body.a))),a.at(body.b)));
 					}
+					auto value=orderAnalysis.under(a.at(n.b),a.at(n.a),&normalize);
+					if(value!=a.at(n.b)) return normalize(a.mask(a.at(n.a),value));
 					return t;
 				case Op.not_:
 					auto child=a.node(a.at(n.a));

@@ -46,8 +46,8 @@ def main():
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"build/Syntax.lean")
 	scalars=sorted((ROOT/"build/scalar").glob("*.lean"))
-	if len(scalars)!=28:
-		raise RuntimeError("expected 28 scalar certificates")
+	if len(scalars)!=58:
+		raise RuntimeError("expected 58 scalar certificates")
 	for file in scalars:
 		check(file)
 	files=sorted((ROOT/"build/certificates").glob("*.lean"))
@@ -63,6 +63,10 @@ def main():
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad.d"),
 		str(negative/"BadRule.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadRule.lean",succeeds=False)
+	bad_rules.write_text("rule bad_abs(x:ℝ):|x|⇒x;\n",encoding="utf-8")
+	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad_abs.d"),
+		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
+	check(negative/"BadAbs.lean",succeeds=False)
 
 	good=(ROOT/"build/certificates/Guarded.lean").read_text()
 	corrupt,count=re.subn(

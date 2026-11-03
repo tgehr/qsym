@@ -12,3 +12,4 @@ rule minimum_result():[true]·(-9223372036854775808)⇒-9223372036854775808;
 rule nonzero(x:ℝ):([x≠0]·x⁻¹)+0⇒maskR(nonzeroR(x),invR(x));
 rule power(x:ℝ):x³+0⇒x^3;
 rule interval(x:ℝ):[0≤x<1]+0⇒[0≤x∧x<1];
+rule absolute(x:ℝ):|x|+0⇒absR(x);
