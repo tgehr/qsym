@@ -1,7 +1,7 @@
 module qsym.spec;
 import qsym.ir:Sort,sortName;
 import qsym.table:Table;
-import std.ascii:isAlpha,isDigit,isWhite;
+import qsym.lexer;
 import std.conv:to;
 import std.exception:enforce;
 import std.algorithm:canFind;
@@ -14,6 +14,7 @@ final class Pattern{
 	long number;
 	Sort sort;
 	bool variable;
+	private uint candidates;
 	this(string name){ this.name=name; }
 }
 struct Rule{ string name; Parameter[] parameters; Pattern lhs,rhs; }
@@ -22,54 +23,100 @@ struct Rule{ string name; Parameter[] parameters; Pattern lhs,rhs; }
 /// arbitrary D snippets, proof snippets, binders, or side-condition solvers.
 struct Parser{
 	string source;
-	size_t pos;
-	private void ws(){
-		while(pos<source.length){
-			if(isWhite(source[pos])){ ++pos; continue; }
-			if(source[pos]=='#'){
-				while(pos<source.length&&source[pos]!='\n')++pos;
-				continue;
-			}
-			break;
-		}
-	}
+	private Lexer lexer;
+	private Token token;
+	private void next(){ token=lexer.next(); }
 	private bool take(string s){
-		ws();
-		if(source.length-pos>=s.length&&source[pos..pos+s.length]==s){
-			pos+=s.length; return true;
-		}
-		return false;
+		if(token.text!=s||token.kind==TokenKind.end) return false;
+		next(); return true;
 	}
 	private void expect(string s){
-		enforce(take(s),"expected '"~s~"' at byte "~to!string(pos));
+		enforce(take(s),"expected '"~s~"' at byte "~to!string(token.offset));
 	}
 	private string ident(){
-		ws(); auto start=pos;
-		enforce(pos<source.length&&isAlpha(source[pos]),"identifier expected at byte "~to!string(pos));
-		while(pos<source.length&&(isAlpha(source[pos])||isDigit(source[pos])||source[pos]=='_'))++pos;
-		return source[start..pos];
+		enforce(token.kind==TokenKind.identifier,"identifier expected at byte "~to!string(token.offset));
+		auto name=token.text; next(); return name;
 	}
-	private Pattern pattern(uint depth=0){
+	private Pattern integer(bool negative=false){
+		enforce(token.kind==TokenKind.integer,"integer expected at byte "~to!string(token.offset));
+		auto p=new Pattern("#"); p.number=to!long((negative?"-":"")~token.text); next(); return p;
+	}
+	private Pattern primary(uint depth){
 		enforce(depth<128,"rule pattern nesting limit exceeded");
-		ws();
-		if(pos<source.length&&(isDigit(source[pos])||source[pos]=='-')){
-			auto start=pos++;
-			while(pos<source.length&&isDigit(source[pos]))++pos;
-			auto p=new Pattern("#"); p.number=to!long(source[start..pos]); return p;
-		}
+		if(take("(")){ auto p=expression(depth+1); expect(")"); return p; }
+		if(take("[")){ auto p=expression(depth+1); expect("]"); return pattern("$iverson",[p]); }
+		if(take("ⅈ")) return pattern("complex",[integerPattern(0),integerPattern(1)]);
+		if(token.kind==TokenKind.integer) return integer();
 		auto p=new Pattern(ident());
 		if(take("(")){
 			if(!take(")")){
-				do{ p.args~=pattern(depth+1); }while(take(","));
+				do{ p.args~=expression(depth+1); }while(take(","));
 				expect(")");
 			}
+		}
+		if(p.name=="inv"||p.name=="nonzero"||p.name=="mask") p.name="$"~p.name;
+		return p;
+	}
+	private Pattern factor(uint depth){
+		enforce(depth<128,"rule pattern nesting limit exceeded");
+		if(take("+")) return factor(depth+1);
+		if(take("-")){
+			// A signed payload must remain available to real()/complex(), including long.min.
+			if(token.kind==TokenKind.integer){
+				auto p=integer(true);
+				return postfix(p);
+			}
+			return pattern("$neg",[factor(depth+1)]);
+		}
+		if(take("⅟")) return pattern("$inv",[factor(depth+1)]);
+		return postfix(primary(depth));
+	}
+	private Pattern postfix(Pattern p){
+		uint count;
+		while(token.text=="⁻¹"||token.text=="^"){
+			enforce(++count<128,"rule pattern nesting limit exceeded");
+			if(!take("⁻¹")){
+				expect("^"); auto parens=take("("); expect("-");
+				enforce(integer().number==1,"only exponent -1 is supported");
+				if(parens) expect(")");
+			}
+			p=pattern("$inv",[p]);
+		}
+		return p;
+	}
+	private Pattern product(uint depth){
+		auto p=factor(depth);
+		while(token.text=="*"||token.text=="/"){
+			auto op=token.text; next();
+			auto q=factor(depth);
+			if(op=="/") q=pattern("$inv",[q]);
+			p=pattern("$mul",[p,q]);
+		}
+		return p;
+	}
+	private Pattern sum(uint depth){
+		auto p=product(depth);
+		while(token.text=="+"||token.text=="-"){
+			auto op=token.text; next();
+			auto q=product(depth);
+			if(op=="-") q=pattern("$neg",[q]);
+			p=pattern("$add",[p,q]);
+		}
+		return p;
+	}
+	private Pattern expression(uint depth=0){
+		auto p=sum(depth);
+		if(take("!=")){
+			auto q=sum(depth);
+			enforce(q.name=="#"&&q.number==0,"only nonzero comparisons (x≠0) are supported");
+			p=pattern("$nonzero",[p]);
 		}
 		return p;
 	}
 	Rule[] parse(){
+		lexer=Lexer(source); next();
 		Rule[] rules;
-		ws();
-		while(pos!=source.length){
+		while(token.kind!=TokenKind.end){
 			enforce(ident()=="rule","expected rule declaration");
 			Rule r; r.name=ident();
 			foreach(old;rules) enforce(old.name!=r.name,"duplicate rule name");
@@ -79,21 +126,25 @@ struct Parser{
 					auto name=ident(); expect(":"); auto ty=ident();
 					Sort s;
 					switch(ty){
-						case "Real":s=Sort.real_; break;
-						case "Complex":s=Sort.complex; break;
-						case "Bool":s=Sort.boolean; break;
+						case "Real","ℝ":s=Sort.real_; break;
+						case "Complex","ℂ":s=Sort.complex; break;
+						case "Bool","𝔹":s=Sort.boolean; break;
 						case "Density":s=Sort.density; break;
 						case "Measure":s=Sort.measure; break;
 						default:throw new Exception("unknown sort: "~ty);
 					}
 					foreach(old;r.parameters) enforce(old.name!=name,"duplicate parameter");
-					enforce(!isConstructor(name),"parameter shadows a constructor");
+					enforce(!isConstructor(name)&&name!="inv"&&name!="nonzero"&&name!="mask","parameter shadows a constructor");
 					r.parameters~=Parameter(name,s);
 				}while(take(","));
 				expect(")");
 			}
-			expect(":"); r.lhs=pattern(); expect("=>"); r.rhs=pattern(); expect(";");
-			validate(r); rules~=r; ws();
+			expect(":"); r.lhs=expression(); expect("=>"); r.rhs=expression(); expect(";");
+			auto candidates=possible(r.lhs,r.parameters)&possible(r.rhs,r.parameters);
+			enforce(candidates!=0,"rewrite changes its type");
+			auto sort=choose(candidates);
+			r.lhs=lower(r.lhs,sort); r.rhs=lower(r.rhs,sort);
+			validate(r); rules~=r;
 		}
 		return rules;
 	}
@@ -103,6 +154,115 @@ bool isConstructor(string n){
 	return ["real","complex","true","false","addR","addC","mulR","mulC",
 		"invR","invC","nonzeroR","nonzeroC","maskR","maskC","conj",
 		"lebesgue","puncture","densityAt","forget"].canFind(n);
+}
+
+private Pattern pattern(string name,Pattern[] args){
+	auto p=new Pattern(name); p.args=args; return p;
+}
+private Pattern integerPattern(long n){ auto p=new Pattern("#"); p.number=n; return p; }
+private uint bit(Sort s){ return 1u<<cast(uint)s; }
+private enum scalars=(1u<<Sort.real_)|(1u<<Sort.complex);
+private Sort choose(uint candidates){
+	foreach(s;[Sort.real_,Sort.complex,Sort.boolean,Sort.density,Sort.measure])
+		if(candidates&bit(s)) return s;
+	assert(0);
+}
+
+private struct Signature{ Sort result; Sort[] args; }
+private Signature signature(string name){
+	alias R=Sort.real_,C=Sort.complex,B=Sort.boolean,D=Sort.density,M=Sort.measure;
+	switch(name){
+		case "true","false":return Signature(B,[]);
+		case "lebesgue":return Signature(D,[]);
+		case "addR","mulR":return Signature(R,[R,R]);
+		case "addC","mulC":return Signature(C,[C,C]);
+		case "invR":return Signature(R,[R]);
+		case "invC","conj":return Signature(C,[C]);
+		case "nonzeroR":return Signature(B,[R]);
+		case "nonzeroC":return Signature(B,[C]);
+		case "maskR":return Signature(R,[B,R]);
+		case "maskC":return Signature(C,[B,C]);
+		case "puncture":return Signature(D,[D]);
+		case "densityAt":return Signature(R,[D,R]);
+		case "forget":return Signature(M,[D]);
+		default:throw new Exception("unknown constructor or unbound variable: "~name);
+	}
+}
+
+// Propagate possible sorts before choosing a default for bare numeric literals.
+// Both rule endpoints constrain the choice; there are no implicit scalar casts.
+private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
+	enforce(depth<128,"rule pattern nesting limit exceeded");
+	foreach(v;parameters) if(p.name==v.name){
+		enforce(p.args.length==0,"metavariables cannot be applied");
+		p.variable=true; return p.candidates=bit(v.sort);
+	}
+	auto arity=p.args.length;
+	if(p.name=="#") return p.candidates=scalars;
+	if(p.name=="real"||p.name=="complex"){
+		enforce(arity==(p.name=="real"?1:2),"literal arity mismatch");
+		foreach(arg;p.args) enforce(arg.name=="#","literal integer expected");
+		return p.candidates=bit(p.name=="real"?Sort.real_:Sort.complex);
+	}
+	uint[] args;
+	foreach(arg;p.args) args~=possible(arg,parameters,depth+1);
+	uint result;
+	switch(p.name){
+		case "$add","$mul":
+			enforce(arity==2,"binary operator arity mismatch");
+			result=scalars&args[0]&args[1]; break;
+		case "$neg","$inv":
+			enforce(arity==1,"unary operator arity mismatch");
+			result=scalars&args[0]; break;
+		case "$nonzero":
+			enforce(arity==1&&args[0]&scalars,"nonzero requires a scalar");
+			result=bit(Sort.boolean); break;
+		case "$iverson":
+			enforce(arity==1&&args[0]&bit(Sort.boolean),"Iverson brackets require Bool");
+			result=scalars; break;
+		case "$mask":
+			enforce(arity==2&&args[0]&bit(Sort.boolean),"mask requires Bool and a scalar");
+			result=scalars&args[1]; break;
+		default:
+			auto sig=signature(p.name);
+			enforce(arity==sig.args.length,"arity mismatch for "~p.name);
+			foreach(i,s;sig.args) enforce(args[i]&bit(s),"type mismatch in "~p.name);
+			result=bit(sig.result);
+	}
+	enforce(result!=0,"type mismatch in "~p.name);
+	return p.candidates=result;
+}
+
+private Pattern literal(long n,Sort s){
+	return s==Sort.real_?pattern("real",[integerPattern(n)]):pattern("complex",[integerPattern(n),integerPattern(0)]);
+}
+
+private Pattern lower(Pattern p,Sort s){
+	enforce(p.candidates&bit(s),"inconsistent elaboration sort");
+	if(p.variable) return p;
+	auto suffix=s==Sort.real_?"R":"C";
+	switch(p.name){
+		case "#":return literal(p.number,s);
+		case "real","complex":return p;
+		case "$add":return pattern("add"~suffix,[lower(p.args[0],s),lower(p.args[1],s)]);
+		case "$mul":
+			// A bracket directly weighting the following factor is a mask, not
+			// strict multiplication by a previously evaluated numeric indicator.
+			if(p.args[0].name=="$iverson")
+				return pattern("mask"~suffix,[lower(p.args[0].args[0],Sort.boolean),lower(p.args[1],s)]);
+			return pattern("mul"~suffix,[lower(p.args[0],s),lower(p.args[1],s)]);
+		case "$neg":return pattern("mul"~suffix,[literal(-1,s),lower(p.args[0],s)]);
+		case "$inv":return pattern("inv"~suffix,[lower(p.args[0],s)]);
+		case "$nonzero":
+			auto operand=choose(p.args[0].candidates&scalars);
+			return pattern(operand==Sort.real_?"nonzeroR":"nonzeroC",[lower(p.args[0],operand)]);
+		case "$iverson":return pattern("mask"~suffix,[lower(p.args[0],Sort.boolean),literal(1,s)]);
+		case "$mask":return pattern("mask"~suffix,[lower(p.args[0],Sort.boolean),lower(p.args[1],s)]);
+		default:
+			auto sig=signature(p.name);
+			foreach(i,t;sig.args) p.args[i]=lower(p.args[i],t);
+			return p;
+	}
 }
 
 private Sort infer(Pattern p,Parameter[] parameters){
@@ -117,26 +277,10 @@ private Sort infer(Pattern p,Parameter[] parameters){
 		p.sort=p.name=="real"?Sort.real_:Sort.complex;
 		return p.sort;
 	}
-	Sort[] expected;
-	switch(p.name){
-		case "true","false":p.sort=Sort.boolean; break;
-		case "lebesgue":p.sort=Sort.density; break;
-		case "addR","mulR":p.sort=Sort.real_; expected=[Sort.real_,Sort.real_]; break;
-		case "addC","mulC":p.sort=Sort.complex; expected=[Sort.complex,Sort.complex]; break;
-		case "invR":p.sort=Sort.real_; expected=[Sort.real_]; break;
-		case "invC","conj":p.sort=Sort.complex; expected=[Sort.complex]; break;
-		case "nonzeroR":p.sort=Sort.boolean; expected=[Sort.real_]; break;
-		case "nonzeroC":p.sort=Sort.boolean; expected=[Sort.complex]; break;
-		case "maskR":p.sort=Sort.real_; expected=[Sort.boolean,Sort.real_]; break;
-		case "maskC":p.sort=Sort.complex; expected=[Sort.boolean,Sort.complex]; break;
-		case "puncture":p.sort=Sort.density; expected=[Sort.density]; break;
-		case "densityAt":p.sort=Sort.real_; expected=[Sort.density,Sort.real_]; break;
-		case "forget":p.sort=Sort.measure; expected=[Sort.density]; break;
-		default:assert(0);
-	}
-	enforce(p.args.length==expected.length,"arity mismatch for "~p.name);
+	auto sig=signature(p.name); p.sort=sig.result;
+	enforce(p.args.length==sig.args.length,"arity mismatch for "~p.name);
 	foreach(i,arg;p.args)
-		enforce(infer(arg,parameters)==expected[i],"type mismatch in "~p.name);
+		enforce(infer(arg,parameters)==sig.args[i],"type mismatch in "~p.name);
 	return p.sort;
 }
 
@@ -162,8 +306,10 @@ void validate(ref Rule r){
 }
 
 string leanSort(Sort s){ return s==Sort.boolean?"bool":s==Sort.real_?"real":to!string(s); }
+string parameterCode(string name){ return "v_"~symbolCode(name); }
+string ruleCode(string name){ return "r_"~symbolCode(name); }
 string leanPattern(Pattern p){
-	if(p.variable) return p.name;
+	if(p.variable) return parameterCode(p.name);
 	if(p.name=="true"||p.name=="false") return "(.bool "~p.name~")";
 	if(p.name=="#") return "("~to!string(p.number)~")";
 	string s="(."~p.name;
@@ -180,4 +326,61 @@ unittest{
 	assertThrown(Parser("rule z(x:Real): addR(x,real(0)) => addR(x,x);").parse());
 	// Syntactic well-typedness is NOT a proof of mathematical validity.
 	assert(Parser("rule bad(x:Real): mulR(real(0),x) => real(0);").parse().length==1);
+}
+
+unittest{
+	import std.exception:assertThrown;
+	void same(string surface,string constructors){
+		auto a=Parser(surface).parse()[0],b=Parser(constructors).parse()[0];
+		assert(a.lhs.sort==b.lhs.sort&&a.rhs.sort==b.rhs.sort);
+		assert(leanPattern(a.lhs)==leanPattern(b.lhs));
+		assert(leanPattern(a.rhs)==leanPattern(b.rhs));
+	}
+	same("rule r(x:ℝ):x+0⇒x;","rule r(x:Real):addR(x,real(0))=>x;");
+	same("rule r(z:ℂ):(0+0)+z→z;",
+		"rule r(z:Complex):addC(addC(complex(0,0),complex(0,0)),z)=>z;");
+	same("rule r(x:ℝ,y:ℝ):x+y·1⇒x+y;",
+		"rule r(x:Real,y:Real):addR(x,mulR(y,real(1)))=>addR(x,y);");
+	same("rule r(x:ℝ,y:ℝ):(x+y)*1=>x+y;",
+		"rule r(x:Real,y:Real):mulR(addR(x,y),real(1))=>addR(x,y);");
+	same("rule r(x:ℝ,y:ℝ):x/1/y⇒x/y;",
+		"rule r(x:Real,y:Real):mulR(mulR(x,invR(real(1))),invR(y))=>mulR(x,invR(y));");
+	same("rule r(x:ℝ):[x≠0]·x⁻¹+0⇒[x!=0]*inv(x);",
+		"rule r(x:Real):addR(maskR(nonzeroR(x),invR(x)),real(0))=>maskR(nonzeroR(x),invR(x));");
+	same("rule r(x:ℝ):⅟x+0⇒x^(-1);",
+		"rule r(x:Real):addR(invR(x),real(0))=>invR(x);");
+	same("rule r(x:ℝ):-x+0⇒−x;",
+		"rule r(x:Real):addR(mulR(real(-1),x),real(0))=>mulR(real(-1),x);");
+	same("rule r(z:ℂ):z−0⇒z;",
+		"rule r(z:Complex):addC(z,mulC(complex(-1,0),complex(0,0)))=>z;");
+	same("rule r():[false]⇒0;","rule r():maskR(false,real(1))=>real(0);");
+	same("rule r():[false]⇒complex(0,0);","rule r():maskC(false,complex(1,0))=>complex(0,0);");
+	same("rule r(p:𝔹):[p]+0⇒[p];","rule r(p:Bool):addR(maskR(p,real(1)),real(0))=>maskR(p,real(1));");
+	same("rule r():[false]·(1÷0)⇒0;",
+		"rule r():maskR(false,mulR(real(1),invR(real(0))))=>real(0);");
+	same("rule r():[false]·ⅈ⇒0;","rule r():maskC(false,complex(0,1))=>complex(0,0);");
+	same("rule r():[false]·(-9223372036854775808)⇒0;",
+		"rule r():maskR(false,real(-9223372036854775808))=>real(0);");
+	auto unicode=Parser("rule απλό(ρ₁':ℝ):ρ₁'+0⇒ρ₁';").parse()[0];
+	assert(unicode.parameters[0].name=="ρ₁'");
+	assert(parameterCode("ρ₁'")!=parameterCode("u_cf81e2828127"));
+	assert(ruleCode("theorem")=="r_theorem");
+	foreach(s;[
+		"rule r(x:ℝ,z:ℂ):x+z⇒z;",
+		"rule r(x:ℝ):[x]⇒0;",
+		"rule r(x:ℝ):[x≠1]⇒0;",
+		"rule r(x:ℝ):x^2⇒x;",
+		"rule r(x:ℝ):x+0⇒x; garbage",
+		"rule r(x:ℝ):x+0⇒x; rule r(x:ℝ):x+0⇒x;",
+		"rule r(α:ℝ,α:ℝ):α+0⇒α;",
+		"rule r(x:ℝ):[false]·9223372036854775808⇒x;",
+		"rule r(x:ℝ):x+⇒x;",
+		"rule r(x:ℝ):(x+0⇒x;",
+		"rule r(x:ℝ):[false⇒0;",
+		"rule r(x:ℝ):∫x⇒x;",
+		"rule r(x:ℝ):inv()⇒x;"
+	]) assertThrown(Parser(s).parse(),s);
+	string deep="x";
+	foreach(i;0..150) deep~="+0";
+	assertThrown(Parser("rule r(x:ℝ):"~deep~"⇒x;").parse());
 }

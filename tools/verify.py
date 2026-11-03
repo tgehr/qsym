@@ -44,6 +44,7 @@ def main():
 	check(ROOT/"lean/QSym/Generated.lean")
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
+	check(ROOT/"build/Syntax.lean")
 	files=sorted((ROOT/"build/certificates").glob("*.lean"))
 	if len(files)!=7:
 		raise RuntimeError("expected seven freshly generated certificates")
@@ -53,7 +54,7 @@ def main():
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
 	bad_rules=negative/"bad.qs"
-	bad_rules.write_text("rule bad(x:Real): mulR(real(0),x) => real(0);\n")
+	bad_rules.write_text("rule bad(x:ℝ):0·x⇒0;\n",encoding="utf-8")
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad.d"),
 		str(negative/"BadRule.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadRule.lean",succeeds=False)

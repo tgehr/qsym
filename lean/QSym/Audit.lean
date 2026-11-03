@@ -11,6 +11,6 @@ import QSym
 #print axioms QSym.Expr.density_total_measurable
 #print axioms QSym.partialIntegral_defined_iff
 #print axioms QSym.Quantum.basis_inner
-#print axioms QSym.Generated.real_add_zero
-#print axioms QSym.Generated.complex_conj_conj
-#print axioms QSym.Generated.erase_puncture
+#print axioms QSym.Generated.r_real_add_zero
+#print axioms QSym.Generated.r_complex_conj_conj
+#print axioms QSym.Generated.r_erase_puncture

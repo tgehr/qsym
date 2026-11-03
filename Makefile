@@ -25,6 +25,9 @@ build/qsym: generate tools/main.d $(MODULES)
 test: generate
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/all.d -of=build/tests
 	./build/tests
+	./build/rulec tests/syntax.qs build/syntax.d build/Syntax.lean
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/generated.d build/syntax.d -of=build/syntax-tests
+	./build/syntax-tests
 
 demo: build/qsym
 	./build/qsym demo

@@ -1,0 +1,12 @@
+rule σύγκρουση(α:ℝ,u_ceb1:ℝ):(α+u_ceb1)+0⇒α+u_ceb1;
+rule απλό(ρ₁':ℝ):ρ₁'+0⇒ρ₁';
+rule theorem(Expr:ℂ):1×Expr⇒Expr;
+rule bare_false():[false]⇒0;
+rule bare_true():[true]⇒1;
+rule complex_bare_false():[false]⇒complex(0,0);
+rule guarded(p:𝔹,x:ℝ):[p]·x+0⇒mask(p,x);
+rule inverse(x:ℝ):⅟x+0⇒x⁻¹;
+rule imaginary():[false]·ⅈ⇒complex(0,0);
+rule minimum():[false]·(-9223372036854775808)⇒0;
+rule minimum_result():[true]·(-9223372036854775808)⇒-9223372036854775808;
+rule nonzero(x:ℝ):([x≠0]·x⁻¹)+0⇒maskR(nonzeroR(x),invR(x));
