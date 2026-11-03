@@ -1,0 +1,3 @@
+[submodule "deps/util"]
+	path = deps/util
+	url = https://github.com/tgehr/util.git
