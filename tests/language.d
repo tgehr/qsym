@@ -79,7 +79,7 @@ unittest{
 	assert(result("[x<2]")=="[x<2]");
 	assert(result("([p]:ℕ)")=="([p]:ℕ)");
 	assert(result("[q≠0]*q⁻¹")=="[q≠0]·q⁻¹");
-	assert(result("2^(1/2)")=="2^(1/2)");
+	assert(result("2^(1/2)")=="sqrt(2)");
 	assert(result("2^3^2")=="512");
 	assert(result("q^0")=="rat(1,1)");
 	assert(result("ccosh(0)")=="1+0·ⅈ");

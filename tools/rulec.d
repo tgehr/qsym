@@ -30,8 +30,23 @@ string dOp(string n){
 	}
 }
 string dInteger(long n){ return n==long.min?"long.min":to!string(n)~"L"; }
+string rootOp(Pattern p){
+	if(p.name=="real"&&p.args.length==2)
+		return Rational(BigInt(p.args[0].number),BigInt(p.args[1].number)).small?"realLit":"numberLit";
+	return dOp(p.name);
+}
+bool pairRule(Rule r){
+	auto op=rootOp(r.lhs);
+	return r.automatic&&(op=="add"||op=="mul")&&!r.lhs.args[0].variable&&!r.lhs.args[1].variable;
+}
+string rootTest(Pattern p,string node){
+	auto test=node~".op==Op."~rootOp(p);
+	if(builtin(p.name)!=Builtin.invalid) test~="&&"~node~".value==Builtin."~p.name;
+	return test;
+}
 string dPattern(Pattern p){
 	if(p.variable) return parameterCode(p.name);
+	if(p.name=="real"&&p.args.length==2) return "a.real_(Rational(BigInt("~dInteger(p.args[0].number)~"),BigInt("~dInteger(p.args[1].number)~")))";
 	if(p.name=="natAdd"||p.name=="natMul") return "nat(cast(ulong)("~dPattern(p.args[0])~")"~(p.name=="natAdd"?"+":"*")~dPattern(p.args[1])~")";
 	if(p.natural&&p.name=="#") return to!string(p.number)~"u";
 	if(p.name=="powN"||p.name=="powZ"||p.name=="powQ"||p.name=="powR"||p.name=="powC") return "a.pow("~dPattern(p.args[0])~","~dPattern(p.args[1])~")";
@@ -90,11 +105,22 @@ string emitD(Rule[] rules){
 		d~="Law[] "~(inference?"inferences":"rewrites")~"(Op op){\n\tswitch(op){\n";
 		foreach(op;opsFor(rules,inference)){
 			string[] ids;
-			foreach(r;rules) if((inference?r.inference:r.automatic)&&dOp(r.lhs.name)==op) ids~="Law."~symbolCode(r.name);
+			foreach(r;rules) if((inference?r.inference:r.automatic)&&rootOp(r.lhs)==op) ids~="Law."~symbolCode(r.name);
 			d~="\t\tcase Op."~op~":return ["~ids.join(",")~"];\n";
 		}
 		d~="\t\tdefault:return null;\n\t}\n}\n";
 	}
+	d~="Law[] pairRewrites(Op op){\n\tswitch(op){\n";
+	foreach(op;["add","mul"]){
+		string[] ids;
+		foreach(r;rules) if(pairRule(r)&&rootOp(r.lhs)==op) ids~="Law."~symbolCode(r.name);
+		d~="\t\tcase Op."~op~":return ["~ids.join(",")~"];\n";
+	}
+	d~="\t\tdefault:return null;\n\t}\n}\n";
+	d~="bool pairCandidate(Law law,Node x,Node y){\n\tswitch(law){\n";
+	foreach(r;rules) if(pairRule(r))
+		d~="\t\tcase Law."~symbolCode(r.name)~":return "~rootTest(r.lhs.args[0],"x")~"&&"~rootTest(r.lhs.args[1],"y")~";\n";
+	d~="\t\tdefault:return false;\n\t}\n}\n";
 	d~="size_t conditionCount(Law law){\n\tswitch(law){\n";
 	foreach(r;rules) d~="\t\tcase Law."~symbolCode(r.name)~":return "~to!string(r.premises.length)~";\n";
 	return d~"\t\tdefault:assert(0);\n\t}\n}\n";
@@ -103,7 +129,7 @@ string emitD(Rule[] rules){
 string[] opsFor(Rule[] rules,bool inference){
 	string[] result;
 	foreach(r;rules) if(inference?r.inference:r.automatic){
-		auto op=dOp(r.lhs.name); bool found;
+		auto op=rootOp(r.lhs); bool found;
 		foreach(old;result) if(old==op) found=true;
 		if(!found) result~=op;
 	}
@@ -116,6 +142,7 @@ string matchPayload(Pattern p,string value,Parameter[] parameters,string indent,
 		matchCode(p,"cast(uint)("~value~")"~(big?".toLong()":""),parameters,indent);
 }
 string matchCode(Pattern p,string path,Parameter[] parameters,string indent){
+	if(p.name=="real"&&p.args.length==2) return indent~"if("~path~"!="~dPattern(p)~") return false;\n";
 	if(p.variable){
 		size_t i; while(parameters[i].name!=p.name) ++i;
 		auto slot="bindings["~to!string(i)~"]";
@@ -155,6 +182,7 @@ string matchCode(Pattern p,string path,Parameter[] parameters,string indent){
 
 string leanValue(Pattern p){
 	if(p.variable||p.natural) return leanPattern(p);
+	if(p.name=="real"&&p.args.length==2) return "(some ((("~leanPattern(p.args[0])~" : ℚ) / "~leanPattern(p.args[1])~" : ℚ) : ℝ))";
 	if(p.name=="nat") return "(some ("~leanPattern(p.args[0])~" : ℕ))";
 	if(p.name=="int") return "(some ("~leanPattern(p.args[0])~" : ℤ))";
 	if(p.name=="rat") return "(some (("~leanPattern(p.args[0])~" : ℚ) / "~leanPattern(p.args[1])~"))";

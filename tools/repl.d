@@ -12,6 +12,10 @@ int repl(){
 	//if(reader.interactive) writeln("enter an expression; :help for commands.");
 	Syntax syntax,lastSyntax;
 	string last;
+	string[] facts,lastFacts;
+	Term[] parseFacts(Arena a,ref Syntax s,string[] source){
+		Term[] result; foreach(f;source) result~=s.parse(a,f); return result;
+	}
 	for(;;){
 		string input; if(!reader.readLine(input)) break;
 		auto line=strip(input);
@@ -30,8 +34,10 @@ int repl(){
 				writeln(":vars n:ℕ,k:ℤ,q:ℚ,z:ℂ,p:𝔹   declare types; :vars lists them");
 				writeln(":symbols [PREFIX] list Unicode input spellings");
 				writeln(":functions [PREFIX] list built-in signatures");
+				writeln(":assume EXPR      assume a defined, true Boolean expression");
+				writeln(":facts            list assumptions; :clear removes them");
 				writeln(":lean FILE        export a Lean certificate for the last expression");
-				writeln(":reset            clear variables and the last expression");
+				writeln(":reset            clear assumptions, variables and the last expression");
 				writeln(":quit             exit (or EOF)");
 				continue;
 			}
@@ -52,27 +58,42 @@ int repl(){
 				}
 				continue;
 			}
-			if(line==":reset"){ syntax=Syntax.init; lastSyntax=Syntax.init; last=null; continue; }
+			if(line==":reset"){ syntax=Syntax.init; lastSyntax=Syntax.init; last=null; facts=null; lastFacts=null; continue; }
 			if(line==":vars"){
 				foreach(v;syntax.variables) writeln(v.name,":",sortName(v.sort));
 				continue;
 			}
-			if(line.startsWith(":vars ")){ syntax.declare(strip(line[6..$])); continue; }
+			if(line.startsWith(":vars ")){
+				auto next=syntax; next.declare(strip(line[6..$]));
+				if(facts.length) foreach(i,v;syntax.variables)
+					enforce(next.variables[i].sort==v.sort,"use :clear before changing the type of "~v.name);
+				syntax=next; continue;
+			}
+			if(line==":facts"){ foreach(f;facts) writeln(f); continue; }
+			if(line==":clear"){ facts=null; continue; }
+			if(line.startsWith(":assume ")){
+				auto source=strip(line[8..$]),next=syntax;
+				auto session=Session.open(); auto a=session.arena;
+				enforce(a.sort(next.parse(a,source))==Sort.boolean,"assumptions must be Bool");
+				syntax=next; facts~=source; continue;
+			}
 			if(line.startsWith(":lean ")){
 				enforce(last.length!=0,"no expression to export");
 				auto path=strip(line[6..$]); enforce(path.length!=0,"expected a file name");
 				auto session=Session.open(); auto a=session.arena;
-				auto result=simplify(a,lastSyntax.parse(a,last),Options(DensityMode.preserve,true));
+				auto assumptions=parseFacts(a,lastSyntax,lastFacts);
+				auto result=simplify(a,lastSyntax.parse(a,last),assumptions,Options(DensityMode.preserve,true));
 				write(path,exportLean(a,result));
 				writeln("Wrote ",path);
 				continue;
 			}
 			enforce(!line.startsWith(":"),"unknown command; use :help");
 			auto session=Session.open(); auto a=session.arena;
-			auto result=simplify(a,syntax.parse(a,line));
+			auto assumptions=parseFacts(a,syntax,facts);
+			auto result=simplify(a,syntax.parse(a,line),assumptions);
 			writeln(syntax.format(a,result.output));
 			if(result.exhausted) stderr.writeln("simplification budget exhausted; showing the partial result");
-			last=line; lastSyntax=syntax;
+			last=line; lastSyntax=syntax; lastFacts=facts.dup;
 		}catch(Exception e){ stderr.writeln(e.msg); }
 	}
 	return 0;

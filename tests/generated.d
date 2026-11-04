@@ -34,6 +34,8 @@ import qsym.generated.rules;
 	assert(r.applied&&r.result==a.pow(x,3)&&r.bindings==[x,a.real_(3)]);
 	r=rewrite(a,a.call(Builtin.sinC,[a.complex(0)]),true);
 	assert(r.applied&&r.result==a.complex(0));
+	r=rewrite(a,a.add(a.real_(Rational(BigInt(1),BigInt(2))),a.real_(Rational(BigInt(1),BigInt(2)))),true);
+	assert(r.applied&&r.result==a.real_(1));
 }
 
 void main(){}

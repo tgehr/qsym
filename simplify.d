@@ -24,13 +24,20 @@ struct Result{
 	bool traced;
 	Derivation derivation;
 	Proof certificate;
+	Term[] assumptions;
 }
 
 /// Proof search only. Generated Lean certificates are the trust boundary.
 /// Results agree with the original wherever the original was defined; the
 /// result may have a larger domain. Erasure remains an explicit root operation.
 Result simplify(Arena a,Term input,Options options=Options.init){
+	return simplify(a,input,[],options);
+}
+
+/// Facts are defined, true Boolean expressions. Certificates retain them as hypotheses.
+Result simplify(Arena a,Term input,Term[] facts,Options options=Options.init){
 	a.check(input);
+	foreach(f;facts) enforce(a.sort(f)==Sort.boolean,"simplification facts must be Bool");
 	auto root=input;
 	if(options.densityMode==DensityMode.distributionOnly){
 		enforce(a.sort(input)==Sort.density,
@@ -39,11 +46,13 @@ Result simplify(Arena a,Term input,Options options=Options.init){
 	}
 	Result result;
 	result.input=input; result.proofInput=root; result.traced=options.trace;
+	result.assumptions=facts.dup;
 	auto d=new Derivation(a,options.trace);
 	auto budget=new Budget(options.maxAlgebraWork,options.maxTerms,options.maxCoefficientWords);
 	auto engine=new Engine(a,d,budget,options.maxRewrites);
-	foreach(i;a.postorder(root)) engine.go(a.at(i));
-	result.certificate=engine.go(root);
+	auto context=engine.assume(facts);
+	foreach(i;a.postorder(root)) engine.go(a.at(i),context);
+	result.certificate=engine.go(root,context);
 	result.derivation=d; result.output=result.certificate.after;
 	result.exhausted=budget.exhausted;
 	return result;
@@ -53,8 +62,11 @@ enum Equivalence{ agreeOnCommonDomain,unknown }
 /// A shared normal form proves agreement where BOTH inputs are defined. It
 /// does not prove equality of domains; different forms remain inconclusive.
 Equivalence equivalent(Arena a,Term left,Term right,Options options=Options.init){
+	return equivalent(a,left,right,[],options);
+}
+Equivalence equivalent(Arena a,Term left,Term right,Term[] facts,Options options=Options.init){
 	enforce(a.sort(left)==a.sort(right),"equivalence requires equal types");
-	return simplify(a,left,options).output==simplify(a,right,options).output
+	return simplify(a,left,facts,options).output==simplify(a,right,facts,options).output
 		?Equivalence.agreeOnCommonDomain:Equivalence.unknown;
 }
 

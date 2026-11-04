@@ -1,4 +1,5 @@
 import QSym.Expr
+import QSym.Elementary
 
 namespace QSym.Value
 
@@ -110,6 +111,63 @@ theorem refines_densityAt {a b : Option Density} {x y : Option ℝ}
     (h : Refines a b) (k : Refines x y) : Refines (densityAt a x) (densityAt b y) :=
   refines_bind h (fun _ => refines_bind k (fun _ => refines_refl _))
 
+theorem refines_log_product (x y : Option ℝ)
+    (hx : Refines (lt (some 0) x) (some true))
+    (hy : Refines (lt (some 0) y) (some true)) :
+    Refines (Functions.logR.apply (mul x y)) (add (Functions.logR.apply x) (Functions.logR.apply y)) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    cases y with
+    | none => intro v hv; cases hv
+    | some y =>
+      have hx' : 0 < x := by simpa [Refines, lt] using hx
+      have hy' : 0 < y := by simpa [Refines, lt] using hy
+      intro v hv
+      simpa [Function1.apply, Functions.logR, mul, add, hx', hy', mul_pos hx' hy',
+        Elementary.log_mul_pos hx' hy'] using hv
+
+theorem refines_power_exact (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real)) (v_m : Nat) (v_n : Nat)
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (some ((v_m : Int) : ℝ)) (Value.inv (Value.add (some ((v_n : Int) : ℝ)) (some (((1) : Int) : ℝ))))))))) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (v_y.map (fun x => x ^ (v_n + (1)))) (Value.mul (some (((-1) : Int) : ℝ)) v_x)))) (some true))
+    (hp2 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true))
+    (hp3 : Value.Defined v_y) :
+    Value.Refines (Functions.powerR.apply v_x v_z) (v_y.map (fun x => x ^ v_m)) := by
+  classical
+  obtain ⟨y, rfl⟩ := hp3
+  cases v_x with
+  | none => intro v hv; cases hv
+  | some x =>
+    cases v_z with
+    | none => intro v hv; cases hv
+    | some z =>
+      have hn : (v_n : ℝ)+1 ≠ 0 := by positivity
+      have hz : z = (v_m : ℝ)/((v_n : ℝ)+1) := by
+        simpa [Refines, not, nonzero, add, mul, inv, hn, ← sub_eq_add_neg, sub_eq_zero, div_eq_mul_inv] using hp0
+      have hx : y^(v_n+1) = x := by
+        simpa [Refines, not, nonzero, add, mul, ← sub_eq_add_neg, sub_eq_zero] using hp1
+      have hy : 0 ≤ y := by simpa [Refines, le] using hp2
+      subst x; subst z
+      intro v hv
+      simp only [Function2.apply, Functions.powerR, Option.bind] at hv
+      split at hv
+      · simpa [Elementary.root_power y v_m v_n hy] using hv
+      · cases hv
+
+theorem refines_phase_period (v_x : Option (Ty.denote .real)) (v_n : Option (Ty.denote .integer))
+    (hp0 : Value.Defined v_n) :
+    Value.Refines (Functions.cisR.apply v_x) (Functions.cisR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (Functions.castQR.apply (Functions.castZQ.apply v_n)) (Value.mul (some (((2) : Int) : ℝ)) (some Functions.pi)))))) := by
+  classical
+  obtain ⟨n, rfl⟩ := hp0
+  cases v_x with
+  | none => intro v hv; cases hv
+  | some x =>
+    apply refines_of_eq
+    simpa only [Function1.apply, Functions.cisR, Functions.castQR, Functions.castZQ,
+      add, mul, Option.bind, if_true, Int.cast_neg, Int.cast_one, Int.cast_ofNat, Rat.cast_intCast]
+      using congrArg some (Elementary.phase_period x n).symm
+
 end QSym.Value
 
 namespace QSym
@@ -132,6 +190,9 @@ elab "qsym_split_bool" : tactic => liftMetaTactic fun goal => goal.withContext d
 macro "qsym_scalar" : tactic => `(tactic| (
   first
   | exact Value.refines_inv_inv _
+  | solve | (simp only [Int.cast_zero] at *; apply Value.refines_log_product <;> assumption)
+  | solve | apply Value.refines_power_exact <;> assumption
+  | solve | apply Value.refines_phase_period <;> assumption
   | (
     classical
     intro v hv
@@ -140,28 +201,43 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Functions.mulN, Functions.ltN, Functions.leN, Functions.nonzeroN, Functions.addZ,
       Functions.mulZ, Functions.ltZ, Functions.leZ, Functions.nonzeroZ, Functions.addQ,
       Functions.mulQ, Functions.ltQ, Functions.leQ, Functions.nonzeroQ, Functions.invQ,
-      Functions.eqB, Functions.powerR, Functions.powerC, Functions.sqrtR, Functions.sqrtC,
+      Functions.eqB, Elementary.half_domain, Functions.powerR, Functions.powerC, Functions.sqrtR, Functions.sqrtC,
       Functions.expR, Functions.expC, Functions.sinR, Functions.sinC, Functions.cosR,
       Functions.cosC, Functions.sinhR, Functions.sinhC, Functions.coshR, Functions.coshC,
       Functions.tanhR, Functions.tanhC, Functions.logR, Functions.logC, Functions.tanR,
-      Functions.tanC, Functions.makeC, Functions.reC, Functions.imC, Functions.cisR,
+      Functions.tanC, Functions.minR, Functions.maxR, Functions.signR, Functions.asinR,
+      Functions.acosR, Functions.atanR, Functions.absC, Functions.pi, Functions.e, Functions.makeC, Functions.reC, Functions.imC, Functions.cisR,
       Value.add, Value.mul, Value.inv, Value.nonzero, Value.mask, Value.conj,
       Value.not, Value.and, Value.or, Value.lt, Value.le, Value.abs,
       Option.bind_eq_bind, Option.pure_def, Option.map, Option.bind] at *
     try simp only [Option.some.injEq, forall_eq, forall_eq', Bool.true_eq, decide_eq_true_eq] at *
     repeat' first
-      | simp_all (config := {failIfUnchanged := true})
+      | simp_all (config := {failIfUnchanged := true}) [Real.exp_pos, Real.sqrt_nonneg, Real.pi_pos, Elementary.half_ne_int, Elementary.inv_two_ne_int, Elementary.sqrt_not_neg]
       | qsym_split_and
       | qsym_split_bool
       | split at *
+    all_goals try (simp_all only [← sub_eq_add_neg, sub_eq_zero])
     all_goals subst_vars
+    all_goals try (simp_all [Elementary.log_mul_pos, Elementary.root_power, Real.sqrt_sq_eq_abs,
+      Real.rpow_add, Elementary.rpow_mul_pos, Elementary.rpow_half, ← Real.sqrt_eq_rpow,
+      Real.sin_sub_int_mul_two_pi, Real.cos_sub_int_mul_two_pi, Elementary.sin_period, Elementary.cos_period,
+      Elementary.sin_three_half_pi, Elementary.cos_three_half_pi, Elementary.exp_phase,
+      Elementary.phase_period, Complex.exp_pi_div_two_mul_I,
+      Complex.ofReal_add, add_mul, Complex.exp_add])
     all_goals try (simp_all [pow_add, pow_mul, mul_pow, inv_pow, Real.rpow_natCast, Complex.cpow_natCast,
-      Real.exp_log, Complex.exp_log, Real.log_exp, Real.sqrt_sq_eq_abs])
+      Real.exp_log, Complex.exp_log, Real.log_exp, Real.sqrt_sq_eq_abs,
+      Real.exp_add, Complex.exp_add, Real.exp_sub, Complex.exp_sub, Real.exp_neg, Complex.exp_neg,
+      Real.exp_nat_mul, Complex.exp_nat_mul, Real.exp_one_rpow,
+      Real.log_mul, Real.log_pow, Real.log_inv, Real.log_abs, Real.log_sqrt,
+      Real.sin_sq_add_cos_sq, Complex.sin_sq_add_cos_sq,
+      Real.cosh_sq_sub_sinh_sq, Real.tan_arctan, Real.sin_arcsin, Real.cos_arccos,
+      Real.arcsin_sin, Real.arccos_cos, min_eq_left, min_eq_right, max_eq_left, max_eq_right,
+      Complex.exp_conj, Complex.mul_re, Complex.mul_im, Complex.re_add_im, norm_mul])
     all_goals try (simp_all [abs_mul, abs_inv, abs_pow])
     all_goals try norm_num at *
     all_goals try field_simp
     all_goals try ring_nf at *
-    all_goals try simp_all [Complex.I_sq]
+    all_goals try simp_all [Complex.I_sq, Elementary.phase_half_pi, Elementary.phase_period_normal]
     all_goals try norm_num [Complex.I_pow_eq_pow_mod] at *
     all_goals try ring
     all_goals try (simp only [abs_eq_max_neg, max_def] at *; split_ifs at * <;> nlinarith)
@@ -171,6 +247,11 @@ macro "qsym_scalar" : tactic => `(tactic| (
       div_lt_iff₀, div_le_iff₀, lt_div_iff_of_neg, le_div_iff_of_neg,
       div_lt_iff_of_neg, div_le_iff_of_neg, mul_comm])
     all_goals try (simp only [pow_mul] at *; nlinarith)
+    all_goals try (simp_all [neg_eq_iff_add_eq_zero, add_comm])
+    all_goals try (solve | (apply Eq.symm; apply Real.arcsin_sin <;> linarith))
+    all_goals try (simp_all [Elementary.sqrt_not_neg])
+    all_goals try (apply Elementary.nonnegative_of_pos_or_zero; assumption)
+    all_goals try (solve | (convert Elementary.phase_half_pi.symm using 2 <;> push_cast <;> ring))
     all_goals try positivity
     all_goals try nlinarith
     all_goals try (constructor <;> intro h <;> nlinarith)

@@ -25,3 +25,4 @@ rule rat_literal(n:NatParam,d:NatParam):rat(n,d)+rat(0,1)⇒rat(n,d);
 rewrite imaginary_literal(n:NatParam):conj(complex(0,n))⇒complex(0,0)-complex(0,n);
 rule real_power_literal(x:ℝ,n:NatParam):pow(x,real(n))⇒x^n;
 rule complex_sine_zero():sin(complex(0,0))⇒complex(0,0);
+rule rational_real():real(1,2)+real(1,2)⇒1;

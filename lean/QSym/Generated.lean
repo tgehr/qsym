@@ -1548,4 +1548,567 @@ theorem r_bool_eq_false (v_p : Option (Ty.denote .bool)) :
 
 #qsym_check_axioms r_bool_eq_false
 
+theorem r_real_exp_product (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.mul (Functions.expR.apply v_x) (Functions.expR.apply v_y)) (Functions.expR.apply (Value.add v_x v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_exp_product
+
+theorem r_complex_exp_product (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex)) :
+    Value.Refines (Value.mul (Functions.expC.apply v_x) (Functions.expC.apply v_y)) (Functions.expC.apply (Value.add v_x v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_exp_product
+
+theorem r_real_exp_quotient (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.mul (Functions.expR.apply v_x) (Value.inv (Functions.expR.apply v_y))) (Functions.expR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_exp_quotient
+
+theorem r_complex_exp_quotient (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex)) :
+    Value.Refines (Value.mul (Functions.expC.apply v_x) (Value.inv (Functions.expC.apply v_y))) (Functions.expC.apply (Value.add v_x (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_exp_quotient
+
+theorem r_real_exp_power (v_x : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines ((Functions.expR.apply v_x).map (fun x => x ^ v_n)) (Functions.expR.apply (Value.mul (some ((v_n : Int) : ℝ)) v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_exp_power
+
+theorem r_complex_exp_power (v_x : Option (Ty.denote .complex)) (v_n : Nat) :
+    Value.Refines ((Functions.expC.apply v_x).map (fun x => x ^ v_n)) (Functions.expC.apply (Value.mul (some (((v_n : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_exp_power
+
+theorem r_real_exp_base (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.powerR.apply (some Functions.e) v_x) (Functions.expR.apply v_x) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_exp_base
+
+theorem r_real_positive_exp (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.expR.apply v_x)) (some true) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_positive_exp
+
+theorem r_real_nonnegative_sqrt (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (some (((0) : Int) : ℝ)) (Functions.sqrtR.apply v_x)) (some true) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonnegative_sqrt
+
+theorem r_real_positive_pi :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (some Functions.pi)) (some true) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_positive_pi
+
+theorem r_real_positive_e :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (some Functions.e)) (some true) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_positive_e
+
+theorem r_real_log_product (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp1 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Functions.logR.apply (Value.mul v_x v_y)) (Value.add (Functions.logR.apply v_x) (Functions.logR.apply v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_log_product
+
+theorem r_real_log_power (v_x : Option (Ty.denote .real)) (v_n : Nat)
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Functions.logR.apply (v_x.map (fun x => x ^ v_n))) (Value.mul (some ((v_n : Int) : ℝ)) (Functions.logR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_log_power
+
+theorem r_real_log_square (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.logR.apply (v_x.map (fun x => x ^ (2)))) (Value.mul (some (((2) : Int) : ℝ)) (Functions.logR.apply (Value.abs v_x))) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_log_square
+
+theorem r_real_log_inverse (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Functions.logR.apply (Value.inv v_x)) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.logR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_log_inverse
+
+theorem r_real_log_sqrt (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Functions.logR.apply (Functions.sqrtR.apply v_x)) (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (Functions.logR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_log_sqrt
+
+theorem r_real_half_power (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.powerR.apply v_x (some ((((1) : ℚ) / (2) : ℚ) : ℝ))) (Functions.sqrtR.apply v_x) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_half_power
+
+theorem r_real_sqrt_squared (v_x : Option (Ty.denote .real)) :
+    Value.Refines ((Functions.sqrtR.apply v_x).map (fun x => x ^ (2))) v_x := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sqrt_squared
+
+theorem r_real_sqrt_exact (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add (v_y.map (fun x => x ^ (2))) (Value.mul (some (((-1) : Int) : ℝ)) v_x)))) (some true))
+    (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true))
+    (hp2 : Value.Defined v_y) :
+    Value.Refines (Functions.sqrtR.apply v_x) v_y := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sqrt_exact
+
+theorem r_real_power_exact (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real)) (v_m : Nat) (v_n : Nat)
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (some ((v_m : Int) : ℝ)) (Value.inv (Value.add (some ((v_n : Int) : ℝ)) (some (((1) : Int) : ℝ))))))))) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (v_y.map (fun x => x ^ (v_n + (1)))) (Value.mul (some (((-1) : Int) : ℝ)) v_x)))) (some true))
+    (hp2 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true))
+    (hp3 : Value.Defined v_y) :
+    Value.Refines (Functions.powerR.apply v_x v_z) (v_y.map (fun x => x ^ v_m)) := by
+  cases v_x <;> cases v_y <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_exact
+
+theorem r_real_general_power_product (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Value.mul (Functions.powerR.apply v_x v_y) (Functions.powerR.apply v_x v_z)) (Functions.powerR.apply v_x (Value.add v_y v_z)) := by
+  cases v_x <;> cases v_y <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_general_power_product
+
+theorem r_real_general_power_nested (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Functions.powerR.apply (Functions.powerR.apply v_x v_y) v_z) (Functions.powerR.apply v_x (Value.mul v_y v_z)) := by
+  cases v_x <;> cases v_y <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_general_power_nested
+
+theorem r_real_one_power (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.powerR.apply (some (((1) : Int) : ℝ)) v_x) (some (((1) : Int) : ℝ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_one_power
+
+theorem r_complex_one_power (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.powerC.apply (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z) (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_one_power
+
+theorem r_real_zero_power (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Functions.powerR.apply (some (((0) : Int) : ℝ)) v_x) (some (((0) : Int) : ℝ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_zero_power
+
+theorem r_real_min_left (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_x v_y) (some true)) :
+    Value.Refines (Functions.minR.apply v_x v_y) v_x := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_min_left
+
+theorem r_real_min_right (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_y v_x) (some true)) :
+    Value.Refines (Functions.minR.apply v_x v_y) v_y := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_min_right
+
+theorem r_real_max_left (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_y v_x) (some true)) :
+    Value.Refines (Functions.maxR.apply v_x v_y) v_x := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_max_left
+
+theorem r_real_max_right (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_x v_y) (some true)) :
+    Value.Refines (Functions.maxR.apply v_x v_y) v_y := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_max_right
+
+theorem r_real_sign_positive (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Functions.signR.apply v_x) (some ((1) : ℤ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_positive
+
+theorem r_real_sign_negative (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_x (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.signR.apply v_x) (some ((-1) : ℤ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_negative
+
+theorem r_real_sign_zero (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.nonzero v_x)) (some true)) :
+    Value.Refines (Functions.signR.apply v_x) (some ((0) : ℤ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_zero
+
+theorem r_real_trig_identity (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.add ((Functions.sinR.apply v_x).map (fun x => x ^ (2))) ((Functions.cosR.apply v_x).map (fun x => x ^ (2)))) (some (((1) : Int) : ℝ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_trig_identity
+
+theorem r_complex_trig_identity (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Value.add ((Functions.sinC.apply v_z).map (fun x => x ^ (2))) ((Functions.cosC.apply v_z).map (fun x => x ^ (2)))) (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_trig_identity
+
+theorem r_real_sin_neg (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.sinR.apply (Value.mul (some (((-1) : Int) : ℝ)) v_x)) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.sinR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_neg
+
+theorem r_real_cos_neg (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.cosR.apply (Value.mul (some (((-1) : Int) : ℝ)) v_x)) (Functions.cosR.apply v_x) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_neg
+
+theorem r_real_tan_neg (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.tanR.apply (Value.mul (some (((-1) : Int) : ℝ)) v_x)) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.tanR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tan_neg
+
+theorem r_complex_sin_neg (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.sinC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.sinC.apply v_z)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sin_neg
+
+theorem r_complex_cos_neg (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.cosC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) (Functions.cosC.apply v_z) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cos_neg
+
+theorem r_real_sinh_neg (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.sinhR.apply (Value.mul (some (((-1) : Int) : ℝ)) v_x)) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.sinhR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sinh_neg
+
+theorem r_real_cosh_neg (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.coshR.apply (Value.mul (some (((-1) : Int) : ℝ)) v_x)) (Functions.coshR.apply v_x) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cosh_neg
+
+theorem r_real_hyperbolic_identity (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.add ((Functions.coshR.apply v_x).map (fun x => x ^ (2))) (Value.mul (some (((-1) : Int) : ℝ)) ((Functions.sinhR.apply v_x).map (fun x => x ^ (2))))) (some (((1) : Int) : ℝ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_hyperbolic_identity
+
+theorem r_real_tan_atan (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.tanR.apply (Functions.atanR.apply v_x)) v_x := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tan_atan
+
+theorem r_real_sin_asin (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.sinR.apply (Functions.asinR.apply v_x)) v_x := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_asin
+
+theorem r_real_cos_acos (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.cosR.apply (Functions.acosR.apply v_x)) v_x := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_acos
+
+theorem r_real_asin_sin (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) (some ((((1) : ℚ) / (2) : ℚ) : ℝ))) (some Functions.pi)) v_x) (some true))
+    (hp1 : Value.Refines (Value.le v_x (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (some Functions.pi))) (some true)) :
+    Value.Refines (Functions.asinR.apply (Functions.sinR.apply v_x)) v_x := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asin_sin
+
+theorem r_real_acos_cos (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp1 : Value.Refines (Value.le v_x (some Functions.pi)) (some true)) :
+    Value.Refines (Functions.acosR.apply (Functions.cosR.apply v_x)) v_x := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_acos_cos
+
+theorem r_real_sin_pi :
+    Value.Refines (Functions.sinR.apply (some Functions.pi)) (some (((0) : Int) : ℝ)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_pi
+
+theorem r_real_cos_pi :
+    Value.Refines (Functions.cosR.apply (some Functions.pi)) (some (((-1) : Int) : ℝ)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_pi
+
+theorem r_real_sin_half_pi :
+    Value.Refines (Functions.sinR.apply (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (some Functions.pi))) (some (((1) : Int) : ℝ)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_half_pi
+
+theorem r_real_cos_half_pi :
+    Value.Refines (Functions.cosR.apply (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (some Functions.pi))) (some (((0) : Int) : ℝ)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_half_pi
+
+theorem r_real_sin_three_half_pi :
+    Value.Refines (Functions.sinR.apply (Value.mul (some ((((3) : ℚ) / (2) : ℚ) : ℝ)) (some Functions.pi))) (some (((-1) : Int) : ℝ)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_three_half_pi
+
+theorem r_real_cos_three_half_pi :
+    Value.Refines (Functions.cosR.apply (Value.mul (some ((((3) : ℚ) / (2) : ℚ) : ℝ)) (some Functions.pi))) (some (((0) : Int) : ℝ)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_three_half_pi
+
+theorem r_real_sin_sixth_pi :
+    Value.Refines (Functions.sinR.apply (Value.mul (some ((((1) : ℚ) / (6) : ℚ) : ℝ)) (some Functions.pi))) (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_sixth_pi
+
+theorem r_real_cos_third_pi :
+    Value.Refines (Functions.cosR.apply (Value.mul (some ((((1) : ℚ) / (3) : ℚ) : ℝ)) (some Functions.pi))) (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_third_pi
+
+theorem r_real_cos_quarter_pi :
+    Value.Refines (Functions.cosR.apply (Value.mul (some ((((1) : ℚ) / (4) : ℚ) : ℝ)) (some Functions.pi))) (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (Functions.sqrtR.apply (some (((2) : Int) : ℝ)))) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_quarter_pi
+
+theorem r_real_sin_quarter_pi :
+    Value.Refines (Functions.sinR.apply (Value.mul (some ((((1) : ℚ) / (4) : ℚ) : ℝ)) (some Functions.pi))) (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (Functions.sqrtR.apply (some (((2) : Int) : ℝ)))) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_quarter_pi
+
+theorem r_real_sin_period (v_x : Option (Ty.denote .real)) (v_n : Option (Ty.denote .integer))
+    (hp0 : Value.Defined v_n) :
+    Value.Refines (Functions.sinR.apply v_x) (Functions.sinR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (Functions.castQR.apply (Functions.castZQ.apply v_n)) (Value.mul (some (((2) : Int) : ℝ)) (some Functions.pi)))))) := by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_period
+
+theorem r_real_cos_period (v_x : Option (Ty.denote .real)) (v_n : Option (Ty.denote .integer))
+    (hp0 : Value.Defined v_n) :
+    Value.Refines (Functions.cosR.apply v_x) (Functions.cosR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (Functions.castQR.apply (Functions.castZQ.apply v_n)) (Value.mul (some (((2) : Int) : ℝ)) (some Functions.pi)))))) := by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_period
+
+theorem r_complex_exp_conj (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Value.conj (Functions.expC.apply v_z)) (Functions.expC.apply (Value.conj v_z)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_exp_conj
+
+theorem r_real_part_sum (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.reC.apply (Value.add v_z v_w)) (Value.add (Functions.reC.apply v_z) (Functions.reC.apply v_w)) := by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_part_sum
+
+theorem r_imaginary_part_sum (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.imC.apply (Value.add v_z v_w)) (Value.add (Functions.imC.apply v_z) (Functions.imC.apply v_w)) := by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_imaginary_part_sum
+
+theorem r_real_part_product (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.reC.apply (Value.mul v_z v_w)) (Value.add (Value.mul (Functions.reC.apply v_z) (Functions.reC.apply v_w)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (Functions.imC.apply v_z) (Functions.imC.apply v_w)))) := by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_part_product
+
+theorem r_imaginary_part_product (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.imC.apply (Value.mul v_z v_w)) (Value.add (Value.mul (Functions.reC.apply v_z) (Functions.imC.apply v_w)) (Value.mul (Functions.imC.apply v_z) (Functions.reC.apply v_w))) := by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_imaginary_part_product
+
+theorem r_real_part_cast (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.reC.apply (Functions.castRC.apply v_x)) v_x := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_part_cast
+
+theorem r_imaginary_part_cast (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.imC.apply (Functions.castRC.apply v_x)) (some (((0) : Int) : ℝ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_imaginary_part_cast
+
+theorem r_complex_reconstruction (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.makeC.apply (Functions.reC.apply v_z) (Functions.imC.apply v_z)) v_z := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_reconstruction
+
+theorem r_complex_norm_product (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.absC.apply (Value.mul v_z v_w)) (Value.mul (Functions.absC.apply v_z) (Functions.absC.apply v_w)) := by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_norm_product
+
+theorem r_complex_norm_conj (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.absC.apply (Value.conj v_z)) (Functions.absC.apply v_z) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_norm_conj
+
+theorem r_complex_phase_product (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.mul (Functions.cisR.apply v_x) (Functions.cisR.apply v_y)) (Functions.cisR.apply (Value.add v_x v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_phase_product
+
+theorem r_complex_phase_norm (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.absC.apply (Functions.cisR.apply v_x)) (some (((1) : Int) : ℝ)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_phase_norm
+
+theorem r_complex_exp_phase (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.reC.apply v_z))) (some true)) :
+    Value.Refines (Functions.expC.apply v_z) (Functions.cisR.apply (Functions.imC.apply v_z)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_exp_phase
+
+theorem r_complex_phase_pi :
+    Value.Refines (Functions.cisR.apply (some Functions.pi)) (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_phase_pi
+
+theorem r_complex_phase_half_pi :
+    Value.Refines (Functions.cisR.apply (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (some Functions.pi))) (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) := by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_phase_half_pi
+
+theorem r_complex_phase_period (v_x : Option (Ty.denote .real)) (v_n : Option (Ty.denote .integer))
+    (hp0 : Value.Defined v_n) :
+    Value.Refines (Functions.cisR.apply v_x) (Functions.cisR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (Functions.castQR.apply (Functions.castZQ.apply v_n)) (Value.mul (some (((2) : Int) : ℝ)) (some Functions.pi)))))) := by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_phase_period
+
+theorem r_real_solve_affine (v_x : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.mul v_a v_x) v_b))) (some true))
+    (hp1 : Value.Refines (Value.nonzero v_a) (some true))
+    (hp2 : Value.Defined v_a)
+    (hp3 : Value.Defined v_b) :
+    Value.Refines v_x (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) v_b) (Value.inv v_a)) := by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_solve_affine
+
+theorem r_complex_solve_affine (v_x : Option (Ty.denote .complex)) (v_a : Option (Ty.denote .complex)) (v_b : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.mul v_a v_x) v_b))) (some true))
+    (hp1 : Value.Refines (Value.nonzero v_a) (some true))
+    (hp2 : Value.Defined v_a)
+    (hp3 : Value.Defined v_b) :
+    Value.Refines v_x (Value.mul (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_b) (Value.inv v_a)) := by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_solve_affine
+
 end QSym.Generated

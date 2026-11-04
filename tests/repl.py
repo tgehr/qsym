@@ -23,6 +23,19 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	"sin(z+0)","([p]:ℕ)",":functions cexp",":quit",""]),text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==[
-	"[x<2]","2^(1/2)","nat(0)","rat(1,2)","csin(z)","([p]:ℕ)",
+	"[x<2]","sqrt(2)","nat(0)","rat(1,2)","csin(z)","([p]:ℕ)",
 	"cexp(Complex): Complex","cexpi(Complex): Complex"],result.stdout
+facts_certificate=root/"build/ReplFacts.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":assume x>0",":facts","abs(x)",":assume 2*y+1=7","y^2",":assume x+1",
+	":vars x:ℂ",":vars z:ℂ",":facts","abs(x)",":clear",":vars x:ℂ",
+	f":lean {facts_certificate}",":reset","abs(x)",":facts",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0,result.stderr
+assert result.stdout.splitlines()==[
+	"x>0","x","9","x>0","2*y+1=7","x",f"Wrote {facts_certificate}","abs(x)"],result.stdout
+assert "assumptions must be Bool" in result.stderr,result.stderr
+assert "use :clear before changing the type of x" in result.stderr,result.stderr
+# Clearing facts and changing types cannot change the last result's certificate.
+assert "(g1 :" in facts_certificate.read_text() and "(g2 :" in facts_certificate.read_text()
 print("REPL checks passed.")

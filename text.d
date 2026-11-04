@@ -30,7 +30,7 @@ struct Syntax{
 			if(p.name=="nat") return a.natural_(p.args[0].number);
 			if(p.name=="int") return a.integer(p.args[0].number);
 			if(p.name=="rat") return a.rational(p.args[0].number,p.args[1].number);
-			if(p.name=="real") return a.real_(p.args[0].number);
+			if(p.name=="real") return p.args.length==1?a.real_(p.args[0].number):a.real_(Rational(BigInt(p.args[0].number),BigInt(p.args[1].number)));
 			if(p.name=="complex") return a.complex(p.args[0].number,p.args[1].number);
 			if(p.name=="true"||p.name=="false") return a.boolean(p.name=="true");
 			if(p.name=="lebesgue") return a.lebesgue();

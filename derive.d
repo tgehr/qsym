@@ -8,7 +8,7 @@ import std.exception:enforce;
 struct Proof{ Term before,after; uint id=uint.max,context; bool known; }
 struct Context{ uint parent; Term guard; bool value; }
 enum Evidence{ rule,trans,congr,scoped,assumption,transport,numeric,ac }
-struct DomainProof{ Term term; uint[] path; DomainProof[] children; bool found,total; }
+struct DomainProof{ Term term; uint[] path; DomainProof[] children; bool found,total; uint assumption; }
 struct Deduction{
 	Evidence kind;
 	Proof proof;
@@ -62,7 +62,7 @@ final class Derivation{
 		foreach(c;i.conditions){
 			if(c.literal) enforce(arena.isNumber(c.term),"literal premise failed");
 			else if(c.defined){
-				auto d=domain(i.before,c.term);
+				auto d=domain(i.before,c.term,context);
 				enforce(d.found,"missing definedness premise"); domains~=d;
 			}else{
 				enforce(j<premises.length&&premises[j].before==c.term&&premises[j].after==arena.boolean(true)&&visible(premises[j].context,context),"invalid rule premise");
@@ -135,7 +135,7 @@ final class Derivation{
 		auto d=Deduction(Evidence.ac,Proof(before,after,uint.max,context)); d.value=op==Op.mul;
 		return record(d);
 	}
-	DomainProof domain(Term source,Term target){
+	DomainProof domain(Term source,Term target,uint context=0){
 		Table!(uint,uint) known;
 		struct Entry{ Term term; uint[] path; }
 		Entry[] pending=[Entry(source)]; uint[][] paths;
@@ -153,6 +153,10 @@ final class Derivation{
 			if(i!=uint.max){ d.found=true; d.path=paths[i]; return d; }
 			auto n=arena.node(t);
 			if(n.arity==0){ d.found=d.total=true; return d; }
+			for(auto c=context;c;c=contexts[c].parent){
+				auto p=this.domain(contexts[c].guard,t);
+				if(p.found){ p.assumption=c; return p; }
+			}
 			if(depth>=128||n.op==Op.inv||n.op==Op.mask||n.op==Op.and_||n.op==Op.or_||n.op==Op.builtin&&!builtinInfo(cast(Builtin)n.value).total) return d;
 			foreach(j;0..n.arity){
 				auto child=build(arena.child(t,j),depth+1);

@@ -337,8 +337,12 @@ private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 	uint[] args;
 	foreach(arg;p.args) args~=possible(arg,parameters,depth+1);
 	if(literalName(p.name)){
-		enforce(arity==(p.name=="complex"||p.name=="rat"?2:1),"literal arity mismatch");
+		enforce(arity==(p.name=="complex"||p.name=="rat"?2:1)||p.name=="real"&&arity==2,"literal arity mismatch");
 		foreach(arg;p.args) enforce(payload(arg),"literal integer or NatParam expected");
+		if(p.name=="real"&&arity==2){
+			foreach(arg;p.args) enforce(arg.name=="#","rational real patterns require fixed integer payloads");
+			enforce(p.args[1].number!=0,"zero rational denominator");
+		}
 		if(p.name=="nat") enforce(p.args[0].name!="#"||p.args[0].number>=0,"negative natural literal");
 		if(p.name=="rat") enforce(p.args[1].name!="#"||p.args[1].number!=0,"zero rational denominator");
 		return p.candidates=bit(literalSort(p.name));
@@ -552,6 +556,7 @@ string parameterCode(string name){ return "v_"~symbolCode(name); }
 string ruleCode(string name){ return "r_"~symbolCode(name); }
 string leanPattern(Pattern p){
 	if(p.variable) return parameterCode(p.name);
+	if(p.name=="real"&&p.args.length==2) return "(.ratR (("~leanPattern(p.args[0])~" : ℚ) / "~leanPattern(p.args[1])~"))";
 	if(p.name=="rat") return "(.rat (("~leanPattern(p.args[0])~" : ℚ) / "~leanPattern(p.args[1])~"))";
 	if(p.name=="natAdd"||p.name=="natMul")
 		return "("~leanPattern(p.args[0])~(p.name=="natAdd"?" + ":" * ")~leanPattern(p.args[1])~")";
@@ -564,6 +569,7 @@ string leanPattern(Pattern p){
 
 unittest{
 	import std.exception:assertThrown;
+	assertThrown(Parser("rule bad():real(1,0)⇒0;").parse());
 	assert(Parser("rule z(x:Real): addR(x,real(0)) => x;").parse().length==1);
 	assertThrown(Parser("rule z(x:Real): addC(x,complex(0,0)) => x;").parse());
 	assertThrown(Parser("rule z(x:Real): addR(x,real(0)) => y;").parse());

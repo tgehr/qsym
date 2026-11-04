@@ -53,6 +53,12 @@ def main():
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
+	certificate(ROOT/"build/ReplFacts.lean")
+	elementary=sorted((ROOT/"build/elementary").glob("*.lean"))
+	if len(elementary)!=82:
+		raise RuntimeError("expected 82 elementary certificates")
+	for file in elementary:
+		certificate(file)
 	language=sorted((ROOT/"build/language").glob("*.lean"))
 	if len(language)!=47 or not (ROOT/"build/language/Builtins.lean").is_file():
 		raise RuntimeError("expected 47 language certificates")
@@ -93,6 +99,9 @@ def main():
 		("BadCondition","rewrite bad(x:ℝ):|x|⇒x when x≤0;"),
 		("BadComplexLog","rewrite bad(z:ℂ):clog(cexp(z))⇒z;"),
 		("BadComplexRoot","rewrite bad(z:ℂ):csqrt(z^2)⇒z;"),
+		("BadLogProduct","rewrite bad(x:ℝ,y:ℝ):log(x*y)⇒log(x)+log(y);"),
+		("BadNestedPower","rewrite bad(x:ℝ,y:ℝ,z:ℝ):powerR(powerR(x,y),z)⇒powerR(x,y*z);"),
+		("BadRealRoot","rewrite bad(x:ℝ):sqrt(x^2)⇒x;"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
 		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),
@@ -102,6 +111,19 @@ def main():
 		"theorem forged (x : Option ℝ) (h : Value.Defined x) : Value.Defined (Functions.logR.apply x) :=\n"
 		"  Functions.logR.total (fun _ => True.intro) x h\n")
 	check(negative/"PartialIsNotTotal.lean",succeeds=False)
+
+	fact=(ROOT/"build/elementary/AbsFact.lean").read_text()
+	weak,count=re.subn(r"\(g1 : (\(Expr.eval ρ n\d+\)) = some true\)",
+		r"(g1 : Value.Refines \1 (some true))",fact)
+	if not count:
+		raise RuntimeError("could not construct the weak-assumption test")
+	(negative/"WeakAssumption.lean").write_text(weak)
+	check(negative/"WeakAssumption.lean",succeeds=False)
+	claim=re.search(r"theorem refinement .*? : (Value.Refines .*?) :=",fact).group(1)
+	claim=re.sub(r"\bn(\d+)\b",r"Certificate.n\1",claim)
+	(negative/"MissingAssumption.lean").write_text(fact+"\nnamespace QSym\n"
+		+"theorem forged (ρ : Env) : "+claim+" := Certificate.refinement ρ rfl\nend QSym\n")
+	check(negative/"MissingAssumption.lean",succeeds=False)
 
 	guarded=(ROOT/"build/scalar/IntervalAbs.lean").read_text()
 	corrupt,count=re.subn(

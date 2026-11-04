@@ -98,6 +98,20 @@ package final class Field{
 		sort!((x,y)=>compare(a,x.atom,y.atom)<0)(m.factors);
 		return m;
 	}
+	bool affine(Term expression,Term variable,out Term coefficient,out Term remainder){
+		Number c; Term[] rest;
+		foreach(t;leaves(expression,Op.add)){
+			auto m=mono(t);
+			if(m.factors.length==1&&m.factors[0].atom==variable&&m.factors[0].exponent==1)
+				c=budget.calc!"+"(c,m.coefficient);
+			else{
+				foreach(id;a.postorder(t)){ budget.spend(); if(id==variable.id) return false; }
+				rest~=t;
+			}
+		}
+		if(c.zero) return false;
+		coefficient=a.number(c,a.sort(variable)); remainder=balanced(rest,Op.add,a.sort(variable)); return true;
+	}
 	private int order(Mono x,Mono y){
 		long dx,dy; foreach(f;x.factors) dx+=f.exponent; foreach(f;y.factors) dy+=f.exponent;
 		if(dx!=dy) return dx<dy?-1:1;

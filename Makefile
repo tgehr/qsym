@@ -32,6 +32,8 @@ test: build/qsym
 	./build/scalar-tests --DRT-testmode=run-main build/scalar
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/language.d -of=build/language-tests
 	./build/language-tests --DRT-testmode=run-main build/language
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/elementary.d -of=build/elementary-tests
+	./build/elementary-tests --DRT-testmode=run-main build/elementary
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

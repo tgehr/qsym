@@ -181,7 +181,11 @@ private string totalCode(Arena a,Term t,bool[] total){
 	total[t.id]=proof.length!=0;
 	return proof.length?"theorem total_"~to!string(t.id)~" (ρ : Env) : Expr.Defined ρ "~name(t.id)~" :=\n  "~proof~"\n":"";
 }
-private string domainEvidence(Arena a,Term source,DomainProof p,string h){
+private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,string h){
+	if(p.assumption){
+		source=d.contexts[p.assumption].guard;
+		h="(show Value.Defined "~ev(source.id)~" from ⟨_, g"~to!string(p.assumption)~"⟩)";
+	}
 	enforce(p.found,"missing domain evidence");
 	if(p.total) return "(show Value.Defined "~ev(p.term.id)~" from ⟨_, rfl⟩)";
 	if(p.children.length){
@@ -191,11 +195,11 @@ private string domainEvidence(Arena a,Term source,DomainProof p,string h){
 			enforce(info.total,"partial function is not total");
 			string proof="(Functions."~info.code~".total (fun "~(n.arity==1?"_":"_ _")~" => True.intro) "~ev(n.a);
 			if(n.arity==2) proof~=" "~ev(n.b);
-			foreach(child;p.children) proof~=" "~domainEvidence(a,source,child,h);
+			foreach(child;p.children) proof~=" "~domainEvidence(a,d,source,child,h);
 			return proof~")";
 		}
-		string args=ev(n.a),proof=domainEvidence(a,source,p.children[0],h);
-		if(n.arity==2){ args~=" "~ev(n.b); proof="⟨"~proof~", "~domainEvidence(a,source,p.children[1],h)~"⟩"; }
+		string args=ev(n.a),proof=domainEvidence(a,d,source,p.children[0],h);
+		if(n.arity==2){ args~=" "~ev(n.b); proof="⟨"~proof~", "~domainEvidence(a,d,source,p.children[1],h)~"⟩"; }
 		return "((Value."~domainLemma(n)~" "~args~").mpr "~proof~")";
 	}
 	auto t=source;
@@ -246,10 +250,18 @@ private string acEvidence(Arena a,Deduction e){
 string exportLean(Arena a,Result result){
 	enforce(result.traced&&result.derivation !is null&&result.derivation.tracing,"proof export requires a recorded derivation");
 	auto d=result.derivation;
-	enforce(d.arena is a&&result.certificate.context==0,"invalid certificate context");
+	enforce(d.arena is a,"invalid certificate arena");
+	auto context=result.certificate.context;
+	auto chain=context;
+	foreach_reverse(f;result.assumptions){
+		enforce(chain&&d.contexts[chain].guard==f&&d.contexts[chain].value,"invalid certificate assumptions");
+		chain=d.contexts[chain].parent;
+	}
+	enforce(!chain,"undeclared certificate assumption");
 	enforce(result.certificate.before==result.proofInput&&result.certificate.after==result.output,"certificate endpoints changed");
 	bool[] needed=new bool[a.length],used=new bool[d.deductions.length];
 	Term[] pending=[result.input,result.proofInput,result.output];
+	pending~=result.assumptions;
 	Proof[] proofs=[result.certificate];
 	while(proofs.length){
 		auto p=proofs[$-1]; --proofs.length;
@@ -280,7 +292,7 @@ string exportLean(Arena a,Result result){
 				if(e.domains.length) s~="  fun v hv =>\n  let hd : Value.Defined "~ev(p.before.id)~" := ⟨v, hv⟩\n";
 				foreach(c;r.conditions){
 					if(c.literal) continue;
-					application~=" "~(c.defined?domainEvidence(a,p.before,e.domains[domain++],"hd"):ref_(e.premises[premise++]));
+					application~=" "~(c.defined?domainEvidence(a,d,p.before,e.domains[domain++],"hd"):ref_(e.premises[premise++]));
 				}
 				application="("~application~")";
 				if(r.reversed){ enforce(r.equality,"cannot reverse a refinement"); application~=".symm"; }
@@ -335,9 +347,9 @@ string exportLean(Arena a,Result result){
 		}
 		s~="\n";
 	}
-	s~="theorem refinement (ρ : Env) : Value.Refines "~ev(result.proofInput.id)~" "~ev(result.output.id)~" :=\n  "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
-	s~="theorem simplification (ρ : Env) (h : Expr.Defined ρ "~name(result.proofInput.id)~") : "~
-		ev(result.proofInput.id)~" = "~ev(result.output.id)~" := (refinement ρ).eq_of_defined h\n#qsym_check_axioms simplification\n\n";
+	s~="theorem refinement (ρ : Env)"~contexts(d,context,true)~" : Value.Refines "~ev(result.proofInput.id)~" "~ev(result.output.id)~" :=\n  "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
+	s~="theorem simplification (ρ : Env)"~contexts(d,context,true)~" (h : Expr.Defined ρ "~name(result.proofInput.id)~") : "~
+		ev(result.proofInput.id)~" = "~ev(result.output.id)~" := (refinement ρ"~contexts(d,context,false)~").eq_of_defined h\n#qsym_check_axioms simplification\n\n";
 	auto inputOrder=a.postorder(result.input);
 	foreach(i;inputOrder) s~=domainCode(a,a.at(i));
 	s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" ↔ "~dc(result.input.id)~" := "~ds(result.input.id)~"\n#qsym_check_axioms definedness\n";
@@ -357,15 +369,22 @@ string exportEquivalence(Arena a,Result left,Result right){
 	import std.string:replace;
 	enforce(left.output==right.output,"no shared normal form; equivalence remains unknown");
 	enforce(a.sort(left.proofInput)==a.sort(right.proofInput),"proof endpoint types differ");
+	enforce(left.assumptions==right.assumptions,"equivalence requires the same assumptions");
 	auto l=exportLean(a,left).replace("QSym.Certificate","QSym.LeftCertificate");
 	auto r=exportLean(a,right).replace("QSym.Certificate","QSym.RightCertificate");
 	r=r.replace("import QSym\n","");
+	string hypotheses,arguments;
+	foreach(i,f;left.assumptions){
+		auto h="h"~to!string(i);
+		hypotheses~="\n    ("~h~" : Expr.eval ρ LeftCertificate."~name(f.id)~" = some true)";
+		arguments~=" "~h;
+	}
 	return l~"\n"~r~"\nnamespace QSym\n"~
-		"theorem equivalence (ρ : Env)\n"~
+		"theorem equivalence (ρ : Env)"~hypotheses~"\n"~
 		"    (hl : Expr.Defined ρ LeftCertificate."~name(left.proofInput.id)~")\n"~
 		"    (hr : Expr.Defined ρ RightCertificate."~name(right.proofInput.id)~") :\n"~
 		"    Expr.eval ρ LeftCertificate."~name(left.proofInput.id)~
 		" = Expr.eval ρ RightCertificate."~name(right.proofInput.id)~" :=\n"~
-		"  (LeftCertificate.simplification ρ hl).trans (RightCertificate.simplification ρ hr).symm\n"~
+		"  (LeftCertificate.simplification ρ"~arguments~" hl).trans (RightCertificate.simplification ρ"~arguments~" hr).symm\n"~
 		"#qsym_check_axioms equivalence\nend QSym\n";
 }
