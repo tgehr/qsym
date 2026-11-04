@@ -1,6 +1,7 @@
 module all;
 import qsym;
 import qsym.spec;
+import qsym.tests.rules;
 
 @safe unittest{
 	import std.exception:assertThrown;

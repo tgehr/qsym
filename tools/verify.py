@@ -24,10 +24,10 @@ def main():
 	parser.add_argument("--lean",help="invoke this Lean directly, with configured LEAN_PATH")
 	args=parser.parse_args()
 
-	def check(path,succeeds=True):
+	def check(path,succeeds=True,timeout=180):
 		cmd=[args.lean] if args.lean else [args.lake,"env","lean"]
 		completed=subprocess.run(cmd+[str(path.resolve())],cwd=ROOT/"lean",
-			stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=180)
+			stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=timeout)
 		if succeeds:
 			if completed.returncode:
 				raise RuntimeError(completed.stdout)
@@ -35,25 +35,29 @@ def main():
 		else:
 			if completed.returncode==0:
 				raise RuntimeError(f"invalid proof was accepted: {path.name}")
-			if not any(s in completed.stdout for s in ("unsolved goals","type mismatch")):
+			if not any(s in completed.stdout for s in ("unsolved goals","type mismatch","is false")):
 				raise RuntimeError("negative test failed for the wrong reason:\n"+completed.stdout)
 		print(("checked " if succeeds else "rejected ")+path.name,flush=True)
 
 	# Recheck generated theorems here so their full axiom reports are audited,
 	# even when Lake reused cached build outputs.
-	check(ROOT/"lean/QSym/Generated.lean")
+	check(ROOT/"lean/QSym/Generated.lean",timeout=600)
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"build/Syntax.lean")
 	scalars=sorted((ROOT/"build/scalar").glob("*.lean"))
-	if len(scalars)!=58:
-		raise RuntimeError("expected 58 scalar certificates")
+	if len(scalars)!=59:
+		raise RuntimeError("expected 59 scalar certificates")
 	for file in scalars:
+		if re.search(r"\b(qsym_scalar|ring|ring_nf|field_simp|nlinarith)\b",file.read_text()):
+			raise RuntimeError("symbolic endpoint tactic in certificate: "+file.name)
 		check(file)
 	files=sorted((ROOT/"build/certificates").glob("*.lean"))
 	if len(files)!=7:
 		raise RuntimeError("expected seven freshly generated certificates")
 	for file in files:
+		if re.search(r"\b(qsym_scalar|ring|ring_nf|field_simp|nlinarith)\b",file.read_text()):
+			raise RuntimeError("symbolic endpoint tactic in certificate: "+file.name)
 		check(file)
 
 	negative=ROOT/"build/negative"
@@ -67,6 +71,28 @@ def main():
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad_abs.d"),
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
+	for name,rule in (
+		("BadCondition","rewrite bad(x:ℝ):|x|⇒x when x≤0;"),
+		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
+		bad_rules.write_text(rule+"\n",encoding="utf-8")
+		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),
+			str(negative/(name+".lean"))],check=True,stdout=subprocess.PIPE)
+		check(negative/(name+".lean"),succeeds=False)
+
+	guarded=(ROOT/"build/scalar/IntervalAbs.lean").read_text()
+	corrupt,count=re.subn(
+		r"(Generated\.r_real_abs_nonpositive \(Expr.eval ρ n\d+\)) \(p\d+ ρ g\d+\)",
+		r"\1 (Value.refines_refl (some true))",guarded,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the wrong-premise test")
+	(negative/"WrongPremise.lean").write_text(corrupt)
+	check(negative/"WrongPremise.lean",succeeds=False)
+	polynomial=(ROOT/"build/scalar/Polynomial.lean").read_text()
+	corrupt,count=re.subn(r"(Replay\.AC\.sound[^\n]*?\(\.leaf )\d+",r"\g<1>999999",polynomial,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid-permutation test")
+	(negative/"WrongPermutation.lean").write_text(corrupt)
+	check(negative/"WrongPermutation.lean",succeeds=False)
 
 	good=(ROOT/"build/certificates/Guarded.lean").read_text()
 	corrupt,count=re.subn(

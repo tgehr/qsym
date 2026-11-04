@@ -2,6 +2,7 @@ module qsym.proof;
 import qsym.ir;
 import qsym.simplify;
 import qsym.domain;
+import qsym.derive;
 import qsym.spec:leanSort;
 import std.conv:to;
 import std.exception:enforce;
@@ -130,103 +131,198 @@ private string domainCode(Arena a,Term t){
 		"  change Value.Defined ("~sem~") ↔ ("~cond~")\n  "~proof~"\n\n";
 }
 
-/// Emits a closed statement about the ORIGINAL input and actual output, with
-/// explicit congruence and instantiated rule proofs. D is not trusted by Lean.
-/// Fast-mode results cannot accidentally be exported as checked results.
-string exportLean(Arena a,Result result){
-	enforce(result.traced,"proof export requires Options.trace = true");
-	a.check(result.input); a.check(result.proofInput); a.check(result.output);
-	string s="-- Generated certificate. Check with: lake env lean FILE.lean\n"~
-		"import QSym\nnamespace QSym.Certificate\n";
-
-	// Only export nodes referenced by the certificate, retaining DAG sharing.
-	bool[] needed=new bool[a.length];
-	Term[] pending=[result.input,result.proofInput,result.output];
-	foreach(step;result.steps){
-		pending~=[step.before,step.rebuilt,step.result,step.algebraInput];
-		foreach(ap;step.applied){
-			pending~=[ap.before,ap.rule.result]; pending~=ap.rule.bindings;
-		}
+private string contexts(Derivation d,uint ctx,bool declarations){
+	uint[] chain;
+	for(auto i=ctx;i;i=d.contexts[i].parent) chain=i~chain;
+	string s;
+	foreach(i;chain){
+		auto c=d.contexts[i]; auto g="g"~to!string(i);
+		s~=declarations?" ("~g~" : "~ev(c.guard.id)~" = some "~(c.value?"true":"false")~")":" "~g;
 	}
-	size_t cursor;
-	while(cursor<pending.length){
-		auto t=pending[cursor++]; a.check(t);
-		if(needed[t.id]) continue;
-		needed[t.id]=true;
+	return s;
+}
+private string reference(Derivation d,Proof p,bool raw=false){
+	if(p.id==uint.max){ enforce(p.before==p.after,"missing derivation"); return "(Value.refines_refl "~ev(p.before.id)~")"; }
+	enforce(p.id<d.deductions.length,"invalid proof reference");
+	auto saved=d.deductions[p.id].proof;
+	enforce(saved.before==p.before&&saved.after==p.after,"proof endpoints changed");
+	auto s="(p"~to!string(p.id)~" ρ"~contexts(d,saved.context,false)~")";
+	return saved.known&&!raw?"(Value.refines_of_eq "~s~")":s;
+}
+private string domainLemma(Node n){
+	switch(n.op){
+		case Op.add:return "defined_add";
+		case Op.mul:return "defined_mul";
+		case Op.lt:return "defined_lt";
+		case Op.le:return "defined_le";
+		case Op.densityAt:return "defined_densityAt";
+		case Op.nonzero:return "defined_nonzero";
+		case Op.not_:return "defined_not";
+		case Op.conj:return "defined_conj";
+		case Op.pow,Op.abs,Op.puncture,Op.forget:return "defined_map _";
+		default:assert(0,"unsupported definedness operation");
+	}
+}
+private string domainEvidence(Arena a,Term source,DomainProof p,string h){
+	enforce(p.found,"missing domain evidence");
+	if(p.total) return "(show Value.Defined "~ev(p.term.id)~" from ⟨_, rfl⟩)";
+	if(p.children.length){
+		auto n=a.node(p.term);
+		string args=ev(n.a),proof=domainEvidence(a,source,p.children[0],h);
+		if(n.arity==2){ args~=" "~ev(n.b); proof="⟨"~proof~", "~domainEvidence(a,source,p.children[1],h)~"⟩"; }
+		return "((Value."~domainLemma(n)~" "~args~").mpr "~proof~")";
+	}
+	auto t=source;
+	foreach(i;p.path){
 		auto n=a.node(t);
-		if(n.arity>=1) pending~=a.at(n.a);
-		if(n.arity==2) pending~=a.at(n.b);
+		switch(n.op){
+			case Op.inv:h="(Value.defined_inv_arg "~ev(n.a)~" "~h~")"; break;
+			case Op.mask:h="(Value.defined_mask_guard "~ev(n.a)~" "~ev(n.b)~" "~h~")"; break;
+			case Op.and_:h="(Value.defined_and_guard "~ev(n.a)~" "~ev(n.b)~" "~h~")"; break;
+			case Op.or_:h="(Value.defined_or_guard "~ev(n.a)~" "~ev(n.b)~" "~h~")"; break;
+			default:
+				auto args=ev(n.a)~(n.arity==2?" "~ev(n.b):"");
+				h="((Value."~domainLemma(n)~" "~args~").mp "~h~")";
+				if(n.arity==2) h~="."~to!string(i+1);
+				break;
+		}
+		t=a.child(t,i);
 	}
-	foreach(i,used;needed) if(used){
-		auto n=a.node(a.at(cast(uint) i));
-		s~="def "~name(cast(uint) i)~" : Expr ."~leanSort(n.sort)~" := "~leanConstructor(a,n)~"\n";
+	enforce(t==p.term,"bad domain projection");
+	return h;
+}
+private string nodeDefinitions(Arena a,Term[] roots){
+	bool[] seen=new bool[a.length]; string[] names;
+	foreach(root;roots) foreach(id;a.postorder(root)) if(!seen[id]){ seen[id]=true; names~=name(id); }
+	return names.join(", ");
+}
+private string acEvidence(Arena a,Deduction e){
+	import qsym.table:Table;
+	auto op=e.value?Op.mul:Op.add;
+	Term[] atoms; Table!(uint,uint) ids;
+	string tree(Term t){
+		auto n=a.node(t);
+		if(n.op==op) return "(.node "~tree(a.at(n.a))~" "~tree(a.at(n.b))~")";
+		if(a.isNumber(t)&&(e.value?a.number(t).one:a.number(t).zero)) return ".unit";
+		auto i=ids.get(t.id,uint.max);
+		if(i==uint.max){ i=cast(uint)atoms.length; ids.set(t.id,i); atoms~=t; }
+		return "(.leaf "~to!string(i)~")";
 	}
+	auto left=tree(e.proof.before),right=tree(e.proof.after);
+	auto ac="Replay."~(e.value?"mul":"add")~(a.sort(e.proof.before)==Sort.real_?"R":"C");
+	string env="(fun i => match i with";
+	foreach(i,t;atoms) env~=" | "~to!string(i)~" => "~ev(t.id);
+	env~=" | _ => none)";
+	return "  simpa only ["~nodeDefinitions(a,[e.proof.before,e.proof.after])~
+		", Expr.eval, Replay.AC.eval, "~ac~", Int.cast_zero, Int.cast_one, zero_mul, add_zero] using\n"~
+		"    (Value.refines_of_eq (Replay.AC.sound "~ac~" "~env~" "~left~" "~right~" (by decide)))\n";
+}
+
+// The exporter replays named laws and their premises. It never asks an
+// algebra tactic to guess why two symbolic endpoints might agree.
+string exportLean(Arena a,Result result){
+	enforce(result.traced&&result.derivation !is null&&result.derivation.tracing,"proof export requires a recorded derivation");
+	auto d=result.derivation;
+	enforce(d.arena is a&&result.certificate.context==0,"invalid certificate context");
+	enforce(result.certificate.before==result.proofInput&&result.certificate.after==result.output,"certificate endpoints changed");
+	bool[] needed=new bool[a.length],used=new bool[d.deductions.length];
+	Term[] pending=[result.input,result.proofInput,result.output];
+	Proof[] proofs=[result.certificate];
+	while(proofs.length){
+		auto p=proofs[$-1]; --proofs.length;
+		pending~=[p.before,p.after];
+		if(p.id==uint.max) continue;
+		enforce(p.id<used.length,"invalid proof index");
+		if(used[p.id]) continue;
+		used[p.id]=true; auto e=d.deductions[p.id]; proofs~=e.premises;
+		pending~=e.instance.bindings;
+		foreach(c;e.instance.conditions) pending~=c.term;
+		for(auto c=e.proof.context;c;c=d.contexts[c].parent) pending~=d.contexts[c].guard;
+	}
+	foreach(t;pending) foreach(id;a.postorder(t)) needed[id]=true;
+	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\n";
+	foreach(i,n;needed) if(n){ auto t=a.at(cast(uint)i); s~="def "~name(t.id)~" : Expr ."~leanSort(a.sort(t))~" := "~leanConstructor(a,a.node(t))~"\n"; }
 	s~="\n";
-
-	foreach(step;result.steps){
-		auto n=a.node(step.before),rebuilt=a.node(step.rebuilt);
-		s~="theorem h"~to!string(step.before.id)~" (ρ : Env) : Value.Refines "~ev(step.before.id)~
-			" "~ev(step.result.id)~" := by\n";
-		s~="  have h0 : Value.Refines "~ev(step.before.id)~" "~ev(step.rebuilt.id)~" := by\n";
-		if(step.before==step.rebuilt) s~="    exact Value.refines_refl _\n";
-		else{
-			s~="    change Value.Refines ("~semantic(a,n)~") ("~semantic(a,rebuilt)~")\n";
-			auto h1="(h"~to!string(n.a)~" ρ)",h2="(h"~to!string(n.b)~" ρ)";
-			string lemma;
-			switch(n.op){
-				case Op.add:lemma="refines_add "~h1~" "~h2; break;
-				case Op.mul:lemma="refines_mul "~h1~" "~h2; break;
-				case Op.inv:lemma="refines_inv "~h1; break;
-				case Op.nonzero:lemma="refines_nonzero "~h1; break;
-				case Op.conj:lemma="refines_conj "~h1; break;
-				case Op.not_:lemma="refines_not "~h1; break;
-				case Op.and_:lemma="refines_and "~h1~" "~h2; break;
-				case Op.or_:lemma="refines_or "~h1~" "~h2; break;
-				case Op.lt:lemma="refines_lt "~h1~" "~h2; break;
-				case Op.le:lemma="refines_le "~h1~" "~h2; break;
-				case Op.mask:lemma="refines_mask "~h1~" "~h2; break;
-				case Op.densityAt:lemma="refines_densityAt "~h1~" "~h2; break;
-				case Op.pow,Op.abs,Op.puncture,Op.forget:lemma="refines_map _ "~h1; break;
-				default:assert(0,"unexpected congruence");
-			}
-			s~="    exact Value."~lemma~"\n";
+	foreach(i,yes;used) if(yes){
+		auto e=d.deductions[i],p=e.proof;
+		auto claim=p.known?ev(p.before.id)~" = "~ev(p.after.id):"Value.Refines "~ev(p.before.id)~" "~ev(p.after.id);
+		s~="theorem p"~to!string(i)~" (ρ : Env)"~contexts(d,p.context,true)~" : "~claim~" := by\n";
+		string ref_(Proof q){ return reference(d,q); }
+		final switch(e.kind){
+			case Evidence.rule:
+				auto r=e.instance;
+				string application="Generated."~r.rule;
+				foreach(j,b;r.bindings) application~=" "~(r.naturals[j]?to!string(a.number(b).re.integer):ev(b.id));
+				size_t premise,domain;
+				if(e.domains.length) s~="  intro v hv\n  have hd : Value.Defined "~ev(p.before.id)~" := ⟨v, hv⟩\n";
+				foreach(c;r.conditions){
+					if(c.literal) continue;
+					application~=" "~(c.defined?domainEvidence(a,p.before,e.domains[domain++],"hd"):ref_(e.premises[premise++]));
+				}
+				application="("~application~")";
+				if(r.reversed){ enforce(r.equality,"cannot reverse a refinement"); application~=".symm"; }
+				if(r.equality) application="(Value.refines_of_eq "~application~")";
+				s~="  exact "~application~(e.domains.length?" v hv":"")~"\n";
+				break;
+			case Evidence.trans:s~="  exact "~ref_(e.premises[0])~".trans "~ref_(e.premises[1])~"\n"; break;
+			case Evidence.congr:
+				auto n=a.node(p.before),m=a.node(p.after);
+				s~="  change Value.Refines ("~semantic(a,n)~") ("~semantic(a,m)~")\n";
+				string lemma;
+				switch(n.op){
+					case Op.add:lemma="refines_add"; break;
+					case Op.mul:lemma="refines_mul"; break;
+					case Op.inv:lemma="refines_inv"; break;
+					case Op.nonzero:lemma="refines_nonzero"; break;
+					case Op.conj:lemma="refines_conj"; break;
+					case Op.not_:lemma="refines_not"; break;
+					case Op.and_:lemma="refines_and"; break;
+					case Op.or_:lemma="refines_or"; break;
+					case Op.lt:lemma="refines_lt"; break;
+					case Op.le:lemma="refines_le"; break;
+					case Op.mask:lemma="refines_mask"; break;
+					case Op.densityAt:lemma="refines_densityAt"; break;
+					case Op.pow,Op.abs,Op.puncture,Op.forget:lemma="refines_map _"; break;
+					default:assert(0,"invalid congruence");
+				}
+				s~="  exact Value."~lemma;
+				foreach(q;e.premises) s~=" "~ref_(q);
+				s~="\n"; break;
+			case Evidence.scoped:
+				auto n=a.node(p.before),body=e.premises[0];
+				auto op=n.op==Op.mask?"mask":n.op==Op.and_?"and":"or";
+				s~="  exact Value.refines_"~op~"_under "~ev(n.a)~" "~ev(body.before.id)~" "~ev(body.after.id)~
+					" (fun g"~to!string(body.context)~" => "~ref_(body)~")\n";
+				break;
+			case Evidence.assumption:
+				auto t=d.contexts[e.assumptionScope].guard;
+				string h="g"~to!string(e.assumptionScope);
+				foreach(j;e.path){
+					auto n=a.node(t);
+					auto lemma=n.op==Op.not_?"of_not":(n.op==Op.and_?"and_true_":"or_false_")~(j==0?"left":"right");
+					h="(Value."~lemma~" "~h~")"; t=a.child(t,j);
+				}
+				s~="  exact "~(e.value?h:"Value.not_eq "~h)~"\n"; break;
+			case Evidence.transport:
+				s~="  exact "~ref_(e.premises[1])~" true "~reference(d,e.premises[0],true)~"\n"; break;
+			case Evidence.numeric:
+				s~="  apply Value.refines_of_eq\n  norm_num ["~nodeDefinitions(a,[p.before,p.after])~
+					", Expr.eval, Value.add, Value.mul, Value.inv, Value.conj, Value.abs, Value.nonzero, Value.lt, Value.le, Complex.ext_iff, Complex.normSq_apply]\n";
+				break;
+			case Evidence.ac:s~=acEvidence(a,e); break;
 		}
-		string chain="h0";
-		uint j;
-		foreach(ap;step.applied){
-			auto hn="h"~to!string(++j);
-			s~="  have "~hn~" : Value.Refines "~ev(ap.before.id)~" "~ev(ap.rule.result.id)~
-				" := Generated."~ap.rule.rule~" ρ";
-			foreach(b;ap.rule.bindings) s~=" "~name(b.id);
-			s~="\n"; chain="("~chain~").trans "~hn;
-		}
-		if(step.algebraInput!=step.result){
-			auto hn="h"~to!string(++j);
-			s~="  have "~hn~" : Value.Refines "~ev(step.algebraInput.id)~" "~ev(step.result.id)~" := by\n";
-			string[] defs;
-			foreach(id;a.postorder(step.algebraInput)) defs~=name(id);
-			foreach(id;a.postorder(step.result)) defs~=name(id);
-			s~="    simp only ["~defs.join(", ")~", Expr.eval]\n    qsym_scalar\n";
-			chain="("~chain~").trans "~hn;
-		}
-		s~="  exact "~chain~"\n\n";
+		s~="\n";
 	}
-	s~="theorem refinement (ρ : Env) : Value.Refines "~ev(result.proofInput.id)~" "~ev(result.output.id)~
-		" := h"~to!string(result.proofInput.id)~" ρ\n#print axioms refinement\n\n";
+	s~="theorem refinement (ρ : Env) : Value.Refines "~ev(result.proofInput.id)~" "~ev(result.output.id)~" :=\n  "~reference(d,result.certificate)~"\n#print axioms refinement\n\n";
 	s~="theorem simplification (ρ : Env) (h : Expr.Defined ρ "~name(result.proofInput.id)~") : "~
-		ev(result.proofInput.id)~" = "~ev(result.output.id)~" := (refinement ρ).eq_of_defined h\n"~
-		"#print axioms simplification\n\n";
-
-	foreach(i,used;needed) if(used) s~=domainCode(a,a.at(cast(uint) i));
-	s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~
-		" ↔ "~dc(result.input.id)~" := "~ds(result.input.id)~"\n";
-	s~="#print axioms definedness\n";
+		ev(result.proofInput.id)~" = "~ev(result.output.id)~" := (refinement ρ).eq_of_defined h\n#print axioms simplification\n\n";
+	foreach(i,yes;needed) if(yes) s~=domainCode(a,a.at(cast(uint)i));
+	s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" ↔ "~dc(result.input.id)~" := "~ds(result.input.id)~"\n#print axioms definedness\n";
 	if(domain(a,result.input).everywhere){
-		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" := by\n"~
-			"  apply (definedness ρ).mpr\n  simp only [";
 		string[] defs;
-		foreach(i,used;needed) if(used){ defs~="d"~to!string(i); defs~=name(cast(uint) i); }
-		s~=defs.join(", ")~", Expr.eval]\n  all_goals qsym_defined\n#print axioms everywhere_defined\n";
+		foreach(i,yes;needed) if(yes){ defs~="d"~to!string(i); defs~=name(cast(uint)i); }
+		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" := by\n"~
+			"  apply (definedness ρ).mpr\n  simp only ["~defs.join(", ")~", Expr.eval]\n  all_goals qsym_defined\n#print axioms everywhere_defined\n";
 	}
 	return s~"end QSym.Certificate\n";
 }

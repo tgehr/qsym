@@ -7,20 +7,22 @@ import std.exception:enforce;
 import std.algorithm:canFind;
 @safe:
 
-struct Parameter{ string name; Sort sort; }
+struct Parameter{ string name; Sort sort; bool natural; }
 final class Pattern{
 	string name;
 	Pattern[] args;
 	long number;
 	Sort sort;
 	bool variable;
+	bool natural;
 	private uint candidates;
 	this(string name){ this.name=name; }
 }
-struct Rule{ string name; Parameter[] parameters; Pattern lhs,rhs; }
+struct Premise{ Pattern term; bool defined,literal; }
+struct Rule{ string name; Parameter[] parameters; Pattern lhs,rhs; Premise[] premises; bool automatic=true,equality,inference,bounded; }
 
-/// Deliberately small, first-order, terminating rule DSL. No trusted axioms,
-/// arbitrary D snippets, proof snippets, binders, or side-condition solvers.
+// Rules are scheduled automatically; lemmas require explicit selection.
+// All declarations generate proof obligations, never Lean axioms.
 struct Parser{
 	string source;
 	private Lexer lexer;
@@ -82,6 +84,11 @@ struct Parser{
 			if(token.kind==TokenKind.power){ exponent=to!long(token.text); next(); }
 			else{
 				expect("^"); auto parens=take("("); auto negative=take("-");
+				if(!negative&&(parens||token.kind==TokenKind.identifier)){
+					auto e=parens?expression():new Pattern(ident());
+					if(parens) expect(")");
+					return pattern("$pow",[p,e]);
+				}
 				exponent=integer(negative).number;
 				if(parens) expect(")");
 			}
@@ -142,34 +149,57 @@ struct Parser{
 		lexer=Lexer(source); next();
 		Rule[] rules;
 		while(token.kind!=TokenKind.end){
-			enforce(ident()=="rule","expected rule declaration");
-			Rule r; r.name=ident();
+			auto kind=ident();
+			enforce(["rule","rewrite","lemma","equation","fact"].canFind(kind),"unknown declaration kind");
+			Rule r; r.automatic=kind=="rule"||kind=="rewrite"; r.bounded=kind=="rewrite";
+			r.equality=kind=="equation"; r.inference=kind=="fact"; r.name=ident();
 			foreach(old;rules) enforce(old.name!=r.name,"duplicate rule name");
 			expect("(");
 			if(!take(")")){
 				do{
 					auto name=ident(); expect(":"); auto ty=ident();
-					Sort s;
+					Sort s; bool natural;
 					switch(ty){
 						case "Real","ℝ":s=Sort.real_; break;
 						case "Complex","ℂ":s=Sort.complex; break;
 						case "Bool","𝔹":s=Sort.boolean; break;
 						case "Density":s=Sort.density; break;
 						case "Measure":s=Sort.measure; break;
+						case "Nat","ℕ":s=Sort.real_; natural=true; break;
 						default:throw new Exception("unknown sort: "~ty);
 					}
 					foreach(old;r.parameters) enforce(old.name!=name,"duplicate parameter");
 					enforce(!isConstructor(name)&&name!="inv"&&name!="nonzero"&&name!="mask"&&name!="abs","parameter shadows a constructor");
-					r.parameters~=Parameter(name,s);
+						r.parameters~=Parameter(name,s,natural);
 				}while(take(","));
 				expect(")");
 			}
-			expect(":"); r.lhs=expression(); expect("=>"); r.rhs=expression(); expect(";");
+			expect(":"); r.lhs=expression();
+			if(r.inference) r.rhs=pattern("true",[]);
+			else{ expect(r.equality?"<=>":"=>"); r.rhs=expression(); }
+			if(take("when")) do{
+				Premise p;
+				if(token.text=="defined"||token.text=="literal"){
+					p.defined=take("defined"); if(!p.defined){ expect("literal"); p.literal=true; }
+					expect("("); p.term=expression(); expect(")");
+				}
+				else p.term=expression();
+				r.premises~=p;
+			}while(take(","));
+			expect(";");
 			auto candidates=possible(r.lhs,r.parameters)&possible(r.rhs,r.parameters);
-			enforce(candidates!=0,"rewrite changes its type");
+			enforce((candidates&~naturalBit)!=0,"rewrite changes its type");
 			auto sort=choose(candidates);
 			r.lhs=lower(r.lhs,sort); r.rhs=lower(r.rhs,sort);
-			validate(r); rules~=r;
+			foreach(ref p;r.premises){
+				auto types=possible(p.term,r.parameters);
+				enforce((types&~naturalBit)!=0,"conditions require an IR expression");
+				auto ty=p.defined||p.literal?choose(types):Sort.boolean;
+				enforce(types&bit(ty),"condition must be Bool");
+				p.term=lower(p.term,ty);
+			}
+			try{ validate(r); }catch(Exception e){ throw new Exception("in "~r.name~": "~e.msg); }
+			rules~=r;
 		}
 		return rules;
 	}
@@ -187,6 +217,7 @@ private Pattern pattern(string name,Pattern[] args){
 private Pattern integerPattern(long n){ auto p=new Pattern("#"); p.number=n; return p; }
 private uint bit(Sort s){ return 1u<<cast(uint)s; }
 private enum scalars=(1u<<Sort.real_)|(1u<<Sort.complex);
+private enum naturalBit=1u<<5;
 private Sort choose(uint candidates){
 	foreach(s;[Sort.real_,Sort.complex,Sort.boolean,Sort.density,Sort.measure])
 		if(candidates&bit(s)) return s;
@@ -223,10 +254,10 @@ private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 	enforce(depth<128,"rule pattern nesting limit exceeded");
 	foreach(v;parameters) if(p.name==v.name){
 		enforce(p.args.length==0,"metavariables cannot be applied");
-		p.variable=true; return p.candidates=bit(v.sort);
+		p.variable=true; p.natural=v.natural; return p.candidates=v.natural?naturalBit:bit(v.sort);
 	}
 	auto arity=p.args.length;
-	if(p.name=="#") return p.candidates=scalars;
+	if(p.name=="#") return p.candidates=scalars|(p.number>=0&&p.number<=uint.max?naturalBit:0);
 	if(p.name=="real"||p.name=="complex"){
 		enforce(arity==(p.name=="real"?1:2),"literal arity mismatch");
 		foreach(arg;p.args) enforce(arg.name=="#","literal integer expected");
@@ -237,11 +268,11 @@ private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 	uint result;
 	switch(p.name){
 		case "$pow","powR","powC":
-			enforce(arity==2&&p.args[1].name=="#"&&p.args[1].number>=0&&p.args[1].number<=uint.max,"natural exponent expected");
+			enforce(arity==2&&(args[1]&naturalBit),"natural exponent expected");
 			result=args[0]&(p.name=="$pow"?scalars:bit(p.name=="powR"?Sort.real_:Sort.complex)); break;
 		case "$add","$mul":
 			enforce(arity==2,"binary operator arity mismatch");
-			result=scalars&args[0]&args[1]; break;
+			result=(scalars|naturalBit)&args[0]&args[1]; break;
 		case "$neg","$inv":
 			enforce(arity==1,"unary operator arity mismatch");
 			result=scalars&args[0]; break;
@@ -268,12 +299,22 @@ private Pattern literal(long n,Sort s){
 	return s==Sort.real_?pattern("real",[integerPattern(n)]):pattern("complex",[integerPattern(n),integerPattern(0)]);
 }
 
+private Pattern lowerNat(Pattern p){
+	enforce(p.candidates&naturalBit,"natural expression expected");
+	p.natural=true;
+	if(p.variable||p.name=="#") return p;
+	enforce(p.name=="$add"||p.name=="$mul","unsupported natural operation");
+	p.name=p.name=="$add"?"natAdd":"natMul";
+	foreach(ref arg;p.args) arg=lowerNat(arg);
+	return p;
+}
+
 private Pattern lower(Pattern p,Sort s){
 	enforce(p.candidates&bit(s),"inconsistent elaboration sort");
 	if(p.variable) return p;
 	auto suffix=s==Sort.real_?"R":"C";
 	switch(p.name){
-		case "$pow","powR","powC":return pattern("pow"~suffix,[lower(p.args[0],s),p.args[1]]);
+		case "$pow","powR","powC":return pattern("pow"~suffix,[lower(p.args[0],s),lowerNat(p.args[1])]);
 		case "#":return literal(p.number,s);
 		case "real","complex":return p;
 		case "$add":return pattern("add"~suffix,[lower(p.args[0],s),lower(p.args[1],s)]);
@@ -305,7 +346,7 @@ private Sort infer(Pattern p,Parameter[] parameters){
 	enforce(isConstructor(p.name),"unknown constructor or unbound variable: "~p.name);
 	if(p.name=="powR"||p.name=="powC"){
 		p.sort=p.name=="powR"?Sort.real_:Sort.complex;
-		enforce(p.args.length==2&&p.args[1].name=="#"&&p.args[1].number>=0&&p.args[1].number<=uint.max,"natural exponent expected");
+		enforce(p.args.length==2&&p.args[1].natural,"natural exponent expected");
 		enforce(infer(p.args[0],parameters)==p.sort,"power type mismatch");
 		return p.sort;
 	}
@@ -324,6 +365,7 @@ private Sort infer(Pattern p,Parameter[] parameters){
 
 private size_t cost(Pattern p,ref Table!(string,uint) uses){
 	if(p.variable){ uses.set(p.name,uses.get(p.name,0)+1); return 0; }
+	if(p.natural){ foreach(arg;p.args) cost(arg,uses); return 0; }
 	size_t n=1;
 	// Integer payloads aren't IR nodes.
 	if(p.name!="real"&&p.name!="complex")
@@ -333,13 +375,22 @@ private size_t cost(Pattern p,ref Table!(string,uint) uses){
 void validate(ref Rule r){
 	auto a=infer(r.lhs,r.parameters),b=infer(r.rhs,r.parameters);
 	enforce(a==b,"rewrite changes its type");
-	enforce(!r.lhs.variable,"root variable patterns are unsupported");
+	if(r.inference) enforce(!r.lhs.variable&&a==Sort.boolean,"facts require a Boolean pattern");
+	if(r.automatic) enforce(!r.lhs.variable,"automatic root variable patterns are unsupported");
 	Table!(string,uint) left,right;
 	auto l=cost(r.lhs,left),k=cost(r.rhs,right);
-	enforce(k<l,"rules must strictly decrease constructor count");
+	foreach(ref p;r.premises){
+		auto s=infer(p.term,r.parameters);
+		enforce(p.defined||p.literal||s==Sort.boolean,"condition must be Bool");
+		cost(p.term,right);
+	}
+	if(r.automatic&&!r.bounded) enforce(k<l,"rules must strictly decrease constructor count");
 	foreach(v;r.parameters){
-		enforce(left.contains(v.name),"unused/unbound rule parameter: "~v.name);
-		enforce(right.get(v.name,0)<=left.get(v.name,0),"rule duplicates a metavariable");
+		enforce(left.contains(v.name)||!r.automatic&&right.contains(v.name),"unused/unbound rule parameter: "~v.name);
+		if(r.automatic&&!r.bounded){
+			Table!(string,uint) rhs; cost(r.rhs,rhs);
+			enforce(rhs.get(v.name,0)<=left.get(v.name,0),"rule duplicates a metavariable");
+		}
 	}
 }
 
@@ -348,6 +399,8 @@ string parameterCode(string name){ return "v_"~symbolCode(name); }
 string ruleCode(string name){ return "r_"~symbolCode(name); }
 string leanPattern(Pattern p){
 	if(p.variable) return parameterCode(p.name);
+	if(p.name=="natAdd"||p.name=="natMul")
+		return "("~leanPattern(p.args[0])~(p.name=="natAdd"?" + ":" * ")~leanPattern(p.args[1])~")";
 	if(p.name=="true"||p.name=="false") return "(.bool "~p.name~")";
 	if(p.name=="#") return "("~to!string(p.number)~")";
 	string s="(."~p.name;

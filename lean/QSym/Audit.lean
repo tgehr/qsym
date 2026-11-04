@@ -14,3 +14,10 @@ import QSym
 #print axioms QSym.Generated.r_real_add_zero
 #print axioms QSym.Generated.r_complex_conj_conj
 #print axioms QSym.Generated.r_erase_puncture
+#print axioms QSym.Replay.AC.sound
+#print axioms QSym.Value.refines_mask_under
+#print axioms QSym.Value.refines_and_under
+#print axioms QSym.Value.refines_or_under
+#print axioms QSym.Value.and_true_right
+#print axioms QSym.Value.or_false_right
+#print axioms QSym.Value.defined_inv_arg

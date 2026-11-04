@@ -9,6 +9,13 @@ theorem refines_of_eq {α : Type} {x y : Option α} (h : x = y) : Refines x y :=
   subst y; exact refines_refl x
 theorem Refines.trans {α : Type} {x y z : Option α}
     (h : Refines x y) (k : Refines y z) : Refines x z := fun v hv => k v (h v hv)
+theorem Refines.antisymm {α : Type} {x y : Option α}
+    (h : Refines x y) (k : Refines y x) : x = y := by
+  cases x with
+  | none => cases y with
+    | none => rfl
+    | some v => have impossible := k v rfl; cases impossible
+  | some v => exact (h v rfl).symm
 theorem Refines.defined {α : Type} {x y : Option α}
     (h : Refines x y) (hx : Defined x) : Defined y := by
   obtain ⟨v, hv⟩ := hx
@@ -104,9 +111,16 @@ namespace QSym
 open Lean Meta Elab Tactic in
 elab "qsym_split_and" : tactic => liftMetaTactic fun goal => goal.withContext do
   for decl in ← getLCtx do
-    if decl.type.isAppOfArity ``And 2 then
+    if decl.type.isAppOfArity ``And 2 || decl.type.isAppOfArity ``Exists 2 then
       return (← goal.cases decl.fvarId).toList.map (·.mvarId)
   throwError "no conjunction"
+
+open Lean Meta Elab Tactic in
+elab "qsym_split_bool" : tactic => liftMetaTactic fun goal => goal.withContext do
+  for decl in ← getLCtx do
+    if decl.type.isConstOf ``Bool then
+      return (← goal.cases decl.fvarId).toList.map (·.mvarId)
+  throwError "no Boolean"
 
 -- Search is untrusted: every successful tactic emits a kernel-checked proof.
 macro "qsym_scalar" : tactic => `(tactic| (
@@ -115,14 +129,18 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | (
     classical
     intro v hv
-    simp only [Value.add, Value.mul, Value.inv, Value.nonzero, Value.mask, Value.conj,
+    try simp only [Value.Refines, Value.Defined] at *
+    try simp only [Value.add, Value.mul, Value.inv, Value.nonzero, Value.mask, Value.conj,
       Value.not, Value.and, Value.or, Value.lt, Value.le, Value.abs,
-      Option.map, Option.bind] at hv ⊢
+      Option.bind_eq_bind, Option.pure_def, Option.map, Option.bind] at *
+    try simp only [Option.some.injEq, forall_eq, forall_eq', Bool.true_eq, decide_eq_true_eq] at *
     repeat' first
       | simp_all (config := {failIfUnchanged := true})
       | qsym_split_and
+      | qsym_split_bool
       | split at *
     all_goals subst_vars
+    all_goals try (simp_all [pow_add, pow_mul, mul_pow, inv_pow])
     all_goals try (simp_all [abs_mul, abs_inv, abs_pow])
     all_goals try norm_num at *
     all_goals try field_simp
@@ -133,6 +151,10 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (simp only [abs_eq_max_neg, max_def] at *; split_ifs at * <;> nlinarith)
     all_goals try ring
     all_goals try (simp only [← decide_not, decide_eq_decide] at *)
+    all_goals try (simp_all [← div_eq_mul_inv, lt_div_iff₀, le_div_iff₀,
+      div_lt_iff₀, div_le_iff₀, lt_div_iff_of_neg, le_div_iff_of_neg,
+      div_lt_iff_of_neg, div_le_iff_of_neg, mul_comm])
+    all_goals try (simp only [pow_mul] at *; nlinarith)
     all_goals try positivity
     all_goals try nlinarith
     all_goals try (constructor <;> intro h <;> nlinarith)
@@ -158,7 +180,7 @@ macro "qsym_rule" : tactic => `(tactic| (
         Value.add_zero_right, Value.add_zero_left, Value.mul_one_right, Value.mul_one_left,
         Value.mask_true, Value.mask_false, Value.conj_conj,
         Option.map_map, Function.comp_def, Density.forget_puncture]
-  | simp only [Expr.eval]
+  | try simp only [Expr.eval]
     qsym_scalar
 ))
 

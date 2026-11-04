@@ -1,7 +1,8 @@
 module qsym.simplify;
 import qsym.ir;
-import qsym.generated.rules;
-import qsym.algebra:Algebra;
+import qsym.derive:Derivation,Proof;
+import qsym.budget:Budget;
+import qsym.engine:Engine;
 import std.exception:enforce;
 @safe:
 
@@ -14,8 +15,6 @@ struct Options{
 	size_t maxAlgebraWork=1_000_000;
 	size_t maxCoefficientWords=512;
 }
-struct Applied{ Term before; Rewrite rule; }
-struct Step{ Term before,rebuilt,result; Applied[] applied; Term algebraInput; }
 struct Result{
 	Term input;
 	/// In distributionOnly mode this is forget(input), with type Measure.
@@ -23,7 +22,8 @@ struct Result{
 	Term output;
 	bool exhausted;
 	bool traced;
-	Step[] steps;
+	Derivation derivation;
+	Proof certificate;
 }
 
 /// Proof search only. Generated Lean certificates are the trust boundary.
@@ -39,34 +39,13 @@ Result simplify(Arena a,Term input,Options options=Options.init){
 	}
 	Result result;
 	result.input=input; result.proofInput=root; result.traced=options.trace;
-	auto order=a.postorder(root);
-	Term[] memo=new Term[a.length];
-	size_t remaining=options.maxRewrites;
-	auto algebra=new Algebra(a,options.maxTerms,options.maxAlgebraWork,options.maxCoefficientWords);
-	foreach(i;order){
-		auto original=a.at(i);
-		auto n=a.node(original);
-		if(n.arity>=1) enforce(memo[n.a].id!=uint.max,"postorder missing first child");
-		if(n.arity==2) enforce(memo[n.b].id!=uint.max,"postorder missing second child");
-		Term[] children;
-		if(n.arity>=1) children~=memo[n.a];
-		if(n.arity==2) children~=memo[n.b];
-		auto rebuilt=a.rebuild(original,children);
-		auto current=rebuilt;
-		Applied[] applied;
-		while(true){
-			if(remaining==0){ result.exhausted=true; break; }
-			auto r=rewrite(a,current,options.trace);
-			if(!r.applied) break;
-			if(options.trace) applied~=Applied(current,r);
-			current=r.result; --remaining;
-		}
-		auto normalized=remaining?algebra.normalize(current):current;
-		memo[i]=normalized;
-		if(options.trace) result.steps~=Step(original,rebuilt,normalized,applied,current);
-	}
-	result.exhausted|=algebra.exhausted;
-	result.output=memo[root.id];
+	auto d=new Derivation(a,options.trace);
+	auto budget=new Budget(options.maxAlgebraWork,options.maxTerms,options.maxCoefficientWords);
+	auto engine=new Engine(a,d,budget,options.maxRewrites);
+	foreach(i;a.postorder(root)) engine.go(a.at(i));
+	result.certificate=engine.go(root);
+	result.derivation=d; result.output=result.certificate.after;
+	result.exhausted=budget.exhausted;
 	return result;
 }
 

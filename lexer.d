@@ -34,10 +34,10 @@ struct Lexer{
 	Token next(){
 		ws(); auto start=pos;
 		if(pos==source.length) return Token(TokenKind.end,"",pos);
-		foreach(s;["=>","⇒","→","!=","≠","<=","≤",">=","≥","==","&&","||"]){
+		foreach(s;["<=>","≡","=>","⇒","→","!=","≠","<=","≤",">=","≥","==","&&","||"]){
 			if(source[pos..$].startsWith(s)){
 				pos+=s.length;
-				return Token(TokenKind.symbol,s=="⇒"||s=="→"?"=>":s=="≠"?"!=":s=="≤"?"<=":s=="≥"?">=":s=="=="?"=":s,start);
+				return Token(TokenKind.symbol,s=="≡"?"<=>":s=="⇒"||s=="→"?"=>":s=="≠"?"!=":s=="≤"?"<=":s=="≥"?">=":s=="=="?"=":s,start);
 			}
 		}
 		auto c=cur();

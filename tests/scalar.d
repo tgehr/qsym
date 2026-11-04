@@ -28,6 +28,7 @@ struct Case{ string name; Term input,expected; }
 		Case("PolynomialDivision",a.div(a.sub(a.pow(x,2),one),a.sub(x,one)),a.add(x,one)),
 		Case("ComplexConstant",a.pow(a.complex(1,1),2),a.complex(0,2)),
 		Case("ComplexPower",a.pow(a.complex(1,1),5),a.complex(-4,-4)),
+		Case("ComplexLargePower",a.pow(a.complex(0,1),uint.max),a.complex(0,-1)),
 		Case("ComplexInverse",a.inv(a.complex(1,1)),a.complex(half,-half)),
 		Case("ComplexCancel",a.div(z,z),a.complex(1)),
 		Case("ComplexPolynomial",a.sub(a.pow(a.add(z,w),2),
@@ -152,6 +153,8 @@ private struct Value{ bool defined; Number number; bool boolean; }
 	auto enormous=a.pow(a.real_(2),uint.max);
 	auto bounded=simplify(a,enormous);
 	assert(bounded.exhausted&&bounded.output==enormous);
+	auto exponentOverflow=a.pow(a.pow(x,uint.max),2);
+	assert(simplify(a,exponentOverflow).exhausted);
 	auto product=x;
 	foreach(i;2..5000) product=a.mul(product,a.variable(Sort.real_,i));
 	assert(simplify(a,product,Options(DensityMode.preserve,false,100_000,256,10000)).exhausted);
