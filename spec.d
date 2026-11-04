@@ -1,5 +1,6 @@
 module qsym.spec;
 import qsym.ir:Sort,sortName;
+import qsym.builtins;
 import qsym.table:Table;
 import qsym.lexer;
 import std.conv:to;
@@ -7,6 +8,7 @@ import std.exception:enforce;
 import std.algorithm:canFind;
 @safe:
 
+// NatParam is a bounded constructor payload; ℕ is an expression type.
 struct Parameter{ string name; Sort sort; bool natural; }
 final class Pattern{
 	string name;
@@ -16,6 +18,8 @@ final class Pattern{
 	bool variable;
 	bool natural;
 	private uint candidates;
+	private bool constantNatural;
+	private ulong naturalValue;
 	this(string name){ this.name=name; }
 }
 struct Premise{ Pattern term; bool defined,literal; }
@@ -45,9 +49,13 @@ struct Parser{
 	}
 	private Pattern primary(uint depth){
 		enforce(depth<128,"rule pattern nesting limit exceeded");
-		if(take("(")){ auto p=expression(depth+1); expect(")"); return p; }
+		if(take("(")){
+			auto p=expression(depth+1);
+			if(take(":")){ auto q=pattern("$ascribe",[p]); q.sort=parseSort(ident()); p=q; }
+			expect(")"); return p;
+		}
 		if(take("[")){ auto p=expression(depth+1); expect("]"); return pattern("$iverson",[p]); }
-		if(take("|")){ auto p=expression(depth+1); expect("|"); return pattern("absR",[p]); }
+		if(take("|")){ auto p=expression(depth+1); expect("|"); return pattern("$abs",[p]); }
 		if(take("ⅈ")) return pattern("complex",[integerPattern(0),integerPattern(1)]);
 		if(token.kind==TokenKind.integer) return integer();
 		auto p=new Pattern(ident());
@@ -58,7 +66,20 @@ struct Parser{
 			}
 		}
 		if(p.name=="inv"||p.name=="nonzero"||p.name=="mask") p.name="$"~p.name;
-		if(p.name=="abs") p.name="absR";
+		if(p.name=="abs") p.name="$abs";
+		if(p.name=="cinv") p.name="invC";
+		if((p.name=="min"||p.name=="max")&&p.args.length==1){
+			p.name="$ascribe"; p.sort=Sort.real_; return p;
+		}
+		if(p.name=="hypot"){
+			if(!p.args.length) return integerPattern(0);
+			if(p.args.length==1){ p.name="$abs"; return p; }
+		}
+		if((p.name=="min"||p.name=="max"||p.name=="hypot")&&p.args.length>2){
+			auto result=pattern(p.name,p.args[0..2]);
+			foreach(arg;p.args[2..$]) result=pattern(p.name,[result,arg]);
+			return result;
+		}
 		return p;
 	}
 	private Pattern factor(uint depth){
@@ -69,35 +90,24 @@ struct Parser{
 			if(token.kind==TokenKind.integer){
 				auto p=integer(true);
 				if(token.kind==TokenKind.power||token.text=="^")
-					return pattern("$neg",[postfix(pattern("$neg",[p]))]);
+					return pattern("$neg",[postfix(pattern("$neg",[p]),depth)]);
 				return p;
 			}
 			return pattern("$neg",[factor(depth+1)]);
 		}
 		if(take("⅟")) return pattern("$inv",[factor(depth+1)]);
 		if(take("!")) return pattern("not",[factor(depth+1)]);
-		return postfix(primary(depth));
+		return postfix(primary(depth),depth);
 	}
-	private Pattern postfix(Pattern p){
-		if(token.kind==TokenKind.power||token.text=="^"){
-			long exponent;
-			if(token.kind==TokenKind.power){ exponent=to!long(token.text); next(); }
-			else{
-				expect("^"); auto parens=take("("); auto negative=take("-");
-				if(!negative&&(parens||token.kind==TokenKind.identifier)){
-					auto e=parens?expression():new Pattern(ident());
-					if(parens) expect(")");
-					return pattern("$pow",[p,e]);
-				}
-				exponent=integer(negative).number;
-				if(parens) expect(")");
-			}
-			enforce(exponent>=-(cast(long)uint.max)&&exponent<=uint.max,"exponent exceeds uint range");
-			if(exponent!=-1) p=pattern("$pow",[p,integerPattern(exponent<0?-exponent:exponent)]);
-			if(exponent<0) p=pattern("$inv",[p]);
+	private Pattern postfix(Pattern p,uint depth){
+		if(token.kind==TokenKind.power){
+			auto exponent=to!long(token.text); next();
+			return pattern("$pow",[p,integerPattern(exponent)]);
 		}
+		if(take("^")) return pattern("$pow",[p,factor(depth+1)]);
 		return p;
 	}
+
 	private Pattern product(uint depth){
 		auto p=factor(depth);
 		while(token.text=="*"||token.text=="/"){
@@ -126,10 +136,9 @@ struct Parser{
 			auto q=sum(depth);
 			Pattern predicate;
 			if(op=="!="||op=="="){
-				auto difference=q.name=="#"&&q.number==0?p:pattern("$add",[p,pattern("$neg",[q])]);
-				predicate=pattern("$nonzero",[difference]);
+				predicate=pattern("$different",[p,q]);
 				if(op=="=") predicate=pattern("not",[predicate]);
-			}else predicate=pattern(op=="<"||op==">"?"ltR":"leR",op==">"||op==">="?[q,p]:[p,q]);
+			}else predicate=pattern(op=="<"||op==">"?"$lt":"$le",op==">"||op==">="?[q,p]:[p,q]);
 			combined=combined is null?predicate:pattern("and",[combined,predicate]);
 			p=q;
 		}
@@ -147,16 +156,7 @@ struct Parser{
 	}
 	private Parameter parameter(){
 		auto name=ident(); expect(":"); auto ty=ident();
-		Sort s; bool natural;
-		switch(ty){
-			case "Real","ℝ":s=Sort.real_; break;
-			case "Complex","ℂ":s=Sort.complex; break;
-			case "Bool","𝔹":s=Sort.boolean; break;
-			case "Density":s=Sort.density; break;
-			case "Measure":s=Sort.measure; break;
-			case "Nat","ℕ":s=Sort.real_; natural=true; break;
-			default:throw new Exception("unknown sort: "~ty);
-		}
+		auto natural=ty=="NatParam",s=natural?Sort.real_:parseSort(ty);
 		enforce(!isConstructor(name)&&name!="inv"&&name!="nonzero"&&name!="mask"&&name!="abs","parameter shadows a constructor");
 		return Parameter(name,s,natural);
 	}
@@ -215,7 +215,7 @@ struct Parser{
 			}while(take(","));
 			expect(";");
 			auto candidates=possible(r.lhs,r.parameters)&possible(r.rhs,r.parameters);
-			enforce((candidates&~naturalBit)!=0,"rewrite changes its type");
+			enforce((candidates&~naturalBit)!=0,"rewrite changes its type in "~r.name);
 			auto sort=choose(candidates);
 			r.lhs=lower(r.lhs,sort); r.rhs=lower(r.rhs,sort);
 			foreach(ref p;r.premises){
@@ -232,8 +232,23 @@ struct Parser{
 	}
 }
 
+private Sort parseSort(string name){
+	switch(name){
+		case "Real","ℝ":return Sort.real_;
+		case "Complex","ℂ":return Sort.complex;
+		case "Bool","𝔹":return Sort.boolean;
+		case "Density":return Sort.density;
+		case "Measure":return Sort.measure;
+		case "Nat","ℕ":return Sort.natural;
+		case "Int","ℤ":return Sort.integer;
+		case "Rat","ℚ":return Sort.rational;
+		default:throw new Exception("unknown sort: "~name);
+	}
+}
+
 bool isConstructor(string n){
-	return ["real","complex","true","false","addR","addC","mulR","mulC",
+	foreach(f;0..cast(uint)Builtin.invalid) if(builtinName(cast(Builtin)f,n)) return true;
+	return ["nat","int","rat","powN","powZ","powQ","maskN","maskZ","maskQ","real","complex","true","false","addR","addC","mulR","mulC",
 		"invR","invC","nonzeroR","nonzeroC","maskR","maskC","conj",
 		"lebesgue","puncture","densityAt","forget","powR","powC","not","and","or","ltR","leR","absR"].canFind(n);
 }
@@ -243,16 +258,31 @@ private Pattern pattern(string name,Pattern[] args){
 }
 private Pattern integerPattern(long n){ auto p=new Pattern("#"); p.number=n; return p; }
 private uint bit(Sort s){ return 1u<<cast(uint)s; }
-private enum scalars=(1u<<Sort.real_)|(1u<<Sort.complex);
-private enum naturalBit=1u<<5;
+private enum scalars=(1u<<Sort.real_)|(1u<<Sort.complex)|(1u<<Sort.natural)|(1u<<Sort.integer)|(1u<<Sort.rational);
+private enum naturalBit=1u<<8;
 private Sort choose(uint candidates){
-	foreach(s;[Sort.real_,Sort.complex,Sort.boolean,Sort.density,Sort.measure])
+	foreach(s;[Sort.real_,Sort.complex,Sort.natural,Sort.integer,Sort.rational,Sort.boolean,Sort.density,Sort.measure])
 		if(candidates&bit(s)) return s;
-	assert(0);
+	throw new Exception("no expression type");
+}
+
+private uint widen(uint types){
+	uint result=types;
+	foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex])
+		if(types&bit(s)) foreach(t;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex]) if(promotes(s,t)) result|=bit(t);
+	return result;
+}
+private uint common(uint a,uint b){
+	if(a&b&scalars) return a&b&scalars;
+	a=widen(a)&widen(b)&scalars;
+	foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex]) if(a&bit(s)) return bit(s);
+	return 0;
 }
 
 private struct Signature{ Sort result; Sort[] args; }
 private Signature signature(string name){
+	auto f=builtin(name);
+	if(f!=Builtin.invalid){ auto d=builtinInfo(f); return Signature(d.result,d.args.dup); }
 	alias R=Sort.real_,C=Sort.complex,B=Sort.boolean,D=Sort.density,M=Sort.measure;
 	switch(name){
 		case "true","false":return Signature(B,[]);
@@ -266,6 +296,9 @@ private Signature signature(string name){
 		case "invC","conj":return Signature(C,[C]);
 		case "nonzeroR":return Signature(B,[R]);
 		case "nonzeroC":return Signature(B,[C]);
+		case "maskN":return Signature(Sort.natural,[B,Sort.natural]);
+		case "maskZ":return Signature(Sort.integer,[B,Sort.integer]);
+		case "maskQ":return Signature(Sort.rational,[B,Sort.rational]);
 		case "maskR":return Signature(R,[B,R]);
 		case "maskC":return Signature(C,[B,C]);
 		case "puncture":return Signature(D,[D]);
@@ -276,46 +309,105 @@ private Signature signature(string name){
 }
 
 // Propagate possible sorts before choosing a default for bare numeric literals.
-// Both rule endpoints constrain the choice; there are no implicit scalar casts.
+// Both rule endpoints constrain literals; widening inserts explicit IR casts.
+private bool payload(Pattern p){ return p.name=="#"||p.variable&&p.natural; }
+private bool powerPattern(string s){ return s=="powN"||s=="powZ"||s=="powQ"||s=="powR"||s=="powC"; }
+private Sort literalSort(string name){
+	switch(name){
+		case "nat":return Sort.natural;
+		case "int":return Sort.integer;
+		case "rat":return Sort.rational;
+		case "real":return Sort.real_;
+		case "complex":return Sort.complex;
+		default:assert(0);
+	}
+}
+private bool literalName(string name){ return ["nat","int","rat","real","complex"].canFind(name); }
 private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 	enforce(depth<128,"rule pattern nesting limit exceeded");
 	foreach(v;parameters) if(p.name==v.name){
-		enforce(p.args.length==0,"metavariables cannot be applied");
+		enforce(!p.args.length,"metavariables cannot be applied");
 		p.variable=true; p.natural=v.natural; return p.candidates=v.natural?naturalBit:bit(v.sort);
 	}
 	auto arity=p.args.length;
-	if(p.name=="#") return p.candidates=scalars|(p.number>=0&&p.number<=uint.max?naturalBit:0);
-	if(p.name=="real"||p.name=="complex"){
-		enforce(arity==(p.name=="real"?1:2),"literal arity mismatch");
-		foreach(arg;p.args) enforce(arg.name=="#","literal integer expected");
-		return p.candidates=bit(p.name=="real"?Sort.real_:Sort.complex);
+	if(p.name=="#"){
+		p.constantNatural=p.number>=0&&p.number<=uint.max; p.naturalValue=cast(ulong)p.number;
+		return p.candidates=(p.number<0?scalars&~bit(Sort.natural):scalars)|(p.constantNatural?naturalBit:0);
 	}
 	uint[] args;
 	foreach(arg;p.args) args~=possible(arg,parameters,depth+1);
+	if(literalName(p.name)){
+		enforce(arity==(p.name=="complex"||p.name=="rat"?2:1),"literal arity mismatch");
+		foreach(arg;p.args) enforce(payload(arg),"literal integer or NatParam expected");
+		if(p.name=="nat") enforce(p.args[0].name!="#"||p.args[0].number>=0,"negative natural literal");
+		if(p.name=="rat") enforce(p.args[1].name!="#"||p.args[1].number!=0,"zero rational denominator");
+		return p.candidates=bit(literalSort(p.name));
+	}
 	uint result;
-	switch(p.name){
-		case "$pow","powR","powC":
-			enforce(arity==2&&(args[1]&naturalBit),"natural exponent expected");
-			result=args[0]&(p.name=="$pow"?scalars:bit(p.name=="powR"?Sort.real_:Sort.complex)); break;
+	if(powerPattern(p.name)){
+		enforce(arity==2&&(args[1]&naturalBit),"NatParam exponent expected");
+		result=args[0]&bit(p.name=="powN"?Sort.natural:p.name=="powZ"?Sort.integer:p.name=="powQ"?Sort.rational:p.name=="powR"?Sort.real_:Sort.complex);
+	}else switch(p.name){
+		case "$ascribe":
+			enforce(widen(args[0])&bit(p.sort),"invalid type ascription"); result=bit(p.sort); break;
+		case "$pow":
+			enforce(arity==2&&args[0]&scalars&&args[1]&(scalars|naturalBit),"numeric power expected");
+			if(args[1]&naturalBit||p.args[1].name=="#"&&p.args[1].number>=0) result=args[0]&scalars;
+			else if(p.args[1].name=="#"&&p.args[1].number<0){
+				result=args[0]&(bit(Sort.rational)|bit(Sort.real_)|bit(Sort.complex));
+				if(!result) result=common(args[0],bit(Sort.rational));
+			}
+			else if(args[1]==bit(Sort.natural)) result=args[0]&scalars;
+			else if(args[1]==bit(Sort.integer)) result=common(args[0],bit(Sort.rational));
+			else result=common(args[0],common(args[1],bit(Sort.real_)));
+			break;
 		case "$add","$mul":
 			enforce(arity==2,"binary operator arity mismatch");
-			result=(scalars|naturalBit)&args[0]&args[1]; break;
+			result=common(args[0],args[1])|(naturalBit&args[0]&args[1]);
+			if(p.args[0].constantNatural&&p.args[1].constantNatural){
+				p.naturalValue=p.name=="$add"?p.args[0].naturalValue+p.args[1].naturalValue:p.args[0].naturalValue*p.args[1].naturalValue;
+				p.constantNatural=p.naturalValue<=uint.max;
+				if(!p.constantNatural) result&=~naturalBit;
+			}
+			break;
 		case "$neg","$inv":
 			enforce(arity==1,"unary operator arity mismatch");
-			result=scalars&args[0]; break;
+			auto allowed=p.name=="$neg"?scalars&~bit(Sort.natural):bit(Sort.rational)|bit(Sort.real_)|bit(Sort.complex);
+			result=args[0]&allowed;
+			if(!result) result=common(args[0],bit(p.name=="$neg"?Sort.integer:Sort.rational));
+			break;
 		case "$nonzero":
-			enforce(arity==1&&args[0]&scalars,"nonzero requires a scalar");
+			enforce(arity==1&&args[0]&scalars,"nonzero requires a scalar"); result=bit(Sort.boolean); break;
+		case "$different":
+			enforce(arity==2&&(common(args[0],args[1])||args[0]&args[1]&bit(Sort.boolean)),"comparison type mismatch");
 			result=bit(Sort.boolean); break;
+		case "$lt","$le":
+			enforce(arity==2&&common(args[0],args[1])&~bit(Sort.complex),"ordering requires ordered scalars");
+			result=bit(Sort.boolean); break;
+		case "$abs":
+			enforce(arity==1&&args[0]&scalars,"absolute value requires a scalar"); result=bit(Sort.real_); break;
 		case "$iverson":
-			enforce(arity==1&&args[0]&bit(Sort.boolean),"Iverson brackets require Bool");
-			result=scalars; break;
+			enforce(arity==1&&args[0]&bit(Sort.boolean),"Iverson brackets require Bool"); result=scalars; break;
 		case "$mask":
-			enforce(arity==2&&args[0]&bit(Sort.boolean),"mask requires Bool and a scalar");
-			result=scalars&args[1]; break;
+			enforce(arity==2&&args[0]&bit(Sort.boolean),"mask requires Bool and a scalar"); result=scalars&args[1]; break;
 		default:
+			// Resolve function overloads from argument types before surrounding casts.
+			Builtin selected=Builtin.invalid; uint best=uint.max;
+			foreach(i;0..cast(uint)Builtin.invalid){
+				auto f=cast(Builtin)i,d=builtinInfo(f);
+				if(!builtinName(f,p.name)||d.args.length!=arity) continue;
+				uint cost; bool ok=true;
+				foreach(j,t;d.args){
+					if(!(widen(args[j])&bit(t))){ ok=false; break; }
+					if(!(args[j]&bit(t))) cost+=10;
+					else if(args[j]&bit(Sort.real_)&&t==Sort.complex) ++cost;
+				}
+				if(ok&&cost<best){ best=cost; selected=f; }
+			}
+			if(selected!=Builtin.invalid){ p.name=builtinInfo(selected).code; result=bit(builtinInfo(selected).result); break; }
 			auto sig=signature(p.name);
 			enforce(arity==sig.args.length,"arity mismatch for "~p.name);
-			foreach(i,s;sig.args) enforce(args[i]&bit(s),"type mismatch in "~p.name);
+			foreach(i,t;sig.args) enforce(widen(args[i])&bit(t),"type mismatch in "~p.name);
 			result=bit(sig.result);
 	}
 	enforce(result!=0,"type mismatch in "~p.name);
@@ -323,41 +415,83 @@ private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 }
 
 private Pattern literal(long n,Sort s){
-	return s==Sort.real_?pattern("real",[integerPattern(n)]):pattern("complex",[integerPattern(n),integerPattern(0)]);
+	switch(s){
+		case Sort.natural:return pattern("nat",[integerPattern(n)]);
+		case Sort.integer:return pattern("int",[integerPattern(n)]);
+		case Sort.rational:return pattern("rat",[integerPattern(n),integerPattern(1)]);
+		case Sort.real_:return pattern("real",[integerPattern(n)]);
+		case Sort.complex:return pattern("complex",[integerPattern(n),integerPattern(0)]);
+		default:throw new Exception("numeric literal type expected");
+	}
 }
-
 private Pattern lowerNat(Pattern p){
-	enforce(p.candidates&naturalBit,"natural expression expected");
+	enforce(p.candidates&naturalBit,"natural parameter expression expected");
 	p.natural=true;
 	if(p.variable||p.name=="#") return p;
-	enforce(p.name=="$add"||p.name=="$mul","unsupported natural operation");
+	enforce(p.name=="$add"||p.name=="$mul","unsupported natural parameter operation");
 	p.name=p.name=="$add"?"natAdd":"natMul";
 	foreach(ref arg;p.args) arg=lowerNat(arg);
 	return p;
 }
-
+private Pattern embed(Pattern p,Sort from,Sort to){
+	enforce(promotes(from,to),"invalid numeric embedding");
+	while(from!=to){
+		auto next=from==Sort.natural?Sort.integer:from==Sort.integer?Sort.rational:from==Sort.rational?Sort.real_:Sort.complex;
+		p=pattern("cast"~suffix(from)~suffix(next),[p]); from=next;
+	}
+	return p;
+}
 private Pattern lower(Pattern p,Sort s){
-	enforce(p.candidates&bit(s),"inconsistent elaboration sort");
+	if(!(p.candidates&bit(s))){
+		auto from=choose(p.candidates&~naturalBit);
+		return embed(lower(p,from),from,s);
+	}
 	if(p.variable) return p;
-	auto suffix=s==Sort.real_?"R":"C";
+	auto suf=numeric(s)?suffix(s):"";
+	if(powerPattern(p.name)) return pattern(p.name,[lower(p.args[0],s),lowerNat(p.args[1])]);
 	switch(p.name){
-		case "$pow","powR","powC":return pattern("pow"~suffix,[lower(p.args[0],s),lowerNat(p.args[1])]);
+		case "$ascribe":return lower(p.args[0],s);
+		case "$pow":
+			auto e=p.args[1];
+			if(e.candidates&naturalBit) return pattern("pow"~suf,[lower(p.args[0],s),lowerNat(e)]);
+			if(e.name=="#"&&e.number<0&&e.number>=-cast(long)uint.max){
+				auto base=lower(p.args[0],s);
+				if(e.number!=-1){ auto n=integerPattern(-e.number); n.natural=true; base=pattern("pow"~suf,[base,n]); }
+				return pattern("inv"~suf,[base]);
+			}
+			if(e.name=="#") return pattern("pow"~suf~(e.number<0?"Z":"N"),
+				[lower(p.args[0],s),lower(e,e.number<0?Sort.integer:Sort.natural)]);
+			auto ty=choose(e.candidates);
+			if(ty==Sort.natural||ty==Sort.integer)
+				return pattern("pow"~suf~suffix(ty),[lower(p.args[0],s),lower(e,ty)]);
+			return pattern(s==Sort.complex?"powerC":"powerR",[lower(p.args[0],s),lower(e,s)]);
 		case "#":return literal(p.number,s);
-		case "real","complex":return p;
-		case "$add":return pattern("add"~suffix,[lower(p.args[0],s),lower(p.args[1],s)]);
+		case "nat","int","rat","real","complex":return p;
+		case "$add":return pattern("add"~suf,[lower(p.args[0],s),lower(p.args[1],s)]);
 		case "$mul":
-			// A bracket directly weighting the following factor is a mask, not
-			// strict multiplication by a previously evaluated numeric indicator.
-			if(p.args[0].name=="$iverson")
-				return pattern("mask"~suffix,[lower(p.args[0].args[0],Sort.boolean),lower(p.args[1],s)]);
-			return pattern("mul"~suffix,[lower(p.args[0],s),lower(p.args[1],s)]);
-		case "$neg":return pattern("mul"~suffix,[literal(-1,s),lower(p.args[0],s)]);
-		case "$inv":return pattern("inv"~suffix,[lower(p.args[0],s)]);
+			auto left=p.args[0]; while(left.name=="$ascribe") left=left.args[0];
+			if(left.name=="$iverson") return pattern("mask"~suf,[lower(left.args[0],Sort.boolean),lower(p.args[1],s)]);
+			return pattern("mul"~suf,[lower(p.args[0],s),lower(p.args[1],s)]);
+		case "$neg":return pattern("mul"~suf,[literal(-1,s),lower(p.args[0],s)]);
+		case "$inv":return pattern("inv"~suf,[lower(p.args[0],s)]);
+		case "$abs":
+			auto ty=choose(p.args[0].candidates);
+			return pattern(ty==Sort.complex?"absC":"absR",[lower(p.args[0],ty==Sort.complex?ty:Sort.real_)]);
 		case "$nonzero":
 			auto operand=choose(p.args[0].candidates&scalars);
-			return pattern(operand==Sort.real_?"nonzeroR":"nonzeroC",[lower(p.args[0],operand)]);
-		case "$iverson":return pattern("mask"~suffix,[lower(p.args[0],Sort.boolean),literal(1,s)]);
-		case "$mask":return pattern("mask"~suffix,[lower(p.args[0],Sort.boolean),lower(p.args[1],s)]);
+			return pattern("nonzero"~suffix(operand),[lower(p.args[0],operand)]);
+		case "$different":
+			auto types=common(p.args[0].candidates,p.args[1].candidates);
+			if(!types) return pattern("not",[pattern("eqB",[lower(p.args[0],Sort.boolean),lower(p.args[1],Sort.boolean)])]);
+			auto ty=choose(types); if(ty==Sort.natural) ty=Sort.integer;
+			auto diff=p.args[1].name=="#"&&p.args[1].number==0?lower(p.args[0],ty):
+				pattern("add"~suffix(ty),[lower(p.args[0],ty),pattern("mul"~suffix(ty),[literal(-1,ty),lower(p.args[1],ty)])]);
+			return pattern("nonzero"~suffix(ty),[diff]);
+		case "$lt","$le":
+			auto ty=choose(common(p.args[0].candidates,p.args[1].candidates)&~bit(Sort.complex));
+			return pattern((p.name=="$lt"?"lt":"le")~suffix(ty),[lower(p.args[0],ty),lower(p.args[1],ty)]);
+		case "$iverson":return pattern("mask"~suf,[lower(p.args[0],Sort.boolean),literal(1,s)]);
+		case "$mask":return pattern("mask"~suf,[lower(p.args[0],Sort.boolean),lower(p.args[1],s)]);
 		default:
 			auto sig=signature(p.name);
 			foreach(i,t;sig.args) p.args[i]=lower(p.args[i],t);
@@ -367,26 +501,19 @@ private Pattern lower(Pattern p,Sort s){
 
 private Sort infer(Pattern p,Parameter[] parameters){
 	foreach(v;parameters) if(p.name==v.name){
-		enforce(p.args.length==0,"metavariables cannot be applied");
+		enforce(!p.args.length,"metavariables cannot be applied");
 		p.variable=true; p.sort=v.sort; return p.sort;
 	}
 	enforce(isConstructor(p.name),"unknown constructor or unbound variable: "~p.name);
-	if(p.name=="powR"||p.name=="powC"){
-		p.sort=p.name=="powR"?Sort.real_:Sort.complex;
-		enforce(p.args.length==2&&p.args[1].natural,"natural exponent expected");
-		enforce(infer(p.args[0],parameters)==p.sort,"power type mismatch");
-		return p.sort;
+	if(powerPattern(p.name)){
+		p.sort=p.name=="powN"?Sort.natural:p.name=="powZ"?Sort.integer:p.name=="powQ"?Sort.rational:p.name=="powR"?Sort.real_:Sort.complex;
+		enforce(p.args.length==2&&p.args[1].natural,"natural parameter exponent expected");
+		enforce(infer(p.args[0],parameters)==p.sort,"power type mismatch"); return p.sort;
 	}
-	if(p.name=="real"||p.name=="complex"){
-		enforce(p.args.length==(p.name=="real"?1:2),"literal arity mismatch");
-		foreach(arg;p.args) enforce(arg.name=="#","literal integer expected");
-		p.sort=p.name=="real"?Sort.real_:Sort.complex;
-		return p.sort;
-	}
+	if(literalName(p.name)){ p.sort=literalSort(p.name); return p.sort; }
 	auto sig=signature(p.name); p.sort=sig.result;
 	enforce(p.args.length==sig.args.length,"arity mismatch for "~p.name);
-	foreach(i,arg;p.args)
-		enforce(infer(arg,parameters)==sig.args[i],"type mismatch in "~p.name);
+	foreach(i,arg;p.args) enforce(infer(arg,parameters)==sig.args[i],"type mismatch in "~p.name);
 	return p.sort;
 }
 
@@ -395,8 +522,7 @@ private size_t cost(Pattern p,ref Table!(string,uint) uses){
 	if(p.natural){ foreach(arg;p.args) cost(arg,uses); return 0; }
 	size_t n=1;
 	// Integer payloads aren't IR nodes.
-	if(p.name!="real"&&p.name!="complex")
-		foreach(arg;p.args) if(arg.name!="#") n+=cost(arg,uses);
+	foreach(arg;p.args) if(arg.name!="#") n+=cost(arg,uses);
 	return n;
 }
 void validate(ref Rule r){
@@ -426,6 +552,7 @@ string parameterCode(string name){ return "v_"~symbolCode(name); }
 string ruleCode(string name){ return "r_"~symbolCode(name); }
 string leanPattern(Pattern p){
 	if(p.variable) return parameterCode(p.name);
+	if(p.name=="rat") return "(.rat (("~leanPattern(p.args[0])~" : ℚ) / "~leanPattern(p.args[1])~"))";
 	if(p.name=="natAdd"||p.name=="natMul")
 		return "("~leanPattern(p.args[0])~(p.name=="natAdd"?" + ":" * ")~leanPattern(p.args[1])~")";
 	if(p.name=="true"||p.name=="false") return "(.bool "~p.name~")";
@@ -490,12 +617,9 @@ unittest{
 	assert(parameterCode("ρ₁'")!=parameterCode("u_cf81e2828127"));
 	assert(ruleCode("theorem")=="r_theorem");
 	foreach(s;[
-		"rule r(x:ℝ,z:ℂ):x+z⇒z;",
 		"rule r(x:ℝ):[x]⇒0;",
 		"rule r(x:ℂ):[x<1]⇒0;",
 		"rule r(x:ℂ):|x|+0⇒x;",
-		"rule r(x:ℝ):x^x⇒x;",
-		"rule r(x:ℝ):x^2^3⇒x;",
 		"rule r(x:ℝ):x+0⇒x; garbage",
 		"rule r(x:ℝ):x+0⇒x; rule r(x:ℝ):x+0⇒x;",
 		"rule r(α:ℝ,α:ℝ):α+0⇒α;",

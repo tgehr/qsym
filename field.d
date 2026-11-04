@@ -123,7 +123,34 @@ package final class Field{
 			case Op.add:result=a.number(budget.calc!"+"(v,w),n.sort); break;
 			case Op.mul:result=a.number(budget.calc!"*"(v,w),n.sort); break;
 			case Op.inv:if(v.zero) return d.refl(t,ctx); result=a.number(budget.calc!"/"(Number(1),v),n.sort); break;
+			case Op.builtin:
+				auto f=cast(Builtin)n.value;
+				switch(f){
+					case Builtin.castNZ,Builtin.castZQ,Builtin.castQR,Builtin.castRC:result=a.number(v,n.sort); break;
+					case Builtin.addN,Builtin.addZ,Builtin.addQ:result=a.number(budget.calc!"+"(v,w),n.sort); break;
+					case Builtin.mulN,Builtin.mulZ,Builtin.mulQ:result=a.number(budget.calc!"*"(v,w),n.sort); break;
+					case Builtin.invQ:if(v.zero) return d.refl(t,ctx); result=a.number(budget.calc!"/"(Number(1),v),n.sort); break;
+					case Builtin.nonzeroN,Builtin.nonzeroZ,Builtin.nonzeroQ:result=a.boolean(!v.zero); break;
+					case Builtin.ltN,Builtin.ltZ,Builtin.ltQ:result=a.boolean(v.re<w.re); break;
+					case Builtin.leN,Builtin.leZ,Builtin.leQ:result=a.boolean(v.re<=w.re); break;
+					case Builtin.reC:result=a.real_(v.re); break;
+					case Builtin.imC:result=a.real_(v.im); break;
+					case Builtin.makeC:result=a.complex(v.re,w.re); break;
+					case Builtin.makeQ:if(w.zero) return d.refl(t,ctx); result=a.number(budget.calc!"/"(v,w),Sort.rational); break;
+					case Builtin.numQ:result=a.number(Number(Rational(v.re.numerator,BigInt(1))),Sort.integer); break;
+					case Builtin.denQ:result=a.number(Number(Rational(v.re.denominator,BigInt(1))),Sort.natural); break;
+					default:return d.refl(t,ctx);
+				}
+				break;
 			case Op.pow:
+				if(n.sort!=Sort.real_&&n.sort!=Sort.complex){
+					auto power=Number(1),base=v; auto exponent=cast(uint)n.value;
+					while(exponent){
+						if(exponent&1) power=budget.calc!"*"(power,base);
+						exponent>>=1; if(exponent) base=budget.calc!"*"(base,base);
+					}
+					result=a.number(power,n.sort); break;
+				}
 				if(!n.value) return law!"pow_zero"(n.sort,[x],ctx);
 				if(n.value==1) return law!"pow_one"(n.sort,[x],ctx);
 				auto m=n.value/2;
@@ -378,6 +405,7 @@ package final class Field{
 		budget.spend();
 		auto p=literal(t,ctx); if(p.after!=t) return p;
 		auto n=a.node(t);
+		if(n.sort!=Sort.real_&&n.sort!=Sort.complex) return d.refl(t,ctx);
 		switch(n.op){
 			case Op.add:return sum(t,ctx);
 			case Op.mul:return multiply(t,ctx);

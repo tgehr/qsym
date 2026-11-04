@@ -16,7 +16,7 @@ import pty
 import termios
 
 root=pathlib.Path(__file__).resolve().parents[1]
-ready=b"\x1b[?2004h\r\x1b[2Kqsym> \r\x1b[6C"
+ready=b"\x1b[?2004h\r\x1b[2K>>> \r\x1b[4C"
 left=b"\x1b[D"
 right=b"\x1b[C"
 up=b"\x1b[A"
@@ -59,7 +59,7 @@ class Terminal:
 		self.send(keys+b"\r")
 		output=self.until(ready)
 		if(expected is not None): assert b"\x1b[?2004l"+expected.encode()+b"\r\n" in output,output
-		if(expression is not None): assert ("qsym> "+expression+"\r\n").encode() in output,output
+		if(expression is not None): assert (">>> "+expression+"\r\n").encode() in output,output
 		return output
 	def finish(self,key=b"\x04",code=0):
 		self.send(key)
@@ -90,9 +90,9 @@ with Terminal() as t:
 	t.submit(b":vars z:\\bC",None,":vars z:ℂ")
 	t.submit(b"(1+\\ii)\\^2","2·ⅈ","(1+ⅈ)²")
 	t.submit(b"\\lam\t+\\lambda","2·λ","λ+λ")
-	t.submit(b"[x\\le 2]","[x≤2]·1","[x≤2]")
+	t.submit(b"[x\\le 2]","[x≤2]","[x≤2]")
 	t.submit(b"1\\alp\x07+2","3","1+2")
-	t.send(b"1\\alp\x1b"); t.until(b"\x1b[7C")
+	t.send(b"1\\alp\x1b"); t.until(b"\x1b[5C")
 	t.submit("+2","3","1+2")
 	t.submit(b"1+2\\^",None,"1+2\\^") # Unknown/incomplete spellings stay literal.
 	# UTF-8 bytes may arrive in separate reads, including supplementary characters.
@@ -152,9 +152,9 @@ with Terminal() as t:
 	t.finish()
 
 with Terminal("dumb") as t:
-	assert b"\x1b" not in t.until(b"qsym> ")
+	assert b"\x1b" not in t.until(b">>> ")
 	t.send(b"1+2\n")
-	output=t.until(b"qsym> ")
+	output=t.until(b">>> ")
 	assert b"3\r\n" in output and b"\x1b" not in output,output
 	t.finish(b":q\n")
 print("Terminal editing checks passed.")

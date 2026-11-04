@@ -12,10 +12,10 @@ unittest{
 	assertThrown(Parser("rule distribute(x:ℝ,y:ℝ,z:ℝ):x·(y+z)⇒x·y+x·z;").parse());
 	auto eq=Parser("equation associate(x:ℝ,y:ℝ,z:ℝ):(x+y)+z≡x+(y+z);").parse()[0];
 	assert(eq.equality&&!eq.automatic);
-	auto f=Parser("fact square(x:ℝ,n:ℕ):0≤x^(n+n);").parse()[0];
+	auto f=Parser("fact square(x:ℝ,n:NatParam):0≤x^(n+n);").parse()[0];
 	assert(f.inference&&f.parameters[1].natural);
 	assertThrown(Parser("rule bad(x:ℝ):|x|⇒x when x;").parse());
-	assertThrown(Parser("lemma bad(x:ℝ,n:ℕ):x^n⇒x when defined(n);").parse());
+	assertThrown(Parser("lemma bad(x:ℝ,n:NatParam):x^n⇒x when defined(n);").parse());
 	assertThrown(Parser("fact bad(x:ℝ):x;").parse());
 }
 

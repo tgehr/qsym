@@ -15,21 +15,24 @@ private string ds(uint i){ return "(domain_"~to!string(i)~" ρ)"; }
 private string rat(Rational q){ return "(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)"; }
 
 string leanConstructor(Arena a,Node n){
-	string suffix=n.sort==Sort.real_?"R":"C";
+	string suf=numeric(n.sort)?suffix(n.sort):"";
 	string op;
 	final switch(n.op){
 		case Op.realLit:return "(.real ("~to!string(n.value)~"))";
 		case Op.complexLit:return "(.complex ("~to!string(n.value)~") ("~to!string(n.imaginary)~"))";
 		case Op.numberLit:
 			auto q=a.number(n);
+			if(n.sort==Sort.natural||n.sort==Sort.integer) return "(."~(n.sort==Sort.natural?"nat":"int")~" ("~to!string(q.re.numerator)~"))";
+			if(n.sort==Sort.rational) return "(.rat "~rat(q.re)~")";
 			return n.sort==Sort.real_?"(.ratR "~rat(q.re)~")":"(.ratC "~rat(q.re)~" "~rat(q.im)~")";
 		case Op.boolLit:return "(.bool "~(n.value?"true":"false")~")";
 		case Op.variable:
-			return "(.var"~(n.sort==Sort.boolean?"B":suffix)~" "~to!string(n.value)~")";
-		case Op.add:op="add"~suffix; break;
-		case Op.mul:op="mul"~suffix; break;
-		case Op.inv:op="inv"~suffix; break;
-		case Op.pow:return "(.pow"~suffix~" "~name(n.a)~" "~to!string(n.value)~")";
+			return "(.var"~(n.sort==Sort.boolean?"B":suf)~" "~to!string(n.value)~")";
+		case Op.builtin:op=builtinInfo(cast(Builtin)n.value).code; break;
+		case Op.add:op="add"~suf; break;
+		case Op.mul:op="mul"~suf; break;
+		case Op.inv:op="inv"~suf; break;
+		case Op.pow:return "(.pow"~suf~" "~name(n.a)~" "~to!string(n.value)~")";
 		case Op.abs:op="absR"; break;
 		case Op.not_:op="not"; break;
 		case Op.and_:op="and"; break;
@@ -37,7 +40,7 @@ string leanConstructor(Arena a,Node n){
 		case Op.lt:op="ltR"; break;
 		case Op.le:op="leR"; break;
 		case Op.nonzero:op="nonzero"~(a.sort(a.at(n.a))==Sort.real_?"R":"C"); break;
-		case Op.mask:op="mask"~suffix; break;
+		case Op.mask:op="mask"~suf; break;
 		case Op.conj:op="conj"; break;
 		case Op.lebesgue:op="lebesgue"; break;
 		case Op.puncture:op="puncture"; break;
@@ -55,6 +58,12 @@ private string domainCode(Arena a,Term t){
 	final switch(n.op){
 		case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue,Op.numberLit:
 			cond="True"; proof="iff_true_intro ⟨_, rfl⟩"; break;
+		case Op.builtin:
+			auto info=builtinInfo(cast(Builtin)n.value),f="Functions."~info.code;
+			if(!n.arity){ cond="True"; proof="iff_true_intro ⟨_, rfl⟩"; }
+			else if(n.arity==1){ cond="∃ x, "~ev(n.a)~" = some x ∧ "~f~".domain x"; proof=f~".defined "~ev(n.a); }
+			else{ cond="∃ x y, "~ev(n.a)~" = some x ∧ "~ev(n.b)~" = some y ∧ "~f~".domain x y"; proof=f~".defined "~ev(n.a)~" "~ev(n.b); }
+			break;
 		case Op.add,Op.mul,Op.densityAt,Op.lt,Op.le:
 			cond=dc(n.a)~" ∧ "~dc(n.b);
 			auto lemma=n.op==Op.add?"defined_add":n.op==Op.mul?"defined_mul":n.op==Op.lt?"defined_lt":n.op==Op.le?"defined_le":"defined_densityAt";
@@ -133,6 +142,15 @@ private string totalCode(Arena a,Term t,bool[] total){
 	final switch(n.op){
 		case Op.realLit,Op.complexLit,Op.numberLit,Op.boolLit,Op.variable,Op.lebesgue:
 			proof="⟨_, rfl⟩"; break;
+		case Op.builtin:
+			auto info=builtinInfo(cast(Builtin)n.value);
+			if(!n.arity) proof="⟨_, rfl⟩";
+			else if(info.total&&total[n.a]&&(n.arity==1||total[n.b])){
+				proof="Functions."~info.code~".total (fun "~(n.arity==1?"_":"_ _")~" => True.intro) "~ev(n.a);
+				if(n.arity==2) proof~=" "~ev(n.b);
+				proof~=" "~totalRef(n.a)~(n.arity==2?" "~totalRef(n.b):"");
+			}
+			break;
 		case Op.add,Op.mul,Op.lt,Op.le,Op.densityAt:
 			if(total[n.a]&&total[n.b]) proof="(Value."~domainLemma(n)~" "~ev(n.a)~" "~ev(n.b)~
 				").mpr ⟨"~totalRef(n.a)~", "~totalRef(n.b)~"⟩";
@@ -168,6 +186,14 @@ private string domainEvidence(Arena a,Term source,DomainProof p,string h){
 	if(p.total) return "(show Value.Defined "~ev(p.term.id)~" from ⟨_, rfl⟩)";
 	if(p.children.length){
 		auto n=a.node(p.term);
+		if(n.op==Op.builtin){
+			auto info=builtinInfo(cast(Builtin)n.value);
+			enforce(info.total,"partial function is not total");
+			string proof="(Functions."~info.code~".total (fun "~(n.arity==1?"_":"_ _")~" => True.intro) "~ev(n.a);
+			if(n.arity==2) proof~=" "~ev(n.b);
+			foreach(child;p.children) proof~=" "~domainEvidence(a,source,child,h);
+			return proof~")";
+		}
 		string args=ev(n.a),proof=domainEvidence(a,source,p.children[0],h);
 		if(n.arity==2){ args~=" "~ev(n.b); proof="⟨"~proof~", "~domainEvidence(a,source,p.children[1],h)~"⟩"; }
 		return "((Value."~domainLemma(n)~" "~args~").mpr "~proof~")";
@@ -176,6 +202,9 @@ private string domainEvidence(Arena a,Term source,DomainProof p,string h){
 	foreach(i;p.path){
 		auto n=a.node(t);
 		switch(n.op){
+			case Op.builtin:
+				h="(Functions."~builtinInfo(cast(Builtin)n.value).code~(n.arity==1?".defined_arg ":i==0?".defined_left ":".defined_right ")~ev(n.a)~(n.arity==2?" "~ev(n.b):"")~" "~h~")";
+				break;
 			case Op.inv:h="(Value.defined_inv_arg "~ev(n.a)~" "~h~")"; break;
 			case Op.mask:h="(Value.defined_mask_guard "~ev(n.a)~" "~ev(n.b)~" "~h~")"; break;
 			case Op.and_:h="(Value.defined_and_guard "~ev(n.a)~" "~ev(n.b)~" "~h~")"; break;
@@ -263,6 +292,7 @@ string exportLean(Arena a,Result result){
 				auto n=a.node(p.before);
 				string lemma;
 				switch(n.op){
+					case Op.builtin:lemma="refines_function"~to!string(n.arity)~" Functions."~builtinInfo(cast(Builtin)n.value).code; break;
 					case Op.add:lemma="refines_add"; break;
 					case Op.mul:lemma="refines_mul"; break;
 					case Op.inv:lemma="refines_inv"; break;

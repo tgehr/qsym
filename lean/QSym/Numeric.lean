@@ -5,6 +5,9 @@ namespace QSym.Numeric
 -- A successful result certifies a defined closed value. `none` also covers
 -- unsupported syntax, so two failures must never certify an equality.
 abbrev Data : Ty → Type
+  | .natural => ℕ
+  | .integer => ℤ
+  | .rational => ℚ
   | .real => ℚ
   | .complex => ℚ × ℚ
   | .bool => Bool
@@ -14,6 +17,9 @@ instance (s : Ty) : DecidableEq (Data s) := by cases s <;> dsimp [Data] <;> infe
 
 noncomputable def complex (z : ℚ × ℚ) : ℂ := (z.1 : ℂ) + (z.2 : ℂ) * Complex.I
 noncomputable def denote : {s : Ty} → Data s → s.denote
+  | .natural, n => n
+  | .integer, n => n
+  | .rational, q => q
   | .real, q => (q : ℝ)
   | .complex, z => complex z
   | .bool, b => b
@@ -35,6 +41,40 @@ def inverseC (z : ℚ × ℚ) : Option (ℚ × ℚ) :=
   if z = (0, 0) then none else some (invC z)
 
 def calculate : {s : Ty} → Expr s → Option (Data s)
+  | _, .nat v => some v
+  | _, .int v => some v
+  | _, .rat v => some v
+  | _, .addN a b => binary (· + ·) (calculate a) (calculate b)
+  | _, .mulN a b => binary (· * ·) (calculate a) (calculate b)
+  | _, .ltN a b => binary (fun x y => decide (x < y)) (calculate a) (calculate b)
+  | _, .leN a b => binary (fun x y => decide (x ≤ y)) (calculate a) (calculate b)
+  | _, .nonzeroN a => (calculate a).map (fun x => decide (x ≠ 0))
+  | _, .addZ a b => binary (· + ·) (calculate a) (calculate b)
+  | _, .mulZ a b => binary (· * ·) (calculate a) (calculate b)
+  | _, .ltZ a b => binary (fun x y => decide (x < y)) (calculate a) (calculate b)
+  | _, .leZ a b => binary (fun x y => decide (x ≤ y)) (calculate a) (calculate b)
+  | _, .nonzeroZ a => (calculate a).map (fun x => decide (x ≠ 0))
+  | _, .addQ a b => binary (· + ·) (calculate a) (calculate b)
+  | _, .mulQ a b => binary (· * ·) (calculate a) (calculate b)
+  | _, .ltQ a b => binary (fun x y => decide (x < y)) (calculate a) (calculate b)
+  | _, .leQ a b => binary (fun x y => decide (x ≤ y)) (calculate a) (calculate b)
+  | _, .nonzeroQ a => (calculate a).map (fun x => decide (x ≠ 0))
+  | _, .castNZ a => (calculate a).map Int.ofNat
+  | _, .castZQ a => (calculate a).map (fun x : ℤ => (x : ℚ))
+  | _, .castQR a => (calculate a).map id
+  | _, .castRC a => (calculate a).map (fun x => (x, 0))
+  | _, .reC a => (calculate a).map Prod.fst
+  | _, .imC a => (calculate a).map Prod.snd
+  | _, .makeC a b => binary Prod.mk (calculate a) (calculate b)
+  | _, .numQ a => (calculate a).map Rat.num
+  | _, .denQ a => (calculate a).map Rat.den
+  | _, .powN a n => (calculate a).map (· ^ n)
+  | _, .powZ a n => (calculate a).map (· ^ n)
+  | _, .powQ a n => (calculate a).map (· ^ n)
+  | _, .invQ a => (calculate a).bind inverse
+  | _, .makeQ a b => do
+    let x ← calculate a; let y ← calculate b
+    if y = 0 then none else some ((x : ℚ) / y)
   | _, .real n => some (n : ℚ)
   | _, .complex r i => some ((r : ℚ), (i : ℚ))
   | _, .ratR q => some q
@@ -77,9 +117,109 @@ private theorem map_some {α β : Type} {f : α → β} {x : Option α} {v : β}
   cases x <;> simp_all
 
 -- Shared induction; certificates contain only `sound ... rfl`.
-theorem calculate_sound (ρ : Env) {s : Ty} (e : Expr s) (v : Data s)
-    (h : calculate e = some v) : Expr.eval ρ e = some (denote v) := by
-  induction e with
+set_option maxHeartbeats 1000000 in
+theorem calculate_sound (ρ : Env) {s : Ty} (term : Expr s) (v : Data s)
+    (h : calculate term = some v) : Expr.eval ρ term = some (denote v) := by
+  induction term with
+  | nat x => exact h
+  | int x => exact h
+  | rat x => exact h
+  | addN a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.addN, Function2.apply, denote, complex]
+  | mulN a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.mulN, Function2.apply, denote, complex]
+  | ltN a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.ltN, Function2.apply, denote, complex]
+  | leN a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.leN, Function2.apply, denote, complex]
+  | nonzeroN a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.nonzeroN, Function1.apply, denote, complex, id]
+  | addZ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.addZ, Function2.apply, denote, complex]
+  | mulZ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.mulZ, Function2.apply, denote, complex]
+  | ltZ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.ltZ, Function2.apply, denote, complex]
+  | leZ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.leZ, Function2.apply, denote, complex]
+  | nonzeroZ a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.nonzeroZ, Function1.apply, denote, complex, id]
+  | addQ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.addQ, Function2.apply, denote, complex]
+  | mulQ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.mulQ, Function2.apply, denote, complex]
+  | ltQ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.ltQ, Function2.apply, denote, complex]
+  | leQ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.leQ, Function2.apply, denote, complex]
+  | nonzeroQ a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.nonzeroQ, Function1.apply, denote, complex, id]
+  | castNZ a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.castNZ, Function1.apply, denote, complex, id]
+  | castZQ a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some (f := fun x : ℤ => (x : ℚ)) h
+    simp [Expr.eval, ha x hx, Functions.castZQ, Function1.apply, denote, complex, id]
+  | castQR a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.castQR, Function1.apply, denote, complex, id]
+  | castRC a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.castRC, Function1.apply, denote, complex, id]
+  | reC a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.reC, Function1.apply, denote, complex, id]
+  | imC a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.imC, Function1.apply, denote, complex, id]
+  | makeC a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.makeC, Function2.apply, denote, complex]
+  | numQ a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.numQ, Function1.apply, denote, complex, id]
+  | denQ a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Functions.denQ, Function1.apply, denote, complex, id]
+  | powN a n ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, denote]
+  | powZ a n ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, denote]
+  | powQ a n ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, denote]
+  | invQ a ha =>
+    obtain ⟨x, hx, hv⟩ := Option.bind_eq_some_iff.mp h
+    by_cases hz : x = 0
+    · simp [inverse, hz] at hv
+    · have hv' : x⁻¹ = v := by simpa [inverse, hz] using hv
+      subst v
+      simp [Expr.eval, ha x hx, Functions.invQ, Function1.apply, denote, hz]
+  | makeQ a b ha hb =>
+    obtain ⟨x, hx, hv⟩ := Option.bind_eq_some_iff.mp h
+    obtain ⟨y, hy, hv⟩ := Option.bind_eq_some_iff.mp hv
+    by_cases hz : y = 0
+    · simp [hz] at hv
+    · have hv' : (x : ℚ) / y = v := by simpa [hz] using hv
+      subst v
+      simp [Expr.eval, ha x hx, hb y hy, Functions.makeQ, Function2.apply, denote, hz]
   | real n =>
     have hv := Option.some.inj h
     subst v
@@ -88,12 +228,15 @@ theorem calculate_sound (ρ : Env) {s : Ty} (e : Expr s) (v : Data s)
     have hv := Option.some.inj h
     subst v
     simp [Expr.eval, denote, complex]
-  | ratR q => simpa [calculate, Expr.eval, denote] using h
+  | ratR q =>
+    have hv := Option.some.inj h
+    subst v
+    rfl
   | ratC r i =>
     have hv := Option.some.inj h
     subst v
     rfl
-  | bool b => simpa [calculate, Expr.eval, denote] using h
+  | bool b => exact h
   | addR a b ha hb =>
     obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
     simp [Expr.eval, ha x hx, hb y hy, Value.add, denote, Rat.cast_add]
@@ -138,7 +281,7 @@ theorem calculate_sound (ρ : Env) {s : Ty} (e : Expr s) (v : Data s)
   | leR a b ha hb =>
     obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
     simp [Expr.eval, ha x hx, hb y hy, Value.le, denote]
-  | _ => simp [calculate] at h
+  | _ => cases h
 
 def check {s : Ty} (a b : Expr s) : Bool :=
   match calculate a, calculate b with

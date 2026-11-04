@@ -30,6 +30,8 @@ test: build/qsym
 	./build/syntax-tests
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/scalar.d -of=build/scalar-tests
 	./build/scalar-tests --DRT-testmode=run-main build/scalar
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/language.d -of=build/language-tests
+	./build/language-tests --DRT-testmode=run-main build/language
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

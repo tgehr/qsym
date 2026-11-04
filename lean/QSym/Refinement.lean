@@ -38,6 +38,12 @@ theorem refines_map {α β : Type} (f : α → β) {x y : Option α}
   | none => intro v hv; cases hv
   | some a => rw [h a rfl]; exact refines_refl _
 
+theorem refines_function1 {α β} (f : Function1 α β) {x y : Option α} (h : Refines x y) :
+    Refines (f.apply x) (f.apply y) := refines_bind h (fun _ => refines_refl _)
+theorem refines_function2 {α β γ} (f : Function2 α β γ) {x y : Option α} {a b : Option β}
+    (h : Refines x y) (k : Refines a b) : Refines (f.apply x a) (f.apply y b) :=
+  refines_bind h (fun _ => refines_bind k (fun _ => refines_refl _))
+
 theorem refines_add {α : Type} [Add α] {a b x y : Option α}
     (h : Refines a x) (k : Refines b y) : Refines (add a b) (add x y) := by
   cases a with
@@ -130,7 +136,16 @@ macro "qsym_scalar" : tactic => `(tactic| (
     classical
     intro v hv
     try simp only [Value.Refines, Value.Defined] at *
-    try simp only [Value.add, Value.mul, Value.inv, Value.nonzero, Value.mask, Value.conj,
+    try simp only [Function1.apply, Function2.apply, Functions.castNZ, Functions.castZQ, Functions.castQR, Functions.castRC, Functions.addN,
+      Functions.mulN, Functions.ltN, Functions.leN, Functions.nonzeroN, Functions.addZ,
+      Functions.mulZ, Functions.ltZ, Functions.leZ, Functions.nonzeroZ, Functions.addQ,
+      Functions.mulQ, Functions.ltQ, Functions.leQ, Functions.nonzeroQ, Functions.invQ,
+      Functions.eqB, Functions.powerR, Functions.powerC, Functions.sqrtR, Functions.sqrtC,
+      Functions.expR, Functions.expC, Functions.sinR, Functions.sinC, Functions.cosR,
+      Functions.cosC, Functions.sinhR, Functions.sinhC, Functions.coshR, Functions.coshC,
+      Functions.tanhR, Functions.tanhC, Functions.logR, Functions.logC, Functions.tanR,
+      Functions.tanC, Functions.makeC, Functions.reC, Functions.imC, Functions.cisR,
+      Value.add, Value.mul, Value.inv, Value.nonzero, Value.mask, Value.conj,
       Value.not, Value.and, Value.or, Value.lt, Value.le, Value.abs,
       Option.bind_eq_bind, Option.pure_def, Option.map, Option.bind] at *
     try simp only [Option.some.injEq, forall_eq, forall_eq', Bool.true_eq, decide_eq_true_eq] at *
@@ -140,7 +155,8 @@ macro "qsym_scalar" : tactic => `(tactic| (
       | qsym_split_bool
       | split at *
     all_goals subst_vars
-    all_goals try (simp_all [pow_add, pow_mul, mul_pow, inv_pow])
+    all_goals try (simp_all [pow_add, pow_mul, mul_pow, inv_pow, Real.rpow_natCast, Complex.cpow_natCast,
+      Real.exp_log, Complex.exp_log, Real.log_exp, Real.sqrt_sq_eq_abs])
     all_goals try (simp_all [abs_mul, abs_inv, abs_pow])
     all_goals try norm_num at *
     all_goals try field_simp

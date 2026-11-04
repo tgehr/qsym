@@ -20,15 +20,16 @@ int repl(){
 		try{
 			if(line==":quit"||line==":q") break;
 			if(line==":help"){
-				writeln("Expressions: (x+1)^2, [x≠0]·x⁻¹, abs(x), (1+ⅈ)^2");
+				writeln("Expressions: 2^(1/2), exp(z), sin(z), [x≠0]·x⁻¹, (1+ⅈ)^2");
 				writeln("Undeclared variables are real. ASCII operators also work.");
 				writeln("Up/Down: session history; Left/Right, Home/End, Backspace/Delete: edit.");
 				writeln("Unicode: \\alpha → α, \\ne → ≠, \\bR → ℝ, \\^2 → ², \\ii → ⅈ.");
 				writeln("Tab completes a unique prefix; Space commits a symbol; Esc cancels it.");
 				writeln("Ctrl-A/E: Home/End; Ctrl-U/K/W: delete before/after cursor/previous word.");
 				writeln("Ctrl-C: cancel line; Ctrl-D: delete character, or exit on an empty line.");
-				writeln(":vars z:ℂ,p:𝔹   declare variable types; :vars lists them");
+				writeln(":vars n:ℕ,k:ℤ,q:ℚ,z:ℂ,p:𝔹   declare types; :vars lists them");
 				writeln(":symbols [PREFIX] list Unicode input spellings");
+				writeln(":functions [PREFIX] list built-in signatures");
 				writeln(":lean FILE        export a Lean certificate for the last expression");
 				writeln(":reset            clear variables and the last expression");
 				writeln(":quit             exit (or EOF)");
@@ -38,6 +39,17 @@ int repl(){
 				auto prefix=strip(line[8..$]);
 				if(prefix.startsWith("\\")) prefix=prefix[1..$];
 				foreach(s;symbols) if(s.key.startsWith(prefix)) writeln("\\",s.key,"  ",s.text);
+				continue;
+			}
+			if(line==":functions"||line.startsWith(":functions ")){
+				auto prefix=strip(line[10..$]);
+				foreach(i;0..cast(uint)Builtin.invalid){
+					auto f=builtinInfo(cast(Builtin)i);
+					if(!f.name.startsWith(prefix)) continue;
+					stdout.write(f.name,"(");
+					foreach(j,s;f.args) stdout.write(j?",":"",sortName(s));
+					writeln("): ",sortName(f.result));
+				}
 				continue;
 			}
 			if(line==":reset"){ syntax=Syntax.init; lastSyntax=Syntax.init; last=null; continue; }

@@ -18,4 +18,11 @@ assert "type mismatch" in result.stderr,result.stderr
 assert "Expr .real" in certificate.read_text()
 result=subprocess.run([str(root/"build/qsym"),"repl"],input="1+2\n",text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and result.stdout=="3\n",result
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"[x<2]","2^(1/2)",":vars n:ℕ,q:ℚ,z:ℂ,p:𝔹","n*0","rat(1,3)+rat(1,6)",
+	"sin(z+0)","([p]:ℕ)",":functions cexp",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==[
+	"[x<2]","2^(1/2)","nat(0)","rat(1,2)","csin(z)","([p]:ℕ)",
+	"cexp(Complex): Complex","cexpi(Complex): Complex"],result.stdout
 print("REPL checks passed.")

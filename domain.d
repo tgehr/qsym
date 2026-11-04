@@ -30,6 +30,13 @@ DomainBounds domain(Arena a,Term root){
 		final switch(n.op){
 			case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue,Op.numberLit:
 				f="True"; total=true; break;
+			case Op.builtin:
+				auto info=builtinInfo(cast(Builtin)n.value);
+				total=info.total&&(!n.arity||top[n.a])&&(n.arity<2||top[n.b]);
+				if(total) f="True";
+				else f=(n.arity?"D(%"~to!string(n.a)~") and ":"")~
+					(n.arity==2?"D(%"~to!string(n.b)~") and ":"")~info.code~".domain(values)";
+				break;
 			case Op.add,Op.mul,Op.densityAt,Op.lt,Op.le:
 				total=top[n.a]&&top[n.b];
 				f=total?"True":"(D(%"~to!string(n.a)~") and D(%"~to!string(n.b)~"))"; break;

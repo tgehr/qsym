@@ -4,6 +4,8 @@ import std.conv:to;
 import qsym.table:Table;
 @safe:
 
+enum Sort:ubyte{ real_,complex,boolean,density,measure,natural,integer,rational }
+
 enum TypeKind:ubyte{
 	unit,boolean,natural,integer,rational,real_,complex,
 	uintBits,intBits,vector,tuple,array,function_

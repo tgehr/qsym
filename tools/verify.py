@@ -49,9 +49,16 @@ def main():
 	check(ROOT/"lean/QSym/Generated.lean",timeout=600)
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
+	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
+	language=sorted((ROOT/"build/language").glob("*.lean"))
+	if len(language)!=47 or not (ROOT/"build/language/Builtins.lean").is_file():
+		raise RuntimeError("expected 47 language certificates")
+	for file in language:
+		certificate(file)
+
 	scalars=sorted((ROOT/"build/scalar").glob("*.lean"))
 	if len(scalars)!=59:
 		raise RuntimeError("expected 59 scalar certificates")
@@ -84,11 +91,17 @@ def main():
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
 		("BadCondition","rewrite bad(x:ℝ):|x|⇒x when x≤0;"),
+		("BadComplexLog","rewrite bad(z:ℂ):clog(cexp(z))⇒z;"),
+		("BadComplexRoot","rewrite bad(z:ℂ):csqrt(z^2)⇒z;"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
 		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),
 			str(negative/(name+".lean"))],check=True,stdout=subprocess.PIPE)
 		check(negative/(name+".lean"),succeeds=False)
+	(negative/"PartialIsNotTotal.lean").write_text("import QSym\nopen QSym\n"
+		"theorem forged (x : Option ℝ) (h : Value.Defined x) : Value.Defined (Functions.logR.apply x) :=\n"
+		"  Functions.logR.total (fun _ => True.intro) x h\n")
+	check(negative/"PartialIsNotTotal.lean",succeeds=False)
 
 	guarded=(ROOT/"build/scalar/IntervalAbs.lean").read_text()
 	corrupt,count=re.subn(

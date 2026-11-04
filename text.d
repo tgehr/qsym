@@ -11,7 +11,7 @@ struct Syntax{
 	void declare(string source){
 		auto added=Parser(source).parseParameters(),next=variables.dup;
 		foreach(i,v;added){
-			enforce(!v.natural&&(v.sort==Sort.real_||v.sort==Sort.complex||v.sort==Sort.boolean),"expected Real, Complex or Bool");
+			enforce(!v.natural&&(numeric(v.sort)||v.sort==Sort.boolean),"expected a scalar expression type");
 			foreach(old;added[0..i]) enforce(old.name!=v.name,"duplicate variable: "~v.name);
 			bool found;
 			foreach(ref old;next) if(old.name==v.name){ old=v; found=true; break; }
@@ -27,12 +27,17 @@ struct Syntax{
 				foreach(i,v;next) if(v.name==p.name) return a.variable(v.sort,cast(uint)i);
 				assert(0,"missing variable");
 			}
+			if(p.name=="nat") return a.natural_(p.args[0].number);
+			if(p.name=="int") return a.integer(p.args[0].number);
+			if(p.name=="rat") return a.rational(p.args[0].number,p.args[1].number);
 			if(p.name=="real") return a.real_(p.args[0].number);
 			if(p.name=="complex") return a.complex(p.args[0].number,p.args[1].number);
 			if(p.name=="true"||p.name=="false") return a.boolean(p.name=="true");
 			if(p.name=="lebesgue") return a.lebesgue();
+			auto f=builtin(p.name);
+			if(f!=Builtin.invalid){ Term[] args; foreach(arg;p.args) args~=build(arg); return a.call(f,args); }
 			auto x=build(p.args[0]);
-			if(p.name=="powR"||p.name=="powC"){
+			if(p.name=="powN"||p.name=="powZ"||p.name=="powQ"||p.name=="powR"||p.name=="powC"){
 				ulong exponent(Pattern q){
 					if(q.name=="#") return cast(ulong)q.number;
 					auto l=exponent(q.args[0]),r=exponent(q.args[1]);
@@ -47,7 +52,7 @@ struct Syntax{
 				case "mulR","mulC":return a.mul(x,y);
 				case "invR","invC":return a.inv(x);
 				case "nonzeroR","nonzeroC":return a.nonzero(x);
-				case "maskR","maskC":return a.mask(x,y);
+				case "maskN","maskZ","maskQ","maskR","maskC":return a.mask(x,y);
 				case "absR":return a.abs(x);
 				case "conj":return a.conj(x);
 				case "not":return a.not_(x);
@@ -69,13 +74,22 @@ struct Syntax{
 		string arg(uint id,uint precedence=0){
 			auto p=memo[id]; return p.precedence<precedence?"("~p.text~")":p.text;
 		}
+		Piece product(Node n){
+			auto left=a.node(a.at(n.a));
+			// [p]·x denotes a non-strict mask, so a strict product needs an explicit call.
+			if(left.op==Op.mask&&a.isNumber(a.at(left.b))&&a.number(a.at(left.b)).one)
+				return Piece("mul"~suffix(n.sort)~"("~arg(n.a)~","~arg(n.b)~")");
+			return Piece(arg(n.a,70)~"·"~arg(n.b,71),70);
+		}
 		Piece rational(Rational q){ return Piece(q.toString,q.integral?(q<Rational(0)?80:100):70); }
 		foreach(id;a.postorder(root)){
 			auto t=a.at(id),n=a.node(t); Piece p;
 			final switch(n.op){
 				case Op.realLit,Op.complexLit,Op.numberLit:
 					auto z=a.number(t);
-					if(n.sort==Sort.real_) p=rational(z.re);
+					if(n.sort==Sort.natural||n.sort==Sort.integer) p.text=(n.sort==Sort.natural?"nat(":"int(")~z.re.toString~")";
+					else if(n.sort==Sort.rational) p.text="rat("~to!string(z.re.numerator)~","~to!string(z.re.denominator)~")";
+					else if(n.sort==Sort.real_) p=rational(z.re);
 					else if(z.re.zero&&z.im==Rational(1)) p.text="ⅈ";
 					else if(z.re.zero&&z.im==Rational(-1)) p=Piece("-ⅈ",80);
 					else{
@@ -88,7 +102,7 @@ struct Syntax{
 					p.text=variables[cast(size_t)n.value].name; break;
 				case Op.boolLit:p.text=n.value?"true":"false"; break;
 				case Op.add:p=Piece(arg(n.a,60)~"+"~arg(n.b,61),60); break;
-				case Op.mul:p=Piece(arg(n.a,70)~"·"~arg(n.b,71),70); break;
+				case Op.mul:p=product(n); break;
 				case Op.inv:p=Piece(arg(n.a,91)~"⁻¹",90); break;
 				case Op.pow:p=Piece(arg(n.a,91)~"^"~to!string(n.value),90); break;
 				case Op.abs:p.text="abs("~arg(n.a)~")"; break;
@@ -98,7 +112,27 @@ struct Syntax{
 				case Op.or_:p=Piece(arg(n.a,30)~"∨"~arg(n.b,31),30); break;
 				case Op.lt,Op.le:p=Piece(arg(n.a,51)~(n.op==Op.lt?"<":"≤")~arg(n.b,51),50); break;
 				case Op.nonzero:p=Piece(arg(n.a,51)~"≠0",50); break;
-				case Op.mask:p=Piece("["~arg(n.a)~"]·"~arg(n.b,71),70); break;
+				case Op.mask:
+					if(a.isNumber(a.at(n.b))&&a.number(a.at(n.b)).one){
+						p.text="["~arg(n.a)~"]";
+						if(n.sort!=Sort.real_) p.text="("~p.text~":"~["ℕ","ℤ","ℚ","ℝ","ℂ"][rank(n.sort)]~")";
+					}
+					else p=Piece("["~arg(n.a)~"]·"~arg(n.b,71),70);
+					break;
+				case Op.builtin:
+					auto f=cast(Builtin)n.value,info=builtinInfo(f),code=info.code;
+					if(code=="pi") p.text="π";
+					else if(code=="e") p.text="e";
+					else if(code=="addN"||code=="addZ"||code=="addQ") p=Piece(arg(n.a,60)~"+"~arg(n.b,61),60);
+					else if(code=="mulN"||code=="mulZ"||code=="mulQ") p=product(n);
+					else if(f==Builtin.invQ) p=Piece(arg(n.a,91)~"⁻¹",90);
+					else if(code=="nonzeroN"||code=="nonzeroZ"||code=="nonzeroQ") p=Piece(arg(n.a,51)~"≠0",50);
+					else if(code=="ltN"||code=="ltZ"||code=="ltQ") p=Piece(arg(n.a,51)~"<"~arg(n.b,51),50);
+					else if(code=="leN"||code=="leZ"||code=="leQ") p=Piece(arg(n.a,51)~"≤"~arg(n.b,51),50);
+					else if(f==Builtin.eqB) p=Piece(arg(n.a,51)~"="~arg(n.b,51),50);
+					else if(code=="powerR"||code=="powerC"||code.length==5&&code[0..3]=="pow") p=Piece(arg(n.a,91)~"^"~arg(n.b,91),90);
+					else p.text=info.name~"("~arg(n.a)~(n.arity==2?","~arg(n.b):"")~")";
+					break;
 				case Op.lebesgue:p.text="lebesgue()"; break;
 				case Op.puncture:p.text="puncture("~arg(n.a)~")"; break;
 				case Op.densityAt:p.text="densityAt("~arg(n.a)~","~arg(n.b)~")"; break;
@@ -132,7 +166,7 @@ unittest{
 	assert(a.sort(syntax.parse(a,"z"))==Sort.complex);
 	assertThrown(syntax.parse(a,"unknown(x)"));
 	assertThrown(syntax.parse(a,"x junk"));
-	assertThrown(syntax.parse(a,"x^(4294967295+1)"));
+	assert(a.sort(syntax.parse(a,"x^(4294967295+1)"))==Sort.real_);
 	auto deep="x"; foreach(i;0..200) deep~="+x";
 	assertThrown(syntax.parse(a,deep));
 }

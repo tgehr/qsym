@@ -53,7 +53,7 @@ struct Lexer{
 			do{ advance(); }while(pos<source.length&&isDigit(cur()));
 			return Token(TokenKind.integer,source[start..pos],start);
 		}
-		if(c!='ⅈ'&&(isAlpha(c)||c=='_')){
+		if(c!='ⅈ'&&c!='𝑖'&&(isAlpha(c)||c=='_')){
 			do{ advance(); }while(pos<source.length&&(identifierChar(cur())||isDigit(cur())));
 			while(pos<source.length&&(cur()=='\''||cur()=='′')) advance();
 			return Token(TokenKind.identifier,source[start..pos],start);
@@ -61,6 +61,7 @@ struct Lexer{
 		advance();
 		string symbol;
 		switch(c){
+			case '𝑖':symbol="ⅈ"; break;
 			case '·','⋅','×':symbol="*"; break;
 			case '÷':symbol="/"; break;
 			case '−':symbol="-"; break;

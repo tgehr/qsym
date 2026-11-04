@@ -107,7 +107,7 @@ final class Derivation{
 	Proof numeric(Term before,Term after,uint context){
 		foreach(id;arena.postorder(before)){
 			auto n=arena.node(arena.at(id));
-			enforce(n.sort==Sort.real_||n.sort==Sort.complex||n.sort==Sort.boolean,"non-scalar numeric certificate");
+			enforce(qsym.ir.numeric(n.sort)||n.sort==Sort.boolean,"non-scalar numeric certificate");
 			enforce(n.op!=Op.variable&&n.op!=Op.densityAt,"symbolic numeric certificate");
 		}
 		enforce(arena.isNumber(after)||arena.node(after).op==Op.boolLit,"numeric result expected");
@@ -153,7 +153,7 @@ final class Derivation{
 			if(i!=uint.max){ d.found=true; d.path=paths[i]; return d; }
 			auto n=arena.node(t);
 			if(n.arity==0){ d.found=d.total=true; return d; }
-			if(depth>=128||n.op==Op.inv||n.op==Op.mask||n.op==Op.and_||n.op==Op.or_) return d;
+			if(depth>=128||n.op==Op.inv||n.op==Op.mask||n.op==Op.and_||n.op==Op.or_||n.op==Op.builtin&&!builtinInfo(cast(Builtin)n.value).total) return d;
 			foreach(j;0..n.arity){
 				auto child=build(arena.child(t,j),depth+1);
 				if(!child.found) return d;

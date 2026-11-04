@@ -10,10 +10,10 @@ public import qsym.number:BigInt,Rational,Number;
 
 @safe:
 
-enum Sort:ubyte{ real_,complex,boolean,density,measure }
+public import qsym.builtins;
 enum Op:ubyte{
 	realLit,complexLit,boolLit,variable,add,mul,inv,nonzero,
-	mask,conj,lebesgue,puncture,densityAt,forget,numberLit,pow,not_,and_,or_,lt,le,abs
+	mask,conj,lebesgue,puncture,densityAt,forget,numberLit,pow,not_,and_,or_,lt,le,abs,builtin
 }
 
 /// Public handles carry ownership; internal edges are compact arena-local IDs.
@@ -91,9 +91,11 @@ final class Arena{
 	Term complex(Rational r,Rational i=Rational.init){ return number(Number(r,i),Sort.complex); }
 	Term number(Number v,Sort s){
 		enforce(!closed,"arena is closed");
-		enforce(s==Sort.real_||s==Sort.complex,"number requires a scalar type");
-		enforce(s!=Sort.real_||v.im.zero,"real number has an imaginary component");
-		if(v.re.small&&v.im.small)
+		enforce(numeric(s),"number requires a scalar type");
+		enforce(s==Sort.complex||v.im.zero,"ordered number has an imaginary component");
+		enforce(s!=Sort.natural&&s!=Sort.integer||v.re.integral,"integer literal required");
+		enforce(s!=Sort.natural||v.re>=Rational(0),"negative natural literal");
+		if((s==Sort.real_||s==Sort.complex)&&v.re.small&&v.im.small)
 			return s==Sort.real_?real_(v.re.integer):complex(v.re.integer,v.im.integer);
 		auto key=v.toString;
 		auto i=numberIndex.get(key,uint.max);
@@ -112,34 +114,51 @@ final class Arena{
 		if(n.op==Op.numberLit) enforce(n.value>=0&&n.value<numbers.length,"invalid number index");
 		return n.op==Op.numberLit?numbers[cast(size_t)n.value]:Number(n.value,n.imaginary);
 	}
+	Term natural_(long n){ return number(Number(n),Sort.natural); }
+	Term integer(long n){ return number(Number(n),Sort.integer); }
+	Term rational(long n,long d=1){ return number(Number(Rational(BigInt(n),BigInt(d))),Sort.rational); }
 	Term boolean(bool b){ return intern(Node(Op.boolLit,Sort.boolean,0,uint.max,uint.max,b)); }
 	Term variable(Sort s,uint i){
-		enforce(s==Sort.real_||s==Sort.complex||s==Sort.boolean,
+		enforce(numeric(s)||s==Sort.boolean,
 			"only scalar variables are supported in this slice");
 		return intern(Node(Op.variable,s,0,uint.max,uint.max,i));
 	}
 	private void scalar(Term a)const{
 		auto s=sort(a);
-		enforce(s==Sort.real_||s==Sort.complex,"expected Real or Complex");
+		enforce(numeric(s),"numeric value expected");
 	}
 	private Term binary(Op op,Term a,Term b){
 		scalar(a); scalar(b);
 		enforce(sort(a)==sort(b),"scalar types differ; use an explicit embedding");
 		return intern(Node(op,sort(a),2,a.id,b.id));
 	}
-	Term add(Term a,Term b){ return binary(Op.add,a,b); }
-	Term mul(Term a,Term b){ return binary(Op.mul,a,b); }
-	Term neg(Term a){ scalar(a); return mul(number(Number(-1),sort(a)),a); }
-	Term sub(Term a,Term b){ return add(a,neg(b)); }
-	Term div(Term a,Term b){ return mul(a,inv(b)); }
-	Term inv(Term a){ scalar(a); return intern(Node(Op.inv,sort(a),1,a.id)); }
+	Term add(Term a,Term b){
+		scalar(a); enforce(sort(a)==sort(b),"scalar types differ");
+		return rank(sort(a))<rank(Sort.real_)?call(builtin("add"~suffix(sort(a))),[a,b]):binary(Op.add,a,b);
+	}
+	Term mul(Term a,Term b){
+		scalar(a); enforce(sort(a)==sort(b),"scalar types differ");
+		return rank(sort(a))<rank(Sort.real_)?call(builtin("mul"~suffix(sort(a))),[a,b]):binary(Op.mul,a,b);
+	}
+	Term neg(Term a){ scalar(a); if(sort(a)==Sort.natural) a=castTo(a,Sort.integer); return mul(number(Number(-1),sort(a)),a); }
+	Term sub(Term a,Term b){ enforce(sort(a)==sort(b),"scalar types differ"); b=neg(b); return add(castTo(a,sort(b)),b); }
+	Term div(Term a,Term b){ enforce(sort(a)==sort(b),"scalar types differ"); b=inv(b); return mul(castTo(a,sort(b)),b); }
+	Term inv(Term a){
+		scalar(a); if(rank(sort(a))<rank(Sort.rational)) a=castTo(a,Sort.rational);
+		return sort(a)==Sort.rational?call(Builtin.invQ,[a]):intern(Node(Op.inv,sort(a),1,a.id));
+	}
 	Term pow(Term a,uint n){ scalar(a); return intern(Node(Op.pow,sort(a),1,a.id,uint.max,n)); }
 	Term abs(Term a){
 		enforce(sort(a)==Sort.real_,"absolute value requires Real");
 		return intern(Node(Op.abs,Sort.real_,1,a.id));
 	}
-	Term nonzero(Term a){ scalar(a); return intern(Node(Op.nonzero,Sort.boolean,1,a.id)); }
-	Term equal(Term a,Term b){ return not_(nonzero(sub(a,b))); }
+	Term nonzero(Term a){
+		scalar(a); return rank(sort(a))<rank(Sort.real_)?call(builtin("nonzero"~suffix(sort(a))),[a]):intern(Node(Op.nonzero,Sort.boolean,1,a.id));
+	}
+	Term equal(Term a,Term b){
+		if(sort(a)==Sort.boolean&&sort(b)==Sort.boolean) return call(Builtin.eqB,[a,b]);
+		return not_(nonzero(sub(a,b)));
+	}
 	Term not_(Term a){
 		enforce(sort(a)==Sort.boolean,"not requires Bool");
 		return intern(Node(Op.not_,Sort.boolean,1,a.id));
@@ -154,8 +173,8 @@ final class Arena{
 		enforce(sort(a)==Sort.real_&&sort(b)==Sort.real_,"ordering requires Real");
 		return intern(Node(op,Sort.boolean,2,a.id,b.id));
 	}
-	Term lt(Term a,Term b){ return comparison(Op.lt,a,b); }
-	Term le(Term a,Term b){ return comparison(Op.le,a,b); }
+	Term lt(Term a,Term b){ return rank(sort(a))>=0&&rank(sort(a))<rank(Sort.real_)?call(builtin("lt"~suffix(sort(a))),[a,b]):comparison(Op.lt,a,b); }
+	Term le(Term a,Term b){ return rank(sort(a))>=0&&rank(sort(a))<rank(Sort.real_)?call(builtin("le"~suffix(sort(a))),[a,b]):comparison(Op.le,a,b); }
 	Term mask(Term p,Term a){
 		enforce(sort(p)==Sort.boolean,"mask predicate must be Bool");
 		scalar(a);
@@ -164,6 +183,21 @@ final class Arena{
 	Term conj(Term a){
 		enforce(sort(a)==Sort.complex,"conjugation requires Complex");
 		return intern(Node(Op.conj,Sort.complex,1,a.id));
+	}
+	Term call(Builtin f,Term[] args){
+		auto info=builtinInfo(f);
+		enforce(args.length==info.args.length,"built-in arity mismatch");
+		foreach(i,t;args) enforce(sort(t)==info.args[i],"built-in type mismatch: "~info.code);
+		return intern(Node(Op.builtin,info.result,cast(ubyte)args.length,
+			args.length?args[0].id:uint.max,args.length==2?args[1].id:uint.max,cast(long)f));
+	}
+	Term castTo(Term t,Sort target){
+		enforce(promotes(sort(t),target),"invalid numeric embedding");
+		while(sort(t)!=target){
+			auto next=sort(t)==Sort.natural?Sort.integer:sort(t)==Sort.integer?Sort.rational:sort(t)==Sort.rational?Sort.real_:Sort.complex;
+			t=call(builtin("cast"~suffix(sort(t))~suffix(next)),[t]);
+		}
+		return t;
 	}
 	Term lebesgue(){ return intern(Node(Op.lebesgue,Sort.density)); }
 	Term puncture(Term d){
@@ -188,6 +222,7 @@ final class Arena{
 		final switch(n.op){
 			case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue,Op.numberLit:
 				return original;
+			case Op.builtin:return call(cast(Builtin)n.value,cs);
 			case Op.add:return add(cs[0],cs[1]);
 			case Op.mul:return mul(cs[0],cs[1]);
 			case Op.inv:return inv(cs[0]);
@@ -254,6 +289,9 @@ struct Session{
 
 string sortName(Sort s){
 	final switch(s){
+		case Sort.natural:return "Nat";
+		case Sort.integer:return "Int";
+		case Sort.rational:return "Rat";
 		case Sort.real_:return "Real";
 		case Sort.complex:return "Complex";
 		case Sort.boolean:return "Bool";

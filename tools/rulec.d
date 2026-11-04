@@ -10,7 +10,9 @@ import std.exception:enforce;
 @safe:
 
 string dOp(string n){
+	if(builtin(n)!=Builtin.invalid) return "builtin";
 	switch(n){
+		case "nat","int","rat":return "numberLit";
 		case "real":return "realLit";
 		case "complex":return "complexLit";
 		case "true","false":return "boolLit";
@@ -18,12 +20,12 @@ string dOp(string n){
 		case "mulR","mulC":return "mul";
 		case "invR","invC":return "inv";
 		case "nonzeroR","nonzeroC":return "nonzero";
-		case "powR","powC":return "pow";
+		case "powN","powZ","powQ","powR","powC":return "pow";
 		case "absR":return "abs";
 		case "ltR":return "lt";
 		case "leR":return "le";
 		case "not","and","or":return n~"_";
-		case "maskR","maskC":return "mask";
+		case "maskN","maskZ","maskQ","maskR","maskC":return "mask";
 		default:return n;
 	}
 }
@@ -32,12 +34,13 @@ string dPattern(Pattern p){
 	if(p.variable) return parameterCode(p.name);
 	if(p.name=="natAdd"||p.name=="natMul") return "nat(cast(ulong)("~dPattern(p.args[0])~")"~(p.name=="natAdd"?"+":"*")~dPattern(p.args[1])~")";
 	if(p.natural&&p.name=="#") return to!string(p.number)~"u";
-	if(p.name=="powR"||p.name=="powC") return "a.pow("~dPattern(p.args[0])~","~dPattern(p.args[1])~")";
+	if(p.name=="powN"||p.name=="powZ"||p.name=="powQ"||p.name=="powR"||p.name=="powC") return "a.pow("~dPattern(p.args[0])~","~dPattern(p.args[1])~")";
 	if(p.name=="#") return "("~dInteger(p.number)~")";
 	if(p.name=="true"||p.name=="false") return "a.boolean("~p.name~")";
 	string[] args;
 	foreach(arg;p.args) args~=dPattern(arg);
-	auto name=p.name=="real"||p.name=="complex"?p.name:dOp(p.name);
+	if(builtin(p.name)!=Builtin.invalid) return "a.call(Builtin."~p.name~",["~args.join(",")~"])";
+	auto name=p.name=="real"||p.name=="complex"?p.name:p.name=="nat"?"natural_":p.name=="int"?"integer":p.name=="rat"?"rational":dOp(p.name);
 	if(name=="real") name="real_";
 	return "a."~name~"("~args.join(",")~")";
 }
@@ -107,6 +110,11 @@ string[] opsFor(Rule[] rules,bool inference){
 	return result;
 }
 
+string matchPayload(Pattern p,string value,Parameter[] parameters,string indent,bool big=false){
+	if(!p.variable) return indent~"if("~value~"!="~dInteger(p.number)~") return false;\n";
+	return indent~"if("~value~"<0||"~value~">uint.max) return false;\n"~
+		matchCode(p,"cast(uint)("~value~")"~(big?".toLong()":""),parameters,indent);
+}
 string matchCode(Pattern p,string path,Parameter[] parameters,string indent){
 	if(p.variable){
 		size_t i; while(parameters[i].name!=p.name) ++i;
@@ -126,23 +134,40 @@ string matchCode(Pattern p,string path,Parameter[] parameters,string indent){
 	}
 	string s=indent~"if(a.node("~path~").op!=Op."~dOp(p.name)~"||a.sort("~path~")!=Sort."~to!string(p.sort)~") return false;\n";
 	if(p.name=="real"||p.name=="complex"){
-		s~=indent~"if(a.node("~path~").value!="~dInteger(p.args[0].number)~") return false;\n";
-		if(p.name=="complex") s~=indent~"if(a.node("~path~").imaginary!="~dInteger(p.args[1].number)~") return false;\n";
+		s~=matchPayload(p.args[0],"a.node("~path~").value",parameters,indent);
+		if(p.name=="complex") s~=matchPayload(p.args[1],"a.node("~path~").imaginary",parameters,indent);
+	}else if(p.name=="nat"||p.name=="int"||p.name=="rat"){
+		bool variables; foreach(arg;p.args) variables|=arg.variable;
+		if(!variables) s~=indent~"if("~path~"!="~dPattern(p)~") return false;\n";
+		else{
+			s~=matchPayload(p.args[0],"a.number("~path~").re.numerator",parameters,indent,true);
+			if(p.name=="rat") s~=matchPayload(p.args[1],"a.number("~path~").re.denominator",parameters,indent,true);
+		}
 	}else if(p.name=="true"||p.name=="false") s~=indent~"if(a.node("~path~").value!="~(p.name=="true"?"1":"0")~") return false;\n";
-	else if(p.name=="powR"||p.name=="powC")
+	else if(p.name=="powN"||p.name=="powZ"||p.name=="powQ"||p.name=="powR"||p.name=="powC")
 		s~=matchCode(p.args[0],"a.child("~path~",0)",parameters,indent)~matchCode(p.args[1],"cast(uint)a.node("~path~").value",parameters,indent);
-	else foreach(i,arg;p.args) s~=matchCode(arg,"a.child("~path~","~to!string(i)~")",parameters,indent);
+	else{
+		if(builtin(p.name)!=Builtin.invalid) s~=indent~"if(a.node("~path~").value!=cast(long)Builtin."~p.name~") return false;\n";
+		foreach(i,arg;p.args) s~=matchCode(arg,"a.child("~path~","~to!string(i)~")",parameters,indent);
+	}
 	return s;
 }
 
 string leanValue(Pattern p){
 	if(p.variable||p.natural) return leanPattern(p);
-	if(p.name=="real") return "(some (("~to!string(p.args[0].number)~" : Int) : ℝ))";
-	if(p.name=="complex") return "(some ((("~to!string(p.args[0].number)~" : Int) : ℂ) + (("~to!string(p.args[1].number)~" : Int) : ℂ) * Complex.I))";
+	if(p.name=="nat") return "(some ("~leanPattern(p.args[0])~" : ℕ))";
+	if(p.name=="int") return "(some ("~leanPattern(p.args[0])~" : ℤ))";
+	if(p.name=="rat") return "(some (("~leanPattern(p.args[0])~" : ℚ) / "~leanPattern(p.args[1])~"))";
+	if(p.name=="real") return "(some (("~leanPattern(p.args[0])~" : Int) : ℝ))";
+	if(p.name=="complex") return "(some ((("~leanPattern(p.args[0])~" : Int) : ℂ) + (("~leanPattern(p.args[1])~" : Int) : ℂ) * Complex.I))";
 	if(p.name=="true"||p.name=="false") return "(some "~p.name~")";
 	if(p.name=="lebesgue") return "(some Density.lebesgue)";
-	if(p.name=="powR"||p.name=="powC") return "("~leanValue(p.args[0])~".map (fun x => x ^ "~leanPattern(p.args[1])~"))";
+	if(p.name=="powN"||p.name=="powZ"||p.name=="powQ"||p.name=="powR"||p.name=="powC") return "("~leanValue(p.args[0])~".map (fun x => x ^ "~leanPattern(p.args[1])~"))";
 	if(p.name=="puncture"||p.name=="forget") return "("~leanValue(p.args[0])~".map Density."~p.name~")";
+	if(builtin(p.name)!=Builtin.invalid){
+		if(!p.args.length) return "(some Functions."~p.name~")";
+		string s="(Functions."~p.name~".apply"; foreach(arg;p.args) s~=" "~leanValue(arg); return s~")";
+	}
 	auto op=dOp(p.name);
 	if(op=="not_"||op=="and_"||op=="or_") op=op[0..$-1];
 	string s="(Value."~op;
