@@ -9,7 +9,7 @@ import qsym.tools.unicode:symbols;
 
 int repl(){
 	auto reader=LineReader.open();
-	if(reader.interactive) writeln("qsym — enter an expression; :help for commands.");
+	//if(reader.interactive) writeln("enter an expression; :help for commands.");
 	Syntax syntax,lastSyntax;
 	string last;
 	for(;;){
