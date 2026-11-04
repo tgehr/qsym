@@ -66,6 +66,19 @@ theorem defined_or_guard (p q : Option Bool) (h : Defined (or p q)) : Defined p 
   rcases (defined_or p q).mp h with h | ⟨h, _⟩
   · exact ⟨true, h⟩
   · exact ⟨false, h⟩
+
+theorem defined_and_total (p q : Option Bool) (hp : Defined p) (hq : Defined q) :
+    Defined (and p q) := by
+  obtain ⟨b, rfl⟩ := hp
+  cases b
+  · exact ⟨false, rfl⟩
+  · exact hq
+theorem defined_or_total (p q : Option Bool) (hp : Defined p) (hq : Defined q) :
+    Defined (or p q) := by
+  obtain ⟨b, rfl⟩ := hp
+  cases b
+  · exact hq
+  · exact ⟨true, rfl⟩
 end QSym.Value
 
 namespace QSym.Replay
@@ -129,16 +142,16 @@ theorem AC.sound {α : Type} (a : AC α) (ρ : Nat → α) (x y : Tree)
   exact a.fold_perm ρ h
 
 noncomputable def addR : AC (Option ℝ) :=
-  ⟨Value.add, some 0, Generated.r_real_add_assoc, Generated.r_real_add_comm,
-    by simpa using Generated.r_real_add_unit⟩
+  ⟨Value.add, some ((0 : Int) : ℝ), Generated.r_real_add_assoc, Generated.r_real_add_comm,
+    Generated.r_real_add_unit⟩
 noncomputable def mulR : AC (Option ℝ) :=
-  ⟨Value.mul, some 1, Generated.r_real_mul_assoc, Generated.r_real_mul_comm,
-    by simpa using Generated.r_real_mul_unit⟩
+  ⟨Value.mul, some ((1 : Int) : ℝ), Generated.r_real_mul_assoc, Generated.r_real_mul_comm,
+    Generated.r_real_mul_unit⟩
 noncomputable def addC : AC (Option ℂ) :=
-  ⟨Value.add, some 0, Generated.r_complex_add_assoc, Generated.r_complex_add_comm,
-    by simpa using Generated.r_complex_add_unit⟩
+  ⟨Value.add, some (((0 : Int) : ℂ) + ((0 : Int) : ℂ) * Complex.I),
+    Generated.r_complex_add_assoc, Generated.r_complex_add_comm, Generated.r_complex_add_unit⟩
 noncomputable def mulC : AC (Option ℂ) :=
-  ⟨Value.mul, some 1, Generated.r_complex_mul_assoc, Generated.r_complex_mul_comm,
-    by simpa using Generated.r_complex_mul_unit⟩
+  ⟨Value.mul, some (((1 : Int) : ℂ) + ((0 : Int) : ℂ) * Complex.I),
+    Generated.r_complex_mul_assoc, Generated.r_complex_mul_comm, Generated.r_complex_mul_unit⟩
 
 end QSym.Replay

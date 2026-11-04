@@ -6,16 +6,18 @@ import std.stdio:writeln,stderr;
 import std.conv:to;
 import std.datetime.stopwatch:StopWatch,AutoStart;
 import std.exception:enforce;
+import qsym.tools.repl:repl;
 
 int main(string[] args){
 	try{
+		if(args.length==1||args.length==2&&args[1]=="repl") return repl();
 		auto session=Session.open();
 		auto a=session.arena;
 		auto x=a.variable(Sort.real_,0);
 		auto masked=a.mask(a.nonzero(x),a.inv(x));
 		auto input=a.add(a.mul(masked,a.real_(1)),a.real_(0));
 		auto strict=simplify(a,input,Options(DensityMode.preserve,true));
-		if(args.length==1||args[1]=="demo"){
+		if(args[1]=="demo"){
 			writeln("Guarded reciprocal: ",domain(a,input).must);
 			writeln("Simplified IR:\n",dump(a,strict.output));
 			auto d=a.puncture(a.lebesgue());
@@ -59,6 +61,6 @@ int main(string[] args){
 				watch.peek.total!"msecs"," ms (synthetic benchmark; no PSI comparison)");
 			return 0;
 		}
-		throw new Exception("usage: qsym [demo | export DIRECTORY | bench [N]]");
+		throw new Exception("usage: qsym [repl | demo | export DIRECTORY | bench [N]]");
 	}catch(Exception e){ stderr.writeln(e.msg); return 1; }
 }

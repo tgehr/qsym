@@ -6,7 +6,6 @@ import qsym.derive;
 import qsym.spec:leanSort;
 import std.conv:to;
 import std.exception:enforce;
-import std.array:join;
 @safe:
 
 private string name(uint i){ return "n"~to!string(i); }
@@ -49,86 +48,50 @@ string leanConstructor(Arena a,Node n){
 		(n.arity==2?" "~name(n.b):"")~")";
 }
 
-private string semantic(Arena a,Node n){
-	final switch(n.op){
-		case Op.realLit:return "some (("~to!string(n.value)~" : Int) : ℝ)";
-		case Op.complexLit:
-			return "some ((("~to!string(n.value)~" : Int) : ℂ) + (("~
-				to!string(n.imaginary)~" : Int) : ℂ) * Complex.I)";
-		case Op.numberLit:
-			auto q=a.number(n);
-			return n.sort==Sort.real_?"some ("~rat(q.re)~" : ℝ)":
-				"some (("~rat(q.re)~" : ℂ) + ("~rat(q.im)~" : ℂ) * Complex.I)";
-		case Op.boolLit:return "some "~(n.value?"true":"false");
-		case Op.variable:
-			return "some (ρ."~leanSort(n.sort)~" "~to!string(n.value)~")";
-		case Op.add:return "Value.add "~ev(n.a)~" "~ev(n.b);
-		case Op.mul:return "Value.mul "~ev(n.a)~" "~ev(n.b);
-		case Op.inv:return "Value.inv "~ev(n.a);
-		case Op.pow:return ev(n.a)~".map (fun x => x ^ "~to!string(n.value)~")";
-		case Op.abs:return "Value.abs "~ev(n.a);
-		case Op.not_:return "Value.not "~ev(n.a);
-		case Op.and_:return "Value.and "~ev(n.a)~" "~ev(n.b);
-		case Op.or_:return "Value.or "~ev(n.a)~" "~ev(n.b);
-		case Op.lt:return "Value.lt "~ev(n.a)~" "~ev(n.b);
-		case Op.le:return "Value.le "~ev(n.a)~" "~ev(n.b);
-		case Op.nonzero:return "Value.nonzero "~ev(n.a);
-		case Op.mask:return "Value.mask "~ev(n.a)~" "~ev(n.b);
-		case Op.conj:return "Value.conj "~ev(n.a);
-		case Op.lebesgue:return "some Density.lebesgue";
-		case Op.puncture:return ev(n.a)~".map Density.puncture";
-		case Op.densityAt:return "Value.densityAt "~ev(n.a)~" "~ev(n.b);
-		case Op.forget:return ev(n.a)~".map Density.forget";
-	}
-}
-
 private string domainCode(Arena a,Term t){
 	auto n=a.node(t);
 	auto i=to!string(t.id);
 	string cond,proof;
-	string sem=semantic(a,n);
 	final switch(n.op){
 		case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue,Op.numberLit:
-			cond="True"; proof="exact iff_true_intro ⟨_, rfl⟩"; break;
+			cond="True"; proof="iff_true_intro ⟨_, rfl⟩"; break;
 		case Op.add,Op.mul,Op.densityAt,Op.lt,Op.le:
 			cond=dc(n.a)~" ∧ "~dc(n.b);
 			auto lemma=n.op==Op.add?"defined_add":n.op==Op.mul?"defined_mul":n.op==Op.lt?"defined_lt":n.op==Op.le?"defined_le":"defined_densityAt";
-			proof="exact (Value."~lemma~" "~ev(n.a)~" "~ev(n.b)~
+			proof="(Value."~lemma~" "~ev(n.a)~" "~ev(n.b)~
 				").trans (and_congr "~ds(n.a)~" "~ds(n.b)~")"; break;
 		case Op.inv:
 			cond="∃ v, "~ev(n.a)~" = some v ∧ v ≠ 0";
-			proof="exact Value.defined_inv "~ev(n.a); break;
+			proof="Value.defined_inv "~ev(n.a); break;
 		case Op.nonzero,Op.conj,Op.not_:
 			cond=dc(n.a);
-			proof="exact (Value."~(n.op==Op.nonzero?"defined_nonzero":n.op==Op.not_?"defined_not":"defined_conj")~
+			proof="(Value."~(n.op==Op.nonzero?"defined_nonzero":n.op==Op.not_?"defined_not":"defined_conj")~
 				" "~ev(n.a)~").trans "~ds(n.a); break;
 		case Op.pow,Op.abs:
 			cond=dc(n.a);
-			proof="exact (Value.defined_map _ "~ev(n.a)~").trans "~ds(n.a); break;
+			proof="(Value.defined_map _ "~ev(n.a)~").trans "~ds(n.a); break;
 		case Op.puncture,Op.forget:
 			cond=dc(n.a);
-			proof="exact (Value.defined_map _ "~ev(n.a)~").trans "~ds(n.a); break;
+			proof="(Value.defined_map _ "~ev(n.a)~").trans "~ds(n.a); break;
 		case Op.mask:
 			if(isGuardedInverse(a,t)){
 				auto child=a.node(a.at(n.b)).a;
 				cond=dc(child);
-				sem="Value.mask (Value.nonzero "~ev(child)~") (Value.inv "~ev(child)~")";
-				proof="exact (Value.defined_guarded_inv "~ev(child)~").trans "~ds(child);
+				proof="(Value.defined_guarded_inv "~ev(child)~").trans "~ds(child);
 			}else{
 				cond=ev(n.a)~" = some false ∨ ("~ev(n.a)~" = some true ∧ "~dc(n.b)~")";
-				proof="exact (Value.defined_mask "~ev(n.a)~" "~ev(n.b)~
+				proof="(Value.defined_mask "~ev(n.a)~" "~ev(n.b)~
 					").trans (or_congr Iff.rfl (and_congr Iff.rfl "~ds(n.b)~"))";
 			}
 			break;
 		case Op.and_,Op.or_:
 			auto stop=n.op==Op.and_?"false":"true",go=n.op==Op.and_?"true":"false";
 			cond=ev(n.a)~" = some "~stop~" ∨ ("~ev(n.a)~" = some "~go~" ∧ "~dc(n.b)~")";
-			proof="exact (Value."~(n.op==Op.and_?"defined_and":"defined_or")~" "~ev(n.a)~" "~ev(n.b)~
+			proof="(Value."~(n.op==Op.and_?"defined_and":"defined_or")~" "~ev(n.a)~" "~ev(n.b)~
 				").trans (or_congr Iff.rfl (and_congr Iff.rfl "~ds(n.b)~"))"; break;
 	}
 	return "def d"~i~" (ρ : Env) : Prop := "~cond~"\n"~
-		"theorem domain_"~i~" (ρ : Env) : Expr.Defined ρ "~name(t.id)~" ↔ d"~i~" ρ := by\n"~
-		"  change Value.Defined ("~sem~") ↔ ("~cond~")\n  "~proof~"\n\n";
+		"theorem domain_"~i~" (ρ : Env) : Expr.Defined ρ "~name(t.id)~" ↔ d"~i~" ρ :=\n  "~proof~"\n\n";
 }
 
 private string contexts(Derivation d,uint ctx,bool declarations){
@@ -163,6 +126,43 @@ private string domainLemma(Node n){
 		default:assert(0,"unsupported definedness operation");
 	}
 }
+private string totalRef(uint i){ return "(total_"~to!string(i)~" ρ)"; }
+private string totalCode(Arena a,Term t,bool[] total){
+	auto n=a.node(t);
+	string proof;
+	final switch(n.op){
+		case Op.realLit,Op.complexLit,Op.numberLit,Op.boolLit,Op.variable,Op.lebesgue:
+			proof="⟨_, rfl⟩"; break;
+		case Op.add,Op.mul,Op.lt,Op.le,Op.densityAt:
+			if(total[n.a]&&total[n.b]) proof="(Value."~domainLemma(n)~" "~ev(n.a)~" "~ev(n.b)~
+				").mpr ⟨"~totalRef(n.a)~", "~totalRef(n.b)~"⟩";
+			break;
+		case Op.nonzero,Op.conj,Op.not_,Op.pow,Op.abs,Op.puncture,Op.forget:
+			if(total[n.a]) proof="(Value."~domainLemma(n)~" "~ev(n.a)~").mpr "~totalRef(n.a);
+			break;
+		case Op.inv:break;
+		case Op.mask:
+			if(isGuardedInverse(a,t)){
+				auto child=a.node(a.at(n.b)).a;
+				if(total[child]) proof="(Value.defined_guarded_inv "~ev(child)~").mpr "~totalRef(child);
+			}else{
+				auto p=a.node(a.at(n.a));
+				if(p.op==Op.boolLit){
+					if(!p.value) proof="⟨_, rfl⟩";
+					else if(total[n.b]) proof=totalRef(n.b);
+				}
+			}
+			break;
+		case Op.and_,Op.or_:
+			auto p=a.node(a.at(n.a));
+			if(p.op==Op.boolLit&&p.value==(n.op==Op.or_)) proof="⟨_, rfl⟩";
+			else if(total[n.a]&&total[n.b]) proof="Value.defined_"~(n.op==Op.and_?"and":"or")~
+				"_total "~ev(n.a)~" "~ev(n.b)~" "~totalRef(n.a)~" "~totalRef(n.b);
+			break;
+	}
+	total[t.id]=proof.length!=0;
+	return proof.length?"theorem total_"~to!string(t.id)~" (ρ : Env) : Expr.Defined ρ "~name(t.id)~" :=\n  "~proof~"\n":"";
+}
 private string domainEvidence(Arena a,Term source,DomainProof p,string h){
 	enforce(p.found,"missing domain evidence");
 	if(p.total) return "(show Value.Defined "~ev(p.term.id)~" from ⟨_, rfl⟩)";
@@ -191,11 +191,6 @@ private string domainEvidence(Arena a,Term source,DomainProof p,string h){
 	enforce(t==p.term,"bad domain projection");
 	return h;
 }
-private string nodeDefinitions(Arena a,Term[] roots){
-	bool[] seen=new bool[a.length]; string[] names;
-	foreach(root;roots) foreach(id;a.postorder(root)) if(!seen[id]){ seen[id]=true; names~=name(id); }
-	return names.join(", ");
-}
 private string acEvidence(Arena a,Deduction e){
 	import qsym.table:Table;
 	auto op=e.value?Op.mul:Op.add;
@@ -213,9 +208,8 @@ private string acEvidence(Arena a,Deduction e){
 	string env="(fun i => match i with";
 	foreach(i,t;atoms) env~=" | "~to!string(i)~" => "~ev(t.id);
 	env~=" | _ => none)";
-	return "  simpa only ["~nodeDefinitions(a,[e.proof.before,e.proof.after])~
-		", Expr.eval, Replay.AC.eval, "~ac~", Int.cast_zero, Int.cast_one, zero_mul, add_zero] using\n"~
-		"    (Value.refines_of_eq (Replay.AC.sound "~ac~" "~env~" "~left~" "~right~" (by decide)))\n";
+	return "  Value.refines_of_eq (Replay.AC.sound "~ac~" "~env~" "~left~" "~right~
+		" (of_decide_eq_true rfl))\n";
 }
 
 // The exporter replays named laws and their premises. It never asks an
@@ -240,13 +234,13 @@ string exportLean(Arena a,Result result){
 		for(auto c=e.proof.context;c;c=d.contexts[c].parent) pending~=d.contexts[c].guard;
 	}
 	foreach(t;pending) foreach(id;a.postorder(t)) needed[id]=true;
-	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\n";
+	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
 	foreach(i,n;needed) if(n){ auto t=a.at(cast(uint)i); s~="def "~name(t.id)~" : Expr ."~leanSort(a.sort(t))~" := "~leanConstructor(a,a.node(t))~"\n"; }
 	s~="\n";
 	foreach(i,yes;used) if(yes){
 		auto e=d.deductions[i],p=e.proof;
 		auto claim=p.known?ev(p.before.id)~" = "~ev(p.after.id):"Value.Refines "~ev(p.before.id)~" "~ev(p.after.id);
-		s~="theorem p"~to!string(i)~" (ρ : Env)"~contexts(d,p.context,true)~" : "~claim~" := by\n";
+		s~="theorem p"~to!string(i)~" (ρ : Env)"~contexts(d,p.context,true)~" : "~claim~" :=\n";
 		string ref_(Proof q){ return reference(d,q); }
 		final switch(e.kind){
 			case Evidence.rule:
@@ -254,7 +248,7 @@ string exportLean(Arena a,Result result){
 				string application="Generated."~r.rule;
 				foreach(j,b;r.bindings) application~=" "~(r.naturals[j]?to!string(a.number(b).re.integer):ev(b.id));
 				size_t premise,domain;
-				if(e.domains.length) s~="  intro v hv\n  have hd : Value.Defined "~ev(p.before.id)~" := ⟨v, hv⟩\n";
+				if(e.domains.length) s~="  fun v hv =>\n  let hd : Value.Defined "~ev(p.before.id)~" := ⟨v, hv⟩\n";
 				foreach(c;r.conditions){
 					if(c.literal) continue;
 					application~=" "~(c.defined?domainEvidence(a,p.before,e.domains[domain++],"hd"):ref_(e.premises[premise++]));
@@ -262,12 +256,11 @@ string exportLean(Arena a,Result result){
 				application="("~application~")";
 				if(r.reversed){ enforce(r.equality,"cannot reverse a refinement"); application~=".symm"; }
 				if(r.equality) application="(Value.refines_of_eq "~application~")";
-				s~="  exact "~application~(e.domains.length?" v hv":"")~"\n";
+				s~="  "~application~(e.domains.length?" v hv":"")~"\n";
 				break;
-			case Evidence.trans:s~="  exact "~ref_(e.premises[0])~".trans "~ref_(e.premises[1])~"\n"; break;
+			case Evidence.trans:s~="  "~ref_(e.premises[0])~".trans "~ref_(e.premises[1])~"\n"; break;
 			case Evidence.congr:
-				auto n=a.node(p.before),m=a.node(p.after);
-				s~="  change Value.Refines ("~semantic(a,n)~") ("~semantic(a,m)~")\n";
+				auto n=a.node(p.before);
 				string lemma;
 				switch(n.op){
 					case Op.add:lemma="refines_add"; break;
@@ -285,13 +278,13 @@ string exportLean(Arena a,Result result){
 					case Op.pow,Op.abs,Op.puncture,Op.forget:lemma="refines_map _"; break;
 					default:assert(0,"invalid congruence");
 				}
-				s~="  exact Value."~lemma;
+				s~="  Value."~lemma;
 				foreach(q;e.premises) s~=" "~ref_(q);
 				s~="\n"; break;
 			case Evidence.scoped:
 				auto n=a.node(p.before),body=e.premises[0];
 				auto op=n.op==Op.mask?"mask":n.op==Op.and_?"and":"or";
-				s~="  exact Value.refines_"~op~"_under "~ev(n.a)~" "~ev(body.before.id)~" "~ev(body.after.id)~
+				s~="  Value.refines_"~op~"_under "~ev(n.a)~" "~ev(body.before.id)~" "~ev(body.after.id)~
 					" (fun g"~to!string(body.context)~" => "~ref_(body)~")\n";
 				break;
 			case Evidence.assumption:
@@ -302,27 +295,28 @@ string exportLean(Arena a,Result result){
 					auto lemma=n.op==Op.not_?"of_not":(n.op==Op.and_?"and_true_":"or_false_")~(j==0?"left":"right");
 					h="(Value."~lemma~" "~h~")"; t=a.child(t,j);
 				}
-				s~="  exact "~(e.value?h:"Value.not_eq "~h)~"\n"; break;
+				s~="  "~(e.value?h:"Value.not_eq "~h)~"\n"; break;
 			case Evidence.transport:
-				s~="  exact "~ref_(e.premises[1])~" true "~reference(d,e.premises[0],true)~"\n"; break;
+				s~="  "~ref_(e.premises[1])~" true "~reference(d,e.premises[0],true)~"\n"; break;
 			case Evidence.numeric:
-				s~="  apply Value.refines_of_eq\n  norm_num ["~nodeDefinitions(a,[p.before,p.after])~
-					", Expr.eval, Value.add, Value.mul, Value.inv, Value.conj, Value.abs, Value.nonzero, Value.lt, Value.le, Complex.ext_iff, Complex.normSq_apply]\n";
+				s~="  Numeric.sound ρ "~name(p.before.id)~" "~name(p.after.id)~" rfl\n";
 				break;
 			case Evidence.ac:s~=acEvidence(a,e); break;
 		}
 		s~="\n";
 	}
-	s~="theorem refinement (ρ : Env) : Value.Refines "~ev(result.proofInput.id)~" "~ev(result.output.id)~" :=\n  "~reference(d,result.certificate)~"\n#print axioms refinement\n\n";
+	s~="theorem refinement (ρ : Env) : Value.Refines "~ev(result.proofInput.id)~" "~ev(result.output.id)~" :=\n  "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
 	s~="theorem simplification (ρ : Env) (h : Expr.Defined ρ "~name(result.proofInput.id)~") : "~
-		ev(result.proofInput.id)~" = "~ev(result.output.id)~" := (refinement ρ).eq_of_defined h\n#print axioms simplification\n\n";
-	foreach(i,yes;needed) if(yes) s~=domainCode(a,a.at(cast(uint)i));
-	s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" ↔ "~dc(result.input.id)~" := "~ds(result.input.id)~"\n#print axioms definedness\n";
+		ev(result.proofInput.id)~" = "~ev(result.output.id)~" := (refinement ρ).eq_of_defined h\n#qsym_check_axioms simplification\n\n";
+	auto inputOrder=a.postorder(result.input);
+	foreach(i;inputOrder) s~=domainCode(a,a.at(i));
+	s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" ↔ "~dc(result.input.id)~" := "~ds(result.input.id)~"\n#qsym_check_axioms definedness\n";
 	if(domain(a,result.input).everywhere){
-		string[] defs;
-		foreach(i,yes;needed) if(yes){ defs~="d"~to!string(i); defs~=name(cast(uint)i); }
-		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" := by\n"~
-			"  apply (definedness ρ).mpr\n  simp only ["~defs.join(", ")~", Expr.eval]\n  all_goals qsym_defined\n#print axioms everywhere_defined\n";
+		bool[] total=new bool[a.length];
+		foreach(i;inputOrder) s~=totalCode(a,a.at(i),total);
+		enforce(total[result.input.id],"missing totality proof");
+		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" := "~
+			totalRef(result.input.id)~"\n#qsym_check_axioms everywhere_defined\n";
 	}
 	return s~"end QSym.Certificate\n";
 }
@@ -341,10 +335,7 @@ string exportEquivalence(Arena a,Result left,Result right){
 		"    (hl : Expr.Defined ρ LeftCertificate."~name(left.proofInput.id)~")\n"~
 		"    (hr : Expr.Defined ρ RightCertificate."~name(right.proofInput.id)~") :\n"~
 		"    Expr.eval ρ LeftCertificate."~name(left.proofInput.id)~
-		" = Expr.eval ρ RightCertificate."~name(right.proofInput.id)~" := by\n"~
-		"  calc\n    _ = Expr.eval ρ LeftCertificate."~name(left.output.id)~
-		" := LeftCertificate.simplification ρ hl\n"~
-		"    _ = Expr.eval ρ RightCertificate."~name(right.output.id)~" := by rfl\n"~
-		"    _ = _ := (RightCertificate.simplification ρ hr).symm\n"~
-		"#print axioms equivalence\nend QSym\n";
+		" = Expr.eval ρ RightCertificate."~name(right.proofInput.id)~" :=\n"~
+		"  (LeftCertificate.simplification ρ hl).trans (RightCertificate.simplification ρ hr).symm\n"~
+		"#qsym_check_axioms equivalence\nend QSym\n";
 }

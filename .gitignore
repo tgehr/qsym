@@ -5,3 +5,4 @@
 *.olean
 *.ilean
 *.trace
+__pycache__/

@@ -7,7 +7,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate test demo verify bench clean
+.PHONY: all generate test demo verify bench bench-certificates clean
 all: build/qsym
 
 build generated:
@@ -19,10 +19,10 @@ build/rulec: tools/rulec.d $(MODULES) | build
 generate: build/rulec | generated
 	./build/rulec rules/core.qs $(GENERATED_D) $(GENERATED_LEAN)
 
-build/qsym: generate tools/main.d $(MODULES)
+build/qsym: generate tools/main.d tools/repl.d $(MODULES)
 	$(DC) $(DFLAGS) $(IMPORTS) -i tools/main.d -of=$@
 
-test: generate
+test: build/qsym
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/all.d -of=build/tests
 	./build/tests
 	./build/rulec tests/syntax.qs build/syntax.d build/Syntax.lean
@@ -30,12 +30,20 @@ test: generate
 	./build/syntax-tests
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/scalar.d -of=build/scalar-tests
 	./build/scalar-tests --DRT-testmode=run-main build/scalar
+	python3 tests/repl.py
 
 demo: build/qsym
 	./build/qsym demo
 
 bench: build/qsym
 	./build/qsym bench 50000
+
+build/scalar-export: generate tests/scalar.d $(MODULES)
+	$(DC) $(DFLAGS) $(IMPORTS) -i tests/scalar.d -of=$@
+
+bench-certificates: build/scalar-export
+	cd lean && $(LAKE) build
+	python3 tools/bench_certificates.py --lake $(LAKE)
 
 # Full verification is fail-closed. Fast compilation alone never grants trust.
 verify: test build/qsym

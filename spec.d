@@ -145,6 +145,44 @@ struct Parser{
 		while(take("||")) p=pattern("or",[p,conjunction(depth)]);
 		return p;
 	}
+	private Parameter parameter(){
+		auto name=ident(); expect(":"); auto ty=ident();
+		Sort s; bool natural;
+		switch(ty){
+			case "Real","ℝ":s=Sort.real_; break;
+			case "Complex","ℂ":s=Sort.complex; break;
+			case "Bool","𝔹":s=Sort.boolean; break;
+			case "Density":s=Sort.density; break;
+			case "Measure":s=Sort.measure; break;
+			case "Nat","ℕ":s=Sort.real_; natural=true; break;
+			default:throw new Exception("unknown sort: "~ty);
+		}
+		enforce(!isConstructor(name)&&name!="inv"&&name!="nonzero"&&name!="mask"&&name!="abs","parameter shadows a constructor");
+		return Parameter(name,s,natural);
+	}
+	Parameter[] parseParameters(){
+		lexer=Lexer(source); next();
+		Parameter[] parameters;
+		do{ parameters~=parameter(); }while(take(","));
+		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text);
+		return parameters;
+	}
+	Pattern parseExpression(ref Parameter[] parameters){
+		lexer=Lexer(source); next(); auto p=expression();
+		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text);
+		void variables(Pattern q,uint depth=0){
+			enforce(depth<128,"expression nesting limit exceeded");
+			if(!q.args.length&&q.name!="#"&&!isConstructor(q.name)){
+				foreach(v;parameters) if(v.name==q.name) return;
+				parameters~=Parameter(q.name,Sort.real_);
+			}
+			foreach(arg;q.args) variables(arg,depth+1);
+		}
+		variables(p);
+		p=lower(p,choose(possible(p,parameters)));
+		infer(p,parameters);
+		return p;
+	}
 	Rule[] parse(){
 		lexer=Lexer(source); next();
 		Rule[] rules;
@@ -157,20 +195,9 @@ struct Parser{
 			expect("(");
 			if(!take(")")){
 				do{
-					auto name=ident(); expect(":"); auto ty=ident();
-					Sort s; bool natural;
-					switch(ty){
-						case "Real","ℝ":s=Sort.real_; break;
-						case "Complex","ℂ":s=Sort.complex; break;
-						case "Bool","𝔹":s=Sort.boolean; break;
-						case "Density":s=Sort.density; break;
-						case "Measure":s=Sort.measure; break;
-						case "Nat","ℕ":s=Sort.real_; natural=true; break;
-						default:throw new Exception("unknown sort: "~ty);
-					}
-					foreach(old;r.parameters) enforce(old.name!=name,"duplicate parameter");
-					enforce(!isConstructor(name)&&name!="inv"&&name!="nonzero"&&name!="mask"&&name!="abs","parameter shadows a constructor");
-						r.parameters~=Parameter(name,s,natural);
+					auto v=parameter();
+					foreach(old;r.parameters) enforce(old.name!=v.name,"duplicate parameter");
+					r.parameters~=v;
 				}while(take(","));
 				expect(")");
 			}

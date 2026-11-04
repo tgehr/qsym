@@ -35,33 +35,44 @@ def main():
 		else:
 			if completed.returncode==0:
 				raise RuntimeError(f"invalid proof was accepted: {path.name}")
-			if not any(s in completed.stdout for s in ("unsolved goals","type mismatch","is false")):
+			if not any(s in completed.stdout for s in ("unsolved goals","type mismatch","is false","unexpected axioms")):
 				raise RuntimeError("negative test failed for the wrong reason:\n"+completed.stdout)
 		print(("checked " if succeeds else "rejected ")+path.name,flush=True)
+
+	def certificate(path):
+		if re.search(r"\b(by|decreasing_by|sorry|admit|native_decide)\b",path.read_text()):
+			raise RuntimeError("tactic or unchecked proof in certificate: "+path.name)
+		check(path)
 
 	# Recheck generated theorems here so their full axiom reports are audited,
 	# even when Lake reused cached build outputs.
 	check(ROOT/"lean/QSym/Generated.lean",timeout=600)
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
+	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"build/Syntax.lean")
+	certificate(ROOT/"build/Repl.lean")
 	scalars=sorted((ROOT/"build/scalar").glob("*.lean"))
 	if len(scalars)!=59:
 		raise RuntimeError("expected 59 scalar certificates")
 	for file in scalars:
-		if re.search(r"\b(qsym_scalar|ring|ring_nf|field_simp|nlinarith)\b",file.read_text()):
-			raise RuntimeError("symbolic endpoint tactic in certificate: "+file.name)
-		check(file)
+		certificate(file)
 	files=sorted((ROOT/"build/certificates").glob("*.lean"))
 	if len(files)!=7:
 		raise RuntimeError("expected seven freshly generated certificates")
 	for file in files:
-		if re.search(r"\b(qsym_scalar|ring|ring_nf|field_simp|nlinarith)\b",file.read_text()):
-			raise RuntimeError("symbolic endpoint tactic in certificate: "+file.name)
-		check(file)
+		certificate(file)
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	# Audit a shared dependency before introducing a new axiom: a cache must
+	# never hide later declarations, even through transitive dependencies.
+	for name,body in (
+		("NewAxiom","axiom injected : False\ntheorem forged : False := injected"),
+		("Sorry","theorem forged : False := by sorry")):
+		path=negative/(name+".lean")
+		path.write_text("import QSym\n#qsym_check_axioms QSym.Numeric.sound\n"+body+"\n#qsym_check_axioms forged\n")
+		check(path,succeeds=False)
 	bad_rules=negative/"bad.qs"
 	bad_rules.write_text("rule bad(x:ℝ):1·x⇒0;\n",encoding="utf-8")
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad.d"),
@@ -93,6 +104,12 @@ def main():
 		raise RuntimeError("could not construct the invalid-permutation test")
 	(negative/"WrongPermutation.lean").write_text(corrupt)
 	check(negative/"WrongPermutation.lean",succeeds=False)
+	rational=(ROOT/"build/scalar/Rational.lean").read_text()
+	corrupt,count=re.subn(r"(Numeric\.sound ρ n\d+) n\d+ rfl",r"\1 (.real 42) rfl",rational,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid-arithmetic test")
+	(negative/"WrongArithmetic.lean").write_text(corrupt)
+	check(negative/"WrongArithmetic.lean",succeeds=False)
 
 	good=(ROOT/"build/certificates/Guarded.lean").read_text()
 	corrupt,count=re.subn(

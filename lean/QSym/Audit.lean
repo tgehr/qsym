@@ -21,3 +21,6 @@ import QSym
 #print axioms QSym.Value.and_true_right
 #print axioms QSym.Value.or_false_right
 #print axioms QSym.Value.defined_inv_arg
+#print axioms QSym.Value.defined_and_total
+#print axioms QSym.Value.defined_or_total
+#print axioms QSym.Numeric.sound
