@@ -112,6 +112,21 @@ package final class Field{
 		if(c.zero) return false;
 		coefficient=a.number(c,a.sort(variable)); remainder=balanced(rest,Op.add,a.sort(variable)); return true;
 	}
+	bool quadratic(Term expression,out Term atom,out Number[3] coefficients){
+		if(a.sort(expression)!=Sort.real_) return false;
+		bool found;
+		foreach(t;leaves(expression,Op.add)){
+			auto m=mono(t); size_t degree;
+			if(m.factors.length){
+				if(m.factors.length!=1) return false;
+				auto f=m.factors[0]; if(f.exponent<1||f.exponent>2) return false;
+				if(found&&f.atom!=atom) return false;
+				atom=f.atom; found=true; degree=cast(size_t)f.exponent;
+			}
+			coefficients[degree]=budget.calc!"+"(coefficients[degree],m.coefficient);
+		}
+		return found;
+	}
 	private int order(Mono x,Mono y){
 		long dx,dy; foreach(f;x.factors) dx+=f.exponent; foreach(f;y.factors) dy+=f.exponent;
 		if(dx!=dy) return dx<dy?-1:1;
@@ -128,6 +143,8 @@ package final class Field{
 	}
 	Proof literal(Term t,uint ctx){
 		auto n=a.node(t);
+		if(n.op==Op.builtin&&n.value==Builtin.eqB&&a.node(a.at(n.a)).op==Op.boolLit&&a.node(a.at(n.b)).op==Op.boolLit)
+			return d.numeric(t,a.boolean(a.node(a.at(n.a)).value==a.node(a.at(n.b)).value),ctx);
 		if(!n.arity) return d.refl(t,ctx);
 		auto x=a.at(n.a); if(!a.isNumber(x)) return d.refl(t,ctx);
 		auto v=a.number(x); Number w;
@@ -140,6 +157,11 @@ package final class Field{
 			case Op.builtin:
 				auto f=cast(Builtin)n.value;
 				switch(f){
+					case Builtin.gcdZ:
+						auto l=v.re.numerator,r=w.re.numerator;
+						if(l<0) l=-l; if(r<0) r=-r;
+						while(r!=0){ budget.spend(1+l.uintLength+r.uintLength); auto rem=l%r; l=r; r=rem; }
+						result=a.number(Number(Rational(l,BigInt(1))),Sort.natural); break;
 					case Builtin.castNZ,Builtin.castZQ,Builtin.castQR,Builtin.castRC:result=a.number(v,n.sort); break;
 					case Builtin.addN,Builtin.addZ,Builtin.addQ:result=a.number(budget.calc!"+"(v,w),n.sort); break;
 					case Builtin.mulN,Builtin.mulZ,Builtin.mulQ:result=a.number(budget.calc!"*"(v,w),n.sort); break;
@@ -289,6 +311,19 @@ package final class Field{
 	private Proof sum(Term t,uint ctx){
 		auto s=a.sort(t),ts=leaves(t,Op.add);
 		if(ts.length>budget.maxTerms) throw new Limit;
+		// A recursive normalization may leave an active product unchanged.
+		// Fold its coefficients explicitly before using AC to collect terms.
+		auto prefix=d.refl(t,ctx);
+		Proof[] products; foreach(x;ts) products~=product(x,ctx);
+		auto tree=balanced(ts,Op.add,s);
+		prefix=d.ac(t,tree,Op.add,ctx);
+		while(products.length>1){
+			Proof[] next;
+			for(size_t i;i<products.length;i+=2) next~=i+1==products.length?products[i]:d.congr(a.add(products[i].before,products[i+1].before),[products[i],products[i+1]],ctx);
+			products=next;
+		}
+		prefix=then(prefix,products[0],ctx);
+		t=prefix.after; ts=leaves(t,Op.add);
 		struct Entry{ Term term; Mono m; }
 		Entry[] entries; foreach(x;ts) entries~=Entry(x,mono(x));
 		sort!((x,y)=>order(x.m,y.m)>0)(entries);
@@ -319,7 +354,7 @@ package final class Field{
 		p=then(p,changes[0],ctx);
 		Term[] output;
 		foreach(x;leaves(p.after,Op.add)) if(!a.isNumber(x)||!a.number(x).zero) output~=x;
-		return then(p,d.ac(p.after,balanced(output,Op.add,s),Op.add,ctx),ctx);
+		return then(prefix,then(p,d.ac(p.after,balanced(output,Op.add,s),Op.add,ctx),ctx),ctx);
 	}
 	private Proof multiply(Term t,uint ctx){
 		auto n=a.node(t),x=a.at(n.a),y=a.at(n.b);

@@ -54,6 +54,17 @@ def main():
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
+	for directory,count in (("guards",18),("folding",73)):
+		files=sorted((ROOT/"build"/directory).glob("*.lean"))
+		if len(files)!=count:
+			raise RuntimeError(f"expected {count} {directory} certificates")
+		for file in files:
+			certificate(file)
+	predicates=sorted((ROOT/"build/predicates").glob("*.lean"))
+	if len(predicates)!=34:
+		raise RuntimeError("expected 34 predicate certificates")
+	for file in predicates:
+		certificate(file)
 	elementary=sorted((ROOT/"build/elementary").glob("*.lean"))
 	if len(elementary)!=82:
 		raise RuntimeError("expected 82 elementary certificates")
@@ -96,12 +107,20 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadFloor","lemma bad(x:ℝ,n:ℤ):floor(x)⇒n when toℝ(n)≤x,defined(n);"),
+		("BadCubeRoot","rewrite bad(x:ℝ):cbrt(x)⇒powerR(x,real(1,3));"),
+		("BadSqrtBranch","lemma bad(z:ℂ,w:ℂ):csqrt(z)⇒w when w^2=z,defined(w);"),
+		("BadLogBase","lemma bad(x:ℝ,y:ℝ):log2(x)⇒y when powerR(10,y)=x,defined(y);"),
+		("BadOrSwap","lemma bad(p:𝔹,q:𝔹):p∨q⇒q∨p;"),
 		("BadCondition","rewrite bad(x:ℝ):|x|⇒x when x≤0;"),
 		("BadComplexLog","rewrite bad(z:ℂ):clog(cexp(z))⇒z;"),
 		("BadComplexRoot","rewrite bad(z:ℂ):csqrt(z^2)⇒z;"),
 		("BadLogProduct","rewrite bad(x:ℝ,y:ℝ):log(x*y)⇒log(x)+log(y);"),
 		("BadNestedPower","rewrite bad(x:ℝ,y:ℝ,z:ℝ):powerR(powerR(x,y),z)⇒powerR(x,y*z);"),
 		("BadRealRoot","rewrite bad(x:ℝ):sqrt(x^2)⇒x;"),
+		("BadDistribution","rewrite bad(p:𝔹,q:𝔹,r:𝔹):(p∨q)∧r⇒(p∧r)∨(q∧r);"),
+		("BadSwap","rewrite bad(p:𝔹,q:𝔹):p∧q⇒q∧p;"),
+		("BadFactorization","lemma bad(p:ℝ,x:ℝ,y:ℝ):p≠0⇒x≠0∧y≠0 when defined(x),defined(y);"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
 		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),

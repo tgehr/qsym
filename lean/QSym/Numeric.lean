@@ -66,6 +66,8 @@ def calculate : {s : Ty} → Expr s → Option (Data s)
   | _, .reC a => (calculate a).map Prod.fst
   | _, .imC a => (calculate a).map Prod.snd
   | _, .makeC a b => binary Prod.mk (calculate a) (calculate b)
+  | _, .gcdZ a b => binary Int.gcd (calculate a) (calculate b)
+  | _, .eqB a b => binary (· == ·) (calculate a) (calculate b)
   | _, .numQ a => (calculate a).map Rat.num
   | _, .denQ a => (calculate a).map Rat.den
   | _, .powN a n => (calculate a).map (· ^ n)
@@ -190,6 +192,12 @@ theorem calculate_sound (ρ : Env) {s : Ty} (term : Expr s) (v : Data s)
   | makeC a b ha hb =>
     obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
     simp [Expr.eval, ha x hx, hb y hy, Functions.makeC, Function2.apply, denote, complex]
+  | gcdZ a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.gcdZ, Function2.apply, denote]
+  | eqB a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    simp [Expr.eval, ha x hx, hb y hy, Functions.eqB, Function2.apply, denote]
   | numQ a ha =>
     obtain ⟨x, hx, rfl⟩ := map_some h
     simp [Expr.eval, ha x hx, Functions.numQ, Function1.apply, denote, complex, id]

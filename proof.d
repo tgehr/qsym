@@ -198,6 +198,8 @@ private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,str
 			foreach(child;p.children) proof~=" "~domainEvidence(a,d,source,child,h);
 			return proof~")";
 		}
+		if(n.op==Op.and_||n.op==Op.or_) return "(Value.defined_"~(n.op==Op.and_?"and":"or")~"_total "~ev(n.a)~" "~ev(n.b)~" "~
+			domainEvidence(a,d,source,p.children[0],h)~" "~domainEvidence(a,d,source,p.children[1],h)~")";
 		string args=ev(n.a),proof=domainEvidence(a,d,source,p.children[0],h);
 		if(n.arity==2){ args~=" "~ev(n.b); proof="⟨"~proof~", "~domainEvidence(a,d,source,p.children[1],h)~"⟩"; }
 		return "((Value."~domainLemma(n)~" "~args~").mpr "~proof~")";

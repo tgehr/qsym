@@ -33,7 +33,7 @@ package final class Elementary{
 		if(power(lo,n,x)==x){ result=lo; return true; }
 		return false;
 	}
-	private bool root(Rational x,uint n,out Rational result){
+	bool root(Rational x,uint n,out Rational result){
 		BigInt numerator,denominator;
 		if(!root(x.numerator,n,numerator)||!root(x.denominator,n,denominator)) return false;
 		result=Rational(numerator,denominator); return true;
@@ -55,6 +55,49 @@ package final class Elementary{
 	bool propose(Term t,out Instance result){
 		auto n=a.node(t); if(n.op!=Op.builtin) return false;
 		auto f=cast(Builtin)n.value;
+		if((f==Builtin.floorR||f==Builtin.ceilR)&&a.isNumber(a.at(n.a))){
+			auto q=a.number(a.at(n.a)).re,m=q.numerator/q.denominator,r=q.numerator%q.denominator;
+			budget.spend(q.words);
+			if(f==Builtin.floorR&&r<0) --m;
+			if(f==Builtin.ceilR&&r>0) ++m;
+			result=instantiate(a,f==Builtin.floorR?Law.real_floor_exact:Law.real_ceil_exact,
+				[a.at(n.a),a.number(Number(Rational(m,BigInt(1))),Sort.integer)]); return true;
+		}
+		if((f==Builtin.log2R||f==Builtin.log10R)&&a.isNumber(a.at(n.a))){
+			auto q=a.number(a.at(n.a)).re; if(q<=Rational(0)) return false;
+			long exponent; auto base=f==Builtin.log2R?2:10;
+			foreach(i,v;[q.numerator,q.denominator]){
+				while(v!=1){
+					budget.spend(1+v.uintLength);
+					if(v%base!=0) return false;
+					v/=base; exponent+=i?-1:1;
+				}
+			}
+			result=instantiate(a,f==Builtin.log2R?Law.real_log2_exact:Law.real_log10_exact,[a.at(n.a),a.real_(exponent)]); return true;
+		}
+		if((f==Builtin.gammaR||f==Builtin.gammaC)&&a.isNumber(a.at(n.a))){
+			auto q=a.number(a.at(n.a));
+			if(!q.im.zero||!q.re.integral||q.re<Rational(2)||q.re>Rational(cast(long)budget.maxTerms)) return false;
+			result=instantiate(a,f==Builtin.gammaR?Law.real_gamma_next:Law.complex_gamma_next,[a.at(n.a),a.real_(q.re.integer-2)]); return true;
+		}
+		if((f==Builtin.powQZ||f==Builtin.powRZ||f==Builtin.powCZ||f==Builtin.powerC)&&a.isNumber(a.at(n.b))){
+			auto q=a.number(a.at(n.b));
+			if(!q.im.zero||!q.re.integral||q.re>=Rational(0)||q.re<Rational(-cast(long)uint.max)) return false;
+			auto law=f==Builtin.powQZ?Law.rational_indexed_negative_power:f==Builtin.powRZ?Law.real_indexed_negative_power:
+				f==Builtin.powCZ?Law.complex_indexed_negative_power:Law.complex_general_negative_power;
+			result=instantiate(a,law,[a.at(n.a),a.at(n.b),a.real_(-q.re.integer-1)]); return true;
+		}
+		if(f==Builtin.sqrtC&&a.isNumber(a.at(n.a))){
+			auto z=a.number(a.at(n.a)); Rational magnitude,re,im;
+			auto norm=budget.calc!"+"(budget.calc!"*"(Number(z.re),Number(z.re)),budget.calc!"*"(Number(z.im),Number(z.im)));
+			if(!root(norm.re,2,magnitude)) return false;
+			auto rr=budget.calc!"/"(budget.calc!"+"(Number(magnitude),Number(z.re)),Number(2));
+			auto ii=budget.calc!"/"(budget.calc!"-"(Number(magnitude),Number(z.re)),Number(2));
+			if(!root(rr.re,2,re)||!root(ii.re,2,im)) return false;
+			if(z.im<Rational(0)) im=-im;
+			result=re.zero?instantiate(a,Law.complex_sqrt_imaginary,[a.at(n.a),a.real_(im)]):
+				instantiate(a,Law.complex_sqrt_exact,[a.at(n.a),a.complex(re,im)]); return true;
+		}
 		if(f==Builtin.sqrtR&&a.isNumber(a.at(n.a))){
 			Rational value; if(!root(a.number(a.at(n.a)).re,2,value)) return false;
 			result=instantiate(a,Law.real_sqrt_exact,[a.at(n.a),a.real_(value)]); return true;

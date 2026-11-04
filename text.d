@@ -69,19 +69,54 @@ struct Syntax{
 		auto result=build(p); variables=next; return result;
 	}
 	string format(Arena a,Term root){
-		struct Piece{ string text; uint precedence=100; }
+		struct Piece{ string text; uint precedence=100; bool negative,iverson; }
 		Piece[] memo=new Piece[a.length];
-		string arg(uint id,uint precedence=0){
-			auto p=memo[id]; return p.precedence<precedence?"("~p.text~")":p.text;
+		string render(Piece p,uint precedence=0,bool magnitude=false){
+			if(p.negative&&!magnitude){
+				p.text="-"~(p.precedence<70?"("~p.text~")":p.text);
+				if(p.precedence>80) p.precedence=80;
+			}
+			return p.precedence<precedence?"("~p.text~")":p.text;
+		}
+		string arg(uint id,uint precedence=0){ return render(memo[id],precedence); }
+		Piece rational(Rational q){ return Piece((q<Rational(0)?-q:q).toString,q.integral?100:70,q<Rational(0)); }
+		Piece sum(uint x,uint y){
+			return Piece(arg(x,60)~(memo[y].negative?"-":"+")~render(memo[y],61,true),60);
 		}
 		Piece product(Node n){
-			auto left=a.node(a.at(n.a));
 			// [p]·x denotes a non-strict mask, so a strict product needs an explicit call.
-			if(left.op==Op.mask&&a.isNumber(a.at(left.b))&&a.number(a.at(left.b)).one)
+			if(memo[n.a].iverson)
 				return Piece("mul"~suffix(n.sort)~"("~arg(n.a)~","~arg(n.b)~")");
-			return Piece(arg(n.a,70)~"·"~arg(n.b,71),70);
+			auto l=memo[n.a],r=memo[n.b];
+			bool unit(uint id){ return (n.sort==Sort.real_||n.sort==Sort.complex)&&a.isNumber(a.at(id))&&(a.number(a.at(id)).one||(-a.number(a.at(id))).one); }
+			if(unit(n.a)){ r.negative=l.negative!=r.negative; return r; }
+			if(unit(n.b)){ l.negative=l.negative!=r.negative; return l; }
+			return Piece(render(l,70,true)~"·"~render(r,71,true),70,l.negative!=r.negative);
 		}
-		Piece rational(Rational q){ return Piece(q.toString,q.integral?(q<Rational(0)?80:100):70); }
+		Piece zeroComparison(Term t,string relation){
+			Term[] pending=[t]; string left,right; Number constant;
+			void append(ref string side,string term){ side~=(side.length?"+":"")~term; }
+			while(pending.length){
+				auto u=pending[$-1]; --pending.length; auto n=a.node(u);
+				if(n.op==Op.add) pending~=[a.at(n.b),a.at(n.a)];
+				else if(a.isNumber(u)) constant=constant+a.number(u);
+				else if(memo[u.id].negative) append(right,render(memo[u.id],61,true));
+				else append(left,arg(u.id,61));
+			}
+			if(!left.length&&right.length){ left=right; right=""; constant=-constant; }
+			if(!constant.zero){
+				auto v=-constant;
+				if(v.im.zero){
+					auto p=rational(v.re);
+					if(right.length) right~=(p.negative?"-":"+")~render(p,61,true);
+					else right=render(p);
+				}else{
+					auto sign=v.im<Rational(0)?"":"+";
+					append(right,"("~v.re.toString~sign~v.im.toString~"·ⅈ)");
+				}
+			}
+			return Piece((left.length?left:"0")~relation~(right.length?right:"0"),50);
+		}
 		foreach(id;a.postorder(root)){
 			auto t=a.at(id),n=a.node(t); Piece p;
 			final switch(n.op){
@@ -90,31 +125,34 @@ struct Syntax{
 					if(n.sort==Sort.natural||n.sort==Sort.integer) p.text=(n.sort==Sort.natural?"nat(":"int(")~z.re.toString~")";
 					else if(n.sort==Sort.rational) p.text="rat("~to!string(z.re.numerator)~","~to!string(z.re.denominator)~")";
 					else if(n.sort==Sort.real_) p=rational(z.re);
-					else if(z.re.zero&&z.im==Rational(1)) p.text="ⅈ";
-					else if(z.re.zero&&z.im==Rational(-1)) p=Piece("-ⅈ",80);
 					else{
+						auto negative=z.re<Rational(0)||z.re.zero&&z.im<Rational(0); if(negative) z=-z;
 						auto im=z.im==Rational(1)?"ⅈ":z.im==Rational(-1)?"-ⅈ":z.im.toString~"·ⅈ";
-						p=z.re.zero&&!z.im.zero?Piece(im,70):Piece(z.re.toString~(z.im<Rational(0)?"":"+")~im,60);
+						p=z.re.zero&&!z.im.zero?Piece(im,z.im==Rational(1)?100:70):Piece(z.re.toString~(z.im<Rational(0)?"":"+")~im,60);
+						p.negative=negative;
 					}
 					break;
 				case Op.variable:
 					enforce(n.value<variables.length&&variables[cast(size_t)n.value].sort==n.sort,"unknown variable index");
 					p.text=variables[cast(size_t)n.value].name; break;
 				case Op.boolLit:p.text=n.value?"true":"false"; break;
-				case Op.add:p=Piece(arg(n.a,60)~"+"~arg(n.b,61),60); break;
+				case Op.add:p=sum(n.a,n.b); break;
 				case Op.mul:p=product(n); break;
 				case Op.inv:p=Piece(arg(n.a,91)~"⁻¹",90); break;
 				case Op.pow:p=Piece(arg(n.a,91)~"^"~to!string(n.value),90); break;
 				case Op.abs:p.text="abs("~arg(n.a)~")"; break;
 				case Op.conj:p.text="conj("~arg(n.a)~")"; break;
-				case Op.not_:p=Piece("¬"~arg(n.a,80),80); break;
+				case Op.not_:
+					auto inner=a.node(a.at(n.a));
+					p=inner.op==Op.nonzero?zeroComparison(a.at(inner.a),"="):Piece("¬"~arg(n.a,80),80); break;
 				case Op.and_:p=Piece(arg(n.a,40)~"∧"~arg(n.b,41),40); break;
 				case Op.or_:p=Piece(arg(n.a,30)~"∨"~arg(n.b,31),30); break;
 				case Op.lt,Op.le:p=Piece(arg(n.a,51)~(n.op==Op.lt?"<":"≤")~arg(n.b,51),50); break;
-				case Op.nonzero:p=Piece(arg(n.a,51)~"≠0",50); break;
+				case Op.nonzero:p=zeroComparison(a.at(n.a),"≠"); break;
 				case Op.mask:
 					if(a.isNumber(a.at(n.b))&&a.number(a.at(n.b)).one){
 						p.text="["~arg(n.a)~"]";
+						p.iverson=true;
 						if(n.sort!=Sort.real_) p.text="("~p.text~":"~["ℕ","ℤ","ℚ","ℝ","ℂ"][rank(n.sort)]~")";
 					}
 					else p=Piece("["~arg(n.a)~"]·"~arg(n.b,71),70);
@@ -123,7 +161,7 @@ struct Syntax{
 					auto f=cast(Builtin)n.value,info=builtinInfo(f),code=info.code;
 					if(code=="pi") p.text="π";
 					else if(code=="e") p.text="e";
-					else if(code=="addN"||code=="addZ"||code=="addQ") p=Piece(arg(n.a,60)~"+"~arg(n.b,61),60);
+					else if(code=="addN"||code=="addZ"||code=="addQ") p=sum(n.a,n.b);
 					else if(code=="mulN"||code=="mulZ"||code=="mulQ") p=product(n);
 					else if(f==Builtin.invQ) p=Piece(arg(n.a,91)~"⁻¹",90);
 					else if(code=="nonzeroN"||code=="nonzeroZ"||code=="nonzeroQ") p=Piece(arg(n.a,51)~"≠0",50);
@@ -141,7 +179,7 @@ struct Syntax{
 			enforce(p.text.length<=1_000_000,"formatted expression exceeds one million bytes");
 			memo[id]=p;
 		}
-		return memo[root.id].text;
+		return arg(root.id);
 	}
 }
 

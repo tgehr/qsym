@@ -157,7 +157,7 @@ final class Derivation{
 				auto p=this.domain(contexts[c].guard,t);
 				if(p.found){ p.assumption=c; return p; }
 			}
-			if(depth>=128||n.op==Op.inv||n.op==Op.mask||n.op==Op.and_||n.op==Op.or_||n.op==Op.builtin&&!builtinInfo(cast(Builtin)n.value).total) return d;
+			if(depth>=128||n.op==Op.inv||n.op==Op.mask||n.op==Op.builtin&&!builtinInfo(cast(Builtin)n.value).total) return d;
 			foreach(j;0..n.arity){
 				auto child=build(arena.child(t,j),depth+1);
 				if(!child.found) return d;

@@ -34,6 +34,12 @@ test: build/qsym
 	./build/language-tests --DRT-testmode=run-main build/language
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/elementary.d -of=build/elementary-tests
 	./build/elementary-tests --DRT-testmode=run-main build/elementary
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/predicates.d -of=build/predicate-tests
+	./build/predicate-tests --DRT-testmode=run-main build/predicates
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/guards.d -of=build/guard-tests
+	./build/guard-tests --DRT-testmode=run-main build/guards
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/folding.d -of=build/folding-tests
+	./build/folding-tests --DRT-testmode=run-main build/folding
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

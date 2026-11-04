@@ -79,4 +79,94 @@ theorem phase_period_normal (x : ℝ) (n : ℤ) :
       Complex.exp (Complex.I*x) := by
   convert phase_period x n using 2 <;> push_cast <;> ring
 
+theorem floor_exact {x : ℝ} {n : ℤ} (hl : (n : ℝ) ≤ x) (hu : x < n+1) :
+    n = ⌊x⌋ := ((Int.floor_eq_iff).mpr ⟨hl, hu⟩).symm
+
+theorem ceil_exact {x : ℝ} {n : ℤ} (hl : (n : ℝ) < x+1) (hu : x ≤ n) :
+    n = ⌈x⌉ := ((Int.ceil_eq_iff).mpr ⟨by linarith, hu⟩).symm
+
+theorem sqrt_imaginary (y : ℝ) (hy : 0 ≤ y) :
+    Complex.I*(y : ℂ) = (-(y : ℂ)^2)^(2⁻¹ : ℂ) := by
+  have hl : -(Real.pi/2) < (Complex.I*(y : ℂ)).arg := by
+    apply Complex.neg_pi_div_two_lt_arg_iff.mpr
+    right; simpa using hy
+  have hu : (Complex.I*(y : ℂ)).arg ≤ Real.pi/2 := by
+    apply Complex.arg_le_pi_div_two_iff.mpr
+    left; simp
+  have h := Complex.pow_cpow_ofNat_inv (x := Complex.I*(y : ℂ)) (n := 2) hl hu
+  simpa [mul_pow] using h.symm
+
+theorem cartesian_ne_zero {x y : ℝ} (h : x ≠ 0 ∨ y ≠ 0) :
+    (x : ℂ)+Complex.I*y ≠ 0 := by
+  intro hz
+  have hr := congrArg Complex.re hz
+  have hi := congrArg Complex.im hz
+  simp at hr hi
+  aesop
+
+theorem gamma_real_next {x : ℝ} (n : ℕ) (h : x+(-2-(n : ℝ))=0) :
+    Real.Gamma (n+1)+(n : ℝ)*Real.Gamma (n+1)=Real.Gamma x := by
+  have hx : x=(n : ℝ)+1+1 := by linarith
+  rw [hx, Real.Gamma_add_one (by positivity : (n : ℝ)+1 ≠ 0)]
+  ring
+
+theorem gamma_complex_next {x : ℂ} (n : ℕ) (h : x+(-2-(n : ℂ))=0) :
+    Complex.Gamma (n+1)+(n : ℂ)*Complex.Gamma (n+1)=Complex.Gamma x := by
+  have hx : x=(n : ℂ)+1+1 := by linear_combination h
+  have hn : (n : ℂ)+1 ≠ 0 := by exact_mod_cast (show (n : ℝ)+1 ≠ 0 by positivity)
+  rw [hx, Complex.Gamma_add_one _ hn]
+  ring
+
+theorem complex_nat_succ_ne_neg (n k : ℕ) : (n : ℂ)+1 ≠ -(k : ℂ) := by
+  intro h
+  have hr := congrArg Complex.re h
+  simp at hr
+  have : (0 : ℝ) ≤ n := Nat.cast_nonneg n
+  have : (0 : ℝ) ≤ k := Nat.cast_nonneg k
+  linarith
+
+theorem indexed_negative {K : Type*} [Field K] {x : K} {y : ℤ} (n : ℕ)
+    (hd : x ≠ 0 ∨ 0 ≤ y) (he : (n : ℤ)+(y+1)=0) :
+    x ≠ 0 ∧ x⁻¹/x^n = x^y := by
+  have hy : y = -((n : ℤ)+1) := by omega
+  have hn : x ≠ 0 := by rcases hd with h | h; exact h; omega
+  constructor
+  · exact hn
+  · rw [hy, ← Nat.cast_add_one, zpow_neg, zpow_natCast, pow_succ]
+    simp [div_eq_mul_inv, mul_comm]
+
+theorem complex_negative {x y : ℂ} (n : ℕ)
+    (hd : x ≠ 0 ∨ y=0 ∨ 0<y.re ∧ y.im=0) (he : (n : ℂ)+(y+1)=0) :
+    x ≠ 0 ∧ x⁻¹/x^n = x^y := by
+  have hy : y = -((n : ℂ)+1) := by linear_combination he
+  have hn : x ≠ 0 := by
+    rcases hd with h | h | ⟨h, _⟩
+    · exact h
+    · have hr := congrArg Complex.re h
+      simp [hy] at hr
+      have := Nat.cast_nonneg (α := ℝ) n
+      linarith
+    · simp [hy] at h
+      have := Nat.cast_nonneg (α := ℝ) n
+      linarith
+  constructor
+  · exact hn
+  · rw [hy, ← Nat.cast_add_one, Complex.cpow_neg, Complex.cpow_natCast, pow_succ]
+    simp [div_eq_mul_inv, mul_comm]
+
+theorem nonnegative_cases {x : ℝ} {P : Prop} (h : 0 ≤ x) : 0<x ∨ x=0 ∨ P := by
+  rcases lt_or_eq_of_le h with h | h
+  · exact Or.inl h
+  · exact Or.inr (Or.inl h.symm)
+
+theorem negative_power {x y : ℝ} (hy : y<0) (hd : Functions.powerR.domain x y) :
+    Functions.powerR.domain x (-y) ∧ x^(-y) ≠ 0 ∧ (x^(-y))⁻¹=x^y := by
+  rcases hd with h | ⟨rfl, h⟩ | ⟨h, n, rfl⟩
+  · exact ⟨Or.inl h, (Real.rpow_pos_of_pos h _).ne', by rw [Real.rpow_neg h.le, inv_inv]⟩
+  · linarith
+  · refine ⟨Or.inr (Or.inr ⟨h, -n, by simp⟩), ?_, ?_⟩
+    · rw [← Int.cast_neg, Real.rpow_intCast]
+      exact zpow_ne_zero _ h.ne
+    · rw [← Int.cast_neg, Real.rpow_intCast, Real.rpow_intCast, zpow_neg, inv_inv]
+
 end QSym.Elementary

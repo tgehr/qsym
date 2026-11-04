@@ -168,6 +168,74 @@ theorem refines_phase_period (v_x : Option (Ty.denote .real)) (v_n : Option (Ty.
       add, mul, Option.bind, if_true, Int.cast_neg, Int.cast_one, Int.cast_ofNat, Rat.cast_intCast]
       using congrArg some (Elementary.phase_period x n).symm
 
+theorem and_decide (p q : Prop) [Decidable p] [Decidable q] :
+    and (some (decide p)) (some (decide q)) = some (decide (p ∧ q)) := by
+  by_cases hp : p <;> by_cases hq : q <;> simp [hp, hq, and]
+theorem or_decide (p q : Prop) [Decidable p] [Decidable q] :
+    or (some (decide p)) (some (decide q)) = some (decide (p ∨ q)) := by
+  by_cases hp : p <;> by_cases hq : q <;> simp [hp, hq, or]
+
+theorem refines_lt_factor (l r x y : Option ℝ)
+    (h : Refines (not (nonzero (add (add l (mul (some (-1)) r)) (mul (some (-1)) (mul x y))))) (some true))
+    (hx : Defined x) (hy : Defined y) :
+    Refines (lt l r) (or (and (lt x (some 0)) (lt (some 0) y)) (and (lt (some 0) x) (lt y (some 0)))) := by
+  classical
+  obtain ⟨x, rfl⟩ := hx
+  obtain ⟨y, rfl⟩ := hy
+  cases l with
+  | none => intro v hv; cases hv
+  | some l =>
+    cases r with
+    | none => intro v hv; cases hv
+    | some r =>
+      have he : l-r = x*y := by
+        simpa [Refines, not, nonzero, add, mul, ← sub_eq_add_neg, sub_eq_zero] using h
+      apply refines_of_eq
+      simp only [lt, Option.bind_eq_bind, Option.bind, Option.pure_def, and_decide, or_decide, Option.some.injEq, decide_eq_decide]
+      rw [← sub_lt_zero, he, mul_neg_iff, or_comm]
+
+theorem refines_le_factor (l r x y : Option ℝ)
+    (h : Refines (not (nonzero (add (add l (mul (some (-1)) r)) (mul (some (-1)) (mul x y))))) (some true))
+    (hx : Defined x) (hy : Defined y) :
+    Refines (le l r) (or (and (le x (some 0)) (le (some 0) y)) (and (le (some 0) x) (le y (some 0)))) := by
+  classical
+  obtain ⟨x, rfl⟩ := hx
+  obtain ⟨y, rfl⟩ := hy
+  cases l with
+  | none => intro v hv; cases hv
+  | some l =>
+    cases r with
+    | none => intro v hv; cases hv
+    | some r =>
+      have he : l-r = x*y := by
+        simpa [Refines, not, nonzero, add, mul, ← sub_eq_add_neg, sub_eq_zero] using h
+      apply refines_of_eq
+      simp only [le, Option.bind_eq_bind, Option.bind, Option.pure_def, and_decide, or_decide, Option.some.injEq, decide_eq_decide]
+      rw [← sub_nonpos, he, mul_nonpos_iff, or_comm]
+
+theorem refines_power_negative (x y : Option ℝ)
+    (hy : Refines (lt y (some 0)) (some true)) :
+    Refines (Functions.powerR.apply x y)
+      (inv (Functions.powerR.apply x (mul (some (-1)) y))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    cases y with
+    | none => intro v hv; cases hv
+    | some y =>
+      have hn : y<0 := by simpa [Refines, lt] using hy
+      intro v hv
+      simp only [Function2.apply, Option.bind] at hv
+      split at hv
+      · rename_i hd
+        have h := Elementary.negative_power hn hd
+        simp only [Function2.apply, mul, Option.bind, neg_one_mul, if_pos h.1, inv, if_neg h.2.1]
+        change (if x^(-y)=0 then none else some ((x^(-y))⁻¹))=some v
+        rw [if_neg h.2.1, h.2.2]
+        exact hv
+      · cases hv
+
 end QSym.Value
 
 namespace QSym
@@ -193,6 +261,9 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | solve | (simp only [Int.cast_zero] at *; apply Value.refines_log_product <;> assumption)
   | solve | apply Value.refines_power_exact <;> assumption
   | solve | apply Value.refines_phase_period <;> assumption
+  | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_power_negative <;> assumption)
+  | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_lt_factor <;> assumption)
+  | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_le_factor <;> assumption)
   | (
     classical
     intro v hv
@@ -201,7 +272,12 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Functions.mulN, Functions.ltN, Functions.leN, Functions.nonzeroN, Functions.addZ,
       Functions.mulZ, Functions.ltZ, Functions.leZ, Functions.nonzeroZ, Functions.addQ,
       Functions.mulQ, Functions.ltQ, Functions.leQ, Functions.nonzeroQ, Functions.invQ,
-      Functions.eqB, Elementary.half_domain, Functions.powerR, Functions.powerC, Functions.sqrtR, Functions.sqrtC,
+      Functions.eqB, Functions.powNN, Functions.powZN, Functions.powQN, Functions.powRN, Functions.powCN,
+      Functions.powQZ, Functions.powRZ, Functions.powCZ, Functions.cbrtR, Functions.exp2R, Functions.log2R, Functions.log10R,
+      Functions.floorR, Functions.ceilR, Functions.roundR, Functions.isIntR, Functions.hypotR, Functions.argC,
+      Functions.expiC, Functions.polarC, Functions.atan2R, Functions.asinhR, Functions.acoshR, Functions.atanhR,
+      Functions.asinC, Functions.acosC, Functions.atanC, Functions.asinhC, Functions.acoshC, Functions.atanhC,
+      Functions.erfR, Functions.erfcR, Functions.gammaR, Functions.gammaC, Functions.lgammaR, Elementary.half_domain, Functions.powerR, Functions.powerC, Functions.sqrtR, Functions.sqrtC,
       Functions.expR, Functions.expC, Functions.sinR, Functions.sinC, Functions.cosR,
       Functions.cosC, Functions.sinhR, Functions.sinhC, Functions.coshR, Functions.coshC,
       Functions.tanhR, Functions.tanhC, Functions.logR, Functions.logC, Functions.tanR,
@@ -234,6 +310,11 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Real.arcsin_sin, Real.arccos_cos, min_eq_left, min_eq_right, max_eq_left, max_eq_right,
       Complex.exp_conj, Complex.mul_re, Complex.mul_im, Complex.re_add_im, norm_mul])
     all_goals try (simp_all [abs_mul, abs_inv, abs_pow])
+    all_goals try (simp_all [Int.floor_eq_iff, Int.ceil_eq_iff, Real.rpow_neg, Complex.cpow_neg,
+      zpow_natCast, zpow_neg, Real.norm_eq_abs, Complex.norm_def, Complex.normSq_apply,
+      Real.arcsin_zero, Real.arcsin_one, Real.arccos_zero, Real.arccos_one, Real.arccos_neg_one,
+      Real.arctan_zero, Real.arctan_one, Real.arsinh_zero, Real.Gamma_one, Complex.Gamma_one,
+      Real.log_exp, Complex.zero_cpow, Complex.one_cpow])
     all_goals try norm_num at *
     all_goals try field_simp
     all_goals try ring_nf at *
@@ -252,6 +333,23 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (simp_all [Elementary.sqrt_not_neg])
     all_goals try (apply Elementary.nonnegative_of_pos_or_zero; assumption)
     all_goals try (solve | (convert Elementary.phase_half_pi.symm using 2 <;> push_cast <;> ring))
+    all_goals try (solve | apply Elementary.floor_exact <;> assumption)
+    all_goals try (solve | apply Elementary.ceil_exact <;> assumption)
+    all_goals try (solve | exact (Complex.sq_cpow_two_inv (by assumption)).symm)
+    all_goals try (solve | apply Elementary.sqrt_imaginary; assumption)
+    all_goals try (solve | apply Elementary.cartesian_ne_zero; assumption)
+    all_goals try (solve | apply Elementary.gamma_real_next; assumption)
+    all_goals try (solve | apply Elementary.gamma_complex_next; assumption)
+    all_goals try (solve | exact (Elementary.complex_nat_succ_ne_neg _ _) (by assumption))
+    all_goals try (solve | apply Elementary.indexed_negative <;> assumption)
+    all_goals try (solve | apply Elementary.complex_negative <;> assumption)
+    all_goals try (solve | apply lt_of_le_of_ne <;> assumption)
+    all_goals try (simp [Real.log_rpow (by norm_num : (0 : ℝ)<2), Real.log_rpow (by norm_num : (0 : ℝ)<10)])
+    all_goals try (solve | apply Eq.symm; apply Complex.arg_eq_zero_iff.mpr; constructor <;> first | assumption | linarith)
+    all_goals try (solve | apply Eq.symm; apply Complex.arg_eq_pi_iff.mpr; constructor <;> assumption)
+    all_goals try (solve | have h := Complex.arg_eq_pi_div_two_iff.mpr ⟨by assumption, by assumption⟩; linarith [h])
+    all_goals try (solve | have h := Complex.arg_eq_neg_pi_div_two_iff.mpr ⟨by assumption, by assumption⟩; linarith [h])
+    all_goals try (solve | apply Elementary.nonnegative_cases; assumption)
     all_goals try positivity
     all_goals try nlinarith
     all_goals try (constructor <;> intro h <;> nlinarith)

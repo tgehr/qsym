@@ -4,6 +4,7 @@ import qsym.derive;
 import qsym.budget;
 import qsym.field:Field,compare;
 import qsym.elementary:Elementary;
+import qsym.predicates:Predicates;
 import std.algorithm:sort;
 import qsym.generated.rules;
 import qsym.table:Table;
@@ -15,9 +16,13 @@ package final class Engine{
 	private Budget budget;
 	private Field field;
 	private Elementary elementary;
+	private Predicates predicates;
 	private size_t rewritesLeft;
 	private uint depth;
-	private Table!(ulong,uint) memo,truths;
+	private struct MemoKey{ ulong term; uint revision; }
+	private Table!(MemoKey,uint) memo;
+	private Table!(ulong,uint) truths;
+	private uint[] revisions=[0];
 	private Proof[] proofs;
 	private uint[] roots;
 	private Table!(ulong,bool) active,proving;
@@ -26,12 +31,13 @@ package final class Engine{
 		this.a=a; this.d=d; this.budget=budget; rewritesLeft=rewrites;
 		field=new Field(a,d,budget,&normalize);
 		elementary=new Elementary(a,budget);
+		predicates=new Predicates(a,budget,field,elementary);
 	}
-	private void remember(ref Table!(ulong,uint) index,ulong key,Proof p){
+	private void remember(K)(ref Table!(K,uint) index,K key,Proof p){
 		index.set(key,cast(uint)proofs.length); proofs~=p;
 	}
 	private void memoize(ulong key,Proof p){
-		if(key>uint.max){ remember(memo,key,p); return; }
+		if(key>uint.max){ remember(memo,MemoKey(key,revisions[cast(uint)(key>>33)]),p); return; }
 		if(key>=roots.length) roots.length=cast(size_t)key+1;
 		roots[cast(uint)key]=cast(uint)proofs.length+1; proofs~=p;
 	}
@@ -46,7 +52,8 @@ package final class Engine{
 		budget.spend();
 		auto ctx=d.enter(parent,guard,value);
 		facts.length=d.contexts.length;
-		seed(ctx); return ctx;
+		revisions.length=d.contexts.length;
+		seed(ctx); resolve(ctx); return ctx;
 	}
 	private void seed(uint ctx){
 		auto guard=d.contexts[ctx].guard,value=d.contexts[ctx].value;
@@ -68,25 +75,46 @@ package final class Engine{
 			auto q=go(p.before,ctx,true);
 			if(q.after!=p.before){ auto f=d.transport(p,q,ctx); facts[ctx]~=f; remember(truths,key(f.before,ctx),f); }
 		}
+		// Normalization may have memoized terms before learning these equalities.
+		++revisions[ctx];
+	}
+	private void resolve(uint ctx){
+		for(bool changed=true;changed;){
+			changed=false;
+			foreach(f;known(ctx)){
+				budget.spend(); auto n=a.node(f.before);
+				if(!f.known||n.op!=Op.or_) continue;
+				foreach(law;[Law.bool_or_prune_left,Law.bool_or_prune_right]){
+					auto i=instantiate(a,law,[a.at(n.a),a.at(n.b)]); bool found;
+					foreach(old;known(ctx)) if(old.known&&old.before==i.result){ found=true; break; }
+					if(found) continue;
+					Proof p; if(!instanceProof(i,ctx,p)) continue;
+					auto q=d.transport(f,p,ctx); facts[ctx]~=q; remember(truths,key(q.before,ctx),q);
+					++revisions[ctx]; changed=true;
+				}
+			}
+		}
 	}
 	uint assume(Term[] conditions){
 		uint ctx;
 		foreach(f;conditions) ctx=d.enter(ctx,f,true);
 		facts.length=d.contexts.length;
-		try{ foreach(i;1..ctx+1) seed(i); }
+		revisions.length=d.contexts.length;
+		try{ foreach(i;1..ctx+1) seed(i); resolve(ctx); }
 		catch(Limit e){ budget.exhausted=true; }
 		return ctx;
 	}
 	private bool instanceProof(Instance i,uint ctx,out Proof result){
-		Proof[] premises;
+		// Reject inadmissible bindings before recursively searching for premises.
 		foreach(c;i.conditions){
 			budget.spend();
-			if(c.literal){ if(!a.isNumber(c.term)) return false; }
-			else if(c.defined){ if(!d.domain(i.before,c.term,ctx).found) return false; }
-			else{
-				Proof p; if(!prove(c.term,ctx,p)) return false;
-				premises~=p;
-			}
+			if(c.literal&&!a.isNumber(c.term)) return false;
+			if(c.defined&&!d.domain(i.before,c.term,ctx).found) return false;
+		}
+		Proof[] premises;
+		foreach(c;i.conditions) if(!c.literal&&!c.defined){
+			Proof p; if(!prove(c.term,ctx,p)) return false;
+			premises~=p;
 		}
 		if(!rewritesLeft) throw new Limit;
 		--rewritesLeft;
@@ -158,7 +186,7 @@ package final class Engine{
 	}
 	private bool substitute(Term t,uint ctx,out Proof result){
 		auto n=a.node(t);
-		if(n.op!=Op.variable||(n.sort!=Sort.real_&&n.sort!=Sort.complex)) return false;
+		if((n.op!=Op.variable&&n.op!=Op.builtin&&n.op!=Op.abs&&n.op!=Op.conj)||(n.sort!=Sort.real_&&n.sort!=Sort.complex)) return false;
 		struct Candidate{ Term coefficient,remainder,value; size_t variables; }
 		Candidate[] candidates;
 		foreach(f;known(ctx)){
@@ -185,9 +213,34 @@ package final class Engine{
 		}
 		return false;
 	}
+	private bool strictBound(Term t,uint ctx,out Proof result){
+		auto n=a.node(t);
+		if(n.op!=Op.le||!ctx) return false;
+		bool excluded;
+		foreach(f;known(ctx)) if(f.known&&a.node(f.before).op==Op.nonzero){ excluded=true; break; }
+		if(!excluded) return false;
+		auto i=instantiate(a,Law.real_le_strict,[a.at(n.a),a.at(n.b)]);
+		// Tighten only from an established exclusion, avoiding cyclic sign search.
+		auto p=go(i.conditions[0].term,0,true);
+		foreach(f;known(ctx)) if(f.known&&f.before==p.after){
+			if(!rewritesLeft) throw new Limit;
+			--rewritesLeft; result=d.rule(i,[d.trans(p,f,ctx)],ctx); return true;
+		}
+		return false;
+	}
+	private size_t guardCost(Term t){
+		size_t cost; Term[] pending=[t];
+		while(pending.length){
+			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.node(u);
+			cost+=n.op==Op.le?2:1;
+			if(cost>budget.maxTerms) return size_t.max;
+			foreach(i;0..n.arity) pending~=a.child(u,i);
+		}
+		return cost;
+	}
 	Proof go(Term t,uint ctx=0,bool probe=false){
 		auto k=key(t,ctx,probe);
-		auto cached=k<=uint.max?(t.id<roots.length?roots[t.id]:0):memo.get(k,uint.max)+1;
+		auto cached=k<=uint.max?(t.id<roots.length?roots[t.id]:0):memo.get(MemoKey(k,revisions[ctx]),uint.max)+1;
 		if(cached) return proofs[cached-1];
 		if(active.get(k,false)) return d.refl(t,ctx);
 		if(!rewritesLeft){ budget.exhausted=true; return d.refl(t,ctx); }
@@ -217,6 +270,10 @@ package final class Engine{
 			}
 			auto numeric=field.literal(current,ctx);
 			if(numeric.after!=current){ p=d.trans(p,numeric,ctx); memoize(k,p); return p; }
+			Proof strict;
+			if(!probe&&strictBound(current,ctx,strict)){
+				p=d.trans(p,strict,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
+			}
 			foreach(law;rewrites(n.op)){
 				Proof q;
 				if(attempt(law,current,ctx,q)&&q.after!=current){
@@ -228,12 +285,32 @@ package final class Engine{
 			if(elementary.propose(current,proposal)&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
 				p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 			}
+			if((n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le)&&a.sort(a.at(n.a))==Sort.real_){
+				auto residual=n.op==Op.nonzero?a.at(n.a):go(a.sub(a.at(n.a),a.at(n.b)),ctx,true).after;
+				if(predicates.propose(current,residual,proposal)&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
+					p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
+				}
+			}
 			if(n.op==Op.mask||n.op==Op.and_||n.op==Op.or_){
 				auto c=enter(ctx,a.at(n.a),n.op!=Op.or_);
 				auto q=go(a.at(n.b),c,probe);
 				if(q.after!=q.before){
 					p=d.trans(p,d.scoped(current,q,ctx),ctx);
 					p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
+				}
+			}
+			if((n.op==Op.and_||n.op==Op.or_)&&d.domain(current,a.at(n.b),ctx).found){
+				auto c=enter(ctx,a.at(n.b),n.op==Op.and_),q=go(a.at(n.a),c,probe);
+				// Only commute to make progress; partial guards still require definedness.
+				if(q.after!=q.before&&guardCost(q.after)<guardCost(q.before)){
+					Proof swap;
+					auto law=n.op==Op.and_?Law.bool_and_swap:Law.bool_or_swap;
+					if(instanceProof(instantiate(a,law,[a.at(n.a),a.at(n.b)]),ctx,swap)){
+						p=d.trans(p,swap,ctx); p=d.trans(p,d.scoped(p.after,q,ctx),ctx);
+						// Restore the original guard order when the reduced guard is defined.
+						if(instanceProof(instantiate(a,law,[a.child(p.after,0),a.child(p.after,1)]),ctx,swap)) p=d.trans(p,swap,ctx);
+						p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
+					}
 				}
 			}
 			auto q=pairs(current,ctx);
