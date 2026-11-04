@@ -1,25 +1,19 @@
 module qsym.tools.repl;
 import qsym;
-import std.stdio:stdin,stdout,stderr,writeln;
+import std.stdio:stdout,stderr,writeln;
 import std.string:strip,startsWith;
 import std.file:write;
 import std.exception:enforce;
-
-version(Windows) extern(C) int _isatty(int);
+import qsym.tools.lineedit:LineReader;
+import qsym.tools.unicode:symbols;
 
 int repl(){
-	version(Posix){
-		import core.sys.posix.unistd:isatty;
-		bool interactive=isatty(stdin.fileno())!=0;
-	}else version(Windows){
-		bool interactive=_isatty(stdin.fileno())!=0;
-	}else bool interactive=true;
-	if(interactive) writeln("qsym — enter an expression; :help for commands.");
+	auto reader=LineReader.open();
+	if(reader.interactive) writeln("qsym — enter an expression; :help for commands.");
 	Syntax syntax,lastSyntax;
 	string last;
 	for(;;){
-		if(interactive){ stdout.write("qsym> "); stdout.flush(); }
-		auto input=stdin.readln(); if(input is null) break;
+		string input; if(!reader.readLine(input)) break;
 		auto line=strip(input);
 		scope(exit) stdout.flush();
 		if(!line.length||line.startsWith("#")) continue;
@@ -28,10 +22,22 @@ int repl(){
 			if(line==":help"){
 				writeln("Expressions: (x+1)^2, [x≠0]·x⁻¹, abs(x), (1+ⅈ)^2");
 				writeln("Undeclared variables are real. ASCII operators also work.");
+				writeln("Up/Down: session history; Left/Right, Home/End, Backspace/Delete: edit.");
+				writeln("Unicode: \\alpha → α, \\ne → ≠, \\bR → ℝ, \\^2 → ², \\ii → ⅈ.");
+				writeln("Tab completes a unique prefix; Space commits a symbol; Esc cancels it.");
+				writeln("Ctrl-A/E: Home/End; Ctrl-U/K/W: delete before/after cursor/previous word.");
+				writeln("Ctrl-C: cancel line; Ctrl-D: delete character, or exit on an empty line.");
 				writeln(":vars z:ℂ,p:𝔹   declare variable types; :vars lists them");
+				writeln(":symbols [PREFIX] list Unicode input spellings");
 				writeln(":lean FILE        export a Lean certificate for the last expression");
 				writeln(":reset            clear variables and the last expression");
 				writeln(":quit             exit (or EOF)");
+				continue;
+			}
+			if(line==":symbols"||line.startsWith(":symbols ")){
+				auto prefix=strip(line[8..$]);
+				if(prefix.startsWith("\\")) prefix=prefix[1..$];
+				foreach(s;symbols) if(s.key.startsWith(prefix)) writeln("\\",s.key,"  ",s.text);
 				continue;
 			}
 			if(line==":reset"){ syntax=Syntax.init; lastSyntax=Syntax.init; last=null; continue; }

@@ -19,7 +19,7 @@ build/rulec: tools/rulec.d $(MODULES) | build
 generate: build/rulec | generated
 	./build/rulec rules/core.qs $(GENERATED_D) $(GENERATED_LEAN)
 
-build/qsym: generate tools/main.d tools/repl.d $(MODULES)
+build/qsym: generate tools/main.d tools/repl.d tools/lineedit.d tools/edit.d tools/unicode.d $(MODULES)
 	$(DC) $(DFLAGS) $(IMPORTS) -i tools/main.d -of=$@
 
 test: build/qsym
@@ -31,6 +31,7 @@ test: build/qsym
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/scalar.d -of=build/scalar-tests
 	./build/scalar-tests --DRT-testmode=run-main build/scalar
 	python3 tests/repl.py
+	python3 tests/terminal.py
 
 demo: build/qsym
 	./build/qsym demo
