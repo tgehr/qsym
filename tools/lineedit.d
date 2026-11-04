@@ -21,7 +21,7 @@ struct LineReader{
 		return r;
 	}
 	bool interactive()const{ return tty; }
-	bool readLine(out string line,string prompt="qsym> "){
+	bool readLine(out string line,string prompt=">>> "){
 		version(Posix) if(editing) return readEdited(line,prompt);
 		if(tty){ stdout.write(prompt); stdout.flush(); }
 		line=stdin.readln(); return line !is null;
