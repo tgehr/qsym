@@ -31,7 +31,11 @@ struct Parser{
 	string source;
 	private Lexer lexer;
 	private Token token;
-	private void next(){ token=lexer.next(); }
+	private size_t integerEnd;
+	private void next(){
+		integerEnd=token.kind==TokenKind.integer?token.offset+token.text.length:size_t.max;
+		token=lexer.next();
+	}
 	private bool take(string s){
 		if(token.text!=s||token.kind==TokenKind.end) return false;
 		next(); return true;
@@ -110,9 +114,14 @@ struct Parser{
 
 	private Pattern product(uint depth){
 		auto p=factor(depth);
-		while(token.text=="*"||token.text=="/"){
-			auto op=token.text; next();
+		bool adjacent(Pattern p){ return p.name=="#"&&token.offset==integerEnd&&
+			(token.kind==TokenKind.identifier||token.text=="("||token.text=="ⅈ"); }
+		auto implicit=adjacent(p);
+		while(token.text=="*"||token.text=="/"||implicit){
+			auto op=implicit?"*":token.text;
+			if(!implicit) next();
 			auto q=factor(depth);
+			implicit=adjacent(q);
 			if(op=="/") q=pattern("$inv",[q]);
 			p=pattern("$mul",[p,q]);
 		}

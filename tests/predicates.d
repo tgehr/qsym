@@ -39,7 +39,7 @@ Example[] examples(){
 		Example("RedundantBoundReverse","[x<1]*[x<2]","[x<1]"),
 		Example("ClosedStrictBound","[x≤1]*[x<2]","[x≤1]"),
 		Example("ClosedPoint","[x≤2]*[2≤x]","[x=2]"),
-		Example("IrrationalRoots","x^2=2","x^2=2"),
+		Example("IrrationalRoots","x^2=2","x=-sqrt(2)∨x=sqrt(2)"),
 		Example("Multivariate","x*y=1","x*y=1"),
 		Example("PartialDisjunction","[x=0∨log(-1)=0]*[x≠0]","[x=0∨log(-1)=0]*[x≠0]"),
 		Example("GuardedInverse","[x^2=1]*[x<1]/(x+1)","[x=-1]/0")

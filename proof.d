@@ -182,6 +182,11 @@ private string totalCode(Arena a,Term t,bool[] total){
 	return proof.length?"theorem total_"~to!string(t.id)~" (ρ : Env) : Expr.Defined ρ "~name(t.id)~" :=\n  "~proof~"\n":"";
 }
 private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,string h){
+	if(p.fact!=uint.max){
+		auto f=d.domainFacts[p.fact]; enforce(f.known,"strong domain fact required");
+		source=f.before;
+		h="(show Value.Defined "~ev(source.id)~" from ⟨_, "~reference(d,f,true)~"⟩)";
+	}
 	if(p.assumption){
 		source=d.contexts[p.assumption].guard;
 		h="(show Value.Defined "~ev(source.id)~" from ⟨_, g"~to!string(p.assumption)~"⟩)";
@@ -265,6 +270,10 @@ string exportLean(Arena a,Result result){
 	Term[] pending=[result.input,result.proofInput,result.output];
 	pending~=result.assumptions;
 	Proof[] proofs=[result.certificate];
+	void domains(DomainProof p){
+		if(p.fact!=uint.max) proofs~=d.domainFacts[p.fact];
+		foreach(child;p.children) domains(child);
+	}
 	while(proofs.length){
 		auto p=proofs[$-1]; --proofs.length;
 		pending~=[p.before,p.after];
@@ -272,6 +281,7 @@ string exportLean(Arena a,Result result){
 		enforce(p.id<used.length,"invalid proof index");
 		if(used[p.id]) continue;
 		used[p.id]=true; auto e=d.deductions[p.id]; proofs~=e.premises;
+		foreach(domain;e.domains) domains(domain);
 		pending~=e.instance.bindings;
 		foreach(c;e.instance.conditions) pending~=c.term;
 		for(auto c=e.proof.context;c;c=d.contexts[c].parent) pending~=d.contexts[c].guard;

@@ -99,8 +99,16 @@ package final class Elementary{
 				instantiate(a,Law.complex_sqrt_exact,[a.at(n.a),a.complex(re,im)]); return true;
 		}
 		if(f==Builtin.sqrtR&&a.isNumber(a.at(n.a))){
-			Rational value; if(!root(a.number(a.at(n.a)).re,2,value)) return false;
-			result=instantiate(a,Law.real_sqrt_exact,[a.at(n.a),a.real_(value)]); return true;
+			auto x=a.number(a.at(n.a)).re; Rational value;
+			if(root(x,2,value)){
+				result=instantiate(a,Law.real_sqrt_exact,[a.at(n.a),a.real_(value)]); return true;
+			}
+			if(x<Rational(0)||x.integral) return false;
+			auto denominator=Rational(x.denominator,BigInt(1));
+			auto square=root(denominator,2,value);
+			auto scale=(square?value:denominator).inverse;
+			auto radicand=budget.calc!"*"(Number(x),budget.calc!"*"(Number(scale.inverse),Number(scale.inverse)));
+			result=instantiate(a,Law.real_sqrt_scale,[a.at(n.a),a.real_(scale),a.number(radicand,Sort.real_)]); return true;
 		}
 		if(f==Builtin.powerR&&a.isNumber(a.at(n.a))&&a.isNumber(a.at(n.b))){
 			auto exponent=a.number(a.at(n.b)).re;

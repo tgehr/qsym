@@ -306,7 +306,7 @@ package final class Engine{
 			if(elementary.propose(current,proposal)&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
 				p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 			}
-			if((n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le)&&a.sort(a.at(n.a))==Sort.real_){
+			if(n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le){
 				auto residual=n.op==Op.nonzero?a.at(n.a):go(a.sub(a.at(n.a),a.at(n.b)),ctx,true).after;
 				if(predicates.propose(current,residual,proposal)&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
 					p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;

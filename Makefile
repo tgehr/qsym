@@ -36,6 +36,8 @@ test: build/qsym
 	./build/elementary-tests --DRT-testmode=run-main build/elementary
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/predicates.d -of=build/predicate-tests
 	./build/predicate-tests --DRT-testmode=run-main build/predicates
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/quadratics.d -of=build/quadratic-tests
+	./build/quadratic-tests --DRT-testmode=run-main build/quadratics
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/guards.d -of=build/guard-tests
 	./build/guard-tests --DRT-testmode=run-main build/guards
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/folding.d -of=build/folding-tests

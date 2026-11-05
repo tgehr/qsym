@@ -113,7 +113,7 @@ package final class Field{
 		coefficient=a.number(c,a.sort(variable)); remainder=balanced(rest,Op.add,a.sort(variable)); return true;
 	}
 	bool quadratic(Term expression,out Term atom,out Number[3] coefficients){
-		if(a.sort(expression)!=Sort.real_) return false;
+		if(a.sort(expression)!=Sort.real_&&a.sort(expression)!=Sort.complex) return false;
 		bool found;
 		foreach(t;leaves(expression,Op.add)){
 			auto m=mono(t); size_t degree;

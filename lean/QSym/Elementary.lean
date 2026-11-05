@@ -224,4 +224,42 @@ theorem norm_power_domain {z w : ℂ} (h : z≠0 ∨ w=0 ∨ 0<w.re) :
     · exact h.le
   · exact Or.inl hz
 
+theorem real_quadratic_nonzero (x a b d : ℝ) (hd : 0≤d) :
+    a*((x+b)^2-d)≠0 ↔ a≠0 ∧ x+b+Real.sqrt d≠0 ∧ x+b-Real.sqrt d≠0 := by
+  rw [show a*((x+b)^2-d)=a*((x+b+Real.sqrt d)*(x+b-Real.sqrt d)) by
+    calc
+      _ = a*((x+b)^2-(Real.sqrt d)^2) := by rw [Real.sq_sqrt hd]
+      _ = _ := by ring]
+  simp only [ne_eq, mul_eq_zero, not_or]
+
+theorem complex_quadratic_nonzero (x a b d : ℂ) :
+    a*((x+b)^2-d)≠0 ↔ a≠0 ∧ x+b+d^(2⁻¹ : ℂ)≠0 ∧ x+b-d^(2⁻¹ : ℂ)≠0 := by
+  have hs : (d^(2⁻¹ : ℂ))^2=d := Complex.cpow_ofNat_inv_pow d 2
+  rw [show a*((x+b)^2-d)=a*((x+b+d^(2⁻¹ : ℂ))*(x+b-d^(2⁻¹ : ℂ))) by
+    calc
+      _ = a*((x+b)^2-(d^(2⁻¹ : ℂ))^2) := by rw [hs]
+      _ = _ := by ring]
+  simp only [ne_eq, mul_eq_zero, not_or]
+
+theorem sqrt_scale {a b : ℝ} (ha : 0≤a) :
+    Real.sqrt (a^2*b)=a*Real.sqrt b := by
+  rw [Real.sqrt_mul (sq_nonneg a), Real.sqrt_sq ha]
+
+theorem sqrt_real_nonnegative {z : ℂ} (hi : z.im=0) (hr : 0≤z.re) :
+    z^(2⁻¹ : ℂ)=(Real.sqrt z.re : ℂ) := by
+  have hz : z=(z.re : ℂ) := (real_exponent hi).symm
+  calc
+    _ = (z.re : ℂ)^(2⁻¹ : ℂ) := congrArg (fun w : ℂ => w^(2⁻¹ : ℂ)) hz
+    _ = ((z.re^(2⁻¹ : ℝ) : ℝ) : ℂ) := by simpa using (Complex.ofReal_cpow hr (2⁻¹ : ℝ)).symm
+    _ = _ := congrArg Complex.ofReal (rpow_half _)
+
+theorem sqrt_real_negative {z : ℂ} (hi : z.im=0) (hr : z.re<0) :
+    z^(2⁻¹ : ℂ)=Complex.I*(Real.sqrt (-z.re) : ℂ) := by
+  have hs : -((Real.sqrt (-z.re) : ℝ) : ℂ)^2=z := by
+    rw [← Complex.ofReal_pow]
+    apply Complex.ext
+    · simp only [Complex.neg_re, Complex.ofReal_re, Real.sq_sqrt (le_of_lt (neg_pos.mpr hr)), neg_neg]
+    · simp only [Complex.neg_im, Complex.ofReal_im, hi, neg_zero]
+  simpa only [hs] using (sqrt_imaginary (Real.sqrt (-z.re)) (Real.sqrt_nonneg _)).symm
+
 end QSym.Elementary

@@ -236,6 +236,66 @@ theorem refines_power_negative (x y : Option ℝ)
         exact hv
       · cases hv
 
+theorem refines_real_nonzero_quadratic (v_p : Option ℝ) (v_x : Option ℝ) (v_a : Option ℝ) (v_b : Option ℝ) (v_d : Option ℝ)
+    (hp0 : Refines (not (nonzero (add v_p (mul (some (-1)) (mul v_a (add ((add v_x v_b).map (fun x => x^2)) (mul (some (-1)) v_d))))))) (some true))
+    (hp1 : Refines (nonzero v_a) (some true))
+    (hp2 : Refines (le (some 0) v_d) (some true))
+    (hp3 : Defined v_a)
+    (hp4 : Defined v_b)
+    (hp5 : Defined v_d)
+    (hp6 : Defined v_x) :
+    Refines (nonzero v_p) (and (nonzero (add v_x (mul (some (-1)) (add (mul (some (-1)) v_b) (mul (some (-1)) (Functions.sqrtR.apply v_d)))))) (nonzero (add v_x (mul (some (-1)) (add (mul (some (-1)) v_b) (Functions.sqrtR.apply v_d)))))) := by
+  classical
+  obtain ⟨a, rfl⟩ := hp3
+  obtain ⟨b, rfl⟩ := hp4
+  obtain ⟨d, rfl⟩ := hp5
+  obtain ⟨x, rfl⟩ := hp6
+  cases v_p with
+  | none => intro v hv; cases hv
+  | some p =>
+    have hp : p=a*((x+b)^2-d) := by
+      simpa [Refines, not, nonzero, add, mul, ← sub_eq_add_neg, sub_eq_zero] using hp0
+    have ha : a≠0 := by simpa [Refines, nonzero] using hp1
+    have hd : 0≤d := by simpa [Refines, le] using hp2
+    subst p
+    have h := Elementary.real_quadratic_nonzero x a b d hd
+    apply refines_of_eq
+    have hand (p q : Bool) : and (some p) (some q)=some (p && q) := by cases p <;> rfl
+    have he : decide (a*((x+b)^2-d)≠0)=decide (x+b+Real.sqrt d≠0 ∧ x+b-Real.sqrt d≠0) :=
+      decide_eq_decide.mpr (h.trans (and_iff_right ha))
+    simpa [nonzero, hand, add, mul, Function1.apply, Functions.sqrtR, ha, hd,
+      sub_eq_add_neg, neg_add_rev, add_assoc, add_comm, add_left_comm]
+      using congrArg (fun b : Bool => some b) he
+
+theorem refines_complex_nonzero_quadratic (v_p : Option ℂ) (v_x : Option ℂ) (v_a : Option ℂ) (v_b : Option ℂ) (v_d : Option ℂ)
+    (hp0 : Refines (not (nonzero (add v_p (mul (some (-1)) (mul v_a (add ((add v_x v_b).map (fun x => x^2)) (mul (some (-1)) v_d))))))) (some true))
+    (hp1 : Refines (nonzero v_a) (some true))
+    (hp2 : Defined v_a)
+    (hp3 : Defined v_b)
+    (hp4 : Defined v_d)
+    (hp5 : Defined v_x) :
+    Refines (nonzero v_p) (and (nonzero (add v_x (mul (some (-1)) (add (mul (some (-1)) v_b) (mul (some (-1)) (Functions.sqrtC.apply v_d)))))) (nonzero (add v_x (mul (some (-1)) (add (mul (some (-1)) v_b) (Functions.sqrtC.apply v_d)))))) := by
+  classical
+  obtain ⟨a, rfl⟩ := hp2
+  obtain ⟨b, rfl⟩ := hp3
+  obtain ⟨d, rfl⟩ := hp4
+  obtain ⟨x, rfl⟩ := hp5
+  cases v_p with
+  | none => intro v hv; cases hv
+  | some p =>
+    have hp : p=a*((x+b)^2-d) := by
+      simpa [Refines, not, nonzero, add, mul, ← sub_eq_add_neg, sub_eq_zero] using hp0
+    have ha : a≠0 := by simpa [Refines, nonzero] using hp1
+    subst p
+    have h := Elementary.complex_quadratic_nonzero x a b d
+    apply refines_of_eq
+    have hand (p q : Bool) : and (some p) (some q)=some (p && q) := by cases p <;> rfl
+    have he : decide (a*((x+b)^2-d)≠0)=decide (x+b+d^(2⁻¹ : ℂ)≠0 ∧ x+b-d^(2⁻¹ : ℂ)≠0) :=
+      decide_eq_decide.mpr (h.trans (and_iff_right ha))
+    simpa [nonzero, hand, add, mul, Function1.apply, Functions.sqrtC, ha,
+      sub_eq_add_neg, neg_add_rev, add_assoc, add_comm, add_left_comm]
+      using congrArg (fun b : Bool => some b) he
+
 end QSym.Value
 
 namespace QSym
@@ -258,6 +318,8 @@ elab "qsym_split_bool" : tactic => liftMetaTactic fun goal => goal.withContext d
 macro "qsym_scalar" : tactic => `(tactic| (
   first
   | exact Value.refines_inv_inv _
+  | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_real_nonzero_quadratic <;> assumption)
+  | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_complex_nonzero_quadratic <;> assumption)
   | solve | (simp only [Int.cast_zero] at *; apply Value.refines_log_product <;> assumption)
   | solve | apply Value.refines_power_exact <;> assumption
   | solve | apply Value.refines_phase_period <;> assumption
@@ -288,12 +350,13 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Option.bind_eq_bind, Option.pure_def, Option.map, Option.bind] at *
     try simp only [Option.some.injEq, forall_eq, forall_eq', Bool.true_eq, decide_eq_true_eq] at *
     repeat' first
-      | simp_all (config := {failIfUnchanged := true}) [Real.exp_pos, Real.sqrt_nonneg, Real.pi_pos, Elementary.half_ne_int, Elementary.inv_two_ne_int, Elementary.sqrt_not_neg]
+      | simp_all (config := {failIfUnchanged := true}) [Real.exp_pos, Real.sqrt_nonneg, Real.sqrt_pos, Real.pi_pos, Elementary.half_ne_int, Elementary.inv_two_ne_int, Elementary.sqrt_not_neg]
       | qsym_split_and
       | qsym_split_bool
       | split at *
     all_goals try (simp_all only [← sub_eq_add_neg, sub_eq_zero])
     all_goals subst_vars
+    all_goals try (simp_all [Elementary.sqrt_scale, Elementary.sqrt_real_nonnegative, Elementary.sqrt_real_negative])
     all_goals try (simp_all [Elementary.log_mul_pos, Elementary.root_power, Real.sqrt_sq_eq_abs,
       Real.rpow_add, Elementary.rpow_mul_pos, Elementary.rpow_half, ← Real.sqrt_eq_rpow,
       Real.sin_sub_int_mul_two_pi, Real.cos_sub_int_mul_two_pi, Elementary.sin_period, Elementary.cos_period,
@@ -338,6 +401,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (simp_all [neg_eq_iff_add_eq_zero, add_comm])
     all_goals try (solve | (apply Eq.symm; apply Real.arcsin_sin <;> linarith))
     all_goals try (simp_all [Elementary.sqrt_not_neg])
+    all_goals try (solve | have h := Real.sqrt_pos.mpr (by assumption); linarith [h])
     all_goals try (apply Elementary.nonnegative_of_pos_or_zero; assumption)
     all_goals try (solve | (convert Elementary.phase_half_pi.symm using 2 <;> push_cast <;> ring))
     all_goals try (solve | apply Elementary.floor_exact <;> assumption)

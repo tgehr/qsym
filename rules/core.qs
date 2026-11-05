@@ -174,6 +174,9 @@ rule real_le_common(x:ℝ,a:ℝ,b:ℝ):x+a≤x+b⇒a≤b;
 
 # Native polynomial analysis supplies witnesses; these premises check them.
 lemma real_nonzero_scale(p:ℝ,x:ℝ,a:ℝ):p≠0⇒x≠0 when p=a*x,a≠0,defined(a),defined(x);
+lemma complex_nonzero_scale(p:ℂ,x:ℂ,a:ℂ):p≠0⇒x≠0 when p=a*x,a≠0,defined(a),defined(x);
+lemma real_nonzero_quadratic(p:ℝ,x:ℝ,a:ℝ,b:ℝ,d:ℝ):p≠0⇒x≠-b-sqrt(d)∧x≠-b+sqrt(d) when p=a*((x+b)^2-d),a≠0,0≤d,defined(a),defined(b),defined(d),defined(x);
+lemma complex_nonzero_quadratic(p:ℂ,x:ℂ,a:ℂ,b:ℂ,d:ℂ):p≠0⇒x≠-b-csqrt(d)∧x≠-b+csqrt(d) when p=a*((x+b)^2-d),a≠0,defined(a),defined(b),defined(d),defined(x);
 lemma real_lt_affine_pos(l:ℝ,r:ℝ,a:ℝ,x:ℝ):l<r⇒x<0 when l-r=a*x,0<a,defined(a),defined(x);
 lemma real_lt_affine_neg(l:ℝ,r:ℝ,a:ℝ,x:ℝ):l<r⇒0<x when l-r=a*x,a<0,defined(a),defined(x);
 lemma real_le_affine_pos(l:ℝ,r:ℝ,a:ℝ,x:ℝ):l≤r⇒x≤0 when l-r=a*x,0<a,defined(a),defined(x);
@@ -257,6 +260,12 @@ rewrite complex_exp_power(x:ℂ,n:NatParam):exp(x)^n⇒exp(complex(n,0)·x);
 rule real_exp_base(x:ℝ):powerR(e,x)⇒exp(x);
 fact real_positive_exp(x:ℝ):0<exp(x);
 fact real_nonnegative_sqrt(x:ℝ):0≤sqrt(x);
+fact real_positive_sqrt(x:ℝ):0<sqrt(x) when 0<x;
+fact complex_nonzero_real(z:ℂ):z≠0 when creal(z)≠0;
+fact complex_nonzero_imag(z:ℂ):z≠0 when cimag(z)≠0;
+lemma real_sqrt_scale(x:ℝ,a:ℝ,b:ℝ):sqrt(x)⇒a*sqrt(b) when x=a^2*b,0≤a,0≤b,defined(a),defined(b);
+rewrite complex_sqrt_real_nonnegative(z:ℂ):csqrt(z)⇒toℂ(sqrt(creal(z))) when cimag(z)=0,0≤creal(z);
+rewrite complex_sqrt_real_negative(z:ℂ):csqrt(z)⇒ⅈ*toℂ(sqrt(-creal(z))) when cimag(z)=0,creal(z)<0;
 fact real_positive_pi():0<π;
 fact real_positive_e():0<e;
 rewrite real_log_product(x:ℝ,y:ℝ):log(x·y)⇒log(x)+log(y) when 0<x,0<y;
@@ -314,6 +323,10 @@ rewrite real_part_product(z:ℂ,w:ℂ):creal(z·w)⇒creal(z)·creal(w)-cimag(z)
 rewrite imaginary_part_product(z:ℂ,w:ℂ):cimag(z·w)⇒creal(z)·cimag(w)+cimag(z)·creal(w);
 rule real_part_cast(x:ℝ):creal(toℂ(x))⇒x;
 rule imaginary_part_cast(x:ℝ):cimag(toℂ(x))⇒0;
+rewrite complex_cast_sum(x:ℝ,y:ℝ):toℂ(x+y)⇒toℂ(x)+toℂ(y);
+rewrite complex_cast_product(x:ℝ,y:ℝ):toℂ(x*y)⇒toℂ(x)*toℂ(y);
+rewrite complex_cast_power(x:ℝ,n:NatParam):toℂ(x)^n⇒toℂ(x^n);
+rewrite real_sqrt_power(x:ℝ,n:NatParam):sqrt(x)^(n+2)⇒x*sqrt(x)^n;
 rule complex_reconstruction(z:ℂ):cfromri(creal(z),cimag(z))⇒z;
 rewrite complex_norm_product(z:ℂ,w:ℂ):cabs(z·w)⇒cabs(z)·cabs(w);
 rule complex_norm_conj(z:ℂ):cabs(conj(z))⇒cabs(z);

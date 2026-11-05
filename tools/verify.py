@@ -54,7 +54,7 @@ def main():
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -124,6 +124,9 @@ def main():
 		("BadRealRoot","rewrite bad(x:ℝ):sqrt(x^2)⇒x;"),
 		("BadDistribution","rewrite bad(p:𝔹,q:𝔹,r:𝔹):(p∨q)∧r⇒(p∧r)∨(q∧r);"),
 		("BadSwap","rewrite bad(p:𝔹,q:𝔹):p∧q⇒q∧p;"),
+		("BadQuadraticDiscriminant","lemma bad(x:ℝ):x^2+1≠0⇒x≠-1∧x≠1;"),
+		("BadQuadraticLeading","lemma bad(x:ℂ,a:ℂ):a*(x^2-1)≠0⇒x≠-1∧x≠1;"),
+		("BadRootSelection","lemma bad(z:ℂ):z⇒ⅈ when z^2+1=0;"),
 		("BadFactorization","lemma bad(p:ℝ,x:ℝ,y:ℝ):p≠0⇒x≠0∧y≠0 when defined(x),defined(y);"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
@@ -156,6 +159,12 @@ def main():
 		raise RuntimeError("could not construct the wrong-premise test")
 	(negative/"WrongPremise.lean").write_text(corrupt)
 	check(negative/"WrongPremise.lean",succeeds=False)
+	selected=(ROOT/"build/quadratics/ComplexSelectUpper.lean").read_text()
+	corrupt,count=re.subn(r"from ⟨_, \(p\d+ ρ(?: g\d+)*\)⟩", "from ⟨_, rfl⟩", selected, count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid-definedness test")
+	(negative/"WrongDerivedDomain.lean").write_text(corrupt)
+	check(negative/"WrongDerivedDomain.lean",succeeds=False)
 	polynomial=(ROOT/"build/scalar/Polynomial.lean").read_text()
 	corrupt,count=re.subn(r"(Replay\.AC\.sound[^\n]*?\(\.leaf )\d+",r"\g<1>999999",polynomial,count=1)
 	if count!=1:

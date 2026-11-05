@@ -71,6 +71,7 @@ struct Syntax{
 	string format(Arena a,Term root){
 		struct Piece{ string text; uint precedence=100; bool negative,iverson; }
 		Piece[] memo=new Piece[a.length];
+		bool[] symbolic=new bool[a.length];
 		string render(Piece p,uint precedence=0,bool magnitude=false){
 			if(p.negative&&!magnitude){
 				p.text="-"~(p.precedence<70?"("~p.text~")":p.text);
@@ -90,7 +91,12 @@ struct Syntax{
 			return arg(n.b,91);
 		}
 		Piece sum(uint x,uint y){
-			return Piece(arg(x,60)~(memo[y].negative?"-":"+")~render(memo[y],61,true),60);
+			auto l=memo[x],r=memo[y];
+			if(a.sort(a.at(x))==Sort.complex){
+				if(a.isNumber(a.at(x))&&a.number(a.at(x)).im.zero&&!a.isNumber(a.at(y))) l=rational(a.number(a.at(x)).re);
+				if(a.isNumber(a.at(y))&&a.number(a.at(y)).im.zero&&!a.isNumber(a.at(x))) r=rational(a.number(a.at(y)).re);
+			}
+			return Piece(render(l,60)~(r.negative?"-":"+")~render(r,61,true),60);
 		}
 		Piece product(Node n){
 			// [p]·x denotes a non-strict mask, so a strict product needs an explicit call.
@@ -107,13 +113,27 @@ struct Syntax{
 			return Piece(render(l,70,true)~"·"~render(r,71,true),70,l.negative!=r.negative);
 		}
 		Piece zeroComparison(Term t,string relation){
-			Term[] pending=[t]; string left,right; Number constant;
+			Term[] pending=[t],terms; string left,right; Number constant;
+			Term variable; uint variables;
 			void append(ref string side,string term){ side~=(side.length?"+":"")~term; }
 			while(pending.length){
 				auto u=pending[$-1]; --pending.length; auto n=a.node(u);
 				if(n.op==Op.add) pending~=[a.at(n.b),a.at(n.a)];
 				else if(a.isNumber(u)) constant=constant+a.number(u);
-				else if(memo[u.id].negative) append(right,render(memo[u.id],61,true));
+				else{
+					terms~=u;
+					if(symbolic[u.id]){ variable=u; ++variables; }
+				}
+			}
+			if(variables==1){
+				left=arg(variable.id,61);
+				foreach(u;terms) if(u!=variable){
+					auto p=memo[u.id]; p.negative=!p.negative;
+					if(!right.length) right=render(p,60);
+					else right~=(p.negative?"-":"+")~render(p,61,true);
+				}
+			}else foreach(u;terms){
+				if(memo[u.id].negative) append(right,render(memo[u.id],61,true));
 				else append(left,arg(u.id,61));
 			}
 			if(!left.length&&right.length){ left=right; right=""; constant=-constant; }
@@ -132,6 +152,8 @@ struct Syntax{
 		}
 		foreach(id;a.postorder(root)){
 			auto t=a.at(id),n=a.node(t); Piece p;
+			symbolic[id]=n.op==Op.variable||n.op==Op.densityAt||
+				n.arity>=1&&symbolic[n.a]||n.arity==2&&symbolic[n.b];
 			final switch(n.op){
 				case Op.realLit,Op.complexLit,Op.numberLit:
 					auto z=a.number(t);
@@ -225,7 +247,7 @@ unittest{
 unittest{
 	import qsym.simplify;
 	auto session=Session.open(); auto a=session.arena; Syntax s; s.declare("z:ℂ,x:ℝ");
-	foreach(pair;[["cpow(z,1/2)","z^(1/2)"],["cpow(z,-1/3)","z^(-1/3)"],["cpow(z,x)","z^x"],["clog(cpow(z,1/2))","1/2·clog(z)"],["toℂ(2)*z","2·z"]]){
+	foreach(pair;[["cpow(z,1/2)","z^(1/2)"],["cpow(z,-1/3)","z^(-1/3)"],["cpow(z,x)","z^x"],["clog(cpow(z,1/2))","1/2·clog(z)"],["toℂ(2)*z","2·z"],["z-1/2","z-1/2"]]){
 		auto input=pair[0],expected=pair[1];
 		auto t=simplify(a,s.parse(a,input)).output,printed=s.format(a,t);
 		assert(printed==expected,printed);

@@ -8,7 +8,7 @@ import std.exception:enforce;
 struct Proof{ Term before,after; uint id=uint.max,context; bool known; }
 struct Context{ uint parent; Term guard; bool value; }
 enum Evidence{ rule,trans,congr,scoped,assumption,transport,numeric,ac }
-struct DomainProof{ Term term; uint[] path; DomainProof[] children; bool found,total; uint assumption; }
+struct DomainProof{ Term term; uint[] path; DomainProof[] children; bool found,total; uint assumption; uint fact=uint.max; }
 struct Deduction{
 	Evidence kind;
 	Proof proof;
@@ -25,6 +25,7 @@ final class Derivation{
 	Arena arena;
 	bool tracing;
 	Deduction[] deductions;
+	Proof[] domainFacts;
 	Context[] contexts=[Context.init];
 	this(Arena a,bool tracing){ arena=a; this.tracing=tracing; }
 	Proof refl(Term t,uint context=0){ return Proof(t,t,uint.max,context); }
@@ -102,7 +103,9 @@ final class Derivation{
 	Proof transport(Proof known,Proof change,uint context){
 		enforce(known.known&&known.before==change.before,"known value required");
 		auto result=Proof(change.after,known.after,uint.max,context,true);
-		return tracing?record(Deduction(Evidence.transport,result,[known,change])):result;
+		if(tracing) result=record(Deduction(Evidence.transport,result,[known,change]));
+		domainFacts~=result;
+		return result;
 	}
 	Proof numeric(Term before,Term after,uint context){
 		foreach(id;arena.postorder(before)){
@@ -135,7 +138,7 @@ final class Derivation{
 		auto d=Deduction(Evidence.ac,Proof(before,after,uint.max,context)); d.value=op==Op.mul;
 		return record(d);
 	}
-	DomainProof domain(Term source,Term target,uint context=0){
+	DomainProof domain(Term source,Term target,uint context=0,bool learned=true){
 		Table!(uint,uint) known;
 		struct Entry{ Term term; uint[] path; }
 		Entry[] pending=[Entry(source)]; uint[][] paths;
@@ -154,8 +157,12 @@ final class Derivation{
 			auto n=arena.node(t);
 			if(n.arity==0){ d.found=d.total=true; return d; }
 			for(auto c=context;c;c=contexts[c].parent){
-				auto p=this.domain(contexts[c].guard,t);
+				auto p=this.domain(contexts[c].guard,t,0,false);
 				if(p.found){ p.assumption=c; return p; }
+			}
+			if(learned) foreach(j,f;domainFacts) if(visible(f.context,context)){
+				auto p=this.domain(f.before,t,0,false);
+				if(p.found){ p.fact=cast(uint)j; return p; }
 			}
 			if(depth>=128||n.op==Op.inv||n.op==Op.mask||n.op==Op.builtin&&!builtinInfo(cast(Builtin)n.value).total) return d;
 			foreach(j;0..n.arity){
