@@ -44,8 +44,8 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["[x=2]","[x=-1]","[x=-1]","x-2","-x"],result.stdout
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
-	"[x^2<=1]·[x<1]","[x<0]·[y>0]·[1<x]","floor(-7/3)","log2(8)","cabs(3+4*ⅈ)",":quit",""]),
+	"[x^2<=1]·[x<1]","[x=-1∨x=1]·[x<1]","[x<0]·[y>0]·[1<x]","floor(-7/3)","log2(8)","cabs(3+4*ⅈ)",":quit",""]),
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
-assert result.stdout.splitlines()==["[-1≤x∧x<1]","0","int(-3)","3","5"],result.stdout
+assert result.stdout.splitlines()==["[-1≤x∧x<1]","[x=-1]","0","int(-3)","3","5"],result.stdout
 print("REPL checks passed.")

@@ -54,7 +54,7 @@ def main():
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
-	for directory,count in (("guards",18),("folding",73)):
+	for directory,count in (("guards",24),("folding",73)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")

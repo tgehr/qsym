@@ -9,6 +9,12 @@ import std.exception:enforce;
 struct Example{ string name,input,expected; string[] facts; }
 Example[] examples(){
 	return [
+		Example("DisjunctiveGuard","[x=-1∨x=1]·[x<1]","[x=-1]"),
+		Example("DisjunctiveGuardReverse","[x<1]·[x=-1∨x=1]","[x=-1]"),
+		Example("DisjunctiveGuardOrder","[x=1∨x=-1]·[x<1]","[x=-1]"),
+		Example("DisjunctiveGuardShifted","[x=2∨x=3]·[x<3]","[x=2]"),
+		Example("DisjunctiveGuardBody","[x=-1∨x=1]·[x<1]·x","-[x=-1]"),
+		Example("DisjunctiveFacts","x","-1",["x=-1∨x=1","x<1"]),
 		Example("NestedBounds","[x^2≤1]*[x<1]","[-1≤x∧x<1]"),
 		Example("NestedBoundsReverse","[x<1]*[x^2≤1]","[x<1∧-1≤x]"),
 		Example("NestedContradiction","[x<0]*[y>0]*[1<x]","0"),
@@ -48,6 +54,16 @@ unittest{
 		exportLean(a,checked);
 	}
 	assert(!failures,"guard simplification regressions");
+}
+unittest{
+	foreach(trace;[false,true]) foreach(source;["[x=-1∨x=1]·[x<1]","[x^2=1]·[x<1]"]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		auto options=Options(DensityMode.preserve,trace); options.maxAlgebraWork=20_000;
+		auto result=simplify(a,s.parse(a,source),options);
+		assert(!result.exhausted,source~" exceeds the guard-search work budget");
+		assert(s.format(a,result.output)=="[x=-1]");
+		if(trace) exportLean(a,result);
+	}
 }
 @system void main(string[] args){
 	enforce(args.length==2,"usage: guard-tests DIRECTORY"); mkdirRecurse(args[1]);

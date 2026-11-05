@@ -18,9 +18,11 @@ package final class Engine{
 	private Elementary elementary;
 	private Predicates predicates;
 	private size_t rewritesLeft;
-	private uint depth;
+	private uint depth,epoch;
 	private struct MemoKey{ ulong term; uint revision; }
 	private Table!(MemoKey,uint) memo;
+	private struct ContextKey{ uint parent,guard,revision; bool value; }
+	private Table!(ContextKey,uint) branches;
 	private Table!(ulong,uint) truths;
 	private uint[] revisions=[0];
 	private Proof[] proofs;
@@ -37,12 +39,21 @@ package final class Engine{
 		index.set(key,cast(uint)proofs.length); proofs~=p;
 	}
 	private void memoize(ulong key,Proof p){
-		if(key>uint.max){ remember(memo,MemoKey(key,revisions[cast(uint)(key>>33)]),p); return; }
+		if(key>uint.max){ remember(memo,MemoKey(key,revision(cast(uint)(key>>33))),p); return; }
 		if(key>=roots.length) roots.length=cast(size_t)key+1;
 		roots[cast(uint)key]=cast(uint)proofs.length+1; proofs~=p;
 	}
 	private ulong key(Term t,uint ctx,bool probe=false){ return (cast(ulong)ctx<<33)|(cast(ulong)probe<<32)|t.id; }
 	private Proof normalize(Term t,uint ctx){ return go(t,ctx); }
+	// Invalidate child caches when inherited facts change during seeding.
+	private uint revision(uint ctx){
+		uint result;
+		while(ctx){
+			if(revisions[ctx]>result) result=revisions[ctx];
+			ctx=d.contexts[ctx].parent;
+		}
+		return result;
+	}
 	private Proof[] known(uint ctx){
 		Proof[] result;
 		while(ctx){ result~=facts[ctx]; ctx=d.contexts[ctx].parent; }
@@ -50,9 +61,14 @@ package final class Engine{
 	}
 	private uint enter(uint parent,Term guard,bool value){
 		budget.spend();
+		auto k=ContextKey(parent,guard.id,revision(parent),value);
+		auto cached=branches.get(k,uint.max);
+		if(cached!=uint.max) return cached;
 		auto ctx=d.enter(parent,guard,value);
 		facts.length=d.contexts.length;
 		revisions.length=d.contexts.length;
+		// Recursive visits during seeding must share the same assumptions.
+		branches.set(k,ctx);
 		seed(ctx); resolve(ctx); return ctx;
 	}
 	private void seed(uint ctx){
@@ -76,7 +92,7 @@ package final class Engine{
 			if(q.after!=p.before){ auto f=d.transport(p,q,ctx); facts[ctx]~=f; remember(truths,key(f.before,ctx),f); }
 		}
 		// Normalization may have memoized terms before learning these equalities.
-		++revisions[ctx];
+		revisions[ctx]=++epoch;
 	}
 	private void resolve(uint ctx){
 		for(bool changed=true;changed;){
@@ -90,7 +106,7 @@ package final class Engine{
 					if(found) continue;
 					Proof p; if(!instanceProof(i,ctx,p)) continue;
 					auto q=d.transport(f,p,ctx); facts[ctx]~=q; remember(truths,key(q.before,ctx),q);
-					++revisions[ctx]; changed=true;
+					revisions[ctx]=++epoch; changed=true;
 				}
 			}
 		}
@@ -144,6 +160,11 @@ package final class Engine{
 		if(truths.contains(k)){ result=proofs[truths.get(k,uint.max)]; return true; }
 		foreach(f;known(ctx)) if(f.before==t){ result=f; return true; }
 		if(t==a.boolean(true)){ result=d.refl(t,ctx); return true; }
+		auto numeric=field.literal(t,ctx);
+		if(numeric.after!=t){
+			if(numeric.after!=a.boolean(true)) return false;
+			result=numeric; remember(truths,k,result); return true;
+		}
 		if(proving.get(k,false)) return false;
 		proving.set(k,true); scope(exit) proving.set(k,false);
 		foreach(law;inferences(a.node(t).op)) if(attempt(law,t,ctx,result)){
@@ -240,7 +261,7 @@ package final class Engine{
 	}
 	Proof go(Term t,uint ctx=0,bool probe=false){
 		auto k=key(t,ctx,probe);
-		auto cached=k<=uint.max?(t.id<roots.length?roots[t.id]:0):memo.get(MemoKey(k,revisions[ctx]),uint.max)+1;
+		auto cached=k<=uint.max?(t.id<roots.length?roots[t.id]:0):memo.get(MemoKey(k,revision(ctx)),uint.max)+1;
 		if(cached) return proofs[cached-1];
 		if(active.get(k,false)) return d.refl(t,ctx);
 		if(!rewritesLeft){ budget.exhausted=true; return d.refl(t,ctx); }
@@ -252,6 +273,8 @@ package final class Engine{
 			foreach(i;0..n.arity) cs~=go(a.child(t,i),ctx,probe);
 			auto p=d.congr(t,cs,ctx);
 			auto current=p.after; n=a.node(current);
+			auto numeric=field.literal(current,ctx);
+			if(numeric.after!=current){ p=d.trans(p,numeric,ctx); memoize(k,p); return p; }
 			if(ctx&&!probe){
 				Proof q;
 				if(substitute(current,ctx,q)){ p=d.trans(p,q,ctx); memoize(k,p); return p; }
@@ -268,8 +291,6 @@ package final class Engine{
 					p=d.trans(p,f,ctx); memoize(k,p); return p;
 				}
 			}
-			auto numeric=field.literal(current,ctx);
-			if(numeric.after!=current){ p=d.trans(p,numeric,ctx); memoize(k,p); return p; }
 			Proof strict;
 			if(!probe&&strictBound(current,ctx,strict)){
 				p=d.trans(p,strict,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
@@ -291,7 +312,8 @@ package final class Engine{
 					p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 				}
 			}
-			if(n.op==Op.mask||n.op==Op.and_||n.op==Op.or_){
+			// Premise normalization must not start another guarded search.
+			if(!probe&&(n.op==Op.mask||n.op==Op.and_||n.op==Op.or_)){
 				auto c=enter(ctx,a.at(n.a),n.op!=Op.or_);
 				auto q=go(a.at(n.b),c,probe);
 				if(q.after!=q.before){
@@ -299,7 +321,7 @@ package final class Engine{
 					p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 				}
 			}
-			if((n.op==Op.and_||n.op==Op.or_)&&d.domain(current,a.at(n.b),ctx).found){
+			if(!probe&&(n.op==Op.and_||n.op==Op.or_)&&d.domain(current,a.at(n.b),ctx).found){
 				auto c=enter(ctx,a.at(n.b),n.op==Op.and_),q=go(a.at(n.a),c,probe);
 				// Only commute to make progress; partial guards still require definedness.
 				if(q.after!=q.before&&guardCost(q.after)<guardCost(q.before)){
