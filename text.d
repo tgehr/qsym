@@ -80,6 +80,15 @@ struct Syntax{
 		}
 		string arg(uint id,uint precedence=0){ return render(memo[id],precedence); }
 		Piece rational(Rational q){ return Piece((q<Rational(0)?-q:q).toString,q.integral?100:70,q<Rational(0)); }
+		string exponent(Node n){
+			// The complex base supplies the type when this is parsed again.
+			auto t=a.at(n.b),v=a.node(t);
+			if(n.value==Builtin.powerC){
+				if(a.isNumber(t)&&a.number(t).im.zero) return render(rational(a.number(t).re),91);
+				if(v.op==Op.builtin&&v.value==Builtin.castRC) return arg(v.a,91);
+			}
+			return arg(n.b,91);
+		}
 		Piece sum(uint x,uint y){
 			return Piece(arg(x,60)~(memo[y].negative?"-":"+")~render(memo[y],61,true),60);
 		}
@@ -88,6 +97,10 @@ struct Syntax{
 			if(memo[n.a].iverson)
 				return Piece("mul"~suffix(n.sort)~"("~arg(n.a)~","~arg(n.b)~")");
 			auto l=memo[n.a],r=memo[n.b];
+			if(n.sort==Sort.complex){
+				if(a.isNumber(a.at(n.a))&&a.number(a.at(n.a)).im.zero&&!a.isNumber(a.at(n.b))) l=rational(a.number(a.at(n.a)).re);
+				if(a.isNumber(a.at(n.b))&&a.number(a.at(n.b)).im.zero&&!a.isNumber(a.at(n.a))) r=rational(a.number(a.at(n.b)).re);
+			}
 			bool unit(uint id){ return (n.sort==Sort.real_||n.sort==Sort.complex)&&a.isNumber(a.at(id))&&(a.number(a.at(id)).one||(-a.number(a.at(id))).one); }
 			if(unit(n.a)){ r.negative=l.negative!=r.negative; return r; }
 			if(unit(n.b)){ l.negative=l.negative!=r.negative; return l; }
@@ -168,7 +181,7 @@ struct Syntax{
 					else if(code=="ltN"||code=="ltZ"||code=="ltQ") p=Piece(arg(n.a,51)~"<"~arg(n.b,51),50);
 					else if(code=="leN"||code=="leZ"||code=="leQ") p=Piece(arg(n.a,51)~"≤"~arg(n.b,51),50);
 					else if(f==Builtin.eqB) p=Piece(arg(n.a,51)~"="~arg(n.b,51),50);
-					else if(code=="powerR"||code=="powerC"||code.length==5&&code[0..3]=="pow") p=Piece(arg(n.a,91)~"^"~arg(n.b,91),90);
+					else if(code=="powerR"||code=="powerC"||code.length==5&&code[0..3]=="pow") p=Piece(arg(n.a,91)~"^"~exponent(n),90);
 					else p.text=info.name~"("~arg(n.a)~(n.arity==2?","~arg(n.b):"")~")";
 					break;
 				case Op.lebesgue:p.text="lebesgue()"; break;
@@ -207,4 +220,15 @@ unittest{
 	assert(a.sort(syntax.parse(a,"x^(4294967295+1)"))==Sort.real_);
 	auto deep="x"; foreach(i;0..200) deep~="+x";
 	assertThrown(syntax.parse(a,deep));
+}
+
+unittest{
+	import qsym.simplify;
+	auto session=Session.open(); auto a=session.arena; Syntax s; s.declare("z:ℂ,x:ℝ");
+	foreach(pair;[["cpow(z,1/2)","z^(1/2)"],["cpow(z,-1/3)","z^(-1/3)"],["cpow(z,x)","z^x"],["clog(cpow(z,1/2))","1/2·clog(z)"],["toℂ(2)*z","2·z"]]){
+		auto input=pair[0],expected=pair[1];
+		auto t=simplify(a,s.parse(a,input)).output,printed=s.format(a,t);
+		assert(printed==expected,printed);
+		assert(simplify(a,s.parse(a,printed)).output==t,printed~" failed to round-trip");
+	}
 }

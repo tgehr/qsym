@@ -169,4 +169,59 @@ theorem negative_power {x y : ℝ} (hy : y<0) (hd : Functions.powerR.domain x y)
       exact zpow_ne_zero _ h.ne
     · rw [← Int.cast_neg, Real.rpow_intCast, Real.rpow_intCast, zpow_neg, inv_inv]
 
+
+theorem real_exponent {w : ℂ} (hi : w.im=0) : (w.re : ℂ)=w := by
+  apply Complex.ext <;> simp [hi]
+
+theorem log_cpow_contract (z w : ℂ) (hi : w.im=0) (hl : 0<w.re) (hu : w.re≤1) :
+    Complex.log (z^w) = Complex.log z*w := by
+  by_cases hz : z=0
+  · have hw : w≠0 := by intro h; simp [h] at hl
+    simp [hz, Complex.zero_cpow hw]
+  rw [Complex.cpow_def_of_ne_zero hz]
+  apply Complex.log_exp
+  · simp only [Complex.mul_im, Complex.log_im, hi, mul_zero, zero_add]
+    have h := mul_lt_mul_of_pos_right (Complex.neg_pi_lt_arg z) hl
+    have h' := mul_le_mul_of_nonpos_left hu (neg_nonpos.mpr Real.pi_pos.le)
+    linarith
+  · simp only [Complex.mul_im, Complex.log_im, hi, mul_zero, zero_add]
+    have h := mul_le_mul_of_nonneg_right (Complex.arg_le_pi z) hl.le
+    have h' := mul_le_mul_of_nonneg_left hu Real.pi_pos.le
+    linarith
+
+theorem arg_cpow_contract (z w : ℂ) (hi : w.im=0) (hl : 0<w.re) (hu : w.re≤1) :
+    Complex.arg (z^w) = w.re*Complex.arg z := by
+  have h := congrArg Complex.im (log_cpow_contract z w hi hl hu)
+  simpa [Complex.log_im, Complex.mul_im, hi, mul_comm] using h
+
+theorem log_sqrt (z : ℂ) : Complex.log (z^(2⁻¹ : ℂ)) = Complex.log z/2 := by
+  simpa [div_eq_mul_inv] using log_cpow_contract z (2⁻¹) (by norm_num) (by norm_num) (by norm_num)
+
+theorem arg_sqrt (z : ℂ) : Complex.arg (z^(2⁻¹ : ℂ)) = (2 : ℝ)⁻¹*Complex.arg z := by
+  simpa using arg_cpow_contract z (2⁻¹) (by norm_num) (by norm_num) (by norm_num)
+
+theorem norm_cpow_real {z w : ℂ} (hi : w.im=0) : ‖z^w‖=‖z‖^w.re := by
+  rw [← real_exponent hi, Complex.norm_cpow_real]
+  simp
+
+theorem norm_sqrt (z : ℂ) : ‖z^(2⁻¹ : ℂ)‖ = Real.sqrt ‖z‖ := by
+  calc
+    _ = ‖z‖^(2⁻¹ : ℝ) := by simpa using Complex.norm_cpow_inv_nat z 2
+    _ = _ := rpow_half ‖z‖
+
+theorem arg_exp {z : ℂ} (hl : -Real.pi<z.im) (hu : z.im≤Real.pi) :
+    Complex.arg (Complex.exp z)=z.im := by
+  simpa only [Complex.log_im] using congrArg Complex.im (Complex.log_exp hl hu)
+
+
+theorem norm_power_domain {z w : ℂ} (h : z≠0 ∨ w=0 ∨ 0<w.re) :
+    z≠0 ∨ z=0 ∧ 0≤w.re := by
+  by_cases hz : z=0
+  · right; refine ⟨hz, ?_⟩
+    rcases h with h | rfl | h
+    · exact (h hz).elim
+    · simp
+    · exact h.le
+  · exact Or.inl hz
+
 end QSym.Elementary

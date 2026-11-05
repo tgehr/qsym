@@ -29,7 +29,9 @@ int repl(){
 				writeln("Up/Down: session history; Left/Right, Home/End, Backspace/Delete: edit.");
 				writeln("Unicode: \\alpha → α, \\ne → ≠, \\bR → ℝ, \\^2 → ², \\ii → ⅈ.");
 				writeln("Tab completes a unique prefix; Space commits a symbol; Esc cancels it.");
-				writeln("Ctrl-A/E: Home/End; Ctrl-U/K/W: delete before/after cursor/previous word.");
+				writeln("Ctrl-A/E: Home/End; Ctrl-U/K/W: kill before/after cursor/previous word.");
+				writeln("Ctrl-Y: yank; Alt-Y: cycle kills; Ctrl-_: undo; Ctrl-T: transpose characters.");
+				writeln("Alt-B/F: move by word; Alt-Backspace/D: kill word backward/forward; Alt-</>: first/last history.");
 				writeln("Ctrl-C: cancel line; Ctrl-D: delete character, or exit on an empty line.");
 				writeln(":vars n:ℕ,k:ℤ,q:ℚ,z:ℂ,p:𝔹   declare types; :vars lists them");
 				writeln(":symbols [PREFIX] list Unicode input spellings");

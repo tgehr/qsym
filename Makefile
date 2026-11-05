@@ -40,6 +40,8 @@ test: build/qsym
 	./build/guard-tests --DRT-testmode=run-main build/guards
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/folding.d -of=build/folding-tests
 	./build/folding-tests --DRT-testmode=run-main build/folding
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/relations.d -of=build/relation-tests
+	./build/relation-tests --DRT-testmode=run-main build/relations
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

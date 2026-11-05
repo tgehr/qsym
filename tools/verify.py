@@ -54,7 +54,7 @@ def main():
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
-	for directory,count in (("guards",24),("folding",73)):
+	for directory,count in (("guards",24),("folding",73),("relations",37)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -113,6 +113,10 @@ def main():
 		("BadLogBase","lemma bad(x:ℝ,y:ℝ):log2(x)⇒y when powerR(10,y)=x,defined(y);"),
 		("BadOrSwap","lemma bad(p:𝔹,q:𝔹):p∨q⇒q∨p;"),
 		("BadCondition","rewrite bad(x:ℝ):|x|⇒x when x≤0;"),
+		("BadArgPower","rewrite bad(z:ℂ):carg(cpow(z,real(3,2)))⇒real(3,2)*carg(z);"),
+		("BadLogPower","rewrite bad(z:ℂ):clog(cpow(z,real(3,2)))⇒real(3,2)*clog(z);"),
+		("BadArgBoundary","rewrite bad(z:ℂ):carg(cexp(z))⇒cimag(z) when -π≤cimag(z),cimag(z)≤π;"),
+		("BadNormPower","rewrite bad(z:ℂ,w:ℂ):cabs(cpow(z,w))⇒pow(cabs(z),creal(w));"),
 		("BadComplexLog","rewrite bad(z:ℂ):clog(cexp(z))⇒z;"),
 		("BadComplexRoot","rewrite bad(z:ℂ):csqrt(z^2)⇒z;"),
 		("BadLogProduct","rewrite bad(x:ℝ,y:ℝ):log(x*y)⇒log(x)+log(y);"),

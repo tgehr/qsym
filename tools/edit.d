@@ -1,11 +1,12 @@
 module qsym.tools.edit;
 import qsym.tools.unicode:symbolMatch;
-import std.uni:graphemeStride,isWhite;
+import std.uni:graphemeStride,isWhite,isAlphaNum;
 import std.utf:decode;
 @safe:
 
 enum Key{ none,text,left,right,home,end,up,down,backspace,del,enter,cancel,eof,
-	killBefore,killAfter,killWord,complete,escape,suspend,clear,pasteStart,pasteEnd,wordLeft,wordRight }
+	killBefore,killAfter,killWord,complete,escape,suspend,clear,pasteStart,pasteEnd,wordLeft,wordRight,
+	killWordBefore,killWordAfter,yank,yankPop,undo,transpose,first,last }
 struct Event{ Key key; string text; }
 
 // Streaming decoder: UTF-8 and escape sequences may cross read boundaries.
@@ -16,7 +17,19 @@ struct KeyDecoder{
 	Event timeout(){ escape=null; return Event(Key.escape); }
 	Event feed(ubyte c){
 		if(escape.length){
-			if(escape.length==1&&c!='['&&c!='O'){ escape=null; return feed(c); }
+			if(escape.length==1&&c!='['&&c!='O'){
+				escape=null;
+				switch(c){
+					case 'b','B':return Event(Key.wordLeft);
+					case 'f','F':return Event(Key.wordRight);
+					case 'd','D':return Event(Key.killWordAfter);
+					case 'y','Y':return Event(Key.yankPop);
+					case 8,127:return Event(Key.killWordBefore);
+					case '<':return Event(Key.first);
+					case '>':return Event(Key.last);
+					default:return Event.init;
+				}
+			}
 			escape~=cast(char)c;
 			if(escape.length>32){ escape=null; return Event.init; }
 			if(escape.length<3||c<0x40||c>0x7e) return Event.init;
@@ -25,8 +38,8 @@ struct KeyDecoder{
 			switch(c){
 				case 'A':return Event(Key.up);
 				case 'B':return Event(Key.down);
-				case 'C':return Event(s.canFind(";5")?Key.wordRight:Key.right);
-				case 'D':return Event(s.canFind(";5")?Key.wordLeft:Key.left);
+				case 'C':return Event(s.canFind(";5")||s.canFind(";3")?Key.wordRight:Key.right);
+				case 'D':return Event(s.canFind(";5")||s.canFind(";3")?Key.wordLeft:Key.left);
 				case 'H':return Event(Key.home);
 				case 'F':return Event(Key.end);
 				case '~':
@@ -34,6 +47,7 @@ struct KeyDecoder{
 						case "\x1b[1~","\x1b[7~":return Event(Key.home);
 						case "\x1b[4~","\x1b[8~":return Event(Key.end);
 						case "\x1b[3~":return Event(Key.del);
+						case "\x1b[3;5~","\x1b[3;3~":return Event(Key.killWordAfter);
 						case "\x1b[200~":return Event(Key.pasteStart);
 						case "\x1b[201~":return Event(Key.pasteEnd);
 						default:return Event.init;
@@ -69,16 +83,20 @@ struct KeyDecoder{
 			case 12:return Event(Key.clear);
 			case 14:return Event(Key.down);
 			case 16:return Event(Key.up);
+			case 20:return Event(Key.transpose);
 			case 21:return Event(Key.killBefore);
 			case 23:return Event(Key.killWord);
+			case 25:return Event(Key.yank);
 			case 26:return Event(Key.suspend);
 			case 27:escape="\x1b"; return Event.init;
+			case 31:return Event(Key.undo);
 			default:return c>=32?Event(Key.text,[cast(char)c].idup):Event.init;
 		}
 	}
 }
 
 enum Action{ redraw,accept,cancel,eof,beep,clear,suspend,none }
+final class KillRing{ private string[] entries; }
 struct EditBuffer{
 	enum limit=64*1024;
 	private enum absent=size_t.max;
@@ -87,7 +105,13 @@ struct EditBuffer{
 	private Draft[] drafts;
 	private size_t selected;
 	private bool paste;
-	this(string[] history){
+	private KillRing kills;
+	private Draft[] undo;
+	private Key lastKey;
+	private size_t yankStart,yankEnd,killIndex;
+	private bool yanking;
+	this(string[] history,KillRing kills=null){
+		this.kills=kills is null?new KillRing:kills;
 		foreach(s;history) drafts~=Draft(s,s.length);
 		drafts~=Draft.init; selected=history.length;
 	}
@@ -148,20 +172,53 @@ struct EditBuffer{
 		drafts[selected]=current; selected=up?selected-1:selected+1; current=drafts[selected];
 	}
 	private bool white(size_t at){ auto i=at; return isWhite(decode(text,i)); }
-	private size_t wordLeft(){
+	private size_t spaceLeft(){
 		auto p=cursor;
 		while(p&&white(previous(p))) p=previous(p);
 		while(p&&!white(previous(p))) p=previous(p);
 		return p;
 	}
+	private bool word(size_t at){ auto i=at,c=decode(text,i); return c=='_'||isAlphaNum(c); }
+	private size_t wordLeft(){
+		auto p=cursor;
+		while(p&&!word(previous(p))) p=previous(p);
+		while(p&&word(previous(p))) p=previous(p);
+		return p;
+	}
 	private size_t wordRight(){
 		auto p=cursor;
-		while(p<text.length&&!white(p)) p=following(p);
-		while(p<text.length&&white(p)) p=following(p);
+		while(p<text.length&&!word(p)) p=following(p);
+		while(p<text.length&&word(p)) p=following(p);
 		return p;
+	}
+	private static bool killing(Key k){
+		return k==Key.killBefore||k==Key.killAfter||k==Key.killWord||k==Key.killWordBefore||k==Key.killWordAfter;
+	}
+	private void kill(size_t start,size_t end,bool backward){
+		if(start==end) return;
+		auto s=text[start..end];
+		if(killing(lastKey)&&kills.entries.length&&kills.entries[0].length+s.length<=limit){
+			auto old=kills.entries[0]; kills.entries[0]=backward?s~old:old~s;
+		}else{
+			if(kills.entries.length==32) kills.entries=kills.entries[0..31];
+			kills.entries=[s]~kills.entries;
+		}
+		remove(start,end);
 	}
 	Action handle(Event e){
 		if(e.key==Key.none) return Action.none;
+		if(e.key!=Key.yankPop) yanking=false;
+		// Save text changes, grouping ordinary typing and each bracketed paste.
+		auto before=current;
+		scope(exit){
+			if(e.key!=Key.undo&&text!=before.text){
+				if((!(e.key==Key.text&&lastKey==Key.text)&&!(paste&&lastKey!=Key.pasteStart))||!undo.length){
+					if(undo.length==256) undo=undo[1..$];
+					undo~=before;
+				}
+			}
+			lastKey=e.key;
+		}
 		if(e.key==Key.pasteStart){ finish(); paste=true; return Action.none; }
 		if(e.key==Key.pasteEnd){ paste=false; return Action.redraw; }
 		if(paste){
@@ -181,11 +238,34 @@ struct EditBuffer{
 			case Key.wordRight:current.cursor=wordRight(); break;
 			case Key.up:history(true); break;
 			case Key.down:history(false); break;
+			case Key.first:while(selected) history(true); break;
+			case Key.last:while(selected+1<drafts.length) history(false); break;
 			case Key.backspace:if(cursor) remove(previous(cursor),cursor); break;
 			case Key.del:if(cursor<text.length) remove(cursor,following(cursor)); break;
-			case Key.killBefore:remove(0,cursor); break;
-			case Key.killAfter:remove(cursor,text.length); break;
-			case Key.killWord:remove(wordLeft(),cursor); break;
+			case Key.killBefore:kill(0,cursor,true); break;
+			case Key.killAfter:kill(cursor,text.length,false); break;
+			case Key.killWord:kill(spaceLeft(),cursor,true); break;
+			case Key.killWordBefore:kill(wordLeft(),cursor,true); break;
+			case Key.killWordAfter:kill(cursor,wordRight(),false); break;
+			case Key.yank:
+				if(!kills.entries.length) return Action.beep;
+				yankStart=cursor; killIndex=0;
+				if(!insert(kills.entries[0])) return Action.beep;
+				yankEnd=yankStart+kills.entries[0].length; yanking=true; break;
+			case Key.yankPop:
+				if(!yanking) return Action.beep;
+				auto index=(killIndex+1)%kills.entries.length,s=kills.entries[index];
+				if(text.length-(yankEnd-yankStart)+s.length>limit) return Action.beep;
+				current.text=text[0..yankStart]~s~text[yankEnd..$];
+				yankEnd=yankStart+s.length; current.cursor=yankEnd; snap(); killIndex=index; break;
+			case Key.undo:
+				if(!undo.length) return Action.beep;
+				current=undo[$-1]; --undo.length; break;
+			case Key.transpose:
+				if(!cursor) return Action.beep;
+				auto end=cursor<text.length?following(cursor):cursor,mid=previous(end),start=previous(mid);
+				if(start==mid) return Action.beep;
+				current.text=text[0..start]~text[mid..end]~text[start..mid]~text[end..$]; current.cursor=end; snap(); break;
 			case Key.enter:return Action.accept;
 			case Key.cancel:return Action.cancel;
 			case Key.eof:
@@ -269,7 +349,8 @@ unittest{
 	// Editing arbitrary key streams must preserve valid UTF-8 and grapheme boundaries.
 	auto e=EditBuffer(["α+β","e\u0301界"]); KeyDecoder keys; uint seed=12345;
 	string[] inputs=["x","α","界","\u0301","\\","alp","ne","\x1b[A","\x1b[B","\x1b[C","\x1b[D",
-		"\x1b[H","\x1b[F","\x1b[3~","\x7f","\x01","\x05","\x07","\t","\x15","\x17","\x0b"];
+		"\x1b[H","\x1b[F","\x1b[3~","\x7f","\x01","\x05","\x07","\t","\x15","\x17","\x0b",
+		"\x19","\x1by","\x1bb","\x1bf","\x1bd","\x1b\x7f","\x1f","\x14","\x1b<","\x1b>"];
 	foreach(i;0..5000){
 		seed=1664525*seed+1013904223;
 		foreach(ubyte c;inputs[seed%inputs.length]) e.handle(keys.feed(c));
@@ -284,4 +365,20 @@ unittest{
 	e.handle(Event(Key.text,"x".replicate(EditBuffer.limit-2))); e.handle(Event(Key.pasteEnd));
 	e.handle(Event(Key.text,"\\"));
 	assert(e.handle(Event(Key.text,"["))==Action.beep&&e.text.length==EditBuffer.limit);
+}
+
+unittest{
+	auto e=EditBuffer(null); KeyDecoder keys;
+	void type(string s){ foreach(ubyte c;s) e.handle(keys.feed(c)); }
+	type("α+β\x01\x0b\x19"); assert(e.text=="α+β","Ctrl+Y must restore killed text");
+	type("\x01\x06\x0b\x15\x19"); assert(e.text=="α+β","backward kills prepend");
+	type("\x01\x0bnew\x15\x19\x1by"); assert(e.text=="α+β","Alt+Y cycles the kill ring");
+	type("\x01\x1bf"); assert(e.cursor=="α".length,"Alt+F moves by Unicode words");
+	type("\x1bd"); assert(e.text=="α","Alt+D kills the next word");
+	type("\x19"); assert(e.text=="α+β");
+	type("\x1b\x7f"); assert(e.text=="α+","Alt+Backspace kills the previous word");
+	type("\x1f"); assert(e.text=="α+β","Ctrl+_ undoes a kill");
+	e=EditBuffer(null); type("αβ\x14"); assert(e.text=="βα","Ctrl+T transposes characters");
+	type("\x1f"); assert(e.text=="αβ");
+	e=EditBuffer(null); type("e\u0301界\x14"); assert(e.text=="界e\u0301","transpose preserves graphemes");
 }

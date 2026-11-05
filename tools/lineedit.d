@@ -9,6 +9,7 @@ version(Windows) private extern(C) int _isatty(int);
 
 struct LineReader{
 	private string[] history;
+	private KillRing kills;
 	private bool tty,editing;
 	version(Posix){ private ubyte[4096] input; private size_t begin,end; }
 	static LineReader open(){
@@ -32,7 +33,8 @@ struct LineReader{
 		history~=line;
 	}
 	version(Posix) private bool readEdited(out string line,string prompt){
-		auto buffer=EditBuffer(history); KeyDecoder decoder; size_t start; uint paintedColumns;
+		if(kills is null) kills=new KillRing;
+		auto buffer=EditBuffer(history,kills); KeyDecoder decoder; size_t start; uint paintedColumns;
 		RawTerminal terminal;
 		scope(exit) terminal.leave();
 		terminal.enter();

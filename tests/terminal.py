@@ -76,6 +76,18 @@ with Terminal() as t:
 	assert not termios.tcgetattr(t.slave)[3]&(termios.ECHO|termios.ICANON)
 	t.submit("x+x","2·x")
 	t.submit(up+home+b"2*"+end,"3·x","2*x+x")
+	t.submit(b"1+2"+home+b"\x0b\x19","3","1+2")
+	# Killed text survives submission and cancellation; successive kills join.
+	t.submit(b"\x19","3","1+2")
+	t.send(b"9+8"+home+b"\x0b\x03"); t.until(ready)
+	t.submit(b"\x19","17","9+8")
+	t.submit(b"3+4"+home+right+b"\x0b\x15\x19","7","3+4")
+	t.submit(b"5+6"+home+b"\x0b1+2"+home+b"\x0b\x19\x1by","11","5+6")
+	t.submit(b"1+23"+left+b"\x14","33","1+32")
+	t.submit(b"1+23"+left+b"\x14\x1f","24","1+23")
+	t.submit("α+β".encode()+b"\x1bb\x1bd"+"α".encode(),"2·α","α+α")
+	t.submit(b"1+234\x1b\x7f2","3","1+2")
+	t.submit("2*x+x","3·x")
 	# Recalled entries and the unfinished draft keep their edits and cursor.
 	t.submit(b"5+6"+left+up+home+b"3*"+up+down+down+delete+b"7","12","5+7")
 	t.submit(b"1+3"+left+delete+b"2"+home+right+right+b"4","43","1+42")

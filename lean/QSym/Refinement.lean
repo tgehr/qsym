@@ -309,6 +309,13 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Real.cosh_sq_sub_sinh_sq, Real.tan_arctan, Real.sin_arcsin, Real.cos_arccos,
       Real.arcsin_sin, Real.arccos_cos, min_eq_left, min_eq_right, max_eq_left, max_eq_right,
       Complex.exp_conj, Complex.mul_re, Complex.mul_im, Complex.re_add_im, norm_mul])
+    all_goals try (simp_all [Elementary.log_cpow_contract, Elementary.arg_cpow_contract,
+      Elementary.log_sqrt, Elementary.arg_sqrt, Elementary.norm_cpow_real, Elementary.norm_sqrt,
+      Elementary.arg_exp, Complex.log_exp, Complex.log_re, Complex.log_im, Complex.norm_exp,
+      norm_inv, norm_pow, Complex.norm_real, Real.norm_eq_abs, norm_pos_iff,
+      Complex.cpow_ne_zero_iff, Complex.cpow_ofNat_inv_pow,
+      Real.sinh_arsinh, Real.arsinh_sinh, Real.cos_arcsin, Real.sin_arccos,
+      Complex.sin_conj, Complex.cos_conj, Complex.sinh_conj, Complex.cosh_conj])
     all_goals try (simp_all [abs_mul, abs_inv, abs_pow])
     all_goals try (simp_all [Int.floor_eq_iff, Int.ceil_eq_iff, Real.rpow_neg, Complex.cpow_neg,
       zpow_natCast, zpow_neg, Real.norm_eq_abs, Complex.norm_def, Complex.normSq_apply,
@@ -349,6 +356,8 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (solve | apply Eq.symm; apply Complex.arg_eq_pi_iff.mpr; constructor <;> assumption)
     all_goals try (solve | have h := Complex.arg_eq_pi_div_two_iff.mpr ⟨by assumption, by assumption⟩; linarith [h])
     all_goals try (solve | have h := Complex.arg_eq_neg_pi_div_two_iff.mpr ⟨by assumption, by assumption⟩; linarith [h])
+    all_goals try (solve | exact (Elementary.rpow_half _).symm)
+    all_goals try (solve | apply Elementary.norm_power_domain; assumption)
     all_goals try (solve | apply Elementary.nonnegative_cases; assumption)
     all_goals try positivity
     all_goals try nlinarith
