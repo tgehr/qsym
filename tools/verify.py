@@ -54,7 +54,7 @@ def main():
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -128,6 +128,13 @@ def main():
 		("BadQuadraticLeading","lemma bad(x:ℂ,a:ℂ):a*(x^2-1)≠0⇒x≠-1∧x≠1;"),
 		("BadRootSelection","lemma bad(z:ℂ):z⇒ⅈ when z^2+1=0;"),
 		("BadFactorization","lemma bad(p:ℝ,x:ℝ,y:ℝ):p≠0⇒x≠0∧y≠0 when defined(x),defined(y);"),
+		("BadSignedSum","rewrite bad(x:ℝ,y:ℝ):x+y=0⇒x=0∧y=0;"),
+		("BadProductBoundary","rewrite bad(x:ℝ,y:ℝ):x*y<0⇒y<0 when 0≤x;"),
+		("BadEvenMonotonicity","rewrite bad(x:ℝ,y:ℝ):x^2<y^2⇒x<y;"),
+		("BadPowerDirection","rewrite bad(x:ℝ,y:ℝ):powerR(real(1,2),x)<powerR(real(1,2),y)⇒x<y;"),
+		("BadSqrtBound","rewrite bad(x:ℝ,y:ℝ):sqrt(x)≤y⇒x≤y^2;"),
+		("BadAbsBound","rewrite bad(x:ℝ,y:ℝ):abs(x)=y⇒x=-y∨x=y;"),
+		("BadQuadraticSign","rewrite bad(x:ℝ):2-x^2≤0⇒-sqrt(2)≤x∧x≤sqrt(2);"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
 		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),
@@ -165,6 +172,12 @@ def main():
 		raise RuntimeError("could not construct the invalid-definedness test")
 	(negative/"WrongDerivedDomain.lean").write_text(corrupt)
 	check(negative/"WrongDerivedDomain.lean",succeeds=False)
+	projected=(ROOT/"build/order/AssumedSquareSum.lean").read_text()
+	corrupt,count=re.subn(r"Value\.and_true_left", "Value.and_true_right", projected, count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid-fact-projection test")
+	(negative/"WrongFactProjection.lean").write_text(corrupt)
+	check(negative/"WrongFactProjection.lean",succeeds=False)
 	polynomial=(ROOT/"build/scalar/Polynomial.lean").read_text()
 	corrupt,count=re.subn(r"(Replay\.AC\.sound[^\n]*?\(\.leaf )\d+",r"\g<1>999999",polynomial,count=1)
 	if count!=1:

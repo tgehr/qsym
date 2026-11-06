@@ -89,10 +89,24 @@ package final class Engine{
 		auto original=facts[ctx].dup;
 		foreach(p;original){
 			auto q=go(p.before,ctx,true);
-			if(q.after!=p.before){ auto f=d.transport(p,q,ctx); facts[ctx]~=f; remember(truths,key(f.before,ctx),f); }
+			if(q.after!=p.before) learn(d.transport(p,q,ctx),ctx);
 		}
 		// Normalization may have memoized terms before learning these equalities.
 		revisions[ctx]=++epoch;
+	}
+	private void learn(Proof p,uint ctx){
+		struct Item{ Term term; bool value; uint[] path; }
+		Item[] pending=[Item(p.before,true)];
+		while(pending.length){
+			budget.spend(); auto item=pending[$-1]; --pending.length;
+			auto f=item.path.length?d.project(p,item.path,ctx):p;
+			auto k=key(f.before,ctx),old=truths.get(k,uint.max);
+			if(old==uint.max||!proofs[old].known){ facts[ctx]~=f; remember(truths,k,f); }
+			auto n=a.node(item.term);
+			if(n.op==Op.not_) pending~=Item(a.at(n.a),!item.value,item.path~0u);
+			else if(n.op==Op.and_&&item.value||n.op==Op.or_&&!item.value)
+				pending~=[Item(a.at(n.b),item.value,item.path~1u),Item(a.at(n.a),item.value,item.path~0u)];
+		}
 	}
 	private void resolve(uint ctx){
 		for(bool changed=true;changed;){
@@ -105,7 +119,7 @@ package final class Engine{
 					foreach(old;known(ctx)) if(old.known&&old.before==i.result){ found=true; break; }
 					if(found) continue;
 					Proof p; if(!instanceProof(i,ctx,p)) continue;
-					auto q=d.transport(f,p,ctx); facts[ctx]~=q; remember(truths,key(q.before,ctx),q);
+					learn(d.transport(f,p,ctx),ctx);
 					revisions[ctx]=++epoch; changed=true;
 				}
 			}
@@ -151,6 +165,7 @@ package final class Engine{
 		return false;
 	}
 	private bool attempt(Law law,Term t,uint ctx,out Proof result){
+		if(!candidate(a,law,t)) return false;
 		budget.spend(); Term[] bindings;
 		return match(a,law,-1,t,bindings)&&complete(law,bindings,ctx,result);
 	}
@@ -270,6 +285,14 @@ package final class Engine{
 			++depth; scope(exit) --depth;
 			budget.spend(); active.set(k,true); scope(exit) active.set(k,false);
 			auto n=a.node(t); Proof[] cs;
+			// Preserve useful factorizations and comparison shapes before expansion.
+			if(n.op==Op.nonzero) foreach(law;rewrites(n.op)){
+				if(conditionCount(law)) continue;
+				Proof q;
+				if(attempt(law,t,ctx,q)&&q.after!=t){
+					auto p=d.trans(q,go(q.after,ctx,probe),ctx); memoize(k,p); return p;
+				}
+			}
 			foreach(i;0..n.arity) cs~=go(a.child(t,i),ctx,probe);
 			auto p=d.congr(t,cs,ctx);
 			auto current=p.after; n=a.node(current);

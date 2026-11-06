@@ -44,6 +44,13 @@ string rootTest(Pattern p,string node){
 	if(builtin(p.name)!=Builtin.invalid) test~="&&"~node~".value==Builtin."~p.name;
 	return test;
 }
+string shapeTest(Pattern p,string path,uint depth=2){
+	if(p.variable||p.natural||p.name=="#") return "true";
+	auto test=rootTest(p,"a.node("~path~")");
+	if(depth) foreach(i,arg;p.args) if(!arg.variable&&!arg.natural&&arg.name!="#")
+		test~="&&"~shapeTest(arg,"a.child("~path~","~to!string(i)~")",depth-1);
+	return test;
+}
 string dPattern(Pattern p){
 	if(p.variable) return parameterCode(p.name);
 	if(p.name=="real"&&p.args.length==2) return "a.real_(Rational(BigInt("~dInteger(p.args[0].number)~"),BigInt("~dInteger(p.args[1].number)~")))";
@@ -101,20 +108,24 @@ string emitD(Rule[] rules){
 		d~="\t\t\t\tdefault:return false;\n\t\t\t}\n";
 	}
 	d~="\t\tdefault:return false;\n\t}\n}\n";
+	d~="bool candidate(Arena a,Law law,Term input){\n\tswitch(law){\n";
+	foreach(r;rules) if(r.automatic||r.inference)
+		d~="\t\tcase Law."~symbolCode(r.name)~":return "~shapeTest(r.lhs,"input")~";\n";
+	d~="\t\tdefault:return false;\n\t}\n}\n";
 	foreach(inference;[false,true]){
-		d~="Law[] "~(inference?"inferences":"rewrites")~"(Op op){\n\tswitch(op){\n";
+		d~="const(Law)[] "~(inference?"inferences":"rewrites")~"(Op op){\n\tswitch(op){\n";
 		foreach(op;opsFor(rules,inference)){
 			string[] ids;
 			foreach(r;rules) if((inference?r.inference:r.automatic)&&rootOp(r.lhs)==op) ids~="Law."~symbolCode(r.name);
-			d~="\t\tcase Op."~op~":return ["~ids.join(",")~"];\n";
+			d~="\t\tcase Op."~op~":{ static immutable Law[] laws=["~ids.join(",")~"]; return laws; }\n";
 		}
 		d~="\t\tdefault:return null;\n\t}\n}\n";
 	}
-	d~="Law[] pairRewrites(Op op){\n\tswitch(op){\n";
+	d~="const(Law)[] pairRewrites(Op op){\n\tswitch(op){\n";
 	foreach(op;["add","mul"]){
 		string[] ids;
 		foreach(r;rules) if(pairRule(r)&&rootOp(r.lhs)==op) ids~="Law."~symbolCode(r.name);
-		d~="\t\tcase Op."~op~":return ["~ids.join(",")~"];\n";
+		d~="\t\tcase Op."~op~":{ static immutable Law[] laws=["~ids.join(",")~"]; return laws; }\n";
 	}
 	d~="\t\tdefault:return null;\n\t}\n}\n";
 	d~="bool pairCandidate(Law law,Node x,Node y){\n\tswitch(law){\n";
@@ -155,7 +166,7 @@ string matchCode(Pattern p,string path,Parameter[] parameters,string indent){
 		// Invert a linear repeated exponent for inference matching.
 		if(p.name=="natAdd"&&p.args[0].variable&&p.args[1].variable&&p.args[0].name==p.args[1].name)
 			return indent~"if(("~path~")%2) return false;\n"~matchCode(p.args[0],"("~path~")/2",parameters,indent);
-		if(p.name=="natAdd"&&p.args[0].variable&&p.args[1].name=="#")
+		if(p.name=="natAdd"&&p.args[1].name=="#")
 			return indent~"if("~path~"<"~to!string(p.args[1].number)~"u) return false;\n"~matchCode(p.args[0],"("~path~"-"~to!string(p.args[1].number)~"u)",parameters,indent);
 		return indent~"return false;\n";
 	}

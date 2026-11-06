@@ -44,10 +44,15 @@ package final class Predicates{
 		}
 		Rational squareRoot;
 		if(complex||!elementary.root(discriminant.re,2,squareRoot)){
-			if(!nz) return false;
 			auto center=a.number(budget.calc!"/"(c[1],twoA),s);
 			auto radicand=a.number(budget.calc!"/"(discriminant,budget.calc!"*"(twoA,twoA)),s);
-			result=instantiate(a,complex?Law.complex_nonzero_quadratic:Law.real_nonzero_quadratic,[l,atom,scale,center,radicand]);
+			if(nz) result=instantiate(a,complex?Law.complex_nonzero_quadratic:Law.real_nonzero_quadratic,[l,atom,scale,center,radicand]);
+			else{
+				auto positive=c[2].re>Rational(0);
+				auto law=n.op==Op.lt?(positive?Law.real_lt_quadratic_pos:Law.real_lt_quadratic_neg):
+					(positive?Law.real_le_quadratic_pos:Law.real_le_quadratic_neg);
+				result=instantiate(a,law,[l,r,atom,scale,center,radicand]);
+			}
 			return true;
 		}
 		auto first=budget.calc!"/"(budget.calc!"-"(-c[1],Number(squareRoot)),twoA);

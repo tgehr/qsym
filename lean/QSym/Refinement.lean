@@ -1,7 +1,11 @@
 import QSym.Expr
 import QSym.Elementary
+import QSym.Order
 
 namespace QSym.Value
+
+theorem and_some (p q : Bool) : and (some p) (some q) = some (p && q) := by cases p <;> rfl
+theorem or_some (p q : Bool) : or (some p) (some q) = some (p || q) := by cases p <;> rfl
 
 def Refines {α : Type} (x y : Option α) : Prop := ∀ v, x = some v → y = some v
 
@@ -310,13 +314,65 @@ elab "qsym_split_and" : tactic => liftMetaTactic fun goal => goal.withContext do
 open Lean Meta Elab Tactic in
 elab "qsym_split_bool" : tactic => liftMetaTactic fun goal => goal.withContext do
   for decl in ← getLCtx do
-    if decl.type.isConstOf ``Bool then
+    if (← whnf decl.type).isConstOf ``Bool then
       return (← goal.cases decl.fvarId).toList.map (·.mvarId)
   throwError "no Boolean"
 
 -- Search is untrusted: every successful tactic emits a kernel-checked proof.
+open Lean Meta Elab Tactic in
+elab "qsym_order_goal" : tactic => do
+  let t ← getMainTarget
+  unless t.isAppOfArity ``Value.Refines 3 && (← whnf t.getAppArgs[0]!).isConstOf ``Bool do
+    throwError "not a Boolean refinement"
+
+macro "qsym_order" : tactic => `(tactic| (
+  qsym_order_goal
+  classical
+  simp only [Value.Refines, Value.Defined, Function1.apply, Function2.apply,
+    Functions.expR, Functions.logR, Functions.sqrtR, Functions.powerR,
+    Value.add, Value.mul, Value.nonzero, Value.not, Value.lt, Value.le, Value.abs,
+    Option.bind_eq_bind, Option.pure_def, Option.map, Option.bind] at *
+  try simp only [Option.some.injEq, forall_eq, forall_eq', Bool.true_eq, decide_eq_true_eq] at *
+  repeat' first
+    | simp_all (config := {failIfUnchanged := true}) [Value.and_some, Value.or_some, Value.mask, -Real.log_eq_zero]
+    | qsym_split_bool
+    | split_ifs at *
+  all_goals try simp_all only [← sub_eq_add_neg, sub_eq_zero, ← decide_not, ← Bool.decide_and, ← Bool.decide_or, decide_eq_decide]
+  all_goals try simp_all [Order.nonnegative_add_eq_zero, Order.nonpositive_add_eq_zero,
+    Order.odd_power_lt, Order.odd_power_le, Order.odd_power_eq,
+    Order.nonnegative_power_lt, Order.nonnegative_power_le,
+    Real.exp_lt_exp, Real.exp_le_exp, Real.exp_eq_exp, Real.exp_eq_one_iff, Real.exp_ne_zero,
+    Real.exp_lt_one_iff, Real.exp_le_one_iff, Real.one_lt_exp_iff, Real.one_le_exp_iff,
+    Real.log_lt_log_iff, Real.log_le_log_iff, Real.log_injOn_pos.eq_iff, Order.log_eq_exp,
+    Real.log_neg_iff, Order.log_nonpositive, Order.log_positive, Real.log_nonneg_iff,
+    Real.sqrt_lt_sqrt_iff, Real.sqrt_le_sqrt_iff, Real.sqrt_inj, Real.sqrt_eq_zero,
+    Real.rpow_lt_rpow_left_iff, Real.rpow_le_rpow_left_iff,
+    Real.rpow_lt_rpow_left_iff_of_base_lt_one, Real.rpow_le_rpow_left_iff_of_base_lt_one,
+    abs_lt, abs_le, Order.lt_abs_cases, Order.le_abs_cases, Order.abs_eq_cases, not_and_or, -Real.log_eq_zero]
+  all_goals try simp_all only [← decide_not, ← Bool.decide_and, ← Bool.decide_or, decide_eq_decide,
+    eq_neg_iff_add_eq_zero, imp_iff_not_or, not_le, not_lt]
+  all_goals first
+    | solve | apply Order.quadratic_lt_pos <;> assumption
+    | solve | symm; apply Order.quadratic_lt_pos <;> assumption
+    | solve | apply Order.quadratic_le_pos <;> assumption
+    | solve | symm; apply Order.quadratic_le_pos <;> assumption
+    | solve | apply Order.quadratic_lt_neg <;> assumption
+    | solve | symm; apply Order.quadratic_lt_neg <;> assumption
+    | solve | apply Order.quadratic_le_neg <;> assumption
+    | solve | symm; apply Order.quadratic_le_neg <;> assumption
+    | solve | simp only [Order.sqrt_lt_bound (by assumption), Order.le_sqrt_bound (by assumption),
+        Real.sqrt_le_iff, Order.lt_sqrt_bound, ← not_lt]; tauto
+    | solve | simp_all only [Order.sqrt_lt_bound, Real.sqrt_le_iff, Order.lt_sqrt_bound, Order.le_sqrt_bound, ← not_lt]; tauto
+    | solve | simp_all [mul_neg_iff, mul_nonpos_iff, mul_pos_iff, mul_nonneg_iff]; tauto
+    | solve | constructor <;> intro h <;> nlinarith
+    | solve | nlinarith
+    | solve | positivity
+    | solve | tauto
+))
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | qsym_order
   | exact Value.refines_inv_inv _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_real_nonzero_quadratic <;> assumption)
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_complex_nonzero_quadratic <;> assumption)

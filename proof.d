@@ -342,8 +342,8 @@ string exportLean(Arena a,Result result){
 					" (fun g"~to!string(body.context)~" => "~ref_(body)~")\n";
 				break;
 			case Evidence.assumption:
-				auto t=d.contexts[e.assumptionScope].guard;
-				string h="g"~to!string(e.assumptionScope);
+				auto t=e.premises.length?e.premises[0].before:d.contexts[e.assumptionScope].guard;
+				string h=e.premises.length?reference(d,e.premises[0],true):"g"~to!string(e.assumptionScope);
 				foreach(j;e.path){
 					auto n=a.node(t);
 					auto lemma=n.op==Op.not_?"of_not":(n.op==Op.and_?"and_true_":"or_false_")~(j==0?"left":"right");

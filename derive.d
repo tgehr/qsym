@@ -107,6 +107,20 @@ final class Derivation{
 		domainFacts~=result;
 		return result;
 	}
+	Proof project(Proof source,uint[] path,uint context){
+		enforce(source.known&&visible(source.context,context),"known value required");
+		auto t=source.before; bool value=true;
+		foreach(i;path){
+			auto n=arena.node(t);
+			if(n.op==Op.not_){ enforce(i==0,"bad fact path"); value=!value; }
+			else enforce((n.op==Op.and_&&value||n.op==Op.or_&&!value)&&i<2,"invalid fact projection");
+			t=arena.child(t,i);
+		}
+		auto p=value?t:arena.not_(t);
+		auto d=Deduction(Evidence.assumption,Proof(p,arena.boolean(true),uint.max,context,true),[source]);
+		d.path=path; d.value=value;
+		auto result=record(d); domainFacts~=result; return result;
+	}
 	Proof numeric(Term before,Term after,uint context){
 		foreach(id;arena.postorder(before)){
 			auto n=arena.node(arena.at(id));

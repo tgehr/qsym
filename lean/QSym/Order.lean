@@ -1,0 +1,102 @@
+import QSym.Functions
+
+namespace QSym.Order
+
+theorem log_eq_exp {x y : ℝ} (hx : 0<x) : Real.log x=y ↔ x=Real.exp y := by
+  constructor
+  · intro h; rw [← h, Real.exp_log hx]
+  · intro h; rw [h, Real.log_exp]
+
+theorem log_nonpositive {x : ℝ} (hx : 0<x) : Real.log x≤0 ↔ x≤1 := Real.log_nonpos_iff hx.le
+theorem log_positive {x : ℝ} (hx : 0<x) : 0<Real.log x ↔ 1<x := Real.log_pos_iff hx.le
+
+theorem abs_eq_cases (x y : ℝ) : |x|=y ↔ 0≤y ∧ (x=-y ∨ x=y) := by
+  by_cases hy : 0≤y
+  · simp [hy, abs_eq hy, or_comm]
+  · have h : |x|≠y := by have := abs_nonneg x; intro he; linarith
+    simp [hy, h]
+
+theorem lt_abs_cases (x y : ℝ) : y < |x| ↔ x < -y ∨ y<x := by
+  rw [lt_abs]
+  constructor <;> rintro (h | h) <;> first | (left; linarith) | (right; linarith)
+
+theorem le_abs_cases (x y : ℝ) : y ≤ |x| ↔ x≤-y ∨ y≤x := by
+  rw [le_abs]
+  constructor <;> rintro (h | h) <;> first | (left; linarith) | (right; linarith)
+
+theorem nonnegative_add_eq_zero {x y : ℝ} (hx : 0≤x) (hy : 0≤y) :
+    x+y=0 ↔ x=0 ∧ y=0 := by
+  constructor
+  · intro h; constructor <;> linarith
+  · rintro ⟨rfl, rfl⟩; simp
+
+theorem nonpositive_add_eq_zero {x y : ℝ} (hx : x≤0) (hy : y≤0) :
+    x+y=0 ↔ x=0 ∧ y=0 := by
+  constructor
+  · intro h; constructor <;> linarith
+  · rintro ⟨rfl, rfl⟩; simp
+
+theorem odd_power_lt (x y : ℝ) (n : ℕ) : x^(n+n+1)<y^(n+n+1) ↔ x<y :=
+  (show Odd (n+n+1) from ⟨n, by omega⟩).pow_lt_pow
+
+theorem odd_power_le (x y : ℝ) (n : ℕ) : x^(n+n+1)≤y^(n+n+1) ↔ x≤y :=
+  (show Odd (n+n+1) from ⟨n, by omega⟩).pow_le_pow
+
+theorem odd_power_eq (x y : ℝ) (n : ℕ) : x^(n+n+1)=y^(n+n+1) ↔ x=y :=
+  (show Odd (n+n+1) from ⟨n, by omega⟩).pow_inj
+
+theorem nonnegative_power_lt {x y : ℝ} (n : ℕ) (hx : 0≤x) (hy : 0≤y) :
+    x^(n+1)<y^(n+1) ↔ x<y := pow_lt_pow_iff_left₀ hx hy (Nat.succ_ne_zero n)
+
+theorem nonnegative_power_le {x y : ℝ} (n : ℕ) (hx : 0≤x) (hy : 0≤y) :
+    x^(n+1)≤y^(n+1) ↔ x≤y := pow_le_pow_iff_left₀ hx hy (Nat.succ_ne_zero n)
+
+theorem sqrt_lt_bound {x y : ℝ} (hx : 0≤x) : Real.sqrt x<y ↔ 0<y ∧ x<y^2 := by
+  constructor
+  · intro h
+    have hy := (Real.sqrt_nonneg x).trans_lt h
+    exact ⟨hy, (Real.sqrt_lt hx hy.le).mp h⟩
+  · rintro ⟨hy, h⟩
+    exact (Real.sqrt_lt hx hy.le).mpr h
+
+theorem lt_sqrt_bound (x y : ℝ) : y<Real.sqrt x ↔ y<0 ∨ y^2<x := by
+  by_cases hy : y<0
+  · simp [hy, hy.trans_le (Real.sqrt_nonneg x)]
+  · simpa [hy] using (Real.lt_sqrt (le_of_not_gt hy))
+
+theorem le_sqrt_bound {x y : ℝ} (hx : 0≤x) : y≤Real.sqrt x ↔ y≤0 ∨ y^2≤x := by
+  by_cases hy : y≤0
+  · simp [hy, hy.trans (Real.sqrt_nonneg x)]
+  · simpa [hy] using (Real.le_sqrt (le_of_lt (lt_of_not_ge hy)) hx)
+
+theorem quadratic_lt_pos {l r x a b d : ℝ}
+    (hp : l-r=a*((x+b)^2-d)) (ha : 0<a) :
+    l<r ↔ -b<x+Real.sqrt d ∧ b+x<Real.sqrt d := by
+  rw [← sub_lt_zero, hp, mul_neg_iff]
+  simp only [not_lt_of_ge ha.le, ha, false_and, and_false, true_and, and_true, false_or, or_false, sub_neg]
+  rw [Real.sq_lt]
+  constructor <;> rintro ⟨_, _⟩ <;> constructor <;> linarith
+
+theorem quadratic_le_pos {l r x a b d : ℝ}
+    (hp : l-r=a*((x+b)^2-d)) (ha : 0<a) (hd : 0≤d) :
+    l≤r ↔ -b≤x+Real.sqrt d ∧ b+x≤Real.sqrt d := by
+  rw [← sub_nonpos, hp, mul_nonpos_iff]
+  simp only [not_le_of_gt ha, ha.le, false_and, and_false, true_and, and_true, false_or, or_false, sub_nonpos]
+  rw [Real.sq_le hd]
+  constructor <;> rintro ⟨_, _⟩ <;> constructor <;> linarith
+
+theorem quadratic_lt_neg {l r x a b d : ℝ}
+    (hp : l-r=a*((x+b)^2-d)) (ha : a<0) (hd : 0≤d) :
+    l<r ↔ x+Real.sqrt d < -b ∨ Real.sqrt d<b+x := by
+  have h := quadratic_le_pos (l := r) (r := l) (x := x) (a := -a) (b := b) (d := d)
+    (by linarith) (neg_pos.mpr ha) hd
+  simpa only [not_le, not_and_or] using not_congr h
+
+theorem quadratic_le_neg {l r x a b d : ℝ}
+    (hp : l-r=a*((x+b)^2-d)) (ha : a<0) :
+    l≤r ↔ x+Real.sqrt d≤-b ∨ Real.sqrt d≤b+x := by
+  have h := quadratic_lt_pos (l := r) (r := l) (x := x) (a := -a) (b := b) (d := d)
+    (by linarith) (neg_pos.mpr ha)
+  simpa only [not_lt, not_and_or] using not_congr h
+
+end QSym.Order
