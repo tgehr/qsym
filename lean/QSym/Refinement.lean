@@ -1,6 +1,7 @@
 import QSym.Expr
 import QSym.Elementary
 import QSym.Order
+import QSym.Identities
 
 namespace QSym.Value
 
@@ -330,15 +331,20 @@ macro "qsym_order" : tactic => `(tactic| (
   classical
   simp only [Value.Refines, Value.Defined, Function1.apply, Function2.apply,
     Functions.expR, Functions.logR, Functions.sqrtR, Functions.powerR,
-    Value.add, Value.mul, Value.nonzero, Value.not, Value.lt, Value.le, Value.abs,
+    Functions.minR, Functions.maxR, Functions.absC, Functions.reC, Functions.imC,
+    Functions.expC, Functions.logC, Functions.sqrtC, Functions.pi, Functions.sinR, Functions.cosR,
+    Value.inv, Value.conj, Value.add, Value.mul, Value.nonzero, Value.not, Value.lt, Value.le, Value.abs,
     Option.bind_eq_bind, Option.pure_def, Option.map, Option.bind] at *
   try simp only [Option.some.injEq, forall_eq, forall_eq', Bool.true_eq, decide_eq_true_eq] at *
   repeat' first
-    | simp_all (config := {failIfUnchanged := true}) [Value.and_some, Value.or_some, Value.mask, -Real.log_eq_zero]
+    | simp_all (config := {failIfUnchanged := true}) [Value.and_some, Value.or_some, Value.mask, Real.sin_le_one, Real.neg_one_le_sin, Real.cos_le_one, Real.neg_one_le_cos, -Real.log_eq_zero]
     | qsym_split_bool
     | split_ifs at *
   all_goals try simp_all only [← sub_eq_add_neg, sub_eq_zero, ← decide_not, ← Bool.decide_and, ← Bool.decide_or, decide_eq_decide]
-  all_goals try simp_all [Order.nonnegative_add_eq_zero, Order.nonpositive_add_eq_zero,
+  all_goals try simp_all [Identities.min_eq_max, Identities.clog_inj, Identities.clog_zero,
+    Identities.csqrt_inj, Identities.cexp_inj, Identities.conj_eq,
+    min_lt_iff, min_le_iff, lt_min_iff, le_min_iff, max_lt_iff, max_le_iff, lt_max_iff, le_max_iff,
+    Order.nonnegative_add_eq_zero, Order.nonpositive_add_eq_zero,
     Order.odd_power_lt, Order.odd_power_le, Order.odd_power_eq,
     Order.nonnegative_power_lt, Order.nonnegative_power_le,
     Real.exp_lt_exp, Real.exp_le_exp, Real.exp_eq_exp, Real.exp_eq_one_iff, Real.exp_ne_zero,
@@ -412,6 +418,15 @@ macro "qsym_scalar" : tactic => `(tactic| (
       | split at *
     all_goals try (simp_all only [← sub_eq_add_neg, sub_eq_zero])
     all_goals subst_vars
+    all_goals try (simp_all [Identities.abs_even_power, Identities.log_even_power,
+      Identities.log_even_domain, Identities.exp_log_scale, Identities.cexp_log_scale,
+      Identities.exp_log_scale_right, Identities.cexp_log_scale_right, Real.exp_add, Complex.exp_add, Real.sqrt_mul,
+      Real.mul_rpow, min_add_max, Identities.min_mul_max,
+      Real.sin_le_one, Real.neg_one_le_sin, Real.cos_le_one, Real.neg_one_le_cos,
+      Real.sin_two_mul, Complex.sin_two_mul, Real.tanh_neg, Complex.tanh_neg,
+      Complex.cosh_sq_sub_sinh_sq, Complex.mul_conj', Complex.ofReal_pow,
+      Identities.square_re, Identities.square_im, Complex.conj_ofReal])
+    all_goals try (solve | simp only [← mul_eq_zero]; apply Identities.power_product_domain <;> assumption)
     all_goals try (simp_all [Elementary.sqrt_scale, Elementary.sqrt_real_nonnegative, Elementary.sqrt_real_negative])
     all_goals try (simp_all [Elementary.log_mul_pos, Elementary.root_power, Real.sqrt_sq_eq_abs,
       Real.rpow_add, Elementary.rpow_mul_pos, Elementary.rpow_half, ← Real.sqrt_eq_rpow,

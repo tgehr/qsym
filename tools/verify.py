@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check certificates and reject unsound rules/results; no external Python deps."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import pathlib
 import re
 import subprocess
@@ -22,7 +23,10 @@ def main():
 	parser.add_argument("--lake",default="lake")
 	# Useful when sharing a preinstalled Mathlib tree; normal users use Lake.
 	parser.add_argument("--lean",help="invoke this Lean directly, with configured LEAN_PATH")
+	parser.add_argument("--jobs",type=int,default=1,help="parallel certificate checks")
 	args=parser.parse_args()
+	if args.jobs<1:
+		parser.error("--jobs must be positive")
 
 	def check(path,succeeds=True,timeout=180):
 		cmd=[args.lean] if args.lean else [args.lake,"env","lean"]
@@ -39,14 +43,15 @@ def main():
 				raise RuntimeError("negative test failed for the wrong reason:\n"+completed.stdout)
 		print(("checked " if succeeds else "rejected ")+path.name,flush=True)
 
+	certificates=[]
 	def certificate(path):
 		if re.search(r"\b(by|decreasing_by|sorry|admit|native_decide)\b",path.read_text()):
 			raise RuntimeError("tactic or unchecked proof in certificate: "+path.name)
-		check(path)
+		certificates.append(path)
 
 	# Recheck generated theorems here so their full axiom reports are audited,
 	# even when Lake reused cached build outputs.
-	check(ROOT/"lean/QSym/Generated.lean",timeout=600)
+	check(ROOT/"lean/QSym/Generated.lean",timeout=900)
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"tests/Language.lean")
@@ -54,7 +59,7 @@ def main():
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -86,6 +91,10 @@ def main():
 		raise RuntimeError("expected seven freshly generated certificates")
 	for file in files:
 		certificate(file)
+
+	with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+		for _ in pool.map(check,certificates):
+			pass
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
@@ -135,11 +144,22 @@ def main():
 		("BadSqrtBound","rewrite bad(x:ℝ,y:ℝ):sqrt(x)≤y⇒x≤y^2;"),
 		("BadAbsBound","rewrite bad(x:ℝ,y:ℝ):abs(x)=y⇒x=-y∨x=y;"),
 		("BadQuadraticSign","rewrite bad(x:ℝ):2-x^2≤0⇒-sqrt(2)≤x∧x≤sqrt(2);"),
+		("BadComplexExpInjective","rewrite bad(z:ℂ,w:ℂ):cexp(z)≠cexp(w)⇒z≠w;"),
+		("BadComplexSqrtProduct","rewrite bad(z:ℂ,w:ℂ):csqrt(z)*csqrt(w)⇒csqrt(z*w);"),
+		("BadComplexNormInjective","rewrite bad(z:ℂ,w:ℂ):cabs(z)≠cabs(w)⇒z≠w;"),
+		("BadComplexPowerProduct","rewrite bad(z:ℂ,w:ℂ,t:ℂ):powerC(z,t)*powerC(w,t)⇒powerC(z*w,t);"),
+		("BadComplexOddPower","rewrite bad(z:ℂ,w:ℂ):z^3≠w^3⇒z≠w;"),
+		("BadMinComparison","rewrite bad(x:ℝ,y:ℝ,t:ℝ):min(x,y)<t⇒x<t∧y<t;"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
 		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),
 			str(negative/(name+".lean"))],check=True,stdout=subprocess.PIPE)
 		check(negative/(name+".lean"),succeeds=False)
+	(negative/"BadComplexExpBoundary.lean").write_text("import QSym\n"
+		"theorem forged (z w : ℂ) (hz : -Real.pi≤z.im) (hz' : z.im≤Real.pi)\n"
+		"    (hw : -Real.pi<w.im) (hw' : w.im≤Real.pi) : Complex.exp z=Complex.exp w ↔ z=w :=\n"
+		"  QSym.Identities.cexp_inj hz hz' hw hw'\n")
+	check(negative/"BadComplexExpBoundary.lean",succeeds=False)
 	(negative/"PartialIsNotTotal.lean").write_text("import QSym\nopen QSym\n"
 		"theorem forged (x : Option ℝ) (h : Value.Defined x) : Value.Defined (Functions.logR.apply x) :=\n"
 		"  Functions.logR.total (fun _ => True.intro) x h\n")

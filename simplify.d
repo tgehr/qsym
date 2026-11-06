@@ -51,7 +51,6 @@ Result simplify(Arena a,Term input,Term[] facts,Options options=Options.init){
 	auto budget=new Budget(options.maxAlgebraWork,options.maxTerms,options.maxCoefficientWords);
 	auto engine=new Engine(a,d,budget,options.maxRewrites);
 	auto context=engine.assume(facts);
-	foreach(i;a.postorder(root)) engine.go(a.at(i),context);
 	result.certificate=engine.go(root,context);
 	result.derivation=d; result.output=result.certificate.after;
 	result.exhausted=budget.exhausted;

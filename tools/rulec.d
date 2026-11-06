@@ -35,11 +35,20 @@ string rootOp(Pattern p){
 		return Rational(BigInt(p.args[0].number),BigInt(p.args[1].number)).small?"realLit":"numberLit";
 	return dOp(p.name);
 }
+bool containsVariable(Pattern p,string name){
+	if(p.variable) return p.name==name;
+	foreach(arg;p.args) if(containsVariable(arg,name)) return true;
+	return false;
+}
 bool pairRule(Rule r){
 	auto op=rootOp(r.lhs);
-	return r.automatic&&(op=="add"||op=="mul")&&!r.lhs.args[0].variable&&!r.lhs.args[1].variable;
+	if(!r.automatic||(op!="add"&&op!="mul")) return false;
+	auto x=r.lhs.args[0],y=r.lhs.args[1];
+	return !x.variable&&!y.variable||x.variable&&!y.variable&&containsVariable(y,x.name)||
+		y.variable&&!x.variable&&containsVariable(x,y.name);
 }
 string rootTest(Pattern p,string node){
+	if(p.variable) return "true";
 	auto test=node~".op==Op."~rootOp(p);
 	if(builtin(p.name)!=Builtin.invalid) test~="&&"~node~".value==Builtin."~p.name;
 	return test;

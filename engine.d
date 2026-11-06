@@ -205,10 +205,10 @@ package final class Engine{
 		}
 		Term join(Term x,Term y){ return n.op==Op.add?a.add(x,y):a.mul(x,y); }
 		foreach(i,x;leaves) foreach(j; i+1..leaves.length) foreach(reverse;[false,true]){
-			auto left=reverse?leaves[j]:x,right=reverse?x:leaves[j];
+			budget.spend(); auto left=reverse?leaves[j]:x,right=reverse?x:leaves[j];
 			foreach(law;laws){
-				budget.spend();
 				if(!pairCandidate(law,a.node(left),a.node(right))) continue;
+				budget.spend();
 				auto pair=join(left,right);
 				Proof q; if(!attempt(law,pair,ctx,q)||q.after==pair) continue;
 				Term[] rest; foreach(k,y;leaves) if(k!=i&&k!=j) rest~=y;
@@ -286,13 +286,28 @@ package final class Engine{
 			budget.spend(); active.set(k,true); scope(exit) active.set(k,false);
 			auto n=a.node(t); Proof[] cs;
 			// Preserve useful factorizations and comparison shapes before expansion.
-			if(n.op==Op.nonzero) foreach(law;rewrites(n.op)){
+			if(n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le) foreach(law;rewrites(n.op)){
 				if(conditionCount(law)) continue;
 				Proof q;
 				if(attempt(law,t,ctx,q)&&q.after!=t){
 					auto p=d.trans(q,go(q.after,ctx,probe),ctx); memoize(k,p); return p;
 				}
 			}
+			// Normalize operands without expanding the difference used by equality.
+			if(n.op==Op.nonzero&&a.node(a.at(n.a)).op==Op.add){
+				auto residual=a.at(n.a);
+				auto operands=d.congr(residual,[go(a.child(residual,0),ctx,probe),go(a.child(residual,1),ctx,probe)],ctx);
+				auto comparison=d.congr(t,[operands],ctx);
+				if(comparison.after!=t) foreach(law;rewrites(n.op)){
+					if(conditionCount(law)) continue;
+					Proof q;
+					if(attempt(law,comparison.after,ctx,q)&&q.after!=comparison.after){
+						auto p=d.trans(d.trans(comparison,q,ctx),go(q.after,ctx,probe),ctx); memoize(k,p); return p;
+					}
+				}
+			}
+			// Bound the call stack for deep DAGs without eagerly expanding ordinary inputs.
+			if(depth==64) foreach(id;a.postorder(t)) if(id!=t.id) go(a.at(id),ctx,probe);
 			foreach(i;0..n.arity) cs~=go(a.child(t,i),ctx,probe);
 			auto p=d.congr(t,cs,ctx);
 			auto current=p.after; n=a.node(current);
