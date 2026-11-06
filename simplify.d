@@ -14,6 +14,7 @@ struct Options{
 	size_t maxTerms=256;
 	size_t maxAlgebraWork=1_000_000;
 	size_t maxCoefficientWords=512;
+	bool expandPowers=false;
 }
 struct Result{
 	Term input;
@@ -49,7 +50,7 @@ Result simplify(Arena a,Term input,Term[] facts,Options options=Options.init){
 	result.assumptions=facts.dup;
 	auto d=new Derivation(a,options.trace);
 	auto budget=new Budget(options.maxAlgebraWork,options.maxTerms,options.maxCoefficientWords);
-	auto engine=new Engine(a,d,budget,options.maxRewrites);
+	auto engine=new Engine(a,d,budget,options.maxRewrites,options.expandPowers);
 	auto context=engine.assume(facts);
 	result.certificate=engine.go(root,context);
 	result.derivation=d; result.output=result.certificate.after;

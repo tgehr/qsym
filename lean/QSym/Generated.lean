@@ -1504,6 +1504,27 @@ theorem r_real_ne_odd_power (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.d
 
 #qsym_check_axioms r_real_ne_odd_power
 
+theorem r_real_lt_even_power (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) (v_y.map (fun x => x ^ ((v_n + v_n) + (2))))) (Value.lt (Value.abs v_x) (Value.abs v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_lt_even_power
+
+theorem r_real_le_even_power (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) (v_y.map (fun x => x ^ ((v_n + v_n) + (2))))) (Value.le (Value.abs v_x) (Value.abs v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_le_even_power
+
+theorem r_real_ne_even_power (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.nonzero (Value.add (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) (Value.mul (some (((-1) : Int) : ℝ)) (v_y.map (fun x => x ^ ((v_n + v_n) + (2))))))) (Value.and (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (some (((-1) : Int) : ℝ)) v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y)))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_ne_even_power
+
 theorem r_real_lt_nonnegative_power (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat)
     (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
     (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :

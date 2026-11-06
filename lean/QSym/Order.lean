@@ -45,6 +45,20 @@ theorem odd_power_le (x y : ℝ) (n : ℕ) : x^(n+n+1)≤y^(n+n+1) ↔ x≤y :=
 theorem odd_power_eq (x y : ℝ) (n : ℕ) : x^(n+n+1)=y^(n+n+1) ↔ x=y :=
   (show Odd (n+n+1) from ⟨n, by omega⟩).pow_inj
 
+theorem even_power_lt (x y : ℝ) (n : ℕ) : x^(n+n+2)<y^(n+n+2) ↔ |x| < |y| := by
+  have h : Even (n+n+2) := ⟨n+1, by omega⟩
+  rw [← h.pow_abs x, ← h.pow_abs y]
+  exact pow_lt_pow_iff_left₀ (abs_nonneg x) (abs_nonneg y) (by omega)
+
+theorem even_power_le (x y : ℝ) (n : ℕ) : x^(n+n+2)≤y^(n+n+2) ↔ |x| ≤ |y| := by
+  have h : Even (n+n+2) := ⟨n+1, by omega⟩
+  rw [← h.pow_abs x, ← h.pow_abs y]
+  exact pow_le_pow_iff_left₀ (abs_nonneg x) (abs_nonneg y) (by omega)
+
+theorem even_power_eq (x y : ℝ) (n : ℕ) : x^(n+n+2)=y^(n+n+2) ↔ x=-y ∨ x=y := by
+  have h : Even (n+n+2) := ⟨n+1, by omega⟩
+  simp [pow_eq_pow_iff_of_ne_zero (by omega : n+n+2≠0), h, or_comm]
+
 theorem nonnegative_power_lt {x y : ℝ} (n : ℕ) (hx : 0≤x) (hy : 0≤y) :
     x^(n+1)<y^(n+1) ↔ x<y := pow_lt_pow_iff_left₀ hx hy (Nat.succ_ne_zero n)
 

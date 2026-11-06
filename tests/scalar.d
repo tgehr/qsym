@@ -6,7 +6,7 @@ import std.path:buildPath;
 import std.stdio:writeln;
 import std.string:replace;
 
-struct Case{ string name; Term input,expected; }
+struct Case{ string name; Term input,expected; bool expand; }
 @safe Case[] examples(Arena a){
 	auto x=a.variable(Sort.real_,0),y=a.variable(Sort.real_,1),p=a.variable(Sort.boolean,0);
 	auto q=a.variable(Sort.boolean,1);
@@ -18,7 +18,7 @@ struct Case{ string name; Term input,expected; }
 	auto nonnegative=a.le(zero,x),negative=a.lt(x,zero),positive=a.lt(zero,x);
 	auto interval=a.and_(nonnegative,a.lt(x,one));
 	return [
-		Case("Polynomial",a.sub(a.pow(sum,2),expanded),zero),
+		Case("Polynomial",a.sub(a.pow(sum,2),expanded),zero,true),
 		Case("Collect",a.add(a.mul(two,x),a.mul(a.real_(3),x)),a.mul(a.real_(5),x)),
 		Case("Rational",a.add(a.inv(two),a.inv(a.real_(3))),a.real_(Rational(BigInt(5),BigInt(6)))),
 		Case("Large",a.pow(a.real_(long.max),2),a.real_(Rational("85070591730234615847396907784232501249"))),
@@ -32,7 +32,7 @@ struct Case{ string name; Term input,expected; }
 		Case("ComplexInverse",a.inv(a.complex(1,1)),a.complex(half,-half)),
 		Case("ComplexCancel",a.div(z,z),a.complex(1)),
 		Case("ComplexPolynomial",a.sub(a.pow(a.add(z,w),2),
-			a.add(a.add(a.pow(z,2),a.mul(a.complex(2),a.mul(z,w))),a.pow(w,2))),a.complex(0)),
+			a.add(a.add(a.pow(z,2),a.mul(a.complex(2),a.mul(z,w))),a.pow(w,2))),a.complex(0),true),
 		Case("Conjugate",a.conj(a.mul(a.complex(1,1),z)),a.mul(a.complex(1,-1),a.conj(z))),
 		Case("GuardedCancellation",a.mask(a.nonzero(x),a.div(x,x)),a.mask(a.nonzero(x),one)),
 		Case("SameGuard",a.add(a.mask(p,x),a.mask(p,y)),a.mask(p,sum)),
@@ -137,14 +137,17 @@ private struct Value{ bool defined; Number number; bool boolean; }
 @safe unittest{
 	auto session=Session.open(); auto a=session.arena;
 	foreach(c;examples(a)){
-		auto fast=simplify(a,c.input),traced=simplify(a,c.input,Options(DensityMode.preserve,true));
+		auto options=Options.init; options.expandPowers=c.expand;
+		auto fast=simplify(a,c.input,options); options.trace=true;
+		auto traced=simplify(a,c.input,options);
 		assert(fast.output==c.expected,c.name~"\n"~dump(a,fast.output)~"expected:\n"~dump(a,c.expected));
 		assert(fast.output==traced.output&&fast.exhausted==traced.exhausted,c.name);
-		assert(!fast.exhausted&&simplify(a,fast.output).output==fast.output,c.name~" is not idempotent");
+		assert(!fast.exhausted&&simplify(a,fast.output,options).output==fast.output,c.name~" is not idempotent");
 		checkValues(a,c.input,fast.output);
 	}
 	auto x=a.variable(Sort.real_,0),y=a.variable(Sort.real_,1);
-	auto limited=simplify(a,a.pow(a.add(x,y),100),Options(DensityMode.preserve,true,100_000,8,1000));
+	auto expansion=Options(DensityMode.preserve,true,100_000,8,1000); expansion.expandPowers=true;
+	auto limited=simplify(a,a.pow(a.add(x,y),100),expansion);
 	assert(limited.exhausted);
 	auto guarded=a.mask(a.le(a.real_(0),x),a.abs(a.add(x,a.real_(1))));
 	auto exhausted=simplify(a,guarded,Options(DensityMode.preserve,true,100_000,256,1));
@@ -226,7 +229,8 @@ void main(string[] args){
 	auto session=Session.open(); auto a=session.arena;
 	mkdirRecurse(args[1]);
 	foreach(c;examples(a)){
-		auto result=simplify(a,c.input,Options(DensityMode.preserve,true));
+		auto options=Options(DensityMode.preserve,true); options.expandPowers=c.expand;
+		auto result=simplify(a,c.input,options);
 		enforce(result.output==c.expected,c.name);
 		write(buildPath(args[1],c.name~".lean"),exportLean(a,result).replace("QSym.Certificate","QSym.ScalarTests."~c.name));
 	}

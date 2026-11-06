@@ -48,6 +48,8 @@ test: build/qsym
 	./build/relation-tests --DRT-testmode=run-main build/relations
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/identities.d -of=build/identity-tests
 	./build/identity-tests --DRT-testmode=run-main build/identities
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/compact.d -of=build/compact-tests
+	./build/compact-tests --DRT-testmode=run-main build/compact
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

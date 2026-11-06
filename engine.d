@@ -21,7 +21,7 @@ package final class Engine{
 	private uint depth,epoch;
 	private struct MemoKey{ ulong term; uint revision; }
 	private Table!(MemoKey,uint) memo;
-	private struct ContextKey{ uint parent,guard,revision; bool value; }
+	private struct ContextKey{ uint parent,guard,revision; bool value,expand; }
 	private Table!(ContextKey,uint) branches;
 	private Table!(ulong,uint) truths;
 	private uint[] revisions=[0];
@@ -29,9 +29,10 @@ package final class Engine{
 	private uint[] roots;
 	private Table!(ulong,bool) active,proving;
 	private Proof[][] facts=[[]];
-	this(Arena a,Derivation d,Budget budget,size_t rewrites){
+	this(Arena a,Derivation d,Budget budget,size_t rewrites,bool expandPowers=false){
 		this.a=a; this.d=d; this.budget=budget; rewritesLeft=rewrites;
 		field=new Field(a,d,budget,&normalize);
+		field.expandPowers=expandPowers;
 		elementary=new Elementary(a,budget);
 		predicates=new Predicates(a,budget,field,elementary);
 	}
@@ -39,12 +40,23 @@ package final class Engine{
 		index.set(key,cast(uint)proofs.length); proofs~=p;
 	}
 	private void memoize(ulong key,Proof p){
-		if(key>uint.max){ remember(memo,MemoKey(key,revision(cast(uint)(key>>33))),p); return; }
+		if(key>uint.max){ remember(memo,MemoKey(key,revision(cast(uint)(key>>34))),p); return; }
 		if(key>=roots.length) roots.length=cast(size_t)key+1;
 		roots[cast(uint)key]=cast(uint)proofs.length+1; proofs~=p;
 	}
-	private ulong key(Term t,uint ctx,bool probe=false){ return (cast(ulong)ctx<<33)|(cast(ulong)probe<<32)|t.id; }
+	private ulong key(Term t,uint ctx,bool probe=false){ return (cast(ulong)ctx<<34)|(cast(ulong)field.expandPowers<<33)|(cast(ulong)probe<<32)|t.id; }
 	private Proof normalize(Term t,uint ctx){ return go(t,ctx); }
+	private Proof expanded(Term t,uint ctx){
+		auto previous=field.expandPowers; field.expandPowers=true;
+		scope(exit) field.expandPowers=previous;
+		return go(t,ctx,true);
+	}
+	private bool closed(Term t){
+		foreach(id;a.postorder(t)){
+			budget.spend(); if(a.node(a.at(id)).op==Op.variable) return false;
+		}
+		return true;
+	}
 	// Invalidate child caches when inherited facts change during seeding.
 	private uint revision(uint ctx){
 		uint result;
@@ -61,7 +73,7 @@ package final class Engine{
 	}
 	private uint enter(uint parent,Term guard,bool value){
 		budget.spend();
-		auto k=ContextKey(parent,guard.id,revision(parent),value);
+		auto k=ContextKey(parent,guard.id,revision(parent),value,field.expandPowers);
 		auto cached=branches.get(k,uint.max);
 		if(cached!=uint.max) return cached;
 		auto ctx=d.enter(parent,guard,value);
@@ -190,6 +202,12 @@ package final class Engine{
 		if(p.after!=t){
 			Proof q;
 			if(prove(p.after,ctx,q)){ result=d.trans(p,q,ctx); remember(truths,k,result); return true; }
+		}
+		// Polynomial identities needed by solvers may use a different normal form.
+		auto n=a.node(p.after);
+		if(!field.expandPowers&&n.op==Op.not_&&a.node(a.at(n.a)).op==Op.nonzero&&field.expandable(p.after)){
+			auto q=expanded(p.after,ctx);
+			if(q.after==a.boolean(true)){ result=d.trans(p,q,ctx); remember(truths,k,result); return true; }
 		}
 		return false;
 	}
@@ -346,7 +364,10 @@ package final class Engine{
 			}
 			if(n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le){
 				auto residual=n.op==Op.nonzero?a.at(n.a):go(a.sub(a.at(n.a),a.at(n.b)),ctx,true).after;
-				if(predicates.propose(current,residual,proposal)&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
+				auto found=predicates.propose(current,residual,proposal);
+				if(!found&&!field.expandPowers&&field.expandable(residual))
+					found=predicates.propose(current,expanded(residual,ctx).after,proposal);
+				if(found&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
 					p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 				}
 			}
@@ -377,6 +398,13 @@ package final class Engine{
 			if(q.after==current) q=field.run(current,ctx);
 			p=d.trans(p,q,ctx);
 			if(q.after!=current) p=d.trans(p,go(p.after,ctx,probe),ctx);
+			// Algebraic constants can shrink under expansion, e.g. a root of unity cubed.
+			n=a.node(p.after);
+			if(!field.expandPowers&&(n.op==Op.pow||n.op==Op.add)&&closed(p.after)&&field.expandable(p.after)){
+				q=expanded(p.after,ctx);
+				if(a.postorder(q.after).length<a.postorder(p.after).length)
+					p=d.trans(p,d.trans(q,go(q.after,ctx,probe),ctx),ctx);
+			}
 			memoize(k,p); return p;
 		}catch(Limit e){ budget.exhausted=true; return d.refl(t,ctx); }
 	}

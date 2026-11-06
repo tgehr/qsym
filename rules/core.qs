@@ -202,6 +202,9 @@ rewrite real_abs_ne(x:ℝ,y:ℝ):abs(x)≠y⇒y<0∨(x≠-y∧x≠y);
 rewrite real_lt_odd_power(x:ℝ,y:ℝ,n:NatParam):x^(n+n+1)<y^(n+n+1)⇒x<y;
 rewrite real_le_odd_power(x:ℝ,y:ℝ,n:NatParam):x^(n+n+1)≤y^(n+n+1)⇒x≤y;
 rewrite real_ne_odd_power(x:ℝ,y:ℝ,n:NatParam):x^(n+n+1)≠y^(n+n+1)⇒x≠y;
+rewrite real_lt_even_power(x:ℝ,y:ℝ,n:NatParam):x^(n+n+2)<y^(n+n+2)⇒abs(x)<abs(y);
+rewrite real_le_even_power(x:ℝ,y:ℝ,n:NatParam):x^(n+n+2)≤y^(n+n+2)⇒abs(x)≤abs(y);
+rewrite real_ne_even_power(x:ℝ,y:ℝ,n:NatParam):x^(n+n+2)≠y^(n+n+2)⇒x≠-y∧x≠y;
 rewrite real_lt_nonnegative_power(x:ℝ,y:ℝ,n:NatParam):x^(n+1)<y^(n+1)⇒x<y when 0≤x,0≤y;
 rewrite real_le_nonnegative_power(x:ℝ,y:ℝ,n:NatParam):x^(n+1)≤y^(n+1)⇒x≤y when 0≤x,0≤y;
 

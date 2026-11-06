@@ -39,6 +39,7 @@ package final class Field{
 	private Budget budget;
 	private Proof delegate(Term,uint) @safe norm;
 	private uint divisions;
+	bool expandPowers;
 	this(Arena a,Derivation d,Budget budget,Proof delegate(Term,uint) @safe norm){
 		this.a=a; this.d=d; this.budget=budget; this.norm=norm;
 	}
@@ -330,6 +331,17 @@ package final class Field{
 		Term[] groups; Proof[] changes;
 		for(size_t i;i<entries.length;){
 			auto start=i++; while(i<entries.length&&order(entries[start].m,entries[i].m)==0) ++i;
+			if(i==start+1){
+				groups~=entries[start].term; changes~=d.refl(entries[start].term,ctx); continue;
+			}
+			if(!entries[start].m.factors.length){
+				Term[] constants; Number value;
+				foreach(e;entries[start..i]){
+					constants~=e.term; value=budget.calc!"+"(value,e.m.coefficient);
+				}
+				auto g=balanced(constants,Op.add,s);
+				groups~=g; changes~=d.numeric(g,a.number(value,s),ctx); continue;
+			}
 			auto b=base(entries[start].m,s),g=entries[start].term;
 			auto c=a.number(entries[start].m.coefficient,s);
 			auto p=d.ac(g,a.mul(c,b),Op.mul,ctx);
@@ -384,7 +396,7 @@ package final class Field{
 			p=then(p,d.congr(p.after,[norm(a.at(output.a),ctx),norm(a.at(output.b),ctx)],ctx),ctx);
 			return then(p,multiply(p.after,ctx),ctx);
 		}
-		if(v.op==Op.add&&n.value>1){
+		if(expandPowers&&v.op==Op.add&&n.value>1){
 			auto m=n.value/2;
 			auto p=law!"pow_split"(n.sort,[x,a.real_(m),a.real_(n.value-m)],ctx);
 			auto output=a.node(p.after);
@@ -392,6 +404,35 @@ package final class Field{
 			return then(p,multiply(p.after,ctx),ctx);
 		}
 		return d.refl(t,ctx);
+	}
+	// Bound speculative expansion before allocating its terms or certificates.
+	// Count uncollected monomials, saturating at the configured term limit.
+	bool expandable(Term t){
+		Table!(uint,size_t) widths;
+		bool found;
+		size_t multiply(size_t x,size_t y){
+			return !x||!y?0:x>budget.maxTerms/y?size_t.max:x*y;
+		}
+		foreach(id;a.postorder(t)){
+			budget.spend(); auto n=a.node(a.at(id)); size_t width=1;
+			if(n.op==Op.add){
+				auto x=widths.get(n.a,1),y=widths.get(n.b,1);
+				if(y>budget.maxTerms||x>budget.maxTerms-y) return false;
+				width=x+y;
+			}else if(n.op==Op.mul) width=multiply(widths.get(n.a,1),widths.get(n.b,1));
+			else if(n.op==Op.pow){
+				auto base=widths.get(n.a,1);
+				found=found||(base>1&&n.value>1);
+				for(auto k=n.value;k;k>>=1){
+					if(k&1) width=multiply(width,base);
+					if(width>budget.maxTerms) return false;
+					if(k>1) base=multiply(base,base);
+				}
+			}
+			if(width>budget.maxTerms) return false;
+			widths.set(id,width);
+		}
+		return found;
 	}
 	private Mono[] collect(Mono[] p){
 		sort!((x,y)=>order(x,y)>0)(p);

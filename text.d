@@ -96,7 +96,9 @@ struct Syntax{
 				if(a.isNumber(a.at(x))&&a.number(a.at(x)).im.zero&&!a.isNumber(a.at(y))) l=rational(a.number(a.at(x)).re);
 				if(a.isNumber(a.at(y))&&a.number(a.at(y)).im.zero&&!a.isNumber(a.at(x))) r=rational(a.number(a.at(y)).re);
 			}
-			return Piece(render(l,60)~(r.negative?"-":"+")~render(r,61,true),60);
+			auto tail=render(r,r.negative?61:60,true);
+			auto sign=r.negative?"-":tail.length&&tail[0]=='-'?"":"+";
+			return Piece(render(l,60)~sign~tail,60);
 		}
 		Piece product(Node n){
 			// [p]·x denotes a non-strict mask, so a strict product needs an explicit call.
@@ -110,7 +112,9 @@ struct Syntax{
 			bool unit(uint id){ return (n.sort==Sort.real_||n.sort==Sort.complex)&&a.isNumber(a.at(id))&&(a.number(a.at(id)).one||(-a.number(a.at(id))).one); }
 			if(unit(n.a)){ r.negative=l.negative!=r.negative; return r; }
 			if(unit(n.b)){ l.negative=l.negative!=r.negative; return l; }
-			return Piece(render(l,70,true)~"·"~render(r,71,true),70,l.negative!=r.negative);
+			auto v=a.node(a.at(n.b));
+			auto strict=v.op==Op.mul||v.op==Op.builtin&&(v.value==Builtin.mulN||v.value==Builtin.mulZ||v.value==Builtin.mulQ);
+			return Piece(render(l,70,true)~"·"~render(r,strict?70:71,true),70,l.negative!=r.negative);
 		}
 		Piece zeroComparison(Term t,string relation){
 			Term[] pending=[t],terms; string left,right; Number constant;

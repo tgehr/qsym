@@ -346,6 +346,7 @@ macro "qsym_order" : tactic => `(tactic| (
     min_lt_iff, min_le_iff, lt_min_iff, le_min_iff, max_lt_iff, max_le_iff, lt_max_iff, le_max_iff,
     Order.nonnegative_add_eq_zero, Order.nonpositive_add_eq_zero,
     Order.odd_power_lt, Order.odd_power_le, Order.odd_power_eq,
+    Order.even_power_lt, Order.even_power_le, Order.even_power_eq,
     Order.nonnegative_power_lt, Order.nonnegative_power_le,
     Real.exp_lt_exp, Real.exp_le_exp, Real.exp_eq_exp, Real.exp_eq_one_iff, Real.exp_ne_zero,
     Real.exp_lt_one_iff, Real.exp_le_one_iff, Real.one_lt_exp_iff, Real.one_le_exp_iff,

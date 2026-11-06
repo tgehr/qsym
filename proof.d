@@ -286,7 +286,12 @@ string exportLean(Arena a,Result result){
 		foreach(c;e.instance.conditions) pending~=c.term;
 		for(auto c=e.proof.context;c;c=d.contexts[c].parent) pending~=d.contexts[c].guard;
 	}
-	foreach(t;pending) foreach(id;a.postorder(t)) needed[id]=true;
+	while(pending.length){
+		auto t=pending[$-1]; --pending.length;
+		if(needed[t.id]) continue;
+		needed[t.id]=true;
+		foreach(i;0..a.node(t).arity) pending~=a.child(t,i);
+	}
 	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
 	foreach(i,n;needed) if(n){ auto t=a.at(cast(uint)i); s~="def "~name(t.id)~" : Expr ."~leanSort(a.sort(t))~" := "~leanConstructor(a,a.node(t))~"\n"; }
 	s~="\n";

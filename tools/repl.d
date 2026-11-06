@@ -12,6 +12,7 @@ int repl(){
 	//if(reader.interactive) writeln("enter an expression; :help for commands.");
 	Syntax syntax,lastSyntax;
 	string last;
+	bool lastExpand;
 	string[] facts,lastFacts;
 	Term[] parseFacts(Arena a,ref Syntax s,string[] source){
 		Term[] result; foreach(f;source) result~=s.parse(a,f); return result;
@@ -38,6 +39,7 @@ int repl(){
 				writeln(":functions [PREFIX] list built-in signatures");
 				writeln(":assume EXPR      assume a defined, true Boolean expression");
 				writeln(":facts            list assumptions; :clear removes them");
+				writeln(":expand EXPR      simplify with polynomial power expansion");
 				writeln(":lean FILE        export a Lean certificate for the last expression");
 				writeln(":reset            clear assumptions, variables and the last expression");
 				writeln(":quit             exit (or EOF)");
@@ -84,18 +86,23 @@ int repl(){
 				auto path=strip(line[6..$]); enforce(path.length!=0,"expected a file name");
 				auto session=Session.open(); auto a=session.arena;
 				auto assumptions=parseFacts(a,lastSyntax,lastFacts);
-				auto result=simplify(a,lastSyntax.parse(a,last),assumptions,Options(DensityMode.preserve,true));
+				auto options=Options(DensityMode.preserve,true); options.expandPowers=lastExpand;
+				auto result=simplify(a,lastSyntax.parse(a,last),assumptions,options);
 				write(path,exportLean(a,result));
 				writeln("Wrote ",path);
 				continue;
 			}
-			enforce(!line.startsWith(":"),"unknown command; use :help");
+			auto options=Options.init;
+			if(line==":expand"||line.startsWith(":expand ")){
+				line=strip(line[7..$]); enforce(line.length!=0,"expected an expression");
+				options.expandPowers=true;
+			}else enforce(!line.startsWith(":"),"unknown command; use :help");
 			auto session=Session.open(); auto a=session.arena;
 			auto assumptions=parseFacts(a,syntax,facts);
-			auto result=simplify(a,syntax.parse(a,line),assumptions);
+			auto result=simplify(a,syntax.parse(a,line),assumptions,options);
 			writeln(syntax.format(a,result.output));
 			if(result.exhausted) stderr.writeln("simplification budget exhausted; showing the partial result");
-			last=line; lastSyntax=syntax; lastFacts=facts.dup;
+			last=line; lastSyntax=syntax; lastFacts=facts.dup; lastExpand=options.expandPowers;
 		}catch(Exception e){ stderr.writeln(e.msg); }
 	}
 	return 0;

@@ -53,4 +53,12 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	"cimag(clog(x))","cabs(cexp(x))",":quit",""]),text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["x^(1/2)","x^t","1/2·carg(x)","1/2·carg(x)","carg(x)","exp(creal(x))"],result.stdout
+expanded_certificate=root/"build/ReplExpand.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"(x+1)^10","(x+1)^10<2^10",":expand (x+1)^3",f":lean {expanded_certificate}",
+	"(x+1)^3",":expand",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0,result.stderr
+assert result.stdout.splitlines()==["(x+1)^10","-3<x∧x<1","x^3+3·x^2+3·x+1",
+	f"Wrote {expanded_certificate}","(x+1)^3"],result.stdout
+assert "expected an expression" in result.stderr,result.stderr
 print("REPL checks passed.")
