@@ -7,7 +7,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate test demo verify bench bench-certificates clean
+.PHONY: all generate test demo verify bench bench-certificates bench-associative clean
 all: build/qsym
 
 build generated:
@@ -50,6 +50,8 @@ test: build/qsym
 	./build/identity-tests --DRT-testmode=run-main build/identities
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/compact.d -of=build/compact-tests
 	./build/compact-tests --DRT-testmode=run-main build/compact
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/associative.d -of=build/associative-tests
+	./build/associative-tests --DRT-testmode=run-main build/associative
 	python3 tests/repl.py
 	python3 tests/terminal.py
 
@@ -65,6 +67,14 @@ build/scalar-export: generate tests/scalar.d $(MODULES)
 bench-certificates: build/scalar-export
 	cd lean && $(LAKE) build
 	python3 tools/bench_certificates.py --lake $(LAKE)
+
+build/associative-bench: generate tools/bench_associative.d $(MODULES)
+	$(DC) $(DFLAGS) $(IMPORTS) -i tools/bench_associative.d -of=$@
+
+bench-associative: build/associative-bench
+	./build/associative-bench build/bench-associative
+	cd lean && $(LAKE) build
+	python3 tools/bench_certificates.py --exporter build/associative-bench --lake $(LAKE)
 
 # Full verification is fail-closed. Fast compilation alone never grants trust.
 verify: test build/qsym

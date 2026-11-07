@@ -8,6 +8,7 @@ import qsym.predicates:Predicates;
 import std.algorithm:sort;
 import qsym.generated.rules;
 import qsym.table:Table;
+import qsym.associative:operands;
 @safe:
 
 package final class Engine{
@@ -194,7 +195,14 @@ package final class Engine{
 		}
 		if(proving.get(k,false)) return false;
 		proving.set(k,true); scope(exit) proving.set(k,false);
-		foreach(law;inferences(a.node(t).op)) if(attempt(law,t,ctx,result)){
+		// Check a bounded polynomial identity before asking root/guard solvers
+		// to reason about its unevaluated factored residual.
+		auto goal=a.node(t);
+		if(!field.expandPowers&&goal.op==Op.not_&&a.node(a.at(goal.a)).op==Op.nonzero&&field.expandable(t)){
+			auto q=expanded(t,ctx);
+			if(q.after==a.boolean(true)){ result=q; remember(truths,k,result); return true; }
+		}
+		foreach(law;inferences(a.node(t))) if(attempt(law,t,ctx,result)){
 			remember(truths,k,result); return true;
 		}
 		auto p=go(t,ctx,true);
@@ -222,18 +230,39 @@ package final class Engine{
 			if(leaves.length+pending.length>budget.maxTerms) return d.refl(t,ctx);
 		}
 		Term join(Term x,Term y){ return n.op==Op.add?a.add(x,y):a.mul(x,y); }
-		foreach(i,x;leaves) foreach(j; i+1..leaves.length) foreach(reverse;[false,true]){
-			budget.spend(); auto left=reverse?leaves[j]:x,right=reverse?x:leaves[j];
-			foreach(law;laws){
-				if(!pairCandidate(law,a.node(left),a.node(right))) continue;
-				budget.spend();
-				auto pair=join(left,right);
-				Proof q; if(!attempt(law,pair,ctx,q)||q.after==pair) continue;
-				Term[] rest; foreach(k,y;leaves) if(k!=i&&k!=j) rest~=y;
-				if(!rest.length) return d.trans(d.ac(t,pair,n.op,ctx),q,ctx);
-				auto r=rest[0]; foreach(y;rest[1..$]) r=join(r,y);
-				auto grouped=join(pair,r);
-				return d.trans(d.ac(t,grouped,n.op,ctx),d.congr(grouped,[q,d.refl(r,ctx)],ctx),ctx);
+		Table!(uint,uint) buckets; uint[][] groups;
+		uint[] all;
+		foreach(i,leaf;leaves){
+			auto h=head(a.node(leaf)),b=buckets.get(h,uint.max);
+			if(b==uint.max){ b=cast(uint)groups.length; buckets.set(h,b); groups.length=groups.length+1; }
+			groups[b]~=cast(uint)i; all~=cast(uint)i;
+		}
+		uint[] bucket(uint head){
+			if(head==uint.max) return all;
+			auto b=buckets.get(head,uint.max); return b==uint.max?null:groups[b];
+		}
+		foreach(rule;laws){
+			auto lefts=bucket(rule.left),rights=bucket(rule.right);
+			if(!lefts.length||!rights.length) continue;
+			Table!(uint,uint) keys; uint[] next=new uint[leaves.length];
+			foreach_reverse(j;rights){
+				budget.spend(); uint key;
+				if(!pairKey(a,rule.law,true,leaves[j],key)) continue;
+				next[j]=keys.get(key,uint.max); keys.set(key,j);
+			}
+			foreach(i;lefts){
+				budget.spend(); uint key;
+				if(!pairKey(a,rule.law,false,leaves[i],key)) continue;
+				for(auto j=keys.get(key,uint.max);j!=uint.max;j=next[j]){
+					budget.spend(); if(i==j) continue;
+					auto pair=join(leaves[i],leaves[j]);
+					Proof q; if(!attempt(rule.law,pair,ctx,q)||q.after==pair) continue;
+					Term[] rest; foreach(k,y;leaves) if(k!=i&&k!=j) rest~=y;
+					if(!rest.length) return d.trans(d.ac(t,pair,n.op,ctx),q,ctx);
+					auto r=rest[0]; foreach(y;rest[1..$]) r=join(r,y);
+					auto grouped=join(pair,r);
+					return d.trans(d.ac(t,grouped,n.op,ctx),d.congr(grouped,[q,d.refl(r,ctx)],ctx),ctx);
+				}
 			}
 		}
 		return d.refl(t,ctx);
@@ -292,6 +321,22 @@ package final class Engine{
 		}
 		return cost;
 	}
+	private Proof associative(Term t,uint ctx,bool probe){
+		auto n=a.node(t); Proof[] ps;
+		foreach(e;operands(a,t,n.op,budget)) ps~=field.repeated(go(e.term,ctx,probe),e.count,n.op,ctx);
+		if(!ps.length) return d.ac(t,a.number(Number(n.op==Op.add?0:1),n.sort),n.op,ctx);
+		while(ps.length>1){
+			Proof[] next;
+			for(size_t i;i<ps.length;i+=2){
+				if(i+1==ps.length){ next~=ps[i]; continue; }
+				auto left=ps[i],right=ps[i+1];
+				auto term=n.op==Op.add?a.add(left.before,right.before):a.mul(left.before,right.before);
+				next~=d.congr(term,[left,right],ctx);
+			}
+			ps=next;
+		}
+		return d.trans(d.ac(t,ps[0].before,n.op,ctx),ps[0],ctx);
+	}
 	Proof go(Term t,uint ctx=0,bool probe=false){
 		auto k=key(t,ctx,probe);
 		auto cached=k<=uint.max?(t.id<roots.length?roots[t.id]:0):memo.get(MemoKey(k,revision(ctx)),uint.max)+1;
@@ -304,7 +349,7 @@ package final class Engine{
 			budget.spend(); active.set(k,true); scope(exit) active.set(k,false);
 			auto n=a.node(t); Proof[] cs;
 			// Preserve useful factorizations and comparison shapes before expansion.
-			if(n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le) foreach(law;rewrites(n.op)){
+			if(n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le) foreach(law;rewrites(n)){
 				if(conditionCount(law)) continue;
 				Proof q;
 				if(attempt(law,t,ctx,q)&&q.after!=t){
@@ -316,7 +361,7 @@ package final class Engine{
 				auto residual=a.at(n.a);
 				auto operands=d.congr(residual,[go(a.child(residual,0),ctx,probe),go(a.child(residual,1),ctx,probe)],ctx);
 				auto comparison=d.congr(t,[operands],ctx);
-				if(comparison.after!=t) foreach(law;rewrites(n.op)){
+				if(comparison.after!=t) foreach(law;rewrites(n)){
 					if(conditionCount(law)) continue;
 					Proof q;
 					if(attempt(law,comparison.after,ctx,q)&&q.after!=comparison.after){
@@ -326,8 +371,13 @@ package final class Engine{
 			}
 			// Bound the call stack for deep DAGs without eagerly expanding ordinary inputs.
 			if(depth==64) foreach(id;a.postorder(t)) if(id!=t.id) go(a.at(id),ctx,probe);
-			foreach(i;0..n.arity) cs~=go(a.child(t,i),ctx,probe);
-			auto p=d.congr(t,cs,ctx);
+			Proof p;
+			if((n.op==Op.add||n.op==Op.mul)&&(n.a==n.b||a.node(a.at(n.a)).op==n.op||a.node(a.at(n.b)).op==n.op))
+				p=associative(t,ctx,probe);
+			else{
+				foreach(i;0..n.arity) cs~=go(a.child(t,i),ctx,probe);
+				p=d.congr(t,cs,ctx);
+			}
 			auto current=p.after; n=a.node(current);
 			auto numeric=field.literal(current,ctx);
 			if(numeric.after!=current){ p=d.trans(p,numeric,ctx); memoize(k,p); return p; }
@@ -351,7 +401,7 @@ package final class Engine{
 			if(!probe&&strictBound(current,ctx,strict)){
 				p=d.trans(p,strict,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 			}
-			foreach(law;rewrites(n.op)){
+			foreach(law;rewrites(n)){
 				Proof q;
 				if(attempt(law,current,ctx,q)&&q.after!=current){
 					p=d.trans(p,q,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx);
@@ -401,7 +451,7 @@ package final class Engine{
 			// Algebraic constants can shrink under expansion, e.g. a root of unity cubed.
 			n=a.node(p.after);
 			if(!field.expandPowers&&(n.op==Op.pow||n.op==Op.add)&&closed(p.after)&&field.expandable(p.after)){
-				q=expanded(p.after,ctx);
+				q=expanded(p.after,0);
 				if(a.postorder(q.after).length<a.postorder(p.after).length)
 					p=d.trans(p,d.trans(q,go(q.after,ctx,probe),ctx),ctx);
 			}

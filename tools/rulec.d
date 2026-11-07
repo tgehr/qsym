@@ -53,6 +53,21 @@ string rootTest(Pattern p,string node){
 	if(builtin(p.name)!=Builtin.invalid) test~="&&"~node~".value==Builtin."~p.name;
 	return test;
 }
+string headCode(Pattern p){
+	if(p.variable) return "uint.max";
+	return "(cast(uint)Op."~rootOp(p)~"|(cast(uint)Sort."~to!string(p.sort)~"<<8)"~
+		(builtin(p.name)!=Builtin.invalid?"|(cast(uint)Builtin."~p.name~"<<16)":"")~")";
+}
+string variablePath(Pattern p,string variable,string path){
+	if(p.variable) return !p.natural&&p.name==variable?path:"";
+	if(p.natural||p.name=="#") return "";
+	if(p.name=="real"||p.name=="complex"||p.name=="nat"||p.name=="int"||p.name=="rat") return "";
+	foreach(i,arg;p.args){
+		auto result=variablePath(arg,variable,"a.child("~path~","~to!string(i)~")");
+		if(result.length) return result;
+	}
+	return "";
+}
 string shapeTest(Pattern p,string path,uint depth=2){
 	if(p.variable||p.natural||p.name=="#") return "true";
 	auto test=rootTest(p,"a.node("~path~")");
@@ -81,6 +96,7 @@ string emitD(Rule[] rules){
 		"struct Condition{ Term term; bool defined,literal; }\n"~
 		"struct Instance{ Term before,result; string rule; Term[] bindings; Condition[] conditions; bool[] naturals; bool equality,reversed; }\n"~
 		"private uint nat(ulong n){ enforce(n<=uint.max,\"exponent overflow\"); return cast(uint)n; }\n"~
+		"uint head(Node n){ return cast(uint)n.op|(cast(uint)n.sort<<8)|(n.op==Op.builtin?cast(uint)n.value<<16:0); }\n"~
 		"enum Law{\n";
 	foreach(r;rules) d~="\t"~symbolCode(r.name)~",\n";
 	d~="}\nInstance instantiate(Arena a,Law law,Term[] bindings){\n\tswitch(law){\n";
@@ -102,7 +118,7 @@ string emitD(Rule[] rules){
 	}
 	d~="\t\tdefault:assert(0);\n\t}\n}\n"~
 		"Rewrite rewrite(Arena a,Term root,bool trace){\n"~
-		"\tforeach(law;rewrites(a.node(root).op)){\n"~
+		"\tforeach(law;rewrites(a.node(root))){\n"~
 		"\t\tif(conditionCount(law)) continue;\n"~
 		"\t\tTerm[] bindings;\n"~
 		"\t\tif(!match(a,law,-1,root,bindings)) continue;\n"~
@@ -122,6 +138,19 @@ string emitD(Rule[] rules){
 		d~="\t\tcase Law."~symbolCode(r.name)~":return "~shapeTest(r.lhs,"input")~";\n";
 	d~="\t\tdefault:return false;\n\t}\n}\n";
 	foreach(inference;[false,true]){
+		string[] heads;
+		foreach(r;rules) if(inference?r.inference:r.automatic){
+			auto head=headCode(r.lhs); bool found;
+			foreach(old;heads) if(old==head) found=true;
+			if(!found) heads~=head;
+		}
+		d~="const(Law)[] "~(inference?"inferences":"rewrites")~"(Node n){\n\tswitch(head(n)){\n";
+		foreach(head;heads){
+			string[] ids;
+			foreach(r;rules) if((inference?r.inference:r.automatic)&&headCode(r.lhs)==head) ids~="Law."~symbolCode(r.name);
+			d~="\t\tcase "~head~":{ static immutable Law[] laws=["~ids.join(",")~"]; return laws; }\n";
+		}
+		d~="\t\tdefault:return null;\n\t}\n}\n";
 		d~="const(Law)[] "~(inference?"inferences":"rewrites")~"(Op op){\n\tswitch(op){\n";
 		foreach(op;opsFor(rules,inference)){
 			string[] ids;
@@ -130,16 +159,33 @@ string emitD(Rule[] rules){
 		}
 		d~="\t\tdefault:return null;\n\t}\n}\n";
 	}
-	d~="const(Law)[] pairRewrites(Op op){\n\tswitch(op){\n";
+	d~="struct PairRule{ Law law; uint left,right; }\n";
+	d~="const(PairRule)[] pairRewrites(Op op){\n\tswitch(op){\n";
 	foreach(op;["add","mul"]){
 		string[] ids;
-		foreach(r;rules) if(pairRule(r)&&rootOp(r.lhs)==op) ids~="Law."~symbolCode(r.name);
-		d~="\t\tcase Op."~op~":{ static immutable Law[] laws=["~ids.join(",")~"]; return laws; }\n";
+		foreach(r;rules) if(pairRule(r)&&rootOp(r.lhs)==op)
+			ids~="PairRule(Law."~symbolCode(r.name)~","~headCode(r.lhs.args[0])~","~headCode(r.lhs.args[1])~")";
+		d~="\t\tcase Op."~op~":{ static immutable PairRule[] laws=["~ids.join(",")~"]; return laws; }\n";
 	}
 	d~="\t\tdefault:return null;\n\t}\n}\n";
 	d~="bool pairCandidate(Law law,Node x,Node y){\n\tswitch(law){\n";
 	foreach(r;rules) if(pairRule(r))
 		d~="\t\tcase Law."~symbolCode(r.name)~":return "~rootTest(r.lhs.args[0],"x")~"&&"~rootTest(r.lhs.args[1],"y")~";\n";
+	d~="\t\tdefault:return false;\n\t}\n}\n";
+	d~="bool pairKey(Arena a,Law law,bool right,Term input,out uint key){\n\tswitch(law){\n";
+	foreach(r;rules) if(pairRule(r)){
+		string left,right;
+		foreach(v;r.parameters) if(!v.natural){
+			left=variablePath(r.lhs.args[0],v.name,"input"); right=variablePath(r.lhs.args[1],v.name,"input");
+			if(left.length&&right.length) break;
+		}
+		d~="\t\tcase Law."~symbolCode(r.name)~":\n";
+		foreach(side;[true,false]){
+			d~="\t\t\t"~(side?"if(right)":"else")~"{\n";
+			d~="\t\t\t\tif(!("~shapeTest(r.lhs.args[side?1:0],"input",128)~")) return false;\n";
+			d~="\t\t\t\tkey="~(left.length&&right.length?(side?right:left)~".id":"0")~"; return true;\n\t\t\t}\n";
+		}
+	}
 	d~="\t\tdefault:return false;\n\t}\n}\n";
 	d~="size_t conditionCount(Law law){\n\tswitch(law){\n";
 	foreach(r;rules) d~="\t\tcase Law."~symbolCode(r.name)~":return "~to!string(r.premises.length)~";\n";

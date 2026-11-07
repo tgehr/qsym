@@ -60,7 +60,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",14)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -168,7 +168,7 @@ def main():
 	check(negative/"PartialIsNotTotal.lean",succeeds=False)
 
 	fact=(ROOT/"build/elementary/AbsFact.lean").read_text()
-	weak,count=re.subn(r"\(g1 : (\(Expr.eval ρ n\d+\)) = some true\)",
+	weak,count=re.subn(r"\(g1 : (\(v\d+ ρ\)) = some true\)",
 		r"(g1 : Value.Refines \1 (some true))",fact)
 	if not count:
 		raise RuntimeError("could not construct the weak-assumption test")
@@ -182,7 +182,7 @@ def main():
 
 	guarded=(ROOT/"build/scalar/IntervalAbs.lean").read_text()
 	corrupt,count=re.subn(
-		r"(Generated\.r_real_abs_nonpositive \(Expr.eval ρ n\d+\)) \(p\d+ ρ g\d+\)",
+		r"(Generated\.r_real_abs_nonpositive \(v\d+ ρ\)) \(p\d+ ρ g\d+\)",
 		r"\1 (Value.refines_refl (some true))",guarded,count=1)
 	if count!=1:
 		raise RuntimeError("could not construct the wrong-premise test")
@@ -201,11 +201,23 @@ def main():
 	(negative/"WrongFactProjection.lean").write_text(corrupt)
 	check(negative/"WrongFactProjection.lean",succeeds=False)
 	polynomial=(ROOT/"build/scalar/Polynomial.lean").read_text()
-	corrupt,count=re.subn(r"(Replay\.AC\.sound[^\n]*?\(\.leaf )\d+",r"\g<1>999999",polynomial,count=1)
+	corrupt,count=re.subn(r"(let ac\d+ : Replay.Tree := \(\.leaf )\d+",r"\g<1>999999",polynomial,count=1)
 	if count!=1:
 		raise RuntimeError("could not construct the invalid-permutation test")
 	(negative/"WrongPermutation.lean").write_text(corrupt)
 	check(negative/"WrongPermutation.lean",succeeds=False)
+	deep=(ROOT/"build/associative/Deep512.lean").read_text()
+	corrupt,count=re.subn(r"(theorem cac\d+_\d+ : Replay.Tree.counts ac\d+_\d+ = \[\(\d+,)1",r"\g<1>2",deep,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid-multiplicity test")
+	(negative/"WrongMultiplicity.lean").write_text(corrupt)
+	check(negative/"WrongMultiplicity.lean",succeeds=False)
+	value=(ROOT/"build/associative/RepeatedSum.lean").read_text()
+	corrupt,count=re.subn(r"(noncomputable def v\d+[^\n]*? := )Value.mul",r"\1Value.add",value,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid-evaluation test")
+	(negative/"WrongEvaluation.lean").write_text(corrupt)
+	check(negative/"WrongEvaluation.lean",succeeds=False)
 	rational=(ROOT/"build/scalar/Rational.lean").read_text()
 	corrupt,count=re.subn(r"(Numeric\.sound ρ n\d+) n\d+ rfl",r"\1 (.real 42) rfl",rational,count=1)
 	if count!=1:

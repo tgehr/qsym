@@ -2,6 +2,7 @@ module qsym.derive;
 import qsym.ir;
 import qsym.generated.rules:Instance;
 import qsym.table:Table;
+import qsym.associative:operands;
 import std.exception:enforce;
 @safe:
 
@@ -131,23 +132,14 @@ final class Derivation{
 		if(before==after) return refl(before,context);
 		return record(Deduction(Evidence.numeric,Proof(before,after,uint.max,context)));
 	}
-	private void leaves(Term t,Op op,ref Term[] result){
-		Term[] pending=[t];
-		while(pending.length){
-			t=pending[$-1]; --pending.length;
-			auto n=arena.node(t);
-			if(n.op==op) pending~=[arena.at(n.b),arena.at(n.a)];
-			else if(!(arena.isNumber(t)&&(op==Op.add?arena.number(t).zero:arena.number(t).one))) result~=t;
-		}
-	}
 	Proof ac(Term before,Term after,Op op,uint context){
 		enforce(op==Op.add||op==Op.mul,"AC operation expected");
 		enforce(arena.sort(before)==arena.sort(after),"AC type mismatch");
 		if(before==after) return refl(before,context);
-		Term[] left,right; leaves(before,op,left); leaves(after,op,right);
+		auto left=operands(arena,before,op),right=operands(arena,after,op);
 		Table!(uint,uint) counts;
-		foreach(t;left) counts.set(t.id,counts.get(t.id,0)+1);
-		foreach(t;right){ auto n=counts.get(t.id,0); enforce(n,"AC leaf mismatch"); counts.set(t.id,n-1); }
+		foreach(e;left) counts.set(e.term.id,e.count);
+		foreach(e;right) enforce(counts.get(e.term.id,0)==e.count,"AC leaf mismatch");
 		enforce(left.length==right.length,"AC leaf count mismatch");
 		auto d=Deduction(Evidence.ac,Proof(before,after,uint.max,context)); d.value=op==Op.mul;
 		return record(d);

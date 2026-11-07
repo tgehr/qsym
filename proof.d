@@ -9,7 +9,9 @@ import std.exception:enforce;
 @safe:
 
 private string name(uint i){ return "n"~to!string(i); }
-private string ev(uint i){ return "(Expr.eval ρ "~name(i)~")"; }
+private string exprEval(uint i){ return "(Expr.eval ρ "~name(i)~")"; }
+private string ev(uint i){ return "(v"~to!string(i)~" ρ)"; }
+private string evalEq(uint i){ return "(eval_"~to!string(i)~" ρ)"; }
 private string dc(uint i){ return "(d"~to!string(i)~" ρ)"; }
 private string ds(uint i){ return "(domain_"~to!string(i)~" ρ)"; }
 private string rat(Rational q){ return "(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)"; }
@@ -49,6 +51,51 @@ string leanConstructor(Arena a,Node n){
 	}
 	return "(."~op~(n.arity>=1?" "~name(n.a):"")~
 		(n.arity==2?" "~name(n.b):"")~")";
+}
+
+// Share evaluated subterms as well as syntax. Connect only public endpoints
+// and arithmetic replay to Expr.eval; intermediate steps use the values.
+private string valueCode(Arena a,Term t){
+	auto n=a.node(t); string op;
+	switch(n.op){
+		case Op.add:op="Value.add"; break;
+		case Op.mul:op="Value.mul"; break;
+		case Op.inv:op="Value.inv"; break;
+		case Op.nonzero:op="Value.nonzero"; break;
+		case Op.mask:op="Value.mask"; break;
+		case Op.conj:op="Value.conj"; break;
+		case Op.abs:op="Value.abs"; break;
+		case Op.not_:op="Value.not"; break;
+		case Op.and_:op="Value.and"; break;
+		case Op.or_:op="Value.or"; break;
+		case Op.lt:op="Value.lt"; break;
+		case Op.le:op="Value.le"; break;
+		case Op.densityAt:op="Value.densityAt"; break;
+		case Op.pow:op="(Option.map (fun (x : Ty.denote ."~leanSort(n.sort)~") => x ^ "~to!string(n.value)~"))"; break;
+		case Op.puncture:op="(Option.map Density.puncture)"; break;
+		case Op.forget:op="(Option.map Density.forget)"; break;
+		case Op.builtin:if(n.arity) op="Functions."~builtinInfo(cast(Builtin)n.value).code~".apply"; break;
+		default:enforce(!n.arity,"missing value constructor"); break;
+	}
+	string value;
+	if(n.arity) value=op~" "~ev(n.a)~(n.arity==2?" "~ev(n.b):"");
+	else switch(n.op){
+		case Op.realLit:value="some (("~to!string(n.value)~" : Int) : ℝ)"; break;
+		case Op.complexLit:value="some ((("~to!string(n.value)~" : Int) : ℂ) + (("~to!string(n.imaginary)~" : Int) : ℂ) * Complex.I)"; break;
+		case Op.boolLit:value="some "~(n.value?"true":"false"); break;
+		case Op.variable:value="some (ρ."~leanSort(n.sort)~" "~to!string(n.value)~")"; break;
+		case Op.lebesgue:value="some Density.lebesgue"; break;
+		case Op.builtin:value="some Functions."~builtinInfo(cast(Builtin)n.value).code; break;
+		case Op.numberLit:
+			auto q=a.number(n);
+			if(n.sort==Sort.natural||n.sort==Sort.integer) value="some ("~to!string(q.re.numerator)~")";
+			else if(n.sort==Sort.rational) value="some "~rat(q.re);
+			else if(n.sort==Sort.real_) value="some ("~rat(q.re)~" : ℝ)";
+			else value="some (("~rat(q.re)~" : ℂ) + ("~rat(q.im)~" : ℂ) * Complex.I)";
+			break;
+		default:assert(0,"missing leaf value");
+	}
+	return "noncomputable def v"~to!string(t.id)~" (ρ : Env) : Option (Ty.denote ."~leanSort(n.sort)~") := "~value~"\n";
 }
 
 private string domainCode(Arena a,Term t){
@@ -100,7 +147,7 @@ private string domainCode(Arena a,Term t){
 				").trans (or_congr Iff.rfl (and_congr Iff.rfl "~ds(n.b)~"))"; break;
 	}
 	return "def d"~i~" (ρ : Env) : Prop := "~cond~"\n"~
-		"theorem domain_"~i~" (ρ : Env) : Expr.Defined ρ "~name(t.id)~" ↔ d"~i~" ρ :=\n  "~proof~"\n\n";
+		"theorem domain_"~i~" (ρ : Env) : Value.Defined "~ev(t.id)~" ↔ d"~i~" ρ :=\n  "~proof~"\n\n";
 }
 
 private string contexts(Derivation d,uint ctx,bool declarations){
@@ -179,7 +226,7 @@ private string totalCode(Arena a,Term t,bool[] total){
 			break;
 	}
 	total[t.id]=proof.length!=0;
-	return proof.length?"theorem total_"~to!string(t.id)~" (ρ : Env) : Expr.Defined ρ "~name(t.id)~" :=\n  "~proof~"\n":"";
+	return proof.length?"theorem total_"~to!string(t.id)~" (ρ : Env) : Value.Defined "~ev(t.id)~" :=\n  "~proof~"\n":"";
 }
 private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,string h){
 	if(p.fact!=uint.max){
@@ -231,25 +278,77 @@ private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,str
 	enforce(t==p.term,"bad domain projection");
 	return h;
 }
-private string acEvidence(Arena a,Deduction e){
+private struct ACCode{ string declarations,proof; }
+private ACCode acEvidence(Arena a,Deduction e){
 	import qsym.table:Table;
 	auto op=e.value?Op.mul:Op.add;
-	Term[] atoms; Table!(uint,uint) ids;
-	string tree(Term t){
+	Term[] atoms,pending=[e.proof.before,e.proof.after]; uint[] nodes;
+	Table!(uint,uint) ids; Table!(uint,bool) seen;
+	while(pending.length){
+		auto t=pending[$-1]; --pending.length;
+		if(seen.get(t.id,false)) continue;
+		seen.set(t.id,true); nodes~=t.id;
 		auto n=a.node(t);
-		if(n.op==op) return "(.node "~tree(a.at(n.a))~" "~tree(a.at(n.b))~")";
-		if(a.isNumber(t)&&(e.value?a.number(t).one:a.number(t).zero)) return ".unit";
-		auto i=ids.get(t.id,uint.max);
-		if(i==uint.max){ i=cast(uint)atoms.length; ids.set(t.id,i); atoms~=t; }
-		return "(.leaf "~to!string(i)~")";
+		if(n.op==op) pending~=[a.at(n.b),a.at(n.a)];
+		else if(!a.isNumber(t)||!(e.value?a.number(t).one:a.number(t).zero)){
+			ids.set(t.id,cast(uint)atoms.length); atoms~=t;
+		}
 	}
-	auto left=tree(e.proof.before),right=tree(e.proof.after);
+	import std.algorithm:sort;
+	sort(nodes);
 	auto ac="Replay."~(e.value?"mul":"add")~(a.sort(e.proof.before)==Sort.real_?"R":"C");
 	string env="(fun i => match i with";
 	foreach(i,t;atoms) env~=" | "~to!string(i)~" => "~ev(t.id);
 	env~=" | _ => none)";
-	return "  Value.refines_of_eq (Replay.AC.sound "~ac~" "~env~" "~left~" "~right~
-		" (of_decide_eq_true rfl))\n";
+	bool staged=nodes.length>24;
+	auto prefix=staged?"ac"~to!string(e.proof.id)~"_":"ac";
+	string tree(uint id){ return prefix~to!string(id); }
+	string countRef(uint id){ return "c"~tree(id); }
+	string valueRef(uint id){ return "(e"~tree(id)~" ρ)"; }
+	string code;
+	if(staged){
+		code="attribute [local irreducible] Replay.Tree.counts\nnoncomputable def "~prefix~"env (ρ : Env) : Nat → Option (Ty.denote ."~leanSort(a.sort(e.proof.before))~") := "~env~"\n";
+		env="("~prefix~"env ρ)";
+	}
+	struct Count{ uint atom,count; }
+	Count[][] counts; Table!(uint,uint) locations;
+	foreach(id;nodes){
+		auto n=a.node(a.at(id)); string value;
+		if(n.op==op) value="(.node "~tree(n.a)~" "~tree(n.b)~")";
+		else if(ids.contains(id)) value="(.leaf "~to!string(ids.get(id,0))~")";
+		else value=".unit";
+		if(!staged){ code~="  let "~tree(id)~" : Replay.Tree := "~value~"\n"; continue; }
+		code~="def "~tree(id)~" : Replay.Tree := "~value~"\n";
+		Count[] cs; string cp="rfl";
+		if(n.op==op){
+			auto left=counts[locations.get(n.a,uint.max)],right=counts[locations.get(n.b,uint.max)];
+			size_t i,j;
+			while(i<left.length||j<right.length){
+				if(j==right.length||i<left.length&&left[i].atom<right[j].atom) cs~=left[i++];
+				else if(i==left.length||right[j].atom<left[i].atom) cs~=right[j++];
+				else{
+					enforce(left[i].count<=uint.max-right[j].count,"AC multiplicity overflow");
+					cs~=Count(left[i].atom,left[i].count+right[j].count); ++i; ++j;
+				}
+			}
+			cp="Replay.Tree.counts_node "~tree(n.a)~" "~tree(n.b)~" "~countRef(n.a)~" "~countRef(n.b)~" rfl";
+		}else if(ids.contains(id)) cs=[Count(ids.get(id,0),1)];
+		locations.set(id,cast(uint)counts.length); counts~=cs;
+		string normal="[";
+		foreach(i,c;cs) normal~=(i?",":"")~"("~to!string(c.atom)~","~to!string(c.count)~")";
+		normal~="]";
+		if(n.op==op) cp="(congrArg Replay.Tree.counts (show "~tree(id)~" = "~value~" from rfl)).trans ("~cp~")";
+		else cp="(Replay.Tree.counts.eq_def "~tree(id)~").trans rfl";
+		code~="theorem "~countRef(id)~" : Replay.Tree.counts "~tree(id)~" = "~normal~" := "~cp~"\n";
+	}
+	if(staged) code~="attribute [local semireducible] Replay.Tree.counts\n";
+	auto left=e.proof.before.id,right=e.proof.after.id;
+	if(staged) foreach(id;[left,right]) code~="theorem e"~tree(id)~" (ρ : Env) : Replay.AC.eval "~ac~" "~env~" "~tree(id)~" = "~ev(id)~" := rfl\n";
+	auto same=staged?"("~countRef(left)~".trans "~countRef(right)~".symm)":"rfl";
+	auto proof="(Replay.AC.sound_counts "~ac~" "~env~" "~tree(left)~" "~tree(right)~" "~same~")";
+	if(staged) proof="("~valueRef(left)~".symm.trans ("~proof~".trans "~valueRef(right)~"))";
+	proof="  Value.refines_of_eq "~proof~"\n";
+	return staged?ACCode(code,proof):ACCode("",code~proof);
 }
 
 // The exporter replays named laws and their premises. It never asks an
@@ -266,7 +365,8 @@ string exportLean(Arena a,Result result){
 	}
 	enforce(!chain,"undeclared certificate assumption");
 	enforce(result.certificate.before==result.proofInput&&result.certificate.after==result.output,"certificate endpoints changed");
-	bool[] needed=new bool[a.length],used=new bool[d.deductions.length];
+	bool[] needed=new bool[a.length],used=new bool[d.deductions.length],evaluated=new bool[a.length];
+	foreach(t;[result.input,result.proofInput,result.output]) evaluated[t.id]=true;
 	Term[] pending=[result.input,result.proofInput,result.output];
 	pending~=result.assumptions;
 	Proof[] proofs=[result.certificate];
@@ -281,6 +381,7 @@ string exportLean(Arena a,Result result){
 		enforce(p.id<used.length,"invalid proof index");
 		if(used[p.id]) continue;
 		used[p.id]=true; auto e=d.deductions[p.id]; proofs~=e.premises;
+		if(e.kind==Evidence.numeric){ evaluated[p.before.id]=true; evaluated[p.after.id]=true; }
 		foreach(domain;e.domains) domains(domain);
 		pending~=e.instance.bindings;
 		foreach(c;e.instance.conditions) pending~=c.term;
@@ -292,11 +393,15 @@ string exportLean(Arena a,Result result){
 		needed[t.id]=true;
 		foreach(i;0..a.node(t).arity) pending~=a.child(t,i);
 	}
-	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
+	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nset_option maxRecDepth 8192\n";
 	foreach(i,n;needed) if(n){ auto t=a.at(cast(uint)i); s~="def "~name(t.id)~" : Expr ."~leanSort(a.sort(t))~" := "~leanConstructor(a,a.node(t))~"\n"; }
+	foreach(i,n;needed) if(n) s~=valueCode(a,a.at(cast(uint)i));
+	foreach(i,n;evaluated) if(n) s~="theorem eval_"~to!string(i)~" (ρ : Env) : "~exprEval(cast(uint)i)~" = "~ev(cast(uint)i)~" := rfl\n";
 	s~="\n";
 	foreach(i,yes;used) if(yes){
 		auto e=d.deductions[i],p=e.proof;
+		auto ac=e.kind==Evidence.ac?acEvidence(a,e):ACCode.init;
+		s~=ac.declarations;
 		auto claim=p.known?ev(p.before.id)~" = "~ev(p.after.id):"Value.Refines "~ev(p.before.id)~" "~ev(p.after.id);
 		s~="theorem p"~to!string(i)~" (ρ : Env)"~contexts(d,p.context,true)~" : "~claim~" :=\n";
 		string ref_(Proof q){ return reference(d,q); }
@@ -358,24 +463,37 @@ string exportLean(Arena a,Result result){
 			case Evidence.transport:
 				s~="  "~ref_(e.premises[1])~" true "~reference(d,e.premises[0],true)~"\n"; break;
 			case Evidence.numeric:
-				s~="  Numeric.sound ρ "~name(p.before.id)~" "~name(p.after.id)~" rfl\n";
+				s~="  Eq.mp (congrArg₂ Value.Refines "~evalEq(p.before.id)~" "~evalEq(p.after.id)~") (Numeric.sound ρ "~name(p.before.id)~" "~name(p.after.id)~" rfl)\n";
 				break;
-			case Evidence.ac:s~=acEvidence(a,e); break;
+			case Evidence.ac:s~=ac.proof; break;
 		}
 		s~="\n";
 	}
-	s~="theorem refinement (ρ : Env)"~contexts(d,context,true)~" : Value.Refines "~ev(result.proofInput.id)~" "~ev(result.output.id)~" :=\n  "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
+	s~="theorem refinement (ρ : Env)"~contexts(d,context,true)~" : Value.Refines "~exprEval(result.proofInput.id)~" "~exprEval(result.output.id)~" :=\n  Eq.mpr (congrArg₂ Value.Refines "~evalEq(result.proofInput.id)~" "~evalEq(result.output.id)~") "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
 	s~="theorem simplification (ρ : Env)"~contexts(d,context,true)~" (h : Expr.Defined ρ "~name(result.proofInput.id)~") : "~
-		ev(result.proofInput.id)~" = "~ev(result.output.id)~" := (refinement ρ"~contexts(d,context,false)~").eq_of_defined h\n#qsym_check_axioms simplification\n\n";
+		exprEval(result.proofInput.id)~" = "~exprEval(result.output.id)~" := (refinement ρ"~contexts(d,context,false)~").eq_of_defined h\n#qsym_check_axioms simplification\n\n";
 	auto inputOrder=a.postorder(result.input);
+	bool direct=true;
+	foreach(id;inputOrder){
+		auto n=a.node(a.at(id));
+		if(n.op==Op.inv||n.op==Op.mask||n.op==Op.and_||n.op==Op.or_||n.op==Op.builtin&&n.arity) direct=false;
+	}
+	if(direct){
+		auto id=result.input.id;
+		s~="theorem total_root (ρ : Env) : Value.Defined "~ev(id)~" := ⟨_, rfl⟩\n";
+		s~="def d"~to!string(id)~" (_ : Env) : Prop := True\n";
+		s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(id)~" ↔ "~dc(id)~" := (Iff.of_eq (congrArg Value.Defined "~evalEq(id)~")).trans (iff_true_intro (total_root ρ))\n#qsym_check_axioms definedness\n";
+		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(id)~" := Eq.mpr (congrArg Value.Defined "~evalEq(id)~") (total_root ρ)\n#qsym_check_axioms everywhere_defined\n";
+		return s~"end QSym.Certificate\n";
+	}
 	foreach(i;inputOrder) s~=domainCode(a,a.at(i));
-	s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" ↔ "~dc(result.input.id)~" := "~ds(result.input.id)~"\n#qsym_check_axioms definedness\n";
+	s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" ↔ "~dc(result.input.id)~" := (Iff.of_eq (congrArg Value.Defined "~evalEq(result.input.id)~")).trans "~ds(result.input.id)~"\n#qsym_check_axioms definedness\n";
 	if(domain(a,result.input).everywhere){
 		bool[] total=new bool[a.length];
 		foreach(i;inputOrder) s~=totalCode(a,a.at(i),total);
 		enforce(total[result.input.id],"missing totality proof");
 		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" := "~
-			totalRef(result.input.id)~"\n#qsym_check_axioms everywhere_defined\n";
+			"Eq.mpr (congrArg Value.Defined "~evalEq(result.input.id)~") "~totalRef(result.input.id)~"\n#qsym_check_axioms everywhere_defined\n";
 	}
 	return s~"end QSym.Certificate\n";
 }

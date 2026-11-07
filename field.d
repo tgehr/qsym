@@ -369,19 +369,38 @@ package final class Field{
 		return then(prefix,then(p,d.ac(p.after,balanced(output,Op.add,s),Op.add,ctx),ctx),ctx);
 	}
 	private Proof multiply(Term t,uint ctx){
-		auto n=a.node(t),x=a.at(n.a),y=a.at(n.b);
-		if(!divisions){ auto q=divide(t,ctx); if(q.after!=t) return q; }
-		if(a.node(y).op==Op.add){
-			auto v=a.node(y),p=law!"distribute"(n.sort,[x,a.at(v.a),a.at(v.b)],ctx);
-			auto output=a.node(p.after);
-			p=then(p,d.congr(p.after,[norm(a.at(output.a),ctx),norm(a.at(output.b),ctx)],ctx),ctx);
-			return then(p,sum(p.after,ctx),ctx);
+		auto p=expandPowers?d.refl(t,ctx):product(t,ctx); t=p.after;
+		if(a.node(t).op!=Op.mul) return p;
+		if(!divisions){ auto q=divide(t,ctx); if(q.after!=t) return then(p,q,ctx); }
+		auto fs=leaves(t,Op.mul); size_t at=fs.length;
+		foreach(i,f;fs) if(a.node(f).op==Op.add){ at=i; break; }
+		if(at==fs.length) return p;
+		Term[] rest;
+		foreach(i,f;fs) if(i!=at){
+			if(!expandPowers&&!a.isNumber(f)) return p;
+			rest~=f;
 		}
-		if(a.node(x).op==Op.add){
-			auto swapped=a.mul(y,x);
-			return then(d.ac(t,swapped,Op.mul,ctx),multiply(swapped,ctx),ctx);
+		auto s=a.sort(t),x=balanced(rest,Op.mul,s),y=fs[at],v=a.node(y);
+		p=then(p,d.ac(t,a.mul(x,y),Op.mul,ctx),ctx);
+		p=then(p,law!"distribute"(s,[x,a.at(v.a),a.at(v.b)],ctx),ctx);
+		auto output=a.node(p.after);
+		p=then(p,d.congr(p.after,[norm(a.at(output.a),ctx),norm(a.at(output.b),ctx)],ctx),ctx);
+		return then(p,sum(p.after,ctx),ctx);
+	}
+	// Multiplicities are reduced by doubling. Repeated DAG edges do not cause
+	// repeated normalization or a linear chain of collection proofs.
+	Proof repeated(Proof atom,uint count,Op op,uint ctx){
+		if(count==1) return atom;
+		budget.spend(); enforce(count>1,"positive multiplicity expected");
+		auto half=repeated(atom,count/2,op,ctx);
+		Term join(Term x,Term y){ return op==Op.add?a.add(x,y):a.mul(x,y); }
+		Proof combine(Proof x,Proof y){
+			auto p=d.congr(join(x.before,y.before),[x,y],ctx),q=literal(p.after,ctx);
+			if(q.after==p.after) q=op==Op.add?sum(p.after,ctx):product(p.after,ctx);
+			return then(p,q,ctx);
 		}
-		return product(t,ctx);
+		auto p=combine(half,half);
+		return count&1?combine(p,atom):p;
 	}
 	private Proof power(Term t,uint ctx){
 		auto n=a.node(t),x=a.at(n.a),v=a.node(x);
@@ -419,7 +438,10 @@ package final class Field{
 				auto x=widths.get(n.a,1),y=widths.get(n.b,1);
 				if(y>budget.maxTerms||x>budget.maxTerms-y) return false;
 				width=x+y;
-			}else if(n.op==Op.mul) width=multiply(widths.get(n.a,1),widths.get(n.b,1));
+			}else if(n.op==Op.mul){
+				auto x=widths.get(n.a,1),y=widths.get(n.b,1);
+				width=multiply(x,y); found=found||x>1||y>1;
+			}
 			else if(n.op==Op.pow){
 				auto base=widths.get(n.a,1);
 				found=found||(base>1&&n.value>1);
@@ -489,6 +511,7 @@ package final class Field{
 		auto result=d.ac(t,grouped,Op.mul,ctx);
 		result=then(result,law!"divide_step"(n.sort,[p,denominator,q],ctx),ctx);
 		++divisions; scope(exit) --divisions;
+		auto previous=expandPowers; expandPowers=true; scope(exit) expandPowers=previous;
 		return then(result,norm(result.after,ctx),ctx);
 	}
 	Proof run(Term t,uint ctx){
