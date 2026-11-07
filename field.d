@@ -374,7 +374,7 @@ package final class Field{
 		if(!divisions){ auto q=divide(t,ctx); if(q.after!=t) return then(p,q,ctx); }
 		auto fs=leaves(t,Op.mul); size_t at=fs.length;
 		foreach(i,f;fs) if(a.node(f).op==Op.add){ at=i; break; }
-		if(at==fs.length) return p;
+		if(at==fs.length) return expandPowers?product(t,ctx):p;
 		Term[] rest;
 		foreach(i,f;fs) if(i!=at){
 			if(!expandPowers&&!a.isNumber(f)) return p;
@@ -455,6 +455,33 @@ package final class Field{
 			widths.set(id,width);
 		}
 		return found;
+	}
+	bool commonFactor(Term t,out Term x,out Term y){
+		auto ts=leaves(t,Op.add); if(ts.length<2) return false;
+		Mono[] terms; foreach(term;ts) terms~=mono(term);
+		Factor[] common;
+		foreach(f;terms[0].factors){
+			if(f.exponent<=0) continue;
+			auto minimum=f.exponent;
+			foreach(m;terms[1..$]){
+				long exponent;
+				foreach(g;m.factors){ budget.spend(); if(g.atom==f.atom){ exponent=g.exponent; break; } }
+				if(exponent<minimum) minimum=exponent;
+				if(minimum<=0) break;
+			}
+			if(minimum>0) common~=Factor(f.atom,minimum);
+		}
+		if(!common.length) return false;
+		auto s=a.sort(t); Term[] quotients;
+		foreach(m;terms){
+			Factor[] rest;
+			foreach(f;m.factors){
+				foreach(g;common){ budget.spend(); if(g.atom==f.atom) f.exponent-=g.exponent; }
+				if(f.exponent) rest~=f;
+			}
+			quotients~=emit(Mono(m.coefficient,rest),s);
+		}
+		x=base(Mono(Number(1),common),s); y=balanced(quotients,Op.add,s); return true;
 	}
 	private Mono[] collect(Mono[] p){
 		sort!((x,y)=>order(x,y)>0)(p);

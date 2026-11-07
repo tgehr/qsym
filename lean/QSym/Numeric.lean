@@ -40,6 +40,14 @@ def inverse (q : ℚ) : Option ℚ := if q = 0 then none else some q⁻¹
 def inverseC (z : ℚ × ℚ) : Option (ℚ × ℚ) :=
   if z = (0, 0) then none else some (invC z)
 
+-- Structural fuel keeps kernel reduction independent of well-founded proofs.
+def power : ℕ → ℚ → ℕ → ℚ
+  | 0, _, _ => 1
+  | fuel+1, x, n =>
+    if n=0 then 1 else
+    let y := power fuel (x*x) (n/2)
+    if n%2=0 then y else y*x
+
 def calculate : {s : Ty} → Expr s → Option (Data s)
   | _, .nat v => some v
   | _, .int v => some v
@@ -73,6 +81,7 @@ def calculate : {s : Ty} → Expr s → Option (Data s)
   | _, .powN a n => (calculate a).map (· ^ n)
   | _, .powZ a n => (calculate a).map (· ^ n)
   | _, .powQ a n => (calculate a).map (· ^ n)
+  | _, .powR a n => (calculate a).map (fun x => power n x n)
   | _, .invQ a => (calculate a).bind inverse
   | _, .makeQ a b => do
     let x ← calculate a; let y ← calculate b
@@ -117,6 +126,22 @@ private theorem binary_some {α β γ : Type} {f : α → β → γ} {x : Option
 private theorem map_some {α β : Type} {f : α → β} {x : Option α} {v : β}
     (h : x.map f = some v) : ∃ a, x = some a ∧ f a = v := by
   cases x <;> simp_all
+
+private theorem power_sound (fuel : ℕ) (x : ℚ) (n : ℕ) (h : n≤fuel) : power fuel x n = x^n := by
+  induction fuel generalizing x n with
+  | zero =>
+    have hn : n=0 := by omega
+    subst n
+    rfl
+  | succ fuel ih =>
+    simp only [power]
+    split
+    · next hn => simp [hn]
+    · next hn =>
+      rw [ih (x*x) (n/2) (by omega), ← pow_two, ← pow_mul]
+      split
+      · next he => congr 1; omega
+      · next he => rw [← pow_succ]; congr 1; omega
 
 -- Shared induction; certificates contain only `sound ... rfl`.
 set_option maxHeartbeats 1000000 in
@@ -213,6 +238,9 @@ theorem calculate_sound (ρ : Env) {s : Ty} (term : Expr s) (v : Data s)
   | powQ a n ha =>
     obtain ⟨x, hx, rfl⟩ := map_some h
     simp [Expr.eval, ha x hx, denote]
+  | powR a n ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, denote, power_sound n x n (le_refl n), Rat.cast_pow]
   | invQ a ha =>
     obtain ⟨x, hx, hv⟩ := Option.bind_eq_some_iff.mp h
     by_cases hz : x = 0

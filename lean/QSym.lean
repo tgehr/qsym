@@ -5,4 +5,5 @@ import QSym.Quantum
 import QSym.Generated
 import QSym.Refinement
 import QSym.Replay
+import QSym.Sum
 import QSym.Numeric

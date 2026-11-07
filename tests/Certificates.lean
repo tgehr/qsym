@@ -26,3 +26,10 @@ example (ρ : Env) : Value.Refines (Expr.eval ρ (.ltR (.ratR (-1/3)) (.ratR (-1
     (Expr.eval ρ (.bool true)) := Numeric.sound ρ _ _ rfl
 example (ρ : Env) : Value.Refines (Expr.eval ρ (.leR (.ratR (1/3)) (.ratR (1/3))))
     (Expr.eval ρ (.bool true)) := Numeric.sound ρ _ _ rfl
+example (ρ : Env) : Value.Refines (Expr.eval ρ (.real 8))
+    (Expr.eval ρ (.powR (.real 2) 3)) := Numeric.sound ρ _ _ rfl
+example (ρ : Env) : Value.Refines (Expr.eval ρ (.ratR (-1/8)))
+    (Expr.eval ρ (.powR (.ratR (-1/2)) 3)) := Numeric.sound ρ _ _ rfl
+example (ρ : Env) : Value.Refines (Expr.eval ρ (.real (-1)))
+    (Expr.eval ρ (.powR (.real (-1)) 1000001)) := Numeric.sound ρ _ _ rfl
+example : Numeric.check (.powR (.invR (.real 0)) 0) (.real 1) = false := rfl

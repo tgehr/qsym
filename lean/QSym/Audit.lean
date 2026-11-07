@@ -16,6 +16,8 @@ import QSym
 #print axioms QSym.Generated.r_erase_puncture
 #print axioms QSym.Replay.AC.sound
 #print axioms QSym.Replay.AC.sound_counts
+#print axioms QSym.Sum.normalize_sound
+#print axioms QSym.Sum.sound
 #print axioms QSym.Value.refines_mask_under
 #print axioms QSym.Value.refines_and_under
 #print axioms QSym.Value.refines_or_under

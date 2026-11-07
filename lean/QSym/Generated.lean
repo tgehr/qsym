@@ -1448,6 +1448,150 @@ theorem r_real_nonneg_mul_neg_right (v_x : Option (Ty.denote .real)) (v_y : Opti
 
 #qsym_check_axioms r_real_nonneg_mul_neg_right
 
+theorem r_real_odd_negative (v_x : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (v_x.map (fun x => x ^ ((v_n + v_n) + (1)))) (some (((0) : Int) : ℝ))) (Value.lt v_x (some (((0) : Int) : ℝ))) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_odd_negative
+
+theorem r_real_odd_nonpositive (v_x : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (v_x.map (fun x => x ^ ((v_n + v_n) + (1)))) (some (((0) : Int) : ℝ))) (Value.le v_x (some (((0) : Int) : ℝ))) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_odd_nonpositive
+
+theorem r_real_odd_positive (v_x : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (v_x.map (fun x => x ^ ((v_n + v_n) + (1))))) (Value.lt (some (((0) : Int) : ℝ)) v_x) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_odd_positive
+
+theorem r_real_odd_nonnegative (v_x : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (some (((0) : Int) : ℝ)) (v_x.map (fun x => x ^ ((v_n + v_n) + (1))))) (Value.le (some (((0) : Int) : ℝ)) v_x) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_odd_nonnegative
+
+theorem r_real_even_lt_nonpositive (v_x : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real)) (v_n : Nat)
+    (hp0 : Value.Refines (Value.le v_c (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.lt (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) v_c) (some false) := by
+  cases v_x <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_even_lt_nonpositive
+
+theorem r_real_even_le_negative (v_x : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real)) (v_n : Nat)
+    (hp0 : Value.Refines (Value.lt v_c (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.le (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) v_c) (some false) := by
+  cases v_x <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_even_le_negative
+
+theorem r_real_negative_lt_even (v_x : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real)) (v_n : Nat)
+    (hp0 : Value.Refines (Value.lt v_c (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.lt v_c (v_x.map (fun x => x ^ ((v_n + v_n) + (2))))) (some true) := by
+  cases v_x <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_negative_lt_even
+
+theorem r_real_nonpositive_le_even (v_x : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real)) (v_n : Nat)
+    (hp0 : Value.Refines (Value.le v_c (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.le v_c (v_x.map (fun x => x ^ ((v_n + v_n) + (2))))) (some true) := by
+  cases v_x <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonpositive_le_even
+
+theorem r_real_odd_mul_negative (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (1)))) v_y) (some (((0) : Int) : ℝ))) (Value.lt (Value.mul v_x v_y) (some (((0) : Int) : ℝ))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_odd_mul_negative
+
+theorem r_real_odd_mul_nonpositive (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (1)))) v_y) (some (((0) : Int) : ℝ))) (Value.le (Value.mul v_x v_y) (some (((0) : Int) : ℝ))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_odd_mul_nonpositive
+
+theorem r_real_odd_mul_positive (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (1)))) v_y)) (Value.lt (some (((0) : Int) : ℝ)) (Value.mul v_x v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_odd_mul_positive
+
+theorem r_real_odd_mul_nonnegative (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (some (((0) : Int) : ℝ)) (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (1)))) v_y)) (Value.le (some (((0) : Int) : ℝ)) (Value.mul v_x v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_odd_mul_nonnegative
+
+theorem r_real_even_mul_negative (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) v_y) (some (((0) : Int) : ℝ))) (Value.and (Value.nonzero v_x) (Value.lt v_y (some (((0) : Int) : ℝ)))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_even_mul_negative
+
+theorem r_real_even_mul_nonpositive (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) v_y) (some (((0) : Int) : ℝ))) (Value.or (Value.not (Value.nonzero v_x)) (Value.le v_y (some (((0) : Int) : ℝ)))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_even_mul_nonpositive
+
+theorem r_real_even_mul_positive (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) v_y)) (Value.and (Value.nonzero v_x) (Value.lt (some (((0) : Int) : ℝ)) v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_even_mul_positive
+
+theorem r_real_even_mul_nonnegative (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (some (((0) : Int) : ℝ)) (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) v_y)) (Value.or (Value.not (Value.nonzero v_x)) (Value.le (some (((0) : Int) : ℝ)) v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_even_mul_nonnegative
+
+theorem r_real_power_mul_swap_negative (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (Value.mul v_x (v_y.map (fun x => x ^ (v_n + (1))))) (some (((0) : Int) : ℝ))) (Value.lt (Value.mul (v_y.map (fun x => x ^ (v_n + (1)))) v_x) (some (((0) : Int) : ℝ))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_mul_swap_negative
+
+theorem r_real_power_mul_swap_nonpositive (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (Value.mul v_x (v_y.map (fun x => x ^ (v_n + (1))))) (some (((0) : Int) : ℝ))) (Value.le (Value.mul (v_y.map (fun x => x ^ (v_n + (1)))) v_x) (some (((0) : Int) : ℝ))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_mul_swap_nonpositive
+
+theorem r_real_power_mul_swap_positive (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Value.mul v_x (v_y.map (fun x => x ^ (v_n + (1)))))) (Value.lt (some (((0) : Int) : ℝ)) (Value.mul (v_y.map (fun x => x ^ (v_n + (1)))) v_x)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_mul_swap_positive
+
+theorem r_real_power_mul_swap_nonnegative (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Value.le (some (((0) : Int) : ℝ)) (Value.mul v_x (v_y.map (fun x => x ^ (v_n + (1)))))) (Value.le (some (((0) : Int) : ℝ)) (Value.mul (v_y.map (fun x => x ^ (v_n + (1)))) v_x)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_mul_swap_nonnegative
+
 theorem r_real_abs_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
     Value.Refines (Value.lt (Value.abs v_x) v_y) (Value.and (Value.lt (Value.mul (some (((-1) : Int) : ℝ)) v_y) v_x) (Value.lt v_x v_y)) := by
   cases v_x <;> cases v_y
@@ -1691,6 +1835,16 @@ theorem r_real_le_affine_neg (v_l : Option (Ty.denote .real)) (v_r : Option (Ty.
   all_goals qsym_rule
 
 #qsym_check_axioms r_real_le_affine_neg
+
+theorem r_complex_nonzero_factor (v_p : Option (Ty.denote .complex)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add v_p (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Value.mul v_x v_y))))) (some true))
+    (hp1 : Value.Defined v_x)
+    (hp2 : Value.Defined v_y) :
+    Value.Refines (Value.nonzero v_p) (Value.and (Value.nonzero v_x) (Value.nonzero v_y)) := by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_nonzero_factor
 
 theorem r_real_nonzero_factor (v_p : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
     (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add v_p (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_x v_y))))) (some true))

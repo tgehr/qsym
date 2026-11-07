@@ -60,7 +60,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",14)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",14),("signs",51),("sum",7)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -142,6 +142,8 @@ def main():
 		("BadProductBoundary","rewrite bad(x:ℝ,y:ℝ):x*y<0⇒y<0 when 0≤x;"),
 		("BadEvenMonotonicity","rewrite bad(x:ℝ,y:ℝ):x^2<y^2⇒x<y;"),
 		("BadEvenZero","rewrite bad(x:ℝ,y:ℝ):x^0≤y^0⇒abs(x)≤abs(y);"),
+		("BadEvenSign","rewrite bad(x:ℝ):x^2<0⇒x<0;"),
+		("BadEvenProductZero","rewrite bad(x:ℝ,y:ℝ):x^2*y<0⇒y<0;"),
 		("BadPowerDirection","rewrite bad(x:ℝ,y:ℝ):powerR(real(1,2),x)<powerR(real(1,2),y)⇒x<y;"),
 		("BadSqrtBound","rewrite bad(x:ℝ,y:ℝ):sqrt(x)≤y⇒x≤y^2;"),
 		("BadAbsBound","rewrite bad(x:ℝ,y:ℝ):abs(x)=y⇒x=-y∨x=y;"),
@@ -218,6 +220,27 @@ def main():
 		raise RuntimeError("could not construct the invalid-evaluation test")
 	(negative/"WrongEvaluation.lean").write_text(corrupt)
 	check(negative/"WrongEvaluation.lean",succeeds=False)
+	root=(ROOT/"build/signs/OddBound.lean").read_text()
+	corrupt,count=re.subn(r"(def n\d+ : Expr .real := \(.real \()2(\)\))",r"\g<1>3\2",root,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the incorrect-root test")
+	(negative/"WrongRoot.lean").write_text(corrupt)
+	check(negative/"WrongRoot.lean",succeeds=False)
+	sum_source=(ROOT/"build/sum/real_.lean").read_text()
+	for name,pattern,replacement in (
+		("WrongSumMultiplicity",r"(def output[^\n]*?\.term \d+,)2",r"\g<1>3"),
+		("WrongSumLiteral",r"(def output[^\n]*?\.literal \(\()128",r"\g<1>129")):
+		corrupt,count=re.subn(pattern,replacement,sum_source,count=1)
+		if count!=1:
+			raise RuntimeError("could not construct "+name)
+		(negative/(name+".lean")).write_text(corrupt)
+		check(negative/(name+".lean"),succeeds=False)
+	partial=(ROOT/"build/sum/Partial3.lean").read_text()
+	corrupt,count=re.subn(r"(def output[^\n]*? := )[^\n]+",r"\1[]",partial,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid sum cancellation test")
+	(negative/"WrongSumCancellation.lean").write_text(corrupt)
+	check(negative/"WrongSumCancellation.lean",succeeds=False)
 	rational=(ROOT/"build/scalar/Rational.lean").read_text()
 	corrupt,count=re.subn(r"(Numeric\.sound ρ n\d+) n\d+ rfl",r"\1 (.real 42) rfl",rational,count=1)
 	if count!=1:

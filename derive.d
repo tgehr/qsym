@@ -123,12 +123,12 @@ final class Derivation{
 		auto result=record(d); domainFacts~=result; return result;
 	}
 	Proof numeric(Term before,Term after,uint context){
-		foreach(id;arena.postorder(before)){
+		enforce(arena.sort(before)==arena.sort(after),"numeric type mismatch");
+		foreach(t;[before,after]) foreach(id;arena.postorder(t)){
 			auto n=arena.node(arena.at(id));
 			enforce(qsym.ir.numeric(n.sort)||n.sort==Sort.boolean,"non-scalar numeric certificate");
 			enforce(n.op!=Op.variable&&n.op!=Op.densityAt,"symbolic numeric certificate");
 		}
-		enforce(arena.isNumber(after)||arena.node(after).op==Op.boolLit,"numeric result expected");
 		if(before==after) return refl(before,context);
 		return record(Deduction(Evidence.numeric,Proof(before,after,uint.max,context)));
 	}

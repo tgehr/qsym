@@ -19,7 +19,7 @@ package final class Engine{
 	private Elementary elementary;
 	private Predicates predicates;
 	private size_t rewritesLeft;
-	private uint depth,epoch;
+	private uint depth,epoch,premiseDepth;
 	private struct MemoKey{ ulong term; uint revision; }
 	private Table!(MemoKey,uint) memo;
 	private struct ContextKey{ uint parent,guard,revision; bool value,expand; }
@@ -51,6 +51,12 @@ package final class Engine{
 		auto previous=field.expandPowers; field.expandPowers=true;
 		scope(exit) field.expandPowers=previous;
 		return go(t,ctx,true);
+	}
+	private Proof expandedEquality(Term t,uint ctx){
+		auto test=a.child(t,0),q=expanded(a.child(test,0),ctx);
+		if(!a.isNumber(q.after)||!a.number(q.after).zero) return d.refl(t,ctx);
+		auto p=d.congr(t,[d.congr(test,[q],ctx)],ctx);
+		return d.trans(p,go(p.after,ctx,true),ctx);
 	}
 	private bool closed(Term t){
 		foreach(id;a.postorder(t)){
@@ -194,12 +200,13 @@ package final class Engine{
 			result=numeric; remember(truths,k,result); return true;
 		}
 		if(proving.get(k,false)) return false;
-		proving.set(k,true); scope(exit) proving.set(k,false);
+		proving.set(k,true); ++premiseDepth;
+		scope(exit){ proving.set(k,false); --premiseDepth; }
 		// Check a bounded polynomial identity before asking root/guard solvers
 		// to reason about its unevaluated factored residual.
 		auto goal=a.node(t);
 		if(!field.expandPowers&&goal.op==Op.not_&&a.node(a.at(goal.a)).op==Op.nonzero&&field.expandable(t)){
-			auto q=expanded(t,ctx);
+			auto q=expandedEquality(t,ctx);
 			if(q.after==a.boolean(true)){ result=q; remember(truths,k,result); return true; }
 		}
 		foreach(law;inferences(a.node(t))) if(attempt(law,t,ctx,result)){
@@ -214,7 +221,7 @@ package final class Engine{
 		// Polynomial identities needed by solvers may use a different normal form.
 		auto n=a.node(p.after);
 		if(!field.expandPowers&&n.op==Op.not_&&a.node(a.at(n.a)).op==Op.nonzero&&field.expandable(p.after)){
-			auto q=expanded(p.after,ctx);
+			auto q=expandedEquality(p.after,ctx);
 			if(q.after==a.boolean(true)){ result=d.trans(p,q,ctx); remember(truths,k,result); return true; }
 		}
 		return false;
@@ -337,6 +344,26 @@ package final class Engine{
 		}
 		return d.trans(d.ac(t,ps[0].before,n.op,ctx),ps[0],ctx);
 	}
+	private bool powerBound(Term t,uint ctx,out Proof result){
+		auto n=a.node(t); if(n.op!=Op.lt&&n.op!=Op.le) return false;
+		auto left=a.at(n.a),right=a.at(n.b);
+		bool reverse=a.node(right).op==Op.pow&&a.isNumber(left);
+		auto power=reverse?right:left,bound=reverse?left:right,p=a.node(power);
+		if(p.op!=Op.pow||p.sort!=Sort.real_||p.value<2||!a.isNumber(bound)) return false;
+		auto value=a.number(bound).re; bool negative=value<Rational(0);
+		if(negative&&!(p.value&1)) return false;
+		Rational root;
+		if(!elementary.root(negative?-value:value,cast(uint)p.value,root)) return false;
+		auto atom=a.at(p.a),constant=a.real_(negative?-root:root),lifted=a.pow(constant,cast(uint)p.value);
+		auto q=d.numeric(bound,lifted,ctx),same=d.refl(power,ctx);
+		auto congr=d.congr(t,reverse?[q,same]:[same,q],ctx);
+		auto odd=cast(bool)(p.value&1);
+		auto law=n.op==Op.lt?(odd?Law.real_lt_odd_power:Law.real_lt_even_power):
+			(odd?Law.real_le_odd_power:Law.real_le_even_power);
+		Proof step;
+		if(!instanceProof(instantiate(a,law,[reverse?constant:atom,reverse?atom:constant,a.real_((p.value-(odd?1:2))/2)]),ctx,step)) return false;
+		result=d.trans(congr,step,ctx); return true;
+	}
 	Proof go(Term t,uint ctx=0,bool probe=false){
 		auto k=key(t,ctx,probe);
 		auto cached=k<=uint.max?(t.id<roots.length?roots[t.id]:0):memo.get(MemoKey(k,revision(ctx)),uint.max)+1;
@@ -409,14 +436,17 @@ package final class Engine{
 				}
 			}
 			Instance proposal; Proof proposed;
+			if(powerBound(current,ctx,proposed)){
+				p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
+			}
 			if(elementary.propose(current,proposal)&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
 				p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 			}
 			if(n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le){
 				auto residual=n.op==Op.nonzero?a.at(n.a):go(a.sub(a.at(n.a),a.at(n.b)),ctx,true).after;
-				auto found=predicates.propose(current,residual,proposal);
+				auto found=predicates.propose(current,residual,proposal,!premiseDepth);
 				if(!found&&!field.expandPowers&&field.expandable(residual))
-					found=predicates.propose(current,expanded(residual,ctx).after,proposal);
+					found=predicates.propose(current,expanded(residual,ctx).after,proposal,!premiseDepth);
 				if(found&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
 					p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 				}

@@ -15,11 +15,18 @@ package final class Predicates{
 	this(Arena a,Budget budget,Field field,Elementary elementary){
 		this.a=a; this.budget=budget; this.field=field; this.elementary=elementary;
 	}
-	bool propose(Term t,Term residual,out Instance result){
+	bool propose(Term t,Term residual,out Instance result,bool factor=true){
 		auto n=a.node(t); Term atom; Number[3] c;
-		if(!field.quadratic(residual,atom,c)) return false;
 		auto s=a.sort(residual),complex=s==Sort.complex;
 		auto nz=n.op==Op.nonzero; auto l=a.at(n.a),r=nz?a.number(Number(0),s):a.at(n.b);
+		if(!field.quadratic(residual,atom,c)){
+			// Do not recursively factor goals generated to check a factorization.
+			if(!factor) return false;
+			Term x,y; if(!field.commonFactor(residual,x,y)) return false;
+			result=nz?instantiate(a,complex?Law.complex_nonzero_factor:Law.real_nonzero_factor,[l,x,y]):
+				instantiate(a,n.op==Op.lt?Law.real_lt_factor:Law.real_le_factor,[l,r,x,y]);
+			return true;
+		}
 		if(c[2].zero){
 			if(c[1].zero||nz&&c[1].one) return false;
 			if(!nz&&(l==atom&&a.isNumber(r)||r==atom&&a.isNumber(l))) return false;

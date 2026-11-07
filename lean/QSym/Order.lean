@@ -45,6 +45,73 @@ theorem odd_power_le (x y : ℝ) (n : ℕ) : x^(n+n+1)≤y^(n+n+1) ↔ x≤y :=
 theorem odd_power_eq (x y : ℝ) (n : ℕ) : x^(n+n+1)=y^(n+n+1) ↔ x=y :=
   (show Odd (n+n+1) from ⟨n, by omega⟩).pow_inj
 
+theorem odd_negative (x : ℝ) (n : ℕ) : x^(n+n+1)<0 ↔ x<0 :=
+  (show Odd (n+n+1) from ⟨n, by omega⟩).pow_neg_iff
+
+theorem odd_nonpositive (x : ℝ) (n : ℕ) : x^(n+n+1)≤0 ↔ x≤0 :=
+  (show Odd (n+n+1) from ⟨n, by omega⟩).pow_nonpos_iff
+
+theorem odd_positive (x : ℝ) (n : ℕ) : 0<x^(n+n+1) ↔ 0<x :=
+  (show Odd (n+n+1) from ⟨n, by omega⟩).pow_pos_iff
+
+theorem odd_nonnegative (x : ℝ) (n : ℕ) : 0≤x^(n+n+1) ↔ 0≤x :=
+  (show Odd (n+n+1) from ⟨n, by omega⟩).pow_nonneg_iff
+
+theorem even_nonnegative (x : ℝ) (n : ℕ) : 0≤x^(n+n+2) :=
+  (show Even (n+n+2) from ⟨n+1, by omega⟩).pow_nonneg x
+
+theorem even_lt_nonpositive (x c : ℝ) (n : ℕ) (hc : c≤0) : x^(n+n+2)<c ↔ False :=
+  iff_false_intro (not_lt_of_ge (hc.trans (even_nonnegative x n)))
+
+theorem even_le_negative (x c : ℝ) (n : ℕ) (hc : c<0) : x^(n+n+2)≤c ↔ False :=
+  iff_false_intro (not_le_of_gt (hc.trans_le (even_nonnegative x n)))
+
+theorem negative_lt_even (x c : ℝ) (n : ℕ) (hc : c<0) : c<x^(n+n+2) ↔ True :=
+  iff_true_intro (hc.trans_le (even_nonnegative x n))
+
+theorem nonpositive_le_even (x c : ℝ) (n : ℕ) (hc : c≤0) : c≤x^(n+n+2) ↔ True :=
+  iff_true_intro (hc.trans (even_nonnegative x n))
+
+theorem odd_mul_negative (x y : ℝ) (n : ℕ) : x^(n+n+1)*y<0 ↔ x*y<0 := by
+  simp only [mul_neg_iff, odd_negative, odd_nonpositive, odd_positive, odd_nonnegative]
+
+theorem odd_mul_nonpositive (x y : ℝ) (n : ℕ) : x^(n+n+1)*y≤0 ↔ x*y≤0 := by
+  simp only [mul_nonpos_iff, odd_negative, odd_nonpositive, odd_positive, odd_nonnegative]
+
+theorem odd_mul_positive (x y : ℝ) (n : ℕ) : 0<x^(n+n+1)*y ↔ 0<x*y := by
+  simp only [mul_pos_iff, odd_negative, odd_nonpositive, odd_positive, odd_nonnegative]
+
+theorem odd_mul_nonnegative (x y : ℝ) (n : ℕ) : 0≤x^(n+n+1)*y ↔ 0≤x*y := by
+  simp only [mul_nonneg_iff, odd_negative, odd_nonpositive, odd_positive, odd_nonnegative]
+
+theorem even_mul_negative (x y : ℝ) (n : ℕ) : x^(n+n+2)*y<0 ↔ x≠0 ∧ y<0 := by
+  by_cases hx : x=0
+  · simp [hx]
+  · have hp : 0<x^(n+n+2) := (show Even (n+n+2) from ⟨n+1, by omega⟩).pow_pos_iff (by omega) |>.mpr hx
+    simp [hx, mul_neg_iff, mul_nonpos_iff, mul_pos_iff, mul_nonneg_iff,
+      hp, hp.le, not_lt_of_ge hp.le, not_le_of_gt hp]
+
+theorem even_mul_nonpositive (x y : ℝ) (n : ℕ) : x^(n+n+2)*y≤0 ↔ x=0 ∨ y≤0 := by
+  by_cases hx : x=0
+  · simp [hx]
+  · have hp : 0<x^(n+n+2) := (show Even (n+n+2) from ⟨n+1, by omega⟩).pow_pos_iff (by omega) |>.mpr hx
+    simp [hx, mul_neg_iff, mul_nonpos_iff, mul_pos_iff, mul_nonneg_iff,
+      hp, hp.le, not_lt_of_ge hp.le, not_le_of_gt hp]
+
+theorem even_mul_positive (x y : ℝ) (n : ℕ) : 0<x^(n+n+2)*y ↔ x≠0 ∧ 0<y := by
+  by_cases hx : x=0
+  · simp [hx]
+  · have hp : 0<x^(n+n+2) := (show Even (n+n+2) from ⟨n+1, by omega⟩).pow_pos_iff (by omega) |>.mpr hx
+    simp [hx, mul_neg_iff, mul_nonpos_iff, mul_pos_iff, mul_nonneg_iff,
+      hp, hp.le, not_lt_of_ge hp.le, not_le_of_gt hp]
+
+theorem even_mul_nonnegative (x y : ℝ) (n : ℕ) : 0≤x^(n+n+2)*y ↔ x=0 ∨ 0≤y := by
+  by_cases hx : x=0
+  · simp [hx]
+  · have hp : 0<x^(n+n+2) := (show Even (n+n+2) from ⟨n+1, by omega⟩).pow_pos_iff (by omega) |>.mpr hx
+    simp [hx, mul_neg_iff, mul_nonpos_iff, mul_pos_iff, mul_nonneg_iff,
+      hp, hp.le, not_lt_of_ge hp.le, not_le_of_gt hp]
+
 theorem even_power_lt (x y : ℝ) (n : ℕ) : x^(n+n+2)<y^(n+n+2) ↔ |x| < |y| := by
   have h : Even (n+n+2) := ⟨n+1, by omega⟩
   rw [← h.pow_abs x, ← h.pow_abs y]
