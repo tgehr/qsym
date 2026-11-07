@@ -72,6 +72,24 @@ theorem refines_inv {α : Type} [Zero α] [Inv α] {a b : Option α}
     (h : Refines a b) : Refines (inv a) (inv b) :=
   refines_bind h (fun _ => refines_refl _)
 
+private theorem quotient_add_eq_zero {α : Type} [Field α] (x y z : α) (hy : y≠0) :
+    x*y⁻¹+z=0 ↔ x+y*z=0 := by
+  have h : (x*y⁻¹+z)*y=x+y*z := by
+    calc
+      (x*y⁻¹+z)*y=x*(y⁻¹*y)+y*z := by ring
+      _=x+y*z := by rw [inv_mul_cancel₀ hy]; simp
+  rw [← h, mul_eq_zero]
+  simp [hy]
+
+theorem refines_quotient_add_nonzero {α : Type} [Field α] (x y z : Option α) :
+    Refines (nonzero (add (mul x (inv y)) z)) (nonzero (add x (mul y z))) := by
+  classical
+  cases x <;> cases y <;> cases z <;> simp [Refines, nonzero, add, mul, inv]
+  next x y z =>
+    by_cases hy : y=0
+    · simp [hy, mul, add, nonzero]
+    · simp [hy, mul, add, nonzero, quotient_add_eq_zero x y z hy]
+
 theorem refines_inv_inv {α : Type} [DivisionRing α] (x : Option α) :
     Refines (inv (inv x)) x := by
   cases x with
@@ -383,6 +401,7 @@ macro "qsym_order" : tactic => `(tactic| (
 
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | exact Value.refines_quotient_add_nonzero _ _ _
   | solve | qsym_order
   | exact Value.refines_inv_inv _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_real_nonzero_quadratic <;> assumption)

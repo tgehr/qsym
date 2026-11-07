@@ -24,9 +24,10 @@ def main():
 	# Useful when sharing a preinstalled Mathlib tree; normal users use Lake.
 	parser.add_argument("--lean",help="invoke this Lean directly, with configured LEAN_PATH")
 	parser.add_argument("--jobs",type=int,default=1,help="parallel certificate checks")
+	parser.add_argument("--batch-size",type=int,default=1,help="check independent standard certificates in shared Lean processes")
 	args=parser.parse_args()
-	if args.jobs<1:
-		parser.error("--jobs must be positive")
+	if args.jobs<1 or args.batch_size<1:
+		parser.error("--jobs and --batch-size must be positive")
 
 	def check(path,succeeds=True,timeout=180):
 		cmd=[args.lean] if args.lean else [args.lake,"env","lean"]
@@ -60,7 +61,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",14),("signs",51),("sum",7)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",18),("signs",51),("sum",7),("rational",24)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -93,9 +94,42 @@ def main():
 	for file in files:
 		certificate(file)
 
+	checks=certificates; members={}
+	if args.batch_size>1:
+		checks=[]; pending=[]; directory=ROOT/"build/verification"
+		directory.mkdir(exist_ok=True)
+		def flush():
+			if not pending:
+				return
+			path=directory/("Batch"+str(len(checks))+".lean")
+			parts=["import QSym\n"]
+			for i,(file,source) in enumerate(pending):
+				parts.append("-- "+str(file.relative_to(ROOT))+"\n"+source.replace("QSym.Certificate","QSym.BatchCertificate"+str(i)))
+			path.write_text("\n".join(parts)); checks.append(path); members[path]=[file for file,_ in pending]; pending.clear()
+		for file in certificates:
+			source=file.read_text()
+			# Only rename the exporter's single, self-contained namespace.
+			if re.findall(r"^namespace ([^\n]+)",source,re.M)==["QSym.Certificate"] and re.findall(r"^import ([^\n]+)",source,re.M)==["QSym"]:
+				pending.append((file,re.sub(r"^import QSym\n","",source,flags=re.M)))
+				if len(pending)==args.batch_size:
+					flush()
+			else:
+				checks.append(file)
+		flush()
+	def check_group(path):
+		files=members.get(path,[path])
+		try:
+			check(path,timeout=180*len(files))
+		except (RuntimeError,subprocess.TimeoutExpired):
+			if path not in members:
+				raise
+			print(f"{path.name} failed; checking {len(files)} constituent certificates individually.",flush=True)
+			for file in files:
+				check(file)
 	with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-		for _ in pool.map(check,certificates):
+		for _ in pool.map(check_group,checks):
 			pass
+	print(f"Checked {len(certificates)} tactic-free certificates.",flush=True)
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
@@ -134,6 +168,8 @@ def main():
 		("BadRealRoot","rewrite bad(x:ℝ):sqrt(x^2)⇒x;"),
 		("BadDistribution","rewrite bad(p:𝔹,q:𝔹,r:𝔹):(p∨q)∧r⇒(p∧r)∨(q∧r);"),
 		("BadSwap","rewrite bad(p:𝔹,q:𝔹):p∧q⇒q∧p;"),
+		("BadReciprocalClear","rewrite bad(x:ℝ,y:ℝ):x⁻¹+y≠0⇒1+y≠0;"),
+		("BadComplexReciprocalClear","rewrite bad(x:ℂ,y:ℂ):x⁻¹+y≠0⇒1+y≠0;"),
 		("BadQuadraticDiscriminant","lemma bad(x:ℝ):x^2+1≠0⇒x≠-1∧x≠1;"),
 		("BadQuadraticLeading","lemma bad(x:ℂ,a:ℂ):a*(x^2-1)≠0⇒x≠-1∧x≠1;"),
 		("BadRootSelection","lemma bad(z:ℂ):z⇒ⅈ when z^2+1=0;"),
@@ -209,11 +245,20 @@ def main():
 	(negative/"WrongPermutation.lean").write_text(corrupt)
 	check(negative/"WrongPermutation.lean",succeeds=False)
 	deep=(ROOT/"build/associative/Deep512.lean").read_text()
-	corrupt,count=re.subn(r"(theorem cac\d+_\d+ : Replay.Tree.counts ac\d+_\d+ = \[\(\d+,)1",r"\g<1>2",deep,count=1)
+	corrupt,count=re.subn(r"(def ac\d+_b\d+ : Replay.Bag 0 := \.leaf )1",r"\g<1>2",deep,count=1)
 	if count!=1:
 		raise RuntimeError("could not construct the invalid-multiplicity test")
 	(negative/"WrongMultiplicity.lean").write_text(corrupt)
 	check(negative/"WrongMultiplicity.lean",succeeds=False)
+	for name,pattern,replacement in (
+		("WrongBagBranch",r"(def ac\d+_b\d+ : Replay.Bag \d+ := \.node )([^\n]+)",r"\1Replay.Bag.zero Replay.Bag.zero"),
+		("WrongBagIndex",r"(Replay.Bag.atom_sound Replay\.\w+ \(ac\d+_env ρ\) \d+ )\d+",r"\g<1>999999")):
+		corrupt,count=re.subn(pattern,replacement,deep,count=1)
+		if count!=1:
+			raise RuntimeError("could not construct "+name)
+		(negative/(name+".lean")).write_text(corrupt)
+		check(negative/(name+".lean"),succeeds=False)
+
 	value=(ROOT/"build/associative/RepeatedSum.lean").read_text()
 	corrupt,count=re.subn(r"(noncomputable def v\d+[^\n]*? := )Value.mul",r"\1Value.add",value,count=1)
 	if count!=1:

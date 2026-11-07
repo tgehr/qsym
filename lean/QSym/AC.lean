@@ -32,6 +32,16 @@ def AC.fold {α : Type} (a : AC α) (ρ : Nat → α) : List Nat → α
 theorem AC.left_id {α : Type} (a : AC α) (x : α) : a.op a.unit x = x := by
   rw [a.comm, a.right_id]
 
+def AC.repeat {α : Type} (a : AC α) (x : α) : Nat → α
+  | 0 => a.unit
+  | n+1 => a.op x (a.repeat x n)
+
+theorem AC.repeat_add {α : Type} (a : AC α) (x : α) (n m : Nat) :
+    a.repeat x (n+m) = a.op (a.repeat x n) (a.repeat x m) := by
+  induction n with
+  | zero => simp [AC.repeat, a.left_id]
+  | succ n ih => simpa [AC.repeat, Nat.succ_add, ih] using (a.assoc x (a.repeat x n) (a.repeat x m)).symm
+
 theorem AC.fold_append {α : Type} (a : AC α) (ρ : Nat → α) (xs ys : List Nat) :
     a.fold ρ (xs ++ ys) = a.op (a.fold ρ xs) (a.fold ρ ys) := by
   induction xs with

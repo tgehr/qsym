@@ -3912,6 +3912,20 @@ theorem r_complex_inverse_ne (v_z : Option (Ty.denote .complex)) (v_w : Option (
 
 #qsym_check_axioms r_complex_inverse_ne
 
+theorem r_real_quotient_add_nonzero (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Value.mul v_x (Value.inv v_y)) v_z)) (Value.nonzero (Value.add v_x (Value.mul v_y v_z))) := by
+  cases v_x <;> cases v_y <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_quotient_add_nonzero
+
+theorem r_complex_quotient_add_nonzero (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex)) (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Value.nonzero (Value.add (Value.mul v_x (Value.inv v_y)) v_z)) (Value.nonzero (Value.add v_x (Value.mul v_y v_z))) := by
+  cases v_x <;> cases v_y <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_quotient_add_nonzero
+
 theorem r_real_add_lt_cancel (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real)) :
     Value.Refines (Value.lt (Value.add v_x v_t) (Value.add v_y v_t)) (Value.lt v_x v_y) := by
   cases v_x <;> cases v_y <;> cases v_t

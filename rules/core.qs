@@ -533,6 +533,9 @@ rewrite real_inverse_nonnegative(x:ℝ):0≤x⁻¹⇒0≤x;
 rewrite real_inverse_nonpositive(x:ℝ):x⁻¹≤0⇒x≤0;
 rewrite real_inverse_ne(x:ℝ,y:ℝ):x⁻¹≠y⁻¹⇒x≠y;
 rewrite complex_inverse_ne(z:ℂ,w:ℂ):z⁻¹≠w⁻¹⇒z≠w;
+lemma real_quotient_add_nonzero(x:ℝ,y:ℝ,z:ℝ):x*y⁻¹+z≠0⇒x+y*z≠0;
+lemma complex_quotient_add_nonzero(x:ℂ,y:ℂ,z:ℂ):x*y⁻¹+z≠0⇒x+y*z≠0;
+
 rewrite real_add_lt_cancel(x:ℝ,y:ℝ,t:ℝ):x+t<y+t⇒x<y;
 rewrite real_add_le_cancel(x:ℝ,y:ℝ,t:ℝ):x+t≤y+t⇒x≤y;
 rewrite real_abs_even_power(x:ℝ,n:NatParam):abs(x)^(n+n)⇒x^(n+n);

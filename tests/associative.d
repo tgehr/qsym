@@ -64,6 +64,24 @@ unittest{
 	assert(!r.exhausted,"unindexed pair search");
 	assert(simplify(a,r.output,options).output==r.output);
 }
+private Term partialRegion(Arena a,Sort s,Op op){
+	auto t=a.number(Number(op==Op.add?0:1),s);
+	foreach(i;0..32){
+		auto atom=a.mask(a.variable(Sort.boolean,i),a.inv(a.variable(s,i)));
+		t=op==Op.add?a.add(t,atom):a.mul(t,atom);
+	}
+	return t;
+}
+unittest{
+	foreach(s;[Sort.real_,Sort.complex]) foreach(op;[Op.add,Op.mul]){
+		auto owner=Session.open(); auto a=owner.arena; auto t=partialRegion(a,s,op);
+		auto fast=simplify(a,t),checked=simplify(a,t,Options(DensityMode.preserve,true));
+		assert(!fast.exhausted&&fast.output==checked.output);
+		auto code=exportLean(a,checked);
+		import std.string:indexOf;
+		assert(code.indexOf("Replay.Bag.node_sound")>=0,"large partial regions must use shared bags");
+	}
+}
 @system void main(string[] args){
 	enforce(args.length==2,"usage: associative-tests DIRECTORY"); mkdirRecurse(args[1]);
 	foreach(c;examples()){
@@ -71,7 +89,15 @@ unittest{
 		auto options=Options(DensityMode.preserve,true); options.expandPowers=c.expand;
 		write(buildPath(args[1],c.name~".lean"),exportLean(a,simplify(a,s.parse(a,c.input),options)));
 	}
-	auto owner=Session.open(); auto a=owner.arena;
-	write(buildPath(args[1],"Deep512.lean"),exportLean(a,simplify(a,deepSum(a,512),Options(DensityMode.preserve,true))));
+	{
+		auto owner=Session.open(); auto a=owner.arena;
+		write(buildPath(args[1],"Deep512.lean"),exportLean(a,simplify(a,deepSum(a,512),Options(DensityMode.preserve,true))));
+	}
+	foreach(s;[Sort.real_,Sort.complex]) foreach(op;[Op.add,Op.mul]){
+		auto owner=Session.open(); auto a=owner.arena;
+		import std.conv:to;
+		write(buildPath(args[1],"Partial"~to!string(s)~to!string(op)~".lean"),
+			exportLean(a,simplify(a,partialRegion(a,s,op),Options(DensityMode.preserve,true))));
+	}
 	writeln("Wrote associative certificates.");
 }

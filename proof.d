@@ -1,4 +1,5 @@
 module qsym.proof;
+import qsym.table:Table;
 import qsym.ir;
 import qsym.simplify;
 import qsym.domain;
@@ -279,8 +280,70 @@ private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,str
 	return h;
 }
 private struct ACCode{ string declarations,proof; }
+private ACCode bagEvidence(Arena a,Deduction e,uint[] nodes,Term[] atoms,Table!(uint,uint) ids){
+	auto op=e.value?Op.mul:Op.add;
+	auto ac="Replay."~(e.value?"mul":"add")~(a.sort(e.proof.before)==Sort.real_?"R":"C");
+	auto prefix="ac"~to!string(e.proof.id)~"_";
+	string code="noncomputable def "~prefix~"env (ρ : Env) (i : Nat) : Option (Ty.denote ."~leanSort(a.sort(e.proof.before))~") :=\n  ([";
+	foreach(i,t;atoms) code~=(i?",":"")~ev(t.id);
+	code~="] : List (Option (Ty.denote ."~leanSort(a.sort(e.proof.before))~"))).getD i none\n";
+	auto env="("~prefix~"env ρ)";
+	uint height;
+	while((1UL<<height)<atoms.length) ++height;
+	// Persistent count tries share unchanged branches between successive merges.
+	struct BagNode{ uint height,left,right; }
+	struct Pair{ uint left,right; }
+	BagNode[] bags=[BagNode.init]; Table!(BagNode,uint) intern; Table!(Pair,uint) merges;
+	string bagRef(uint id,uint h){ return id?prefix~"b"~to!string(id):"(Replay.Bag.zero : Replay.Bag "~to!string(h)~")"; }
+	string proof(uint id){ return "("~prefix~"p"~to!string(id)~" ρ)"; }
+	uint node(uint h,uint l,uint r=0){
+		if(!l&&!r) return 0;
+		auto key=BagNode(h,l,r),id=intern.get(key,0);
+		if(id) return id;
+		enforce(bags.length<uint.max,"AC bag overflow"); id=cast(uint)bags.length;
+		bags~=key; intern.set(key,id);
+		code~="def "~bagRef(id,h)~" : Replay.Bag "~to!string(h)~" := "~(h?".node "~bagRef(l,h-1)~" "~bagRef(r,h-1):".leaf "~to!string(l))~"\n";
+		return id;
+	}
+	uint single(uint h,uint i){
+		if(!h) return node(0,1);
+		auto b=single(h-1,i/2);
+		return i%2?node(h,0,b):node(h,b,0);
+	}
+	uint merge(uint l,uint r){
+		if(!l) return r; if(!r) return l;
+		if(l>r){ auto tmp=l; l=r; r=tmp; }
+		auto key=Pair(l,r),cached=merges.get(key,0);
+		if(cached) return cached;
+		auto x=bags[l],y=bags[r]; enforce(x.height==y.height,"AC bag height mismatch");
+		uint result;
+		if(x.height) result=node(x.height,merge(x.left,y.left),merge(x.right,y.right));
+		else{
+			enforce(x.left<=uint.max-y.left,"AC multiplicity overflow");
+			result=node(0,x.left+y.left);
+		}
+		merges.set(key,result); return result;
+	}
+	Table!(uint,uint) normal;
+	foreach(id;nodes){
+		auto n=a.node(a.at(id)); uint b; string p;
+		if(n.op==op){
+			auto l=normal.get(n.a,uint.max),r=normal.get(n.b,uint.max);
+			enforce(l!=uint.max&&r!=uint.max,"AC node order mismatch");
+			b=merge(l,r);
+			p="Replay.Bag.node_sound "~ac~" "~env~" "~ev(n.a)~" "~ev(n.b)~" "~bagRef(l,height)~" "~bagRef(r,height)~" "~bagRef(b,height)~" "~proof(n.a)~" "~proof(n.b)~" rfl";
+		}else if(ids.contains(id)){
+			auto i=ids.get(id,0); b=single(height,i);
+			p="Replay.Bag.atom_sound "~ac~" "~env~" "~to!string(height)~" "~to!string(i)~" "~ev(id)~" "~bagRef(b,height)~" (of_decide_eq_true rfl) rfl rfl";
+		}else p="rfl";
+		normal.set(id,b);
+		code~="theorem "~prefix~"p"~to!string(id)~" (ρ : Env) : "~ev(id)~" = Replay.Bag.eval "~ac~" "~env~" "~bagRef(b,height)~" := "~p~"\n";
+	}
+	auto left=e.proof.before.id,right=e.proof.after.id;
+	enforce(normal.get(left,uint.max)==normal.get(right,uint.max),"AC certificate mismatch");
+	return ACCode(code,"  Value.refines_of_eq ("~proof(left)~".trans "~proof(right)~".symm)\n");
+}
 private ACCode acEvidence(Arena a,Deduction e){
-	import qsym.table:Table;
 	auto op=e.value?Op.mul:Op.add;
 	Term[] atoms,pending=[e.proof.before,e.proof.after]; uint[] nodes;
 	Table!(uint,uint) ids; Table!(uint,bool) seen;
@@ -296,59 +359,21 @@ private ACCode acEvidence(Arena a,Deduction e){
 	}
 	import std.algorithm:sort;
 	sort(nodes);
+	if(nodes.length>24) return bagEvidence(a,e,nodes,atoms,ids);
 	auto ac="Replay."~(e.value?"mul":"add")~(a.sort(e.proof.before)==Sort.real_?"R":"C");
-	string env="(fun i => match i with";
-	foreach(i,t;atoms) env~=" | "~to!string(i)~" => "~ev(t.id);
-	env~=" | _ => none)";
-	bool staged=nodes.length>24;
-	auto prefix=staged?"ac"~to!string(e.proof.id)~"_":"ac";
-	string tree(uint id){ return prefix~to!string(id); }
-	string countRef(uint id){ return "c"~tree(id); }
-	string valueRef(uint id){ return "(e"~tree(id)~" ρ)"; }
+	string env="(fun i => ([";
+	foreach(i,t;atoms) env~=(i?",":"")~ev(t.id);
+	env~="] : List (Option (Ty.denote ."~leanSort(a.sort(e.proof.before))~"))).getD i none)";
+	string tree(uint id){ return "ac"~to!string(id); }
 	string code;
-	if(staged){
-		code="attribute [local irreducible] Replay.Tree.counts\nnoncomputable def "~prefix~"env (ρ : Env) : Nat → Option (Ty.denote ."~leanSort(a.sort(e.proof.before))~") := "~env~"\n";
-		env="("~prefix~"env ρ)";
-	}
-	struct Count{ uint atom,count; }
-	Count[][] counts; Table!(uint,uint) locations;
 	foreach(id;nodes){
 		auto n=a.node(a.at(id)); string value;
 		if(n.op==op) value="(.node "~tree(n.a)~" "~tree(n.b)~")";
 		else if(ids.contains(id)) value="(.leaf "~to!string(ids.get(id,0))~")";
 		else value=".unit";
-		if(!staged){ code~="  let "~tree(id)~" : Replay.Tree := "~value~"\n"; continue; }
-		code~="def "~tree(id)~" : Replay.Tree := "~value~"\n";
-		Count[] cs; string cp="rfl";
-		if(n.op==op){
-			auto left=counts[locations.get(n.a,uint.max)],right=counts[locations.get(n.b,uint.max)];
-			size_t i,j;
-			while(i<left.length||j<right.length){
-				if(j==right.length||i<left.length&&left[i].atom<right[j].atom) cs~=left[i++];
-				else if(i==left.length||right[j].atom<left[i].atom) cs~=right[j++];
-				else{
-					enforce(left[i].count<=uint.max-right[j].count,"AC multiplicity overflow");
-					cs~=Count(left[i].atom,left[i].count+right[j].count); ++i; ++j;
-				}
-			}
-			cp="Replay.Tree.counts_node "~tree(n.a)~" "~tree(n.b)~" "~countRef(n.a)~" "~countRef(n.b)~" rfl";
-		}else if(ids.contains(id)) cs=[Count(ids.get(id,0),1)];
-		locations.set(id,cast(uint)counts.length); counts~=cs;
-		string normal="[";
-		foreach(i,c;cs) normal~=(i?",":"")~"("~to!string(c.atom)~","~to!string(c.count)~")";
-		normal~="]";
-		if(n.op==op) cp="(congrArg Replay.Tree.counts (show "~tree(id)~" = "~value~" from rfl)).trans ("~cp~")";
-		else cp="(Replay.Tree.counts.eq_def "~tree(id)~").trans rfl";
-		code~="theorem "~countRef(id)~" : Replay.Tree.counts "~tree(id)~" = "~normal~" := "~cp~"\n";
+		code~="  let "~tree(id)~" : Replay.Tree := "~value~"\n";
 	}
-	if(staged) code~="attribute [local semireducible] Replay.Tree.counts\n";
-	auto left=e.proof.before.id,right=e.proof.after.id;
-	if(staged) foreach(id;[left,right]) code~="theorem e"~tree(id)~" (ρ : Env) : Replay.AC.eval "~ac~" "~env~" "~tree(id)~" = "~ev(id)~" := rfl\n";
-	auto same=staged?"("~countRef(left)~".trans "~countRef(right)~".symm)":"rfl";
-	auto proof="(Replay.AC.sound_counts "~ac~" "~env~" "~tree(left)~" "~tree(right)~" "~same~")";
-	if(staged) proof="("~valueRef(left)~".symm.trans ("~proof~".trans "~valueRef(right)~"))";
-	proof="  Value.refines_of_eq "~proof~"\n";
-	return staged?ACCode(code,proof):ACCode("",code~proof);
+	return ACCode("",code~"  Value.refines_of_eq (Replay.AC.sound_counts "~ac~" "~env~" "~tree(e.proof.before.id)~" "~tree(e.proof.after.id)~" rfl)\n");
 }
 
 // The exporter replays named laws and their premises. It never asks an

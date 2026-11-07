@@ -541,6 +541,30 @@ package final class Field{
 		auto previous=expandPowers; expandPowers=true; scope(exit) expandPowers=previous;
 		return then(result,norm(result.after,ctx),ctx);
 	}
+	bool clearDenominator(Term t,uint ctx,out Proof result){
+		auto n=a.node(t);
+		if(n.op!=Op.nonzero) return false;
+		auto residual=a.at(n.a),s=a.sort(residual);
+		if(s!=Sort.real_&&s!=Sort.complex||a.node(residual).op!=Op.add) return false;
+		auto terms=leaves(residual,Op.add);
+		foreach(i,term;terms){
+			auto factors=leaves(term,Op.mul);
+			foreach(j,f;factors) if(a.node(f).op==Op.inv){
+				auto denominator=a.child(f,0);
+				auto numerator=balanced(factors[0..j]~factors[j+1..$],Op.mul,s);
+				auto rest=balanced(terms[0..i]~terms[i+1..$],Op.add,s);
+				auto quotient=a.mul(numerator,f),grouped=a.add(term,rest);
+				auto collect=d.ac(residual,grouped,Op.add,ctx);
+				auto factor=d.ac(term,quotient,Op.mul,ctx);
+				auto regroup=d.congr(grouped,[factor,d.refl(rest,ctx)],ctx);
+				auto prepare=d.congr(t,[then(collect,regroup,ctx)],ctx);
+				result=then(prepare,law!"quotient_add_nonzero"(s,[numerator,denominator,rest],ctx),ctx);
+				return true;
+			}
+		}
+		return false;
+	}
+
 	Proof run(Term t,uint ctx){
 		budget.spend();
 		auto p=literal(t,ctx); if(p.after!=t) return p;

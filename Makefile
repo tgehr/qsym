@@ -2,6 +2,7 @@ DC ?= ldc2
 LAKE ?= lake
 UTIL_PARENT ?= deps
 DFLAGS ?= -O -boundscheck=on
+VERIFYFLAGS ?=
 MODULES := $(wildcard *.d)
 GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
@@ -56,6 +57,8 @@ test: build/qsym
 	./build/sign-tests --DRT-testmode=run-main build/signs
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/sum.d -of=build/sum-tests
 	./build/sum-tests --DRT-testmode=run-main build/sum
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/rational.d -of=build/rational-tests
+	./build/rational-tests --DRT-testmode=run-main build/rational
 	python3 tests/repl.py
 	python3 tests/terminal.py
 
@@ -91,7 +94,7 @@ bench-sums: build/sum-bench
 verify: test build/qsym
 	cd lean && $(LAKE) build
 	./build/qsym export build/certificates
-	python3 tools/verify.py --lake $(LAKE)
+	python3 tools/verify.py --lake $(LAKE) $(VERIFYFLAGS)
 
 clean:
 	rm -rf build

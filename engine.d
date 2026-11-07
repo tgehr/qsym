@@ -395,6 +395,10 @@ package final class Engine{
 						auto p=d.trans(d.trans(comparison,q,ctx),go(q.after,ctx,probe),ctx); memoize(k,p); return p;
 					}
 				}
+				Proof cleared;
+				if(field.clearDenominator(comparison.after,ctx,cleared)){
+					auto p=d.trans(d.trans(comparison,cleared,ctx),go(cleared.after,ctx,probe),ctx); memoize(k,p); return p;
+				}
 			}
 			// Bound the call stack for deep DAGs without eagerly expanding ordinary inputs.
 			if(depth==64) foreach(id;a.postorder(t)) if(id!=t.id) go(a.at(id),ctx,probe);
