@@ -57,11 +57,12 @@ def main():
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
+	check(ROOT/"tests/Lookup.lean")
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("signs",51),("sum",7),("rational",24)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -252,7 +253,9 @@ def main():
 	check(negative/"WrongMultiplicity.lean",succeeds=False)
 	for name,pattern,replacement in (
 		("WrongBagBranch",r"(def ac\d+_b\d+ : Replay.Bag \d+ := \.node )([^\n]+)",r"\1Replay.Bag.zero Replay.Bag.zero"),
-		("WrongBagIndex",r"(Replay.Bag.atom_sound Replay\.\w+ \(ac\d+_env ρ\) \d+ )\d+",r"\g<1>999999")):
+		("WrongBagIndex",r"(Replay.Bag.atom_sound Replay\.\w+ \(ac\d+_env ρ\) \d+ )\d+",r"\g<1>999999"),
+		("WrongLookupLeaf",r"(\.leaf )v\d+",r"\1(fun _ => none)"),
+		("WrongLookupOrder",r"\.node \(\.leaf (v\d+)\) \(\.leaf (v\d+)\)",r".node (.leaf \2) (.leaf \1)")):
 		corrupt,count=re.subn(pattern,replacement,deep,count=1)
 		if count!=1:
 			raise RuntimeError("could not construct "+name)

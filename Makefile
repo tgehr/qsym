@@ -59,6 +59,8 @@ test: build/qsym
 	./build/counted-tests --DRT-testmode=run-main build/counted
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/joins.d -of=build/join-tests
 	./build/join-tests --DRT-testmode=run-main build/joins
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/lookup.d -of=build/lookup-tests
+	./build/lookup-tests --DRT-testmode=run-main build/lookup
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/signs.d -of=build/sign-tests
 	./build/sign-tests --DRT-testmode=run-main build/signs
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/sum.d -of=build/sum-tests

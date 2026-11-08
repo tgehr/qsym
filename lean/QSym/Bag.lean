@@ -2,6 +2,18 @@ import QSym.AC
 
 namespace QSym.Replay
 
+-- Low index bits select branches, as in Bag. Atom lookup is logarithmic.
+inductive Lookup (α : Type) where
+  | empty
+  | leaf (value : α)
+  | node (even odd : Lookup α)
+
+def Lookup.get {α : Type} (fallback : α) : Lookup α → Nat → α
+  | .empty, _ => fallback
+  | .leaf value, 0 => value
+  | .leaf _, _+1 => fallback
+  | .node even odd, i => if i%2=0 then even.get fallback (i/2) else odd.get fallback (i/2)
+
 inductive Bag : Nat → Type where
   | zero {h : Nat} : Bag h
   | leaf (count : Nat) : Bag 0

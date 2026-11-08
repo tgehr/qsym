@@ -316,13 +316,22 @@ private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,str
 	return h;
 }
 private struct ACCode{ string declarations,proof; }
+private string lookupCode(Term[] atoms){
+	string tree(size_t offset,size_t stride){
+		if(offset>=atoms.length) return ".empty";
+		if(stride>=atoms.length-offset) return "(.leaf v"~to!string(atoms[offset].id)~")";
+		return "(.node "~tree(offset,stride*2)~" "~tree(offset+stride,stride*2)~")";
+	}
+	return tree(0,1);
+}
 private ACCode bagEvidence(Arena a,Deduction e,uint[] nodes,Term[] atoms,Table!(uint,uint) ids){
 	auto op=e.value?Op.mul:Op.add;
 	auto ac="Replay."~(e.value?"mul":"add")~(a.sort(e.proof.before)==Sort.real_?"R":"C");
 	auto prefix="ac"~to!string(e.proof.id)~"_";
-	string code="noncomputable def "~prefix~"env (ρ : Env) (i : Nat) : Option (Ty.denote ."~leanSort(a.sort(e.proof.before))~") :=\n  ([";
-	foreach(i,t;atoms) code~=(i?",":"")~ev(t.id);
-	code~="] : List (Option (Ty.denote ."~leanSort(a.sort(e.proof.before))~"))).getD i none\n";
+	auto type="Option (Ty.denote ."~leanSort(a.sort(e.proof.before))~")";
+	// Select a value function before applying ρ; keep the lookup tree closed.
+	string code="noncomputable def "~prefix~"values : Replay.Lookup (Env → "~type~") := "~lookupCode(atoms)~"\n"~
+		"noncomputable def "~prefix~"env (ρ : Env) (i : Nat) : "~type~" := Replay.Lookup.get (fun _ => none) "~prefix~"values i ρ\n";
 	auto env="("~prefix~"env ρ)";
 	uint height;
 	while((1UL<<height)<atoms.length) ++height;
