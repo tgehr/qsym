@@ -64,7 +64,8 @@ unittest{
 }
 unittest{
 	auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
-	assert(s.format(a,s.parse(a,"y+mulR(-[p],x)"))=="y+mulR(-[p],x)");
+	auto strict=s.parse(a,"y+mulR(-[p],x)");
+	assert(s.parse(a,s.format(a,strict))==strict);
 	foreach(pair;[["[3*x+1=7]","[x=2]"],["[x^2=1]*[x<1]","[x=-1]"],
 		["x-2","x-2"],["-x","-x"],["-2*x","-2·x"],["x-y=0","x=y"]]){
 		auto t=simplify(a,s.parse(a,pair[0])).output;

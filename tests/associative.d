@@ -84,7 +84,8 @@ unittest{
 		assert(!fast.exhausted&&fast.output==checked.output);
 		auto code=exportLean(a,checked);
 		import std.string:indexOf;
-		assert(code.indexOf("Replay.Bag.node_sound")>=0,"large partial regions must use shared bags");
+		assert(code.indexOf("Region (Expr")>=0,"native regions must be exported as counted operands");
+		assert(code.indexOf("Replay.Bag.node_sound")<0,"canonical regions need no permutation proof");
 		auto repeated=repeatedRegion(a,s,op),atom=a.mask(a.variable(Sort.boolean,0),a.inv(a.variable(s,0)));
 		auto expected=op==Op.add?a.mul(a.number(Number(256),s),atom):a.pow(atom,256);
 		auto r=simplify(a,repeated,Options(DensityMode.preserve,true));

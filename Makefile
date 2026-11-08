@@ -53,6 +53,8 @@ test: build/qsym
 	./build/compact-tests --DRT-testmode=run-main build/compact
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/associative.d -of=build/associative-tests
 	./build/associative-tests --DRT-testmode=run-main build/associative
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/regions.d -of=build/region-tests
+	./build/region-tests --DRT-testmode=run-main build/regions
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/signs.d -of=build/sign-tests
 	./build/sign-tests --DRT-testmode=run-main build/signs
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/sum.d -of=build/sum-tests

@@ -61,7 +61,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("signs",51),("sum",7),("rational",24)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("signs",51),("sum",7),("rational",24)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -244,7 +244,7 @@ def main():
 		raise RuntimeError("could not construct the invalid-permutation test")
 	(negative/"WrongPermutation.lean").write_text(corrupt)
 	check(negative/"WrongPermutation.lean",succeeds=False)
-	deep=(ROOT/"build/associative/Deep512.lean").read_text()
+	deep=(ROOT/"build/regions/RawRealSum.lean").read_text()
 	corrupt,count=re.subn(r"(def ac\d+_b\d+ : Replay.Bag 0 := \.leaf )1",r"\g<1>2",deep,count=1)
 	if count!=1:
 		raise RuntimeError("could not construct the invalid-multiplicity test")
@@ -254,6 +254,17 @@ def main():
 		("WrongBagBranch",r"(def ac\d+_b\d+ : Replay.Bag \d+ := \.node )([^\n]+)",r"\1Replay.Bag.zero Replay.Bag.zero"),
 		("WrongBagIndex",r"(Replay.Bag.atom_sound Replay\.\w+ \(ac\d+_env ρ\) \d+ )\d+",r"\g<1>999999")):
 		corrupt,count=re.subn(pattern,replacement,deep,count=1)
+		if count!=1:
+			raise RuntimeError("could not construct "+name)
+		(negative/(name+".lean")).write_text(corrupt)
+		check(negative/(name+".lean"),succeeds=False)
+
+	counted=(ROOT/"build/regions/CountedSum.lean").read_text()
+	root=re.search(r"theorem refinement .*? : Value.Refines \(Expr.eval ρ n(\d+)\)",counted).group(1)
+	for name,pattern,replacement in (
+		("WrongRegionCount",rf"(def b{root} : Region[^\n]+?\()\.twicePlusOne",r"\1.twice"),
+		("WrongRegionOperand",rf"(def b{root} : Region[^\n]+? := \.item )n\d+",r"\1(Expr.real 0)")):
+		corrupt,count=re.subn(pattern,replacement,counted,count=1)
 		if count!=1:
 			raise RuntimeError("could not construct "+name)
 		(negative/(name+".lean")).write_text(corrupt)

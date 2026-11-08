@@ -27,3 +27,8 @@ import QSym
 #print axioms QSym.Value.defined_and_total
 #print axioms QSym.Value.defined_or_total
 #print axioms QSym.Numeric.sound
+#print axioms QSym.Region.fold_congr
+#print axioms QSym.Expr.eval_sumR
+#print axioms QSym.Expr.eval_sumC
+#print axioms QSym.Expr.eval_productR
+#print axioms QSym.Expr.eval_productC

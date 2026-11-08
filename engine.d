@@ -52,14 +52,14 @@ package final class Engine{
 		return go(t,ctx,true);
 	}
 	private Proof expandedEquality(Term t,uint ctx){
-		auto test=a.child(t,0),q=expanded(a.child(test,0),ctx);
+		auto test=a.viewChild(t,0),q=expanded(a.viewChild(test,0),ctx);
 		if(!a.isNumber(q.after)||!a.number(q.after).zero) return d.refl(t,ctx);
 		auto p=d.congr(t,[d.congr(test,[q],ctx)],ctx);
 		return d.trans(p,go(p.after,ctx,true),ctx);
 	}
 	private bool closed(Term t){
-		foreach(id;a.postorder(t)){
-			budget.spend(); if(a.node(a.at(id)).op==Op.variable) return false;
+		foreach(id;a.viewPostorder(t)){
+			budget.spend(); if(a.view(a.at(id)).op==Op.variable) return false;
 		}
 		return true;
 	}
@@ -97,7 +97,7 @@ package final class Engine{
 			budget.spend(); auto item=pending[$-1]; --pending.length;
 			auto p=d.assumption(ctx,item.path,ctx);
 			facts[ctx]~=p; remember(truths,key(p.before,ctx),p);
-			auto n=a.node(item.term);
+			auto n=a.view(item.term);
 			if(n.op==Op.not_) pending~=Item(a.at(n.a),!item.value,item.path~0u);
 			else if(n.op==Op.and_&&item.value||n.op==Op.or_&&!item.value)
 				pending~=[Item(a.at(n.b),item.value,item.path~1u),Item(a.at(n.a),item.value,item.path~0u)];
@@ -120,7 +120,7 @@ package final class Engine{
 			auto f=item.path.length?d.project(p,item.path,ctx):p;
 			auto k=key(f.before,ctx),old=truths.get(k,uint.max);
 			if(old==uint.max||!proofs[old].known){ facts[ctx]~=f; remember(truths,k,f); }
-			auto n=a.node(item.term);
+			auto n=a.view(item.term);
 			if(n.op==Op.not_) pending~=Item(a.at(n.a),!item.value,item.path~0u);
 			else if(n.op==Op.and_&&item.value||n.op==Op.or_&&!item.value)
 				pending~=[Item(a.at(n.b),item.value,item.path~1u),Item(a.at(n.a),item.value,item.path~0u)];
@@ -130,7 +130,7 @@ package final class Engine{
 		for(bool changed=true;changed;){
 			changed=false;
 			foreach(f;known(ctx)){
-				budget.spend(); auto n=a.node(f.before);
+				budget.spend(); auto n=a.view(f.before);
 				if(!f.known||n.op!=Op.or_) continue;
 				foreach(law;[Law.bool_or_prune_left,Law.bool_or_prune_right]){
 					auto i=instantiate(a,law,[a.at(n.a),a.at(n.b)]); bool found;
@@ -203,12 +203,12 @@ package final class Engine{
 		scope(exit){ proving.set(k,false); --premiseDepth; }
 		// Check a bounded polynomial identity before asking root/guard solvers
 		// to reason about its unevaluated factored residual.
-		auto goal=a.node(t);
-		if(!field.expandPowers&&goal.op==Op.not_&&a.node(a.at(goal.a)).op==Op.nonzero&&field.expandable(t)){
+		auto goal=a.view(t);
+		if(!field.expandPowers&&goal.op==Op.not_&&a.view(a.at(goal.a)).op==Op.nonzero&&field.expandable(t)){
 			auto q=expandedEquality(t,ctx);
 			if(q.after==a.boolean(true)){ result=q; remember(truths,k,result); return true; }
 		}
-		foreach(law;inferences(a.node(t))) if(attempt(law,t,ctx,result)){
+		foreach(law;inferences(a.view(t))) if(attempt(law,t,ctx,result)){
 			remember(truths,k,result); return true;
 		}
 		auto p=go(t,ctx,true);
@@ -218,28 +218,24 @@ package final class Engine{
 			if(prove(p.after,ctx,q)){ result=d.trans(p,q,ctx); remember(truths,k,result); return true; }
 		}
 		// Polynomial identities needed by solvers may use a different normal form.
-		auto n=a.node(p.after);
-		if(!field.expandPowers&&n.op==Op.not_&&a.node(a.at(n.a)).op==Op.nonzero&&field.expandable(p.after)){
+		auto n=a.view(p.after);
+		if(!field.expandPowers&&n.op==Op.not_&&a.view(a.at(n.a)).op==Op.nonzero&&field.expandable(p.after)){
 			auto q=expandedEquality(p.after,ctx);
 			if(q.after==a.boolean(true)){ result=d.trans(p,q,ctx); remember(truths,k,result); return true; }
 		}
 		return false;
 	}
 	private Proof pairs(Term t,uint ctx){
-		auto n=a.node(t);
+		auto n=a.view(t);
 		if((n.op!=Op.add&&n.op!=Op.mul)||(n.sort!=Sort.real_&&n.sort!=Sort.complex)) return d.refl(t,ctx);
 		auto laws=pairRewrites(n.op); if(!laws.length) return d.refl(t,ctx);
-		Term[] leaves,pending=[t];
-		while(pending.length){
-			budget.spend(); auto u=pending[$-1]; --pending.length; auto v=a.node(u);
-			if(v.op==n.op) pending~=[a.at(v.b),a.at(v.a)]; else leaves~=u;
-			if(leaves.length+pending.length>budget.maxTerms) return d.refl(t,ctx);
-		}
+		auto operands=d.regions.terms(t,n.op,budget);
+		Term[] leaves; foreach(e;operands) leaves~=e.term;
 		Term join(Term x,Term y){ return n.op==Op.add?a.add(x,y):a.mul(x,y); }
 		Table!(uint,uint) buckets; uint[][] groups;
 		uint[] all;
 		foreach(i,leaf;leaves){
-			auto h=head(a.node(leaf)),b=buckets.get(h,uint.max);
+			auto h=head(a.view(leaf)),b=buckets.get(h,uint.max);
 			if(b==uint.max){ b=cast(uint)groups.length; buckets.set(h,b); groups.length=groups.length+1; }
 			groups[b]~=cast(uint)i; all~=cast(uint)i;
 		}
@@ -260,12 +256,13 @@ package final class Engine{
 				budget.spend(); uint key;
 				if(!pairKey(a,rule.law,false,leaves[i],key)) continue;
 				for(auto j=keys.get(key,uint.max);j!=uint.max;j=next[j]){
-					budget.spend(); if(i==j) continue;
+					budget.spend(); if(i==j&&operands[i].count<2) continue;
 					auto pair=join(leaves[i],leaves[j]);
 					Proof q; if(!attempt(rule.law,pair,ctx,q)||q.after==pair) continue;
-					Term[] rest; foreach(k,y;leaves) if(k!=i&&k!=j) rest~=y;
+					Operand[] rest;
+					foreach(k,e;operands){ e.count-=(k==i)+(k==j); if(e.count) rest~=e; }
 					if(!rest.length) return d.trans(d.ac(t,pair,n.op,ctx),q,ctx);
-					auto r=rest[0]; foreach(y;rest[1..$]) r=join(r,y);
+					auto r=a.region(n.op,n.sort,rest);
 					auto grouped=join(pair,r);
 					return d.trans(d.ac(t,grouped,n.op,ctx),d.congr(grouped,[q,d.refl(r,ctx)],ctx),ctx);
 				}
@@ -274,26 +271,26 @@ package final class Engine{
 		return d.refl(t,ctx);
 	}
 	private bool substitute(Term t,uint ctx,out Proof result){
-		auto n=a.node(t);
+		auto n=a.view(t);
 		if((n.op!=Op.variable&&n.op!=Op.builtin&&n.op!=Op.abs&&n.op!=Op.conj)||(n.sort!=Sort.real_&&n.sort!=Sort.complex)) return false;
 		struct Candidate{ Term coefficient,remainder,value; size_t variables; }
 		Candidate[] candidates;
 		foreach(f;known(ctx)){
-			auto q=a.node(f.before);
+			auto q=a.view(f.before);
 			if(!f.known||q.op!=Op.not_) continue;
-			q=a.node(a.at(q.a)); if(q.op!=Op.nonzero||a.sort(a.at(q.a))!=n.sort) continue;
+			q=a.view(a.at(q.a)); if(q.op!=Op.nonzero||a.sort(a.at(q.a))!=n.sort) continue;
 			Term coefficient,remainder;
 			if(!field.affine(a.at(q.a),t,coefficient,remainder)) continue;
 			auto value=a.div(a.neg(remainder),coefficient); size_t count;
-			foreach(id;a.postorder(value)) if(a.node(a.at(id)).op==Op.variable) ++count;
+			foreach(id;a.viewPostorder(value)) if(a.view(a.at(id)).op==Op.variable) ++count;
 			candidates~=Candidate(coefficient,remainder,value,count);
 		}
 		sort!((x,y)=>x.variables!=y.variables?x.variables<y.variables:compare(a,x.value,y.value)<0)(candidates);
 		foreach(c;candidates){
 			auto changed=go(c.value,ctx); bool ordered=changed.after!=t;
-			foreach(id;a.postorder(changed.after)){
+			foreach(id;a.viewPostorder(changed.after)){
 				auto v=a.at(id);
-				if(a.node(v).op==Op.variable&&compare(a,v,t)<=0){ ordered=false; break; }
+				if(a.view(v).op==Op.variable&&compare(a,v,t)<=0){ ordered=false; break; }
 			}
 			if(!ordered) continue;
 			auto law=n.sort==Sort.real_?Law.real_solve_affine:Law.complex_solve_affine;
@@ -303,10 +300,10 @@ package final class Engine{
 		return false;
 	}
 	private bool strictBound(Term t,uint ctx,out Proof result){
-		auto n=a.node(t);
+		auto n=a.view(t);
 		if(n.op!=Op.le||!ctx) return false;
 		bool excluded;
-		foreach(f;known(ctx)) if(f.known&&a.node(f.before).op==Op.nonzero){ excluded=true; break; }
+		foreach(f;known(ctx)) if(f.known&&a.view(f.before).op==Op.nonzero){ excluded=true; break; }
 		if(!excluded) return false;
 		auto i=instantiate(a,Law.real_le_strict,[a.at(n.a),a.at(n.b)]);
 		// Tighten only from an established exclusion, avoiding cyclic sign search.
@@ -320,15 +317,15 @@ package final class Engine{
 	private size_t guardCost(Term t){
 		size_t cost; Term[] pending=[t];
 		while(pending.length){
-			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.node(u);
+			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.view(u);
 			cost+=n.op==Op.le?2:1;
 			if(cost>budget.maxTerms) return size_t.max;
-			foreach(i;0..n.arity) pending~=a.child(u,i);
+			foreach(i;0..n.arity) pending~=a.viewChild(u,i);
 		}
 		return cost;
 	}
 	private Proof associative(Term t,uint ctx,bool probe){
-		auto n=a.node(t); Proof[] ps;
+		auto n=a.view(t); Proof[] ps;
 		foreach(e;d.regions.terms(t,n.op,budget)) ps~=field.repeated(go(e.term,ctx,probe),e.count,n.op,ctx);
 		if(!ps.length) return d.ac(t,a.number(Number(n.op==Op.add?0:1),n.sort),n.op,ctx);
 		while(ps.length>1){
@@ -344,10 +341,10 @@ package final class Engine{
 		return d.trans(d.ac(t,ps[0].before,n.op,ctx),ps[0],ctx);
 	}
 	private bool powerBound(Term t,uint ctx,out Proof result){
-		auto n=a.node(t); if(n.op!=Op.lt&&n.op!=Op.le) return false;
+		auto n=a.view(t); if(n.op!=Op.lt&&n.op!=Op.le) return false;
 		auto left=a.at(n.a),right=a.at(n.b);
-		bool reverse=a.node(right).op==Op.pow&&a.isNumber(left);
-		auto power=reverse?right:left,bound=reverse?left:right,p=a.node(power);
+		bool reverse=a.view(right).op==Op.pow&&a.isNumber(left);
+		auto power=reverse?right:left,bound=reverse?left:right,p=a.view(power);
 		if(p.op!=Op.pow||p.sort!=Sort.real_||p.value<2||!a.isNumber(bound)) return false;
 		auto value=a.number(bound).re; bool negative=value<Rational(0);
 		if(negative&&!(p.value&1)) return false;
@@ -373,7 +370,7 @@ package final class Engine{
 			if(depth>=128) throw new Limit;
 			++depth; scope(exit) --depth;
 			budget.spend(); active.set(k,true); scope(exit) active.set(k,false);
-			auto n=a.node(t); Proof[] cs;
+			auto n=a.view(t); Proof[] cs;
 			// Preserve useful factorizations and comparison shapes before expansion.
 			if(n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le) foreach(law;rewrites(n)){
 				if(conditionCount(law)) continue;
@@ -383,9 +380,9 @@ package final class Engine{
 				}
 			}
 			// Normalize operands without expanding the difference used by equality.
-			if(n.op==Op.nonzero&&a.node(a.at(n.a)).op==Op.add){
+			if(n.op==Op.nonzero&&a.view(a.at(n.a)).op==Op.add){
 				auto residual=a.at(n.a);
-				auto operands=d.congr(residual,[go(a.child(residual,0),ctx,probe),go(a.child(residual,1),ctx,probe)],ctx);
+				auto operands=d.congr(residual,[go(a.viewChild(residual,0),ctx,probe),go(a.viewChild(residual,1),ctx,probe)],ctx);
 				auto comparison=d.congr(t,[operands],ctx);
 				if(comparison.after!=t) foreach(law;rewrites(n)){
 					if(conditionCount(law)) continue;
@@ -400,15 +397,15 @@ package final class Engine{
 				}
 			}
 			// Bound the call stack for deep DAGs without eagerly expanding ordinary inputs.
-			if(depth==64) foreach(id;a.postorder(t)) if(id!=t.id) go(a.at(id),ctx,probe);
+			if(depth==64) foreach(id;a.viewPostorder(t)) if(id!=t.id) go(a.at(id),ctx,probe);
 			Proof p;
-			if((n.op==Op.add||n.op==Op.mul)&&(n.a==n.b||a.node(a.at(n.a)).op==n.op||a.node(a.at(n.b)).op==n.op))
+			if((n.op==Op.add||n.op==Op.mul)&&(n.a==n.b||a.view(a.at(n.a)).op==n.op||a.view(a.at(n.b)).op==n.op))
 				p=associative(t,ctx,probe);
 			else{
-				foreach(i;0..n.arity) cs~=go(a.child(t,i),ctx,probe);
+				foreach(i;0..n.arity) cs~=go(a.viewChild(t,i),ctx,probe);
 				p=d.congr(t,cs,ctx);
 			}
-			auto current=p.after; n=a.node(current);
+			auto current=p.after; n=a.view(current);
 			auto numeric=field.literal(current,ctx);
 			if(numeric.after!=current){ p=d.trans(p,numeric,ctx); memoize(k,p); return p; }
 			if(ctx&&!probe){
@@ -472,7 +469,7 @@ package final class Engine{
 					if(instanceProof(instantiate(a,law,[a.at(n.a),a.at(n.b)]),ctx,swap)){
 						p=d.trans(p,swap,ctx); p=d.trans(p,d.scoped(p.after,q,ctx),ctx);
 						// Restore the original guard order when the reduced guard is defined.
-						if(instanceProof(instantiate(a,law,[a.child(p.after,0),a.child(p.after,1)]),ctx,swap)) p=d.trans(p,swap,ctx);
+						if(instanceProof(instantiate(a,law,[a.viewChild(p.after,0),a.viewChild(p.after,1)]),ctx,swap)) p=d.trans(p,swap,ctx);
 						p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 					}
 				}
@@ -482,10 +479,10 @@ package final class Engine{
 			p=d.trans(p,q,ctx);
 			if(q.after!=current) p=d.trans(p,go(p.after,ctx,probe),ctx);
 			// Algebraic constants can shrink under expansion, e.g. a root of unity cubed.
-			n=a.node(p.after);
+			n=a.view(p.after);
 			if(!field.expandPowers&&(n.op==Op.pow||n.op==Op.add)&&closed(p.after)&&field.expandable(p.after)){
 				q=expanded(p.after,0);
-				if(a.postorder(q.after).length<a.postorder(p.after).length)
+				if(a.viewPostorder(q.after).length<a.viewPostorder(p.after).length)
 					p=d.trans(p,d.trans(q,go(q.after,ctx,probe),ctx),ctx);
 			}
 			memoize(k,p); return p;

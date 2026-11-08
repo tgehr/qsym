@@ -84,7 +84,7 @@ struct Case{ string name; Term input,expected; bool expand; }
 private struct Value{ bool defined; Number number; bool boolean; }
 @safe private Value evaluate(Arena a,uint[] order,Value[] memo,Rational x,Rational y,uint flags){
 	foreach(id;order){
-		auto t=a.at(id),n=a.node(t);
+		auto t=a.at(id),n=a.view(t);
 		Value v,l,r;
 		if(n.arity>=1) l=memo[n.a];
 		if(n.arity==2) r=memo[n.b];
@@ -124,7 +124,7 @@ private struct Value{ bool defined; Number number; bool boolean; }
 	return memo[order[$-1]];
 }
 @safe private void checkValues(Arena a,Term input,Term output){
-	auto left=a.postorder(input),right=a.postorder(output);
+	auto left=a.viewPostorder(input),right=a.viewPostorder(output);
 	auto memo=new Value[a.length];
 	foreach(i;-4..5) foreach(j;-2..3) foreach(flags;0u..4u){
 		auto x=Rational(BigInt(i),BigInt(2)),y=Rational(j);
@@ -200,10 +200,19 @@ private struct Value{ bool defined; Number number; bool boolean; }
 
 @safe unittest{
 	bool sameTree(Arena a,Term x,Arena b,Term y){
+		import qsym.field:compare;
+		import std.algorithm:sort;
 		Term[] xs=[x],ys=[y];
 		for(size_t i=0;i<xs.length;++i){
 			auto n=a.node(xs[i]),m=b.node(ys[i]);
 			if(n.op!=m.op||n.sort!=m.sort||n.arity!=m.arity) return false;
+			if(n.region){
+				auto ls=a.operands(xs[i]),rs=b.operands(ys[i]);
+				sort!((x,y)=>compare(a,x.term,y.term)<0)(ls);
+				sort!((x,y)=>compare(b,x.term,y.term)<0)(rs);
+				foreach(j,l;ls){ if(l.count!=rs[j].count) return false; xs~=l.term; ys~=rs[j].term; }
+				continue;
+			}
 			if(a.isNumber(xs[i])){ if(a.number(xs[i])!=b.number(ys[i])) return false; }
 			else if(n.value!=m.value) return false;
 			if(n.arity>=1){ xs~=a.at(n.a); ys~=b.at(m.a); }

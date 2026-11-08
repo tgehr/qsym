@@ -1,5 +1,6 @@
 module qsym.field;
 import qsym.ir;
+public import qsym.order:compare;
 import qsym.derive;
 import qsym.budget;
 import qsym.generated.rules;
@@ -8,28 +9,51 @@ import std.algorithm:sort;
 import std.exception:enforce;
 @safe:
 
-int compare(Arena a,Term x,Term y){
-	Term[] left=[x],right=[y];
-	while(left.length){
-		x=left[$-1]; y=right[$-1]; --left.length; --right.length;
-		if(x==y) continue;
-		auto l=a.node(x),r=a.node(y);
-		if(l.sort!=r.sort) return l.sort<r.sort?-1:1;
-		if(l.op!=r.op) return l.op<r.op?-1:1;
-		if(a.isNumber(x)){
-			auto u=a.number(x),v=a.number(y),c=u.re.opCmp(v.re);
-			if(c) return c;
-			return u.im.opCmp(v.im);
+package struct Factor{ Term atom; long exponent; }
+package struct Mono{ Number coefficient; Factor[] factors; }
+
+package Factor factor(Arena a,Term t){
+	long sign=1; auto n=a.view(t);
+	if(n.op==Op.inv){ sign=-1; t=a.at(n.a); n=a.view(t); }
+	return n.op==Op.pow?Factor(a.at(n.a),sign*n.value):Factor(t,sign);
+}
+
+package Mono monomial(Arena a,Term t,Budget budget){
+	Mono m; m.coefficient=Number(1);
+	auto es=a.multisetTerms(a.multiset(t,Op.mul));
+	if(es.length>budget.maxTerms) throw new Limit;
+	budget.spend(1+es.length);
+	foreach(e;es){
+		if(a.isNumber(e.term)){
+			auto v=a.number(e.term);
+			for(auto count=e.count;count;count>>=1){
+				if(count&1) m.coefficient=budget.calc!"*"(m.coefficient,v);
+				if(count>1) v=budget.calc!"*"(v,v);
+			}
+		}else{
+			auto f=factor(a,e.term);
+			if((f.exponent<0?-f.exponent:f.exponent)>uint.max/e.count) throw new Limit;
+			f.exponent*=e.count; m.factors~=f;
 		}
-		if(l.value!=r.value) return l.value<r.value?-1:1;
-		if(l.arity==2){ left~=a.at(l.b); right~=a.at(r.b); }
-		if(l.arity>=1){ left~=a.at(l.a); right~=a.at(r.a); }
+	}
+	sort!((x,y)=>compare(a,x.atom,y.atom)<0)(m.factors);
+	return m;
+}
+
+package int monomialOrder(Arena a,Mono x,Mono y){
+	long dx,dy; foreach(f;x.factors) dx+=f.exponent; foreach(f;y.factors) dy+=f.exponent;
+	if(dx!=dy) return dx<dy?-1:1;
+	size_t i,j;
+	while(i<x.factors.length||j<y.factors.length){
+		if(i==x.factors.length) return y.factors[j].exponent>0?-1:1;
+		if(j==y.factors.length) return x.factors[i].exponent>0?1:-1;
+		auto c=compare(a,x.factors[i].atom,y.factors[j].atom);
+		if(c) return c<0?(x.factors[i].exponent>0?1:-1):(y.factors[j].exponent>0?-1:1);
+		auto ex=x.factors[i++].exponent,ey=y.factors[j++].exponent;
+		if(ex!=ey) return ex<ey?-1:1;
 	}
 	return 0;
 }
-
-private struct Factor{ Term atom; long exponent; }
-private struct Mono{ Number coefficient; Factor[] factors; }
 
 // The algorithms choose normal forms. Every changed expression is accompanied
 // by applications of generated laws, congruence, AC permutations or arithmetic.
@@ -60,7 +84,7 @@ package final class Field{
 		return ts[0];
 	}
 	private Term[] leaves(Term t,Op op){
-		if(a.node(t).op!=op){ budget.spend(); return [t]; }
+		if(a.view(t).op!=op){ budget.spend(); return [t]; }
 		Term[] result;
 		foreach(e;d.regions.terms(t,op,budget)){
 			if(e.count>budget.maxTerms-result.length) throw new Limit;
@@ -76,11 +100,7 @@ package final class Field{
 		auto t=e==1?f.atom:a.pow(f.atom,cast(uint)e);
 		return f.exponent<0?a.inv(t):t;
 	}
-	private Factor factor(Term t){
-		long sign=1; auto n=a.node(t);
-		if(n.op==Op.inv){ sign=-1; t=a.at(n.a); n=a.node(t); }
-		return n.op==Op.pow?Factor(a.at(n.a),sign*n.value):Factor(t,sign);
-	}
+	private Factor factor(Term t){ return qsym.field.factor(a,t); }
 	private Term base(Mono m,Sort s){
 		Term[] fs; foreach(f;m.factors) fs~=factorTerm(f,s);
 		return balanced(fs,Op.mul,s);
@@ -92,24 +112,7 @@ package final class Field{
 		foreach(f;m.factors) fs~=factorTerm(f,s);
 		return balanced(fs,Op.mul,s);
 	}
-	private Mono mono(Term t){
-		Mono m; m.coefficient=Number(1);
-		foreach(e;d.regions.terms(t,Op.mul,budget)){
-			if(a.isNumber(e.term)){
-				auto v=a.number(e.term);
-				for(auto count=e.count;count;count>>=1){
-					if(count&1) m.coefficient=budget.calc!"*"(m.coefficient,v);
-					if(count>1) v=budget.calc!"*"(v,v);
-				}
-			}else{
-				auto f=factor(e.term);
-				if((f.exponent<0?-f.exponent:f.exponent)>uint.max/e.count) throw new Limit;
-				f.exponent*=e.count; m.factors~=f;
-			}
-		}
-		sort!((x,y)=>compare(a,x.atom,y.atom)<0)(m.factors);
-		return m;
-	}
+	private Mono mono(Term t){ return monomial(a,t,budget); }
 	bool affine(Term expression,Term variable,out Term coefficient,out Term remainder){
 		Number c; Term[] rest;
 		foreach(t;leaves(expression,Op.add)){
@@ -117,7 +120,7 @@ package final class Field{
 			if(m.factors.length==1&&m.factors[0].atom==variable&&m.factors[0].exponent==1)
 				c=budget.calc!"+"(c,m.coefficient);
 			else{
-				foreach(id;a.postorder(t)){ budget.spend(); if(id==variable.id) return false; }
+				foreach(id;a.viewPostorder(t)){ budget.spend(); if(id==variable.id) return false; }
 				rest~=t;
 			}
 		}
@@ -139,24 +142,11 @@ package final class Field{
 		}
 		return found;
 	}
-	private int order(Mono x,Mono y){
-		long dx,dy; foreach(f;x.factors) dx+=f.exponent; foreach(f;y.factors) dy+=f.exponent;
-		if(dx!=dy) return dx<dy?-1:1;
-		size_t i,j;
-		while(i<x.factors.length||j<y.factors.length){
-			if(i==x.factors.length) return y.factors[j].exponent>0?-1:1;
-			if(j==y.factors.length) return x.factors[i].exponent>0?1:-1;
-			auto c=compare(a,x.factors[i].atom,y.factors[j].atom);
-			if(c) return c<0?(x.factors[i].exponent>0?1:-1):(y.factors[j].exponent>0?-1:1);
-			auto ex=x.factors[i++].exponent,ey=y.factors[j++].exponent;
-			if(ex!=ey) return ex<ey?-1:1;
-		}
-		return 0;
-	}
+	private int order(Mono x,Mono y){ return monomialOrder(a,x,y); }
 	Proof literal(Term t,uint ctx){
-		auto n=a.node(t);
-		if(n.op==Op.builtin&&n.value==Builtin.eqB&&a.node(a.at(n.a)).op==Op.boolLit&&a.node(a.at(n.b)).op==Op.boolLit)
-			return d.numeric(t,a.boolean(a.node(a.at(n.a)).value==a.node(a.at(n.b)).value),ctx);
+		auto n=a.view(t);
+		if(n.op==Op.builtin&&n.value==Builtin.eqB&&a.view(a.at(n.a)).op==Op.boolLit&&a.view(a.at(n.b)).op==Op.boolLit)
+			return d.numeric(t,a.boolean(a.view(a.at(n.a)).value==a.view(a.at(n.b)).value),ctx);
 		if(!n.arity) return d.refl(t,ctx);
 		auto x=a.at(n.a); if(!a.isNumber(x)) return d.refl(t,ctx);
 		auto v=a.number(x); Number w;
@@ -203,7 +193,7 @@ package final class Field{
 				if(n.value==1) return law!"pow_one"(n.sort,[x],ctx);
 				auto m=n.value/2;
 				auto p=law!"pow_split"(n.sort,[x,a.real_(m),a.real_(n.value-m)],ctx);
-				auto l=norm(a.child(p.after,0),ctx),r=norm(a.child(p.after,1),ctx);
+				auto l=norm(a.viewChild(p.after,0),ctx),r=norm(a.viewChild(p.after,1),ctx);
 				if(budget.exhausted) throw new Limit;
 				p=then(p,d.congr(p.after,[l,r],ctx),ctx);
 				return then(p,literal(p.after,ctx),ctx);
@@ -266,11 +256,11 @@ package final class Field{
 		}
 		// Only powers zero and one are removed here; re-entering polynomial
 		// normalization would undo the factor grouping just constructed.
-		auto outNode=a.node(p.after);
+		auto outNode=a.view(p.after);
 		if(outNode.op==Op.pow&&(outNode.value==0||outNode.value==1))
 			p=then(p,outNode.value==0?law!"pow_zero"(s,[a.at(outNode.a)],ctx):law!"pow_one"(s,[a.at(outNode.a)],ctx),ctx);
 		else if(outNode.op==Op.inv){
-			auto inner=a.node(a.at(outNode.a));
+			auto inner=a.view(a.at(outNode.a));
 			if(inner.op==Op.pow&&inner.value==1) p=then(p,d.congr(p.after,[law!"pow_one"(s,[a.at(inner.a)],ctx)],ctx),ctx);
 		}
 		return p;
@@ -290,9 +280,8 @@ package final class Field{
 			auto start=i++; while(i<atoms.length&&factor(atoms[i]).atom==factor(atoms[start]).atom) ++i;
 			auto g=atoms[start],p=d.refl(g,ctx);
 			foreach(x;atoms[start+1..i]){
-				auto pair=a.mul(g,x);
+				auto pair=a.mul(g,x),previous=p.after;
 				p=d.congr(pair,[p,d.refl(x,ctx)],ctx);
-				auto previous=a.child(p.after,0);
 				p=then(p,a.isNumber(previous)&&a.number(previous).one?d.ac(p.after,x,Op.mul,ctx):joinFactors(previous,x,ctx),ctx);
 				g=pair;
 			}
@@ -381,20 +370,20 @@ package final class Field{
 	}
 	private Proof multiply(Term t,uint ctx){
 		auto p=expandPowers?d.refl(t,ctx):product(t,ctx); t=p.after;
-		if(a.node(t).op!=Op.mul) return p;
+		if(a.view(t).op!=Op.mul) return p;
 		if(!divisions){ auto q=divide(t,ctx); if(q.after!=t) return then(p,q,ctx); }
 		auto fs=leaves(t,Op.mul); size_t at=fs.length;
-		foreach(i,f;fs) if(a.node(f).op==Op.add){ at=i; break; }
+		foreach(i,f;fs) if(a.view(f).op==Op.add){ at=i; break; }
 		if(at==fs.length) return expandPowers?product(t,ctx):p;
 		Term[] rest;
 		foreach(i,f;fs) if(i!=at){
 			if(!expandPowers&&!a.isNumber(f)) return p;
 			rest~=f;
 		}
-		auto s=a.sort(t),x=balanced(rest,Op.mul,s),y=fs[at],v=a.node(y);
+		auto s=a.sort(t),x=balanced(rest,Op.mul,s),y=fs[at],v=a.view(y);
 		p=then(p,d.ac(t,a.mul(x,y),Op.mul,ctx),ctx);
 		p=then(p,law!"distribute"(s,[x,a.at(v.a),a.at(v.b)],ctx),ctx);
-		auto output=a.node(p.after);
+		auto output=a.view(p.after);
 		p=then(p,d.congr(p.after,[norm(a.at(output.a),ctx),norm(a.at(output.b),ctx)],ctx),ctx);
 		return then(p,sum(p.after,ctx),ctx);
 	}
@@ -414,7 +403,7 @@ package final class Field{
 		return count&1?combine(p,atom):p;
 	}
 	private Proof power(Term t,uint ctx){
-		auto n=a.node(t),x=a.at(n.a),v=a.node(x);
+		auto n=a.view(t),x=a.at(n.a),v=a.view(x);
 		if(v.op==Op.pow){
 			if(cast(ulong)v.value*n.value>uint.max) throw new Limit;
 			return law!"pow_power"(n.sort,[a.at(v.a),a.real_(v.value),a.real_(n.value)],ctx);
@@ -422,14 +411,14 @@ package final class Field{
 		if(v.op==Op.inv) return law!"power_inv"(n.sort,[a.at(v.a),a.real_(n.value)],ctx);
 		if(v.op==Op.mul){
 			auto p=law!"pow_product"(n.sort,[a.at(v.a),a.at(v.b),a.real_(n.value)],ctx);
-			auto output=a.node(p.after);
+			auto output=a.view(p.after);
 			p=then(p,d.congr(p.after,[norm(a.at(output.a),ctx),norm(a.at(output.b),ctx)],ctx),ctx);
 			return then(p,multiply(p.after,ctx),ctx);
 		}
 		if(expandPowers&&v.op==Op.add&&n.value>1){
 			auto m=n.value/2;
 			auto p=law!"pow_split"(n.sort,[x,a.real_(m),a.real_(n.value-m)],ctx);
-			auto output=a.node(p.after);
+			auto output=a.view(p.after);
 			p=then(p,d.congr(p.after,[norm(a.at(output.a),ctx),norm(a.at(output.b),ctx)],ctx),ctx);
 			return then(p,multiply(p.after,ctx),ctx);
 		}
@@ -443,8 +432,8 @@ package final class Field{
 		size_t multiply(size_t x,size_t y){
 			return !x||!y?0:x>budget.maxTerms/y?size_t.max:x*y;
 		}
-		foreach(id;a.postorder(t)){
-			budget.spend(); auto n=a.node(a.at(id)); size_t width=1;
+		foreach(id;a.viewPostorder(t)){
+			budget.spend(); auto n=a.view(a.at(id)); size_t width=1;
 			if(n.op==Op.add){
 				auto x=widths.get(n.a,1),y=widths.get(n.b,1);
 				if(y>budget.maxTerms||x>budget.maxTerms-y) return false;
@@ -519,10 +508,10 @@ package final class Field{
 		return output;
 	}
 	private Proof divide(Term t,uint ctx){
-		auto n=a.node(t),p=a.at(n.a),inv=a.at(n.b);
-		if(a.node(inv).op!=Op.inv){ if(a.node(p).op!=Op.inv) return d.refl(t,ctx); auto z=p; p=inv; inv=z; }
-		auto denominator=a.child(inv,0);
-		if(a.node(denominator).op!=Op.add) return d.refl(t,ctx);
+		auto n=a.view(t),p=a.at(n.a),inv=a.at(n.b);
+		if(a.view(inv).op!=Op.inv){ if(a.view(p).op!=Op.inv) return d.refl(t,ctx); auto z=p; p=inv; inv=z; }
+		auto denominator=a.viewChild(inv,0);
+		if(a.view(denominator).op!=Op.add) return d.refl(t,ctx);
 		Mono[] num,den;
 		foreach(x;leaves(p,Op.add)) num~=mono(x);
 		foreach(x;leaves(denominator,Op.add)) den~=mono(x);
@@ -553,15 +542,15 @@ package final class Field{
 		return then(result,norm(result.after,ctx),ctx);
 	}
 	bool clearDenominator(Term t,uint ctx,out Proof result){
-		auto n=a.node(t);
+		auto n=a.view(t);
 		if(n.op!=Op.nonzero) return false;
 		auto residual=a.at(n.a),s=a.sort(residual);
-		if(s!=Sort.real_&&s!=Sort.complex||a.node(residual).op!=Op.add) return false;
+		if(s!=Sort.real_&&s!=Sort.complex||a.view(residual).op!=Op.add) return false;
 		auto terms=leaves(residual,Op.add);
 		foreach(i,term;terms){
 			auto factors=leaves(term,Op.mul);
-			foreach(j,f;factors) if(a.node(f).op==Op.inv){
-				auto denominator=a.child(f,0);
+			foreach(j,f;factors) if(a.view(f).op==Op.inv){
+				auto denominator=a.viewChild(f,0);
 				auto numerator=balanced(factors[0..j]~factors[j+1..$],Op.mul,s);
 				auto rest=balanced(terms[0..i]~terms[i+1..$],Op.add,s);
 				auto quotient=a.mul(numerator,f),grouped=a.add(term,rest);
@@ -579,14 +568,14 @@ package final class Field{
 	Proof run(Term t,uint ctx){
 		budget.spend();
 		auto p=literal(t,ctx); if(p.after!=t) return p;
-		auto n=a.node(t);
+		auto n=a.view(t);
 		if(n.sort!=Sort.real_&&n.sort!=Sort.complex) return d.refl(t,ctx);
 		switch(n.op){
 			case Op.add:return sum(t,ctx);
 			case Op.mul:return multiply(t,ctx);
 			case Op.pow:return power(t,ctx);
 			case Op.inv:
-				auto x=a.child(t,0),v=a.node(x);
+				auto x=a.viewChild(t,0),v=a.view(x);
 				if(v.op==Op.mul){
 					auto r=law!"inv_mul"(n.sort,[a.at(v.a),a.at(v.b)],ctx);
 					return then(r,norm(r.after,ctx),ctx);

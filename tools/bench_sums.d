@@ -30,7 +30,7 @@ import std.exception:enforce;
 		}
 		foreach(native;[false,true]){
 			if(native&&shape=="Product") continue;
-			auto name=(native?"Nary":"Binary")~shape; string code; size_t steps;
+			auto name=(native?"SumFold":"Native")~shape; string code; size_t steps;
 			auto watch=StopWatch(AutoStart.yes);
 			if(native){
 				auto pool=new SumPool(a,Sort.real_),input=pool.from(t),output=pool.fold(input);

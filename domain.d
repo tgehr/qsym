@@ -12,9 +12,9 @@ struct DomainBounds{
 }
 
 bool isGuardedInverse(Arena a,Term t){
-	auto n=a.node(t);
+	auto n=a.view(t);
 	if(n.op!=Op.mask) return false;
-	auto p=a.node(a.at(n.a)),v=a.node(a.at(n.b));
+	auto p=a.view(a.at(n.a)),v=a.view(a.at(n.b));
 	return p.op==Op.nonzero&&v.op==Op.inv&&p.a==v.a;
 }
 
@@ -23,8 +23,8 @@ bool isGuardedInverse(Arena a,Term t){
 DomainBounds domain(Arena a,Term root){
 	string[] formulas=new string[a.length];
 	bool[] top=new bool[a.length];
-	foreach(i;a.postorder(root)){
-		auto t=a.at(i),n=a.node(t);
+	foreach(i;a.viewPostorder(root)){
+		auto t=a.at(i),n=a.view(t);
 		string f;
 		bool total;
 		final switch(n.op){
@@ -46,10 +46,10 @@ DomainBounds domain(Arena a,Term root){
 				f=formulas[n.a]; total=top[n.a]; break;
 			case Op.mask:
 				if(isGuardedInverse(a,t)){
-					auto child=a.node(a.at(n.b)).a;
+					auto child=a.view(a.at(n.b)).a;
 					f=formulas[child]; total=top[child];
 				}else{
-					auto p=a.node(a.at(n.a));
+					auto p=a.view(a.at(n.a));
 					if(p.op==Op.boolLit&&p.value==0){ f="True"; total=true; }
 					else if(p.op==Op.boolLit&&p.value==1){ f=formulas[n.b]; total=top[n.b]; }
 					else f="(value(%"~to!string(n.a)~") = false or (value(%"~
@@ -57,7 +57,7 @@ DomainBounds domain(Arena a,Term root){
 				}
 				break;
 			case Op.and_,Op.or_:
-				auto p=a.node(a.at(n.a));
+				auto p=a.view(a.at(n.a));
 				auto stop=n.op==Op.and_?0:1;
 				total=top[n.a]&&(top[n.b]||p.op==Op.boolLit&&p.value==stop);
 				f=total?"True":"(value(%"~to!string(n.a)~") = "~(stop?"true":"false")~

@@ -1,6 +1,9 @@
 module qsym.text;
 import qsym.ir;
 import qsym.spec:Parser,Pattern,Parameter;
+import qsym.field:compare,Mono,monomial,monomialOrder;
+import qsym.budget:Budget;
+import std.algorithm:sort;
 import std.conv:to;
 import std.exception:enforce;
 @safe:
@@ -86,9 +89,9 @@ struct Syntax{
 		Piece rational(Rational q){ return Piece((q<Rational(0)?-q:q).toString,q.integral?100:70,q<Rational(0)); }
 		bool conversion(Node n){ return n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castRC; }
 		Piece promoted(uint id,Sort expected,Sort minimum=Sort.natural){
-			auto t=a.at(id),n=a.node(t);
+			auto t=a.at(id),n=a.view(t);
 			if(a.sort(t)!=expected) return memo[id];
-			while(conversion(n)&&rigid[n.a]&&rank(a.sort(a.at(n.a)))>=rank(minimum)){ id=n.a; n=a.node(a.at(id)); }
+			while(conversion(n)&&rigid[n.a]&&rank(a.sort(a.at(n.a)))>=rank(minimum)){ id=n.a; n=a.view(a.at(id)); }
 			if(expected==Sort.complex&&a.isNumber(a.at(id))&&a.number(a.at(id)).im.zero)
 				return rational(a.number(a.at(id)).re);
 			return memo[id];
@@ -99,7 +102,7 @@ struct Syntax{
 			// different overload, even when the enclosing result is complex.
 			bool anchor(uint id){
 				auto t=a.at(id);
-				return rigid[id]&&!conversion(a.node(t))&&!(a.sort(t)==Sort.complex&&a.isNumber(t)&&a.number(t).im.zero);
+				return rigid[id]&&!conversion(a.view(t))&&!(a.sort(t)==Sort.complex&&a.isNumber(t)&&a.number(t).im.zero);
 			}
 			if(anchor(x)) r=promoted(y,a.sort(a.at(x)));
 			else if(anchor(y)||!rigid[x]&&rigid[y]) l=promoted(x,a.sort(a.at(y)));
@@ -118,7 +121,7 @@ struct Syntax{
 		}
 		Piece sum(uint x,uint y){
 			Piece l,r; pair(x,y,l,r);
-			auto tail=render(r,r.negative||conversion(a.node(a.at(y)))?61:60,true);
+			auto tail=render(r,r.negative||conversion(a.view(a.at(y)))?61:60,true);
 			auto sign=r.negative?"-":tail.length&&tail[0]=='-'?"":"+";
 			return Piece(render(l,60)~sign~tail,60);
 		}
@@ -135,21 +138,59 @@ struct Syntax{
 			if(unit(n.a)){ r.negative=l.negative!=r.negative; return r; }
 			if(unit(n.b)){ l.negative=l.negative!=r.negative; return l; }
 			pair(n.a,n.b,l,r);
-			auto v=a.node(a.at(n.b));
+			auto v=a.view(a.at(n.b));
 			auto strict=v.op==Op.mul||v.op==Op.builtin&&(v.value==Builtin.mulN||v.value==Builtin.mulZ||v.value==Builtin.mulQ);
 			return Piece(render(l,70,true)~"·"~render(r,strict?70:71,true),70,l.negative!=r.negative);
 		}
+		Operand[] ordered(Term t,Op op){
+			auto es=a.multisetTerms(a.multiset(t,op));
+			if(op==Op.mul) sort!((x,y)=>compare(a,x.term,y.term)<0)(es);
+			else{
+				struct Entry{ Operand e; Mono m; }
+				Entry[] entries; auto budget=new Budget(size_t.max,size_t.max,100_000);
+				foreach(e;es) entries~=Entry(e,monomial(a,e.term,budget));
+				sort!((x,y){ auto c=monomialOrder(a,x.m,y.m); return c?c>0:compare(a,x.e.term,y.e.term)<0; })(entries);
+				foreach(i,e;entries) es[i]=e.e;
+			}
+			return es;
+		}
+		Piece region(Term t,Op op){
+			auto es=ordered(t,op),s=a.sort(t); uint anchor=uint.max;
+			foreach(e;es) if(rigid[e.term.id]&&!conversion(a.view(e.term))&&
+				!(s==Sort.complex&&a.isNumber(e.term)&&a.number(e.term).im.zero)){ anchor=e.term.id; break; }
+			if(anchor==uint.max) foreach(e;es) if(rigid[e.term.id]){ anchor=e.term.id; break; }
+			Piece result; bool first=true;
+			foreach(e;es){
+				enforce(e.count<=100_000,"formatted expression has too many repeated operands");
+				auto p=e.term.id==anchor||anchor==uint.max?memo[e.term.id]:promoted(e.term.id,s);
+				foreach(i;0..e.count){
+					if(first){ result=p; first=false; continue; }
+					if(op==Op.add){
+						auto tail=render(p,p.negative||conversion(a.view(e.term))?61:60,true);
+						result=Piece(render(result,60)~(p.negative?"-":tail.length&&tail[0]=='-'?"":"+")~tail,60);
+					}else if(result.iverson) result=Piece("mul"~suffix(s)~"("~render(result)~","~render(p)~")");
+					else if(a.isNumber(e.term)&&(-a.number(e.term)).one) result.negative=!result.negative;
+					else if(result.text=="1"){
+						p.negative=p.negative!=result.negative; result=p;
+					}else result=Piece(render(result,70,true)~"·"~render(p,71,true),70,result.negative!=p.negative);
+					enforce(result.text.length<=1_000_000,"formatted expression exceeds one million bytes");
+				}
+			}
+			return result;
+		}
 		Piece zeroComparison(Term t,string relation){
-			Term[] pending=[t],terms; string left,right; Number constant;
+			Term[] terms; string left,right; Number constant;
 			Term variable; uint variables;
 			void append(ref string side,string term){ side~=(side.length?"+":"")~term; }
-			while(pending.length){
-				auto u=pending[$-1]; --pending.length; auto n=a.node(u);
-				if(n.op==Op.add) pending~=[a.at(n.b),a.at(n.a)];
-				else if(a.isNumber(u)) constant=constant+a.number(u);
-				else{
-					terms~=u;
-					if(symbolic[u.id]){ variable=u; ++variables; }
+			foreach(e;ordered(t,Op.add)){
+				enforce(e.count<=100_000,"formatted expression has too many repeated operands");
+				foreach(i;0..e.count){
+					auto u=e.term;
+					if(a.isNumber(u)) constant=constant+a.number(u);
+					else{
+						terms~=u;
+						if(symbolic[u.id]){ variable=u; ++variables; }
+					}
 				}
 			}
 			if(variables==1){
@@ -178,7 +219,11 @@ struct Syntax{
 			return Piece((left.length?left:"0")~relation~(right.length?right:"0"),50);
 		}
 		foreach(id;a.postorder(root)){
-			auto t=a.at(id),n=a.node(t); Piece p;
+			auto t=a.at(id),n=a.view(t); Piece p;
+			if(a.node(t).region){
+				foreach(e;a.operands(t)){ symbolic[id]|=symbolic[e.term.id]; rigid[id]|=rigid[e.term.id]; }
+				memo[id]=region(t,n.op); continue;
+			}
 			rigid[id]=true;
 			symbolic[id]=n.op==Op.variable||n.op==Op.densityAt||
 				n.arity>=1&&symbolic[n.a]||n.arity==2&&symbolic[n.b];
@@ -199,14 +244,13 @@ struct Syntax{
 					enforce(n.value<variables.length&&variables[cast(size_t)n.value].sort==n.sort,"unknown variable index");
 					p.text=variables[cast(size_t)n.value].name; break;
 				case Op.boolLit:p.text=n.value?"true":"false"; break;
-				case Op.add:p=sum(n.a,n.b); rigid[id]=rigid[n.a]||rigid[n.b]; break;
-				case Op.mul:p=product(n); rigid[id]=rigid[n.a]||rigid[n.b]; break;
+				case Op.add,Op.mul:p=region(t,n.op); rigid[id]=rigid[n.a]||rigid[n.b]; break;
 				case Op.inv:p=Piece(arg(n.a,91)~"⁻¹",90); rigid[id]=rigid[n.a]; break;
 				case Op.pow:p=Piece(arg(n.a,91)~"^"~to!string(n.value),90); rigid[id]=rigid[n.a]; break;
 				case Op.abs:p.text="abs("~expected(n.a,Sort.real_)~")"; break;
 				case Op.conj:p.text="conj("~expected(n.a,Sort.complex)~")"; break;
 				case Op.not_:
-					auto inner=a.node(a.at(n.a));
+					auto inner=a.view(a.at(n.a));
 					p=inner.op==Op.nonzero?zeroComparison(a.at(inner.a),"="):Piece("¬"~arg(n.a,80),80); break;
 				case Op.and_:p=Piece(arg(n.a,40)~"∧"~arg(n.b,41),40); break;
 				case Op.or_:p=Piece(arg(n.a,30)~"∨"~arg(n.b,31),30); break;
@@ -297,16 +341,16 @@ unittest{
 	s.declare("z:ℂ,x:ℝ,y:ℝ,q:ℚ,k:ℤ,n:ℕ,p:𝔹");
 	foreach(pair;[
 		["ⅈ*toℂ(sqrt(3))","ⅈ·sqrt(3)"],
-		["toℂ(sqrt(3))*ⅈ","sqrt(3)·ⅈ"],
+		["toℂ(sqrt(3))*ⅈ","ⅈ·sqrt(3)"],
 		["z+toℂ(x)","z+x"],
 		["z+toℂ(x+y)","z+(x+y)"],
-		["toℂ(x+y)+z","x+y+z"],
-		["toℂ(x+y)*z","(x+y)·z"],
+		["toℂ(x+y)+z","z+(x+y)"],
+		["toℂ(x+y)*z","z·(x+y)"],
 		["z*toℂ(x^y)","z·x^y"],
 		["z*toℂ(log(x))","z·log(x)"],
 		["z*toℂ(sqrt(-1))","z·sqrt(-1)"],
 		["ⅈ*toℂ([p]*x)","ⅈ·([p]·x)"],
-		["toℂ([p]*x)*z","[p]·x·z"],
+		["toℂ([p]*x)*z","z·([p]·x)"],
 		["mulC(([p]:ℂ),toℂ(x))","mulC(([p]:ℂ),x)"],
 		["cexp(toℂ(x))","cexp(x)"],
 		["csqrt(toℂ(sqrt(x)))","csqrt(sqrt(x))"],

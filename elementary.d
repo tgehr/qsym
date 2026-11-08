@@ -38,11 +38,11 @@ package final class Elementary{
 		if(!root(x.numerator,n,numerator)||!root(x.denominator,n,denominator)) return false;
 		result=Rational(numerator,denominator); return true;
 	}
-	private bool pi(Term t){ auto n=a.node(t); return n.op==Op.builtin&&n.value==Builtin.pi; }
+	private bool pi(Term t){ auto n=a.view(t); return n.op==Op.builtin&&n.value==Builtin.pi; }
 	private Rational angle(Term t){
 		Term[] pending=[t]; Rational result;
 		while(pending.length){
-			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.node(u);
+			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.view(u);
 			if(n.op==Op.add) pending~=[a.at(n.a),a.at(n.b)];
 			else if(pi(u)) result=result+Rational(1);
 			else if(n.op==Op.mul){
@@ -53,7 +53,7 @@ package final class Elementary{
 		return result;
 	}
 	bool propose(Term t,out Instance result){
-		auto n=a.node(t); if(n.op!=Op.builtin) return false;
+		auto n=a.view(t); if(n.op!=Op.builtin) return false;
 		auto f=cast(Builtin)n.value;
 		if((f==Builtin.floorR||f==Builtin.ceilR)&&a.isNumber(a.at(n.a))){
 			auto q=a.number(a.at(n.a)).re,m=q.numerator/q.denominator,r=q.numerator%q.denominator;

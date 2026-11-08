@@ -41,3 +41,26 @@ unittest{
 	assertThrown(d.numeric(a.add(x,a.real_(1)),a.real_(2),0));
 	assertThrown(d.ac(a.add(x,y),a.add(x,x),Op.add,0));
 }
+
+unittest{
+	auto owner=Session.open(); auto a=owner.arena;
+	auto three=a.real_(3),x=a.variable(Sort.real_,0),y=a.variable(Sort.real_,1),seven=a.real_(7);
+	Term[] bs;
+	assert(match(a,Law.real_lt_shift,-1,a.lt(a.add(three,x),seven),bs));
+	assert(bs==[x,three,seven]);
+	bs=null;
+	assert(match(a,Law.real_log_ne_value,-1,a.nonzero(a.sub(a.call(Builtin.logR,[x]),a.real_(1))),bs));
+	assert(bs==[x,a.real_(1)]);
+	bs=null;
+	assert(!match(a,Law.complex_cast_sum,-1,a.castTo(x,Sort.complex),bs));
+	bs=null;
+	auto base=a.add(x,y),input=a.add(a.mul(three,base),a.mul(a.real_(2),base));
+	assert(match(a,Law.real_collect,-1,input,bs));
+	assert(instantiate(a,Law.real_collect,bs).before==input);
+	import qsym.matching:matchRegion,MatchWork,MatchOperand;
+	bs=[Term.init];
+	assert(matchRegion(a,a.mul(base,base),Op.mul,[MatchOperand(null,0),MatchOperand(null,0)],bs,new MatchWork));
+	assert(bs==[base]);
+	bs=[Term.init];
+	assert(!matchRegion(a,a.mul(base,a.mul(base,base)),Op.mul,[MatchOperand(null,0),MatchOperand(null,0)],bs,new MatchWork));
+}

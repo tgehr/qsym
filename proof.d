@@ -17,6 +17,22 @@ private string dc(uint i){ return "(d"~to!string(i)~" ρ)"; }
 private string ds(uint i){ return "(domain_"~to!string(i)~" ρ)"; }
 private string rat(Rational q){ return "(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)"; }
 
+private string positive(uint n){
+	enforce(n>0,"positive multiplicity expected");
+	return n==1?".one":"(."~(n&1?"twicePlusOne":"twice")~" "~positive(n/2)~")";
+}
+private string syntaxCode(Arena a,Term t){
+	auto n=a.node(t),s=leanSort(n.sort); string code,body;
+	if(n.region){
+		string child(uint id){ auto v=a.node(a.at(id)); return v.region&&v.op==n.op?"b"~to!string(id):"(.item "~name(id)~" .one)"; }
+		if(n.arity==1){ auto e=a.operands(t)[0]; body=".item "~name(e.term.id)~" "~positive(e.count); }
+		else body=".join "~child(n.a)~" "~child(n.b);
+		code="def b"~to!string(t.id)~" : Region (Expr ."~s~") := "~body~"\n";
+		body="Expr."~(n.op==Op.add?"sum":"product")~suffix(n.sort)~" b"~to!string(t.id);
+	}else body=leanConstructor(a,n);
+	return code~"def "~name(t.id)~" : Expr ."~s~" := "~body~"\n";
+}
+
 string leanConstructor(Arena a,Node n){
 	string suf=numeric(n.sort)?suffix(n.sort):"";
 	string op;
@@ -57,7 +73,7 @@ string leanConstructor(Arena a,Node n){
 // Share evaluated subterms as well as syntax. Connect only public endpoints
 // and arithmetic replay to Expr.eval; intermediate steps use the values.
 private string valueCode(Arena a,Term t){
-	auto n=a.node(t); string op;
+	auto n=a.view(t); string op;
 	switch(n.op){
 		case Op.add:op="Value.add"; break;
 		case Op.mul:op="Value.mul"; break;
@@ -100,7 +116,7 @@ private string valueCode(Arena a,Term t){
 }
 
 private string domainCode(Arena a,Term t){
-	auto n=a.node(t);
+	auto n=a.view(t);
 	auto i=to!string(t.id);
 	string cond,proof;
 	final switch(n.op){
@@ -132,7 +148,7 @@ private string domainCode(Arena a,Term t){
 			proof="(Value.defined_map _ "~ev(n.a)~").trans "~ds(n.a); break;
 		case Op.mask:
 			if(isGuardedInverse(a,t)){
-				auto child=a.node(a.at(n.b)).a;
+				auto child=a.view(a.at(n.b)).a;
 				cond=dc(child);
 				proof="(Value.defined_guarded_inv "~ev(child)~").trans "~ds(child);
 			}else{
@@ -185,7 +201,7 @@ private string domainLemma(Node n){
 }
 private string totalRef(uint i){ return "(total_"~to!string(i)~" ρ)"; }
 private string totalCode(Arena a,Term t,bool[] total){
-	auto n=a.node(t);
+	auto n=a.view(t);
 	string proof;
 	final switch(n.op){
 		case Op.realLit,Op.complexLit,Op.numberLit,Op.boolLit,Op.variable,Op.lebesgue:
@@ -209,10 +225,10 @@ private string totalCode(Arena a,Term t,bool[] total){
 		case Op.inv:break;
 		case Op.mask:
 			if(isGuardedInverse(a,t)){
-				auto child=a.node(a.at(n.b)).a;
+				auto child=a.view(a.at(n.b)).a;
 				if(total[child]) proof="(Value.defined_guarded_inv "~ev(child)~").mpr "~totalRef(child);
 			}else{
-				auto p=a.node(a.at(n.a));
+				auto p=a.view(a.at(n.a));
 				if(p.op==Op.boolLit){
 					if(!p.value) proof="⟨_, rfl⟩";
 					else if(total[n.b]) proof=totalRef(n.b);
@@ -220,7 +236,7 @@ private string totalCode(Arena a,Term t,bool[] total){
 			}
 			break;
 		case Op.and_,Op.or_:
-			auto p=a.node(a.at(n.a));
+			auto p=a.view(a.at(n.a));
 			if(p.op==Op.boolLit&&p.value==(n.op==Op.or_)) proof="⟨_, rfl⟩";
 			else if(total[n.a]&&total[n.b]) proof="Value.defined_"~(n.op==Op.and_?"and":"or")~
 				"_total "~ev(n.a)~" "~ev(n.b)~" "~totalRef(n.a)~" "~totalRef(n.b);
@@ -242,7 +258,7 @@ private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,str
 	enforce(p.found,"missing domain evidence");
 	if(p.total) return "(show Value.Defined "~ev(p.term.id)~" from ⟨_, rfl⟩)";
 	if(p.children.length){
-		auto n=a.node(p.term);
+		auto n=a.view(p.term);
 		if(n.op==Op.builtin){
 			auto info=builtinInfo(cast(Builtin)n.value);
 			enforce(info.total,"partial function is not total");
@@ -259,7 +275,7 @@ private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,str
 	}
 	auto t=source;
 	foreach(i;p.path){
-		auto n=a.node(t);
+		auto n=a.view(t);
 		switch(n.op){
 			case Op.builtin:
 				h="(Functions."~builtinInfo(cast(Builtin)n.value).code~(n.arity==1?".defined_arg ":i==0?".defined_left ":".defined_right ")~ev(n.a)~(n.arity==2?" "~ev(n.b):"")~" "~h~")";
@@ -274,7 +290,7 @@ private string domainEvidence(Arena a,Derivation d,Term source,DomainProof p,str
 				if(n.arity==2) h~="."~to!string(i+1);
 				break;
 		}
-		t=a.child(t,i);
+		t=a.viewChild(t,i);
 	}
 	enforce(t==p.term,"bad domain projection");
 	return h;
@@ -326,7 +342,7 @@ private ACCode bagEvidence(Arena a,Deduction e,uint[] nodes,Term[] atoms,Table!(
 	}
 	Table!(uint,uint) normal;
 	foreach(id;nodes){
-		auto n=a.node(a.at(id)); uint b; string p;
+		auto n=a.view(a.at(id)); uint b; string p;
 		if(n.op==op){
 			auto l=normal.get(n.a,uint.max),r=normal.get(n.b,uint.max);
 			enforce(l!=uint.max&&r!=uint.max,"AC node order mismatch");
@@ -345,13 +361,15 @@ private ACCode bagEvidence(Arena a,Deduction e,uint[] nodes,Term[] atoms,Table!(
 }
 private ACCode acEvidence(Arena a,Deduction e){
 	auto op=e.value?Op.mul:Op.add;
+	if(a.view(e.proof.before)==a.view(e.proof.after))
+		return ACCode("","  Value.refines_refl "~ev(e.proof.before.id)~"\n");
 	Term[] atoms,pending=[e.proof.before,e.proof.after]; uint[] nodes;
 	Table!(uint,uint) ids; Table!(uint,bool) seen;
 	while(pending.length){
 		auto t=pending[$-1]; --pending.length;
 		if(seen.get(t.id,false)) continue;
 		seen.set(t.id,true); nodes~=t.id;
-		auto n=a.node(t);
+		auto n=a.view(t);
 		if(n.op==op) pending~=[a.at(n.b),a.at(n.a)];
 		else if(!a.isNumber(t)||!(e.value?a.number(t).one:a.number(t).zero)){
 			ids.set(t.id,cast(uint)atoms.length); atoms~=t;
@@ -359,7 +377,9 @@ private ACCode acEvidence(Arena a,Deduction e){
 	}
 	import std.algorithm:sort;
 	sort(nodes);
-	if(nodes.length>24) return bagEvidence(a,e,nodes,atoms,ids);
+	// Larger bridges check shared merges separately, avoiding costly reduction
+	// of a whole tree against evaluated real or complex expressions.
+	if(nodes.length>8) return bagEvidence(a,e,nodes,atoms,ids);
 	auto ac="Replay."~(e.value?"mul":"add")~(a.sort(e.proof.before)==Sort.real_?"R":"C");
 	string env="(fun i => ([";
 	foreach(i,t;atoms) env~=(i?",":"")~ev(t.id);
@@ -367,7 +387,7 @@ private ACCode acEvidence(Arena a,Deduction e){
 	string tree(uint id){ return "ac"~to!string(id); }
 	string code;
 	foreach(id;nodes){
-		auto n=a.node(a.at(id)); string value;
+		auto n=a.view(a.at(id)); string value;
 		if(n.op==op) value="(.node "~tree(n.a)~" "~tree(n.b)~")";
 		else if(ids.contains(id)) value="(.leaf "~to!string(ids.get(id,0))~")";
 		else value=".unit";
@@ -416,10 +436,10 @@ string exportLean(Arena a,Result result){
 		auto t=pending[$-1]; --pending.length;
 		if(needed[t.id]) continue;
 		needed[t.id]=true;
-		foreach(i;0..a.node(t).arity) pending~=a.child(t,i);
+		foreach(i;0..a.view(t).arity) pending~=a.viewChild(t,i);
 	}
 	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nset_option maxRecDepth 8192\n";
-	foreach(i,n;needed) if(n){ auto t=a.at(cast(uint)i); s~="def "~name(t.id)~" : Expr ."~leanSort(a.sort(t))~" := "~leanConstructor(a,a.node(t))~"\n"; }
+	foreach(i,n;needed) if(n) s~=syntaxCode(a,a.at(cast(uint)i));
 	foreach(i,n;needed) if(n) s~=valueCode(a,a.at(cast(uint)i));
 	foreach(i,n;evaluated) if(n) s~="theorem eval_"~to!string(i)~" (ρ : Env) : "~exprEval(cast(uint)i)~" = "~ev(cast(uint)i)~" := rfl\n";
 	s~="\n";
@@ -448,7 +468,7 @@ string exportLean(Arena a,Result result){
 				break;
 			case Evidence.trans:s~="  "~ref_(e.premises[0])~".trans "~ref_(e.premises[1])~"\n"; break;
 			case Evidence.congr:
-				auto n=a.node(p.before);
+				auto n=a.view(p.before);
 				string lemma;
 				switch(n.op){
 					case Op.builtin:lemma="refines_function"~to!string(n.arity)~" Functions."~builtinInfo(cast(Builtin)n.value).code; break;
@@ -471,7 +491,7 @@ string exportLean(Arena a,Result result){
 				foreach(q;e.premises) s~=" "~ref_(q);
 				s~="\n"; break;
 			case Evidence.scoped:
-				auto n=a.node(p.before),body=e.premises[0];
+				auto n=a.view(p.before),body=e.premises[0];
 				auto op=n.op==Op.mask?"mask":n.op==Op.and_?"and":"or";
 				s~="  Value.refines_"~op~"_under "~ev(n.a)~" "~ev(body.before.id)~" "~ev(body.after.id)~
 					" (fun g"~to!string(body.context)~" => "~ref_(body)~")\n";
@@ -480,9 +500,9 @@ string exportLean(Arena a,Result result){
 				auto t=e.premises.length?e.premises[0].before:d.contexts[e.assumptionScope].guard;
 				string h=e.premises.length?reference(d,e.premises[0],true):"g"~to!string(e.assumptionScope);
 				foreach(j;e.path){
-					auto n=a.node(t);
+					auto n=a.view(t);
 					auto lemma=n.op==Op.not_?"of_not":(n.op==Op.and_?"and_true_":"or_false_")~(j==0?"left":"right");
-					h="(Value."~lemma~" "~h~")"; t=a.child(t,j);
+					h="(Value."~lemma~" "~h~")"; t=a.viewChild(t,j);
 				}
 				s~="  "~(e.value?h:"Value.not_eq "~h)~"\n"; break;
 			case Evidence.transport:
@@ -497,10 +517,10 @@ string exportLean(Arena a,Result result){
 	s~="theorem refinement (ρ : Env)"~contexts(d,context,true)~" : Value.Refines "~exprEval(result.proofInput.id)~" "~exprEval(result.output.id)~" :=\n  Eq.mpr (congrArg₂ Value.Refines "~evalEq(result.proofInput.id)~" "~evalEq(result.output.id)~") "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
 	s~="theorem simplification (ρ : Env)"~contexts(d,context,true)~" (h : Expr.Defined ρ "~name(result.proofInput.id)~") : "~
 		exprEval(result.proofInput.id)~" = "~exprEval(result.output.id)~" := (refinement ρ"~contexts(d,context,false)~").eq_of_defined h\n#qsym_check_axioms simplification\n\n";
-	auto inputOrder=a.postorder(result.input);
+	auto inputOrder=a.viewPostorder(result.input);
 	bool direct=true;
 	foreach(id;inputOrder){
-		auto n=a.node(a.at(id));
+		auto n=a.view(a.at(id));
 		if(n.op==Op.inv||n.op==Op.mask||n.op==Op.and_||n.op==Op.or_||n.op==Op.builtin&&n.arity) direct=false;
 	}
 	if(direct){

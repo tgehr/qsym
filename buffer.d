@@ -12,6 +12,7 @@ struct Buffer(T){
 		enforce(i<used,"buffer index out of range");
 		return storage[i];
 	}
+	void opIndexAssign(T value,size_t i){ enforce(i<used,"buffer index out of range"); storage[i]=value; }
 	void append(T value){
 		if(used==storage.length){
 			size_t capacity=storage.length?storage.length*2:16;

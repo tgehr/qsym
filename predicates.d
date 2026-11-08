@@ -16,7 +16,7 @@ package final class Predicates{
 		this.a=a; this.budget=budget; this.field=field; this.elementary=elementary;
 	}
 	bool propose(Term t,Term residual,out Instance result,bool factor=true){
-		auto n=a.node(t); Term atom; Number[3] c;
+		auto n=a.view(t); Term atom; Number[3] c;
 		auto s=a.sort(residual),complex=s==Sort.complex;
 		auto nz=n.op==Op.nonzero; auto l=a.at(n.a),r=nz?a.number(Number(0),s):a.at(n.b);
 		if(!field.quadratic(residual,atom,c)){
