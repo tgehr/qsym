@@ -491,6 +491,20 @@ string exportLean(Arena a,Result result){
 		s~="theorem p"~to!string(i)~" (ρ : Env)"~contexts(d,p.context,true)~" : "~claim~" :=\n";
 		string ref_(Proof q){ return reference(d,q); }
 		final switch(e.kind){
+			case Evidence.join:
+				Table!(ulong,uint) leaves;
+				ulong key(Term before,Term after){ return (cast(ulong)before.id<<32)|after.id; }
+				foreach(j,q;e.premises) leaves.set(key(q.before,q.after),cast(uint)j);
+				string join(Term before,Term after){
+					auto j=leaves.get(key(before,after),uint.max);
+					if(j!=uint.max) return ref_(e.premises[j]);
+					if(before==after) return "(Value.refines_refl "~ev(before.id)~")";
+					auto l=a.view(before),r=a.view(after);
+					enforce(l.op==(e.value?Op.mul:Op.add)&&r.op==l.op,"invalid join skeleton");
+					return "(Value.refines_"~(e.value?"mul":"add")~" (a := "~ev(l.a)~") (b := "~ev(l.b)~") (x := "~ev(r.a)~") (y := "~ev(r.b)~") "~
+						join(a.at(l.a),a.at(r.a))~" "~join(a.at(l.b),a.at(r.b))~")";
+				}
+				s~="  "~join(p.before,p.after)~"\n"; break;
 			case Evidence.repeated:
 				auto atom=e.premises[0];
 				s~="  Value.refines_repeat_"~(e.value?"mul":"add"~suffix(a.sort(p.before)))~" "~positive(e.count)~" "~to!string(e.count)~" "~positiveCount(e.count)~

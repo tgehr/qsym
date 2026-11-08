@@ -327,18 +327,8 @@ package final class Engine{
 	private Proof associative(Term t,uint ctx,bool probe){
 		auto n=a.view(t); Proof[] ps;
 		foreach(e;d.regions.terms(t,n.op,budget)) ps~=field.repeated(go(e.term,ctx,probe),e.count,n.op,ctx);
-		if(!ps.length) return d.ac(t,a.number(Number(n.op==Op.add?0:1),n.sort),n.op,ctx);
-		while(ps.length>1){
-			Proof[] next;
-			for(size_t i;i<ps.length;i+=2){
-				if(i+1==ps.length){ next~=ps[i]; continue; }
-				auto left=ps[i],right=ps[i+1];
-				auto term=n.op==Op.add?a.add(left.before,right.before):a.mul(left.before,right.before);
-				next~=d.congr(term,[left,right],ctx);
-			}
-			ps=next;
-		}
-		return d.trans(d.ac(t,ps[0].before,n.op,ctx),ps[0],ctx);
+		auto p=d.join(ps,n.op,n.sort,ctx);
+		return d.trans(d.ac(t,p.before,n.op,ctx),p,ctx);
 	}
 	private bool powerBound(Term t,uint ctx,out Proof result){
 		auto n=a.view(t); if(n.op!=Op.lt&&n.op!=Op.le) return false;

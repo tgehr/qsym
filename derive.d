@@ -8,7 +8,7 @@ import std.exception:enforce;
 
 struct Proof{ Term before,after; uint id=uint.max,context; bool known; }
 struct Context{ uint parent; Term guard; bool value; }
-enum Evidence{ rule,trans,congr,scoped,assumption,transport,numeric,ac,repeated }
+enum Evidence{ rule,trans,congr,scoped,assumption,transport,numeric,ac,repeated,join }
 struct DomainProof{ Term term; uint[] path; DomainProof[] children; bool found,total; uint assumption; uint fact=uint.max; }
 struct Deduction{
 	Evidence kind;
@@ -112,6 +112,40 @@ final class Derivation{
 		auto e=Deduction(Evidence.repeated,Proof(before,after,uint.max,context),[atom]);
 		e.count=count; e.value=op==Op.mul;
 		return trans(trans(prefix,record(e),context),canonical(after,context),context);
+	}
+	// Normalize the whole region once, after combining its operand proofs.
+	Proof join(Proof[] ps,Op op,Sort s,uint context){
+		enforce((op==Op.add||op==Op.mul)&&(s==Sort.real_||s==Sort.complex),"scalar associative operation expected");
+		Operand[] inputs,outputs;
+		foreach(p;ps){
+			enforce(arena.sort(p.before)==s&&arena.sort(p.after)==s,"join type mismatch");
+			enforce(visible(p.context,context),"invisible join premise");
+			enforce(arena.canonical(p.before)==p.before&&arena.canonical(p.after)==p.after,"canonical join operands expected");
+			inputs~=Operand(p.before,1); outputs~=Operand(p.after,1);
+		}
+		auto before=arena.region(op,s,inputs),after=arena.region(op,s,outputs);
+		if(before==after) return refl(before,context);
+		if(!tracing) return Proof(before,after,uint.max,context);
+		if(ps.length==1){ auto p=ps[0]; p.context=context; return p; }
+		Term rawJoin(Term x,Term y){ return op==Op.add?arena.add(x,y,true):arena.mul(x,y,true); }
+		Proof tree(Proof[] qs){
+			if(qs.length==1) return qs[0];
+			auto split=qs.length/2,l=tree(qs[0..split]),r=tree(qs[split..$]);
+			return Proof(rawJoin(l.before,r.before),rawJoin(l.after,r.after),uint.max,context);
+		}
+		bool native=true; Table!(uint,uint) leaves;
+		foreach(i,p;ps){
+			auto t=p.before;
+			if(arena.node(t).op==op||leaves.contains(t.id)||arena.isNumber(t)&&(op==Op.add?arena.number(t).zero:arena.number(t).one)){ native=false; break; }
+			leaves.set(t.id,cast(uint)i);
+		}
+		Proof map(Term t){
+			auto i=leaves.get(t.id,uint.max); if(i!=uint.max) return ps[i];
+			auto n=arena.view(t),l=map(arena.at(n.a)),r=map(arena.at(n.b));
+			return Proof(t,rawJoin(l.after,r.after),uint.max,context);
+		}
+		auto raw=native?map(before):tree(ps),e=Deduction(Evidence.join,raw,ps.dup); e.value=op==Op.mul;
+		return trans(trans(ac(before,raw.before,op,context),record(e),context),ac(raw.after,after,op,context),context);
 	}
 	Proof rule(Instance i,Proof[] premises,uint context){
 		if(i.before==i.result) return refl(i.before,context);

@@ -8,7 +8,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate test demo verify bench bench-certificates bench-associative bench-sums bench-counted clean
+.PHONY: all generate test demo verify bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 all: build/qsym
 
 build generated:
@@ -57,6 +57,8 @@ test: build/qsym
 	./build/region-tests --DRT-testmode=run-main build/regions
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/counted.d -of=build/counted-tests
 	./build/counted-tests --DRT-testmode=run-main build/counted
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/joins.d -of=build/join-tests
+	./build/join-tests --DRT-testmode=run-main build/joins
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/signs.d -of=build/sign-tests
 	./build/sign-tests --DRT-testmode=run-main build/signs
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/sum.d -of=build/sum-tests
@@ -101,6 +103,14 @@ bench-counted: build/counted-bench
 	./build/counted-bench build/bench-counted
 	cd lean && $(LAKE) build
 	python3 tools/bench_certificates.py --exporter build/counted-bench --lake $(LAKE)
+
+build/join-bench: generate tools/bench_joins.d $(MODULES)
+	$(DC) $(DFLAGS) $(IMPORTS) -i tools/bench_joins.d -of=$@
+
+bench-joins: build/join-bench
+	./build/join-bench build/bench-joins
+	cd lean && $(LAKE) build
+	python3 tools/bench_certificates.py --exporter build/join-bench --lake $(LAKE)
 
 # Full verification is fail-closed. Fast compilation alone never grants trust.
 verify: test build/qsym

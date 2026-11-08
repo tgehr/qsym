@@ -296,18 +296,7 @@ package final class Field{
 			groups~=g; changes~=p;
 		}
 		auto grouped=balanced(groups,Op.mul,s),p=d.ac(t,grouped,Op.mul,ctx);
-		// A group may itself be a product, so rebuild the grouping skeleton
-		// explicitly instead of flattening it again.
-		Proof combine(Proof[] ps){
-			if(!ps.length) return d.refl(number(1,s),ctx);
-			while(ps.length>1){
-				Proof[] next;
-				for(size_t i;i<ps.length;i+=2) next~=i+1==ps.length?ps[i]:d.congr(a.mul(ps[i].before,ps[i+1].before),[ps[i],ps[i+1]],ctx);
-				ps=next;
-			}
-			return ps[0];
-		}
-		p=then(p,combine(changes),ctx);
+		p=then(p,d.join(changes,Op.mul,s,ctx),ctx);
 		Term[] output; foreach(q;changes) output~=q.after;
 		auto m=mono(balanced(output,Op.mul,s));
 		if(m.coefficient.zero){
@@ -326,12 +315,7 @@ package final class Field{
 		Proof[] products; foreach(x;ts) products~=product(x,ctx);
 		auto tree=balanced(ts,Op.add,s);
 		prefix=d.ac(t,tree,Op.add,ctx);
-		while(products.length>1){
-			Proof[] next;
-			for(size_t i;i<products.length;i+=2) next~=i+1==products.length?products[i]:d.congr(a.add(products[i].before,products[i+1].before),[products[i],products[i+1]],ctx);
-			products=next;
-		}
-		prefix=then(prefix,products[0],ctx);
+		prefix=then(prefix,d.join(products,Op.add,s,ctx),ctx);
 		t=prefix.after; ts=leaves(t,Op.add);
 		struct Entry{ Term term; Mono m; }
 		Entry[] entries; foreach(x;ts) entries~=Entry(x,mono(x));
@@ -368,12 +352,7 @@ package final class Field{
 		auto grouped=balanced(groups,Op.add,s),p=d.ac(t,grouped,Op.add,ctx);
 		Term[] output;
 		foreach(q;changes) if(!a.isNumber(q.after)||!a.number(q.after).zero) output~=q.after;
-		while(changes.length>1){
-			Proof[] next;
-			for(size_t i;i<changes.length;i+=2) next~=i+1==changes.length?changes[i]:d.congr(a.add(changes[i].before,changes[i+1].before),[changes[i],changes[i+1]],ctx);
-			changes=next;
-		}
-		p=then(p,changes[0],ctx);
+		p=then(p,d.join(changes,Op.add,s,ctx),ctx);
 		return then(prefix,then(p,d.ac(p.after,balanced(output,Op.add,s),Op.add,ctx),ctx),ctx);
 	}
 	private Proof multiply(Term t,uint ctx){
