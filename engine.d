@@ -8,7 +8,6 @@ import qsym.predicates:Predicates;
 import std.algorithm:sort;
 import qsym.generated.rules;
 import qsym.table:Table;
-import qsym.associative:operands;
 @safe:
 
 package final class Engine{
@@ -330,7 +329,7 @@ package final class Engine{
 	}
 	private Proof associative(Term t,uint ctx,bool probe){
 		auto n=a.node(t); Proof[] ps;
-		foreach(e;operands(a,t,n.op,budget)) ps~=field.repeated(go(e.term,ctx,probe),e.count,n.op,ctx);
+		foreach(e;d.regions.terms(t,n.op,budget)) ps~=field.repeated(go(e.term,ctx,probe),e.count,n.op,ctx);
 		if(!ps.length) return d.ac(t,a.number(Number(n.op==Op.add?0:1),n.sort),n.op,ctx);
 		while(ps.length>1){
 			Proof[] next;

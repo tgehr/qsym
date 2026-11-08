@@ -60,12 +60,14 @@ package final class Field{
 		return ts[0];
 	}
 	private Term[] leaves(Term t,Op op){
-		Term[] result,pending=[t];
-		while(pending.length){
-			budget.spend(); t=pending[$-1]; --pending.length;
-			auto n=a.node(t);
-			if(n.op==op) pending~=[a.at(n.b),a.at(n.a)]; else result~=t;
+		if(a.node(t).op!=op){ budget.spend(); return [t]; }
+		Term[] result;
+		foreach(e;d.regions.terms(t,op,budget)){
+			if(e.count>budget.maxTerms-result.length) throw new Limit;
+			budget.spend(e.count);
+			auto start=result.length; result.length+=e.count; result[start..$]=e.term;
 		}
+		if(!result.length) result~=number(op==Op.add?0:1,a.sort(t));
 		return result;
 	}
 	private Term factorTerm(Factor f,Sort s){
@@ -92,9 +94,18 @@ package final class Field{
 	}
 	private Mono mono(Term t){
 		Mono m; m.coefficient=Number(1);
-		foreach(f;leaves(t,Op.mul)){
-			if(a.isNumber(f)) m.coefficient=budget.calc!"*"(m.coefficient,a.number(f));
-			else m.factors~=factor(f);
+		foreach(e;d.regions.terms(t,Op.mul,budget)){
+			if(a.isNumber(e.term)){
+				auto v=a.number(e.term);
+				for(auto count=e.count;count;count>>=1){
+					if(count&1) m.coefficient=budget.calc!"*"(m.coefficient,v);
+					if(count>1) v=budget.calc!"*"(v,v);
+				}
+			}else{
+				auto f=factor(e.term);
+				if((f.exponent<0?-f.exponent:f.exponent)>uint.max/e.count) throw new Limit;
+				f.exponent*=e.count; m.factors~=f;
+			}
 		}
 		sort!((x,y)=>compare(a,x.atom,y.atom)<0)(m.factors);
 		return m;
@@ -358,14 +369,14 @@ package final class Field{
 			groups~=g; changes~=p;
 		}
 		auto grouped=balanced(groups,Op.add,s),p=d.ac(t,grouped,Op.add,ctx);
+		Term[] output;
+		foreach(q;changes) if(!a.isNumber(q.after)||!a.number(q.after).zero) output~=q.after;
 		while(changes.length>1){
 			Proof[] next;
 			for(size_t i;i<changes.length;i+=2) next~=i+1==changes.length?changes[i]:d.congr(a.add(changes[i].before,changes[i+1].before),[changes[i],changes[i+1]],ctx);
 			changes=next;
 		}
 		p=then(p,changes[0],ctx);
-		Term[] output;
-		foreach(x;leaves(p.after,Op.add)) if(!a.isNumber(x)||!a.number(x).zero) output~=x;
 		return then(prefix,then(p,d.ac(p.after,balanced(output,Op.add,s),Op.add,ctx),ctx),ctx);
 	}
 	private Proof multiply(Term t,uint ctx){

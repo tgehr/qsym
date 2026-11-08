@@ -2,7 +2,7 @@ module qsym.derive;
 import qsym.ir;
 import qsym.generated.rules:Instance;
 import qsym.table:Table;
-import qsym.associative:operands;
+import qsym.associative:Regions;
 import std.exception:enforce;
 @safe:
 
@@ -28,7 +28,8 @@ final class Derivation{
 	Deduction[] deductions;
 	Proof[] domainFacts;
 	Context[] contexts=[Context.init];
-	this(Arena a,bool tracing){ arena=a; this.tracing=tracing; }
+	package Regions regions;
+	this(Arena a,bool tracing){ arena=a; this.tracing=tracing; regions=new Regions(a); }
 	Proof refl(Term t,uint context=0){ return Proof(t,t,uint.max,context); }
 	private Proof record(Deduction d){
 		if(tracing){ d.proof.id=cast(uint)deductions.length; deductions~=d; }
@@ -136,11 +137,7 @@ final class Derivation{
 		enforce(op==Op.add||op==Op.mul,"AC operation expected");
 		enforce(arena.sort(before)==arena.sort(after),"AC type mismatch");
 		if(before==after) return refl(before,context);
-		auto left=operands(arena,before,op),right=operands(arena,after,op);
-		Table!(uint,uint) counts;
-		foreach(e;left) counts.set(e.term.id,e.count);
-		foreach(e;right) enforce(counts.get(e.term.id,0)==e.count,"AC leaf mismatch");
-		enforce(left.length==right.length,"AC leaf count mismatch");
+		enforce(regions.from(before,op)==regions.from(after,op),"AC leaf mismatch");
 		auto d=Deduction(Evidence.ac,Proof(before,after,uint.max,context)); d.value=op==Op.mul;
 		return record(d);
 	}

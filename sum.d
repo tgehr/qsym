@@ -1,7 +1,7 @@
 module qsym.sum;
 import qsym.ir;
 import qsym.table:Table;
-import qsym.associative:operands;
+import qsym.associative:Regions;
 import qsym.field:compare;
 import std.algorithm:sort;
 import std.exception:enforce;
@@ -20,6 +20,7 @@ final class SumPool{
 	private Arena a;
 	private Sort scalar;
 	private Term zero;
+	private Regions regions;
 	private struct Count{ uint atom,count; }
 	private struct Span{ uint start,length; }
 	private Count[] data;
@@ -27,7 +28,7 @@ final class SumPool{
 	private Table!(string,uint) interned;
 	this(Arena a,Sort scalar){
 		enforce(scalar==Sort.real_||scalar==Sort.complex,"sum requires a real or complex scalar type");
-		this.a=a; this.scalar=scalar; zero=a.number(Number(0),scalar);
+		this.a=a; this.scalar=scalar; zero=a.number(Number(0),scalar); regions=new Regions(a);
 	}
 	Arena arena(){ a.check(zero); return a; }
 	Sort type(){ a.check(zero); return scalar; }
@@ -82,7 +83,7 @@ final class SumBuilder{
 	void add(Term t,uint count=1){
 		auto a=pool.arena(); enforce(a.sort(t)==pool.scalar,"sum operand type mismatch");
 		if(!count) return;
-		foreach(e;operands(a,t,Op.add)){
+		foreach(e;pool.regions.terms(t,Op.add)){
 			enforce(e.count<=uint.max/count,"sum multiplicity overflow"); addAtom(e.term,e.count*count);
 		}
 	}

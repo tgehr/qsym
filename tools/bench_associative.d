@@ -1,5 +1,6 @@
 module bench_associative;
 import qsym;
+import qsym.derive:Derivation;
 import std.stdio:writeln;
 import std.datetime.stopwatch:StopWatch,AutoStart;
 import std.file:write,mkdirRecurse;
@@ -9,6 +10,15 @@ import std.conv:to;
 import std.exception:enforce;
 @system void main(string[] args){
 	enforce(args.length==2,"usage: associative-bench DIRECTORY"); mkdirRecurse(args[1]);
+	foreach(count;[256u,1024u,4096u]){
+		auto session=Session.open(); auto a=session.arena; auto d=new Derivation(a,false);
+		auto left=a.real_(0),right=left,watch=StopWatch(AutoStart.yes);
+		foreach(i;0..count){
+			auto x=a.variable(Sort.real_,i); left=a.add(left,x); right=a.add(x,right);
+			d.ac(left,right,Op.add,0);
+		}
+		writeln("growing regions ",count,": ",watch.peek.total!"usecs"," us");
+	}
 	foreach(count;[16u,64u,128u,256u]){
 		auto session=Session.open(); auto a=session.arena; auto t=a.real_(0);
 		foreach(i;0..count){

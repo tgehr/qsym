@@ -72,6 +72,11 @@ private Term partialRegion(Arena a,Sort s,Op op){
 	}
 	return t;
 }
+private Term repeatedRegion(Arena a,Sort s,Op op){
+	auto t=a.mask(a.variable(Sort.boolean,0),a.inv(a.variable(s,0)));
+	foreach(i;0..8) t=op==Op.add?a.add(t,t):a.mul(t,t);
+	return t;
+}
 unittest{
 	foreach(s;[Sort.real_,Sort.complex]) foreach(op;[Op.add,Op.mul]){
 		auto owner=Session.open(); auto a=owner.arena; auto t=partialRegion(a,s,op);
@@ -80,6 +85,11 @@ unittest{
 		auto code=exportLean(a,checked);
 		import std.string:indexOf;
 		assert(code.indexOf("Replay.Bag.node_sound")>=0,"large partial regions must use shared bags");
+		auto repeated=repeatedRegion(a,s,op),atom=a.mask(a.variable(Sort.boolean,0),a.inv(a.variable(s,0)));
+		auto expected=op==Op.add?a.mul(a.number(Number(256),s),atom):a.pow(atom,256);
+		auto r=simplify(a,repeated,Options(DensityMode.preserve,true));
+		assert(!r.exhausted&&r.output==simplify(a,expected).output);
+		assert(r.output==simplify(a,repeated).output&&simplify(a,r.output).output==r.output);
 	}
 }
 @system void main(string[] args){
@@ -98,6 +108,8 @@ unittest{
 		import std.conv:to;
 		write(buildPath(args[1],"Partial"~to!string(s)~to!string(op)~".lean"),
 			exportLean(a,simplify(a,partialRegion(a,s,op),Options(DensityMode.preserve,true))));
+		write(buildPath(args[1],"Repeated"~to!string(s)~to!string(op)~".lean"),
+			exportLean(a,simplify(a,repeatedRegion(a,s,op),Options(DensityMode.preserve,true))));
 	}
 	writeln("Wrote associative certificates.");
 }
