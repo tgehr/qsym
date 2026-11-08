@@ -21,13 +21,18 @@ private string positive(uint n){
 	enforce(n>0,"positive multiplicity expected");
 	return n==1?".one":"(."~(n&1?"twicePlusOne":"twice")~" "~positive(n/2)~")";
 }
-private string syntaxCode(Arena a,Term t){
+private string positiveCount(uint n){
+	if(n==1) return "Positive.toNat_one";
+	return "(Positive.toNat_"~(n&1?"twicePlusOne":"twice")~" "~positive(n/2)~" "~to!string(n/2)~" "~positiveCount(n/2)~")";
+}
+private string syntaxCode(Arena a,Term t,bool expression=true){
 	auto n=a.node(t),s=leanSort(n.sort); string code,body;
 	if(n.region){
 		string child(uint id){ auto v=a.node(a.at(id)); return v.region&&v.op==n.op?"b"~to!string(id):"(.item "~name(id)~" .one)"; }
 		if(n.arity==1){ auto e=a.operands(t)[0]; body=".item "~name(e.term.id)~" "~positive(e.count); }
 		else body=".join "~child(n.a)~" "~child(n.b);
 		code="def b"~to!string(t.id)~" : Region (Expr ."~s~") := "~body~"\n";
+		if(!expression) return code;
 		body="Expr."~(n.op==Op.add?"sum":"product")~suffix(n.sort)~" b"~to!string(t.id);
 	}else body=leanConstructor(a,n);
 	return code~"def "~name(t.id)~" : Expr ."~s~" := "~body~"\n";
@@ -201,6 +206,21 @@ private string domainLemma(Node n){
 }
 private string totalRef(uint i){ return "(total_"~to!string(i)~" ρ)"; }
 private string totalCode(Arena a,Term t,bool[] total){
+	if(a.node(t).region){
+		foreach(e;a.operands(t)) if(!total[e.term.id]) return "";
+		auto op=a.node(t).op,label=op==Op.add?"add":"mul";
+		string build(Term u){
+			auto n=a.node(u);
+			if(!n.region||n.op!=op) return totalRef(u.id);
+			if(n.arity==1){
+				auto e=a.operands(u)[0];
+				return "(Positive.defined_"~label~" "~positive(e.count)~" "~ev(e.term.id)~").mpr "~totalRef(e.term.id);
+			}
+			return "(Value.defined_"~label~" "~ev(n.a)~" "~ev(n.b)~").mpr ⟨"~build(a.at(n.a))~", "~build(a.at(n.b))~"⟩";
+		}
+		total[t.id]=true;
+		return "theorem total_"~to!string(t.id)~" (ρ : Env) : Value.Defined "~ev(t.id)~" :=\n  "~build(t)~"\n";
+	}
 	auto n=a.view(t);
 	string proof;
 	final switch(n.op){
@@ -438,8 +458,28 @@ string exportLean(Arena a,Result result){
 		needed[t.id]=true;
 		foreach(i;0..a.view(t).arity) pending~=a.viewChild(t,i);
 	}
-	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nset_option maxRecDepth 8192\n";
-	foreach(i,n;needed) if(n) s~=syntaxCode(a,a.at(cast(uint)i));
+	// Only evaluation endpoints and assumptions need expression syntax.
+	// Region branches share bags; their binary value views need no Expr nodes.
+	bool[] syntax=new bool[a.length],bags=new bool[a.length];
+	foreach(i,yes;evaluated) if(yes) pending~=a.at(cast(uint)i);
+	pending~=result.assumptions;
+	while(pending.length){
+		auto t=pending[$-1]; --pending.length;
+		if(syntax[t.id]) continue;
+		syntax[t.id]=true;
+		foreach(i;0..a.node(t).arity) pending~=a.child(t,i);
+	}
+	foreach(i,yes;syntax) if(yes&&a.node(a.at(cast(uint)i)).region) pending~=a.at(cast(uint)i);
+	while(pending.length){
+		auto t=pending[$-1]; --pending.length;
+		if(bags[t.id]) continue;
+		bags[t.id]=true; auto n=a.node(t);
+		if(n.arity>1) foreach(id;[n.a,n.b]){
+			auto v=a.node(a.at(id)); if(v.region&&v.op==n.op) pending~=a.at(id);
+		}
+	}
+	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nattribute [local irreducible] Value.add Value.mul\nset_option maxRecDepth 8192\n";
+	foreach(i,n;syntax) if(n||bags[i]) s~=syntaxCode(a,a.at(cast(uint)i),n);
 	foreach(i,n;needed) if(n) s~=valueCode(a,a.at(cast(uint)i));
 	foreach(i,n;evaluated) if(n) s~="theorem eval_"~to!string(i)~" (ρ : Env) : "~exprEval(cast(uint)i)~" = "~ev(cast(uint)i)~" := rfl\n";
 	s~="\n";
@@ -451,6 +491,11 @@ string exportLean(Arena a,Result result){
 		s~="theorem p"~to!string(i)~" (ρ : Env)"~contexts(d,p.context,true)~" : "~claim~" :=\n";
 		string ref_(Proof q){ return reference(d,q); }
 		final switch(e.kind){
+			case Evidence.repeated:
+				auto atom=e.premises[0];
+				s~="  Value.refines_repeat_"~(e.value?"mul":"add"~suffix(a.sort(p.before)))~" "~positive(e.count)~" "~to!string(e.count)~" "~positiveCount(e.count)~
+					" (x := "~ev(atom.before.id)~") (y := "~ev(atom.after.id)~") "~ref_(atom)~"\n";
+				break;
 			case Evidence.rule:
 				auto r=e.instance;
 				string application="Generated."~r.rule;
@@ -525,7 +570,10 @@ string exportLean(Arena a,Result result){
 	}
 	if(direct){
 		auto id=result.input.id;
-		s~="theorem total_root (ρ : Env) : Value.Defined "~ev(id)~" := ⟨_, rfl⟩\n";
+		bool[] total=new bool[a.length];
+		foreach(i;a.postorder(result.input)) s~=totalCode(a,a.at(i),total);
+		enforce(total[id],"missing totality proof");
+		s~="theorem total_root (ρ : Env) : Value.Defined "~ev(id)~" := "~totalRef(id)~"\n";
 		s~="def d"~to!string(id)~" (_ : Env) : Prop := True\n";
 		s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(id)~" ↔ "~dc(id)~" := (Iff.of_eq (congrArg Value.Defined "~evalEq(id)~")).trans (iff_true_intro (total_root ρ))\n#qsym_check_axioms definedness\n";
 		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(id)~" := Eq.mpr (congrArg Value.Defined "~evalEq(id)~") (total_root ρ)\n#qsym_check_axioms everywhere_defined\n";
@@ -535,7 +583,7 @@ string exportLean(Arena a,Result result){
 	s~="theorem definedness (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" ↔ "~dc(result.input.id)~" := (Iff.of_eq (congrArg Value.Defined "~evalEq(result.input.id)~")).trans "~ds(result.input.id)~"\n#qsym_check_axioms definedness\n";
 	if(domain(a,result.input).everywhere){
 		bool[] total=new bool[a.length];
-		foreach(i;inputOrder) s~=totalCode(a,a.at(i),total);
+		foreach(i;a.postorder(result.input)) s~=totalCode(a,a.at(i),total);
 		enforce(total[result.input.id],"missing totality proof");
 		s~="theorem everywhere_defined (ρ : Env) : Expr.Defined ρ "~name(result.input.id)~" := "~
 			"Eq.mpr (congrArg Value.Defined "~evalEq(result.input.id)~") "~totalRef(result.input.id)~"\n#qsym_check_axioms everywhere_defined\n";

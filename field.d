@@ -113,25 +113,33 @@ package final class Field{
 		return balanced(fs,Op.mul,s);
 	}
 	private Mono mono(Term t){ return monomial(a,t,budget); }
+	private Mono weighted(Operand e){
+		auto m=mono(e.term);
+		if(e.count!=1) m.coefficient=budget.calc!"*"(m.coefficient,Number(e.count));
+		return m;
+	}
+	private Mono[] polynomial(Term t){
+		Mono[] result; foreach(e;d.regions.terms(t,Op.add,budget)) result~=weighted(e); return result;
+	}
 	bool affine(Term expression,Term variable,out Term coefficient,out Term remainder){
-		Number c; Term[] rest;
-		foreach(t;leaves(expression,Op.add)){
-			auto m=mono(t);
+		Number c; Operand[] rest;
+		foreach(e;d.regions.terms(expression,Op.add,budget)){
+			auto m=weighted(e);
 			if(m.factors.length==1&&m.factors[0].atom==variable&&m.factors[0].exponent==1)
 				c=budget.calc!"+"(c,m.coefficient);
 			else{
-				foreach(id;a.viewPostorder(t)){ budget.spend(); if(id==variable.id) return false; }
-				rest~=t;
+				foreach(id;a.postorder(e.term)){ budget.spend(); if(id==variable.id) return false; }
+				rest~=e;
 			}
 		}
 		if(c.zero) return false;
-		coefficient=a.number(c,a.sort(variable)); remainder=balanced(rest,Op.add,a.sort(variable)); return true;
+		coefficient=a.number(c,a.sort(variable)); remainder=a.region(Op.add,a.sort(variable),rest); return true;
 	}
 	bool quadratic(Term expression,out Term atom,out Number[3] coefficients){
 		if(a.sort(expression)!=Sort.real_&&a.sort(expression)!=Sort.complex) return false;
 		bool found;
-		foreach(t;leaves(expression,Op.add)){
-			auto m=mono(t); size_t degree;
+		foreach(m;polynomial(expression)){
+			size_t degree;
 			if(m.factors.length){
 				if(m.factors.length!=1) return false;
 				auto f=m.factors[0]; if(f.exponent<1||f.exponent>2) return false;
@@ -387,20 +395,11 @@ package final class Field{
 		p=then(p,d.congr(p.after,[norm(a.at(output.a),ctx),norm(a.at(output.b),ctx)],ctx),ctx);
 		return then(p,sum(p.after,ctx),ctx);
 	}
-	// Multiplicities are reduced by doubling. Repeated DAG edges do not cause
-	// repeated normalization or a linear chain of collection proofs.
 	Proof repeated(Proof atom,uint count,Op op,uint ctx){
 		if(count==1) return atom;
 		budget.spend(); enforce(count>1,"positive multiplicity expected");
-		auto half=repeated(atom,count/2,op,ctx);
-		Term join(Term x,Term y){ return op==Op.add?a.add(x,y):a.mul(x,y); }
-		Proof combine(Proof x,Proof y){
-			auto p=d.congr(join(x.before,y.before),[x,y],ctx),q=literal(p.after,ctx);
-			if(q.after==p.after) q=op==Op.add?sum(p.after,ctx):product(p.after,ctx);
-			return then(p,q,ctx);
-		}
-		auto p=combine(half,half);
-		return count&1?combine(p,atom):p;
+		auto p=d.repeated(atom,count,op,ctx);
+		return then(p,norm(p.after,ctx),ctx);
 	}
 	private Proof power(Term t,uint ctx){
 		auto n=a.view(t),x=a.at(n.a),v=a.view(x);
@@ -457,8 +456,9 @@ package final class Field{
 		return found;
 	}
 	bool commonFactor(Term t,out Term x,out Term y){
-		auto ts=leaves(t,Op.add); if(ts.length<2) return false;
-		Mono[] terms; foreach(term;ts) terms~=mono(term);
+		auto es=d.regions.terms(t,Op.add,budget);
+		if(!es.length||es.length==1&&es[0].count==1) return false;
+		Mono[] terms; foreach(e;es) terms~=weighted(e);
 		Factor[] common;
 		foreach(f;terms[0].factors){
 			if(f.exponent<=0) continue;
@@ -512,10 +512,7 @@ package final class Field{
 		if(a.view(inv).op!=Op.inv){ if(a.view(p).op!=Op.inv) return d.refl(t,ctx); auto z=p; p=inv; inv=z; }
 		auto denominator=a.viewChild(inv,0);
 		if(a.view(denominator).op!=Op.add) return d.refl(t,ctx);
-		Mono[] num,den;
-		foreach(x;leaves(p,Op.add)) num~=mono(x);
-		foreach(x;leaves(denominator,Op.add)) den~=mono(x);
-		num=collect(num); den=collect(den);
+		auto num=collect(polynomial(p)),den=collect(polynomial(denominator));
 		foreach(m;num~den) foreach(f;m.factors) if(f.exponent<0) return d.refl(t,ctx);
 		if(!den.length) return d.refl(t,ctx);
 		Mono[] quotient; auto remainder=num;

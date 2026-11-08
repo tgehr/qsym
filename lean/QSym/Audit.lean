@@ -32,3 +32,8 @@ import QSym
 #print axioms QSym.Expr.eval_sumC
 #print axioms QSym.Expr.eval_productR
 #print axioms QSym.Expr.eval_productC
+#print axioms QSym.Positive.defined_add
+#print axioms QSym.Positive.defined_mul
+#print axioms QSym.Value.refines_repeat_addR
+#print axioms QSym.Value.refines_repeat_addC
+#print axioms QSym.Value.refines_repeat_mul

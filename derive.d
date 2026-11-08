@@ -8,7 +8,7 @@ import std.exception:enforce;
 
 struct Proof{ Term before,after; uint id=uint.max,context; bool known; }
 struct Context{ uint parent; Term guard; bool value; }
-enum Evidence{ rule,trans,congr,scoped,assumption,transport,numeric,ac }
+enum Evidence{ rule,trans,congr,scoped,assumption,transport,numeric,ac,repeated }
 struct DomainProof{ Term term; uint[] path; DomainProof[] children; bool found,total; uint assumption; uint fact=uint.max; }
 struct Deduction{
 	Evidence kind;
@@ -19,6 +19,7 @@ struct Deduction{
 	uint assumptionScope;
 	uint[] path;
 	bool value;
+	uint count;
 }
 
 // D records choices. The exporter must justify every choice with a theorem.
@@ -88,6 +89,29 @@ final class Derivation{
 		auto raw=n.op==Op.add?arena.add(children[0].before,children[1].before,true):arena.mul(children[0].before,children[1].before,true);
 		auto p=trans(ac(t,raw,n.op,context),rawCongr(raw,children,context),context);
 		return trans(p,canonical(p.after,context),context);
+	}
+	Proof repeated(Proof atom,uint count,Op op,uint context){
+		enforce(count>0&&(op==Op.add||op==Op.mul),"positive scalar repetition expected");
+		auto s=arena.sort(atom.before);
+		enforce((s==Sort.real_||s==Sort.complex)&&arena.sort(atom.after)==s,"repetition type mismatch");
+		enforce(visible(atom.context,context),"invisible repetition premise");
+		enforce(arena.canonical(atom.before)==atom.before&&arena.canonical(atom.after)==atom.after,"canonical repetition operands expected");
+		if(count==1){ atom.context=context; return atom; }
+		auto before=arena.region(op,s,[Operand(atom.before,count)]);
+		auto after=op==Op.add?arena.mul(arena.number(Number(count),s),atom.after,tracing):arena.pow(atom.after,count);
+		if(!tracing) return Proof(before,after,uint.max,context);
+		auto n=arena.node(before),prefix=refl(before,context);
+		if(!n.region||n.arity!=1||arena.operands(before)[0]!=Operand(atom.before,count)){
+			Term raw(uint k){
+				if(k==1) return atom.before;
+				auto h=raw(k/2),v=op==Op.add?arena.add(h,h,true):arena.mul(h,h,true);
+				return !(k&1)?v:op==Op.add?arena.add(v,atom.before,true):arena.mul(v,atom.before,true);
+			}
+			auto source=raw(count); prefix=ac(before,source,op,context); before=source;
+		}
+		auto e=Deduction(Evidence.repeated,Proof(before,after,uint.max,context),[atom]);
+		e.count=count; e.value=op==Op.mul;
+		return trans(trans(prefix,record(e),context),canonical(after,context),context);
 	}
 	Proof rule(Instance i,Proof[] premises,uint context){
 		if(i.before==i.result) return refl(i.before,context);
