@@ -5,6 +5,52 @@ namespace QSym.Elementary
 theorem log_mul_pos {x y : ℝ} (hx : 0 < x) (hy : 0 < y) :
     Real.log (x*y) = Real.log x + Real.log y := Real.log_mul hx.ne' hy.ne'
 
+theorem log_odd_domain {x : ℝ} (n : ℕ) (h : 0<x^(n+n+1)) : 0<x :=
+  (show Odd (n+n+1) from ⟨n, by omega⟩).pow_pos_iff.mp h
+
+theorem log_odd_power (x : ℝ) (n : ℕ) : Real.log (x^(n+n+1))=(2*n+1)*Real.log x := by
+  rw [Real.log_pow]
+  push_cast
+  ring
+
+theorem log_product_domain {x y : ℝ} (hx : 0≤x) (hxy : 0<x*y) : 0<x ∧ 0<y := by
+  rcases (mul_pos_iff.mp hxy) with h | h
+  · exact h
+  · linarith
+
+theorem log_product_domain_right {x y : ℝ} (hy : 0≤y) (hxy : 0<x*y) : 0<x ∧ 0<y := by
+  obtain ⟨hy, hx⟩ := log_product_domain (x:=y) (y:=x) hy (by simpa only [mul_comm] using hxy)
+  exact ⟨hx, hy⟩
+
+theorem log_positive_real {z : ℂ} (hi : z.im=0) (hr : 0<z.re) :
+    Complex.log z=(Real.log z.re : ℂ) := by
+  have hz : (z.re : ℂ)=z := by apply Complex.ext <;> simp [hi]
+  calc
+    _ = Complex.log (z.re : ℂ) := by rw [hz]
+    _ = _ := (Complex.ofReal_log hr.le).symm
+
+theorem log_scale {z w : ℂ} (hi : z.im=0) (hr : 0<z.re) (hw : w≠0) :
+    Complex.log (z*w)=Complex.log z+Complex.log w := by
+  have hz : (z.re : ℂ)=z := by apply Complex.ext <;> simp [hi]
+  calc
+    _ = Complex.log ((z.re : ℂ)*w) := by rw [hz]
+    _ = (Real.log z.re : ℂ)+Complex.log w := Complex.log_ofReal_mul hr hw
+    _ = _ := by rw [log_positive_real hi hr]
+
+theorem log_scale_right {z w : ℂ} (hi : w.im=0) (hr : 0<w.re) (hz : z≠0) :
+    Complex.log (z*w)=Complex.log z+Complex.log w := by
+  simpa only [mul_comm, add_comm] using log_scale hi hr hz
+
+theorem floor_ne (x : ℝ) (n : ℤ) : ⌊x⌋≠n ↔ x<n ∨ (n : ℝ)+1≤x := by
+  simp only [ne_eq, Int.floor_eq_iff, not_and_or, not_le, not_lt]
+
+theorem ceil_ne (x : ℝ) (n : ℤ) : ⌈x⌉≠n ↔ x≤(n : ℝ)-1 ∨ n<x := by
+  simp only [ne_eq, Int.ceil_eq_iff, not_and_or, not_le, not_lt]
+
+theorem not_lt_floor (x : ℝ) : ¬x<(⌊x⌋ : ℝ) := not_lt.mpr (Int.floor_le x)
+theorem not_ceil_lt (x : ℝ) : ¬(⌈x⌉ : ℝ)<x := not_lt.mpr (Int.le_ceil x)
+theorem not_add_one_le_ceil (x : ℝ) : ¬x+1≤(⌈x⌉ : ℝ) := not_le.mpr (Int.ceil_lt_add_one x)
+
 theorem half_ne_int (n : ℤ) : (1/2 : ℝ) ≠ n := by
   intro h
   have h0 : (0 : ℤ) < n := by exact_mod_cast (show (0 : ℝ) < n by linarith)

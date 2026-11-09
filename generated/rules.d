@@ -364,10 +364,14 @@ enum Law{
 	real_positive_pi,
 	real_positive_e,
 	real_log_product,
+	real_log_product_right,
 	real_log_power,
 	real_log_square,
 	real_log_inverse,
 	real_log_sqrt,
+	real_log_odd_power,
+	real_log_rational,
+	real_log_exact_power,
 	real_half_power,
 	real_sqrt_squared,
 	real_sqrt_exact,
@@ -435,6 +439,26 @@ enum Law{
 	complex_solve_affine,
 	real_floor_exact,
 	real_ceil_exact,
+	real_floor_cast,
+	real_ceil_cast,
+	real_floor_neg,
+	real_ceil_neg,
+	real_floor_shift,
+	real_ceil_shift,
+	real_floor_shift_literal,
+	real_ceil_shift_literal,
+	real_floor_lt,
+	real_floor_le,
+	real_lt_floor,
+	real_le_floor,
+	real_floor_ne,
+	real_ceil_lt,
+	real_ceil_le,
+	real_lt_ceil,
+	real_le_ceil,
+	real_ceil_ne,
+	real_floor_bound,
+	real_ceil_bound,
 	real_round,
 	real_is_integer,
 	real_hypot,
@@ -452,6 +476,10 @@ enum Law{
 	complex_log_real_part,
 	complex_log_imaginary_part,
 	complex_log_exp,
+	complex_log_positive_real,
+	complex_log_scale,
+	complex_log_scale_right,
+	complex_log_inverse,
 	complex_arg_exp,
 	complex_arg_phase,
 	real_sinh_asinh,
@@ -3360,7 +3388,15 @@ Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 			auto v_x=bindings[0];
 			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
 			auto v_y=bindings[1];
-			return Instance(a.call(Builtin.logR,[a.mul(v_x,v_y,raw)]),a.add(a.call(Builtin.logR,[v_x]),a.call(Builtin.logR,[v_y]),raw),"r_real_log_product",bindings,[Condition(a.lt(a.real_((0L)),v_x),false,false),Condition(a.lt(a.real_((0L)),v_y),false,false)],[false,false],false,false,law,raw);
+			return Instance(a.call(Builtin.logR,[a.mul(v_x,v_y,raw)]),a.add(a.call(Builtin.logR,[v_x]),a.call(Builtin.logR,[v_y]),raw),"r_real_log_product",bindings,[Condition(a.le(a.real_((0L)),v_x),false,false)],[false,false],false,false,law,raw);
+		}
+		case Law.real_log_product_right:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.logR,[a.mul(v_x,v_y,raw)]),a.add(a.call(Builtin.logR,[v_x]),a.call(Builtin.logR,[v_y]),raw),"r_real_log_product_right",bindings,[Condition(a.le(a.real_((0L)),v_y),false,false)],[false,false],false,false,law,raw);
 		}
 		case Law.real_log_power:{
 			enforce(bindings.length==2,"rule arity mismatch");
@@ -3381,13 +3417,43 @@ Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 			enforce(bindings.length==1,"rule arity mismatch");
 			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
 			auto v_x=bindings[0];
-			return Instance(a.call(Builtin.logR,[a.inv(v_x)]),a.mul(a.real_((-1L)),a.call(Builtin.logR,[v_x]),raw),"r_real_log_inverse",bindings,[Condition(a.lt(a.real_((0L)),v_x),false,false)],[false],false,false,law,raw);
+			return Instance(a.call(Builtin.logR,[a.inv(v_x)]),a.mul(a.real_((-1L)),a.call(Builtin.logR,[v_x]),raw),"r_real_log_inverse",bindings,[],[false],false,false,law,raw);
 		}
 		case Law.real_log_sqrt:{
 			enforce(bindings.length==1,"rule arity mismatch");
 			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
 			auto v_x=bindings[0];
-			return Instance(a.call(Builtin.logR,[a.call(Builtin.sqrtR,[v_x])]),a.mul(a.real_(Rational(BigInt(1L),BigInt(2L))),a.call(Builtin.logR,[v_x]),raw),"r_real_log_sqrt",bindings,[Condition(a.lt(a.real_((0L)),v_x),false,false)],[false],false,false,law,raw);
+			return Instance(a.call(Builtin.logR,[a.call(Builtin.sqrtR,[v_x])]),a.mul(a.real_(Rational(BigInt(1L),BigInt(2L))),a.call(Builtin.logR,[v_x]),raw),"r_real_log_sqrt",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.real_log_odd_power:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			enforce(a.isNumber(bindings[1])&&a.number(bindings[1]).re.small&&a.number(bindings[1]).re.integer>=0&&a.number(bindings[1]).re.integer<=uint.max,"natural binding expected");
+			auto v_n=cast(uint)a.number(bindings[1]).re.integer;
+			return Instance(a.call(Builtin.logR,[a.pow(v_x,nat(cast(ulong)(nat(cast(ulong)(v_n)+v_n))+1u))]),a.mul(a.add(a.mul(a.real_((2L)),a.real_(v_n),raw),a.real_((1L)),raw),a.call(Builtin.logR,[v_x]),raw),"r_real_log_odd_power",bindings,[],[false,true],false,false,law,raw);
+		}
+		case Law.real_log_rational:{
+			enforce(bindings.length==3,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			enforce(a.sort(bindings[2])==Sort.real_,"rule binding type mismatch");
+			auto v_z=bindings[2];
+			return Instance(a.call(Builtin.logR,[v_x]),a.add(a.call(Builtin.logR,[v_y]),a.mul(a.real_((-1L)),a.call(Builtin.logR,[v_z]),raw),raw),"r_real_log_rational",bindings,[Condition(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.mul(v_y,a.inv(v_z),raw),raw),raw))),false,false),Condition(a.lt(a.real_((0L)),v_y),false,false),Condition(a.lt(a.real_((0L)),v_z),false,false),Condition(v_y,true,false),Condition(v_z,true,false)],[false,false,false],false,false,law,raw);
+		}
+		case Law.real_log_exact_power:{
+			enforce(bindings.length==3,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_b=bindings[1];
+			enforce(a.sort(bindings[2])==Sort.real_,"rule binding type mismatch");
+			enforce(a.isNumber(bindings[2])&&a.number(bindings[2]).re.small&&a.number(bindings[2]).re.integer>=0&&a.number(bindings[2]).re.integer<=uint.max,"natural binding expected");
+			auto v_n=cast(uint)a.number(bindings[2]).re.integer;
+			return Instance(a.call(Builtin.logR,[v_x]),a.mul(a.add(a.real_(v_n),a.real_((2L)),raw),a.call(Builtin.logR,[v_b]),raw),"r_real_log_exact_power",bindings,[Condition(a.not_(a.nonzero(a.add(a.pow(v_b,nat(cast(ulong)(v_n)+2u)),a.mul(a.real_((-1L)),v_x,raw),raw))),false,false),Condition(a.lt(a.real_((0L)),v_b),false,false),Condition(v_b,true,false)],[false,false,true],false,false,law,raw);
 		}
 		case Law.real_half_power:{
 			enforce(bindings.length==1,"rule arity mismatch");
@@ -3835,6 +3901,158 @@ Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 			auto v_n=bindings[1];
 			return Instance(a.call(Builtin.ceilR,[v_x]),v_n,"r_real_ceil_exact",bindings,[Condition(a.lt(a.add(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),a.mul(a.real_((-1L)),a.real_((1L)),raw),raw),v_x),false,false),Condition(a.le(v_x,a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])])),false,false),Condition(v_n,true,false)],[false,false],false,false,law,raw);
 		}
+		case Law.real_floor_cast:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[0];
+			return Instance(a.call(Builtin.floorR,[a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])])]),v_n,"r_real_floor_cast",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.real_ceil_cast:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[0];
+			return Instance(a.call(Builtin.ceilR,[a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])])]),v_n,"r_real_ceil_cast",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.real_floor_neg:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.call(Builtin.floorR,[a.mul(a.real_((-1L)),v_x,raw)]),a.call(Builtin.mulZ,[a.integer((-1L)),a.call(Builtin.ceilR,[v_x])]),"r_real_floor_neg",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.real_ceil_neg:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.call(Builtin.ceilR,[a.mul(a.real_((-1L)),v_x,raw)]),a.call(Builtin.mulZ,[a.integer((-1L)),a.call(Builtin.floorR,[v_x])]),"r_real_ceil_neg",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.real_floor_shift:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.floorR,[a.add(v_x,a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),raw)]),a.call(Builtin.addZ,[a.call(Builtin.floorR,[v_x]),v_n]),"r_real_floor_shift",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_ceil_shift:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.ceilR,[a.add(v_x,a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),raw)]),a.call(Builtin.addZ,[a.call(Builtin.ceilR,[v_x]),v_n]),"r_real_ceil_shift",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_floor_shift_literal:{
+			enforce(bindings.length==3,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_c=bindings[1];
+			enforce(a.sort(bindings[2])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[2];
+			return Instance(a.call(Builtin.floorR,[a.add(v_x,v_c,raw)]),a.call(Builtin.addZ,[a.call(Builtin.floorR,[v_x]),v_n]),"r_real_floor_shift_literal",bindings,[Condition(a.not_(a.nonzero(a.add(v_c,a.mul(a.real_((-1L)),a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),raw),raw))),false,false),Condition(v_n,true,false)],[false,false,false],false,false,law,raw);
+		}
+		case Law.real_ceil_shift_literal:{
+			enforce(bindings.length==3,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_c=bindings[1];
+			enforce(a.sort(bindings[2])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[2];
+			return Instance(a.call(Builtin.ceilR,[a.add(v_x,v_c,raw)]),a.call(Builtin.addZ,[a.call(Builtin.ceilR,[v_x]),v_n]),"r_real_ceil_shift_literal",bindings,[Condition(a.not_(a.nonzero(a.add(v_c,a.mul(a.real_((-1L)),a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),raw),raw))),false,false),Condition(v_n,true,false)],[false,false,false],false,false,law,raw);
+		}
+		case Law.real_floor_lt:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.ltZ,[a.call(Builtin.floorR,[v_x]),v_n]),a.lt(v_x,a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])])),"r_real_floor_lt",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_floor_le:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.leZ,[a.call(Builtin.floorR,[v_x]),v_n]),a.lt(v_x,a.add(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),a.real_((1L)),raw)),"r_real_floor_le",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_lt_floor:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.ltZ,[v_n,a.call(Builtin.floorR,[v_x])]),a.le(a.add(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),a.real_((1L)),raw),v_x),"r_real_lt_floor",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_le_floor:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.leZ,[v_n,a.call(Builtin.floorR,[v_x])]),a.le(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),v_x),"r_real_le_floor",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_floor_ne:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.floorR,[v_x]),a.call(Builtin.mulZ,[a.integer((-1L)),v_n])])]),a.or_(a.lt(v_x,a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])])),a.le(a.add(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),a.real_((1L)),raw),v_x)),"r_real_floor_ne",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_ceil_lt:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.ltZ,[a.call(Builtin.ceilR,[v_x]),v_n]),a.le(v_x,a.add(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),a.mul(a.real_((-1L)),a.real_((1L)),raw),raw)),"r_real_ceil_lt",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_ceil_le:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.leZ,[a.call(Builtin.ceilR,[v_x]),v_n]),a.le(v_x,a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])])),"r_real_ceil_le",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_lt_ceil:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.ltZ,[v_n,a.call(Builtin.ceilR,[v_x])]),a.lt(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),v_x),"r_real_lt_ceil",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_le_ceil:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.leZ,[v_n,a.call(Builtin.ceilR,[v_x])]),a.lt(a.add(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),a.mul(a.real_((-1L)),a.real_((1L)),raw),raw),v_x),"r_real_le_ceil",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_ceil_ne:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.ceilR,[v_x]),a.call(Builtin.mulZ,[a.integer((-1L)),v_n])])]),a.or_(a.le(v_x,a.add(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),a.mul(a.real_((-1L)),a.real_((1L)),raw),raw)),a.lt(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[v_n])]),v_x)),"r_real_ceil_ne",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.real_floor_bound:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.le(a.call(Builtin.castQR,[a.call(Builtin.castZQ,[a.call(Builtin.floorR,[v_x])])]),v_x),a.boolean(true),"r_real_floor_bound",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.real_ceil_bound:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.le(v_x,a.call(Builtin.castQR,[a.call(Builtin.castZQ,[a.call(Builtin.ceilR,[v_x])])])),a.boolean(true),"r_real_ceil_bound",bindings,[],[false],false,false,law,raw);
+		}
 		case Law.real_round:{
 			enforce(bindings.length==1,"rule arity mismatch");
 			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
@@ -3947,6 +4165,34 @@ Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
 			auto v_z=bindings[0];
 			return Instance(a.call(Builtin.logC,[a.call(Builtin.expC,[v_z])]),v_z,"r_complex_log_exp",bindings,[Condition(a.lt(a.mul(a.real_((-1L)),a.call(Builtin.pi,[]),raw),a.call(Builtin.imC,[v_z])),false,false),Condition(a.le(a.call(Builtin.imC,[v_z]),a.call(Builtin.pi,[])),false,false)],[false],false,false,law,raw);
+		}
+		case Law.complex_log_positive_real:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_z=bindings[0];
+			return Instance(a.call(Builtin.logC,[v_z]),a.call(Builtin.castRC,[a.call(Builtin.logR,[a.call(Builtin.reC,[v_z])])]),"r_complex_log_positive_real",bindings,[Condition(a.not_(a.nonzero(a.call(Builtin.imC,[v_z]))),false,false),Condition(a.lt(a.real_((0L)),a.call(Builtin.reC,[v_z])),false,false)],[false],false,false,law,raw);
+		}
+		case Law.complex_log_scale:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_z=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.complex,"rule binding type mismatch");
+			auto v_w=bindings[1];
+			return Instance(a.call(Builtin.logC,[a.mul(v_z,v_w,raw)]),a.add(a.call(Builtin.logC,[v_z]),a.call(Builtin.logC,[v_w]),raw),"r_complex_log_scale",bindings,[Condition(a.not_(a.nonzero(a.call(Builtin.imC,[v_z]))),false,false),Condition(a.lt(a.real_((0L)),a.call(Builtin.reC,[v_z])),false,false)],[false,false],false,false,law,raw);
+		}
+		case Law.complex_log_scale_right:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_z=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.complex,"rule binding type mismatch");
+			auto v_w=bindings[1];
+			return Instance(a.call(Builtin.logC,[a.mul(v_z,v_w,raw)]),a.add(a.call(Builtin.logC,[v_z]),a.call(Builtin.logC,[v_w]),raw),"r_complex_log_scale_right",bindings,[Condition(a.not_(a.nonzero(a.call(Builtin.imC,[v_w]))),false,false),Condition(a.lt(a.real_((0L)),a.call(Builtin.reC,[v_w])),false,false)],[false,false],false,false,law,raw);
+		}
+		case Law.complex_log_inverse:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_z=bindings[0];
+			return Instance(a.call(Builtin.logC,[a.inv(v_z)]),a.mul(a.complex((-1L),(0L)),a.call(Builtin.logC,[v_z]),raw),"r_complex_log_inverse",bindings,[Condition(a.nonzero(a.add(a.call(Builtin.argC,[v_z]),a.mul(a.real_((-1L)),a.call(Builtin.pi,[]),raw),raw)),false,false)],[false],false,false,law,raw);
 		}
 		case Law.complex_arg_exp:{
 			enforce(bindings.length==1,"rule arity mismatch");
@@ -11758,14 +12004,26 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand(null,0,uint.max,false,false),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
 					return true;
 				case 0:
-					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).op!=Op.le||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
 					if(a.view(a.viewChild(input,0)).value!=0L) return false;
 					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
 					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,1); else if(bindings[0]!=a.viewChild(input,1)) return false;
 					return true;
-				case 1:
-					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+				default:return false;
+			}
+		case Law.real_log_product_right:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
+					if(a.view(input).value!=cast(long)Builtin.logR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand(null,0,uint.max,false,false),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.le||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
 					if(a.view(a.viewChild(input,0)).value!=0L) return false;
 					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
@@ -11819,13 +12077,6 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
 					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
 					return true;
-				case 0:
-					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
-					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(a.view(a.viewChild(input,0)).value!=0L) return false;
-					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
-					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,1); else if(bindings[0]!=a.viewChild(input,1)) return false;
-					return true;
 				default:return false;
 			}
 		case Law.real_log_sqrt:
@@ -11840,12 +12091,118 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
 					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
 					return true;
+				default:return false;
+			}
+		case Law.real_log_odd_power:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
+					if(a.view(input).value!=cast(long)Builtin.logR) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.pow||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(cast(uint)a.view(a.viewChild(input,0)).value<1u) return false;
+					if(((cast(uint)a.view(a.viewChild(input,0)).value-1u))%2) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.real_(((cast(uint)a.view(a.viewChild(input,0)).value-1u))/2); else if(bindings[1]!=a.real_(((cast(uint)a.view(a.viewChild(input,0)).value-1u))/2)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_log_rational:
+			if(!bindings.length) bindings.length=3;
+			enforce(bindings.length==3,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
+					if(a.view(input).value!=cast(long)Builtin.logR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					return true;
 				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t196,ref Term[] bs196){
+						if(a.sort(t196)!=Sort.real_) return false;
+						if(!matchRegion(a,t196,Op.mul,[MatchOperand((Term t197,ref Term[] bs197){
+							if(a.view(t197).op!=Op.realLit||a.sort(t197)!=Sort.real_) return false;
+							if(a.view(t197).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t198,ref Term[] bs198){
+							if(a.view(t198).op!=Op.inv||a.sort(t198)!=Sort.real_) return false;
+							if(a.sort(a.viewChild(t198,0))!=Sort.real_) return false;
+							if(bs198[2].id==uint.max) bs198[2]=a.viewChild(t198,0); else if(bs198[2]!=a.viewChild(t198,0)) return false;
+							return true;
+						},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8)))],bs196,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				case 1:
 					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
 					if(a.view(a.viewChild(input,0)).value!=0L) return false;
 					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
-					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,1); else if(bindings[0]!=a.viewChild(input,1)) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				case 2:
+					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=0L) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(bindings[2].id==uint.max) bindings[2]=a.viewChild(input,1); else if(bindings[2]!=a.viewChild(input,1)) return false;
+					return true;
+				case 3:
+					if(a.sort(input)!=Sort.real_) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				case 4:
+					if(a.sort(input)!=Sort.real_) return false;
+					if(bindings[2].id==uint.max) bindings[2]=input; else if(bindings[2]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_log_exact_power:
+			if(!bindings.length) bindings.length=3;
+			enforce(bindings.length==3,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
+					if(a.view(input).value!=cast(long)Builtin.logR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t199,ref Term[] bs199){
+						if(a.view(t199).op!=Op.pow||a.sort(t199)!=Sort.real_) return false;
+						if(a.sort(a.viewChild(t199,0))!=Sort.real_) return false;
+						if(bs199[1].id==uint.max) bs199[1]=a.viewChild(t199,0); else if(bs199[1]!=a.viewChild(t199,0)) return false;
+						if(cast(uint)a.view(t199).value<2u) return false;
+						if(bs199[2].id==uint.max) bs199[2]=a.real_((cast(uint)a.view(t199).value-2u)); else if(bs199[2]!=a.real_((cast(uint)a.view(t199).value-2u))) return false;
+						return true;
+					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t200,ref Term[] bs200){
+						if(a.sort(t200)!=Sort.real_) return false;
+						if(!matchRegion(a,t200,Op.mul,[MatchOperand((Term t201,ref Term[] bs201){
+							if(a.view(t201).op!=Op.realLit||a.sort(t201)!=Sort.real_) return false;
+							if(a.view(t201).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs200,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				case 1:
+					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=0L) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				case 2:
+					if(a.sort(input)!=Sort.real_) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
 					return true;
 				default:return false;
 			}
@@ -11890,19 +12247,19 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t196,ref Term[] bs196){
-						if(a.view(t196).op!=Op.pow||a.sort(t196)!=Sort.real_) return false;
-						if(a.sort(a.viewChild(t196,0))!=Sort.real_) return false;
-						if(bs196[1].id==uint.max) bs196[1]=a.viewChild(t196,0); else if(bs196[1]!=a.viewChild(t196,0)) return false;
-						if(cast(uint)a.view(t196).value!=2u) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t202,ref Term[] bs202){
+						if(a.view(t202).op!=Op.pow||a.sort(t202)!=Sort.real_) return false;
+						if(a.sort(a.viewChild(t202,0))!=Sort.real_) return false;
+						if(bs202[1].id==uint.max) bs202[1]=a.viewChild(t202,0); else if(bs202[1]!=a.viewChild(t202,0)) return false;
+						if(cast(uint)a.view(t202).value!=2u) return false;
 						return true;
-					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t197,ref Term[] bs197){
-						if(a.sort(t197)!=Sort.real_) return false;
-						if(!matchRegion(a,t197,Op.mul,[MatchOperand((Term t198,ref Term[] bs198){
-							if(a.view(t198).op!=Op.realLit||a.sort(t198)!=Sort.real_) return false;
-							if(a.view(t198).value!=-1L) return false;
+					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t203,ref Term[] bs203){
+						if(a.sort(t203)!=Sort.real_) return false;
+						if(!matchRegion(a,t203,Op.mul,[MatchOperand((Term t204,ref Term[] bs204){
+							if(a.view(t204).op!=Op.realLit||a.sort(t204)!=Sort.real_) return false;
+							if(a.view(t204).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs197,work)) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs203,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -11935,32 +12292,32 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,2,uint.max,false,false),MatchOperand((Term t199,ref Term[] bs199){
-						if(a.sort(t199)!=Sort.real_) return false;
-						if(!matchRegion(a,t199,Op.mul,[MatchOperand((Term t200,ref Term[] bs200){
-							if(a.view(t200).op!=Op.realLit||a.sort(t200)!=Sort.real_) return false;
-							if(a.view(t200).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,2,uint.max,false,false),MatchOperand((Term t205,ref Term[] bs205){
+						if(a.sort(t205)!=Sort.real_) return false;
+						if(!matchRegion(a,t205,Op.mul,[MatchOperand((Term t206,ref Term[] bs206){
+							if(a.view(t206).op!=Op.realLit||a.sort(t206)!=Sort.real_) return false;
+							if(a.view(t206).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t201,ref Term[] bs201){
-							if(a.view(t201).op!=Op.realLit||a.sort(t201)!=Sort.real_) return false;
-							if(a.view(t201).value<0||a.view(t201).value>uint.max) return false;
-							if(bs201[3].id==uint.max) bs201[3]=a.real_(cast(uint)(a.view(t201).value)); else if(bs201[3]!=a.real_(cast(uint)(a.view(t201).value))) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t207,ref Term[] bs207){
+							if(a.view(t207).op!=Op.realLit||a.sort(t207)!=Sort.real_) return false;
+							if(a.view(t207).value<0||a.view(t207).value>uint.max) return false;
+							if(bs207[3].id==uint.max) bs207[3]=a.real_(cast(uint)(a.view(t207).value)); else if(bs207[3]!=a.real_(cast(uint)(a.view(t207).value))) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t202,ref Term[] bs202){
-							if(a.view(t202).op!=Op.inv||a.sort(t202)!=Sort.real_) return false;
-							if(a.sort(a.viewChild(t202,0))!=Sort.real_) return false;
-							if(!matchRegion(a,a.viewChild(t202,0),Op.add,[MatchOperand((Term t203,ref Term[] bs203){
-								if(a.view(t203).op!=Op.realLit||a.sort(t203)!=Sort.real_) return false;
-								if(a.view(t203).value<0||a.view(t203).value>uint.max) return false;
-								if(bs203[4].id==uint.max) bs203[4]=a.real_(cast(uint)(a.view(t203).value)); else if(bs203[4]!=a.real_(cast(uint)(a.view(t203).value))) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t208,ref Term[] bs208){
+							if(a.view(t208).op!=Op.inv||a.sort(t208)!=Sort.real_) return false;
+							if(a.sort(a.viewChild(t208,0))!=Sort.real_) return false;
+							if(!matchRegion(a,a.viewChild(t208,0),Op.add,[MatchOperand((Term t209,ref Term[] bs209){
+								if(a.view(t209).op!=Op.realLit||a.sort(t209)!=Sort.real_) return false;
+								if(a.view(t209).value<0||a.view(t209).value>uint.max) return false;
+								if(bs209[4].id==uint.max) bs209[4]=a.real_(cast(uint)(a.view(t209).value)); else if(bs209[4]!=a.real_(cast(uint)(a.view(t209).value))) return false;
 								return true;
-							},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t204,ref Term[] bs204){
-								if(a.view(t204).op!=Op.realLit||a.sort(t204)!=Sort.real_) return false;
-								if(a.view(t204).value!=1L) return false;
+							},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t210,ref Term[] bs210){
+								if(a.view(t210).op!=Op.realLit||a.sort(t210)!=Sort.real_) return false;
+								if(a.view(t210).value!=1L) return false;
 								return true;
-							},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs202,work)) return false;
+							},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs208,work)) return false;
 							return true;
-						},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8)))],bs199,work)) return false;
+						},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8)))],bs205,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -11968,20 +12325,20 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t205,ref Term[] bs205){
-						if(a.view(t205).op!=Op.pow||a.sort(t205)!=Sort.real_) return false;
-						if(a.sort(a.viewChild(t205,0))!=Sort.real_) return false;
-						if(bs205[1].id==uint.max) bs205[1]=a.viewChild(t205,0); else if(bs205[1]!=a.viewChild(t205,0)) return false;
-						if(cast(uint)a.view(t205).value<1u) return false;
-						if(bs205[4].id==uint.max) bs205[4]=a.real_((cast(uint)a.view(t205).value-1u)); else if(bs205[4]!=a.real_((cast(uint)a.view(t205).value-1u))) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t211,ref Term[] bs211){
+						if(a.view(t211).op!=Op.pow||a.sort(t211)!=Sort.real_) return false;
+						if(a.sort(a.viewChild(t211,0))!=Sort.real_) return false;
+						if(bs211[1].id==uint.max) bs211[1]=a.viewChild(t211,0); else if(bs211[1]!=a.viewChild(t211,0)) return false;
+						if(cast(uint)a.view(t211).value<1u) return false;
+						if(bs211[4].id==uint.max) bs211[4]=a.real_((cast(uint)a.view(t211).value-1u)); else if(bs211[4]!=a.real_((cast(uint)a.view(t211).value-1u))) return false;
 						return true;
-					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t206,ref Term[] bs206){
-						if(a.sort(t206)!=Sort.real_) return false;
-						if(!matchRegion(a,t206,Op.mul,[MatchOperand((Term t207,ref Term[] bs207){
-							if(a.view(t207).op!=Op.realLit||a.sort(t207)!=Sort.real_) return false;
-							if(a.view(t207).value!=-1L) return false;
+					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t212,ref Term[] bs212){
+						if(a.sort(t212)!=Sort.real_) return false;
+						if(!matchRegion(a,t212,Op.mul,[MatchOperand((Term t213,ref Term[] bs213){
+							if(a.view(t213).op!=Op.realLit||a.sort(t213)!=Sort.real_) return false;
+							if(a.view(t213).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs206,work)) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs212,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -12004,21 +12361,21 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.real_) return false;
-					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t208,ref Term[] bs208){
-						if(a.view(t208).op!=Op.builtin||a.sort(t208)!=Sort.real_) return false;
-						if(a.view(t208).value!=cast(long)Builtin.powerR) return false;
-						if(a.sort(a.viewChild(t208,0))!=Sort.real_) return false;
-						if(bs208[0].id==uint.max) bs208[0]=a.viewChild(t208,0); else if(bs208[0]!=a.viewChild(t208,0)) return false;
-						if(a.sort(a.viewChild(t208,1))!=Sort.real_) return false;
-						if(bs208[1].id==uint.max) bs208[1]=a.viewChild(t208,1); else if(bs208[1]!=a.viewChild(t208,1)) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t214,ref Term[] bs214){
+						if(a.view(t214).op!=Op.builtin||a.sort(t214)!=Sort.real_) return false;
+						if(a.view(t214).value!=cast(long)Builtin.powerR) return false;
+						if(a.sort(a.viewChild(t214,0))!=Sort.real_) return false;
+						if(bs214[0].id==uint.max) bs214[0]=a.viewChild(t214,0); else if(bs214[0]!=a.viewChild(t214,0)) return false;
+						if(a.sort(a.viewChild(t214,1))!=Sort.real_) return false;
+						if(bs214[1].id==uint.max) bs214[1]=a.viewChild(t214,1); else if(bs214[1]!=a.viewChild(t214,1)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16))),MatchOperand((Term t209,ref Term[] bs209){
-						if(a.view(t209).op!=Op.builtin||a.sort(t209)!=Sort.real_) return false;
-						if(a.view(t209).value!=cast(long)Builtin.powerR) return false;
-						if(a.sort(a.viewChild(t209,0))!=Sort.real_) return false;
-						if(bs209[0].id==uint.max) bs209[0]=a.viewChild(t209,0); else if(bs209[0]!=a.viewChild(t209,0)) return false;
-						if(a.sort(a.viewChild(t209,1))!=Sort.real_) return false;
-						if(bs209[2].id==uint.max) bs209[2]=a.viewChild(t209,1); else if(bs209[2]!=a.viewChild(t209,1)) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16))),MatchOperand((Term t215,ref Term[] bs215){
+						if(a.view(t215).op!=Op.builtin||a.sort(t215)!=Sort.real_) return false;
+						if(a.view(t215).value!=cast(long)Builtin.powerR) return false;
+						if(a.sort(a.viewChild(t215,0))!=Sort.real_) return false;
+						if(bs215[0].id==uint.max) bs215[0]=a.viewChild(t215,0); else if(bs215[0]!=a.viewChild(t215,0)) return false;
+						if(a.sort(a.viewChild(t215,1))!=Sort.real_) return false;
+						if(bs215[2].id==uint.max) bs215[2]=a.viewChild(t215,1); else if(bs215[2]!=a.viewChild(t215,1)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16)))],bindings,work)) return false;
 					return true;
@@ -12252,21 +12609,21 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.real_) return false;
-					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t210,ref Term[] bs210){
-						if(a.view(t210).op!=Op.pow||a.sort(t210)!=Sort.real_) return false;
-						if(a.view(a.viewChild(t210,0)).op!=Op.builtin||a.sort(a.viewChild(t210,0))!=Sort.real_) return false;
-						if(a.view(a.viewChild(t210,0)).value!=cast(long)Builtin.sinR) return false;
-						if(a.sort(a.viewChild(a.viewChild(t210,0),0))!=Sort.real_) return false;
-						if(bs210[0].id==uint.max) bs210[0]=a.viewChild(a.viewChild(t210,0),0); else if(bs210[0]!=a.viewChild(a.viewChild(t210,0),0)) return false;
-						if(cast(uint)a.view(t210).value!=2u) return false;
+					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t216,ref Term[] bs216){
+						if(a.view(t216).op!=Op.pow||a.sort(t216)!=Sort.real_) return false;
+						if(a.view(a.viewChild(t216,0)).op!=Op.builtin||a.sort(a.viewChild(t216,0))!=Sort.real_) return false;
+						if(a.view(a.viewChild(t216,0)).value!=cast(long)Builtin.sinR) return false;
+						if(a.sort(a.viewChild(a.viewChild(t216,0),0))!=Sort.real_) return false;
+						if(bs216[0].id==uint.max) bs216[0]=a.viewChild(a.viewChild(t216,0),0); else if(bs216[0]!=a.viewChild(a.viewChild(t216,0),0)) return false;
+						if(cast(uint)a.view(t216).value!=2u) return false;
 						return true;
-					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t211,ref Term[] bs211){
-						if(a.view(t211).op!=Op.pow||a.sort(t211)!=Sort.real_) return false;
-						if(a.view(a.viewChild(t211,0)).op!=Op.builtin||a.sort(a.viewChild(t211,0))!=Sort.real_) return false;
-						if(a.view(a.viewChild(t211,0)).value!=cast(long)Builtin.cosR) return false;
-						if(a.sort(a.viewChild(a.viewChild(t211,0),0))!=Sort.real_) return false;
-						if(bs211[0].id==uint.max) bs211[0]=a.viewChild(a.viewChild(t211,0),0); else if(bs211[0]!=a.viewChild(a.viewChild(t211,0),0)) return false;
-						if(cast(uint)a.view(t211).value!=2u) return false;
+					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t217,ref Term[] bs217){
+						if(a.view(t217).op!=Op.pow||a.sort(t217)!=Sort.real_) return false;
+						if(a.view(a.viewChild(t217,0)).op!=Op.builtin||a.sort(a.viewChild(t217,0))!=Sort.real_) return false;
+						if(a.view(a.viewChild(t217,0)).value!=cast(long)Builtin.cosR) return false;
+						if(a.sort(a.viewChild(a.viewChild(t217,0),0))!=Sort.real_) return false;
+						if(bs217[0].id==uint.max) bs217[0]=a.viewChild(a.viewChild(t217,0),0); else if(bs217[0]!=a.viewChild(a.viewChild(t217,0),0)) return false;
+						if(cast(uint)a.view(t217).value!=2u) return false;
 						return true;
 					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8)))],bindings,work)) return false;
 					return true;
@@ -12278,21 +12635,21 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.complex) return false;
-					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t212,ref Term[] bs212){
-						if(a.view(t212).op!=Op.pow||a.sort(t212)!=Sort.complex) return false;
-						if(a.view(a.viewChild(t212,0)).op!=Op.builtin||a.sort(a.viewChild(t212,0))!=Sort.complex) return false;
-						if(a.view(a.viewChild(t212,0)).value!=cast(long)Builtin.sinC) return false;
-						if(a.sort(a.viewChild(a.viewChild(t212,0),0))!=Sort.complex) return false;
-						if(bs212[0].id==uint.max) bs212[0]=a.viewChild(a.viewChild(t212,0),0); else if(bs212[0]!=a.viewChild(a.viewChild(t212,0),0)) return false;
-						if(cast(uint)a.view(t212).value!=2u) return false;
+					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t218,ref Term[] bs218){
+						if(a.view(t218).op!=Op.pow||a.sort(t218)!=Sort.complex) return false;
+						if(a.view(a.viewChild(t218,0)).op!=Op.builtin||a.sort(a.viewChild(t218,0))!=Sort.complex) return false;
+						if(a.view(a.viewChild(t218,0)).value!=cast(long)Builtin.sinC) return false;
+						if(a.sort(a.viewChild(a.viewChild(t218,0),0))!=Sort.complex) return false;
+						if(bs218[0].id==uint.max) bs218[0]=a.viewChild(a.viewChild(t218,0),0); else if(bs218[0]!=a.viewChild(a.viewChild(t218,0),0)) return false;
+						if(cast(uint)a.view(t218).value!=2u) return false;
 						return true;
-					},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8))),MatchOperand((Term t213,ref Term[] bs213){
-						if(a.view(t213).op!=Op.pow||a.sort(t213)!=Sort.complex) return false;
-						if(a.view(a.viewChild(t213,0)).op!=Op.builtin||a.sort(a.viewChild(t213,0))!=Sort.complex) return false;
-						if(a.view(a.viewChild(t213,0)).value!=cast(long)Builtin.cosC) return false;
-						if(a.sort(a.viewChild(a.viewChild(t213,0),0))!=Sort.complex) return false;
-						if(bs213[0].id==uint.max) bs213[0]=a.viewChild(a.viewChild(t213,0),0); else if(bs213[0]!=a.viewChild(a.viewChild(t213,0),0)) return false;
-						if(cast(uint)a.view(t213).value!=2u) return false;
+					},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8))),MatchOperand((Term t219,ref Term[] bs219){
+						if(a.view(t219).op!=Op.pow||a.sort(t219)!=Sort.complex) return false;
+						if(a.view(a.viewChild(t219,0)).op!=Op.builtin||a.sort(a.viewChild(t219,0))!=Sort.complex) return false;
+						if(a.view(a.viewChild(t219,0)).value!=cast(long)Builtin.cosC) return false;
+						if(a.sort(a.viewChild(a.viewChild(t219,0),0))!=Sort.complex) return false;
+						if(bs219[0].id==uint.max) bs219[0]=a.viewChild(a.viewChild(t219,0),0); else if(bs219[0]!=a.viewChild(a.viewChild(t219,0),0)) return false;
+						if(cast(uint)a.view(t219).value!=2u) return false;
 						return true;
 					},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8)))],bindings,work)) return false;
 					return true;
@@ -12306,9 +12663,9 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.sinR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t214,ref Term[] bs214){
-						if(a.view(t214).op!=Op.realLit||a.sort(t214)!=Sort.real_) return false;
-						if(a.view(t214).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t220,ref Term[] bs220){
+						if(a.view(t220).op!=Op.realLit||a.sort(t220)!=Sort.real_) return false;
+						if(a.view(t220).value!=-1L) return false;
 						return true;
 					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -12322,9 +12679,9 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.cosR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t215,ref Term[] bs215){
-						if(a.view(t215).op!=Op.realLit||a.sort(t215)!=Sort.real_) return false;
-						if(a.view(t215).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t221,ref Term[] bs221){
+						if(a.view(t221).op!=Op.realLit||a.sort(t221)!=Sort.real_) return false;
+						if(a.view(t221).value!=-1L) return false;
 						return true;
 					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -12338,9 +12695,9 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.tanR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t216,ref Term[] bs216){
-						if(a.view(t216).op!=Op.realLit||a.sort(t216)!=Sort.real_) return false;
-						if(a.view(t216).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t222,ref Term[] bs222){
+						if(a.view(t222).op!=Op.realLit||a.sort(t222)!=Sort.real_) return false;
+						if(a.view(t222).value!=-1L) return false;
 						return true;
 					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -12354,10 +12711,10 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.sinC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t217,ref Term[] bs217){
-						if(a.view(t217).op!=Op.complexLit||a.sort(t217)!=Sort.complex) return false;
-						if(a.view(t217).value!=-1L) return false;
-						if(a.view(t217).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t223,ref Term[] bs223){
+						if(a.view(t223).op!=Op.complexLit||a.sort(t223)!=Sort.complex) return false;
+						if(a.view(t223).value!=-1L) return false;
+						if(a.view(t223).imaginary!=0L) return false;
 						return true;
 					},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -12371,10 +12728,10 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.cosC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t218,ref Term[] bs218){
-						if(a.view(t218).op!=Op.complexLit||a.sort(t218)!=Sort.complex) return false;
-						if(a.view(t218).value!=-1L) return false;
-						if(a.view(t218).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t224,ref Term[] bs224){
+						if(a.view(t224).op!=Op.complexLit||a.sort(t224)!=Sort.complex) return false;
+						if(a.view(t224).value!=-1L) return false;
+						if(a.view(t224).imaginary!=0L) return false;
 						return true;
 					},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -12388,9 +12745,9 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.sinhR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t219,ref Term[] bs219){
-						if(a.view(t219).op!=Op.realLit||a.sort(t219)!=Sort.real_) return false;
-						if(a.view(t219).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t225,ref Term[] bs225){
+						if(a.view(t225).op!=Op.realLit||a.sort(t225)!=Sort.real_) return false;
+						if(a.view(t225).value!=-1L) return false;
 						return true;
 					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -12404,9 +12761,9 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.coshR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t220,ref Term[] bs220){
-						if(a.view(t220).op!=Op.realLit||a.sort(t220)!=Sort.real_) return false;
-						if(a.view(t220).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t226,ref Term[] bs226){
+						if(a.view(t226).op!=Op.realLit||a.sort(t226)!=Sort.real_) return false;
+						if(a.view(t226).value!=-1L) return false;
 						return true;
 					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -12418,29 +12775,29 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.real_) return false;
-					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t221,ref Term[] bs221){
-						if(a.view(t221).op!=Op.pow||a.sort(t221)!=Sort.real_) return false;
-						if(a.view(a.viewChild(t221,0)).op!=Op.builtin||a.sort(a.viewChild(t221,0))!=Sort.real_) return false;
-						if(a.view(a.viewChild(t221,0)).value!=cast(long)Builtin.coshR) return false;
-						if(a.sort(a.viewChild(a.viewChild(t221,0),0))!=Sort.real_) return false;
-						if(bs221[0].id==uint.max) bs221[0]=a.viewChild(a.viewChild(t221,0),0); else if(bs221[0]!=a.viewChild(a.viewChild(t221,0),0)) return false;
-						if(cast(uint)a.view(t221).value!=2u) return false;
+					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t227,ref Term[] bs227){
+						if(a.view(t227).op!=Op.pow||a.sort(t227)!=Sort.real_) return false;
+						if(a.view(a.viewChild(t227,0)).op!=Op.builtin||a.sort(a.viewChild(t227,0))!=Sort.real_) return false;
+						if(a.view(a.viewChild(t227,0)).value!=cast(long)Builtin.coshR) return false;
+						if(a.sort(a.viewChild(a.viewChild(t227,0),0))!=Sort.real_) return false;
+						if(bs227[0].id==uint.max) bs227[0]=a.viewChild(a.viewChild(t227,0),0); else if(bs227[0]!=a.viewChild(a.viewChild(t227,0),0)) return false;
+						if(cast(uint)a.view(t227).value!=2u) return false;
 						return true;
-					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t222,ref Term[] bs222){
-						if(a.sort(t222)!=Sort.real_) return false;
-						if(!matchRegion(a,t222,Op.mul,[MatchOperand((Term t223,ref Term[] bs223){
-							if(a.view(t223).op!=Op.realLit||a.sort(t223)!=Sort.real_) return false;
-							if(a.view(t223).value!=-1L) return false;
+					},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8))),MatchOperand((Term t228,ref Term[] bs228){
+						if(a.sort(t228)!=Sort.real_) return false;
+						if(!matchRegion(a,t228,Op.mul,[MatchOperand((Term t229,ref Term[] bs229){
+							if(a.view(t229).op!=Op.realLit||a.sort(t229)!=Sort.real_) return false;
+							if(a.view(t229).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t224,ref Term[] bs224){
-							if(a.view(t224).op!=Op.pow||a.sort(t224)!=Sort.real_) return false;
-							if(a.view(a.viewChild(t224,0)).op!=Op.builtin||a.sort(a.viewChild(t224,0))!=Sort.real_) return false;
-							if(a.view(a.viewChild(t224,0)).value!=cast(long)Builtin.sinhR) return false;
-							if(a.sort(a.viewChild(a.viewChild(t224,0),0))!=Sort.real_) return false;
-							if(bs224[0].id==uint.max) bs224[0]=a.viewChild(a.viewChild(t224,0),0); else if(bs224[0]!=a.viewChild(a.viewChild(t224,0),0)) return false;
-							if(cast(uint)a.view(t224).value!=2u) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t230,ref Term[] bs230){
+							if(a.view(t230).op!=Op.pow||a.sort(t230)!=Sort.real_) return false;
+							if(a.view(a.viewChild(t230,0)).op!=Op.builtin||a.sort(a.viewChild(t230,0))!=Sort.real_) return false;
+							if(a.view(a.viewChild(t230,0)).value!=cast(long)Builtin.sinhR) return false;
+							if(a.sort(a.viewChild(a.viewChild(t230,0),0))!=Sort.real_) return false;
+							if(bs230[0].id==uint.max) bs230[0]=a.viewChild(a.viewChild(t230,0),0); else if(bs230[0]!=a.viewChild(a.viewChild(t230,0),0)) return false;
+							if(cast(uint)a.view(t230).value!=2u) return false;
 							return true;
-						},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8)))],bs222,work)) return false;
+						},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8)))],bs228,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -12503,16 +12860,16 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case 0:
 					if(a.view(input).op!=Op.le||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t225,ref Term[] bs225){
-						if(a.view(t225).op!=Op.realLit||a.sort(t225)!=Sort.real_) return false;
-						if(a.view(t225).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t231,ref Term[] bs231){
+						if(a.view(t231).op!=Op.realLit||a.sort(t231)!=Sort.real_) return false;
+						if(a.view(t231).value!=-1L) return false;
 						return true;
-					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t226,ref Term[] bs226){
-						if(t226!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
+					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t232,ref Term[] bs232){
+						if(t232!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t227,ref Term[] bs227){
-						if(a.view(t227).op!=Op.builtin||a.sort(t227)!=Sort.real_) return false;
-						if(a.view(t227).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t233,ref Term[] bs233){
+						if(a.view(t233).op!=Op.builtin||a.sort(t233)!=Sort.real_) return false;
+						if(a.view(t233).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
@@ -12523,12 +12880,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
 					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
 					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,1),Op.mul,[MatchOperand((Term t228,ref Term[] bs228){
-						if(t228!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,1),Op.mul,[MatchOperand((Term t234,ref Term[] bs234){
+						if(t234!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t229,ref Term[] bs229){
-						if(a.view(t229).op!=Op.builtin||a.sort(t229)!=Sort.real_) return false;
-						if(a.view(t229).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t235,ref Term[] bs235){
+						if(a.view(t235).op!=Op.builtin||a.sort(t235)!=Sort.real_) return false;
+						if(a.view(t235).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12594,12 +12951,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.sinR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t230,ref Term[] bs230){
-						if(t230!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t236,ref Term[] bs236){
+						if(t236!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t231,ref Term[] bs231){
-						if(a.view(t231).op!=Op.builtin||a.sort(t231)!=Sort.real_) return false;
-						if(a.view(t231).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t237,ref Term[] bs237){
+						if(a.view(t237).op!=Op.builtin||a.sort(t237)!=Sort.real_) return false;
+						if(a.view(t237).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12613,12 +12970,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.cosR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t232,ref Term[] bs232){
-						if(t232!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t238,ref Term[] bs238){
+						if(t238!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t233,ref Term[] bs233){
-						if(a.view(t233).op!=Op.builtin||a.sort(t233)!=Sort.real_) return false;
-						if(a.view(t233).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t239,ref Term[] bs239){
+						if(a.view(t239).op!=Op.builtin||a.sort(t239)!=Sort.real_) return false;
+						if(a.view(t239).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12632,12 +12989,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.sinR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t234,ref Term[] bs234){
-						if(t234!=a.real_(Rational(BigInt(3L),BigInt(2L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t240,ref Term[] bs240){
+						if(t240!=a.real_(Rational(BigInt(3L),BigInt(2L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t235,ref Term[] bs235){
-						if(a.view(t235).op!=Op.builtin||a.sort(t235)!=Sort.real_) return false;
-						if(a.view(t235).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t241,ref Term[] bs241){
+						if(a.view(t241).op!=Op.builtin||a.sort(t241)!=Sort.real_) return false;
+						if(a.view(t241).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12651,12 +13008,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.cosR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t236,ref Term[] bs236){
-						if(t236!=a.real_(Rational(BigInt(3L),BigInt(2L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t242,ref Term[] bs242){
+						if(t242!=a.real_(Rational(BigInt(3L),BigInt(2L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t237,ref Term[] bs237){
-						if(a.view(t237).op!=Op.builtin||a.sort(t237)!=Sort.real_) return false;
-						if(a.view(t237).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t243,ref Term[] bs243){
+						if(a.view(t243).op!=Op.builtin||a.sort(t243)!=Sort.real_) return false;
+						if(a.view(t243).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12670,12 +13027,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.sinR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t238,ref Term[] bs238){
-						if(t238!=a.real_(Rational(BigInt(1L),BigInt(6L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t244,ref Term[] bs244){
+						if(t244!=a.real_(Rational(BigInt(1L),BigInt(6L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t239,ref Term[] bs239){
-						if(a.view(t239).op!=Op.builtin||a.sort(t239)!=Sort.real_) return false;
-						if(a.view(t239).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t245,ref Term[] bs245){
+						if(a.view(t245).op!=Op.builtin||a.sort(t245)!=Sort.real_) return false;
+						if(a.view(t245).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12689,12 +13046,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.cosR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t240,ref Term[] bs240){
-						if(t240!=a.real_(Rational(BigInt(1L),BigInt(3L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t246,ref Term[] bs246){
+						if(t246!=a.real_(Rational(BigInt(1L),BigInt(3L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t241,ref Term[] bs241){
-						if(a.view(t241).op!=Op.builtin||a.sort(t241)!=Sort.real_) return false;
-						if(a.view(t241).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t247,ref Term[] bs247){
+						if(a.view(t247).op!=Op.builtin||a.sort(t247)!=Sort.real_) return false;
+						if(a.view(t247).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12708,12 +13065,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.cosR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t242,ref Term[] bs242){
-						if(t242!=a.real_(Rational(BigInt(1L),BigInt(4L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t248,ref Term[] bs248){
+						if(t248!=a.real_(Rational(BigInt(1L),BigInt(4L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t243,ref Term[] bs243){
-						if(a.view(t243).op!=Op.builtin||a.sort(t243)!=Sort.real_) return false;
-						if(a.view(t243).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t249,ref Term[] bs249){
+						if(a.view(t249).op!=Op.builtin||a.sort(t249)!=Sort.real_) return false;
+						if(a.view(t249).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12727,12 +13084,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.sinR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t244,ref Term[] bs244){
-						if(t244!=a.real_(Rational(BigInt(1L),BigInt(4L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t250,ref Term[] bs250){
+						if(t250!=a.real_(Rational(BigInt(1L),BigInt(4L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t245,ref Term[] bs245){
-						if(a.view(t245).op!=Op.builtin||a.sort(t245)!=Sort.real_) return false;
-						if(a.view(t245).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t251,ref Term[] bs251){
+						if(a.view(t251).op!=Op.builtin||a.sort(t251)!=Sort.real_) return false;
+						if(a.view(t251).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -12961,17 +13318,17 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.complex) return false;
-					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t246,ref Term[] bs246){
-						if(a.view(t246).op!=Op.builtin||a.sort(t246)!=Sort.complex) return false;
-						if(a.view(t246).value!=cast(long)Builtin.cisR) return false;
-						if(a.sort(a.viewChild(t246,0))!=Sort.real_) return false;
-						if(bs246[0].id==uint.max) bs246[0]=a.viewChild(t246,0); else if(bs246[0]!=a.viewChild(t246,0)) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t252,ref Term[] bs252){
+						if(a.view(t252).op!=Op.builtin||a.sort(t252)!=Sort.complex) return false;
+						if(a.view(t252).value!=cast(long)Builtin.cisR) return false;
+						if(a.sort(a.viewChild(t252,0))!=Sort.real_) return false;
+						if(bs252[0].id==uint.max) bs252[0]=a.viewChild(t252,0); else if(bs252[0]!=a.viewChild(t252,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.cisR<<16))),MatchOperand((Term t247,ref Term[] bs247){
-						if(a.view(t247).op!=Op.builtin||a.sort(t247)!=Sort.complex) return false;
-						if(a.view(t247).value!=cast(long)Builtin.cisR) return false;
-						if(a.sort(a.viewChild(t247,0))!=Sort.real_) return false;
-						if(bs247[1].id==uint.max) bs247[1]=a.viewChild(t247,0); else if(bs247[1]!=a.viewChild(t247,0)) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.cisR<<16))),MatchOperand((Term t253,ref Term[] bs253){
+						if(a.view(t253).op!=Op.builtin||a.sort(t253)!=Sort.complex) return false;
+						if(a.view(t253).value!=cast(long)Builtin.cisR) return false;
+						if(a.sort(a.viewChild(t253,0))!=Sort.real_) return false;
+						if(bs253[1].id==uint.max) bs253[1]=a.viewChild(t253,0); else if(bs253[1]!=a.viewChild(t253,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.cisR<<16)))],bindings,work)) return false;
 					return true;
@@ -13031,12 +13388,12 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.cisR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t248,ref Term[] bs248){
-						if(t248!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t254,ref Term[] bs254){
+						if(t254!=a.real_(Rational(BigInt(1L),BigInt(2L)))) return false;
 						return true;
-					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t249,ref Term[] bs249){
-						if(a.view(t249).op!=Op.builtin||a.sort(t249)!=Sort.real_) return false;
-						if(a.view(t249).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.numberLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t255,ref Term[] bs255){
+						if(a.view(t255).op!=Op.builtin||a.sort(t255)!=Sort.real_) return false;
+						if(a.view(t255).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					return true;
@@ -13070,9 +13427,9 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t250,ref Term[] bs250){
-						if(a.sort(t250)!=Sort.real_) return false;
-						if(!matchRegion(a,t250,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand(null,0,uint.max,false,false)],bs250,work)) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t256,ref Term[] bs256){
+						if(a.sort(t256)!=Sort.real_) return false;
+						if(!matchRegion(a,t256,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand(null,0,uint.max,false,false)],bs256,work)) return false;
 						return true;
 					},-1,uint.max),MatchOperand(null,2,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -13103,9 +13460,9 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t251,ref Term[] bs251){
-						if(a.sort(t251)!=Sort.complex) return false;
-						if(!matchRegion(a,t251,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand(null,0,uint.max,false,false)],bs251,work)) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t257,ref Term[] bs257){
+						if(a.sort(t257)!=Sort.complex) return false;
+						if(!matchRegion(a,t257,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand(null,0,uint.max,false,false)],bs257,work)) return false;
 						return true;
 					},-1,uint.max),MatchOperand(null,2,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -13150,17 +13507,17 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
 					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
 					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,1),Op.add,[MatchOperand((Term t252,ref Term[] bs252){
-						if(a.view(t252).op!=Op.builtin||a.sort(t252)!=Sort.real_) return false;
-						if(a.view(t252).value!=cast(long)Builtin.castQR) return false;
-						if(a.view(a.viewChild(t252,0)).op!=Op.builtin||a.sort(a.viewChild(t252,0))!=Sort.rational) return false;
-						if(a.view(a.viewChild(t252,0)).value!=cast(long)Builtin.castZQ) return false;
-						if(a.sort(a.viewChild(a.viewChild(t252,0),0))!=Sort.integer) return false;
-						if(bs252[1].id==uint.max) bs252[1]=a.viewChild(a.viewChild(t252,0),0); else if(bs252[1]!=a.viewChild(a.viewChild(t252,0),0)) return false;
+					if(!matchRegion(a,a.viewChild(input,1),Op.add,[MatchOperand((Term t258,ref Term[] bs258){
+						if(a.view(t258).op!=Op.builtin||a.sort(t258)!=Sort.real_) return false;
+						if(a.view(t258).value!=cast(long)Builtin.castQR) return false;
+						if(a.view(a.viewChild(t258,0)).op!=Op.builtin||a.sort(a.viewChild(t258,0))!=Sort.rational) return false;
+						if(a.view(a.viewChild(t258,0)).value!=cast(long)Builtin.castZQ) return false;
+						if(a.sort(a.viewChild(a.viewChild(t258,0),0))!=Sort.integer) return false;
+						if(bs258[1].id==uint.max) bs258[1]=a.viewChild(a.viewChild(t258,0),0); else if(bs258[1]!=a.viewChild(a.viewChild(t258,0),0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16))),MatchOperand((Term t253,ref Term[] bs253){
-						if(a.view(t253).op!=Op.realLit||a.sort(t253)!=Sort.real_) return false;
-						if(a.view(t253).value!=1L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16))),MatchOperand((Term t259,ref Term[] bs259){
+						if(a.view(t259).op!=Op.realLit||a.sort(t259)!=Sort.real_) return false;
+						if(a.view(t259).value!=1L) return false;
 						return true;
 					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bindings,work)) return false;
 					return true;
@@ -13183,25 +13540,25 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case 0:
 					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t254,ref Term[] bs254){
-						if(a.view(t254).op!=Op.builtin||a.sort(t254)!=Sort.real_) return false;
-						if(a.view(t254).value!=cast(long)Builtin.castQR) return false;
-						if(a.view(a.viewChild(t254,0)).op!=Op.builtin||a.sort(a.viewChild(t254,0))!=Sort.rational) return false;
-						if(a.view(a.viewChild(t254,0)).value!=cast(long)Builtin.castZQ) return false;
-						if(a.sort(a.viewChild(a.viewChild(t254,0),0))!=Sort.integer) return false;
-						if(bs254[1].id==uint.max) bs254[1]=a.viewChild(a.viewChild(t254,0),0); else if(bs254[1]!=a.viewChild(a.viewChild(t254,0),0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t260,ref Term[] bs260){
+						if(a.view(t260).op!=Op.builtin||a.sort(t260)!=Sort.real_) return false;
+						if(a.view(t260).value!=cast(long)Builtin.castQR) return false;
+						if(a.view(a.viewChild(t260,0)).op!=Op.builtin||a.sort(a.viewChild(t260,0))!=Sort.rational) return false;
+						if(a.view(a.viewChild(t260,0)).value!=cast(long)Builtin.castZQ) return false;
+						if(a.sort(a.viewChild(a.viewChild(t260,0),0))!=Sort.integer) return false;
+						if(bs260[1].id==uint.max) bs260[1]=a.viewChild(a.viewChild(t260,0),0); else if(bs260[1]!=a.viewChild(a.viewChild(t260,0),0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16))),MatchOperand((Term t255,ref Term[] bs255){
-						if(a.sort(t255)!=Sort.real_) return false;
-						if(!matchRegion(a,t255,Op.mul,[MatchOperand((Term t256,ref Term[] bs256){
-							if(a.view(t256).op!=Op.realLit||a.sort(t256)!=Sort.real_) return false;
-							if(a.view(t256).value!=-1L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16))),MatchOperand((Term t261,ref Term[] bs261){
+						if(a.sort(t261)!=Sort.real_) return false;
+						if(!matchRegion(a,t261,Op.mul,[MatchOperand((Term t262,ref Term[] bs262){
+							if(a.view(t262).op!=Op.realLit||a.sort(t262)!=Sort.real_) return false;
+							if(a.view(t262).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t257,ref Term[] bs257){
-							if(a.view(t257).op!=Op.realLit||a.sort(t257)!=Sort.real_) return false;
-							if(a.view(t257).value!=1L) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t263,ref Term[] bs263){
+							if(a.view(t263).op!=Op.realLit||a.sort(t263)!=Sort.real_) return false;
+							if(a.view(t263).value!=1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs255,work)) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs261,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
@@ -13221,6 +13578,396 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case 2:
 					if(a.sort(input)!=Sort.integer) return false;
 					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_floor_cast:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.floorR) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_ceil_cast:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.ceilR) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_floor_neg:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t264,ref Term[] bs264){
+						if(a.view(t264).op!=Op.realLit||a.sort(t264)!=Sort.real_) return false;
+						if(a.view(t264).value!=-1L) return false;
+						return true;
+					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_ceil_neg:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t265,ref Term[] bs265){
+						if(a.view(t265).op!=Op.realLit||a.sort(t265)!=Sort.real_) return false;
+						if(a.view(t265).value!=-1L) return false;
+						return true;
+					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_floor_shift:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t266,ref Term[] bs266){
+						if(a.view(t266).op!=Op.builtin||a.sort(t266)!=Sort.real_) return false;
+						if(a.view(t266).value!=cast(long)Builtin.castQR) return false;
+						if(a.view(a.viewChild(t266,0)).op!=Op.builtin||a.sort(a.viewChild(t266,0))!=Sort.rational) return false;
+						if(a.view(a.viewChild(t266,0)).value!=cast(long)Builtin.castZQ) return false;
+						if(a.sort(a.viewChild(a.viewChild(t266,0),0))!=Sort.integer) return false;
+						if(bs266[1].id==uint.max) bs266[1]=a.viewChild(a.viewChild(t266,0),0); else if(bs266[1]!=a.viewChild(a.viewChild(t266,0),0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16)))],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_ceil_shift:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t267,ref Term[] bs267){
+						if(a.view(t267).op!=Op.builtin||a.sort(t267)!=Sort.real_) return false;
+						if(a.view(t267).value!=cast(long)Builtin.castQR) return false;
+						if(a.view(a.viewChild(t267,0)).op!=Op.builtin||a.sort(a.viewChild(t267,0))!=Sort.rational) return false;
+						if(a.view(a.viewChild(t267,0)).value!=cast(long)Builtin.castZQ) return false;
+						if(a.sort(a.viewChild(a.viewChild(t267,0),0))!=Sort.integer) return false;
+						if(bs267[1].id==uint.max) bs267[1]=a.viewChild(a.viewChild(t267,0),0); else if(bs267[1]!=a.viewChild(a.viewChild(t267,0),0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16)))],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_floor_shift_literal:
+			if(!bindings.length) bindings.length=3;
+			enforce(bindings.length==3,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t268,ref Term[] bs268){
+						if(a.sort(t268)!=Sort.real_) return false;
+						if(!matchRegion(a,t268,Op.mul,[MatchOperand((Term t269,ref Term[] bs269){
+							if(a.view(t269).op!=Op.realLit||a.sort(t269)!=Sort.real_) return false;
+							if(a.view(t269).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t270,ref Term[] bs270){
+							if(a.view(t270).op!=Op.builtin||a.sort(t270)!=Sort.real_) return false;
+							if(a.view(t270).value!=cast(long)Builtin.castQR) return false;
+							if(a.view(a.viewChild(t270,0)).op!=Op.builtin||a.sort(a.viewChild(t270,0))!=Sort.rational) return false;
+							if(a.view(a.viewChild(t270,0)).value!=cast(long)Builtin.castZQ) return false;
+							if(a.sort(a.viewChild(a.viewChild(t270,0),0))!=Sort.integer) return false;
+							if(bs270[2].id==uint.max) bs270[2]=a.viewChild(a.viewChild(t270,0),0); else if(bs270[2]!=a.viewChild(a.viewChild(t270,0),0)) return false;
+							return true;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16)))],bs268,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				case 1:
+					if(a.sort(input)!=Sort.integer) return false;
+					if(bindings[2].id==uint.max) bindings[2]=input; else if(bindings[2]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_ceil_shift_literal:
+			if(!bindings.length) bindings.length=3;
+			enforce(bindings.length==3,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t271,ref Term[] bs271){
+						if(a.sort(t271)!=Sort.real_) return false;
+						if(!matchRegion(a,t271,Op.mul,[MatchOperand((Term t272,ref Term[] bs272){
+							if(a.view(t272).op!=Op.realLit||a.sort(t272)!=Sort.real_) return false;
+							if(a.view(t272).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t273,ref Term[] bs273){
+							if(a.view(t273).op!=Op.builtin||a.sort(t273)!=Sort.real_) return false;
+							if(a.view(t273).value!=cast(long)Builtin.castQR) return false;
+							if(a.view(a.viewChild(t273,0)).op!=Op.builtin||a.sort(a.viewChild(t273,0))!=Sort.rational) return false;
+							if(a.view(a.viewChild(t273,0)).value!=cast(long)Builtin.castZQ) return false;
+							if(a.sort(a.viewChild(a.viewChild(t273,0),0))!=Sort.integer) return false;
+							if(bs273[2].id==uint.max) bs273[2]=a.viewChild(a.viewChild(t273,0),0); else if(bs273[2]!=a.viewChild(a.viewChild(t273,0),0)) return false;
+							return true;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16)))],bs271,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				case 1:
+					if(a.sort(input)!=Sort.integer) return false;
+					if(bindings[2].id==uint.max) bindings[2]=input; else if(bindings[2]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_floor_lt:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.ltZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_floor_le:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.leZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_lt_floor:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.ltZ) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,0); else if(bindings[1]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,1),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_le_floor:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.leZ) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,0); else if(bindings[1]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,1),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_floor_ne:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.addZ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).value!=cast(long)Builtin.mulZ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),0))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)!=a.integer((-1L))) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),1),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),1),1)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_ceil_lt:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.ltZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_ceil_le:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.leZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_lt_ceil:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.ltZ) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,0); else if(bindings[1]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,1),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_le_ceil:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.leZ) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,0); else if(bindings[1]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,1),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_ceil_ne:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.addZ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).value!=cast(long)Builtin.mulZ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),0))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)!=a.integer((-1L))) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),1),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),1),1)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_floor_bound:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.le||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).value!=cast(long)Builtin.floorR) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,1); else if(bindings[0]!=a.viewChild(input,1)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.real_ceil_bound:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.le||a.sort(input)!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castQR) return false;
+					if(a.view(a.viewChild(a.viewChild(input,1),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,1),0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,1),0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,1),0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,1),0),0)).value!=cast(long)Builtin.ceilR) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,1),0),0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,1),0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,1),0),0),0)) return false;
 					return true;
 				default:return false;
 			}
@@ -13524,13 +14271,13 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case 0:
 					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t258,ref Term[] bs258){
-						if(a.view(t258).op!=Op.realLit||a.sort(t258)!=Sort.real_) return false;
-						if(a.view(t258).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t274,ref Term[] bs274){
+						if(a.view(t274).op!=Op.realLit||a.sort(t274)!=Sort.real_) return false;
+						if(a.view(t274).value!=-1L) return false;
 						return true;
-					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t259,ref Term[] bs259){
-						if(a.view(t259).op!=Op.builtin||a.sort(t259)!=Sort.real_) return false;
-						if(a.view(t259).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t275,ref Term[] bs275){
+						if(a.view(t275).op!=Op.builtin||a.sort(t275)!=Sort.real_) return false;
+						if(a.view(t275).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
@@ -13549,6 +14296,129 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					return true;
 				default:return false;
 			}
+		case Law.complex_log_positive_real:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
+					if(a.view(input).value!=cast(long)Builtin.logC) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.imC) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				case 1:
+					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=0L) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.reC) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,1),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.complex_log_scale:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
+					if(a.view(input).value!=cast(long)Builtin.logC) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand(null,0,uint.max,false,false),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.imC) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				case 1:
+					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=0L) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.reC) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,1),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.complex_log_scale_right:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
+					if(a.view(input).value!=cast(long)Builtin.logC) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand(null,0,uint.max,false,false),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.imC) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.complex) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				case 1:
+					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=0L) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.reC) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.complex) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.complex_log_inverse:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
+					if(a.view(input).value!=cast(long)Builtin.logC) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.inv||a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t276,ref Term[] bs276){
+						if(a.view(t276).op!=Op.builtin||a.sort(t276)!=Sort.real_) return false;
+						if(a.view(t276).value!=cast(long)Builtin.argC) return false;
+						if(a.sort(a.viewChild(t276,0))!=Sort.complex) return false;
+						if(bs276[0].id==uint.max) bs276[0]=a.viewChild(t276,0); else if(bs276[0]!=a.viewChild(t276,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.argC<<16))),MatchOperand((Term t277,ref Term[] bs277){
+						if(a.sort(t277)!=Sort.real_) return false;
+						if(!matchRegion(a,t277,Op.mul,[MatchOperand((Term t278,ref Term[] bs278){
+							if(a.view(t278).op!=Op.realLit||a.sort(t278)!=Sort.real_) return false;
+							if(a.view(t278).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t279,ref Term[] bs279){
+							if(a.view(t279).op!=Op.builtin||a.sort(t279)!=Sort.real_) return false;
+							if(a.view(t279).value!=cast(long)Builtin.pi) return false;
+							return true;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bs277,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
 		case Law.complex_arg_exp:
 			if(!bindings.length) bindings.length=1;
 			enforce(bindings.length==1,"binding count mismatch");
@@ -13564,13 +14434,13 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case 0:
 					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t260,ref Term[] bs260){
-						if(a.view(t260).op!=Op.realLit||a.sort(t260)!=Sort.real_) return false;
-						if(a.view(t260).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t280,ref Term[] bs280){
+						if(a.view(t280).op!=Op.realLit||a.sort(t280)!=Sort.real_) return false;
+						if(a.view(t280).value!=-1L) return false;
 						return true;
-					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t261,ref Term[] bs261){
-						if(a.view(t261).op!=Op.builtin||a.sort(t261)!=Sort.real_) return false;
-						if(a.view(t261).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t281,ref Term[] bs281){
+						if(a.view(t281).op!=Op.builtin||a.sort(t281)!=Sort.real_) return false;
+						if(a.view(t281).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
@@ -13604,13 +14474,13 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case 0:
 					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t262,ref Term[] bs262){
-						if(a.view(t262).op!=Op.realLit||a.sort(t262)!=Sort.real_) return false;
-						if(a.view(t262).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t282,ref Term[] bs282){
+						if(a.view(t282).op!=Op.realLit||a.sort(t282)!=Sort.real_) return false;
+						if(a.view(t282).value!=-1L) return false;
 						return true;
-					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t263,ref Term[] bs263){
-						if(a.view(t263).op!=Op.builtin||a.sort(t263)!=Sort.real_) return false;
-						if(a.view(t263).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t283,ref Term[] bs283){
+						if(a.view(t283).op!=Op.builtin||a.sort(t283)!=Sort.real_) return false;
+						if(a.view(t283).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
@@ -13834,21 +14704,21 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t264,ref Term[] bs264){
-						if(a.view(t264).op!=Op.builtin||a.sort(t264)!=Sort.real_) return false;
-						if(a.view(t264).value!=cast(long)Builtin.powerR) return false;
-						if(a.view(a.viewChild(t264,0)).op!=Op.realLit||a.sort(a.viewChild(t264,0))!=Sort.real_) return false;
-						if(a.view(a.viewChild(t264,0)).value!=2L) return false;
-						if(a.sort(a.viewChild(t264,1))!=Sort.real_) return false;
-						if(bs264[1].id==uint.max) bs264[1]=a.viewChild(t264,1); else if(bs264[1]!=a.viewChild(t264,1)) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t284,ref Term[] bs284){
+						if(a.view(t284).op!=Op.builtin||a.sort(t284)!=Sort.real_) return false;
+						if(a.view(t284).value!=cast(long)Builtin.powerR) return false;
+						if(a.view(a.viewChild(t284,0)).op!=Op.realLit||a.sort(a.viewChild(t284,0))!=Sort.real_) return false;
+						if(a.view(a.viewChild(t284,0)).value!=2L) return false;
+						if(a.sort(a.viewChild(t284,1))!=Sort.real_) return false;
+						if(bs284[1].id==uint.max) bs284[1]=a.viewChild(t284,1); else if(bs284[1]!=a.viewChild(t284,1)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16))),MatchOperand((Term t265,ref Term[] bs265){
-						if(a.sort(t265)!=Sort.real_) return false;
-						if(!matchRegion(a,t265,Op.mul,[MatchOperand((Term t266,ref Term[] bs266){
-							if(a.view(t266).op!=Op.realLit||a.sort(t266)!=Sort.real_) return false;
-							if(a.view(t266).value!=-1L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16))),MatchOperand((Term t285,ref Term[] bs285){
+						if(a.sort(t285)!=Sort.real_) return false;
+						if(!matchRegion(a,t285,Op.mul,[MatchOperand((Term t286,ref Term[] bs286){
+							if(a.view(t286).op!=Op.realLit||a.sort(t286)!=Sort.real_) return false;
+							if(a.view(t286).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs265,work)) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs285,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -13872,21 +14742,21 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t267,ref Term[] bs267){
-						if(a.view(t267).op!=Op.builtin||a.sort(t267)!=Sort.real_) return false;
-						if(a.view(t267).value!=cast(long)Builtin.powerR) return false;
-						if(a.view(a.viewChild(t267,0)).op!=Op.realLit||a.sort(a.viewChild(t267,0))!=Sort.real_) return false;
-						if(a.view(a.viewChild(t267,0)).value!=10L) return false;
-						if(a.sort(a.viewChild(t267,1))!=Sort.real_) return false;
-						if(bs267[1].id==uint.max) bs267[1]=a.viewChild(t267,1); else if(bs267[1]!=a.viewChild(t267,1)) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t287,ref Term[] bs287){
+						if(a.view(t287).op!=Op.builtin||a.sort(t287)!=Sort.real_) return false;
+						if(a.view(t287).value!=cast(long)Builtin.powerR) return false;
+						if(a.view(a.viewChild(t287,0)).op!=Op.realLit||a.sort(a.viewChild(t287,0))!=Sort.real_) return false;
+						if(a.view(a.viewChild(t287,0)).value!=10L) return false;
+						if(a.sort(a.viewChild(t287,1))!=Sort.real_) return false;
+						if(bs287[1].id==uint.max) bs287[1]=a.viewChild(t287,1); else if(bs287[1]!=a.viewChild(t287,1)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16))),MatchOperand((Term t268,ref Term[] bs268){
-						if(a.sort(t268)!=Sort.real_) return false;
-						if(!matchRegion(a,t268,Op.mul,[MatchOperand((Term t269,ref Term[] bs269){
-							if(a.view(t269).op!=Op.realLit||a.sort(t269)!=Sort.real_) return false;
-							if(a.view(t269).value!=-1L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16))),MatchOperand((Term t288,ref Term[] bs288){
+						if(a.sort(t288)!=Sort.real_) return false;
+						if(!matchRegion(a,t288,Op.mul,[MatchOperand((Term t289,ref Term[] bs289){
+							if(a.view(t289).op!=Op.realLit||a.sort(t289)!=Sort.real_) return false;
+							if(a.view(t289).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs268,work)) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bs288,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -13910,20 +14780,20 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t270,ref Term[] bs270){
-						if(a.view(t270).op!=Op.pow||a.sort(t270)!=Sort.complex) return false;
-						if(a.sort(a.viewChild(t270,0))!=Sort.complex) return false;
-						if(bs270[1].id==uint.max) bs270[1]=a.viewChild(t270,0); else if(bs270[1]!=a.viewChild(t270,0)) return false;
-						if(cast(uint)a.view(t270).value!=2u) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t290,ref Term[] bs290){
+						if(a.view(t290).op!=Op.pow||a.sort(t290)!=Sort.complex) return false;
+						if(a.sort(a.viewChild(t290,0))!=Sort.complex) return false;
+						if(bs290[1].id==uint.max) bs290[1]=a.viewChild(t290,0); else if(bs290[1]!=a.viewChild(t290,0)) return false;
+						if(cast(uint)a.view(t290).value!=2u) return false;
 						return true;
-					},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8))),MatchOperand((Term t271,ref Term[] bs271){
-						if(a.sort(t271)!=Sort.complex) return false;
-						if(!matchRegion(a,t271,Op.mul,[MatchOperand((Term t272,ref Term[] bs272){
-							if(a.view(t272).op!=Op.complexLit||a.sort(t272)!=Sort.complex) return false;
-							if(a.view(t272).value!=-1L) return false;
-							if(a.view(t272).imaginary!=0L) return false;
+					},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8))),MatchOperand((Term t291,ref Term[] bs291){
+						if(a.sort(t291)!=Sort.complex) return false;
+						if(!matchRegion(a,t291,Op.mul,[MatchOperand((Term t292,ref Term[] bs292){
+							if(a.view(t292).op!=Op.complexLit||a.sort(t292)!=Sort.complex) return false;
+							if(a.view(t292).value!=-1L) return false;
+							if(a.view(t292).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bs271,work)) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bs291,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -13956,30 +14826,30 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t273,ref Term[] bs273){
-						if(a.view(t273).op!=Op.builtin||a.sort(t273)!=Sort.complex) return false;
-						if(a.view(t273).value!=cast(long)Builtin.castRC) return false;
-						if(a.sort(a.viewChild(t273,0))!=Sort.real_) return false;
-						if(!matchRegion(a,a.viewChild(t273,0),Op.mul,[MatchOperand((Term t274,ref Term[] bs274){
-							if(a.view(t274).op!=Op.realLit||a.sort(t274)!=Sort.real_) return false;
-							if(a.view(t274).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t293,ref Term[] bs293){
+						if(a.view(t293).op!=Op.builtin||a.sort(t293)!=Sort.complex) return false;
+						if(a.view(t293).value!=cast(long)Builtin.castRC) return false;
+						if(a.sort(a.viewChild(t293,0))!=Sort.real_) return false;
+						if(!matchRegion(a,a.viewChild(t293,0),Op.mul,[MatchOperand((Term t294,ref Term[] bs294){
+							if(a.view(t294).op!=Op.realLit||a.sort(t294)!=Sort.real_) return false;
+							if(a.view(t294).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t275,ref Term[] bs275){
-							if(a.view(t275).op!=Op.pow||a.sort(t275)!=Sort.real_) return false;
-							if(a.sort(a.viewChild(t275,0))!=Sort.real_) return false;
-							if(bs275[1].id==uint.max) bs275[1]=a.viewChild(t275,0); else if(bs275[1]!=a.viewChild(t275,0)) return false;
-							if(cast(uint)a.view(t275).value!=2u) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t295,ref Term[] bs295){
+							if(a.view(t295).op!=Op.pow||a.sort(t295)!=Sort.real_) return false;
+							if(a.sort(a.viewChild(t295,0))!=Sort.real_) return false;
+							if(bs295[1].id==uint.max) bs295[1]=a.viewChild(t295,0); else if(bs295[1]!=a.viewChild(t295,0)) return false;
+							if(cast(uint)a.view(t295).value!=2u) return false;
 							return true;
-						},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8)))],bs273,work)) return false;
+						},-1,(cast(uint)Op.pow|(cast(uint)Sort.real_<<8)))],bs293,work)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.castRC<<16))),MatchOperand((Term t276,ref Term[] bs276){
-						if(a.sort(t276)!=Sort.complex) return false;
-						if(!matchRegion(a,t276,Op.mul,[MatchOperand((Term t277,ref Term[] bs277){
-							if(a.view(t277).op!=Op.complexLit||a.sort(t277)!=Sort.complex) return false;
-							if(a.view(t277).value!=-1L) return false;
-							if(a.view(t277).imaginary!=0L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.castRC<<16))),MatchOperand((Term t296,ref Term[] bs296){
+						if(a.sort(t296)!=Sort.complex) return false;
+						if(!matchRegion(a,t296,Op.mul,[MatchOperand((Term t297,ref Term[] bs297){
+							if(a.view(t297).op!=Op.complexLit||a.sort(t297)!=Sort.complex) return false;
+							if(a.view(t297).value!=-1L) return false;
+							if(a.view(t297).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bs276,work)) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bs296,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -14449,26 +15319,26 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t278,ref Term[] bs278){
-						if(a.sort(t278)!=Sort.real_) return false;
-						if(!matchRegion(a,t278,Op.mul,[MatchOperand((Term t279,ref Term[] bs279){
-							if(a.view(t279).op!=Op.realLit||a.sort(t279)!=Sort.real_) return false;
-							if(a.view(t279).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t298,ref Term[] bs298){
+						if(a.sort(t298)!=Sort.real_) return false;
+						if(!matchRegion(a,t298,Op.mul,[MatchOperand((Term t299,ref Term[] bs299){
+							if(a.view(t299).op!=Op.realLit||a.sort(t299)!=Sort.real_) return false;
+							if(a.view(t299).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t280,ref Term[] bs280){
-							if(a.sort(t280)!=Sort.real_) return false;
-							if(!matchRegion(a,t280,Op.add,[MatchOperand((Term t281,ref Term[] bs281){
-								if(a.view(t281).op!=Op.realLit||a.sort(t281)!=Sort.real_) return false;
-								if(a.view(t281).value<0||a.view(t281).value>uint.max) return false;
-								if(bs281[1].id==uint.max) bs281[1]=a.real_(cast(uint)(a.view(t281).value)); else if(bs281[1]!=a.real_(cast(uint)(a.view(t281).value))) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t300,ref Term[] bs300){
+							if(a.sort(t300)!=Sort.real_) return false;
+							if(!matchRegion(a,t300,Op.add,[MatchOperand((Term t301,ref Term[] bs301){
+								if(a.view(t301).op!=Op.realLit||a.sort(t301)!=Sort.real_) return false;
+								if(a.view(t301).value<0||a.view(t301).value>uint.max) return false;
+								if(bs301[1].id==uint.max) bs301[1]=a.real_(cast(uint)(a.view(t301).value)); else if(bs301[1]!=a.real_(cast(uint)(a.view(t301).value))) return false;
 								return true;
-							},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t282,ref Term[] bs282){
-								if(a.view(t282).op!=Op.realLit||a.sort(t282)!=Sort.real_) return false;
-								if(a.view(t282).value!=2L) return false;
+							},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t302,ref Term[] bs302){
+								if(a.view(t302).op!=Op.realLit||a.sort(t302)!=Sort.real_) return false;
+								if(a.view(t302).value!=2L) return false;
 								return true;
-							},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs280,work)) return false;
+							},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs300,work)) return false;
 							return true;
-						},-1,uint.max)],bs278,work)) return false;
+						},-1,uint.max)],bs298,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -14488,29 +15358,29 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t283,ref Term[] bs283){
-						if(a.sort(t283)!=Sort.complex) return false;
-						if(!matchRegion(a,t283,Op.mul,[MatchOperand((Term t284,ref Term[] bs284){
-							if(a.view(t284).op!=Op.complexLit||a.sort(t284)!=Sort.complex) return false;
-							if(a.view(t284).value!=-1L) return false;
-							if(a.view(t284).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t303,ref Term[] bs303){
+						if(a.sort(t303)!=Sort.complex) return false;
+						if(!matchRegion(a,t303,Op.mul,[MatchOperand((Term t304,ref Term[] bs304){
+							if(a.view(t304).op!=Op.complexLit||a.sort(t304)!=Sort.complex) return false;
+							if(a.view(t304).value!=-1L) return false;
+							if(a.view(t304).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t285,ref Term[] bs285){
-							if(a.sort(t285)!=Sort.complex) return false;
-							if(!matchRegion(a,t285,Op.add,[MatchOperand((Term t286,ref Term[] bs286){
-								if(a.view(t286).op!=Op.complexLit||a.sort(t286)!=Sort.complex) return false;
-								if(a.view(t286).value<0||a.view(t286).value>uint.max) return false;
-								if(bs286[1].id==uint.max) bs286[1]=a.real_(cast(uint)(a.view(t286).value)); else if(bs286[1]!=a.real_(cast(uint)(a.view(t286).value))) return false;
-								if(a.view(t286).imaginary!=0L) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t305,ref Term[] bs305){
+							if(a.sort(t305)!=Sort.complex) return false;
+							if(!matchRegion(a,t305,Op.add,[MatchOperand((Term t306,ref Term[] bs306){
+								if(a.view(t306).op!=Op.complexLit||a.sort(t306)!=Sort.complex) return false;
+								if(a.view(t306).value<0||a.view(t306).value>uint.max) return false;
+								if(bs306[1].id==uint.max) bs306[1]=a.real_(cast(uint)(a.view(t306).value)); else if(bs306[1]!=a.real_(cast(uint)(a.view(t306).value))) return false;
+								if(a.view(t306).imaginary!=0L) return false;
 								return true;
-							},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t287,ref Term[] bs287){
-								if(a.view(t287).op!=Op.complexLit||a.sort(t287)!=Sort.complex) return false;
-								if(a.view(t287).value!=2L) return false;
-								if(a.view(t287).imaginary!=0L) return false;
+							},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t307,ref Term[] bs307){
+								if(a.view(t307).op!=Op.complexLit||a.sort(t307)!=Sort.complex) return false;
+								if(a.view(t307).value!=2L) return false;
+								if(a.view(t307).imaginary!=0L) return false;
 								return true;
-							},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8)))],bs285,work)) return false;
+							},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8)))],bs305,work)) return false;
 							return true;
-						},-1,uint.max)],bs283,work)) return false;
+						},-1,uint.max)],bs303,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -14766,34 +15636,34 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
 					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t288,ref Term[] bs288){
-						if(a.sort(t288)!=Sort.complex) return false;
-						if(!matchRegion(a,t288,Op.mul,[MatchOperand((Term t289,ref Term[] bs289){
-							if(a.view(t289).op!=Op.complexLit||a.sort(t289)!=Sort.complex) return false;
-							if(a.view(t289).value!=-1L) return false;
-							if(a.view(t289).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t308,ref Term[] bs308){
+						if(a.sort(t308)!=Sort.complex) return false;
+						if(!matchRegion(a,t308,Op.mul,[MatchOperand((Term t309,ref Term[] bs309){
+							if(a.view(t309).op!=Op.complexLit||a.sort(t309)!=Sort.complex) return false;
+							if(a.view(t309).value!=-1L) return false;
+							if(a.view(t309).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t290,ref Term[] bs290){
-							if(a.view(t290).op!=Op.complexLit||a.sort(t290)!=Sort.complex) return false;
-							if(a.view(t290).value!=-1L) return false;
-							if(a.view(t290).imaginary!=0L) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t310,ref Term[] bs310){
+							if(a.view(t310).op!=Op.complexLit||a.sort(t310)!=Sort.complex) return false;
+							if(a.view(t310).value!=-1L) return false;
+							if(a.view(t310).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t291,ref Term[] bs291){
-							if(a.sort(t291)!=Sort.complex) return false;
-							if(!matchRegion(a,t291,Op.add,[MatchOperand((Term t292,ref Term[] bs292){
-								if(a.view(t292).op!=Op.complexLit||a.sort(t292)!=Sort.complex) return false;
-								if(a.view(t292).value<0||a.view(t292).value>uint.max) return false;
-								if(bs292[2].id==uint.max) bs292[2]=a.real_(cast(uint)(a.view(t292).value)); else if(bs292[2]!=a.real_(cast(uint)(a.view(t292).value))) return false;
-								if(a.view(t292).imaginary!=0L) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t311,ref Term[] bs311){
+							if(a.sort(t311)!=Sort.complex) return false;
+							if(!matchRegion(a,t311,Op.add,[MatchOperand((Term t312,ref Term[] bs312){
+								if(a.view(t312).op!=Op.complexLit||a.sort(t312)!=Sort.complex) return false;
+								if(a.view(t312).value<0||a.view(t312).value>uint.max) return false;
+								if(bs312[2].id==uint.max) bs312[2]=a.real_(cast(uint)(a.view(t312).value)); else if(bs312[2]!=a.real_(cast(uint)(a.view(t312).value))) return false;
+								if(a.view(t312).imaginary!=0L) return false;
 								return true;
-							},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t293,ref Term[] bs293){
-								if(a.view(t293).op!=Op.complexLit||a.sort(t293)!=Sort.complex) return false;
-								if(a.view(t293).value!=1L) return false;
-								if(a.view(t293).imaginary!=0L) return false;
+							},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t313,ref Term[] bs313){
+								if(a.view(t313).op!=Op.complexLit||a.sort(t313)!=Sort.complex) return false;
+								if(a.view(t313).value!=1L) return false;
+								if(a.view(t313).imaginary!=0L) return false;
 								return true;
-							},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8)))],bs291,work)) return false;
+							},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8)))],bs311,work)) return false;
 							return true;
-						},-1,uint.max)],bs288,work)) return false;
+						},-1,uint.max)],bs308,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -14941,21 +15811,21 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.real_) return false;
-					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t294,ref Term[] bs294){
-						if(a.view(t294).op!=Op.builtin||a.sort(t294)!=Sort.real_) return false;
-						if(a.view(t294).value!=cast(long)Builtin.minR) return false;
-						if(a.sort(a.viewChild(t294,0))!=Sort.real_) return false;
-						if(bs294[0].id==uint.max) bs294[0]=a.viewChild(t294,0); else if(bs294[0]!=a.viewChild(t294,0)) return false;
-						if(a.sort(a.viewChild(t294,1))!=Sort.real_) return false;
-						if(bs294[1].id==uint.max) bs294[1]=a.viewChild(t294,1); else if(bs294[1]!=a.viewChild(t294,1)) return false;
+					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t314,ref Term[] bs314){
+						if(a.view(t314).op!=Op.builtin||a.sort(t314)!=Sort.real_) return false;
+						if(a.view(t314).value!=cast(long)Builtin.minR) return false;
+						if(a.sort(a.viewChild(t314,0))!=Sort.real_) return false;
+						if(bs314[0].id==uint.max) bs314[0]=a.viewChild(t314,0); else if(bs314[0]!=a.viewChild(t314,0)) return false;
+						if(a.sort(a.viewChild(t314,1))!=Sort.real_) return false;
+						if(bs314[1].id==uint.max) bs314[1]=a.viewChild(t314,1); else if(bs314[1]!=a.viewChild(t314,1)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.minR<<16))),MatchOperand((Term t295,ref Term[] bs295){
-						if(a.view(t295).op!=Op.builtin||a.sort(t295)!=Sort.real_) return false;
-						if(a.view(t295).value!=cast(long)Builtin.maxR) return false;
-						if(a.sort(a.viewChild(t295,0))!=Sort.real_) return false;
-						if(bs295[0].id==uint.max) bs295[0]=a.viewChild(t295,0); else if(bs295[0]!=a.viewChild(t295,0)) return false;
-						if(a.sort(a.viewChild(t295,1))!=Sort.real_) return false;
-						if(bs295[1].id==uint.max) bs295[1]=a.viewChild(t295,1); else if(bs295[1]!=a.viewChild(t295,1)) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.minR<<16))),MatchOperand((Term t315,ref Term[] bs315){
+						if(a.view(t315).op!=Op.builtin||a.sort(t315)!=Sort.real_) return false;
+						if(a.view(t315).value!=cast(long)Builtin.maxR) return false;
+						if(a.sort(a.viewChild(t315,0))!=Sort.real_) return false;
+						if(bs315[0].id==uint.max) bs315[0]=a.viewChild(t315,0); else if(bs315[0]!=a.viewChild(t315,0)) return false;
+						if(a.sort(a.viewChild(t315,1))!=Sort.real_) return false;
+						if(bs315[1].id==uint.max) bs315[1]=a.viewChild(t315,1); else if(bs315[1]!=a.viewChild(t315,1)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.maxR<<16)))],bindings,work)) return false;
 					return true;
@@ -14967,21 +15837,21 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.real_) return false;
-					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t296,ref Term[] bs296){
-						if(a.view(t296).op!=Op.builtin||a.sort(t296)!=Sort.real_) return false;
-						if(a.view(t296).value!=cast(long)Builtin.minR) return false;
-						if(a.sort(a.viewChild(t296,0))!=Sort.real_) return false;
-						if(bs296[0].id==uint.max) bs296[0]=a.viewChild(t296,0); else if(bs296[0]!=a.viewChild(t296,0)) return false;
-						if(a.sort(a.viewChild(t296,1))!=Sort.real_) return false;
-						if(bs296[1].id==uint.max) bs296[1]=a.viewChild(t296,1); else if(bs296[1]!=a.viewChild(t296,1)) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t316,ref Term[] bs316){
+						if(a.view(t316).op!=Op.builtin||a.sort(t316)!=Sort.real_) return false;
+						if(a.view(t316).value!=cast(long)Builtin.minR) return false;
+						if(a.sort(a.viewChild(t316,0))!=Sort.real_) return false;
+						if(bs316[0].id==uint.max) bs316[0]=a.viewChild(t316,0); else if(bs316[0]!=a.viewChild(t316,0)) return false;
+						if(a.sort(a.viewChild(t316,1))!=Sort.real_) return false;
+						if(bs316[1].id==uint.max) bs316[1]=a.viewChild(t316,1); else if(bs316[1]!=a.viewChild(t316,1)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.minR<<16))),MatchOperand((Term t297,ref Term[] bs297){
-						if(a.view(t297).op!=Op.builtin||a.sort(t297)!=Sort.real_) return false;
-						if(a.view(t297).value!=cast(long)Builtin.maxR) return false;
-						if(a.sort(a.viewChild(t297,0))!=Sort.real_) return false;
-						if(bs297[0].id==uint.max) bs297[0]=a.viewChild(t297,0); else if(bs297[0]!=a.viewChild(t297,0)) return false;
-						if(a.sort(a.viewChild(t297,1))!=Sort.real_) return false;
-						if(bs297[1].id==uint.max) bs297[1]=a.viewChild(t297,1); else if(bs297[1]!=a.viewChild(t297,1)) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.minR<<16))),MatchOperand((Term t317,ref Term[] bs317){
+						if(a.view(t317).op!=Op.builtin||a.sort(t317)!=Sort.real_) return false;
+						if(a.view(t317).value!=cast(long)Builtin.maxR) return false;
+						if(a.sort(a.viewChild(t317,0))!=Sort.real_) return false;
+						if(bs317[0].id==uint.max) bs317[0]=a.viewChild(t317,0); else if(bs317[0]!=a.viewChild(t317,0)) return false;
+						if(a.sort(a.viewChild(t317,1))!=Sort.real_) return false;
+						if(bs317[1].id==uint.max) bs317[1]=a.viewChild(t317,1); else if(bs317[1]!=a.viewChild(t317,1)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.maxR<<16)))],bindings,work)) return false;
 					return true;
@@ -15030,29 +15900,29 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t298,ref Term[] bs298){
-						if(a.view(t298).op!=Op.builtin||a.sort(t298)!=Sort.real_) return false;
-						if(a.view(t298).value!=cast(long)Builtin.minR) return false;
-						if(a.sort(a.viewChild(t298,0))!=Sort.real_) return false;
-						if(bs298[0].id==uint.max) bs298[0]=a.viewChild(t298,0); else if(bs298[0]!=a.viewChild(t298,0)) return false;
-						if(a.sort(a.viewChild(t298,1))!=Sort.real_) return false;
-						if(bs298[1].id==uint.max) bs298[1]=a.viewChild(t298,1); else if(bs298[1]!=a.viewChild(t298,1)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t318,ref Term[] bs318){
+						if(a.view(t318).op!=Op.builtin||a.sort(t318)!=Sort.real_) return false;
+						if(a.view(t318).value!=cast(long)Builtin.minR) return false;
+						if(a.sort(a.viewChild(t318,0))!=Sort.real_) return false;
+						if(bs318[0].id==uint.max) bs318[0]=a.viewChild(t318,0); else if(bs318[0]!=a.viewChild(t318,0)) return false;
+						if(a.sort(a.viewChild(t318,1))!=Sort.real_) return false;
+						if(bs318[1].id==uint.max) bs318[1]=a.viewChild(t318,1); else if(bs318[1]!=a.viewChild(t318,1)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.minR<<16))),MatchOperand((Term t299,ref Term[] bs299){
-						if(a.sort(t299)!=Sort.real_) return false;
-						if(!matchRegion(a,t299,Op.mul,[MatchOperand((Term t300,ref Term[] bs300){
-							if(a.view(t300).op!=Op.realLit||a.sort(t300)!=Sort.real_) return false;
-							if(a.view(t300).value!=-1L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.minR<<16))),MatchOperand((Term t319,ref Term[] bs319){
+						if(a.sort(t319)!=Sort.real_) return false;
+						if(!matchRegion(a,t319,Op.mul,[MatchOperand((Term t320,ref Term[] bs320){
+							if(a.view(t320).op!=Op.realLit||a.sort(t320)!=Sort.real_) return false;
+							if(a.view(t320).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t301,ref Term[] bs301){
-							if(a.view(t301).op!=Op.builtin||a.sort(t301)!=Sort.real_) return false;
-							if(a.view(t301).value!=cast(long)Builtin.maxR) return false;
-							if(a.sort(a.viewChild(t301,0))!=Sort.real_) return false;
-							if(bs301[0].id==uint.max) bs301[0]=a.viewChild(t301,0); else if(bs301[0]!=a.viewChild(t301,0)) return false;
-							if(a.sort(a.viewChild(t301,1))!=Sort.real_) return false;
-							if(bs301[1].id==uint.max) bs301[1]=a.viewChild(t301,1); else if(bs301[1]!=a.viewChild(t301,1)) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t321,ref Term[] bs321){
+							if(a.view(t321).op!=Op.builtin||a.sort(t321)!=Sort.real_) return false;
+							if(a.view(t321).value!=cast(long)Builtin.maxR) return false;
+							if(a.sort(a.viewChild(t321,0))!=Sort.real_) return false;
+							if(bs321[0].id==uint.max) bs321[0]=a.viewChild(t321,0); else if(bs321[0]!=a.viewChild(t321,0)) return false;
+							if(a.sort(a.viewChild(t321,1))!=Sort.real_) return false;
+							if(bs321[1].id==uint.max) bs321[1]=a.viewChild(t321,1); else if(bs321[1]!=a.viewChild(t321,1)) return false;
 							return true;
-						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.maxR<<16)))],bs299,work)) return false;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.maxR<<16)))],bs319,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -15121,23 +15991,23 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t302,ref Term[] bs302){
-						if(a.view(t302).op!=Op.inv||a.sort(t302)!=Sort.real_) return false;
-						if(a.sort(a.viewChild(t302,0))!=Sort.real_) return false;
-						if(bs302[0].id==uint.max) bs302[0]=a.viewChild(t302,0); else if(bs302[0]!=a.viewChild(t302,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t322,ref Term[] bs322){
+						if(a.view(t322).op!=Op.inv||a.sort(t322)!=Sort.real_) return false;
+						if(a.sort(a.viewChild(t322,0))!=Sort.real_) return false;
+						if(bs322[0].id==uint.max) bs322[0]=a.viewChild(t322,0); else if(bs322[0]!=a.viewChild(t322,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8))),MatchOperand((Term t303,ref Term[] bs303){
-						if(a.sort(t303)!=Sort.real_) return false;
-						if(!matchRegion(a,t303,Op.mul,[MatchOperand((Term t304,ref Term[] bs304){
-							if(a.view(t304).op!=Op.realLit||a.sort(t304)!=Sort.real_) return false;
-							if(a.view(t304).value!=-1L) return false;
+					},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8))),MatchOperand((Term t323,ref Term[] bs323){
+						if(a.sort(t323)!=Sort.real_) return false;
+						if(!matchRegion(a,t323,Op.mul,[MatchOperand((Term t324,ref Term[] bs324){
+							if(a.view(t324).op!=Op.realLit||a.sort(t324)!=Sort.real_) return false;
+							if(a.view(t324).value!=-1L) return false;
 							return true;
-						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t305,ref Term[] bs305){
-							if(a.view(t305).op!=Op.inv||a.sort(t305)!=Sort.real_) return false;
-							if(a.sort(a.viewChild(t305,0))!=Sort.real_) return false;
-							if(bs305[1].id==uint.max) bs305[1]=a.viewChild(t305,0); else if(bs305[1]!=a.viewChild(t305,0)) return false;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t325,ref Term[] bs325){
+							if(a.view(t325).op!=Op.inv||a.sort(t325)!=Sort.real_) return false;
+							if(a.sort(a.viewChild(t325,0))!=Sort.real_) return false;
+							if(bs325[1].id==uint.max) bs325[1]=a.viewChild(t325,0); else if(bs325[1]!=a.viewChild(t325,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8)))],bs303,work)) return false;
+						},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8)))],bs323,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -15150,24 +16020,24 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t306,ref Term[] bs306){
-						if(a.view(t306).op!=Op.inv||a.sort(t306)!=Sort.complex) return false;
-						if(a.sort(a.viewChild(t306,0))!=Sort.complex) return false;
-						if(bs306[0].id==uint.max) bs306[0]=a.viewChild(t306,0); else if(bs306[0]!=a.viewChild(t306,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t326,ref Term[] bs326){
+						if(a.view(t326).op!=Op.inv||a.sort(t326)!=Sort.complex) return false;
+						if(a.sort(a.viewChild(t326,0))!=Sort.complex) return false;
+						if(bs326[0].id==uint.max) bs326[0]=a.viewChild(t326,0); else if(bs326[0]!=a.viewChild(t326,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.inv|(cast(uint)Sort.complex<<8))),MatchOperand((Term t307,ref Term[] bs307){
-						if(a.sort(t307)!=Sort.complex) return false;
-						if(!matchRegion(a,t307,Op.mul,[MatchOperand((Term t308,ref Term[] bs308){
-							if(a.view(t308).op!=Op.complexLit||a.sort(t308)!=Sort.complex) return false;
-							if(a.view(t308).value!=-1L) return false;
-							if(a.view(t308).imaginary!=0L) return false;
+					},-1,(cast(uint)Op.inv|(cast(uint)Sort.complex<<8))),MatchOperand((Term t327,ref Term[] bs327){
+						if(a.sort(t327)!=Sort.complex) return false;
+						if(!matchRegion(a,t327,Op.mul,[MatchOperand((Term t328,ref Term[] bs328){
+							if(a.view(t328).op!=Op.complexLit||a.sort(t328)!=Sort.complex) return false;
+							if(a.view(t328).value!=-1L) return false;
+							if(a.view(t328).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t309,ref Term[] bs309){
-							if(a.view(t309).op!=Op.inv||a.sort(t309)!=Sort.complex) return false;
-							if(a.sort(a.viewChild(t309,0))!=Sort.complex) return false;
-							if(bs309[1].id==uint.max) bs309[1]=a.viewChild(t309,0); else if(bs309[1]!=a.viewChild(t309,0)) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t329,ref Term[] bs329){
+							if(a.view(t329).op!=Op.inv||a.sort(t329)!=Sort.complex) return false;
+							if(a.sort(a.viewChild(t329,0))!=Sort.complex) return false;
+							if(bs329[1].id==uint.max) bs329[1]=a.viewChild(t329,0); else if(bs329[1]!=a.viewChild(t329,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.inv|(cast(uint)Sort.complex<<8)))],bs307,work)) return false;
+						},-1,(cast(uint)Op.inv|(cast(uint)Sort.complex<<8)))],bs327,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -15180,14 +16050,14 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t310,ref Term[] bs310){
-						if(a.sort(t310)!=Sort.real_) return false;
-						if(!matchRegion(a,t310,Op.mul,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t311,ref Term[] bs311){
-							if(a.view(t311).op!=Op.inv||a.sort(t311)!=Sort.real_) return false;
-							if(a.sort(a.viewChild(t311,0))!=Sort.real_) return false;
-							if(bs311[1].id==uint.max) bs311[1]=a.viewChild(t311,0); else if(bs311[1]!=a.viewChild(t311,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t330,ref Term[] bs330){
+						if(a.sort(t330)!=Sort.real_) return false;
+						if(!matchRegion(a,t330,Op.mul,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t331,ref Term[] bs331){
+							if(a.view(t331).op!=Op.inv||a.sort(t331)!=Sort.real_) return false;
+							if(a.sort(a.viewChild(t331,0))!=Sort.real_) return false;
+							if(bs331[1].id==uint.max) bs331[1]=a.viewChild(t331,0); else if(bs331[1]!=a.viewChild(t331,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8)))],bs310,work)) return false;
+						},-1,(cast(uint)Op.inv|(cast(uint)Sort.real_<<8)))],bs330,work)) return false;
 						return true;
 					},-1,uint.max),MatchOperand(null,2,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15200,14 +16070,14 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t312,ref Term[] bs312){
-						if(a.sort(t312)!=Sort.complex) return false;
-						if(!matchRegion(a,t312,Op.mul,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t313,ref Term[] bs313){
-							if(a.view(t313).op!=Op.inv||a.sort(t313)!=Sort.complex) return false;
-							if(a.sort(a.viewChild(t313,0))!=Sort.complex) return false;
-							if(bs313[1].id==uint.max) bs313[1]=a.viewChild(t313,0); else if(bs313[1]!=a.viewChild(t313,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t332,ref Term[] bs332){
+						if(a.sort(t332)!=Sort.complex) return false;
+						if(!matchRegion(a,t332,Op.mul,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t333,ref Term[] bs333){
+							if(a.view(t333).op!=Op.inv||a.sort(t333)!=Sort.complex) return false;
+							if(a.sort(a.viewChild(t333,0))!=Sort.complex) return false;
+							if(bs333[1].id==uint.max) bs333[1]=a.viewChild(t333,0); else if(bs333[1]!=a.viewChild(t333,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.inv|(cast(uint)Sort.complex<<8)))],bs312,work)) return false;
+						},-1,(cast(uint)Op.inv|(cast(uint)Sort.complex<<8)))],bs332,work)) return false;
 						return true;
 					},-1,uint.max),MatchOperand(null,2,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15277,11 +16147,11 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.expR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t314,ref Term[] bs314){
-						if(a.view(t314).op!=Op.builtin||a.sort(t314)!=Sort.real_) return false;
-						if(a.view(t314).value!=cast(long)Builtin.logR) return false;
-						if(a.sort(a.viewChild(t314,0))!=Sort.real_) return false;
-						if(bs314[0].id==uint.max) bs314[0]=a.viewChild(t314,0); else if(bs314[0]!=a.viewChild(t314,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t334,ref Term[] bs334){
+						if(a.view(t334).op!=Op.builtin||a.sort(t334)!=Sort.real_) return false;
+						if(a.view(t334).value!=cast(long)Builtin.logR) return false;
+						if(a.sort(a.viewChild(t334,0))!=Sort.real_) return false;
+						if(bs334[0].id==uint.max) bs334[0]=a.viewChild(t334,0); else if(bs334[0]!=a.viewChild(t334,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16)))],bindings,work)) return false;
 					return true;
@@ -15295,11 +16165,11 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.expR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t315,ref Term[] bs315){
-						if(a.view(t315).op!=Op.builtin||a.sort(t315)!=Sort.real_) return false;
-						if(a.view(t315).value!=cast(long)Builtin.logR) return false;
-						if(a.sort(a.viewChild(t315,0))!=Sort.real_) return false;
-						if(bs315[0].id==uint.max) bs315[0]=a.viewChild(t315,0); else if(bs315[0]!=a.viewChild(t315,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t335,ref Term[] bs335){
+						if(a.view(t335).op!=Op.builtin||a.sort(t335)!=Sort.real_) return false;
+						if(a.view(t335).value!=cast(long)Builtin.logR) return false;
+						if(a.sort(a.viewChild(t335,0))!=Sort.real_) return false;
+						if(bs335[0].id==uint.max) bs335[0]=a.viewChild(t335,0); else if(bs335[0]!=a.viewChild(t335,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16))),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15313,11 +16183,11 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.expR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t316,ref Term[] bs316){
-						if(a.view(t316).op!=Op.builtin||a.sort(t316)!=Sort.real_) return false;
-						if(a.view(t316).value!=cast(long)Builtin.logR) return false;
-						if(a.sort(a.viewChild(t316,0))!=Sort.real_) return false;
-						if(bs316[0].id==uint.max) bs316[0]=a.viewChild(t316,0); else if(bs316[0]!=a.viewChild(t316,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t336,ref Term[] bs336){
+						if(a.view(t336).op!=Op.builtin||a.sort(t336)!=Sort.real_) return false;
+						if(a.view(t336).value!=cast(long)Builtin.logR) return false;
+						if(a.sort(a.viewChild(t336,0))!=Sort.real_) return false;
+						if(bs336[0].id==uint.max) bs336[0]=a.viewChild(t336,0); else if(bs336[0]!=a.viewChild(t336,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16))),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15331,11 +16201,11 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.expR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t317,ref Term[] bs317){
-						if(a.view(t317).op!=Op.builtin||a.sort(t317)!=Sort.real_) return false;
-						if(a.view(t317).value!=cast(long)Builtin.logR) return false;
-						if(a.sort(a.viewChild(t317,0))!=Sort.real_) return false;
-						if(bs317[0].id==uint.max) bs317[0]=a.viewChild(t317,0); else if(bs317[0]!=a.viewChild(t317,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t337,ref Term[] bs337){
+						if(a.view(t337).op!=Op.builtin||a.sort(t337)!=Sort.real_) return false;
+						if(a.view(t337).value!=cast(long)Builtin.logR) return false;
+						if(a.sort(a.viewChild(t337,0))!=Sort.real_) return false;
+						if(bs337[0].id==uint.max) bs337[0]=a.viewChild(t337,0); else if(bs337[0]!=a.viewChild(t337,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16)))],bindings,work)) return false;
 					return true;
@@ -15349,15 +16219,15 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.expR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,2,uint.max,false,false),MatchOperand((Term t318,ref Term[] bs318){
-						if(a.sort(t318)!=Sort.real_) return false;
-						if(!matchRegion(a,t318,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t319,ref Term[] bs319){
-							if(a.view(t319).op!=Op.builtin||a.sort(t319)!=Sort.real_) return false;
-							if(a.view(t319).value!=cast(long)Builtin.logR) return false;
-							if(a.sort(a.viewChild(t319,0))!=Sort.real_) return false;
-							if(bs319[0].id==uint.max) bs319[0]=a.viewChild(t319,0); else if(bs319[0]!=a.viewChild(t319,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,2,uint.max,false,false),MatchOperand((Term t338,ref Term[] bs338){
+						if(a.sort(t338)!=Sort.real_) return false;
+						if(!matchRegion(a,t338,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t339,ref Term[] bs339){
+							if(a.view(t339).op!=Op.builtin||a.sort(t339)!=Sort.real_) return false;
+							if(a.view(t339).value!=cast(long)Builtin.logR) return false;
+							if(a.sort(a.viewChild(t339,0))!=Sort.real_) return false;
+							if(bs339[0].id==uint.max) bs339[0]=a.viewChild(t339,0); else if(bs339[0]!=a.viewChild(t339,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16)))],bs318,work)) return false;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16)))],bs338,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -15371,15 +16241,15 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.expR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t320,ref Term[] bs320){
-						if(a.sort(t320)!=Sort.real_) return false;
-						if(!matchRegion(a,t320,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t321,ref Term[] bs321){
-							if(a.view(t321).op!=Op.builtin||a.sort(t321)!=Sort.real_) return false;
-							if(a.view(t321).value!=cast(long)Builtin.logR) return false;
-							if(a.sort(a.viewChild(t321,0))!=Sort.real_) return false;
-							if(bs321[0].id==uint.max) bs321[0]=a.viewChild(t321,0); else if(bs321[0]!=a.viewChild(t321,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t340,ref Term[] bs340){
+						if(a.sort(t340)!=Sort.real_) return false;
+						if(!matchRegion(a,t340,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t341,ref Term[] bs341){
+							if(a.view(t341).op!=Op.builtin||a.sort(t341)!=Sort.real_) return false;
+							if(a.view(t341).value!=cast(long)Builtin.logR) return false;
+							if(a.sort(a.viewChild(t341,0))!=Sort.real_) return false;
+							if(bs341[0].id==uint.max) bs341[0]=a.viewChild(t341,0); else if(bs341[0]!=a.viewChild(t341,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16)))],bs320,work)) return false;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16)))],bs340,work)) return false;
 						return true;
 					},-1,uint.max),MatchOperand(null,2,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15391,17 +16261,17 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.real_) return false;
-					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t322,ref Term[] bs322){
-						if(a.view(t322).op!=Op.builtin||a.sort(t322)!=Sort.real_) return false;
-						if(a.view(t322).value!=cast(long)Builtin.sqrtR) return false;
-						if(a.sort(a.viewChild(t322,0))!=Sort.real_) return false;
-						if(bs322[0].id==uint.max) bs322[0]=a.viewChild(t322,0); else if(bs322[0]!=a.viewChild(t322,0)) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t342,ref Term[] bs342){
+						if(a.view(t342).op!=Op.builtin||a.sort(t342)!=Sort.real_) return false;
+						if(a.view(t342).value!=cast(long)Builtin.sqrtR) return false;
+						if(a.sort(a.viewChild(t342,0))!=Sort.real_) return false;
+						if(bs342[0].id==uint.max) bs342[0]=a.viewChild(t342,0); else if(bs342[0]!=a.viewChild(t342,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.sqrtR<<16))),MatchOperand((Term t323,ref Term[] bs323){
-						if(a.view(t323).op!=Op.builtin||a.sort(t323)!=Sort.real_) return false;
-						if(a.view(t323).value!=cast(long)Builtin.sqrtR) return false;
-						if(a.sort(a.viewChild(t323,0))!=Sort.real_) return false;
-						if(bs323[1].id==uint.max) bs323[1]=a.viewChild(t323,0); else if(bs323[1]!=a.viewChild(t323,0)) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.sqrtR<<16))),MatchOperand((Term t343,ref Term[] bs343){
+						if(a.view(t343).op!=Op.builtin||a.sort(t343)!=Sort.real_) return false;
+						if(a.view(t343).value!=cast(long)Builtin.sqrtR) return false;
+						if(a.sort(a.viewChild(t343,0))!=Sort.real_) return false;
+						if(bs343[1].id==uint.max) bs343[1]=a.viewChild(t343,0); else if(bs343[1]!=a.viewChild(t343,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.sqrtR<<16)))],bindings,work)) return false;
 					return true;
@@ -15413,21 +16283,21 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.real_) return false;
-					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t324,ref Term[] bs324){
-						if(a.view(t324).op!=Op.builtin||a.sort(t324)!=Sort.real_) return false;
-						if(a.view(t324).value!=cast(long)Builtin.powerR) return false;
-						if(a.sort(a.viewChild(t324,0))!=Sort.real_) return false;
-						if(bs324[0].id==uint.max) bs324[0]=a.viewChild(t324,0); else if(bs324[0]!=a.viewChild(t324,0)) return false;
-						if(a.sort(a.viewChild(t324,1))!=Sort.real_) return false;
-						if(bs324[2].id==uint.max) bs324[2]=a.viewChild(t324,1); else if(bs324[2]!=a.viewChild(t324,1)) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t344,ref Term[] bs344){
+						if(a.view(t344).op!=Op.builtin||a.sort(t344)!=Sort.real_) return false;
+						if(a.view(t344).value!=cast(long)Builtin.powerR) return false;
+						if(a.sort(a.viewChild(t344,0))!=Sort.real_) return false;
+						if(bs344[0].id==uint.max) bs344[0]=a.viewChild(t344,0); else if(bs344[0]!=a.viewChild(t344,0)) return false;
+						if(a.sort(a.viewChild(t344,1))!=Sort.real_) return false;
+						if(bs344[2].id==uint.max) bs344[2]=a.viewChild(t344,1); else if(bs344[2]!=a.viewChild(t344,1)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16))),MatchOperand((Term t325,ref Term[] bs325){
-						if(a.view(t325).op!=Op.builtin||a.sort(t325)!=Sort.real_) return false;
-						if(a.view(t325).value!=cast(long)Builtin.powerR) return false;
-						if(a.sort(a.viewChild(t325,0))!=Sort.real_) return false;
-						if(bs325[1].id==uint.max) bs325[1]=a.viewChild(t325,0); else if(bs325[1]!=a.viewChild(t325,0)) return false;
-						if(a.sort(a.viewChild(t325,1))!=Sort.real_) return false;
-						if(bs325[2].id==uint.max) bs325[2]=a.viewChild(t325,1); else if(bs325[2]!=a.viewChild(t325,1)) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16))),MatchOperand((Term t345,ref Term[] bs345){
+						if(a.view(t345).op!=Op.builtin||a.sort(t345)!=Sort.real_) return false;
+						if(a.view(t345).value!=cast(long)Builtin.powerR) return false;
+						if(a.sort(a.viewChild(t345,0))!=Sort.real_) return false;
+						if(bs345[1].id==uint.max) bs345[1]=a.viewChild(t345,0); else if(bs345[1]!=a.viewChild(t345,0)) return false;
+						if(a.sort(a.viewChild(t345,1))!=Sort.real_) return false;
+						if(bs345[2].id==uint.max) bs345[2]=a.viewChild(t345,1); else if(bs345[2]!=a.viewChild(t345,1)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powerR<<16)))],bindings,work)) return false;
 					return true;
@@ -15513,17 +16383,17 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.real_) return false;
-					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t326,ref Term[] bs326){
-						if(a.view(t326).op!=Op.builtin||a.sort(t326)!=Sort.real_) return false;
-						if(a.view(t326).value!=cast(long)Builtin.sinR) return false;
-						if(a.sort(a.viewChild(t326,0))!=Sort.real_) return false;
-						if(bs326[0].id==uint.max) bs326[0]=a.viewChild(t326,0); else if(bs326[0]!=a.viewChild(t326,0)) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t346,ref Term[] bs346){
+						if(a.view(t346).op!=Op.builtin||a.sort(t346)!=Sort.real_) return false;
+						if(a.view(t346).value!=cast(long)Builtin.sinR) return false;
+						if(a.sort(a.viewChild(t346,0))!=Sort.real_) return false;
+						if(bs346[0].id==uint.max) bs346[0]=a.viewChild(t346,0); else if(bs346[0]!=a.viewChild(t346,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.sinR<<16))),MatchOperand((Term t327,ref Term[] bs327){
-						if(a.view(t327).op!=Op.builtin||a.sort(t327)!=Sort.real_) return false;
-						if(a.view(t327).value!=cast(long)Builtin.cosR) return false;
-						if(a.sort(a.viewChild(t327,0))!=Sort.real_) return false;
-						if(bs327[0].id==uint.max) bs327[0]=a.viewChild(t327,0); else if(bs327[0]!=a.viewChild(t327,0)) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.sinR<<16))),MatchOperand((Term t347,ref Term[] bs347){
+						if(a.view(t347).op!=Op.builtin||a.sort(t347)!=Sort.real_) return false;
+						if(a.view(t347).value!=cast(long)Builtin.cosR) return false;
+						if(a.sort(a.viewChild(t347,0))!=Sort.real_) return false;
+						if(bs347[0].id==uint.max) bs347[0]=a.viewChild(t347,0); else if(bs347[0]!=a.viewChild(t347,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.cosR<<16)))],bindings,work)) return false;
 					return true;
@@ -15535,17 +16405,17 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.complex) return false;
-					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t328,ref Term[] bs328){
-						if(a.view(t328).op!=Op.builtin||a.sort(t328)!=Sort.complex) return false;
-						if(a.view(t328).value!=cast(long)Builtin.sinC) return false;
-						if(a.sort(a.viewChild(t328,0))!=Sort.complex) return false;
-						if(bs328[0].id==uint.max) bs328[0]=a.viewChild(t328,0); else if(bs328[0]!=a.viewChild(t328,0)) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t348,ref Term[] bs348){
+						if(a.view(t348).op!=Op.builtin||a.sort(t348)!=Sort.complex) return false;
+						if(a.view(t348).value!=cast(long)Builtin.sinC) return false;
+						if(a.sort(a.viewChild(t348,0))!=Sort.complex) return false;
+						if(bs348[0].id==uint.max) bs348[0]=a.viewChild(t348,0); else if(bs348[0]!=a.viewChild(t348,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.sinC<<16))),MatchOperand((Term t329,ref Term[] bs329){
-						if(a.view(t329).op!=Op.builtin||a.sort(t329)!=Sort.complex) return false;
-						if(a.view(t329).value!=cast(long)Builtin.cosC) return false;
-						if(a.sort(a.viewChild(t329,0))!=Sort.complex) return false;
-						if(bs329[0].id==uint.max) bs329[0]=a.viewChild(t329,0); else if(bs329[0]!=a.viewChild(t329,0)) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.sinC<<16))),MatchOperand((Term t349,ref Term[] bs349){
+						if(a.view(t349).op!=Op.builtin||a.sort(t349)!=Sort.complex) return false;
+						if(a.view(t349).value!=cast(long)Builtin.cosC) return false;
+						if(a.sort(a.viewChild(t349,0))!=Sort.complex) return false;
+						if(bs349[0].id==uint.max) bs349[0]=a.viewChild(t349,0); else if(bs349[0]!=a.viewChild(t349,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.cosC<<16)))],bindings,work)) return false;
 					return true;
@@ -15559,9 +16429,9 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
 					if(a.view(input).value!=cast(long)Builtin.tanhR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t330,ref Term[] bs330){
-						if(a.view(t330).op!=Op.realLit||a.sort(t330)!=Sort.real_) return false;
-						if(a.view(t330).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t350,ref Term[] bs350){
+						if(a.view(t350).op!=Op.realLit||a.sort(t350)!=Sort.real_) return false;
+						if(a.view(t350).value!=-1L) return false;
 						return true;
 					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15575,10 +16445,10 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.tanC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t331,ref Term[] bs331){
-						if(a.view(t331).op!=Op.complexLit||a.sort(t331)!=Sort.complex) return false;
-						if(a.view(t331).value!=-1L) return false;
-						if(a.view(t331).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t351,ref Term[] bs351){
+						if(a.view(t351).op!=Op.complexLit||a.sort(t351)!=Sort.complex) return false;
+						if(a.view(t351).value!=-1L) return false;
+						if(a.view(t351).imaginary!=0L) return false;
 						return true;
 					},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15592,10 +16462,10 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.sinhC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t332,ref Term[] bs332){
-						if(a.view(t332).op!=Op.complexLit||a.sort(t332)!=Sort.complex) return false;
-						if(a.view(t332).value!=-1L) return false;
-						if(a.view(t332).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t352,ref Term[] bs352){
+						if(a.view(t352).op!=Op.complexLit||a.sort(t352)!=Sort.complex) return false;
+						if(a.view(t352).value!=-1L) return false;
+						if(a.view(t352).imaginary!=0L) return false;
 						return true;
 					},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15609,10 +16479,10 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.coshC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t333,ref Term[] bs333){
-						if(a.view(t333).op!=Op.complexLit||a.sort(t333)!=Sort.complex) return false;
-						if(a.view(t333).value!=-1L) return false;
-						if(a.view(t333).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t353,ref Term[] bs353){
+						if(a.view(t353).op!=Op.complexLit||a.sort(t353)!=Sort.complex) return false;
+						if(a.view(t353).value!=-1L) return false;
+						if(a.view(t353).imaginary!=0L) return false;
 						return true;
 					},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15626,10 +16496,10 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.tanhC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t334,ref Term[] bs334){
-						if(a.view(t334).op!=Op.complexLit||a.sort(t334)!=Sort.complex) return false;
-						if(a.view(t334).value!=-1L) return false;
-						if(a.view(t334).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t354,ref Term[] bs354){
+						if(a.view(t354).op!=Op.complexLit||a.sort(t354)!=Sort.complex) return false;
+						if(a.view(t354).value!=-1L) return false;
+						if(a.view(t354).imaginary!=0L) return false;
 						return true;
 					},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand(null,0,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15641,30 +16511,30 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.complex) return false;
-					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t335,ref Term[] bs335){
-						if(a.view(t335).op!=Op.pow||a.sort(t335)!=Sort.complex) return false;
-						if(a.view(a.viewChild(t335,0)).op!=Op.builtin||a.sort(a.viewChild(t335,0))!=Sort.complex) return false;
-						if(a.view(a.viewChild(t335,0)).value!=cast(long)Builtin.coshC) return false;
-						if(a.sort(a.viewChild(a.viewChild(t335,0),0))!=Sort.complex) return false;
-						if(bs335[0].id==uint.max) bs335[0]=a.viewChild(a.viewChild(t335,0),0); else if(bs335[0]!=a.viewChild(a.viewChild(t335,0),0)) return false;
-						if(cast(uint)a.view(t335).value!=2u) return false;
+					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t355,ref Term[] bs355){
+						if(a.view(t355).op!=Op.pow||a.sort(t355)!=Sort.complex) return false;
+						if(a.view(a.viewChild(t355,0)).op!=Op.builtin||a.sort(a.viewChild(t355,0))!=Sort.complex) return false;
+						if(a.view(a.viewChild(t355,0)).value!=cast(long)Builtin.coshC) return false;
+						if(a.sort(a.viewChild(a.viewChild(t355,0),0))!=Sort.complex) return false;
+						if(bs355[0].id==uint.max) bs355[0]=a.viewChild(a.viewChild(t355,0),0); else if(bs355[0]!=a.viewChild(a.viewChild(t355,0),0)) return false;
+						if(cast(uint)a.view(t355).value!=2u) return false;
 						return true;
-					},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8))),MatchOperand((Term t336,ref Term[] bs336){
-						if(a.sort(t336)!=Sort.complex) return false;
-						if(!matchRegion(a,t336,Op.mul,[MatchOperand((Term t337,ref Term[] bs337){
-							if(a.view(t337).op!=Op.complexLit||a.sort(t337)!=Sort.complex) return false;
-							if(a.view(t337).value!=-1L) return false;
-							if(a.view(t337).imaginary!=0L) return false;
+					},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8))),MatchOperand((Term t356,ref Term[] bs356){
+						if(a.sort(t356)!=Sort.complex) return false;
+						if(!matchRegion(a,t356,Op.mul,[MatchOperand((Term t357,ref Term[] bs357){
+							if(a.view(t357).op!=Op.complexLit||a.sort(t357)!=Sort.complex) return false;
+							if(a.view(t357).value!=-1L) return false;
+							if(a.view(t357).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t338,ref Term[] bs338){
-							if(a.view(t338).op!=Op.pow||a.sort(t338)!=Sort.complex) return false;
-							if(a.view(a.viewChild(t338,0)).op!=Op.builtin||a.sort(a.viewChild(t338,0))!=Sort.complex) return false;
-							if(a.view(a.viewChild(t338,0)).value!=cast(long)Builtin.sinhC) return false;
-							if(a.sort(a.viewChild(a.viewChild(t338,0),0))!=Sort.complex) return false;
-							if(bs338[0].id==uint.max) bs338[0]=a.viewChild(a.viewChild(t338,0),0); else if(bs338[0]!=a.viewChild(a.viewChild(t338,0),0)) return false;
-							if(cast(uint)a.view(t338).value!=2u) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t358,ref Term[] bs358){
+							if(a.view(t358).op!=Op.pow||a.sort(t358)!=Sort.complex) return false;
+							if(a.view(a.viewChild(t358,0)).op!=Op.builtin||a.sort(a.viewChild(t358,0))!=Sort.complex) return false;
+							if(a.view(a.viewChild(t358,0)).value!=cast(long)Builtin.sinhC) return false;
+							if(a.sort(a.viewChild(a.viewChild(t358,0),0))!=Sort.complex) return false;
+							if(bs358[0].id==uint.max) bs358[0]=a.viewChild(a.viewChild(t358,0),0); else if(bs358[0]!=a.viewChild(a.viewChild(t358,0),0)) return false;
+							if(cast(uint)a.view(t358).value!=2u) return false;
 							return true;
-						},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8)))],bs336,work)) return false;
+						},-1,(cast(uint)Op.pow|(cast(uint)Sort.complex<<8)))],bs356,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -15678,11 +16548,11 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.expC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t339,ref Term[] bs339){
-						if(a.view(t339).op!=Op.builtin||a.sort(t339)!=Sort.complex) return false;
-						if(a.view(t339).value!=cast(long)Builtin.logC) return false;
-						if(a.sort(a.viewChild(t339,0))!=Sort.complex) return false;
-						if(bs339[0].id==uint.max) bs339[0]=a.viewChild(t339,0); else if(bs339[0]!=a.viewChild(t339,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t359,ref Term[] bs359){
+						if(a.view(t359).op!=Op.builtin||a.sort(t359)!=Sort.complex) return false;
+						if(a.view(t359).value!=cast(long)Builtin.logC) return false;
+						if(a.sort(a.viewChild(t359,0))!=Sort.complex) return false;
+						if(bs359[0].id==uint.max) bs359[0]=a.viewChild(t359,0); else if(bs359[0]!=a.viewChild(t359,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)))],bindings,work)) return false;
 					return true;
@@ -15696,11 +16566,11 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.expC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t340,ref Term[] bs340){
-						if(a.view(t340).op!=Op.builtin||a.sort(t340)!=Sort.complex) return false;
-						if(a.view(t340).value!=cast(long)Builtin.logC) return false;
-						if(a.sort(a.viewChild(t340,0))!=Sort.complex) return false;
-						if(bs340[0].id==uint.max) bs340[0]=a.viewChild(t340,0); else if(bs340[0]!=a.viewChild(t340,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t360,ref Term[] bs360){
+						if(a.view(t360).op!=Op.builtin||a.sort(t360)!=Sort.complex) return false;
+						if(a.view(t360).value!=cast(long)Builtin.logC) return false;
+						if(a.sort(a.viewChild(t360,0))!=Sort.complex) return false;
+						if(bs360[0].id==uint.max) bs360[0]=a.viewChild(t360,0); else if(bs360[0]!=a.viewChild(t360,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16))),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15714,11 +16584,11 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.expC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t341,ref Term[] bs341){
-						if(a.view(t341).op!=Op.builtin||a.sort(t341)!=Sort.complex) return false;
-						if(a.view(t341).value!=cast(long)Builtin.logC) return false;
-						if(a.sort(a.viewChild(t341,0))!=Sort.complex) return false;
-						if(bs341[0].id==uint.max) bs341[0]=a.viewChild(t341,0); else if(bs341[0]!=a.viewChild(t341,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t361,ref Term[] bs361){
+						if(a.view(t361).op!=Op.builtin||a.sort(t361)!=Sort.complex) return false;
+						if(a.view(t361).value!=cast(long)Builtin.logC) return false;
+						if(a.sort(a.viewChild(t361,0))!=Sort.complex) return false;
+						if(bs361[0].id==uint.max) bs361[0]=a.viewChild(t361,0); else if(bs361[0]!=a.viewChild(t361,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16))),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15732,11 +16602,11 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.expC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t342,ref Term[] bs342){
-						if(a.view(t342).op!=Op.builtin||a.sort(t342)!=Sort.complex) return false;
-						if(a.view(t342).value!=cast(long)Builtin.logC) return false;
-						if(a.sort(a.viewChild(t342,0))!=Sort.complex) return false;
-						if(bs342[0].id==uint.max) bs342[0]=a.viewChild(t342,0); else if(bs342[0]!=a.viewChild(t342,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t362,ref Term[] bs362){
+						if(a.view(t362).op!=Op.builtin||a.sort(t362)!=Sort.complex) return false;
+						if(a.view(t362).value!=cast(long)Builtin.logC) return false;
+						if(a.sort(a.viewChild(t362,0))!=Sort.complex) return false;
+						if(bs362[0].id==uint.max) bs362[0]=a.viewChild(t362,0); else if(bs362[0]!=a.viewChild(t362,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)))],bindings,work)) return false;
 					return true;
@@ -15750,15 +16620,15 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.expC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,2,uint.max,false,false),MatchOperand((Term t343,ref Term[] bs343){
-						if(a.sort(t343)!=Sort.complex) return false;
-						if(!matchRegion(a,t343,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t344,ref Term[] bs344){
-							if(a.view(t344).op!=Op.builtin||a.sort(t344)!=Sort.complex) return false;
-							if(a.view(t344).value!=cast(long)Builtin.logC) return false;
-							if(a.sort(a.viewChild(t344,0))!=Sort.complex) return false;
-							if(bs344[0].id==uint.max) bs344[0]=a.viewChild(t344,0); else if(bs344[0]!=a.viewChild(t344,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,2,uint.max,false,false),MatchOperand((Term t363,ref Term[] bs363){
+						if(a.sort(t363)!=Sort.complex) return false;
+						if(!matchRegion(a,t363,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t364,ref Term[] bs364){
+							if(a.view(t364).op!=Op.builtin||a.sort(t364)!=Sort.complex) return false;
+							if(a.view(t364).value!=cast(long)Builtin.logC) return false;
+							if(a.sort(a.viewChild(t364,0))!=Sort.complex) return false;
+							if(bs364[0].id==uint.max) bs364[0]=a.viewChild(t364,0); else if(bs364[0]!=a.viewChild(t364,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)))],bs343,work)) return false;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)))],bs363,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -15772,15 +16642,15 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
 					if(a.view(input).value!=cast(long)Builtin.expC) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t345,ref Term[] bs345){
-						if(a.sort(t345)!=Sort.complex) return false;
-						if(!matchRegion(a,t345,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t346,ref Term[] bs346){
-							if(a.view(t346).op!=Op.builtin||a.sort(t346)!=Sort.complex) return false;
-							if(a.view(t346).value!=cast(long)Builtin.logC) return false;
-							if(a.sort(a.viewChild(t346,0))!=Sort.complex) return false;
-							if(bs346[0].id==uint.max) bs346[0]=a.viewChild(t346,0); else if(bs346[0]!=a.viewChild(t346,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t365,ref Term[] bs365){
+						if(a.sort(t365)!=Sort.complex) return false;
+						if(!matchRegion(a,t365,Op.mul,[MatchOperand(null,1,uint.max,false,false),MatchOperand((Term t366,ref Term[] bs366){
+							if(a.view(t366).op!=Op.builtin||a.sort(t366)!=Sort.complex) return false;
+							if(a.view(t366).value!=cast(long)Builtin.logC) return false;
+							if(a.sort(a.viewChild(t366,0))!=Sort.complex) return false;
+							if(bs366[0].id==uint.max) bs366[0]=a.viewChild(t366,0); else if(bs366[0]!=a.viewChild(t366,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)))],bs345,work)) return false;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)))],bs365,work)) return false;
 						return true;
 					},-1,uint.max),MatchOperand(null,2,uint.max,false,false)],bindings,work)) return false;
 					return true;
@@ -15806,26 +16676,26 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t347,ref Term[] bs347){
-						if(a.view(t347).op!=Op.builtin||a.sort(t347)!=Sort.complex) return false;
-						if(a.view(t347).value!=cast(long)Builtin.logC) return false;
-						if(a.sort(a.viewChild(t347,0))!=Sort.complex) return false;
-						if(bs347[0].id==uint.max) bs347[0]=a.viewChild(t347,0); else if(bs347[0]!=a.viewChild(t347,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t367,ref Term[] bs367){
+						if(a.view(t367).op!=Op.builtin||a.sort(t367)!=Sort.complex) return false;
+						if(a.view(t367).value!=cast(long)Builtin.logC) return false;
+						if(a.sort(a.viewChild(t367,0))!=Sort.complex) return false;
+						if(bs367[0].id==uint.max) bs367[0]=a.viewChild(t367,0); else if(bs367[0]!=a.viewChild(t367,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16))),MatchOperand((Term t348,ref Term[] bs348){
-						if(a.sort(t348)!=Sort.complex) return false;
-						if(!matchRegion(a,t348,Op.mul,[MatchOperand((Term t349,ref Term[] bs349){
-							if(a.view(t349).op!=Op.complexLit||a.sort(t349)!=Sort.complex) return false;
-							if(a.view(t349).value!=-1L) return false;
-							if(a.view(t349).imaginary!=0L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16))),MatchOperand((Term t368,ref Term[] bs368){
+						if(a.sort(t368)!=Sort.complex) return false;
+						if(!matchRegion(a,t368,Op.mul,[MatchOperand((Term t369,ref Term[] bs369){
+							if(a.view(t369).op!=Op.complexLit||a.sort(t369)!=Sort.complex) return false;
+							if(a.view(t369).value!=-1L) return false;
+							if(a.view(t369).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t350,ref Term[] bs350){
-							if(a.view(t350).op!=Op.builtin||a.sort(t350)!=Sort.complex) return false;
-							if(a.view(t350).value!=cast(long)Builtin.logC) return false;
-							if(a.sort(a.viewChild(t350,0))!=Sort.complex) return false;
-							if(bs350[1].id==uint.max) bs350[1]=a.viewChild(t350,0); else if(bs350[1]!=a.viewChild(t350,0)) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t370,ref Term[] bs370){
+							if(a.view(t370).op!=Op.builtin||a.sort(t370)!=Sort.complex) return false;
+							if(a.view(t370).value!=cast(long)Builtin.logC) return false;
+							if(a.sort(a.viewChild(t370,0))!=Sort.complex) return false;
+							if(bs370[1].id==uint.max) bs370[1]=a.viewChild(t370,0); else if(bs370[1]!=a.viewChild(t370,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)))],bs348,work)) return false;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)))],bs368,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -15851,26 +16721,26 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t351,ref Term[] bs351){
-						if(a.view(t351).op!=Op.builtin||a.sort(t351)!=Sort.complex) return false;
-						if(a.view(t351).value!=cast(long)Builtin.sqrtC) return false;
-						if(a.sort(a.viewChild(t351,0))!=Sort.complex) return false;
-						if(bs351[0].id==uint.max) bs351[0]=a.viewChild(t351,0); else if(bs351[0]!=a.viewChild(t351,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t371,ref Term[] bs371){
+						if(a.view(t371).op!=Op.builtin||a.sort(t371)!=Sort.complex) return false;
+						if(a.view(t371).value!=cast(long)Builtin.sqrtC) return false;
+						if(a.sort(a.viewChild(t371,0))!=Sort.complex) return false;
+						if(bs371[0].id==uint.max) bs371[0]=a.viewChild(t371,0); else if(bs371[0]!=a.viewChild(t371,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.sqrtC<<16))),MatchOperand((Term t352,ref Term[] bs352){
-						if(a.sort(t352)!=Sort.complex) return false;
-						if(!matchRegion(a,t352,Op.mul,[MatchOperand((Term t353,ref Term[] bs353){
-							if(a.view(t353).op!=Op.complexLit||a.sort(t353)!=Sort.complex) return false;
-							if(a.view(t353).value!=-1L) return false;
-							if(a.view(t353).imaginary!=0L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.sqrtC<<16))),MatchOperand((Term t372,ref Term[] bs372){
+						if(a.sort(t372)!=Sort.complex) return false;
+						if(!matchRegion(a,t372,Op.mul,[MatchOperand((Term t373,ref Term[] bs373){
+							if(a.view(t373).op!=Op.complexLit||a.sort(t373)!=Sort.complex) return false;
+							if(a.view(t373).value!=-1L) return false;
+							if(a.view(t373).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t354,ref Term[] bs354){
-							if(a.view(t354).op!=Op.builtin||a.sort(t354)!=Sort.complex) return false;
-							if(a.view(t354).value!=cast(long)Builtin.sqrtC) return false;
-							if(a.sort(a.viewChild(t354,0))!=Sort.complex) return false;
-							if(bs354[1].id==uint.max) bs354[1]=a.viewChild(t354,0); else if(bs354[1]!=a.viewChild(t354,0)) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t374,ref Term[] bs374){
+							if(a.view(t374).op!=Op.builtin||a.sort(t374)!=Sort.complex) return false;
+							if(a.view(t374).value!=cast(long)Builtin.sqrtC) return false;
+							if(a.sort(a.viewChild(t374,0))!=Sort.complex) return false;
+							if(bs374[1].id==uint.max) bs374[1]=a.viewChild(t374,0); else if(bs374[1]!=a.viewChild(t374,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.sqrtC<<16)))],bs352,work)) return false;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.sqrtC<<16)))],bs372,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -15896,39 +16766,39 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t355,ref Term[] bs355){
-						if(a.view(t355).op!=Op.builtin||a.sort(t355)!=Sort.complex) return false;
-						if(a.view(t355).value!=cast(long)Builtin.expC) return false;
-						if(a.sort(a.viewChild(t355,0))!=Sort.complex) return false;
-						if(bs355[0].id==uint.max) bs355[0]=a.viewChild(t355,0); else if(bs355[0]!=a.viewChild(t355,0)) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t375,ref Term[] bs375){
+						if(a.view(t375).op!=Op.builtin||a.sort(t375)!=Sort.complex) return false;
+						if(a.view(t375).value!=cast(long)Builtin.expC) return false;
+						if(a.sort(a.viewChild(t375,0))!=Sort.complex) return false;
+						if(bs375[0].id==uint.max) bs375[0]=a.viewChild(t375,0); else if(bs375[0]!=a.viewChild(t375,0)) return false;
 						return true;
-					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.expC<<16))),MatchOperand((Term t356,ref Term[] bs356){
-						if(a.sort(t356)!=Sort.complex) return false;
-						if(!matchRegion(a,t356,Op.mul,[MatchOperand((Term t357,ref Term[] bs357){
-							if(a.view(t357).op!=Op.complexLit||a.sort(t357)!=Sort.complex) return false;
-							if(a.view(t357).value!=-1L) return false;
-							if(a.view(t357).imaginary!=0L) return false;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.expC<<16))),MatchOperand((Term t376,ref Term[] bs376){
+						if(a.sort(t376)!=Sort.complex) return false;
+						if(!matchRegion(a,t376,Op.mul,[MatchOperand((Term t377,ref Term[] bs377){
+							if(a.view(t377).op!=Op.complexLit||a.sort(t377)!=Sort.complex) return false;
+							if(a.view(t377).value!=-1L) return false;
+							if(a.view(t377).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t358,ref Term[] bs358){
-							if(a.view(t358).op!=Op.builtin||a.sort(t358)!=Sort.complex) return false;
-							if(a.view(t358).value!=cast(long)Builtin.expC) return false;
-							if(a.sort(a.viewChild(t358,0))!=Sort.complex) return false;
-							if(bs358[1].id==uint.max) bs358[1]=a.viewChild(t358,0); else if(bs358[1]!=a.viewChild(t358,0)) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t378,ref Term[] bs378){
+							if(a.view(t378).op!=Op.builtin||a.sort(t378)!=Sort.complex) return false;
+							if(a.view(t378).value!=cast(long)Builtin.expC) return false;
+							if(a.sort(a.viewChild(t378,0))!=Sort.complex) return false;
+							if(bs378[1].id==uint.max) bs378[1]=a.viewChild(t378,0); else if(bs378[1]!=a.viewChild(t378,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.expC<<16)))],bs356,work)) return false;
+						},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.expC<<16)))],bs376,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
 				case 0:
 					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t359,ref Term[] bs359){
-						if(a.view(t359).op!=Op.realLit||a.sort(t359)!=Sort.real_) return false;
-						if(a.view(t359).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t379,ref Term[] bs379){
+						if(a.view(t379).op!=Op.realLit||a.sort(t379)!=Sort.real_) return false;
+						if(a.view(t379).value!=-1L) return false;
 						return true;
-					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t360,ref Term[] bs360){
-						if(a.view(t360).op!=Op.builtin||a.sort(t360)!=Sort.real_) return false;
-						if(a.view(t360).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t380,ref Term[] bs380){
+						if(a.view(t380).op!=Op.builtin||a.sort(t380)!=Sort.real_) return false;
+						if(a.view(t380).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
@@ -15948,13 +16818,13 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case 2:
 					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t361,ref Term[] bs361){
-						if(a.view(t361).op!=Op.realLit||a.sort(t361)!=Sort.real_) return false;
-						if(a.view(t361).value!=-1L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.mul,[MatchOperand((Term t381,ref Term[] bs381){
+						if(a.view(t381).op!=Op.realLit||a.sort(t381)!=Sort.real_) return false;
+						if(a.view(t381).value!=-1L) return false;
 						return true;
-					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t362,ref Term[] bs362){
-						if(a.view(t362).op!=Op.builtin||a.sort(t362)!=Sort.real_) return false;
-						if(a.view(t362).value!=cast(long)Builtin.pi) return false;
+					},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t382,ref Term[] bs382){
+						if(a.view(t382).op!=Op.builtin||a.sort(t382)!=Sort.real_) return false;
+						if(a.view(t382).value!=cast(long)Builtin.pi) return false;
 						return true;
 					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.pi<<16)))],bindings,work)) return false;
 					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
@@ -16137,10 +17007,10 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 			switch(part){
 				case -1:
 					if(a.sort(input)!=Sort.complex) return false;
-					if(!matchRegion(a,input,Op.mul,[MatchOperand(null,0,uint.max,false,true),MatchOperand((Term t363,ref Term[] bs363){
-						if(a.view(t363).op!=Op.conj||a.sort(t363)!=Sort.complex) return false;
-						if(a.sort(a.viewChild(t363,0))!=Sort.complex) return false;
-						if(bs363[0].id==uint.max) bs363[0]=a.viewChild(t363,0); else if(bs363[0]!=a.viewChild(t363,0)) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand(null,0,uint.max,false,true),MatchOperand((Term t383,ref Term[] bs383){
+						if(a.view(t383).op!=Op.conj||a.sort(t383)!=Sort.complex) return false;
+						if(a.sort(a.viewChild(t383,0))!=Sort.complex) return false;
+						if(bs383[0].id==uint.max) bs383[0]=a.viewChild(t383,0); else if(bs383[0]!=a.viewChild(t383,0)) return false;
 						return true;
 					},-1,(cast(uint)Op.conj|(cast(uint)Sort.complex<<8)))],bindings,work)) return false;
 					return true;
@@ -16181,19 +17051,19 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 				case -1:
 					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
-					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t364,ref Term[] bs364){
-						if(a.sort(t364)!=Sort.complex) return false;
-						if(!matchRegion(a,t364,Op.mul,[MatchOperand((Term t365,ref Term[] bs365){
-							if(a.view(t365).op!=Op.complexLit||a.sort(t365)!=Sort.complex) return false;
-							if(a.view(t365).value!=-1L) return false;
-							if(a.view(t365).imaginary!=0L) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand((Term t384,ref Term[] bs384){
+						if(a.sort(t384)!=Sort.complex) return false;
+						if(!matchRegion(a,t384,Op.mul,[MatchOperand((Term t385,ref Term[] bs385){
+							if(a.view(t385).op!=Op.complexLit||a.sort(t385)!=Sort.complex) return false;
+							if(a.view(t385).value!=-1L) return false;
+							if(a.view(t385).imaginary!=0L) return false;
 							return true;
-						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t366,ref Term[] bs366){
-							if(a.view(t366).op!=Op.conj||a.sort(t366)!=Sort.complex) return false;
-							if(a.sort(a.viewChild(t366,0))!=Sort.complex) return false;
-							if(bs366[0].id==uint.max) bs366[0]=a.viewChild(t366,0); else if(bs366[0]!=a.viewChild(t366,0)) return false;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t386,ref Term[] bs386){
+							if(a.view(t386).op!=Op.conj||a.sort(t386)!=Sort.complex) return false;
+							if(a.sort(a.viewChild(t386,0))!=Sort.complex) return false;
+							if(bs386[0].id==uint.max) bs386[0]=a.viewChild(t386,0); else if(bs386[0]!=a.viewChild(t386,0)) return false;
 							return true;
-						},-1,(cast(uint)Op.conj|(cast(uint)Sort.complex<<8)))],bs364,work)) return false;
+						},-1,(cast(uint)Op.conj|(cast(uint)Sort.complex<<8)))],bs384,work)) return false;
 						return true;
 					},-1,uint.max)],bindings,work)) return false;
 					return true;
@@ -16495,10 +17365,12 @@ bool candidate(Arena a,Law law,Term input){
 		case Law.real_positive_pi:return a.view(input).op==Op.lt&&a.view(a.viewChild(input,0)).op==Op.realLit&&a.view(a.viewChild(input,1)).op==Op.builtin&&a.view(a.viewChild(input,1)).value==Builtin.pi;
 		case Law.real_positive_e:return a.view(input).op==Op.lt&&a.view(a.viewChild(input,0)).op==Op.realLit&&a.view(a.viewChild(input,1)).op==Op.builtin&&a.view(a.viewChild(input,1)).value==Builtin.e;
 		case Law.real_log_product:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logR&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.real_log_product_right:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logR&&a.sort(a.viewChild(input,0))==Sort.real_;
 		case Law.real_log_power:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logR&&a.view(a.viewChild(input,0)).op==Op.pow;
 		case Law.real_log_square:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logR&&a.view(a.viewChild(input,0)).op==Op.pow;
 		case Law.real_log_inverse:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logR&&a.view(a.viewChild(input,0)).op==Op.inv;
 		case Law.real_log_sqrt:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logR&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.sqrtR;
+		case Law.real_log_odd_power:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logR&&a.view(a.viewChild(input,0)).op==Op.pow;
 		case Law.real_half_power:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.powerR&&a.view(a.viewChild(input,1)).op==Op.numberLit;
 		case Law.real_sqrt_squared:return a.view(input).op==Op.pow&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.sqrtR;
 		case Law.real_general_power_product:return a.sort(input)==Sort.real_;
@@ -16557,6 +17429,24 @@ bool candidate(Arena a,Law law,Term input){
 		case Law.complex_exp_phase:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.expC;
 		case Law.complex_phase_pi:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.cisR&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.pi;
 		case Law.complex_phase_half_pi:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.cisR&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.real_floor_cast:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.floorR&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.castQR&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.castZQ;
+		case Law.real_ceil_cast:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.ceilR&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.castQR&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.castZQ;
+		case Law.real_floor_neg:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.floorR&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.real_ceil_neg:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.ceilR&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.real_floor_shift:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.floorR&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.real_ceil_shift:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.ceilR&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.real_floor_lt:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.ltZ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.floorR;
+		case Law.real_floor_le:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.leZ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.floorR;
+		case Law.real_lt_floor:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.ltZ&&a.view(a.viewChild(input,1)).op==Op.builtin&&a.view(a.viewChild(input,1)).value==Builtin.floorR;
+		case Law.real_le_floor:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.leZ&&a.view(a.viewChild(input,1)).op==Op.builtin&&a.view(a.viewChild(input,1)).value==Builtin.floorR;
+		case Law.real_floor_ne:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroZ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.addZ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.floorR&&a.view(a.viewChild(a.viewChild(input,0),1)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),1)).value==Builtin.mulZ;
+		case Law.real_ceil_lt:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.ltZ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.ceilR;
+		case Law.real_ceil_le:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.leZ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.ceilR;
+		case Law.real_lt_ceil:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.ltZ&&a.view(a.viewChild(input,1)).op==Op.builtin&&a.view(a.viewChild(input,1)).value==Builtin.ceilR;
+		case Law.real_le_ceil:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.leZ&&a.view(a.viewChild(input,1)).op==Op.builtin&&a.view(a.viewChild(input,1)).value==Builtin.ceilR;
+		case Law.real_ceil_ne:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroZ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.addZ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.ceilR&&a.view(a.viewChild(a.viewChild(input,0),1)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),1)).value==Builtin.mulZ;
+		case Law.real_floor_bound:return a.view(input).op==Op.le&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.castQR&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.castZQ;
+		case Law.real_ceil_bound:return a.view(input).op==Op.le&&a.view(a.viewChild(input,1)).op==Op.builtin&&a.view(a.viewChild(input,1)).value==Builtin.castQR&&a.view(a.viewChild(a.viewChild(input,1),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,1),0)).value==Builtin.castZQ;
 		case Law.real_round:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.roundR;
 		case Law.real_is_integer:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.isIntR;
 		case Law.real_hypot:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.hypotR;
@@ -16574,6 +17464,10 @@ bool candidate(Arena a,Law law,Term input){
 		case Law.complex_log_real_part:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.reC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.logC;
 		case Law.complex_log_imaginary_part:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.imC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.logC;
 		case Law.complex_log_exp:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.expC;
+		case Law.complex_log_positive_real:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logC;
+		case Law.complex_log_scale:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logC&&a.sort(a.viewChild(input,0))==Sort.complex;
+		case Law.complex_log_scale_right:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logC&&a.sort(a.viewChild(input,0))==Sort.complex;
+		case Law.complex_log_inverse:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.logC&&a.view(a.viewChild(input,0)).op==Op.inv;
 		case Law.complex_arg_exp:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.argC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.expC;
 		case Law.complex_arg_phase:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.argC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.cisR;
 		case Law.real_sinh_asinh:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.sinhR&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.asinhR;
@@ -16754,8 +17648,8 @@ const(Law)[] rewrites(Node n){
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.sqrtR<<16)):{ static immutable Law[] laws=[Law.sqrtR_zero,Law.sqrt_square_real]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.sqrtC<<16)):{ static immutable Law[] laws=[Law.sqrtC_zero,Law.complex_sqrt_real_nonnegative,Law.complex_sqrt_real_negative]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.cisR<<16)):{ static immutable Law[] laws=[Law.cisR_zero,Law.complex_phase_pi,Law.complex_phase_half_pi]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16)):{ static immutable Law[] laws=[Law.logR_one,Law.log_exp_real,Law.real_log_product,Law.real_log_power,Law.real_log_square,Law.real_log_inverse,Law.real_log_sqrt,Law.real_log_e,Law.real_log_even_power]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)):{ static immutable Law[] laws=[Law.logC_one,Law.complex_log_real_power,Law.complex_log_sqrt,Law.complex_log_exp]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.logR<<16)):{ static immutable Law[] laws=[Law.logR_one,Law.log_exp_real,Law.real_log_product,Law.real_log_product_right,Law.real_log_power,Law.real_log_square,Law.real_log_inverse,Law.real_log_sqrt,Law.real_log_odd_power,Law.real_log_e,Law.real_log_even_power]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.logC<<16)):{ static immutable Law[] laws=[Law.logC_one,Law.complex_log_real_power,Law.complex_log_sqrt,Law.complex_log_exp,Law.complex_log_positive_real,Law.complex_log_scale,Law.complex_log_scale_right,Law.complex_log_inverse]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.reC<<16)):{ static immutable Law[] laws=[Law.real_part_cartesian,Law.real_part_sum,Law.real_part_product,Law.real_part_cast,Law.complex_log_real_part,Law.conjugate_real_part,Law.complex_square_real_part]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.imC<<16)):{ static immutable Law[] laws=[Law.imag_part_cartesian,Law.imaginary_part_sum,Law.imaginary_part_product,Law.imaginary_part_cast,Law.complex_log_imaginary_part,Law.conjugate_imaginary_part,Law.complex_square_imaginary_part]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.eqB<<16)):{ static immutable Law[] laws=[Law.bool_eq_true,Law.bool_eq_false]; return laws; }
@@ -16767,6 +17661,11 @@ const(Law)[] rewrites(Node n){
 		case (cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.castRC<<16)):{ static immutable Law[] laws=[Law.complex_cast_sum,Law.complex_cast_product]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.makeC<<16)):{ static immutable Law[] laws=[Law.complex_reconstruction]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.absC<<16)):{ static immutable Law[] laws=[Law.complex_norm_product,Law.complex_norm_conj,Law.complex_phase_norm,Law.complex_norm_sqrt,Law.complex_norm_real_power,Law.complex_norm_exp,Law.complex_norm_inverse,Law.complex_norm_power,Law.complex_norm_cast,Law.complex_abs_cartesian,Law.complex_norm_cartesian,Law.complex_norm_mask]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.floorR<<16)):{ static immutable Law[] laws=[Law.real_floor_cast,Law.real_floor_neg,Law.real_floor_shift]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.ceilR<<16)):{ static immutable Law[] laws=[Law.real_ceil_cast,Law.real_ceil_neg,Law.real_ceil_shift]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.ltZ<<16)):{ static immutable Law[] laws=[Law.real_floor_lt,Law.real_lt_floor,Law.real_ceil_lt,Law.real_lt_ceil]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.leZ<<16)):{ static immutable Law[] laws=[Law.real_floor_le,Law.real_le_floor,Law.real_ceil_le,Law.real_le_ceil]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroZ<<16)):{ static immutable Law[] laws=[Law.real_floor_ne,Law.real_ceil_ne]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.roundR<<16)):{ static immutable Law[] laws=[Law.real_round]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.isIntR<<16)):{ static immutable Law[] laws=[Law.real_is_integer]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.hypotR<<16)):{ static immutable Law[] laws=[Law.real_hypot]; return laws; }
@@ -16818,13 +17717,13 @@ const(Law)[] rewrites(Op op){
 		case Op.or_:{ static immutable Law[] laws=[Law.bool_or_left_true,Law.bool_or_left_false,Law.bool_or_right_true,Law.bool_or_right_false,Law.bool_or_same,Law.bool_or_not,Law.bool_not_or,Law.bool_or_absorb,Law.bool_or_prune_left,Law.bool_or_prune_right,Law.real_interval_puncture,Law.real_interval_open_puncture,Law.real_interval_cover,Law.real_upper_union]; return laws; }
 		case Op.lt:{ static immutable Law[] laws=[Law.real_lt_self,Law.real_lt_shift,Law.real_lt_right_shift,Law.real_lt_scale_pos,Law.real_lt_scale_neg,Law.real_positive_nonnegative_test,Law.real_lt_common,Law.real_lt_mul_pos_left,Law.real_lt_mul_neg_left,Law.real_lt_mul_pos_right,Law.real_lt_mul_neg_right,Law.real_pos_mul_pos_left,Law.real_pos_mul_neg_left,Law.real_pos_mul_pos_right,Law.real_pos_mul_neg_right,Law.real_odd_negative,Law.real_odd_positive,Law.real_even_lt_nonpositive,Law.real_negative_lt_even,Law.real_odd_mul_negative,Law.real_odd_mul_positive,Law.real_even_mul_negative,Law.real_even_mul_positive,Law.real_power_mul_swap_negative,Law.real_power_mul_swap_positive,Law.real_abs_lt,Law.real_lt_abs,Law.real_lt_odd_power,Law.real_lt_even_power,Law.real_lt_nonnegative_power,Law.real_exp_lt,Law.real_exp_lt_one,Law.real_one_lt_exp,Law.real_log_lt,Law.real_log_lt_zero,Law.real_log_pos,Law.real_sqrt_lt,Law.real_sqrt_lt_bound,Law.real_lt_sqrt_bound,Law.real_power_base_lt,Law.real_power_small_base_lt,Law.real_min_lt,Law.real_lt_min,Law.real_max_lt,Law.real_lt_max,Law.real_inverse_negative,Law.real_inverse_positive,Law.real_add_lt_cancel,Law.complex_norm_positive,Law.complex_norm_negative]; return laws; }
 		case Op.le:{ static immutable Law[] laws=[Law.real_le_self,Law.real_le_shift,Law.real_le_right_shift,Law.real_le_scale_pos,Law.real_le_scale_neg,Law.real_nonpositive_nonnegative,Law.real_le_common,Law.real_le_mul_pos_left,Law.real_le_mul_neg_left,Law.real_le_mul_pos_right,Law.real_le_mul_neg_right,Law.real_nonneg_mul_pos_left,Law.real_nonneg_mul_neg_left,Law.real_nonneg_mul_pos_right,Law.real_nonneg_mul_neg_right,Law.real_odd_nonpositive,Law.real_odd_nonnegative,Law.real_even_le_negative,Law.real_nonpositive_le_even,Law.real_odd_mul_nonpositive,Law.real_odd_mul_nonnegative,Law.real_even_mul_nonpositive,Law.real_even_mul_nonnegative,Law.real_power_mul_swap_nonpositive,Law.real_power_mul_swap_nonnegative,Law.real_abs_le,Law.real_le_abs,Law.real_le_odd_power,Law.real_le_even_power,Law.real_le_nonnegative_power,Law.real_exp_le,Law.real_exp_le_one,Law.real_one_le_exp,Law.real_log_le,Law.real_log_le_zero,Law.real_log_nonneg,Law.real_sqrt_le,Law.real_sqrt_le_bound,Law.real_le_sqrt_bound,Law.real_power_base_le,Law.real_power_small_base_le,Law.real_min_le,Law.real_le_min,Law.real_max_le,Law.real_le_max,Law.real_inverse_nonnegative,Law.real_inverse_nonpositive,Law.real_add_le_cancel,Law.complex_norm_nonpositive]; return laws; }
-		case Op.builtin:{ static immutable Law[] laws=[Law.natural_add_zero,Law.natural_zero_add,Law.natural_mul_one,Law.natural_one_mul,Law.natural_mul_zero,Law.natural_zero_mul,Law.integer_add_zero,Law.integer_zero_add,Law.integer_mul_one,Law.integer_one_mul,Law.integer_mul_zero,Law.integer_zero_mul,Law.rational_add_zero,Law.rational_zero_add,Law.rational_mul_one,Law.rational_one_mul,Law.rational_mul_zero,Law.rational_zero_mul,Law.natural_nonnegative,Law.rational_inv_inv,Law.real_general_power,Law.complex_general_power,Law.expR_zero,Law.expC_zero,Law.sinR_zero,Law.sinC_zero,Law.cosR_zero,Law.cosC_zero,Law.tanR_zero,Law.tanC_zero,Law.sinhR_zero,Law.sinhC_zero,Law.coshR_zero,Law.coshC_zero,Law.tanhR_zero,Law.tanhC_zero,Law.sqrtR_zero,Law.sqrtC_zero,Law.cisR_zero,Law.logR_one,Law.logC_one,Law.exp_log_real,Law.log_exp_real,Law.exp_log_complex,Law.sqrt_square_real,Law.real_part_cartesian,Law.imag_part_cartesian,Law.bool_eq_true,Law.bool_eq_false,Law.real_exp_base,Law.complex_sqrt_real_nonnegative,Law.complex_sqrt_real_negative,Law.real_log_product,Law.real_log_power,Law.real_log_square,Law.real_log_inverse,Law.real_log_sqrt,Law.real_half_power,Law.real_general_power_nested,Law.real_one_power,Law.complex_one_power,Law.real_zero_power,Law.real_min_left,Law.real_min_right,Law.real_max_left,Law.real_max_right,Law.real_sign_positive,Law.real_sign_negative,Law.real_sign_zero,Law.real_sin_neg,Law.real_cos_neg,Law.real_tan_neg,Law.complex_sin_neg,Law.complex_cos_neg,Law.real_sinh_neg,Law.real_cosh_neg,Law.real_tan_atan,Law.real_sin_asin,Law.real_cos_acos,Law.real_asin_sin,Law.real_acos_cos,Law.real_sin_pi,Law.real_cos_pi,Law.real_sin_half_pi,Law.real_cos_half_pi,Law.real_sin_three_half_pi,Law.real_cos_three_half_pi,Law.real_sin_sixth_pi,Law.real_cos_third_pi,Law.real_cos_quarter_pi,Law.real_sin_quarter_pi,Law.real_part_sum,Law.imaginary_part_sum,Law.real_part_product,Law.imaginary_part_product,Law.real_part_cast,Law.imaginary_part_cast,Law.complex_cast_sum,Law.complex_cast_product,Law.complex_reconstruction,Law.complex_norm_product,Law.complex_norm_conj,Law.complex_phase_norm,Law.complex_exp_phase,Law.complex_phase_pi,Law.complex_phase_half_pi,Law.real_round,Law.real_is_integer,Law.real_hypot,Law.complex_arg_real_power,Law.complex_log_real_power,Law.complex_arg_sqrt,Law.complex_log_sqrt,Law.complex_norm_sqrt,Law.complex_norm_real_power,Law.complex_norm_exp,Law.complex_norm_inverse,Law.complex_norm_power,Law.complex_norm_cast,Law.complex_log_real_part,Law.complex_log_imaginary_part,Law.complex_log_exp,Law.complex_arg_exp,Law.complex_arg_phase,Law.real_sinh_asinh,Law.real_asinh_sinh,Law.real_cos_asin,Law.real_sin_acos,Law.complex_abs_cartesian,Law.real_cbrt_nonnegative,Law.real_cbrt_negative,Law.real_exp2,Law.real_power_negative,Law.complex_polar,Law.complex_expi,Law.real_atan2,Law.complex_arg_positive,Law.complex_arg_negative,Law.complex_arg_positive_imag,Law.complex_arg_negative_imag,Law.real_exp_one,Law.real_log_e,Law.real_asin_zero,Law.real_asin_one,Law.real_acos_zero,Law.real_acos_one,Law.real_acos_neg_one,Law.real_atan_zero,Law.real_atan_one,Law.real_asinh_zero,Law.real_acosh_one,Law.real_atanh_zero,Law.complex_asin_zero,Law.complex_acos_zero,Law.complex_atan_zero,Law.complex_asinh_zero,Law.complex_acosh_one,Law.complex_atanh_zero,Law.real_erf_zero,Law.real_erfc_zero,Law.real_gamma_one,Law.complex_gamma_one,Law.real_lgamma_one,Law.natural_indexed_power,Law.integer_indexed_power,Law.rational_indexed_power,Law.rational_indexed_integer_power,Law.real_indexed_power,Law.real_indexed_integer_power,Law.complex_indexed_power,Law.complex_indexed_integer_power,Law.real_min_absorb,Law.real_max_absorb,Law.real_log_even_power,Law.real_exp_log_scale,Law.real_exp_log_scale_right,Law.real_exp_log_sum,Law.real_exp_log_sum_right,Law.real_exp_log_affine,Law.real_exp_log_affine_left,Law.real_tanh_neg,Law.complex_tan_neg,Law.complex_sinh_neg,Law.complex_cosh_neg,Law.complex_tanh_neg,Law.complex_exp_log_scale,Law.complex_exp_log_scale_right,Law.complex_exp_log_sum,Law.complex_exp_log_sum_right,Law.complex_exp_log_affine,Law.complex_exp_log_affine_left,Law.complex_norm_cartesian,Law.complex_norm_mask,Law.conjugate_real_part,Law.conjugate_imaginary_part,Law.complex_square_real_part,Law.complex_square_imaginary_part]; return laws; }
+		case Op.builtin:{ static immutable Law[] laws=[Law.natural_add_zero,Law.natural_zero_add,Law.natural_mul_one,Law.natural_one_mul,Law.natural_mul_zero,Law.natural_zero_mul,Law.integer_add_zero,Law.integer_zero_add,Law.integer_mul_one,Law.integer_one_mul,Law.integer_mul_zero,Law.integer_zero_mul,Law.rational_add_zero,Law.rational_zero_add,Law.rational_mul_one,Law.rational_one_mul,Law.rational_mul_zero,Law.rational_zero_mul,Law.natural_nonnegative,Law.rational_inv_inv,Law.real_general_power,Law.complex_general_power,Law.expR_zero,Law.expC_zero,Law.sinR_zero,Law.sinC_zero,Law.cosR_zero,Law.cosC_zero,Law.tanR_zero,Law.tanC_zero,Law.sinhR_zero,Law.sinhC_zero,Law.coshR_zero,Law.coshC_zero,Law.tanhR_zero,Law.tanhC_zero,Law.sqrtR_zero,Law.sqrtC_zero,Law.cisR_zero,Law.logR_one,Law.logC_one,Law.exp_log_real,Law.log_exp_real,Law.exp_log_complex,Law.sqrt_square_real,Law.real_part_cartesian,Law.imag_part_cartesian,Law.bool_eq_true,Law.bool_eq_false,Law.real_exp_base,Law.complex_sqrt_real_nonnegative,Law.complex_sqrt_real_negative,Law.real_log_product,Law.real_log_product_right,Law.real_log_power,Law.real_log_square,Law.real_log_inverse,Law.real_log_sqrt,Law.real_log_odd_power,Law.real_half_power,Law.real_general_power_nested,Law.real_one_power,Law.complex_one_power,Law.real_zero_power,Law.real_min_left,Law.real_min_right,Law.real_max_left,Law.real_max_right,Law.real_sign_positive,Law.real_sign_negative,Law.real_sign_zero,Law.real_sin_neg,Law.real_cos_neg,Law.real_tan_neg,Law.complex_sin_neg,Law.complex_cos_neg,Law.real_sinh_neg,Law.real_cosh_neg,Law.real_tan_atan,Law.real_sin_asin,Law.real_cos_acos,Law.real_asin_sin,Law.real_acos_cos,Law.real_sin_pi,Law.real_cos_pi,Law.real_sin_half_pi,Law.real_cos_half_pi,Law.real_sin_three_half_pi,Law.real_cos_three_half_pi,Law.real_sin_sixth_pi,Law.real_cos_third_pi,Law.real_cos_quarter_pi,Law.real_sin_quarter_pi,Law.real_part_sum,Law.imaginary_part_sum,Law.real_part_product,Law.imaginary_part_product,Law.real_part_cast,Law.imaginary_part_cast,Law.complex_cast_sum,Law.complex_cast_product,Law.complex_reconstruction,Law.complex_norm_product,Law.complex_norm_conj,Law.complex_phase_norm,Law.complex_exp_phase,Law.complex_phase_pi,Law.complex_phase_half_pi,Law.real_floor_cast,Law.real_ceil_cast,Law.real_floor_neg,Law.real_ceil_neg,Law.real_floor_shift,Law.real_ceil_shift,Law.real_floor_lt,Law.real_floor_le,Law.real_lt_floor,Law.real_le_floor,Law.real_floor_ne,Law.real_ceil_lt,Law.real_ceil_le,Law.real_lt_ceil,Law.real_le_ceil,Law.real_ceil_ne,Law.real_round,Law.real_is_integer,Law.real_hypot,Law.complex_arg_real_power,Law.complex_log_real_power,Law.complex_arg_sqrt,Law.complex_log_sqrt,Law.complex_norm_sqrt,Law.complex_norm_real_power,Law.complex_norm_exp,Law.complex_norm_inverse,Law.complex_norm_power,Law.complex_norm_cast,Law.complex_log_real_part,Law.complex_log_imaginary_part,Law.complex_log_exp,Law.complex_log_positive_real,Law.complex_log_scale,Law.complex_log_scale_right,Law.complex_log_inverse,Law.complex_arg_exp,Law.complex_arg_phase,Law.real_sinh_asinh,Law.real_asinh_sinh,Law.real_cos_asin,Law.real_sin_acos,Law.complex_abs_cartesian,Law.real_cbrt_nonnegative,Law.real_cbrt_negative,Law.real_exp2,Law.real_power_negative,Law.complex_polar,Law.complex_expi,Law.real_atan2,Law.complex_arg_positive,Law.complex_arg_negative,Law.complex_arg_positive_imag,Law.complex_arg_negative_imag,Law.real_exp_one,Law.real_log_e,Law.real_asin_zero,Law.real_asin_one,Law.real_acos_zero,Law.real_acos_one,Law.real_acos_neg_one,Law.real_atan_zero,Law.real_atan_one,Law.real_asinh_zero,Law.real_acosh_one,Law.real_atanh_zero,Law.complex_asin_zero,Law.complex_acos_zero,Law.complex_atan_zero,Law.complex_asinh_zero,Law.complex_acosh_one,Law.complex_atanh_zero,Law.real_erf_zero,Law.real_erfc_zero,Law.real_gamma_one,Law.complex_gamma_one,Law.real_lgamma_one,Law.natural_indexed_power,Law.integer_indexed_power,Law.rational_indexed_power,Law.rational_indexed_integer_power,Law.real_indexed_power,Law.real_indexed_integer_power,Law.complex_indexed_power,Law.complex_indexed_integer_power,Law.real_min_absorb,Law.real_max_absorb,Law.real_log_even_power,Law.real_exp_log_scale,Law.real_exp_log_scale_right,Law.real_exp_log_sum,Law.real_exp_log_sum_right,Law.real_exp_log_affine,Law.real_exp_log_affine_left,Law.real_tanh_neg,Law.complex_tan_neg,Law.complex_sinh_neg,Law.complex_cosh_neg,Law.complex_tanh_neg,Law.complex_exp_log_scale,Law.complex_exp_log_scale_right,Law.complex_exp_log_sum,Law.complex_exp_log_sum_right,Law.complex_exp_log_affine,Law.complex_exp_log_affine_left,Law.complex_norm_cartesian,Law.complex_norm_mask,Law.conjugate_real_part,Law.conjugate_imaginary_part,Law.complex_square_real_part,Law.complex_square_imaginary_part]; return laws; }
 		default:return null;
 	}
 }
 const(Law)[] inferences(Node n){
 	switch(head(n)){
-		case (cast(uint)Op.le|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_nonnegative_square,Law.real_nonnegative_abs,Law.real_nonnegative_add,Law.real_nonnegative_mask,Law.real_iverson_upper,Law.real_positive_nonnegative,Law.real_negative_nonpositive,Law.real_nonnegative_power,Law.real_nonnegative_mul,Law.real_nonpositive_mul,Law.real_zero_nonnegative,Law.real_zero_nonpositive,Law.real_le_upper,Law.real_le_upper_closed,Law.real_le_lower,Law.real_le_lower_closed,Law.real_nonnegative_sqrt,Law.real_sin_upper,Law.real_sin_lower,Law.real_cos_upper,Law.real_cos_lower,Law.complex_norm_nonnegative]; return laws; }
+		case (cast(uint)Op.le|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_nonnegative_square,Law.real_nonnegative_abs,Law.real_nonnegative_add,Law.real_nonnegative_mask,Law.real_iverson_upper,Law.real_positive_nonnegative,Law.real_negative_nonpositive,Law.real_nonnegative_power,Law.real_nonnegative_mul,Law.real_nonpositive_mul,Law.real_zero_nonnegative,Law.real_zero_nonpositive,Law.real_le_upper,Law.real_le_upper_closed,Law.real_le_lower,Law.real_le_lower_closed,Law.real_nonnegative_sqrt,Law.real_floor_bound,Law.real_ceil_bound,Law.real_sin_upper,Law.real_sin_lower,Law.real_cos_upper,Law.real_cos_lower,Law.complex_norm_nonnegative]; return laws; }
 		case (cast(uint)Op.lt|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_positive_add_left,Law.real_positive_add_right,Law.real_positive_inverse,Law.real_lt_upper,Law.real_lt_upper_closed,Law.real_lt_lower,Law.real_lt_lower_closed,Law.real_positive_exp,Law.real_positive_sqrt,Law.real_positive_pi,Law.real_positive_e]; return laws; }
 		case (cast(uint)Op.nonzero|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_positive_nonzero,Law.real_negative_nonzero,Law.complex_nonzero_real,Law.complex_nonzero_imag]; return laws; }
 		default:return null;
@@ -16832,7 +17731,7 @@ const(Law)[] inferences(Node n){
 }
 const(Law)[] inferences(Op op){
 	switch(op){
-		case Op.le:{ static immutable Law[] laws=[Law.real_nonnegative_square,Law.real_nonnegative_abs,Law.real_nonnegative_add,Law.real_nonnegative_mask,Law.real_iverson_upper,Law.real_positive_nonnegative,Law.real_negative_nonpositive,Law.real_nonnegative_power,Law.real_nonnegative_mul,Law.real_nonpositive_mul,Law.real_zero_nonnegative,Law.real_zero_nonpositive,Law.real_le_upper,Law.real_le_upper_closed,Law.real_le_lower,Law.real_le_lower_closed,Law.real_nonnegative_sqrt,Law.real_sin_upper,Law.real_sin_lower,Law.real_cos_upper,Law.real_cos_lower,Law.complex_norm_nonnegative]; return laws; }
+		case Op.le:{ static immutable Law[] laws=[Law.real_nonnegative_square,Law.real_nonnegative_abs,Law.real_nonnegative_add,Law.real_nonnegative_mask,Law.real_iverson_upper,Law.real_positive_nonnegative,Law.real_negative_nonpositive,Law.real_nonnegative_power,Law.real_nonnegative_mul,Law.real_nonpositive_mul,Law.real_zero_nonnegative,Law.real_zero_nonpositive,Law.real_le_upper,Law.real_le_upper_closed,Law.real_le_lower,Law.real_le_lower_closed,Law.real_nonnegative_sqrt,Law.real_floor_bound,Law.real_ceil_bound,Law.real_sin_upper,Law.real_sin_lower,Law.real_cos_upper,Law.real_cos_lower,Law.complex_norm_nonnegative]; return laws; }
 		case Op.lt:{ static immutable Law[] laws=[Law.real_positive_add_left,Law.real_positive_add_right,Law.real_positive_inverse,Law.real_lt_upper,Law.real_lt_upper_closed,Law.real_lt_lower,Law.real_lt_lower_closed,Law.real_positive_exp,Law.real_positive_sqrt,Law.real_positive_pi,Law.real_positive_e]; return laws; }
 		case Op.nonzero:{ static immutable Law[] laws=[Law.real_positive_nonzero,Law.real_negative_nonzero,Law.complex_nonzero_real,Law.complex_nonzero_imag]; return laws; }
 		default:return null;
@@ -17441,11 +18340,15 @@ size_t conditionCount(Law law){
 		case Law.complex_sqrt_real_negative:return 2;
 		case Law.real_positive_pi:return 0;
 		case Law.real_positive_e:return 0;
-		case Law.real_log_product:return 2;
+		case Law.real_log_product:return 1;
+		case Law.real_log_product_right:return 1;
 		case Law.real_log_power:return 1;
 		case Law.real_log_square:return 0;
-		case Law.real_log_inverse:return 1;
-		case Law.real_log_sqrt:return 1;
+		case Law.real_log_inverse:return 0;
+		case Law.real_log_sqrt:return 0;
+		case Law.real_log_odd_power:return 0;
+		case Law.real_log_rational:return 5;
+		case Law.real_log_exact_power:return 3;
 		case Law.real_half_power:return 0;
 		case Law.real_sqrt_squared:return 0;
 		case Law.real_sqrt_exact:return 3;
@@ -17513,6 +18416,26 @@ size_t conditionCount(Law law){
 		case Law.complex_solve_affine:return 4;
 		case Law.real_floor_exact:return 3;
 		case Law.real_ceil_exact:return 3;
+		case Law.real_floor_cast:return 0;
+		case Law.real_ceil_cast:return 0;
+		case Law.real_floor_neg:return 0;
+		case Law.real_ceil_neg:return 0;
+		case Law.real_floor_shift:return 0;
+		case Law.real_ceil_shift:return 0;
+		case Law.real_floor_shift_literal:return 2;
+		case Law.real_ceil_shift_literal:return 2;
+		case Law.real_floor_lt:return 0;
+		case Law.real_floor_le:return 0;
+		case Law.real_lt_floor:return 0;
+		case Law.real_le_floor:return 0;
+		case Law.real_floor_ne:return 0;
+		case Law.real_ceil_lt:return 0;
+		case Law.real_ceil_le:return 0;
+		case Law.real_lt_ceil:return 0;
+		case Law.real_le_ceil:return 0;
+		case Law.real_ceil_ne:return 0;
+		case Law.real_floor_bound:return 0;
+		case Law.real_ceil_bound:return 0;
 		case Law.real_round:return 0;
 		case Law.real_is_integer:return 0;
 		case Law.real_hypot:return 0;
@@ -17530,6 +18453,10 @@ size_t conditionCount(Law law){
 		case Law.complex_log_real_part:return 0;
 		case Law.complex_log_imaginary_part:return 0;
 		case Law.complex_log_exp:return 2;
+		case Law.complex_log_positive_real:return 2;
+		case Law.complex_log_scale:return 2;
+		case Law.complex_log_scale_right:return 2;
+		case Law.complex_log_inverse:return 1;
 		case Law.complex_arg_exp:return 2;
 		case Law.complex_arg_phase:return 2;
 		case Law.real_sinh_asinh:return 0;

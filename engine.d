@@ -362,7 +362,13 @@ package final class Engine{
 			budget.spend(); active.set(k,true); scope(exit) active.set(k,false);
 			auto n=a.view(t); Proof[] cs;
 			// Preserve useful factorizations and comparison shapes before expansion.
-			if(n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le) foreach(law;rewrites(n)){
+			auto isComparison=n.op==Op.nonzero||n.op==Op.lt||n.op==Op.le;
+			if(n.op==Op.builtin) switch(cast(Builtin)n.value){
+				case Builtin.nonzeroN,Builtin.nonzeroZ,Builtin.nonzeroQ,
+					Builtin.ltN,Builtin.ltZ,Builtin.ltQ,Builtin.leN,Builtin.leZ,Builtin.leQ:isComparison=true; break;
+				default:break;
+			}
+			if(isComparison) foreach(law;rewrites(n)){
 				if(conditionCount(law)) continue;
 				Proof q;
 				if(attempt(law,t,ctx,q)&&q.after!=t){

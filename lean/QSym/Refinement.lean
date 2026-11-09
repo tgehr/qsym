@@ -151,6 +151,26 @@ theorem refines_log_product (x y : Option ℝ)
       simpa [Function1.apply, Functions.logR, mul, add, hx', hy', mul_pos hx' hy',
         Elementary.log_mul_pos hx' hy'] using hv
 
+theorem refines_log_rational (x y z : Option ℝ)
+    (h : Refines (not (nonzero (add x (mul (some (-1)) (mul y (inv z)))))) (some true))
+    (hy : Refines (lt (some 0) y) (some true)) (hz : Refines (lt (some 0) z) (some true))
+    (dy : Defined y) (dz : Defined z) :
+    Refines (Functions.logR.apply x) (add (Functions.logR.apply y) (mul (some (-1)) (Functions.logR.apply z))) := by
+  classical
+  obtain ⟨y, rfl⟩ := dy
+  obtain ⟨z, rfl⟩ := dz
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hy' : 0<y := by simpa [Refines, lt] using hy
+    have hz' : 0<z := by simpa [Refines, lt] using hz
+    have he : x-y*z⁻¹=0 := by simpa [Refines, not, nonzero, add, mul, inv, hz'.ne', sub_eq_add_neg] using h
+    have he' := sub_eq_zero.mp he
+    subst x
+    intro v hv
+    simpa [Function1.apply, Functions.logR, add, mul, hy', hz', mul_pos hy' (inv_pos.mpr hz'),
+      Real.log_mul hy'.ne' (inv_ne_zero hz'.ne'), Real.log_inv] using hv
+
 theorem refines_power_exact (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real)) (v_m : Nat) (v_n : Nat)
     (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (some ((v_m : Int) : ℝ)) (Value.inv (Value.add (some ((v_n : Int) : ℝ)) (some (((1) : Int) : ℝ))))))))) (some true))
     (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (v_y.map (fun x => x ^ (v_n + (1)))) (Value.mul (some (((-1) : Int) : ℝ)) v_x)))) (some true))
@@ -402,6 +422,7 @@ macro "qsym_order" : tactic => `(tactic| (
 macro "qsym_scalar" : tactic => `(tactic| (
   first
   | exact Value.refines_quotient_add_nonzero _ _ _
+  | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_log_rational <;> assumption)
   | solve | qsym_order
   | exact Value.refines_inv_inv _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_real_nonzero_quadratic <;> assumption)
@@ -442,6 +463,16 @@ macro "qsym_scalar" : tactic => `(tactic| (
       | split at *
     all_goals try (simp_all only [← sub_eq_add_neg, sub_eq_zero])
     all_goals subst_vars
+    all_goals try (have h := Elementary.log_product_domain (by assumption) (by assumption); rcases h with ⟨_, _⟩)
+    all_goals try (have h := Elementary.log_product_domain_right (by assumption) (by assumption); rcases h with ⟨_, _⟩)
+    all_goals try (have h := Elementary.log_odd_domain _ (by assumption))
+    all_goals try (simp_all [Int.floor_neg, Int.ceil_neg, Int.floor_add_intCast, Int.ceil_add_intCast,
+      Int.floor_lt, Int.floor_le_iff, Int.lt_floor_iff, Int.le_floor,
+      Int.ceil_lt_iff, Int.ceil_le, Int.lt_ceil, Int.le_ceil_iff,
+      Elementary.floor_ne, Elementary.ceil_ne, Int.floor_le, Int.le_ceil,
+      Elementary.not_lt_floor, Elementary.not_ceil_lt, Elementary.not_add_one_le_ceil,
+      Elementary.log_odd_power, Elementary.log_positive_real, Elementary.log_scale,
+      Elementary.log_scale_right, Complex.log_inv])
     all_goals try (simp_all [Identities.abs_even_power, Identities.log_even_power,
       Identities.log_even_domain, Identities.exp_log_scale, Identities.cexp_log_scale,
       Identities.exp_log_scale_right, Identities.cexp_log_scale_right, Real.exp_add, Complex.exp_add, Real.sqrt_mul,
@@ -520,6 +551,8 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (solve | apply Elementary.nonnegative_cases; assumption)
     all_goals try positivity
     all_goals try nlinarith
+    all_goals try (solve | exact Or.resolve_left (by assumption) (not_lt.mpr (by assumption)))
+    all_goals try (solve | exact Or.resolve_left (by assumption) (not_le.mpr (by assumption)))
     all_goals try (constructor <;> intro h <;> nlinarith)
   )
 ))

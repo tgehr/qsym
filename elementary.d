@@ -55,6 +55,41 @@ package final class Elementary{
 	bool propose(Term t,out Instance result){
 		auto n=a.view(t); if(n.op!=Op.builtin) return false;
 		auto f=cast(Builtin)n.value;
+		if(f==Builtin.floorR||f==Builtin.ceilR){
+			auto x=a.at(n.a);
+			if(a.view(x).op==Op.add){
+				auto operands=a.multisetTerms(a.multiset(x,Op.add));
+				foreach(i,e;operands){
+					budget.spend(); if(!a.isNumber(e.term)) continue;
+					auto value=a.number(e.term); if(!value.re.integral||value.zero) continue;
+					--operands[i].count;
+					result=instantiate(a,f==Builtin.floorR?Law.real_floor_shift_literal:Law.real_ceil_shift_literal,
+						[a.region(Op.add,Sort.real_,operands),e.term,a.number(value,Sort.integer)]); return true;
+				}
+			}
+		}
+		if(f==Builtin.logR&&a.isNumber(a.at(n.a))){
+			auto q=a.number(a.at(n.a)).re;
+			if(q>Rational(0)&&!q.integral){
+				result=instantiate(a,Law.real_log_rational,[a.at(n.a),
+					a.real_(Rational(q.numerator,BigInt(1))),a.real_(Rational(q.denominator,BigInt(1)))]); return true;
+			}
+			if(q>Rational(1)){
+				// Perfect powers suffice; factoring the integer is unnecessary.
+				// Repeated extraction also handles composite exponents.
+				auto words=q.numerator.uintLength;
+				if(words>budget.maxWords) throw new Limit;
+				auto bits=(words-1)*32,high=q.numerator.getDigit!uint(words-1); BigInt base;
+				while(high){ ++bits; high>>=1; }
+				foreach(degree;2..bits){
+					budget.spend();
+					if(root(q.numerator,cast(uint)degree,base)){
+						result=instantiate(a,Law.real_log_exact_power,[a.at(n.a),
+							a.real_(Rational(base,BigInt(1))),a.real_(degree-2)]); return true;
+					}
+				}
+			}
+		}
 		if((f==Builtin.floorR||f==Builtin.ceilR)&&a.isNumber(a.at(n.a))){
 			auto q=a.number(a.at(n.a)).re,m=q.numerator/q.denominator,r=q.numerator%q.denominator;
 			budget.spend(q.words);

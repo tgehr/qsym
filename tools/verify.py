@@ -62,7 +62,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -153,6 +153,12 @@ def main():
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
 		("BadFloor","lemma bad(x:ℝ,n:ℤ):floor(x)⇒n when toℝ(n)≤x,defined(n);"),
+		("BadFloorSum","rewrite bad(x:ℝ,y:ℝ):floor(x+y)⇒floor(x)+floor(y);"),
+		("BadFloorBoundary","rewrite bad(x:ℝ,n:ℤ):floor(x)≤n⇒x≤toℝ(n)+1;"),
+		("BadCeilBoundary","rewrite bad(x:ℝ,n:ℤ):ceil(x)<n⇒x<toℝ(n);"),
+		("BadComplexLogInverse","rewrite bad(z:ℂ):clog(z⁻¹)⇒-clog(z);"),
+		("BadComplexLogProduct","rewrite bad(z:ℂ,w:ℂ):clog(z*w)⇒clog(z)+clog(w);"),
+		("BadComplexRealLog","rewrite bad(z:ℂ):clog(z)⇒toℂ(log(creal(z))) when cimag(z)=0;"),
 		("BadCubeRoot","rewrite bad(x:ℝ):cbrt(x)⇒powerR(x,real(1,3));"),
 		("BadSqrtBranch","lemma bad(z:ℂ,w:ℂ):csqrt(z)⇒w when w^2=z,defined(w);"),
 		("BadLogBase","lemma bad(x:ℝ,y:ℝ):log2(x)⇒y when powerR(10,y)=x,defined(y);"),

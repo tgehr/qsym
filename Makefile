@@ -35,6 +35,8 @@ test: build/qsym
 	./build/language-tests --DRT-testmode=run-main build/language
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/elementary.d -of=build/elementary-tests
 	./build/elementary-tests --DRT-testmode=run-main build/elementary
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/transcendental.d -of=build/transcendental-tests
+	./build/transcendental-tests --DRT-testmode=run-main build/transcendental
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/predicates.d -of=build/predicate-tests
 	./build/predicate-tests --DRT-testmode=run-main build/predicates
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/quadratics.d -of=build/quadratic-tests
