@@ -62,7 +62,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -172,6 +172,13 @@ def main():
 		("BadComplexRoot","rewrite bad(z:ℂ):csqrt(z^2)⇒z;"),
 		("BadLogProduct","rewrite bad(x:ℝ,y:ℝ):log(x*y)⇒log(x)+log(y);"),
 		("BadNestedPower","rewrite bad(x:ℝ,y:ℝ,z:ℝ):powerR(powerR(x,y),z)⇒powerR(x,y*z);"),
+		("BadPowerBases","rewrite bad(x:ℝ,y:ℝ,t:ℝ):powerR(x,t)<powerR(y,t)⇒x<y when 0<t;"),
+		("BadPowerSign","rewrite bad(x:ℝ,y:ℝ,t:ℝ):powerR(x,t)≤powerR(y,t)⇒x≤y when t<0,0<x,0<y;"),
+		("BadPowerBaseUnit","rewrite bad(x:ℝ,y:ℝ,b:ℝ):powerR(b,x)≠powerR(b,y)⇒x≠y when 0<b;"),
+		("BadInverseSigns","rewrite bad(x:ℝ,y:ℝ):x⁻¹<y⁻¹⇒y<x;"),
+		("BadComplexPowerRange","rewrite bad(z:ℂ,w:ℂ,t:ℂ):powerC(z,t)≠powerC(w,t)⇒z≠w when cimag(t)=0,0<creal(t);"),
+		("BadComplexPowerZero","rewrite bad(z:ℂ,w:ℂ,t:ℂ):powerC(z,t)≠powerC(w,t)⇒z≠w when t=0;"),
+		("BadComplexPowerNonzero","rewrite bad(z:ℂ,t:ℂ):powerC(z,t)≠0⇒z≠0;"),
 		("BadRealRoot","rewrite bad(x:ℝ):sqrt(x^2)⇒x;"),
 		("BadDistribution","rewrite bad(p:𝔹,q:𝔹,r:𝔹):(p∨q)∧r⇒(p∧r)∨(q∧r);"),
 		("BadSwap","rewrite bad(p:𝔹,q:𝔹):p∧q⇒q∧p;"),
@@ -207,6 +214,15 @@ def main():
 		"    (hw : -Real.pi<w.im) (hw' : w.im≤Real.pi) : Complex.exp z=Complex.exp w ↔ z=w :=\n"
 		"  QSym.Identities.cexp_inj hz hz' hw hw'\n")
 	check(negative/"BadComplexExpBoundary.lean",succeeds=False)
+	for name,body in (
+		("BadPowerZero","theorem forged (x y t : ℝ) (hx : 0≤x) (hy : 0≤y) (ht : 0≤t) : x^t=y^t ↔ x=y :=\n"
+			"  Real.rpow_left_inj hx hy ht\n"),
+		("BadComplexPowerReal","theorem forged (z w t : ℂ) (hl : 0<t.re) (hu : t.re≤1) : z^t=w^t ↔ z=w :=\n"
+			"  QSym.Elementary.cpow_contract_eq rfl hl hu\n"),
+		("BadComplexPowerNegativeRange","theorem forged (z w t : ℂ) (hi : t.im=0) (hu : t.re<0) : z^t=w^t ↔ z=w :=\n"
+			"  QSym.Elementary.cpow_negative_contract_eq hi (le_of_lt hu) hu\n")):
+		path=negative/(name+".lean"); path.write_text("import QSym\n"+body)
+		check(path,succeeds=False)
 	(negative/"PartialIsNotTotal.lean").write_text("import QSym\nopen QSym\n"
 		"theorem forged (x : Option ℝ) (h : Value.Defined x) : Value.Defined (Functions.logR.apply x) :=\n"
 		"  Functions.logR.total (fun _ => True.intro) x h\n")

@@ -364,21 +364,41 @@ elab "qsym_order_goal" : tactic => do
   unless t.isAppOfArity ``Value.Refines 3 && (← whnf t.getAppArgs[0]!).isConstOf ``Bool do
     throwError "not a Boolean refinement"
 
-macro "qsym_order" : tactic => `(tactic| (
+macro "qsym_order_core" mode:ident : tactic => do
+  let early := mode.getId.eraseMacroScopes==`early
+  let enter ← if early then `(tactic| intro v hv) else `(tactic| skip)
+  let domains ← if early then `(tactic| all_goals try split_ifs at *) else `(tactic| skip)
+  let powers ← if early then `(tactic| (
+  all_goals repeat' qsym_split_and
+  all_goals try simp_all only [← sub_eq_add_neg, sub_eq_zero, ← decide_not, ← Bool.decide_and, ← Bool.decide_or, decide_eq_decide]
+  all_goals try simp (disch := (first | assumption | (simp only [Functions.powerR]; assumption))) only [
+    Real.rpow_right_inj, Real.rpow_lt_rpow_iff, Real.rpow_le_rpow_iff, Real.rpow_left_inj,
+    Order.power_not_negative, Order.power_not_nonpositive,
+    Order.power_negative_lt, Order.power_negative_le, Order.power_noninteger_lt, Order.power_noninteger_le,
+    Order.power_noninteger_negative_lt, Order.power_noninteger_negative_le, Order.power_noninteger_eq,
+    Elementary.cpow_contract_eq, Elementary.cpow_negative_contract_eq, Complex.cpow_eq_zero_iff,
+    Order.nonnegative_inverse_lt, Order.nonnegative_inverse_le, Order.nonpositive_inverse_lt, Order.nonpositive_inverse_le] at *
+  all_goals try assumption
+  )) else `(tactic| (
+  all_goals try simp_all only [← sub_eq_add_neg, sub_eq_zero, ← decide_not, ← Bool.decide_and, ← Bool.decide_or, decide_eq_decide]
+  ))
+  `(tactic| (
   qsym_order_goal
   classical
+  $enter:tactic
   simp only [Value.Refines, Value.Defined, Function1.apply, Function2.apply,
-    Functions.expR, Functions.logR, Functions.sqrtR, Functions.powerR,
+    Functions.expR, Functions.logR, Functions.sqrtR, Functions.powerR, Functions.powerC, Functions.isIntR,
     Functions.minR, Functions.maxR, Functions.absC, Functions.reC, Functions.imC,
     Functions.expC, Functions.logC, Functions.sqrtC, Functions.pi, Functions.sinR, Functions.cosR,
     Value.inv, Value.conj, Value.add, Value.mul, Value.nonzero, Value.not, Value.lt, Value.le, Value.abs,
     Option.bind_eq_bind, Option.pure_def, Option.map, Option.bind] at *
   try simp only [Option.some.injEq, forall_eq, forall_eq', Bool.true_eq, decide_eq_true_eq] at *
+  $domains:tactic
   repeat' first
     | simp_all (config := {failIfUnchanged := true}) [Value.and_some, Value.or_some, Value.mask, Real.sin_le_one, Real.neg_one_le_sin, Real.cos_le_one, Real.neg_one_le_cos, -Real.log_eq_zero]
     | qsym_split_bool
     | split_ifs at *
-  all_goals try simp_all only [← sub_eq_add_neg, sub_eq_zero, ← decide_not, ← Bool.decide_and, ← Bool.decide_or, decide_eq_decide]
+  $powers:tactic
   all_goals try simp_all [Identities.min_eq_max, Identities.clog_inj, Identities.clog_zero,
     Identities.csqrt_inj, Identities.cexp_inj, Identities.conj_eq,
     min_lt_iff, min_le_iff, lt_min_iff, le_min_iff, max_lt_iff, max_le_iff, lt_max_iff, le_max_iff,
@@ -418,6 +438,15 @@ macro "qsym_order" : tactic => `(tactic| (
     | solve | positivity
     | solve | tauto
 ))
+
+open Lean Meta Elab Tactic in
+elab "qsym_order" : tactic => do
+  evalTactic (← `(tactic| qsym_order_goal))
+  let source := (← getMainTarget).getAppArgs[1]!
+  let early := (source.find? fun e => e.isConstOf ``Functions.powerR ||
+    e.isConstOf ``Functions.powerC || e.isConstOf ``Value.inv).isSome
+  if early then evalTactic (← `(tactic| qsym_order_core early))
+  else evalTactic (← `(tactic| qsym_order_core plain))
 
 macro "qsym_scalar" : tactic => `(tactic| (
   first

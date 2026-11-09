@@ -10,6 +10,68 @@ theorem log_eq_exp {x y : ℝ} (hx : 0<x) : Real.log x=y ↔ x=Real.exp y := by
 theorem log_nonpositive {x : ℝ} (hx : 0<x) : Real.log x≤0 ↔ x≤1 := Real.log_nonpos_iff hx.le
 theorem log_positive {x : ℝ} (hx : 0<x) : 0<Real.log x ↔ 1<x := Real.log_pos_iff hx.le
 
+theorem nonnegative_inverse_lt {x y : ℝ} (hx : 0≤x) (hy : 0≤y) (hnx : x≠0) (hny : y≠0) :
+    x⁻¹<y⁻¹ ↔ y<x := inv_lt_inv₀ (lt_of_le_of_ne hx hnx.symm) (lt_of_le_of_ne hy hny.symm)
+theorem nonnegative_inverse_le {x y : ℝ} (hx : 0≤x) (hy : 0≤y) (hnx : x≠0) (hny : y≠0) :
+    x⁻¹≤y⁻¹ ↔ y≤x := inv_le_inv₀ (lt_of_le_of_ne hx hnx.symm) (lt_of_le_of_ne hy hny.symm)
+theorem nonpositive_inverse_lt {x y : ℝ} (hx : x≤0) (hy : y≤0) (hnx : x≠0) (hny : y≠0) :
+    x⁻¹<y⁻¹ ↔ y<x := inv_lt_inv_of_neg (lt_of_le_of_ne hx hnx) (lt_of_le_of_ne hy hny)
+theorem nonpositive_inverse_le {x y : ℝ} (hx : x≤0) (hy : y≤0) (hnx : x≠0) (hny : y≠0) :
+    x⁻¹≤y⁻¹ ↔ y≤x := inv_le_inv_of_neg (lt_of_le_of_ne hx hnx) (lt_of_le_of_ne hy hny)
+
+theorem power_not_negative {x t : ℝ} (hx : 0≤x) : ¬x^t<0 := not_lt_of_ge (Real.rpow_nonneg hx t)
+theorem power_not_nonpositive {x t : ℝ} (hx : 0<x) : ¬x^t≤0 := not_le_of_gt (Real.rpow_pos_of_pos hx t)
+
+theorem power_domain_nonnegative {x t : ℝ} (hi : t≠(⌊t⌋ : ℤ))
+    (hd : Functions.powerR.domain x t) : 0≤x := by
+  rcases hd with h | ⟨rfl, _⟩ | ⟨_, n, rfl⟩
+  · exact h.le
+  · exact le_rfl
+  · simp at hi
+
+theorem power_domain_positive {x t : ℝ} (hx : 0≤x) (ht : t<0)
+    (hd : Functions.powerR.domain x t) : 0<x := by
+  rcases hd with h | ⟨_, h⟩ | ⟨h, _⟩
+  · exact h
+  · linarith
+  · linarith
+
+theorem power_negative_lt {x y t : ℝ} (ht : t<0) (hx : 0≤x) (hy : 0≤y)
+    (hdx : Functions.powerR.domain x t) (hdy : Functions.powerR.domain y t) :
+    x^t<y^t ↔ y<x :=
+  Real.rpow_lt_rpow_iff_of_neg (power_domain_positive hx ht hdx) (power_domain_positive hy ht hdy) ht
+
+theorem power_negative_le {x y t : ℝ} (ht : t<0) (hx : 0≤x) (hy : 0≤y)
+    (hdx : Functions.powerR.domain x t) (hdy : Functions.powerR.domain y t) :
+    x^t≤y^t ↔ y≤x :=
+  Real.rpow_le_rpow_iff_of_neg (power_domain_positive hx ht hdx) (power_domain_positive hy ht hdy) ht
+
+theorem power_noninteger_lt {x y t : ℝ} (ht : 0<t) (hi : t≠(⌊t⌋ : ℤ))
+    (hx : Functions.powerR.domain x t) (hy : Functions.powerR.domain y t) :
+    x^t<y^t ↔ x<y :=
+  Real.rpow_lt_rpow_iff (power_domain_nonnegative hi hx) (power_domain_nonnegative hi hy) ht
+
+theorem power_noninteger_le {x y t : ℝ} (ht : 0<t) (hi : t≠(⌊t⌋ : ℤ))
+    (hx : Functions.powerR.domain x t) (hy : Functions.powerR.domain y t) :
+    x^t≤y^t ↔ x≤y :=
+  Real.rpow_le_rpow_iff (power_domain_nonnegative hi hx) (power_domain_nonnegative hi hy) ht
+
+theorem power_noninteger_negative_lt {x y t : ℝ} (ht : t<0) (hi : t≠(⌊t⌋ : ℤ))
+    (hx : Functions.powerR.domain x t) (hy : Functions.powerR.domain y t) :
+    x^t<y^t ↔ y<x :=
+  power_negative_lt ht (power_domain_nonnegative hi hx) (power_domain_nonnegative hi hy) hx hy
+
+theorem power_noninteger_negative_le {x y t : ℝ} (ht : t<0) (hi : t≠(⌊t⌋ : ℤ))
+    (hx : Functions.powerR.domain x t) (hy : Functions.powerR.domain y t) :
+    x^t≤y^t ↔ y≤x :=
+  power_negative_le ht (power_domain_nonnegative hi hx) (power_domain_nonnegative hi hy) hx hy
+
+theorem power_noninteger_eq {x y t : ℝ} (hi : t≠(⌊t⌋ : ℤ))
+    (hx : Functions.powerR.domain x t) (hy : Functions.powerR.domain y t) :
+    x^t=y^t ↔ x=y := by
+  have ht : t≠0 := by rintro rfl; simp at hi
+  exact Real.rpow_left_inj (power_domain_nonnegative hi hx) (power_domain_nonnegative hi hy) ht
+
 theorem abs_eq_cases (x y : ℝ) : |x|=y ↔ 0≤y ∧ (x=-y ∨ x=y) := by
   by_cases hy : 0≤y
   · simp [hy, abs_eq hy, or_comm]

@@ -2608,6 +2608,161 @@ theorem r_real_power_small_base_le (v_x : Option (Ty.denote .real)) (v_y : Optio
 
 #qsym_check_axioms r_real_power_small_base_le
 
+theorem r_real_power_base_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_b) (some true))
+    (hp1 : Value.Refines (Value.nonzero (Value.add v_b (Value.mul (some (((-1) : Int) : ℝ)) (some (((1) : Int) : ℝ))))) (some true)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.powerR.apply v_b v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.powerR.apply v_b v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_base_ne
+
+theorem r_real_power_exponent_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_t) (some true))
+    (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp2 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.lt (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_exponent_lt
+
+theorem r_real_power_exponent_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_t) (some true))
+    (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp2 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.le (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_exponent_le
+
+theorem r_real_negative_exponent_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_t (some (((0) : Int) : ℝ))) (some true))
+    (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp2 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.lt (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Value.lt v_y v_x) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_negative_exponent_lt
+
+theorem r_real_negative_exponent_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_t (some (((0) : Int) : ℝ))) (some true))
+    (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp2 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.le (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Value.le v_y v_x) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_negative_exponent_le
+
+theorem r_real_power_exponent_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.nonzero v_t) (some true))
+    (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp2 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.powerR.apply v_x v_t) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.powerR.apply v_y v_t)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_exponent_ne
+
+theorem r_real_noninteger_exponent_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_t) (some true))
+    (hp1 : Value.Refines (Value.not (Functions.isIntR.apply v_t)) (some true)) :
+    Value.Refines (Value.lt (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_noninteger_exponent_lt
+
+theorem r_real_noninteger_exponent_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_t) (some true))
+    (hp1 : Value.Refines (Value.not (Functions.isIntR.apply v_t)) (some true)) :
+    Value.Refines (Value.le (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_noninteger_exponent_le
+
+theorem r_real_noninteger_negative_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_t (some (((0) : Int) : ℝ))) (some true))
+    (hp1 : Value.Refines (Value.not (Functions.isIntR.apply v_t)) (some true)) :
+    Value.Refines (Value.lt (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Value.lt v_y v_x) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_noninteger_negative_lt
+
+theorem r_real_noninteger_negative_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_t (some (((0) : Int) : ℝ))) (some true))
+    (hp1 : Value.Refines (Value.not (Functions.isIntR.apply v_t)) (some true)) :
+    Value.Refines (Value.le (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Value.le v_y v_x) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_noninteger_negative_le
+
+theorem r_real_noninteger_exponent_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Functions.isIntR.apply v_t)) (some true)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.powerR.apply v_x v_t) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.powerR.apply v_y v_t)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_noninteger_exponent_ne
+
+theorem r_real_nonnegative_general_power (v_x : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Value.le (some (((0) : Int) : ℝ)) (Functions.powerR.apply v_x v_t)) (some true) := by
+  cases v_x <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonnegative_general_power
+
+theorem r_real_positive_general_power (v_x : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.powerR.apply v_x v_t)) (some true) := by
+  cases v_x <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_positive_general_power
+
+theorem r_real_nonnegative_inverse_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.lt (Value.inv v_x) (Value.inv v_y)) (Value.lt v_y v_x) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonnegative_inverse_lt
+
+theorem r_real_nonnegative_inverse_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
+    (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.le (Value.inv v_x) (Value.inv v_y)) (Value.le v_y v_x) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonnegative_inverse_le
+
+theorem r_real_nonpositive_inverse_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_x (some (((0) : Int) : ℝ))) (some true))
+    (hp1 : Value.Refines (Value.le v_y (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.lt (Value.inv v_x) (Value.inv v_y)) (Value.lt v_y v_x) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonpositive_inverse_lt
+
+theorem r_real_nonpositive_inverse_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_x (some (((0) : Int) : ℝ))) (some true))
+    (hp1 : Value.Refines (Value.le v_y (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.le (Value.inv v_x) (Value.inv v_y)) (Value.le v_y v_x) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonpositive_inverse_le
+
 theorem r_complex_nonzero_real (v_z : Option (Ty.denote .complex))
     (hp0 : Value.Refines (Value.nonzero (Functions.reC.apply v_z)) (some true)) :
     Value.Refines (Value.nonzero v_z) (some true) := by
@@ -3420,6 +3575,34 @@ theorem r_complex_log_real_power (v_z : Option (Ty.denote .complex)) (v_w : Opti
   all_goals qsym_rule
 
 #qsym_check_axioms r_complex_log_real_power
+
+theorem r_complex_power_exponent_ne (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex)) (v_t : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_t))) (some true))
+    (hp1 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.reC.apply v_t)) (some true))
+    (hp2 : Value.Refines (Value.le (Functions.reC.apply v_t) (some (((1) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.powerC.apply v_z v_t) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.powerC.apply v_w v_t)))) (Value.nonzero (Value.add v_z (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_w))) := by
+  cases v_z <;> cases v_w <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_power_exponent_ne
+
+theorem r_complex_negative_exponent_ne (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex)) (v_t : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_t))) (some true))
+    (hp1 : Value.Refines (Value.le (some (((-1) : Int) : ℝ)) (Functions.reC.apply v_t)) (some true))
+    (hp2 : Value.Refines (Value.lt (Functions.reC.apply v_t) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.powerC.apply v_z v_t) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.powerC.apply v_w v_t)))) (Value.nonzero (Value.add v_z (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_w))) := by
+  cases v_z <;> cases v_w <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_negative_exponent_ne
+
+theorem r_complex_power_nonzero (v_z : Option (Ty.denote .complex)) (v_t : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.nonzero v_t) (some true)) :
+    Value.Refines (Value.nonzero (Functions.powerC.apply v_z v_t)) (Value.nonzero v_z) := by
+  cases v_z <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_power_nonzero
 
 theorem r_complex_arg_sqrt (v_z : Option (Ty.denote .complex)) :
     Value.Refines (Functions.argC.apply (Functions.sqrtC.apply v_z)) (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (Functions.argC.apply v_z)) := by

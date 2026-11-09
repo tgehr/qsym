@@ -368,8 +368,7 @@ package final class Engine{
 					Builtin.ltN,Builtin.ltZ,Builtin.ltQ,Builtin.leN,Builtin.leZ,Builtin.leQ:isComparison=true; break;
 				default:break;
 			}
-			if(isComparison) foreach(law;rewrites(n)){
-				if(conditionCount(law)) continue;
+			if(isComparison) foreach(law;earlyRewrites(n)){
 				Proof q;
 				if(attempt(law,t,ctx,q)&&q.after!=t){
 					auto p=d.trans(q,go(q.after,ctx,probe),ctx); memoize(k,p); return p;

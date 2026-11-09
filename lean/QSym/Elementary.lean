@@ -240,6 +240,30 @@ theorem arg_cpow_contract (z w : ℂ) (hi : w.im=0) (hl : 0<w.re) (hu : w.re≤1
   have h := congrArg Complex.im (log_cpow_contract z w hi hl hu)
   simpa [Complex.log_im, Complex.mul_im, hi, mul_comm] using h
 
+theorem cpow_contract_eq {z w t : ℂ} (hi : t.im=0) (hl : 0<t.re) (hu : t.re≤1) :
+    z^t=w^t ↔ z=w := by
+  have ht : t≠0 := by intro h; simp [h] at hl
+  constructor
+  · intro h
+    by_cases hz : z=0
+    · subst z
+      exact ((Complex.cpow_eq_zero_iff w t).mp (by simpa [Complex.zero_cpow ht] using h.symm)).1.symm
+    have hw : w≠0 := by
+      intro hw
+      have hzero : z^t=0 := by simpa [hw, Complex.zero_cpow ht] using h
+      exact hz ((Complex.cpow_eq_zero_iff z t).mp hzero).1
+    have hlog := congrArg Complex.log h
+    rw [log_cpow_contract z t hi hl hu, log_cpow_contract w t hi hl hu] at hlog
+    have he := mul_right_cancel₀ ht hlog
+    simpa [Complex.exp_log hz, Complex.exp_log hw] using congrArg Complex.exp he
+  · rintro rfl; rfl
+
+theorem cpow_negative_contract_eq {z w t : ℂ} (hi : t.im=0) (hl : -1≤t.re) (hu : t.re<0) :
+    z^t=w^t ↔ z=w := by
+  have h := cpow_contract_eq (z:=z) (w:=w) (t:=-t)
+    (by simpa using hi) (by simpa using hu) (by simp only [Complex.neg_re]; linarith)
+  simpa only [Complex.cpow_neg, inv_inj] using h
+
 theorem log_sqrt (z : ℂ) : Complex.log (z^(2⁻¹ : ℂ)) = Complex.log z/2 := by
   simpa [div_eq_mul_inv] using log_cpow_contract z (2⁻¹) (by norm_num) (by norm_num) (by norm_num)
 

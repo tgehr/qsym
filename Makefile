@@ -37,6 +37,8 @@ test: build/qsym
 	./build/elementary-tests --DRT-testmode=run-main build/elementary
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/transcendental.d -of=build/transcendental-tests
 	./build/transcendental-tests --DRT-testmode=run-main build/transcendental
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/powers.d -of=build/power-tests
+	./build/power-tests --DRT-testmode=run-main build/powers
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/predicates.d -of=build/predicate-tests
 	./build/predicate-tests --DRT-testmode=run-main build/predicates
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/quadratics.d -of=build/quadratic-tests

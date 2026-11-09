@@ -41,6 +41,21 @@ bool containsVariable(Pattern p,string name){
 	foreach(arg;p.args) if(containsVariable(arg,name)) return true;
 	return false;
 }
+bool functionPattern(Pattern p){
+	if(p.variable||p.natural) return false;
+	auto op=rootOp(p);
+	if(op=="builtin"||op=="inv"||op=="abs") return true;
+	foreach(arg;p.args) if(functionPattern(arg)) return true;
+	return false;
+}
+bool earlyRule(Rule r){
+	if(!r.automatic) return false;
+	if(!r.premises.length) return true;
+	// Preserve function shapes before normalizing their operands. Algebraic
+	// conditions wait until counted sums and products have been collected.
+	foreach(arg;r.lhs.args) if(functionPattern(arg)) return true;
+	return false;
+}
 bool pairRule(Rule r){
 	auto op=rootOp(r.lhs);
 	if(!r.automatic||(op!="add"&&op!="mul")) return false;
@@ -142,24 +157,27 @@ string emitD(Rule[] rules){
 	foreach(r;rules) if(r.automatic||r.inference)
 		d~="\t\tcase Law."~symbolCode(r.name)~":return "~shapeTest(r.lhs,"input")~";\n";
 	d~="\t\tdefault:return false;\n\t}\n}\n";
-	foreach(inference;[false,true]){
+	foreach(kind;0..3){
+		bool selected(Rule r){ return kind==2?earlyRule(r):kind==1?r.inference:r.automatic; }
+		auto name=kind==2?"earlyRewrites":kind==1?"inferences":"rewrites";
 		string[] heads;
-		foreach(r;rules) if(inference?r.inference:r.automatic){
+		foreach(r;rules) if(selected(r)){
 			auto head=headCode(r.lhs); bool found;
 			foreach(old;heads) if(old==head) found=true;
 			if(!found) heads~=head;
 		}
-		d~="const(Law)[] "~(inference?"inferences":"rewrites")~"(Node n){\n\tswitch(head(n)){\n";
+		d~="const(Law)[] "~name~"(Node n){\n\tswitch(head(n)){\n";
 		foreach(head;heads){
 			string[] ids;
-			foreach(r;rules) if((inference?r.inference:r.automatic)&&headCode(r.lhs)==head) ids~="Law."~symbolCode(r.name);
+			foreach(r;rules) if(selected(r)&&headCode(r.lhs)==head) ids~="Law."~symbolCode(r.name);
 			d~="\t\tcase "~head~":{ static immutable Law[] laws=["~ids.join(",")~"]; return laws; }\n";
 		}
 		d~="\t\tdefault:return null;\n\t}\n}\n";
-		d~="const(Law)[] "~(inference?"inferences":"rewrites")~"(Op op){\n\tswitch(op){\n";
-		foreach(op;opsFor(rules,inference)){
+		if(kind==2) continue;
+		d~="const(Law)[] "~name~"(Op op){\n\tswitch(op){\n";
+		foreach(op;opsFor(rules,kind==1)){
 			string[] ids;
-			foreach(r;rules) if((inference?r.inference:r.automatic)&&rootOp(r.lhs)==op) ids~="Law."~symbolCode(r.name);
+			foreach(r;rules) if(selected(r)&&rootOp(r.lhs)==op) ids~="Law."~symbolCode(r.name);
 			d~="\t\tcase Op."~op~":{ static immutable Law[] laws=["~ids.join(",")~"]; return laws; }\n";
 		}
 		d~="\t\tdefault:return null;\n\t}\n}\n";
