@@ -62,7 +62,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -152,6 +152,16 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadErfcDirection","rewrite bad(x:ℝ,y:ℝ):erfc(x)<erfc(y)⇒x<y;"),
+		("BadAcosDirection","rewrite bad(x:ℝ,y:ℝ):acos(x)≤acos(y)⇒x≤y;"),
+		("BadSinInjective","rewrite bad(x:ℝ,y:ℝ):sin(x)≠sin(y)⇒x≠y;"),
+		("BadCoshInjective","rewrite bad(x:ℝ,y:ℝ):cosh(x)≠cosh(y)⇒x≠y;"),
+		("BadComplexSinhInjective","rewrite bad(z:ℂ,w:ℂ):csinh(z)≠csinh(w)⇒z≠w;"),
+		("BadImaginarySin","rewrite bad(z:ℂ):csin(ⅈ*z)⇒ⅈ*csin(z);"),
+		("BadImaginaryCosSign","rewrite bad(z:ℂ):ccos(ⅈ*z)⇒-ccosh(z);"),
+		("BadCancelNonnegative","rewrite bad(a:ℝ,x:ℝ,y:ℝ):a*x<a*y⇒x<y when 0≤a;"),
+		("BadCancelNegativeDirection","rewrite bad(a:ℝ,x:ℝ,y:ℝ):a*x≤a*y⇒x≤y when a<0;"),
+		("BadAsinDomain","rewrite bad(x:ℝ,y:ℝ):x<y⇒asin(x)<asin(y);"),
 		("BadFloor","lemma bad(x:ℝ,n:ℤ):floor(x)⇒n when toℝ(n)≤x,defined(n);"),
 		("BadFloorSum","rewrite bad(x:ℝ,y:ℝ):floor(x+y)⇒floor(x)+floor(y);"),
 		("BadFloorBoundary","rewrite bad(x:ℝ,n:ℤ):floor(x)≤n⇒x≤toℝ(n)+1;"),

@@ -1,6 +1,7 @@
 import QSym.Expr
 import QSym.Elementary
 import QSym.Order
+import QSym.FunctionOrder
 import QSym.Identities
 
 namespace QSym.Value
@@ -119,6 +120,72 @@ theorem refines_lt {a b x y : Option ℝ} (h : Refines a x) (k : Refines b y) :
     Refines (lt a b) (lt x y) := refines_bind h (fun _ => refines_bind k (fun _ => refines_refl _))
 theorem refines_le {a b x y : Option ℝ} (h : Refines a x) (k : Refines b y) :
     Refines (le a b) (le x y) := refines_bind h (fun _ => refines_bind k (fun _ => refines_refl _))
+
+theorem refines_increasing_lt {f : Function1 ℝ ℝ} (x y : Option ℝ)
+    (h : FunctionOrder.Increasing f) : Refines (lt (f.apply x) (f.apply y)) (lt x y) := by
+  classical
+  cases x <;> cases y <;> simp [Refines, lt, Function1.apply]
+  next a b =>
+    by_cases ha : f.domain a
+    · by_cases hb : f.domain b
+      · simp [ha, hb, ← sub_eq_add_neg, sub_eq_zero, StrictMonoOn.lt_iff_lt h ha hb]
+      · simp [ha, hb]
+    · simp [ha]
+
+theorem refines_increasing_le {f : Function1 ℝ ℝ} (x y : Option ℝ)
+    (h : FunctionOrder.Increasing f) : Refines (le (f.apply x) (f.apply y)) (le x y) := by
+  classical
+  cases x <;> cases y <;> simp [Refines, le, Function1.apply]
+  next a b =>
+    by_cases ha : f.domain a
+    · by_cases hb : f.domain b
+      · simp [ha, hb, ← sub_eq_add_neg, sub_eq_zero, StrictMonoOn.le_iff_le h ha hb]
+      · simp [ha, hb]
+    · simp [ha]
+
+theorem refines_increasing_ne {f : Function1 ℝ ℝ} (x y : Option ℝ)
+    (h : FunctionOrder.Increasing f) : Refines (nonzero (add (f.apply x) (mul (some (-1)) (f.apply y)))) (nonzero (add x (mul (some (-1)) y))) := by
+  classical
+  cases x <;> cases y <;> simp [Refines, nonzero, add, mul, Function1.apply]
+  next a b =>
+    by_cases ha : f.domain a
+    · by_cases hb : f.domain b
+      · simp [ha, hb, ← sub_eq_add_neg, sub_eq_zero, StrictMonoOn.eq_iff_eq h ha hb]
+      · simp [ha, hb]
+    · simp [ha]
+
+theorem refines_decreasing_lt {f : Function1 ℝ ℝ} (x y : Option ℝ)
+    (h : FunctionOrder.Decreasing f) : Refines (lt (f.apply x) (f.apply y)) (lt y x) := by
+  classical
+  cases x <;> cases y <;> simp [Refines, lt, Function1.apply]
+  next a b =>
+    by_cases ha : f.domain a
+    · by_cases hb : f.domain b
+      · simp [ha, hb, ← sub_eq_add_neg, sub_eq_zero, StrictAntiOn.lt_iff_lt h ha hb]
+      · simp [ha, hb]
+    · simp [ha]
+
+theorem refines_decreasing_le {f : Function1 ℝ ℝ} (x y : Option ℝ)
+    (h : FunctionOrder.Decreasing f) : Refines (le (f.apply x) (f.apply y)) (le y x) := by
+  classical
+  cases x <;> cases y <;> simp [Refines, le, Function1.apply]
+  next a b =>
+    by_cases ha : f.domain a
+    · by_cases hb : f.domain b
+      · simp [ha, hb, ← sub_eq_add_neg, sub_eq_zero, StrictAntiOn.le_iff_le h ha hb]
+      · simp [ha, hb]
+    · simp [ha]
+
+theorem refines_decreasing_ne {f : Function1 ℝ ℝ} (x y : Option ℝ)
+    (h : FunctionOrder.Decreasing f) : Refines (nonzero (add (f.apply x) (mul (some (-1)) (f.apply y)))) (nonzero (add x (mul (some (-1)) y))) := by
+  classical
+  cases x <;> cases y <;> simp [Refines, nonzero, add, mul, Function1.apply]
+  next a b =>
+    by_cases ha : f.domain a
+    · by_cases hb : f.domain b
+      · simp [ha, hb, ← sub_eq_add_neg, sub_eq_zero, (StrictAntiOn.eq_iff_eq h ha hb).trans eq_comm]
+      · simp [ha, hb]
+    · simp [ha]
 
 theorem refines_mask {α : Type} [Zero α] {p q : Option Bool} {a b : Option α}
     (h : Refines p q) (k : Refines a b) : Refines (mask p a) (mask q b) := by
@@ -448,10 +515,48 @@ elab "qsym_order" : tactic => do
   if early then evalTactic (← `(tactic| qsym_order_core early))
   else evalTactic (← `(tactic| qsym_order_core plain))
 
+open Lean Meta Elab Tactic in
+elab "qsym_function_order_goal" : tactic => do
+  evalTactic (← `(tactic| qsym_order_goal))
+  let source := (← getMainTarget).getAppArgs[1]!
+  let names := [``Functions.erfR, ``Functions.erfcR, ``Functions.sinhR, ``Functions.asinhR,
+    ``Functions.tanhR, ``Functions.atanR, ``Functions.asinR, ``Functions.acosR,
+    ``Functions.cbrtR, ``Functions.acoshR, ``Functions.atanhR]
+  unless (source.find? fun e => names.any e.isConstOf).isSome do
+    throwError "not a supported unary function comparison"
+
+macro "qsym_function_monotonicity" : tactic => `(tactic| (
+  first
+    | exact FunctionOrder.erf
+    | exact FunctionOrder.erfc
+    | exact FunctionOrder.sinh
+    | exact FunctionOrder.asinh
+    | exact FunctionOrder.tanh
+    | exact FunctionOrder.atan
+    | exact FunctionOrder.asin
+    | exact FunctionOrder.acos
+    | exact FunctionOrder.cbrt
+    | exact FunctionOrder.acosh
+    | exact FunctionOrder.atanh
+))
+
+macro "qsym_function_order" : tactic => `(tactic| (
+  qsym_function_order_goal
+  try simp only [Int.cast_neg, Int.cast_one] at *
+  first
+    | (apply Value.refines_increasing_lt; qsym_function_monotonicity)
+    | (apply Value.refines_increasing_le; qsym_function_monotonicity)
+    | (apply Value.refines_increasing_ne; qsym_function_monotonicity)
+    | (apply Value.refines_decreasing_lt; qsym_function_monotonicity)
+    | (apply Value.refines_decreasing_le; qsym_function_monotonicity)
+    | (apply Value.refines_decreasing_ne; qsym_function_monotonicity)
+))
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
   | exact Value.refines_quotient_add_nonzero _ _ _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_log_rational <;> assumption)
+  | solve | qsym_function_order
   | solve | qsym_order
   | exact Value.refines_inv_inv _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_real_nonzero_quadratic <;> assumption)
@@ -534,6 +639,9 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Complex.cpow_ne_zero_iff, Complex.cpow_ofNat_inv_pow,
       Real.sinh_arsinh, Real.arsinh_sinh, Real.cos_arcsin, Real.sin_arccos,
       Complex.sin_conj, Complex.cos_conj, Complex.sinh_conj, Complex.cosh_conj])
+    all_goals try (simp_all [Elementary.sin_imaginary, Elementary.cos_imaginary, Elementary.tan_imaginary,
+      Elementary.sinh_imaginary, Elementary.cosh_imaginary, Elementary.tanh_imaginary])
+    all_goals try (simp_all only [← Complex.ofReal_cos, Complex.ofReal_eq_zero])
     all_goals try (simp_all [abs_mul, abs_inv, abs_pow])
     all_goals try (simp_all [Int.floor_eq_iff, Int.ceil_eq_iff, Real.rpow_neg, Complex.cpow_neg,
       zpow_natCast, zpow_neg, Real.norm_eq_abs, Complex.norm_def, Complex.normSq_apply,

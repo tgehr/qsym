@@ -350,6 +350,37 @@ package final class Engine{
 		if(!instanceProof(instantiate(a,law,[reverse?constant:atom,reverse?atom:constant,a.real_((p.value-(odd?1:2))/2)]),ctx,step)) return false;
 		result=d.trans(congr,step,ctx); return true;
 	}
+	private bool cancelProductComparison(Term t,uint ctx,out Proof result){
+		auto n=a.view(t); if(n.op!=Op.lt&&n.op!=Op.le) return false;
+		auto left=a.multisetTerms(a.multiset(a.at(n.a),Op.mul));
+		auto right=a.multisetTerms(a.multiset(a.at(n.b),Op.mul));
+		struct Common{ size_t left,right; uint count; Term factor; }
+		Common[] common;
+		// Multiset traversal is ordered by term id, so intersection is linear.
+		for(size_t i,j;i<left.length&&j<right.length;){
+			budget.spend();
+			if(left[i].term.id<right[j].term.id){ ++i; continue; }
+			if(left[i].term.id>right[j].term.id){ ++j; continue; }
+			auto count=left[i].count<right[j].count?left[i].count:right[j].count;
+			common~=Common(i,j,count,a.region(Op.mul,Sort.real_,[Operand(left[i].term,count)]));
+			++i; ++j;
+		}
+		// Choose independently of arena allocation order; rebuild only once a
+		// sign is proved. The generated law checks that sign again on export.
+		sort!((x,y)=>compare(a,x.factor,y.factor)<0)(common);
+		foreach(c;common){
+			budget.spend(); Proof sign;
+			auto positive=prove(a.lt(a.real_(0),c.factor),ctx,sign);
+			if(!positive&&!prove(a.lt(c.factor,a.real_(0)),ctx,sign)) continue;
+			budget.spend(left.length+right.length);
+			left[c.left].count-=c.count; right[c.right].count-=c.count;
+			auto x=a.region(Op.mul,Sort.real_,left),y=a.region(Op.mul,Sort.real_,right);
+			auto law=n.op==Op.lt?(positive?Law.real_lt_cancel_pos:Law.real_lt_cancel_neg):
+				(positive?Law.real_le_cancel_pos:Law.real_le_cancel_neg);
+			return instanceProof(instantiate(a,law,[c.factor,x,y]),ctx,result);
+		}
+		return false;
+	}
 	Proof go(Term t,uint ctx=0,bool probe=false){
 		auto k=key(t,ctx,probe);
 		auto cached=k<=uint.max?(t.id<roots.length?roots[t.id]:0):memo.get(MemoKey(k,revision(ctx)),uint.max)+1;
@@ -431,6 +462,9 @@ package final class Engine{
 				}
 			}
 			Instance proposal; Proof proposed;
+			if(cancelProductComparison(current,ctx,proposed)){
+				p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
+			}
 			if(powerBound(current,ctx,proposed)){
 				p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 			}

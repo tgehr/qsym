@@ -89,6 +89,24 @@ theorem root_power (y : ℝ) (m n : ℕ) (hy : 0 ≤ y) :
     _ = y ^ (m : ℝ) := by congr 1; push_cast; field_simp
     _ = y ^ m := Real.rpow_natCast y m
 
+theorem sin_imaginary (z : ℂ) : Complex.sin (Complex.I*z)=Complex.I*Complex.sinh z := by
+  simpa only [mul_comm] using Complex.sin_mul_I z
+
+theorem cos_imaginary (z : ℂ) : Complex.cos (Complex.I*z)=Complex.cosh z := by
+  simpa only [mul_comm] using Complex.cos_mul_I z
+
+theorem tan_imaginary (z : ℂ) : Complex.tan (Complex.I*z)=Complex.I*Complex.tanh z := by
+  simpa only [mul_comm] using Complex.tan_mul_I z
+
+theorem sinh_imaginary (z : ℂ) : Complex.sinh (Complex.I*z)=Complex.I*Complex.sin z := by
+  simpa only [mul_comm] using Complex.sinh_mul_I z
+
+theorem cosh_imaginary (z : ℂ) : Complex.cosh (Complex.I*z)=Complex.cos z := by
+  simpa only [mul_comm] using Complex.cosh_mul_I z
+
+theorem tanh_imaginary (z : ℂ) : Complex.tanh (Complex.I*z)=Complex.I*Complex.tan z := by
+  simpa only [mul_comm] using Complex.tanh_mul_I z
+
 theorem sin_three_half_pi : Real.sin ((3/2 : ℝ)*Real.pi) = -1 := by
   rw [show (3/2 : ℝ)*Real.pi = Real.pi/2+Real.pi by ring, Real.sin_add_pi]
   simp

@@ -4685,4 +4685,351 @@ theorem r_complex_conjugate_ne (v_z : Option (Ty.denote .complex)) :
 
 #qsym_check_axioms r_complex_conjugate_ne
 
+theorem r_real_erf_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.erfR.apply v_x) (Functions.erfR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_erf_lt
+
+theorem r_real_erf_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.erfR.apply v_x) (Functions.erfR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_erf_le
+
+theorem r_real_erf_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.erfR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.erfR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_erf_ne
+
+theorem r_real_sinh_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.sinhR.apply v_x) (Functions.sinhR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sinh_lt
+
+theorem r_real_sinh_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.sinhR.apply v_x) (Functions.sinhR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sinh_le
+
+theorem r_real_sinh_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.sinhR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.sinhR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sinh_ne
+
+theorem r_real_asinh_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.asinhR.apply v_x) (Functions.asinhR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asinh_lt
+
+theorem r_real_asinh_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.asinhR.apply v_x) (Functions.asinhR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asinh_le
+
+theorem r_real_asinh_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.asinhR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.asinhR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asinh_ne
+
+theorem r_real_tanh_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.tanhR.apply v_x) (Functions.tanhR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tanh_lt
+
+theorem r_real_tanh_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.tanhR.apply v_x) (Functions.tanhR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tanh_le
+
+theorem r_real_tanh_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.tanhR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.tanhR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tanh_ne
+
+theorem r_real_atan_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.atanR.apply v_x) (Functions.atanR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_atan_lt
+
+theorem r_real_atan_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.atanR.apply v_x) (Functions.atanR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_atan_le
+
+theorem r_real_atan_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.atanR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.atanR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_atan_ne
+
+theorem r_real_asin_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.asinR.apply v_x) (Functions.asinR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asin_lt
+
+theorem r_real_asin_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.asinR.apply v_x) (Functions.asinR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asin_le
+
+theorem r_real_asin_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.asinR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.asinR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asin_ne
+
+theorem r_real_cbrt_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.cbrtR.apply v_x) (Functions.cbrtR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cbrt_lt
+
+theorem r_real_cbrt_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.cbrtR.apply v_x) (Functions.cbrtR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cbrt_le
+
+theorem r_real_cbrt_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.cbrtR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.cbrtR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cbrt_ne
+
+theorem r_real_acosh_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.acoshR.apply v_x) (Functions.acoshR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_acosh_lt
+
+theorem r_real_acosh_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.acoshR.apply v_x) (Functions.acoshR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_acosh_le
+
+theorem r_real_acosh_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.acoshR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.acoshR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_acosh_ne
+
+theorem r_real_atanh_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.atanhR.apply v_x) (Functions.atanhR.apply v_y)) (Value.lt v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_atanh_lt
+
+theorem r_real_atanh_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.atanhR.apply v_x) (Functions.atanhR.apply v_y)) (Value.le v_x v_y) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_atanh_le
+
+theorem r_real_atanh_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.atanhR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.atanhR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_atanh_ne
+
+theorem r_real_erfc_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.erfcR.apply v_x) (Functions.erfcR.apply v_y)) (Value.lt v_y v_x) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_erfc_lt
+
+theorem r_real_erfc_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.erfcR.apply v_x) (Functions.erfcR.apply v_y)) (Value.le v_y v_x) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_erfc_le
+
+theorem r_real_erfc_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.erfcR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.erfcR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_erfc_ne
+
+theorem r_real_acos_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Functions.acosR.apply v_x) (Functions.acosR.apply v_y)) (Value.lt v_y v_x) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_acos_lt
+
+theorem r_real_acos_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Functions.acosR.apply v_x) (Functions.acosR.apply v_y)) (Value.le v_y v_x) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_acos_le
+
+theorem r_real_acos_ne (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.nonzero (Value.add (Functions.acosR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.acosR.apply v_y)))) (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_acos_ne
+
+theorem r_complex_sin_imaginary (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.sinC.apply (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) v_z)) (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) (Functions.sinhC.apply v_z)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sin_imaginary
+
+theorem r_complex_cos_imaginary (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.cosC.apply (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) v_z)) (Functions.coshC.apply v_z) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cos_imaginary
+
+theorem r_complex_tan_imaginary (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.tanC.apply (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) v_z)) (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) (Functions.tanhC.apply v_z)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tan_imaginary
+
+theorem r_complex_sinh_imaginary (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.sinhC.apply (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) v_z)) (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) (Functions.sinC.apply v_z)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sinh_imaginary
+
+theorem r_complex_cosh_imaginary (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.coshC.apply (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) v_z)) (Functions.cosC.apply v_z) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cosh_imaginary
+
+theorem r_complex_tanh_imaginary (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.tanhC.apply (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) v_z)) (Value.mul (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)) (Functions.tanC.apply v_z)) := by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tanh_imaginary
+
+theorem r_complex_sin_real (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.sinC.apply (Functions.castRC.apply v_x)) (Functions.castRC.apply (Functions.sinR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sin_real
+
+theorem r_complex_cos_real (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.cosC.apply (Functions.castRC.apply v_x)) (Functions.castRC.apply (Functions.cosR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cos_real
+
+theorem r_complex_tan_real (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.tanC.apply (Functions.castRC.apply v_x)) (Functions.castRC.apply (Functions.tanR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tan_real
+
+theorem r_complex_sinh_real (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.sinhC.apply (Functions.castRC.apply v_x)) (Functions.castRC.apply (Functions.sinhR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sinh_real
+
+theorem r_complex_cosh_real (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.coshC.apply (Functions.castRC.apply v_x)) (Functions.castRC.apply (Functions.coshR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cosh_real
+
+theorem r_complex_tanh_real (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.tanhC.apply (Functions.castRC.apply v_x)) (Functions.castRC.apply (Functions.tanhR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tanh_real
+
+theorem r_real_lt_cancel_pos (v_a : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_a) (some true)) :
+    Value.Refines (Value.lt (Value.mul v_a v_x) (Value.mul v_a v_y)) (Value.lt v_x v_y) := by
+  cases v_a <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_lt_cancel_pos
+
+theorem r_real_le_cancel_pos (v_a : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_a) (some true)) :
+    Value.Refines (Value.le (Value.mul v_a v_x) (Value.mul v_a v_y)) (Value.le v_x v_y) := by
+  cases v_a <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_le_cancel_pos
+
+theorem r_real_lt_cancel_neg (v_a : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_a (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.lt (Value.mul v_a v_x) (Value.mul v_a v_y)) (Value.lt v_y v_x) := by
+  cases v_a <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_lt_cancel_neg
+
+theorem r_real_le_cancel_neg (v_a : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_a (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.le (Value.mul v_a v_x) (Value.mul v_a v_y)) (Value.le v_y v_x) := by
+  cases v_a <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_le_cancel_neg
+
 end QSym.Generated
