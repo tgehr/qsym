@@ -8,7 +8,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate test demo verify verify-fast bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: all generate test demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 all: build/qsym
 
 build generated:
@@ -83,6 +83,8 @@ test: build/qsym
 	./build/sum-tests --DRT-testmode=run-main build/sum
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/rational.d -of=build/rational-tests
 	./build/rational-tests --DRT-testmode=run-main build/rational
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/discrete.d -of=build/discrete-tests
+	./build/discrete-tests --DRT-testmode=run-main build/discrete
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

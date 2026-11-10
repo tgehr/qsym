@@ -122,6 +122,12 @@ def main():
 	for file in files:
 		certificate(file)
 
+	discrete=sorted((ROOT/"build/discrete").glob("*.lean"))
+	if len(discrete)!=109:
+		raise RuntimeError("expected 109 discrete scalar certificates")
+	for file in discrete:
+		certificate(file)
+
 	checks=certificates; members={}
 	if args.batch_size>1:
 		checks=[]; pending=[]; directory=ROOT/"build/verification"
@@ -201,6 +207,12 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadIntegerCancel","rewrite bad(x:ℤ):x+x⇒0;"),
+		("BadNaturalProduct","rewrite bad(x:ℕ,y:ℕ):x*y≠0⇒x≠0∨y≠0;"),
+		("BadRationalPower","rewrite bad(x:ℚ):x^2*x^3⇒x^6;"),
+		("BadRationalReverseCancellation","lemma bad(x:ℚ):rat(1,1)⇒x/x when defined(x);"),
+		("BadIntegerSquare","rewrite bad(x:ℤ):x^2⇒x;"),
+		("BadNaturalStrictSelf","rewrite bad(x:ℕ):x<x⇒true;"),
 		("BadRealAcoshInverse","rewrite bad(x:ℝ):acosh(cosh(x))⇒x;"),
 		("BadComplexAsinInverse","rewrite bad(z:ℂ):casin(csin(z))⇒z;"),
 		("BadComplexAcosInverse","rewrite bad(z:ℂ):cacos(ccos(z))⇒z;"),
