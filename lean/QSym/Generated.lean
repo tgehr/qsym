@@ -3259,6 +3259,34 @@ theorem r_imaginary_part_cast (v_x : Option (Ty.denote .real)) :
 
 #qsym_check_axioms r_imaginary_part_cast
 
+theorem r_rational_cast_product (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.castZQ.apply (Functions.mulZ.apply v_x v_y)) (Functions.mulQ.apply (Functions.castZQ.apply v_x) (Functions.castZQ.apply v_y)) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_cast_product
+
+theorem r_real_cast_product (v_x : Option (Ty.denote .rational)) (v_y : Option (Ty.denote .rational)) :
+    Value.Refines (Functions.castQR.apply (Functions.mulQ.apply v_x v_y)) (Value.mul (Functions.castQR.apply v_x) (Functions.castQR.apply v_y)) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cast_product
+
+theorem r_rational_cast_power (v_x : Option (Ty.denote .integer)) (v_n : Nat) :
+    Value.Refines (Functions.castZQ.apply (v_x.map (fun x => x ^ v_n))) ((Functions.castZQ.apply v_x).map (fun x => x ^ v_n)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_cast_power
+
+theorem r_real_cast_power (v_x : Option (Ty.denote .rational)) (v_n : Nat) :
+    Value.Refines (Functions.castQR.apply (v_x.map (fun x => x ^ v_n))) ((Functions.castQR.apply v_x).map (fun x => x ^ v_n)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cast_power
+
 theorem r_complex_cast_sum (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
     Value.Refines (Functions.castRC.apply (Value.add v_x v_y)) (Value.add (Functions.castRC.apply v_x) (Functions.castRC.apply v_y)) := qsym_cached% by
   cases v_x <;> cases v_y
@@ -6130,5 +6158,40 @@ theorem r_rational_mask_zero (v_p : Option (Ty.denote .bool)) :
   all_goals qsym_rule
 
 #qsym_check_axioms r_rational_mask_zero
+
+theorem r_complex_sin_half_turn (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.sinC.apply (Value.add v_z (Functions.castRC.apply (some Functions.pi)))) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.sinC.apply v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sin_half_turn
+
+theorem r_complex_cos_half_turn (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.cosC.apply (Value.add v_z (Functions.castRC.apply (some Functions.pi)))) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.cosC.apply v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cos_half_turn
+
+theorem r_complex_tan_half_turn (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.tanC.apply (Value.add v_z (Functions.castRC.apply (some Functions.pi)))) (Functions.tanC.apply v_z) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tan_half_turn
+
+theorem r_complex_sin_quarter_turn (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.sinC.apply (Value.add v_z (Functions.castRC.apply (Value.mul (some Functions.pi) (Value.inv (some (((2) : Int) : ℝ))))))) (Functions.cosC.apply v_z) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sin_quarter_turn
+
+theorem r_complex_cos_quarter_turn (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.cosC.apply (Value.add v_z (Functions.castRC.apply (Value.mul (some Functions.pi) (Value.inv (some (((2) : Int) : ℝ))))))) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.sinC.apply v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cos_quarter_turn
 
 end QSym.Generated

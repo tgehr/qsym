@@ -29,6 +29,14 @@ Example[] examples(){
 		if(p[2]!="0") result~=Example("Tan"~suffix,"tan("~angle~")","("~p[1]~")/("~p[2]~")");
 	}
 	result~=[
+		Example("ComplexSinHalfTurn","csin(z+π)","-csin(z)"),
+		Example("ComplexCosHalfTurn","ccos(z+π)","-ccos(z)"),
+		Example("ComplexTanHalfTurn","ctan(z+π)","ctan(z)"),
+		Example("ComplexSinQuarterTurn","csin(z+π/2)","ccos(z)"),
+		Example("ComplexCosQuarterTurn","ccos(z+π/2)","-csin(z)"),
+		Example("ComplexSinMaskedShift","[creal(z)>0]*csin(z+π)","-[creal(z)>0]*csin(z)"),
+		Example("ComplexTanMaskedPoleShift","[false]*ctan(toℂ(π/2)+π)","complex(0,0)"),
+		Example("ComplexSinPartialShift","csin(1/z+π)","-csin(1/z)"),
 		Example("SinShift","sin(x+π/2)","cos(x)"),
 		Example("CosShift","cos(x+π/2)","-sin(x)"),
 		Example("SinHalfTurn","sin(x+π)","-sin(x)"),
@@ -90,9 +98,32 @@ Example[] examples(){
 		Example("MaskedCancellation","[cos(x)≠0]*tan(x)*cos(x)","[cos(x)≠0]*sin(x)"),
 		Example("ComplexMaskedUndefined","[false]*ctan(1/0)","complex(0,0)")
 	];
+	foreach(f;["sin","cos","cis","tan"]){
+		auto period=f=="tan"?"π":"2*π",zero=f=="sin"||f=="tan"?"0":f=="cis"?"complex(1,0)":"1";
+		result~=Example("IntegerPeriod_"~f,f~"("~period~"*k)",zero);
+		result~=Example("IntegerShift_"~f,f~"(x+"~period~"*k)",f~"(x)");
+		result~=Example("NegativeIntegerShift_"~f,f~"(x-"~period~"*k)",f~"(x)");
+		result~=Example("MultipleIntegerShift_"~f,f~"(x+3*"~period~"*k)",f~"(x)");
+		result~=Example("TwoIntegerShifts_"~f,f~"(x+"~period~"*k+"~period~"*m)",f~"(x)");
+	}
+	result~=[
+		Example("RealPeriodUnchanged","sin(2*π*x)","sin(2*π*x)"),
+		Example("IntegerProductPeriod","sin(2*π*k*m)","0"),
+		Example("IntegerSquarePeriod","sin(2*π*k^2)","0"),
+		Example("IntegerPowerPeriod","cos(x+2*π*k^3)","cos(x)"),
+		Example("IntegerCastProductPeriod","sin(2*π*toℝ(k*m))","0"),
+		Example("IntegerCastPowerPeriod","cis(2*π*toℝ(k^2))","complex(1,0)"),
+		Example("NaturalProductPeriod","sin(2*π*n*n)","0"),
+		Example("IntegerPartialPeriod","sin(2*π*floor(1/x))","0"),
+		Example("IntegerProductPartialPeriod","sin(2*π*k*floor(1/x))","0"),
+		Example("PeriodGuardedPartial","[x≠0]*cis(2*π*floor(1/x))","[x≠0]*complex(1,0)"),
+		Example("IntegerHalfPeriodUnchanged","sin(π*k)","sin(π*k)"),
+		Example("PeriodMaskedPole","[false]*tan(π/2+π*k)","0"),
+		Example("PeriodPole","tan(π/2+π*k)","tan(π/2)")
+	];
 	return result;
 }
-private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,z:ℂ,w:ℂ"); return s; }
+private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,z:ℂ,w:ℂ,k:ℤ,m:ℤ,n:ℕ"); return s; }
 unittest{
 	size_t failures;
 	foreach(c;examples()){

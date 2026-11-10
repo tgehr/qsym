@@ -435,6 +435,10 @@ rewrite real_part_product(z:ℂ,w:ℂ):creal(z·w)⇒creal(z)·creal(w)-cimag(z)
 rewrite imaginary_part_product(z:ℂ,w:ℂ):cimag(z·w)⇒creal(z)·cimag(w)+cimag(z)·creal(w);
 rule real_part_cast(x:ℝ):creal(toℂ(x))⇒x;
 rule imaginary_part_cast(x:ℝ):cimag(toℂ(x))⇒0;
+rewrite rational_cast_product(x:ℤ,y:ℤ):toℚ(x*y)⇒toℚ(x)*toℚ(y);
+rewrite real_cast_product(x:ℚ,y:ℚ):toℝ(x*y)⇒toℝ(x)*toℝ(y);
+rewrite rational_cast_power(x:ℤ,n:NatParam):toℚ(x^n)⇒toℚ(x)^n;
+rewrite real_cast_power(x:ℚ,n:NatParam):toℝ(x^n)⇒toℝ(x)^n;
 rewrite complex_cast_sum(x:ℝ,y:ℝ):toℂ(x+y)⇒toℂ(x)+toℂ(y);
 rewrite complex_cast_product(x:ℝ,y:ℝ):toℂ(x*y)⇒toℂ(x)*toℂ(y);
 rewrite complex_cast_power(x:ℝ,n:NatParam):toℂ(x)^n⇒toℂ(x^n);
@@ -844,3 +848,9 @@ rewrite rational_cancel_right_factor(x:ℚ,y:ℚ):(x*y)*y⁻¹⇒x;
 rule natural_mask_zero(p:𝔹):[p]*(nat(0))⇒0;
 rule integer_mask_zero(p:𝔹):[p]*(int(0))⇒0;
 rule rational_mask_zero(p:𝔹):[p]*(rat(0,1))⇒0;
+
+rewrite complex_sin_half_turn(z:ℂ):csin(z+toℂ(π))⇒-csin(z);
+rewrite complex_cos_half_turn(z:ℂ):ccos(z+toℂ(π))⇒-ccos(z);
+rewrite complex_tan_half_turn(z:ℂ):ctan(z+toℂ(π))⇒ctan(z);
+rewrite complex_sin_quarter_turn(z:ℂ):csin(z+toℂ(π/2))⇒ccos(z);
+rewrite complex_cos_quarter_turn(z:ℂ):ccos(z+toℂ(π/2))⇒-csin(z);

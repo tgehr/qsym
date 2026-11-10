@@ -89,7 +89,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",246),("radicals",42),("inverses",60),("domains",184)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("radicals",42),("inverses",60),("domains",184)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -213,6 +213,10 @@ def main():
 		("BadRationalReverseCancellation","lemma bad(x:ℚ):rat(1,1)⇒x/x when defined(x);"),
 		("BadIntegerSquare","rewrite bad(x:ℤ):x^2⇒x;"),
 		("BadNaturalStrictSelf","rewrite bad(x:ℕ):x<x⇒true;"),
+		("BadComplexSinHalfTurn","rewrite bad(z:ℂ):csin(z+toℂ(π))⇒csin(z);"),
+		("BadComplexTanQuarterTurn","rewrite bad(z:ℂ):ctan(z+toℂ(π/2))⇒ctan(z);"),
+		("BadRealPeriodIndex","rewrite bad(x:ℝ):sin(2*π*x)⇒0;"),
+		("BadIntegerHalfPeriod","rewrite bad(k:ℤ):cos(π*k)⇒1;"),
 		("BadRealAcoshInverse","rewrite bad(x:ℝ):acosh(cosh(x))⇒x;"),
 		("BadComplexAsinInverse","rewrite bad(z:ℂ):casin(csin(z))⇒z;"),
 		("BadComplexAcosInverse","rewrite bad(z:ℂ):cacos(ccos(z))⇒z;"),

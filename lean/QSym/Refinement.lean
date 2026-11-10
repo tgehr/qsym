@@ -863,6 +863,8 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Elementary.phase_quarter_turn, Elementary.phase_cartesian, Elementary.tan_period, Elementary.tan_period_domain,
       Real.tan_eq_sin_div_cos, Complex.tan_eq_sin_div_cos, Real.tanh_eq_sinh_div_cosh, Complex.tanh_eq_sinh_div_cosh,
       Real.cosh_add_sinh, Real.cosh_sub_sinh, Complex.cosh_add_sinh, Complex.cosh_sub_sinh,
+      Complex.sin_add_pi, Complex.cos_add_pi, Complex.tan_add_pi,
+      Complex.sin_add_pi_div_two, Complex.cos_add_pi_div_two,
       Real.sin_add, Real.cos_sub, Complex.sin_add, Complex.cos_sub,
       Real.sin_arctan, Real.cos_arctan, Real.cosh_arsinh,
       ← Complex.tan_conj, ← Complex.tanh_conj, ← Complex.cos_conj, ← Complex.cosh_conj,
@@ -942,6 +944,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (simp_all [← div_eq_mul_inv, lt_div_iff₀, le_div_iff₀,
       div_lt_iff₀, div_le_iff₀, lt_div_iff_of_neg, le_div_iff_of_neg,
       div_lt_iff_of_neg, div_le_iff_of_neg, mul_comm])
+    all_goals try (qsym_trig_goal; simp_all [Complex.sin_add_pi_div_two, Complex.cos_add_pi_div_two])
     all_goals try (simp only [pow_mul] at *; nlinarith)
     all_goals try (simp_all [neg_eq_iff_add_eq_zero, add_comm])
     all_goals try (solve | (apply Eq.symm; apply Real.arcsin_sin <;> linarith))

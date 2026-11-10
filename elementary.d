@@ -94,6 +94,37 @@ package final class Elementary{
 		}
 		return result;
 	}
+	private bool symbolicPeriod(Term t,uint period,out Term result){
+		Term[] pending=[t];
+		while(pending.length){
+			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.view(u);
+			if(n.op==Op.add){ pending~=[a.at(n.a),a.at(n.b)]; continue; }
+			if(n.op!=Op.mul) continue;
+			auto factors=a.multisetTerms(a.multiset(u,Op.mul));
+			Rational scale=Rational(1); Term index; bool foundPi,valid=true;
+			foreach(e;factors){
+				budget.spend(); auto v=a.view(e.term);
+				if(a.isNumber(e.term)){
+					foreach(i;0..e.count) scale=budget.calc!"*"(Number(scale),a.number(e.term)).re;
+				}else if(pi(e.term)&&e.count==1&&!foundPi) foundPi=true;
+				else{
+					uint exponent=1;
+					if(v.op==Op.pow){ exponent=cast(uint)v.value; v=a.view(a.at(v.a)); }
+					if(v.op!=Op.builtin||v.value!=Builtin.castQR){ valid=false; break; }
+					auto q=a.view(a.at(v.a));
+					if(q.op!=Op.builtin||q.value!=Builtin.castZQ){ valid=false; break; }
+					auto factor=a.at(q.a);
+					if(exponent!=1) factor=a.pow(factor,exponent);
+					if(e.count!=1) factor=a.pow(factor,e.count);
+					index=index==Term.init?factor:a.mul(index,factor);
+				}
+			}
+			scale=budget.calc!"/"(Number(scale),Number(period)).re;
+			if(!valid||!foundPi||index==Term.init||!scale.integral||scale==Rational(0)) continue;
+			result=scale==Rational(1)?index:a.mul(a.number(Number(scale),Sort.integer),index); return true;
+		}
+		return false;
+	}
 	bool propose(Term t,out Instance result){
 		auto n=a.view(t); if(n.op!=Op.builtin) return false;
 		auto f=cast(Builtin)n.value;
@@ -202,6 +233,12 @@ package final class Elementary{
 				a.real_(exponent.numerator.toLong()),a.real_(degree-2)]); return true;
 		}
 		if(f==Builtin.sinR||f==Builtin.cosR||f==Builtin.tanR||f==Builtin.cisR){
+			Term turns;
+			if(symbolicPeriod(a.at(n.a),f==Builtin.tanR?1:2,turns)){
+				auto law=f==Builtin.sinR?Law.real_sin_period:f==Builtin.cosR?Law.real_cos_period:
+					f==Builtin.tanR?Law.real_tan_period:Law.complex_phase_period;
+				result=instantiate(a,law,[a.at(n.a),turns]); return true;
+			}
 			bool exact;
 			auto q=angle(a.at(n.a),exact),den=q.denominator*(f==Builtin.tanR?1:2),k=q.numerator/den;
 			if(q.numerator<0&&q.numerator%den!=0) --k;
