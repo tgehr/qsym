@@ -6,6 +6,7 @@ import pathlib
 import re
 import subprocess
 import sys
+from kernel_cache import KernelCache,compiled_rules
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ALLOWED_AXIOMS={"propext","Classical.choice","Quot.sound"}
@@ -23,16 +24,30 @@ def main():
 	parser.add_argument("--lake",default="lake")
 	# Useful when sharing a preinstalled Mathlib tree; normal users use Lake.
 	parser.add_argument("--lean",help="invoke this Lean directly, with configured LEAN_PATH")
-	parser.add_argument("--jobs",type=int,default=1,help="parallel certificate checks")
+	parser.add_argument("--jobs",type=int,default=1,help="parallel certificate and rejection checks")
 	parser.add_argument("--batch-size",type=int,default=1,help="check independent standard certificates in shared Lean processes")
+	parser.add_argument("--fast",action="store_true",help="recheck cached proof terms with the current Lean kernel, falling back to source elaboration")
+	parser.add_argument("--stack-size",type=int,default=65536,help="Lean thread stack in KiB, including batched stress tests")
 	args=parser.parse_args()
-	if args.jobs<1 or args.batch_size<1:
-		parser.error("--jobs and --batch-size must be positive")
+	if args.jobs<1 or args.batch_size<1 or args.stack_size<1:
+		parser.error("--jobs, --batch-size and --stack-size must be positive")
+	cmd=[args.lean] if args.lean else [args.lake,"env","lean"]
+	cmd+=["-s",str(args.stack_size)]
+	cache=KernelCache(ROOT,cmd)
 
-	def check(path,succeeds=True,timeout=180):
-		cmd=[args.lean] if args.lean else [args.lake,"env","lean"]
-		completed=subprocess.run(cmd+[str(path.resolve())],cwd=ROOT/"lean",
-			stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=timeout)
+	def run_check(path,succeeds=True,timeout=180,save=False):
+		source=path.read_bytes()
+		with cache.output() as temporary:
+			compiled=pathlib.Path(temporary)/"Checked.olean"
+			options=["-R",str(ROOT),"-o",str(compiled)] if save else []
+			completed=subprocess.run(cmd+options+[str(path.resolve())],cwd=ROOT/"lean",env=cache.env,
+				stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=timeout)
+			if path.read_bytes()!=source:
+				raise RuntimeError("proof changed during checking: "+str(path))
+			if succeeds and completed.returncode==0:
+				audit(completed.stdout)
+				if save:
+					cache.store(path,source,compiled)
 		if succeeds:
 			if completed.returncode:
 				raise RuntimeError(completed.stdout)
@@ -43,6 +58,12 @@ def main():
 			if not any(s in completed.stdout for s in ("unsolved goals","type mismatch","is false","unexpected axioms")):
 				raise RuntimeError("negative test failed for the wrong reason:\n"+completed.stdout)
 		print(("checked " if succeeds else "rejected ")+path.name,flush=True)
+	negative_checks=[]
+	def check(path,succeeds=True,timeout=180,save=False):
+		if succeeds:
+			run_check(path,timeout=timeout,save=save)
+		else:
+			negative_checks.append((path,path.read_bytes(),timeout))
 
 	certificates=[]
 	def certificate(path):
@@ -50,9 +71,13 @@ def main():
 			raise RuntimeError("tactic or unchecked proof in certificate: "+path.name)
 		certificates.append(path)
 
-	# Recheck generated theorems here so their full axiom reports are audited,
-	# even when Lake reused cached build outputs.
-	check(ROOT/"lean/QSym/Generated.lean",timeout=1800)
+	if args.fast:
+		current=ROOT/"build/CurrentRules.lean"
+		current.write_text(compiled_rules((ROOT/"lean/QSym/Generated.lean").read_text()))
+		check(current,timeout=1800)
+	else:
+		# Independent full audit includes proof construction, even after a fast build.
+		check(ROOT/"lean/QSym/Generated.lean",timeout=1800)
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"tests/Language.lean")
@@ -114,6 +139,8 @@ def main():
 			path.write_text("\n".join(parts)); checks.append(path); members[path]=[file for file,_ in pending]; pending.clear()
 		for file in certificates:
 			source=file.read_text()
+			if pending and file.parent!=pending[-1][0].parent:
+				flush()
 			# Only rename the exporter's known, self-contained namespaces.
 			if re.findall(r"^namespace ([^\n]+)",source,re.M) in (["QSym.Certificate"],["QSym.Certificate","QSym.DomainCertificate"]) and re.findall(r"^import ([^\n]+)",source,re.M)==["QSym"]:
 				pending.append((file,re.sub(r"^import QSym\n","",source,flags=re.M)))
@@ -122,16 +149,19 @@ def main():
 			else:
 				checks.append(file)
 		flush()
+	rechecked=cache.recheck(checks,args.jobs) if args.fast else set()
 	def check_group(path):
+		if path in rechecked:
+			return
 		files=members.get(path,[path])
 		try:
-			check(path,timeout=180*len(files))
+			check(path,timeout=180*len(files),save=True)
 		except (RuntimeError,subprocess.TimeoutExpired):
 			if path not in members:
 				raise
 			print(f"{path.name} failed; checking {len(files)} constituent certificates individually.",flush=True)
 			for file in files:
-				check(file)
+				check(file,save=True)
 	with ThreadPoolExecutor(max_workers=args.jobs) as pool:
 		for _ in pool.map(check_group,checks):
 			pass
@@ -420,6 +450,15 @@ def main():
 		raise RuntimeError("could not construct the tampering test")
 	(negative/"Corrupted.lean").write_text(corrupt)
 	check(negative/"Corrupted.lean",succeeds=False)
+	def reject(item):
+		path,source,timeout=item
+		if path.read_bytes()!=source:
+			raise RuntimeError("negative test changed before checking: "+str(path))
+		run_check(path,succeeds=False,timeout=timeout)
+	with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+		for _ in pool.map(reject,negative_checks):
+			pass
+	print(f"Rejected {len(negative_checks)} invalid proofs.",flush=True)
 	print("All checks passed; only Lean's standard foundational axioms were used.")
 
 if __name__=="__main__":

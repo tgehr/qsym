@@ -8,7 +8,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate test demo verify bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: all generate test demo verify verify-fast bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 all: build/qsym
 
 build generated:
@@ -131,10 +131,17 @@ bench-joins: build/join-bench
 	python3 tools/bench_certificates.py --exporter build/join-bench --lake $(LAKE)
 
 # Full verification is fail-closed. Fast compilation alone never grants trust.
-verify: test build/qsym
-	cd lean && $(LAKE) build
+verify-full: test build/qsym
+	python3 tools/build_lean.py --lake $(LAKE)
+	python3 tests/verification.py --lake $(LAKE)
 	./build/qsym export build/certificates
 	python3 tools/verify.py --lake $(LAKE) $(VERIFYFLAGS)
+
+verify: test build/qsym
+	python3 tools/build_lean.py --lake $(LAKE) --reuse-proofs
+	python3 tests/verification.py --lake $(LAKE)
+	./build/qsym export build/certificates
+	python3 tools/verify.py --lake $(LAKE) --fast --jobs 2 --batch-size 16 $(VERIFYFLAGS)
 
 clean:
 	rm -rf build
