@@ -39,7 +39,20 @@ package final class Elementary{
 		result=Rational(numerator,denominator); return true;
 	}
 	private bool pi(Term t){ auto n=a.view(t); return n.op==Op.builtin&&n.value==Builtin.pi; }
-	private Rational angle(Term t){
+	private bool cartesian(Term t){
+		foreach(id;a.postorder(t)){
+			budget.spend(); auto u=a.at(id),n=a.view(u);
+			if(n.sort!=Sort.complex||a.isNumber(u)) continue;
+			switch(n.op){
+				case Op.add,Op.mul,Op.inv,Op.pow,Op.conj:break;
+				case Op.builtin:if(n.value==Builtin.castRC) break; goto default;
+				default:return false;
+			}
+		}
+		return true;
+	}
+	private Rational angle(Term t,out bool exact){
+		exact=true;
 		Term[] pending=[t]; Rational result;
 		while(pending.length){
 			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.view(u);
@@ -48,13 +61,18 @@ package final class Elementary{
 			else if(n.op==Op.mul){
 				if(a.isNumber(a.at(n.a))&&pi(a.at(n.b))) result=result+a.number(a.at(n.a)).re;
 				else if(a.isNumber(a.at(n.b))&&pi(a.at(n.a))) result=result+a.number(a.at(n.b)).re;
+				else exact=false;
 			}
+			else exact=false;
 		}
 		return result;
 	}
 	bool propose(Term t,out Instance result){
 		auto n=a.view(t); if(n.op!=Op.builtin) return false;
 		auto f=cast(Builtin)n.value;
+		if(f==Builtin.absC&&cartesian(a.at(n.a))){
+			result=instantiate(a,Law.complex_norm_components,[a.at(n.a)]); return true;
+		}
 		if(f==Builtin.floorR||f==Builtin.ceilR){
 			auto x=a.at(n.a);
 			if(a.view(x).op==Op.add){
@@ -153,12 +171,26 @@ package final class Elementary{
 			result=instantiate(a,Law.real_power_exact,[a.at(n.a),a.real_(value),a.at(n.b),
 				a.real_(exponent.numerator.toLong()),a.real_(degree-1)]); return true;
 		}
-		if(f==Builtin.sinR||f==Builtin.cosR||f==Builtin.cisR){
-			auto q=angle(a.at(n.a)),den=q.denominator*2,k=q.numerator/den;
+		if(f==Builtin.sinR||f==Builtin.cosR||f==Builtin.tanR||f==Builtin.cisR){
+			bool exact;
+			auto q=angle(a.at(n.a),exact),den=q.denominator*(f==Builtin.tanR?1:2),k=q.numerator/den;
 			if(q.numerator<0&&q.numerator%den!=0) --k;
-			if(k==0) return false;
-			auto law=f==Builtin.sinR?Law.real_sin_period:f==Builtin.cosR?Law.real_cos_period:Law.complex_phase_period;
-			result=instantiate(a,law,[a.at(n.a),a.number(Number(Rational(k,BigInt(1))),Sort.integer)]); return true;
+			if(k!=0){
+				auto law=f==Builtin.sinR?Law.real_sin_period:f==Builtin.cosR?Law.real_cos_period:
+					f==Builtin.tanR?Law.real_tan_period:Law.complex_phase_period;
+				result=instantiate(a,law,[a.at(n.a),a.number(Number(Rational(k,BigInt(1))),Sort.integer)]); return true;
+			}
+			if(f!=Builtin.tanR&&q>=Rational(BigInt(1),BigInt(2))){
+				auto law=f==Builtin.sinR?Law.real_sin_quarter_turn:f==Builtin.cosR?Law.real_cos_quarter_turn:Law.complex_phase_quarter_turn;
+				result=instantiate(a,law,[a.at(n.a)]); return true;
+			}
+			// Expand only phases whose components have exact elementary values.
+			// In particular, leave symbolic phases compact and tangent poles alone.
+			auto degree=q.denominator;
+			if(exact&&(degree==1||degree==3||degree==4||degree==6)){
+				if(f==Builtin.cisR){ result=instantiate(a,Law.complex_phase_cartesian,[a.at(n.a)]); return true; }
+				if(f==Builtin.tanR){ result=instantiate(a,Law.real_tan_ratio,[a.at(n.a)]); return true; }
+			}
 		}
 		return false;
 	}

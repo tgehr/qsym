@@ -82,7 +82,7 @@ unittest{
 	assert(result("2^(1/2)")=="sqrt(2)");
 	assert(result("2^3^2")=="512");
 	assert(result("q^0")=="rat(1,1)");
-	assert(result("ccosh(0)")=="1+0·ⅈ");
+	assert(result("ccosh(0)")=="toℂ(1)");
 	assert(result("clog(cexp(z))")=="clog(cexp(z))");
 	assert(result("[false]*log(0)")=="0");
 	assert(result("sqrt(x^2)")=="abs(x)");

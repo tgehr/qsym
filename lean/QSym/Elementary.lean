@@ -402,4 +402,82 @@ theorem phase_conjugate (x : ℝ) :
   rw [← Complex.exp_conj]
   simp
 
+theorem sin_quarter_turn (x : ℝ) : Real.cos (x+-1*((1/2 : ℝ)*Real.pi))=Real.sin x := by
+  rw [show x+-1*((1/2 : ℝ)*Real.pi)=x-Real.pi/2 by ring]
+  exact Real.cos_sub_pi_div_two x
+
+theorem cos_quarter_turn (x : ℝ) : -Real.sin (x+-1*((1/2 : ℝ)*Real.pi))=Real.cos x := by
+  rw [show x+-1*((1/2 : ℝ)*Real.pi)=x-Real.pi/2 by ring, Real.sin_sub_pi_div_two, neg_neg]
+
+theorem phase_quarter_turn (x : ℝ) :
+    Complex.I*Complex.exp ((x+-1*((1/2 : ℝ)*Real.pi) : ℝ)*Complex.I)=Complex.exp ((x : ℂ)*Complex.I) := by
+  nth_rw 1 [← Complex.exp_pi_div_two_mul_I]
+  rw [← Complex.exp_add]
+  congr 1
+  push_cast
+  ring
+
+theorem phase_cartesian (x : ℝ) :
+    Complex.exp ((x : ℂ)*Complex.I)=(Real.cos x : ℂ)+Complex.I*(Real.sin x : ℂ) := by
+  simpa only [← Complex.ofReal_sin, ← Complex.ofReal_cos, mul_comm] using Complex.exp_mul_I (x : ℂ)
+
+theorem tan_period (x : ℝ) (n : ℤ) :
+    Real.tan (x+-1*((n : ℝ)*Real.pi))=Real.tan x := by
+  simpa only [neg_one_mul, sub_eq_add_neg] using Real.tan_sub_int_mul_pi x n
+
+theorem tan_period_domain (x : ℝ) (n : ℤ) :
+    Real.cos (x+-1*((n : ℝ)*Real.pi))=0 ↔ Real.cos x=0 := by
+  have h : (-1 : ℝ)^n≠0 := zpow_ne_zero _ (by norm_num)
+  simp [← sub_eq_add_neg, Real.cos_sub_int_mul_pi, h]
+
+theorem cosh_ne_zero (x : ℝ) : Real.cosh x≠0 := (Real.cosh_pos x).ne'
+
+theorem sinh_cartesian (z : ℂ) :
+    Complex.sinh z=Complex.sinh z.re*Complex.cos z.im+Complex.cosh z.re*Complex.sin z.im*Complex.I := by
+  conv_lhs => rw [← Complex.re_add_im z]
+  rw [Complex.sinh_add, Complex.sinh_mul_I, Complex.cosh_mul_I]
+  ring
+
+theorem cosh_cartesian (z : ℂ) :
+    Complex.cosh z=Complex.cosh z.re*Complex.cos z.im+Complex.sinh z.re*Complex.sin z.im*Complex.I := by
+  conv_lhs => rw [← Complex.re_add_im z]
+  rw [Complex.cosh_add, Complex.sinh_mul_I, Complex.cosh_mul_I]
+  ring
+
+theorem sin_quarter_turn_normal (x : ℝ) : Real.cos (x+Real.pi*(-1/2))=Real.sin x := by
+  rw [show x+Real.pi*(-1/2)=x-Real.pi/2 by ring, Real.cos_sub_pi_div_two]
+
+theorem cos_quarter_turn_normal (x : ℝ) : Real.cos x+Real.sin (x+Real.pi*(-1/2))=0 := by
+  rw [show x+Real.pi*(-1/2)=x-Real.pi/2 by ring, Real.sin_sub_pi_div_two]
+  ring
+
+theorem phase_quarter_turn_normal (x : ℝ) :
+    Complex.I*Complex.exp (Complex.I*x+Complex.I*Real.pi*(-1/2))=Complex.exp (Complex.I*x) := by
+  convert phase_quarter_turn x using 2 <;> push_cast <;> ring
+
+theorem tan_period_normal (x : ℝ) (n : ℤ) : Real.tan (x-Real.pi*n)=Real.tan x := by
+  simpa only [mul_comm] using Real.tan_sub_int_mul_pi x n
+
+theorem tan_period_domain_normal (x : ℝ) (n : ℤ) : Real.cos (x-Real.pi*n)=0 ↔ Real.cos x=0 := by
+  have h : (-1 : ℝ)^n≠0 := zpow_ne_zero _ (by norm_num)
+  rw [mul_comm Real.pi (n : ℝ), Real.cos_sub_int_mul_pi]
+  simp [h]
+
+theorem sin_re (z : ℂ) : (Complex.sin z).re=Real.sin z.re*Real.cosh z.im := by
+  rw [Complex.sin_eq]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
+theorem sin_im (z : ℂ) : (Complex.sin z).im=Real.cos z.re*Real.sinh z.im := by
+  rw [Complex.sin_eq]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
+theorem cos_re (z : ℂ) : (Complex.cos z).re=Real.cos z.re*Real.cosh z.im := by
+  rw [Complex.cos_eq]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
+theorem cos_im (z : ℂ) : (Complex.cos z).im=-(Real.sin z.re*Real.sinh z.im) := by
+  rw [Complex.cos_eq]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
+theorem sinh_re (z : ℂ) : (Complex.sinh z).re=Real.sinh z.re*Real.cos z.im := by
+  rw [sinh_cartesian]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
+theorem sinh_im (z : ℂ) : (Complex.sinh z).im=Real.cosh z.re*Real.sin z.im := by
+  rw [sinh_cartesian]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
+theorem cosh_re (z : ℂ) : (Complex.cosh z).re=Real.cosh z.re*Real.cos z.im := by
+  rw [cosh_cartesian]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
+theorem cosh_im (z : ℂ) : (Complex.cosh z).im=Real.sinh z.re*Real.sin z.im := by
+  rw [cosh_cartesian]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
+
 end QSym.Elementary

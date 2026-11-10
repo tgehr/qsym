@@ -52,7 +52,7 @@ def main():
 
 	# Recheck generated theorems here so their full axiom reports are audited,
 	# even when Lake reused cached build outputs.
-	check(ROOT/"lean/QSym/Generated.lean",timeout=900)
+	check(ROOT/"lean/QSym/Generated.lean",timeout=1800)
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"tests/Language.lean")
@@ -62,7 +62,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",246)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -152,6 +152,12 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadCosQuarterTurn","lemma bad(x:ℝ):cos(x)⇒sin(x-real(1,2)*π);"),
+		("BadTanPeriod","lemma bad(x:ℝ):tan(x)⇒tan(x-real(1,2)*π);"),
+		("BadComplexCosImaginaryPart","rewrite bad(z:ℂ):cimag(ccos(z))⇒sin(creal(z))*sinh(cimag(z));"),
+		("BadComplexSinRealPart","rewrite bad(z:ℂ):creal(csin(z))⇒sin(creal(z))*cos(cimag(z));"),
+		("BadTanExpansion","rewrite bad(x:ℝ):sin(x)⇒tan(x)*cos(x);"),
+		("BadComplexTanhExpansion","rewrite bad(z:ℂ):csinh(z)⇒ctanh(z)*ccosh(z);"),
 		("BadExponentialPower","rewrite bad(z:ℂ,w:ℂ):powerC(cexp(z),w)⇒cexp(z*w);"),
 		("BadExponentialRoot","rewrite bad(z:ℂ):csqrt(cexp(z))⇒cexp(z/2);"),
 		("BadExponentialPowerBoundary","rewrite bad(z:ℂ,w:ℂ):powerC(cexp(z),w)⇒cexp(z*w) when -π≤cimag(z),cimag(z)≤π;"),

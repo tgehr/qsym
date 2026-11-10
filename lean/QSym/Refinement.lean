@@ -406,6 +406,63 @@ theorem refines_complex_nonzero_quadratic (v_p : Option ℂ) (v_x : Option ℂ) 
       sub_eq_add_neg, neg_add_rev, add_assoc, add_comm, add_left_comm]
       using congrArg (fun b : Bool => some b) he
 
+theorem refines_tan_cos (x : Option ℝ) :
+    Refines (mul (Functions.tanR.apply x) (Functions.cosR.apply x)) (Functions.sinR.apply x) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases h : Real.cos x=0
+    · simp [Refines, Function1.apply, Functions.tanR, Functions.cosR, mul, h]
+    · apply refines_of_eq
+      simp [Function1.apply, Functions.tanR, Functions.cosR, Functions.sinR, mul, h, Real.tan_mul_cos]
+
+theorem refines_complex_tan_cos (x : Option ℂ) :
+    Refines (mul (Functions.tanC.apply x) (Functions.cosC.apply x)) (Functions.sinC.apply x) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases h : Complex.cos x=0
+    · simp [Refines, Function1.apply, Functions.tanC, Functions.cosC, mul, h]
+    · apply refines_of_eq
+      simp [Function1.apply, Functions.tanC, Functions.cosC, Functions.sinC, mul, h, Complex.tan_mul_cos]
+
+theorem refines_complex_tanh_cosh (x : Option ℂ) :
+    Refines (mul (Functions.tanhC.apply x) (Functions.coshC.apply x)) (Functions.sinhC.apply x) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases h : Complex.cosh x=0
+    · simp [Refines, Function1.apply, Functions.tanhC, Functions.coshC, mul, h]
+    · apply refines_of_eq
+      simp [Function1.apply, Functions.tanhC, Functions.coshC, Functions.sinhC, mul, h, Complex.tanh_eq_sinh_div_cosh]
+
+theorem refines_sin_atan (x : Option ℝ) :
+    Refines (Functions.sinR.apply (Functions.atanR.apply x))
+      (mul x (inv (Functions.sqrtR.apply (add (some 1) (x.map (fun v => v^2)))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hp : 0≤1+x^2 := by positivity
+    have hn : Real.sqrt (1+x^2)≠0 := by positivity
+    apply refines_of_eq
+    simp [Function1.apply, Functions.sinR, Functions.atanR, Functions.sqrtR, mul, add, inv, hp, hn, Real.sin_arctan, div_eq_mul_inv]
+
+theorem refines_cos_atan (x : Option ℝ) :
+    Refines (Functions.cosR.apply (Functions.atanR.apply x))
+      (inv (Functions.sqrtR.apply (add (some 1) (x.map (fun v => v^2))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hp : 0≤1+x^2 := by positivity
+    have hn : Real.sqrt (1+x^2)≠0 := by positivity
+    apply refines_of_eq
+    simp [Function1.apply, Functions.cosR, Functions.atanR, Functions.sqrtR, add, inv, hp, hn, Real.cos_arctan]
+
 end QSym.Value
 
 namespace QSym
@@ -552,6 +609,14 @@ macro "qsym_function_order" : tactic => `(tactic| (
     | (apply Value.refines_decreasing_ne; qsym_function_monotonicity)
 ))
 
+open Lean Meta Elab Tactic in
+elab "qsym_trig_goal" : tactic => do
+  let functions := #[``Real.sin, ``Real.cos, ``Real.tan, ``Real.sinh, ``Real.cosh, ``Real.tanh,
+    ``Complex.sin, ``Complex.cos, ``Complex.tan, ``Complex.sinh, ``Complex.cosh, ``Complex.tanh, ``Complex.exp]
+  let target ← getMainTarget
+  unless (target.find? fun e => functions.any (fun n => e.isConstOf n)).isSome do
+    throwError "not a trigonometric goal"
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
   | exact Value.refines_quotient_add_nonzero _ _ _
@@ -564,6 +629,11 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | solve | (simp only [Int.cast_zero] at *; apply Value.refines_log_product <;> assumption)
   | solve | apply Value.refines_power_exact <;> assumption
   | solve | apply Value.refines_phase_period <;> assumption
+  | solve | apply Value.refines_tan_cos
+  | solve | apply Value.refines_complex_tan_cos
+  | solve | apply Value.refines_complex_tanh_cosh
+  | solve | (simp only [Int.cast_one]; apply Value.refines_sin_atan)
+  | solve | (simp only [Int.cast_one]; apply Value.refines_cos_atan)
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_power_negative <;> assumption)
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_lt_factor <;> assumption)
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_le_factor <;> assumption)
@@ -597,6 +667,17 @@ macro "qsym_scalar" : tactic => `(tactic| (
       | split at *
     all_goals try (simp_all only [← sub_eq_add_neg, sub_eq_zero])
     all_goals subst_vars
+    all_goals try (qsym_trig_goal; solve | simp_all [Elementary.sin_quarter_turn, Elementary.cos_quarter_turn,
+      Elementary.phase_quarter_turn, Elementary.phase_cartesian, Elementary.tan_period, Elementary.tan_period_domain,
+      Real.tan_eq_sin_div_cos, Complex.tan_eq_sin_div_cos, Real.tanh_eq_sinh_div_cosh, Complex.tanh_eq_sinh_div_cosh,
+      Real.cosh_add_sinh, Real.cosh_sub_sinh, Complex.cosh_add_sinh, Complex.cosh_sub_sinh,
+      Real.sin_add, Real.cos_sub, Complex.sin_add, Complex.cos_sub,
+      Real.sin_arctan, Real.cos_arctan, Real.cosh_arsinh,
+      ← Complex.tan_conj, ← Complex.tanh_conj, ← Complex.cos_conj, ← Complex.cosh_conj,
+      Real.sin_pi_div_three, Real.cos_pi_div_six, Elementary.cosh_ne_zero,
+      Real.cos_two_mul', Complex.cos_two_mul', div_eq_mul_inv])
+    all_goals try (qsym_trig_goal; solve | simp_all [Elementary.sin_re, Elementary.sin_im, Elementary.cos_re, Elementary.cos_im,
+      Elementary.sinh_re, Elementary.sinh_im, Elementary.cosh_re, Elementary.cosh_im])
     all_goals try (have h := Elementary.log_product_domain (by assumption) (by assumption); rcases h with ⟨_, _⟩)
     all_goals try (have h := Elementary.log_product_domain_right (by assumption) (by assumption); rcases h with ⟨_, _⟩)
     all_goals try (have h := Elementary.log_odd_domain _ (by assumption))
@@ -657,6 +738,9 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try norm_num at *
     all_goals try field_simp
     all_goals try ring_nf at *
+    all_goals try (qsym_trig_goal; simp_all [Elementary.sin_quarter_turn_normal, Elementary.cos_quarter_turn_normal,
+      Elementary.phase_quarter_turn_normal, Elementary.tan_period_normal, Elementary.tan_period_domain_normal,
+      Complex.tan_conj, Complex.tanh_conj])
     all_goals try simp_all [Complex.I_sq, Elementary.phase_half_pi, Elementary.phase_period_normal]
     all_goals try norm_num [Complex.I_pow_eq_pow_mod] at *
     all_goals try ring
@@ -694,6 +778,9 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (solve | apply Elementary.nonnegative_cases; assumption)
     all_goals try positivity
     all_goals try nlinarith
+    all_goals try (qsym_trig_goal; simp_all [Elementary.cos_quarter_turn_normal,
+      Elementary.tan_period_normal, Elementary.tan_period_domain_normal])
+    all_goals try (solve | have h := eq_neg_of_add_eq_zero_left (by assumption); subst_vars; ring)
     all_goals try (solve | exact Or.resolve_left (by assumption) (not_lt.mpr (by assumption)))
     all_goals try (solve | exact Or.resolve_left (by assumption) (not_le.mpr (by assumption)))
     all_goals try (constructor <;> intro h <;> nlinarith)

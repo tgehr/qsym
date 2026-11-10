@@ -236,7 +236,8 @@ struct Syntax{
 					else{
 						auto negative=z.re<Rational(0)||z.re.zero&&z.im<Rational(0); if(negative) z=-z;
 						auto im=z.im==Rational(1)?"ⅈ":z.im==Rational(-1)?"-ⅈ":z.im.toString~"·ⅈ";
-						p=z.re.zero&&!z.im.zero?Piece(im,z.im==Rational(1)?100:70):Piece(z.re.toString~(z.im<Rational(0)?"":"+")~im,60);
+						p=z.im.zero?Piece("toℂ("~z.re.toString~")"):
+							z.re.zero?Piece(im,z.im==Rational(1)?100:70):Piece(z.re.toString~(z.im<Rational(0)?"":"+")~im,60);
 						p.negative=negative;
 					}
 					break;
