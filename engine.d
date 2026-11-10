@@ -18,6 +18,7 @@ package final class Engine{
 	private Elementary elementary;
 	private Predicates predicates;
 	private size_t rewritesLeft;
+	private bool distributeLogic;
 	private uint depth,epoch,premiseDepth;
 	private struct MemoKey{ ulong term; uint revision; }
 	private Table!(MemoKey,uint) memo;
@@ -29,8 +30,9 @@ package final class Engine{
 	private uint[] roots;
 	private Table!(ulong,bool) active,proving;
 	private Proof[][] facts=[[]];
-	this(Arena a,Derivation d,Budget budget,size_t rewrites,bool expandPowers=false){
+	this(Arena a,Derivation d,Budget budget,size_t rewrites,bool expandPowers=false,bool distributeLogic=true){
 		this.a=a; this.d=d; this.budget=budget; rewritesLeft=rewrites;
+		this.distributeLogic=distributeLogic;
 		field=new Field(a,d,budget,&normalize);
 		field.expandPowers=expandPowers;
 		elementary=new Elementary(a,budget);
@@ -183,6 +185,7 @@ package final class Engine{
 		return false;
 	}
 	private bool attempt(Law law,Term t,uint ctx,out Proof result){
+		if(!distributeLogic&&(law==Law.bool_and_or||law==Law.bool_or_and)) return false;
 		if(!candidate(a,law,t)) return false;
 		budget.spend(); Term[] bindings;
 		return match(a,law,-1,t,bindings)&&complete(law,bindings,ctx,result);

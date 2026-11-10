@@ -639,3 +639,62 @@ string exportEquivalence(Arena a,Result left,Result right){
 		"  (LeftCertificate.simplification ρ"~arguments~" hl).trans (RightCertificate.simplification ρ"~arguments~" hr).symm\n"~
 		"#qsym_check_axioms equivalence\nend QSym\n";
 }
+
+string exportDomainLean(Arena a,Term source,Result result){
+	auto conditions=domainConditions(a,source),condition=conditions[source.id];
+	enforce(result.input==condition&&result.proofInput==condition,"domain certificate input changed");
+	auto code=exportLean(a,result)~"\nnamespace QSym.DomainCertificate\n";
+	bool[] needed=new bool[a.length];
+	foreach(root;[source,condition]) foreach(id;a.viewPostorder(root)) needed[id]=true;
+	foreach(id;a.viewPostorder(source)) foreach(j;a.viewPostorder(conditions[id])) needed[j]=true;
+	foreach(i,yes;needed) if(yes){
+		auto t=a.at(cast(uint)i);
+		code~=syntaxCode(a,t)~valueCode(a,t);
+	}
+	string ref_(uint id){ return "(q"~to!string(id)~" ρ)"; }
+	string arg(string label,uint id){ return " ("~label~" := "~ev(id)~")"; }
+	foreach(id;a.viewPostorder(source)){
+		auto n=a.view(a.at(id)); string p;
+		final switch(n.op){
+			case Op.realLit,Op.complexLit,Op.boolLit,Op.variable,Op.lebesgue,Op.numberLit:
+				p="Domain.leaf _"; break;
+			case Op.builtin:
+				auto info=builtinInfo(cast(Builtin)n.value),f="Functions."~info.code;
+				if(!n.arity) p="Domain.leaf _";
+				else{
+					p="Domain."~(info.total?"total":"partial")~to!string(n.arity)~" "~f~arg("x",n.a);
+					p~=n.arity==1?arg("d",conditions[n.a].id):arg("y",n.b)~arg("dx",conditions[n.a].id)~arg("dy",conditions[n.b].id);
+					if(!info.total) p~=arg("p",domainPredicate(a,a.at(id)).id);
+					p~=" ";
+					p~=info.total?(n.arity==1?"(fun _ => True.intro)":"(fun _ _ => True.intro)"):
+						"(Domain.test_"~info.code~" "~ev(n.a)~(n.arity==2?" "~ev(n.b):"")~")";
+					p~=" "~ref_(n.a)~(n.arity==2?" "~ref_(n.b):"");
+				}
+				break;
+			case Op.add,Op.mul,Op.densityAt,Op.lt,Op.le:
+				p="Domain.strict2"~arg("x",n.a)~arg("y",n.b)~arg("dx",conditions[n.a].id)~arg("dy",conditions[n.b].id)~
+					" (Value."~domainLemma(n)~" "~ev(n.a)~" "~ev(n.b)~") "~ref_(n.a)~" "~ref_(n.b); break;
+			case Op.inv:p="Domain.inverse"~arg("x",n.a)~arg("d",conditions[n.a].id)~" "~ref_(n.a); break;
+			case Op.nonzero,Op.conj,Op.puncture,Op.forget,Op.pow,Op.not_,Op.abs:
+				p="Domain.transport"~arg("x",n.a)~arg("d",conditions[n.a].id)~" (Value."~domainLemma(n)~" "~ev(n.a)~") "~ref_(n.a); break;
+			case Op.mask,Op.and_,Op.or_:
+				p="Domain."~(n.op==Op.mask?"mask":n.op==Op.and_?"and":"or")~arg("p",n.a)~arg(n.op==Op.mask?"x":"q",n.b)~
+					arg("dp",conditions[n.a].id)~arg(n.op==Op.mask?"dx":"dq",conditions[n.b].id)~" "~ref_(n.a)~" "~ref_(n.b); break;
+		}
+		code~="theorem q"~to!string(id)~" (ρ : Env) : Domain.Correct "~ev(id)~" "~ev(conditions[id].id)~" :=\n  "~p~"\n";
+	}
+	string hypotheses,arguments;
+	foreach(i,f;result.assumptions){
+		auto h="h"~to!string(i);
+		hypotheses~=" ("~h~" : Expr.eval ρ Certificate."~name(f.id)~" = some true)";
+		arguments~=" "~h;
+	}
+	auto output="(Expr.eval ρ Certificate."~name(result.output.id)~")";
+	code~="theorem domain_correct (ρ : Env)"~hypotheses~" : Domain.Correct "~exprEval(source.id)~" "~output~" :=\n  "~
+		"Domain.simplify "~ref_(source.id)~" (Certificate.refinement ρ"~arguments~")\n#qsym_check_axioms domain_correct\n";
+	code~="theorem domain_total (ρ : Env)"~hypotheses~" : Value.Defined "~output~" :=\n  "~
+		"(domain_correct ρ"~arguments~").total\n#qsym_check_axioms domain_total\n";
+	code~="theorem domain_iff (ρ : Env)"~hypotheses~" : Expr.Defined ρ "~name(source.id)~" ↔ "~output~" = some true :=\n  "~
+		"(domain_correct ρ"~arguments~").iff\n#qsym_check_axioms domain_iff\nend QSym.DomainCertificate\n";
+	return code;
+}

@@ -61,7 +61,7 @@ final class Derivation{
 		if(t==result) return refl(t,context);
 		return record(Deduction(Evidence.congr,Proof(t,result,uint.max,context),children));
 	}
-	private Proof canonical(Term t,uint context,bool reverse=false){
+	package Proof canonical(Term t,uint context,bool reverse=false){
 		auto target=arena.canonical(t); if(t==target) return refl(t,context);
 		auto n=arena.view(t); Proof[] cs;
 		foreach(i;0..n.arity) cs~=canonical(arena.viewChild(t,i),context,reverse);

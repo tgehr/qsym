@@ -12,7 +12,7 @@ int repl(){
 	//if(reader.interactive) writeln("enter an expression; :help for commands.");
 	Syntax syntax,lastSyntax;
 	string last;
-	bool lastExpand;
+	bool lastExpand,lastDomain;
 	string[] facts,lastFacts;
 	Term[] parseFacts(Arena a,ref Syntax s,string[] source){
 		Term[] result; foreach(f;source) result~=s.parse(a,f); return result;
@@ -40,6 +40,7 @@ int repl(){
 				writeln(":assume EXPR      assume a defined, true Boolean expression");
 				writeln(":facts            list assumptions; :clear removes them");
 				writeln(":expand EXPR      simplify with polynomial power expansion");
+				writeln(":domain EXPR      condition for the original expression to be defined");
 				writeln(":lean FILE        export a Lean certificate for the last expression");
 				writeln(":reset            clear assumptions, variables and the last expression");
 				writeln(":quit             exit (or EOF)");
@@ -87,22 +88,28 @@ int repl(){
 				auto session=Session.open(); auto a=session.arena;
 				auto assumptions=parseFacts(a,lastSyntax,lastFacts);
 				auto options=Options(DensityMode.preserve,true); options.expandPowers=lastExpand;
-				auto result=simplify(a,lastSyntax.parse(a,last),assumptions,options);
-				write(path,exportLean(a,result));
+				auto original=lastSyntax.parse(a,last);
+				auto result=lastDomain?simplifyDomain(a,original,assumptions,options):simplify(a,original,assumptions,options);
+				write(path,lastDomain?exportDomainLean(a,original,result):exportLean(a,result));
 				writeln("Wrote ",path);
 				continue;
 			}
-			auto options=Options.init;
+			auto options=Options.init; bool domainQuery;
+			if(line==":domain"||line.startsWith(":domain ")){
+				line=strip(line[7..$]); enforce(line.length!=0,"expected an expression");
+				domainQuery=true;
+			}else
 			if(line==":expand"||line.startsWith(":expand ")){
 				line=strip(line[7..$]); enforce(line.length!=0,"expected an expression");
 				options.expandPowers=true;
 			}else enforce(!line.startsWith(":"),"unknown command; use :help");
 			auto session=Session.open(); auto a=session.arena;
 			auto assumptions=parseFacts(a,syntax,facts);
-			auto result=simplify(a,syntax.parse(a,line),assumptions,options);
+			auto original=syntax.parse(a,line);
+			auto result=domainQuery?simplifyDomain(a,original,assumptions,options):simplify(a,original,assumptions,options);
 			writeln(syntax.format(a,result.output));
 			if(result.exhausted) stderr.writeln("simplification budget exhausted; showing the partial result");
-			last=line; lastSyntax=syntax; lastFacts=facts.dup; lastExpand=options.expandPowers;
+			last=line; lastSyntax=syntax; lastFacts=facts.dup; lastExpand=options.expandPowers; lastDomain=domainQuery;
 		}catch(Exception e){ stderr.writeln(e.msg); }
 	}
 	return 0;

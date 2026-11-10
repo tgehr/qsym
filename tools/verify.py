@@ -58,11 +58,13 @@ def main():
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
+	check(ROOT/"tests/Domain.lean")
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",246),("radicals",42),("inverses",60)):
+	certificate(ROOT/"build/ReplDomain.lean")
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",246),("radicals",42),("inverses",60),("domains",184)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -105,12 +107,15 @@ def main():
 			path=directory/("Batch"+str(len(checks))+".lean")
 			parts=["import QSym\n"]
 			for i,(file,source) in enumerate(pending):
-				parts.append("-- "+str(file.relative_to(ROOT))+"\n"+source.replace("QSym.Certificate","QSym.BatchCertificate"+str(i)))
+				source=source.replace("QSym.Certificate","QSym.BatchCertificate"+str(i))
+				source=source.replace("QSym.DomainCertificate","QSym.BatchDomainCertificate"+str(i))
+				source=re.sub(r"\bCertificate\.","BatchCertificate"+str(i)+".",source)
+				parts.append("-- "+str(file.relative_to(ROOT))+"\n"+source)
 			path.write_text("\n".join(parts)); checks.append(path); members[path]=[file for file,_ in pending]; pending.clear()
 		for file in certificates:
 			source=file.read_text()
-			# Only rename the exporter's single, self-contained namespace.
-			if re.findall(r"^namespace ([^\n]+)",source,re.M)==["QSym.Certificate"] and re.findall(r"^import ([^\n]+)",source,re.M)==["QSym"]:
+			# Only rename the exporter's known, self-contained namespaces.
+			if re.findall(r"^namespace ([^\n]+)",source,re.M) in (["QSym.Certificate"],["QSym.Certificate","QSym.DomainCertificate"]) and re.findall(r"^import ([^\n]+)",source,re.M)==["QSym"]:
 				pending.append((file,re.sub(r"^import QSym\n","",source,flags=re.M)))
 				if len(pending)==args.batch_size:
 					flush()
@@ -142,6 +147,20 @@ def main():
 		path=negative/(name+".lean")
 		path.write_text("import QSym\n#qsym_check_axioms QSym.Numeric.sound\n"+body+"\n#qsym_check_axioms forged\n")
 		check(path,succeeds=False)
+	domain=(ROOT/"build/domains/Reciprocal.lean").read_text()
+	corrupt,count=re.subn(r"(theorem domain_correct .*?Domain.Correct .*? )\(Expr.eval ρ Certificate.n\d+\)( :=)",
+		r"\1(some true)\2",domain,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid-domain test")
+	(negative/"WrongDomainCondition.lean").write_text(corrupt)
+	check(negative/"WrongDomainCondition.lean",succeeds=False)
+	domain=(ROOT/"build/domains/GuardedUndefined.lean").read_text()
+	head,body=domain.split("namespace QSym.DomainCertificate\n",1)
+	corrupt=body.replace("(.bool false)","(.bool true)").replace("some false","some true")
+	if corrupt==body:
+		raise RuntimeError("could not construct the invalid-guard-domain test")
+	(negative/"WrongMaskDomain.lean").write_text(head+"namespace QSym.DomainCertificate\n"+corrupt)
+	check(negative/"WrongMaskDomain.lean",succeeds=False)
 	bad_rules=negative/"bad.qs"
 	bad_rules.write_text("rule bad(x:ℝ):1·x⇒0;\n",encoding="utf-8")
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad.d"),

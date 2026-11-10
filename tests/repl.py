@@ -61,4 +61,20 @@ assert result.returncode==0,result.stderr
 assert result.stdout.splitlines()==["(x+1)^10","-3<x∧x<1","x^3+3·x^2+3·x+1",
 	f"Wrote {expanded_certificate}","(x+1)^3"],result.stdout
 assert "expected an expression" in result.stderr,result.stderr
+domain_certificate=root/"build/ReplDomain.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":domain 1/x",":domain [x≠0]/x",":domain 0*(1/0)",":domain [false]*(1/0)",
+	":domain sqrt(x)",":domain log(1/x)",":domain tanh(atanh(x))",":domain",
+	":assume x>0",":domain log(x)",":clear",":vars x:ℂ",f":lean {domain_certificate}",
+	":reset",":domain clog(0)",":domain csqrt(-1)",":domain false∧1/0>0",
+	":domain 1/0>0∧false",":help",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0,result.stderr
+assert result.stdout.splitlines()[:13]==[
+	"x≠0","true","false","true","0≤x","0<x","-1<x∧x<1","true",
+	f"Wrote {domain_certificate}","false","true","true","false"],result.stdout
+assert "expected an expression" in result.stderr,result.stderr
+assert ":domain EXPR" in result.stdout,result.stdout
+domain_source=domain_certificate.read_text()
+assert "theorem domain_iff" in domain_source and "theorem domain_total" in domain_source
+assert "(h0 :" in domain_source and "Expr .real" in domain_source
 print("REPL checks passed.")

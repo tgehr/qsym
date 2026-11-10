@@ -9,3 +9,4 @@ import QSym.Sum
 import QSym.Bag
 import QSym.Numeric
 import QSym.Region
+import QSym.Domain
