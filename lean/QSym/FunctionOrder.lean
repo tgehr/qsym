@@ -49,6 +49,21 @@ theorem cbrt_cube (x : ℝ) : (Functions.cbrtR.value x)^3=x := by
     norm_num
   · exact cube_root_cube (le_of_not_gt hx)
 
+theorem cbrt_power (x : ℝ) (n : ℕ) : Functions.cbrtR.value (x^(n+n+n+3))=x^(n+1) := by
+  apply (show Odd 3 from ⟨1, rfl⟩).pow_inj.mp
+  rw [cbrt_cube, ← pow_mul]
+  congr 1
+  omega
+
+theorem cbrt_neg (x : ℝ) : Functions.cbrtR.value (-x) = -Functions.cbrtR.value x := by
+  apply (show Odd 3 from ⟨1, rfl⟩).pow_inj.mp
+  norm_num [neg_pow, cbrt_cube]
+
+theorem cbrt_mul (x y : ℝ) :
+    Functions.cbrtR.value (x*y)=Functions.cbrtR.value x*Functions.cbrtR.value y := by
+  apply (show Odd 3 from ⟨1, rfl⟩).pow_inj.mp
+  simp only [mul_pow, cbrt_cube]
+
 theorem cbrt : Increasing Functions.cbrtR := by
   intro x _ y _ hxy
   apply (show Odd 3 from ⟨1, rfl⟩).pow_lt_pow.mp

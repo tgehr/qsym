@@ -50,7 +50,16 @@ bool functionPattern(Pattern p){
 }
 bool earlyRule(Rule r){
 	if(!r.automatic) return false;
-	if(!r.premises.length) return true;
+	auto op=rootOp(r.lhs);
+	auto comparison=op=="nonzero"||op=="lt"||op=="le"||
+		op=="builtin"&&r.lhs.sort==Sort.boolean;
+	if(comparison&&!r.premises.length) return true;
+	// Keep constant reductions ahead of identities with overlapping empty domains.
+	if(!r.premises.length) foreach(arg;r.lhs.args){
+		auto head=rootOp(arg);
+		if(head=="realLit"||head=="complexLit"||head=="numberLit"||head=="boolLit"||arg.natural&&arg.name=="#") return true;
+		if(head=="pow"||head=="conj") return true;
+	}
 	// Preserve function shapes before normalizing their operands. Algebraic
 	// conditions wait until counted sums and products have been collected.
 	foreach(arg;r.lhs.args) if(functionPattern(arg)) return true;
@@ -232,6 +241,21 @@ string matchPayload(Pattern p,string value,Parameter[] parameters,string indent,
 }
 private uint nextMatcher;
 private string[] literalParameters;
+bool naturalLinear(Pattern p,out Pattern variable,out ulong coefficient,out ulong offset){
+	if(p.variable){ variable=p; coefficient=1; return true; }
+	if(p.name=="#"){ offset=p.number; return offset<=uint.max; }
+	if(p.args.length!=2||(p.name!="natAdd"&&p.name!="natMul")) return false;
+	Pattern x,y; ulong a,b,c,d;
+	if(!naturalLinear(p.args[0],x,a,b)||!naturalLinear(p.args[1],y,c,d)) return false;
+	if(x&&y&&x.name!=y.name) return false;
+	variable=x?x:y;
+	if(p.name=="natAdd"){ coefficient=a+c; offset=b+d; }
+	else{
+		if(a&&c) return false;
+		coefficient=a*d+c*b; offset=b*d;
+	}
+	return coefficient<=uint.max&&offset<=uint.max;
+}
 string matchCode(Pattern p,string path,Parameter[] parameters,string indent,bool top=false){
 	if(p.name=="real"&&p.args.length==2) return indent~"if("~path~"!="~dPattern(p)~") return false;\n";
 	if(p.variable){
@@ -243,11 +267,12 @@ string matchCode(Pattern p,string path,Parameter[] parameters,string indent,bool
 	}
 	if(p.natural){
 		if(p.name=="#") return indent~"if("~path~"!="~to!string(p.number)~"u) return false;\n";
-		// Invert a linear repeated exponent for inference matching.
-		if(p.name=="natAdd"&&p.args[0].variable&&p.args[1].variable&&p.args[0].name==p.args[1].name)
-			return indent~"if(("~path~")%2) return false;\n"~matchCode(p.args[0],"("~path~")/2",parameters,indent);
-		if(p.name=="natAdd"&&p.args[1].name=="#")
-			return indent~"if("~path~"<"~to!string(p.args[1].number)~"u) return false;\n"~matchCode(p.args[0],"("~path~"-"~to!string(p.args[1].number)~"u)",parameters,indent);
+		Pattern variable; ulong coefficient,offset;
+		if(naturalLinear(p,variable,coefficient,offset)&&coefficient){
+			auto a=coefficient.to!string~"u",b=offset.to!string~"u",delta="("~path~"-"~b~")";
+			return indent~"if("~path~"<"~b~"||"~delta~"%"~a~") return false;\n"~
+				matchCode(variable,delta~"/"~a,parameters,indent);
+		}
 		return indent~"return false;\n";
 	}
 	if(dOp(p.name)=="add"||dOp(p.name)=="mul"){

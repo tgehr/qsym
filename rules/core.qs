@@ -763,3 +763,11 @@ rewrite real_difference_squares(x:ℝ,y:ℝ):(x+y)*(x-y)⇒x^2-y^2;
 rewrite complex_difference_squares(z:ℂ,w:ℂ):(z+w)*(z-w)⇒z^2-w^2;
 rewrite real_difference_squares_literals(x:ℝ,y:ℝ,z:ℝ):(x+y)*(x+z)⇒x^2-y^2 when literal(y),literal(z),z=-y;
 rewrite complex_difference_squares_literals(x:ℂ,y:ℂ,z:ℂ):(x+y)*(x+z)⇒x^2-y^2 when literal(y),literal(z),z=-y;
+
+rewrite real_sqrt_even_power(x:ℝ,n:NatParam):sqrt(x^(n+n+2))⇒abs(x)^(n+1);
+rewrite real_sqrt_even_factor(x:ℝ,y:ℝ,n:NatParam):sqrt(x^(n+n+2)*y)⇒abs(x)^(n+1)*sqrt(y) when 0≤y;
+rewrite real_cbrt_power(x:ℝ,n:NatParam):cbrt(x^(n+n+n+3))⇒x^(n+1);
+rewrite real_cbrt_cube(x:ℝ):cbrt(x)^3⇒x;
+rewrite real_cbrt_neg(x:ℝ):cbrt(-x)⇒-cbrt(x);
+rewrite real_cbrt_product(x:ℝ,y:ℝ):cbrt(x)*cbrt(y)⇒cbrt(x*y);
+lemma real_power_scale(x:ℝ,a:ℝ,b:ℝ,t:ℝ,m:NatParam,n:NatParam):powerR(x,t)⇒a^m*powerR(b,t) when t=real(m)/(real(n)+2),x=a^(n+2)*b,0≤a,0≤b,defined(a),defined(b);

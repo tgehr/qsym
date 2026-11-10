@@ -38,6 +38,33 @@ package final class Elementary{
 		if(!root(x.numerator,n,numerator)||!root(x.denominator,n,denominator)) return false;
 		result=Rational(numerator,denominator); return true;
 	}
+	private void extract(BigInt x,uint degree,out BigInt factor,out BigInt remainder){
+		factor=BigInt(1); remainder=BigInt(1);
+		auto limit=x; BigInt r;
+		if(root(x,degree,r)){ factor=r; return; }
+		// A fixed search bound avoids factoring large irreducible inputs.
+		// Test perfect-power cofactors after each successful small division.
+		for(uint p=2;p<=1024&&BigInt(p)*p<=x;p=p==2?3:p+2){
+			budget.spend(1+x.uintLength);
+			uint count;
+			while(x%p==0){ budget.spend(1+x.uintLength); x/=p; ++count; }
+			if(!count) continue;
+			factor*=power(BigInt(p),count/degree,limit);
+			remainder*=power(BigInt(p),count%degree,limit);
+			if(root(x,degree,r)){ factor*=r; x=BigInt(1); break; }
+		}
+		remainder*=x;
+	}
+	private bool extract(Rational x,uint degree,out Rational scale,out Rational radicand){
+		if(x<=Rational(0)||degree<2) return false;
+		BigInt nf,nr,df,dr;
+		extract(x.numerator,degree,nf,nr); extract(x.denominator,degree,df,dr);
+		scale=Rational(nf,df*dr);
+		auto d=Number(Rational(dr,BigInt(1))),r=Number(Rational(nr,BigInt(1)));
+		foreach(i;1..degree) r=budget.calc!"*"(r,d);
+		radicand=r.re;
+		return scale!=Rational(1);
+	}
 	private bool pi(Term t){ auto n=a.view(t); return n.op==Op.builtin&&n.value==Builtin.pi; }
 	private bool cartesian(Term t){
 		foreach(id;a.postorder(t)){
@@ -156,20 +183,23 @@ package final class Elementary{
 			if(root(x,2,value)){
 				result=instantiate(a,Law.real_sqrt_exact,[a.at(n.a),a.real_(value)]); return true;
 			}
-			if(x<Rational(0)||x.integral) return false;
-			auto denominator=Rational(x.denominator,BigInt(1));
-			auto square=root(denominator,2,value);
-			auto scale=(square?value:denominator).inverse;
-			auto radicand=budget.calc!"*"(Number(x),budget.calc!"*"(Number(scale.inverse),Number(scale.inverse)));
-			result=instantiate(a,Law.real_sqrt_scale,[a.at(n.a),a.real_(scale),a.number(radicand,Sort.real_)]); return true;
+			Rational scale,radicand;
+			if(!extract(x,2,scale,radicand)) return false;
+			result=instantiate(a,Law.real_sqrt_scale,[a.at(n.a),a.real_(scale),a.real_(radicand)]); return true;
 		}
 		if(f==Builtin.powerR&&a.isNumber(a.at(n.a))&&a.isNumber(a.at(n.b))){
 			auto exponent=a.number(a.at(n.b)).re;
 			if(exponent.numerator<0||exponent.numerator>uint.max||exponent.denominator>64) return false;
 			auto degree=cast(uint)exponent.denominator.toLong();
-			Rational value; if(!root(a.number(a.at(n.a)).re,degree,value)) return false;
-			result=instantiate(a,Law.real_power_exact,[a.at(n.a),a.real_(value),a.at(n.b),
-				a.real_(exponent.numerator.toLong()),a.real_(degree-1)]); return true;
+			auto x=a.number(a.at(n.a)).re; Rational value;
+			if(root(x,degree,value)){
+				result=instantiate(a,Law.real_power_exact,[a.at(n.a),a.real_(value),a.at(n.b),
+					a.real_(exponent.numerator.toLong()),a.real_(degree-1)]); return true;
+			}
+			Rational scale,radicand;
+			if(!extract(x,degree,scale,radicand)) return false;
+			result=instantiate(a,Law.real_power_scale,[a.at(n.a),a.real_(scale),a.real_(radicand),a.at(n.b),
+				a.real_(exponent.numerator.toLong()),a.real_(degree-2)]); return true;
 		}
 		if(f==Builtin.sinR||f==Builtin.cosR||f==Builtin.tanR||f==Builtin.cisR){
 			bool exact;

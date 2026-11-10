@@ -45,6 +45,8 @@ test: build/qsym
 	./build/exponential-tests --DRT-testmode=run-main build/exponentials
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/trigonometry.d -of=build/trigonometry-tests
 	./build/trigonometry-tests --DRT-testmode=run-main build/trigonometry
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/radicals.d -of=build/radical-tests
+	./build/radical-tests --DRT-testmode=run-main build/radicals
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/predicates.d -of=build/predicate-tests
 	./build/predicate-tests --DRT-testmode=run-main build/predicates
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/quadratics.d -of=build/quadratic-tests

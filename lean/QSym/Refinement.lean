@@ -463,6 +463,83 @@ theorem refines_cos_atan (x : Option ℝ) :
     apply refines_of_eq
     simp [Function1.apply, Functions.cosR, Functions.atanR, Functions.sqrtR, add, inv, hp, hn, Real.cos_arctan]
 
+theorem cbrt_apply (x : Option ℝ) : Functions.cbrtR.apply x=x.map Functions.cbrtR.value := by
+  cases x <;> simp [Function1.apply, Functions.cbrtR]
+
+theorem refines_power_scale (v_x v_a v_b v_t : Option ℝ) (v_m v_n : Nat)
+    (hp0 : Refines (not (nonzero (add v_t (mul (some (-1)) (mul (some (v_m : ℝ)) (inv (add (some (v_n : ℝ)) (some 2)))))))) (some true))
+    (hp1 : Refines (not (nonzero (add v_x (mul (some (-1)) (mul (v_a.map (fun x => x^(v_n+2))) v_b))))) (some true))
+    (hp2 : Refines (le (some 0) v_a) (some true))
+    (hp3 : Refines (le (some 0) v_b) (some true))
+    (hp4 : Defined v_a) (hp5 : Defined v_b) :
+    Refines (Functions.powerR.apply v_x v_t) (mul (v_a.map (fun x => x^v_m)) (Functions.powerR.apply v_b v_t)) := by
+  classical
+  obtain ⟨a, rfl⟩ := hp4
+  obtain ⟨b, rfl⟩ := hp5
+  cases v_x with
+  | none => intro v hv; cases hv
+  | some x =>
+    cases v_t with
+    | none => intro v hv; cases hv
+    | some t =>
+      have hn : (v_n : ℝ)+2≠0 := by positivity
+      have ht : t=(v_m : ℝ)/((v_n : ℝ)+2) := by
+        simpa [Refines, not, nonzero, add, mul, inv, hn, ← sub_eq_add_neg, sub_eq_zero, div_eq_mul_inv] using hp0
+      have hx : x=a^(v_n+2)*b := by
+        simpa [Refines, not, nonzero, add, mul, ← sub_eq_add_neg, sub_eq_zero] using hp1
+      have ha : 0≤a := by simpa [Refines, le] using hp2
+      have hb : 0≤b := by simpa [Refines, le] using hp3
+      subst x; subst t
+      have hq : 0≤(v_m : ℝ)/((v_n : ℝ)+2) := by positivity
+      have dom (r : ℝ) (hr : 0≤r) : Functions.powerR.domain r ((v_m : ℝ)/((v_n : ℝ)+2)) := by
+        rcases eq_or_lt_of_le hr with h | h
+        · simp [Functions.powerR, ← h, hq]
+        · exact Or.inl h
+      apply refines_of_eq
+      simpa only [Function2.apply, Option.bind, if_pos (dom _ (mul_nonneg (pow_nonneg ha _) hb)),
+        if_pos (dom b hb), mul, Option.map]
+        using congrArg some (Elementary.power_scale a b v_m v_n ha hb)
+
+theorem refines_cbrt_power (x : Option ℝ) (n : ℕ) :
+    Refines (Functions.cbrtR.apply (x.map (fun v => v^(n+n+n+3)))) (x.map (fun v => v^(n+1))) := by
+  apply refines_of_eq
+  cases x <;> simp only [cbrt_apply, Option.map, FunctionOrder.cbrt_power]
+
+theorem refines_cbrt_cube (x : Option ℝ) :
+    Refines ((Functions.cbrtR.apply x).map (fun v => v^3)) x := by
+  apply refines_of_eq
+  cases x <;> simp only [cbrt_apply, Option.map, FunctionOrder.cbrt_cube]
+
+theorem refines_cbrt_neg (x : Option ℝ) :
+    Refines (Functions.cbrtR.apply (mul (some (-1)) x)) (mul (some (-1)) (Functions.cbrtR.apply x)) := by
+  apply refines_of_eq
+  cases x <;> simp [cbrt_apply, mul, FunctionOrder.cbrt_neg]
+
+theorem refines_cbrt_product (x y : Option ℝ) :
+    Refines (mul (Functions.cbrtR.apply x) (Functions.cbrtR.apply y)) (Functions.cbrtR.apply (mul x y)) := by
+  apply refines_of_eq
+  cases x <;> cases y <;> simp [cbrt_apply, mul, FunctionOrder.cbrt_mul]
+
+theorem refines_sqrt_even_power (x : Option ℝ) (n : ℕ) :
+    Refines (Functions.sqrtR.apply (x.map (fun v => v^(n+n+2)))) ((abs x).map (fun v => v^(n+1))) := by
+  apply refines_of_eq
+  cases x <;> simp [Function1.apply, Functions.sqrtR, abs, Elementary.even_power_nonnegative, Elementary.sqrt_even_power]
+
+theorem refines_sqrt_even_factor (x y : Option ℝ) (n : ℕ)
+    (hy : Refines (le (some 0) y) (some true)) :
+    Refines (Functions.sqrtR.apply (mul (x.map (fun v => v^(n+n+2))) y))
+      (mul ((abs x).map (fun v => v^(n+1))) (Functions.sqrtR.apply y)) := by
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    cases y with
+    | none => intro v hv; cases hv
+    | some y =>
+      have h : 0≤y := by simpa [Refines, le] using hy
+      apply refines_of_eq
+      simp [Function1.apply, Functions.sqrtR, mul, abs, h,
+        mul_nonneg (Elementary.even_power_nonnegative x n) h, Elementary.sqrt_even_factor, Elementary.sqrt_even_power]
+
 end QSym.Value
 
 namespace QSym
@@ -623,11 +700,18 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_log_rational <;> assumption)
   | solve | qsym_function_order
   | solve | qsym_order
+  | solve | apply Value.refines_cbrt_power
+  | solve | apply Value.refines_cbrt_cube
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; apply Value.refines_cbrt_neg)
+  | solve | apply Value.refines_cbrt_product
+  | solve | apply Value.refines_sqrt_even_power
+  | solve | (simp only [Int.cast_zero] at *; apply Value.refines_sqrt_even_factor; assumption)
   | exact Value.refines_inv_inv _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_real_nonzero_quadratic <;> assumption)
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_complex_nonzero_quadratic <;> assumption)
   | solve | (simp only [Int.cast_zero] at *; apply Value.refines_log_product <;> assumption)
   | solve | apply Value.refines_power_exact <;> assumption
+  | solve | (simp only [Int.cast_natCast, Int.cast_zero, Int.cast_neg, Int.cast_one, Int.cast_ofNat] at *; apply Value.refines_power_scale <;> assumption)
   | solve | apply Value.refines_phase_period <;> assumption
   | solve | apply Value.refines_tan_cos
   | solve | apply Value.refines_complex_tan_cos

@@ -5577,4 +5577,60 @@ theorem r_complex_difference_squares_literals (v_x : Option (Ty.denote .complex)
 
 #qsym_check_axioms r_complex_difference_squares_literals
 
+theorem r_real_sqrt_even_power (v_x : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Functions.sqrtR.apply (v_x.map (fun x => x ^ ((v_n + v_n) + (2))))) ((Value.abs v_x).map (fun x => x ^ (v_n + (1)))) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sqrt_even_power
+
+theorem r_real_sqrt_even_factor (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_n : Nat)
+    (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Functions.sqrtR.apply (Value.mul (v_x.map (fun x => x ^ ((v_n + v_n) + (2)))) v_y)) (Value.mul ((Value.abs v_x).map (fun x => x ^ (v_n + (1)))) (Functions.sqrtR.apply v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sqrt_even_factor
+
+theorem r_real_cbrt_power (v_x : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines (Functions.cbrtR.apply (v_x.map (fun x => x ^ (((v_n + v_n) + v_n) + (3))))) (v_x.map (fun x => x ^ (v_n + (1)))) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cbrt_power
+
+theorem r_real_cbrt_cube (v_x : Option (Ty.denote .real)) :
+    Value.Refines ((Functions.cbrtR.apply v_x).map (fun x => x ^ (3))) v_x := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cbrt_cube
+
+theorem r_real_cbrt_neg (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.cbrtR.apply (Value.mul (some (((-1) : Int) : ℝ)) v_x)) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.cbrtR.apply v_x)) := by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cbrt_neg
+
+theorem r_real_cbrt_product (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Value.mul (Functions.cbrtR.apply v_x) (Functions.cbrtR.apply v_y)) (Functions.cbrtR.apply (Value.mul v_x v_y)) := by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cbrt_product
+
+theorem r_real_power_scale (v_x : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real)) (v_m : Nat) (v_n : Nat)
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add v_t (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (some ((v_m : Int) : ℝ)) (Value.inv (Value.add (some ((v_n : Int) : ℝ)) (some (((2) : Int) : ℝ))))))))) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (v_a.map (fun x => x ^ (v_n + (2)))) v_b))))) (some true))
+    (hp2 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_a) (some true))
+    (hp3 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_b) (some true))
+    (hp4 : Value.Defined v_a)
+    (hp5 : Value.Defined v_b) :
+    Value.Refines (Functions.powerR.apply v_x v_t) (Value.mul (v_a.map (fun x => x ^ v_m)) (Functions.powerR.apply v_b v_t)) := by
+  cases v_x <;> cases v_a <;> cases v_b <;> cases v_t
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_power_scale
+
 end QSym.Generated

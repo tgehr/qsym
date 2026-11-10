@@ -62,7 +62,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",246)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",246),("radicals",42)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -152,6 +152,13 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadSqrtSixth","rewrite bad(x:ℝ):sqrt(x^6)⇒x^3;"),
+		("BadSqrtFactorDomain","rewrite bad(x:ℝ,y:ℝ):sqrt(x^2*y)⇒abs(x)*sqrt(y);"),
+		("BadCbrtEven","rewrite bad(x:ℝ):cbrt(x^2)⇒x;"),
+		("BadCbrtAbsolute","rewrite bad(x:ℝ):cbrt(x^3)⇒abs(x);"),
+		("BadRootScaleSign","rewrite bad(a:ℝ,b:ℝ):powerR(a^2*b,real(1,2))⇒a*sqrt(b) when 0≤b;"),
+		("BadRootScaleDegree","rewrite bad(a:ℝ,b:ℝ):powerR(a^2*b,real(1,3))⇒a*powerR(b,real(1,3)) when 0≤a,0≤b;"),
+		("BadComplexCubeRoot","rewrite bad(z:ℂ):cpow(z^3,real(1,3))⇒z;"),
 		("BadCosQuarterTurn","lemma bad(x:ℝ):cos(x)⇒sin(x-real(1,2)*π);"),
 		("BadTanPeriod","lemma bad(x:ℝ):tan(x)⇒tan(x-real(1,2)*π);"),
 		("BadComplexCosImaginaryPart","rewrite bad(z:ℂ):cimag(ccos(z))⇒sin(creal(z))*sinh(cimag(z));"),

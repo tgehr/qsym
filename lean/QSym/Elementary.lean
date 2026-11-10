@@ -89,6 +89,23 @@ theorem root_power (y : ℝ) (m n : ℕ) (hy : 0 ≤ y) :
     _ = y ^ (m : ℝ) := by congr 1; push_cast; field_simp
     _ = y ^ m := Real.rpow_natCast y m
 
+theorem even_power_nonnegative (x : ℝ) (n : ℕ) : 0≤x^(n+n+2) :=
+  (show Even (n+n+2) from ⟨n+1, by omega⟩).pow_nonneg x
+
+theorem sqrt_even_power (x : ℝ) (n : ℕ) : Real.sqrt (x^(n+n+2))=|x|^(n+1) := by
+  rw [show n+n+2=(n+1)*2 by omega, pow_mul, Real.sqrt_sq_eq_abs, abs_pow]
+
+theorem sqrt_even_factor (x y : ℝ) (n : ℕ) :
+    Real.sqrt (x^(n+n+2)*y)=|x|^(n+1)*Real.sqrt y := by
+  rw [Real.sqrt_mul (even_power_nonnegative x n), sqrt_even_power]
+
+theorem power_scale (a b : ℝ) (m n : ℕ) (ha : 0≤a) (hb : 0≤b) :
+    (a^(n+2)*b)^((m : ℝ)/(n+2))=a^m*b^((m : ℝ)/(n+2)) := by
+  rw [Real.mul_rpow (pow_nonneg ha _) hb]
+  congr 1
+  simpa only [Nat.cast_add, Nat.cast_one, add_assoc, one_add_one_eq_two]
+    using root_power a m (n+1) ha
+
 theorem sin_imaginary (z : ℂ) : Complex.sin (Complex.I*z)=Complex.I*Complex.sinh z := by
   simpa only [mul_comm] using Complex.sin_mul_I z
 
