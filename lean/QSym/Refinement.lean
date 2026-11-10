@@ -3,6 +3,7 @@ import QSym.Elementary
 import QSym.Order
 import QSym.FunctionOrder
 import QSym.Identities
+import QSym.Inverse
 
 namespace QSym.Value
 
@@ -50,6 +51,26 @@ theorem refines_function1 {α β} (f : Function1 α β) {x y : Option α} (h : R
 theorem refines_function2 {α β γ} (f : Function2 α β γ) {x y : Option α} {a b : Option β}
     (h : Refines x y) (k : Refines a b) : Refines (f.apply x a) (f.apply y b) :=
   refines_bind h (fun _ => refines_bind k (fun _ => refines_refl _))
+
+theorem refines_composition {α β γ} (f : Function1 β γ) (g : Function1 α β)
+    (k : α → γ) (x : Option α)
+    (h : ∀ a, g.domain a → f.domain (g.value a) → f.value (g.value a)=k a) :
+    Refines (f.apply (g.apply x)) (x.map k) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some a =>
+    by_cases hg : g.domain a
+    · by_cases hf : f.domain (g.value a)
+      · apply refines_of_eq
+        simp [Function1.apply, hg, hf, h a hg hf]
+      · intro v hv; simp [Function1.apply, hg, hf] at hv
+    · intro v hv; simp [Function1.apply, hg] at hv
+
+theorem refines_inverse {α β} (f : Function1 β α) (g : Function1 α β) (x : Option α)
+    (h : ∀ a, g.domain a → f.domain (g.value a) → f.value (g.value a)=a) :
+    Refines (f.apply (g.apply x)) x := by
+  simpa only [Option.map_id] using refines_composition f g id x h
 
 theorem refines_add {α : Type} [Add α] {a b x y : Option α}
     (h : Refines a x) (k : Refines b y) : Refines (add a b) (add x y) := by
@@ -463,6 +484,66 @@ theorem refines_cos_atan (x : Option ℝ) :
     apply refines_of_eq
     simp [Function1.apply, Functions.cosR, Functions.atanR, Functions.sqrtR, add, inv, hp, hn, Real.cos_arctan]
 
+theorem refines_real_acosh_cosh (x : Option ℝ) :
+    Refines (Functions.acoshR.apply (Functions.coshR.apply x)) (abs x) :=
+  refines_composition Functions.acoshR Functions.coshR (fun x => |x|) x
+    (fun x _ _ => Inverse.real_acosh_cosh x)
+
+theorem refines_real_sinh_acosh (x : Option ℝ) :
+    Refines (Functions.sinhR.apply (Functions.acoshR.apply x))
+      (Functions.sqrtR.apply (add (x.map (fun x => x^2)) (mul (some (-1)) (some 1)))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases hx : 1≤x
+    · have hn : 0≤x^2-1 := by nlinarith
+      apply refines_of_eq
+      simpa [Function1.apply, Functions.sinhR, Functions.acoshR, Functions.sqrtR, add, mul, hx, hn, ← sub_eq_add_neg]
+        using congrArg some (Inverse.real_sinh_acosh x hx)
+    · intro v hv; simp [Function1.apply, Functions.acoshR, hx] at hv
+
+theorem refines_complex_cos_asin (z : Option ℂ) :
+    Refines (Functions.cosC.apply (Functions.asinC.apply z))
+      (Functions.sqrtC.apply (add (some 1) (mul (some (-1)) (z.map (fun z => z^2))))) := by
+  apply refines_of_eq
+  cases z with
+  | none => rfl
+  | some z =>
+    simpa [Function1.apply, Functions.cosC, Functions.asinC, Functions.sqrtC, add, mul, sub_eq_add_neg]
+      using congrArg some (Inverse.complex_cos_asin z)
+
+theorem refines_complex_sin_acos (z : Option ℂ) :
+    Refines (Functions.sinC.apply (Functions.acosC.apply z))
+      (Functions.sqrtC.apply (add (some 1) (mul (some (-1)) (z.map (fun z => z^2))))) := by
+  apply refines_of_eq
+  cases z with
+  | none => rfl
+  | some z =>
+    simpa [Function1.apply, Functions.sinC, Functions.acosC, Functions.sqrtC, add, mul, sub_eq_add_neg]
+      using congrArg some (Inverse.complex_sin_acos z)
+
+theorem refines_complex_cosh_asinh (z : Option ℂ) :
+    Refines (Functions.coshC.apply (Functions.asinhC.apply z))
+      (Functions.sqrtC.apply (add (z.map (fun z => z^2)) (some 1))) := by
+  apply refines_of_eq
+  cases z with
+  | none => rfl
+  | some z =>
+    simpa [Function1.apply, Functions.coshC, Functions.asinhC, Functions.sqrtC, add]
+      using congrArg some (Inverse.complex_cosh_asinh z)
+
+theorem refines_complex_sinh_acosh (z : Option ℂ) :
+    Refines (Functions.sinhC.apply (Functions.acoshC.apply z))
+      (mul (Functions.sqrtC.apply (add z (mul (some (-1)) (some 1))))
+        (Functions.sqrtC.apply (add z (some 1)))) := by
+  apply refines_of_eq
+  cases z with
+  | none => rfl
+  | some z =>
+    simpa [Function1.apply, Functions.sinhC, Functions.acoshC, Functions.sqrtC, add, mul, sub_eq_add_neg]
+      using congrArg some (Inverse.complex_sinh_acosh z)
+
 theorem cbrt_apply (x : Option ℝ) : Functions.cbrtR.apply x=x.map Functions.cbrtR.value := by
   cases x <;> simp [Function1.apply, Functions.cbrtR]
 
@@ -694,8 +775,35 @@ elab "qsym_trig_goal" : tactic => do
   unless (target.find? fun e => functions.any (fun n => e.isConstOf n)).isSome do
     throwError "not a trigonometric goal"
 
+open Lean Meta Elab Tactic in
+elab "qsym_inverse_goal" : tactic => do
+  let functions := #[``Functions.acoshR, ``Functions.atanhR, ``Functions.asinC, ``Functions.acosC,
+    ``Functions.atanC, ``Functions.asinhC, ``Functions.acoshC, ``Functions.atanhC]
+  let target ← getMainTarget
+  unless (target.find? fun e => functions.any (fun n => e.isConstOf n)).isSome do
+    throwError "not an inverse-function goal"
+
+macro "qsym_inverse" : tactic => `(tactic| (qsym_inverse_goal; first
+  | exact Value.refines_inverse Functions.coshR Functions.acoshR _ (fun x h _ => Inverse.real_cosh_acosh x h)
+  | exact Value.refines_inverse Functions.tanhR Functions.atanhR _ (fun x h _ => Inverse.real_tanh_atanh x h.1 h.2)
+  | exact Value.refines_inverse Functions.atanhR Functions.tanhR _ (fun x _ h => Inverse.real_atanh_tanh x h)
+  | exact Value.refines_inverse Functions.sinC Functions.asinC _ (fun z _ _ => Inverse.complex_sin_asin z)
+  | exact Value.refines_inverse Functions.cosC Functions.acosC _ (fun z _ _ => Inverse.complex_cos_acos z)
+  | exact Value.refines_inverse Functions.tanC Functions.atanC _ (fun z h _ => Inverse.complex_tan_atan z h.1 h.2)
+  | exact Value.refines_inverse Functions.sinhC Functions.asinhC _ (fun z _ _ => Inverse.complex_sinh_asinh z)
+  | exact Value.refines_inverse Functions.coshC Functions.acoshC _ (fun z _ _ => Inverse.complex_cosh_acosh z)
+  | exact Value.refines_inverse Functions.tanhC Functions.atanhC _ (fun z h _ => Inverse.complex_tanh_atanh z h.1 h.2)
+  | exact Value.refines_real_acosh_cosh _
+  | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero]; first
+    | exact Value.refines_real_sinh_acosh _
+    | exact Value.refines_complex_cos_asin _
+    | exact Value.refines_complex_sin_acos _
+    | exact Value.refines_complex_cosh_asinh _
+    | exact Value.refines_complex_sinh_acosh _)))
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | qsym_inverse
   | exact Value.refines_quotient_add_nonzero _ _ _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_log_rational <;> assumption)
   | solve | qsym_function_order

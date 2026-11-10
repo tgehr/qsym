@@ -62,7 +62,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",246),("radicals",42)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",246),("radicals",42),("inverses",60)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -152,6 +152,14 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadRealAcoshInverse","rewrite bad(x:ℝ):acosh(cosh(x))⇒x;"),
+		("BadComplexAsinInverse","rewrite bad(z:ℂ):casin(csin(z))⇒z;"),
+		("BadComplexAcosInverse","rewrite bad(z:ℂ):cacos(ccos(z))⇒z;"),
+		("BadComplexAtanInverse","rewrite bad(z:ℂ):catan(ctan(z))⇒z;"),
+		("BadComplexAsinhInverse","rewrite bad(z:ℂ):casinh(csinh(z))⇒z;"),
+		("BadComplexAcoshInverse","rewrite bad(z:ℂ):cacosh(ccosh(z))⇒z;"),
+		("BadComplexAtanhInverse","rewrite bad(z:ℂ):catanh(ctanh(z))⇒z;"),
+		("BadComplexAcoshRoot","rewrite bad(z:ℂ):csinh(cacosh(z))⇒csqrt(z^2-1);"),
 		("BadSqrtSixth","rewrite bad(x:ℝ):sqrt(x^6)⇒x^3;"),
 		("BadSqrtFactorDomain","rewrite bad(x:ℝ,y:ℝ):sqrt(x^2*y)⇒abs(x)*sqrt(y);"),
 		("BadCbrtEven","rewrite bad(x:ℝ):cbrt(x^2)⇒x;"),
