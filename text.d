@@ -270,6 +270,7 @@ struct Syntax{
 					auto f=cast(Builtin)n.value,info=builtinInfo(f),code=info.code;
 					if(code=="pi") p.text="π";
 					else if(code=="e") p.text="e";
+					else if(f==Builtin.expR&&a.isNumber(a.at(n.a))&&a.number(a.at(n.a)).one) p.text="e";
 					else if(code=="addN"||code=="addZ"||code=="addQ") p=sum(n.a,n.b);
 					else if(code=="mulN"||code=="mulZ"||code=="mulQ") p=product(n);
 					else if(f==Builtin.invQ) p=Piece(arg(n.a,91)~"⁻¹",90);

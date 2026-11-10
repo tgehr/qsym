@@ -62,7 +62,7 @@ def main():
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -152,6 +152,15 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadExponentialPower","rewrite bad(z:ℂ,w:ℂ):powerC(cexp(z),w)⇒cexp(z*w);"),
+		("BadExponentialRoot","rewrite bad(z:ℂ):csqrt(cexp(z))⇒cexp(z/2);"),
+		("BadExponentialPowerBoundary","rewrite bad(z:ℂ,w:ℂ):powerC(cexp(z),w)⇒cexp(z*w) when -π≤cimag(z),cimag(z)≤π;"),
+		("BadPhasePower","rewrite bad(x:ℝ,z:ℂ):powerC(cis(x),z)⇒cexp(ⅈ*x*z);"),
+		("BadRealExponentialPower","rewrite bad(x:ℝ,y:ℝ):powerR(exp(x),y)⇒exp(x+y);"),
+		("BadPhaseInverse","rewrite bad(x:ℝ):cis(x)⁻¹⇒cis(x);"),
+		("BadExponentialRealPart","rewrite bad(z:ℂ):creal(cexp(z))⇒cos(cimag(z));"),
+		("BadExponentialReal","rewrite bad(z:ℂ):cexp(z)⇒toℂ(exp(creal(z)));"),
+		("BadHalfPowerNegative","rewrite bad(z:ℂ):powerC(z,real(1,2))⇒toℂ(sqrt(-creal(z))) when cimag(z)=0,creal(z)<0;"),
 		("BadErfcDirection","rewrite bad(x:ℝ,y:ℝ):erfc(x)<erfc(y)⇒x<y;"),
 		("BadAcosDirection","rewrite bad(x:ℝ,y:ℝ):acos(x)≤acos(y)⇒x≤y;"),
 		("BadSinInjective","rewrite bad(x:ℝ,y:ℝ):sin(x)≠sin(y)⇒x≠y;"),

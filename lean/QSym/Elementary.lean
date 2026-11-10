@@ -350,4 +350,56 @@ theorem sqrt_real_negative {z : ℂ} (hi : z.im=0) (hr : z.re<0) :
     · simp only [Complex.neg_im, Complex.ofReal_im, hi, neg_zero]
   simpa only [hs] using (sqrt_imaginary (Real.sqrt (-z.re)) (Real.sqrt_nonneg _)).symm
 
+theorem real_exp_zpow (x : ℝ) (n : ℤ) : (Real.exp x)^n=Real.exp ((n : ℝ)*x) := by
+  apply Complex.ofReal_injective
+  simpa only [Complex.ofReal_zpow, Complex.ofReal_exp, Complex.ofReal_mul, Complex.ofReal_intCast]
+    using (Complex.exp_int_mul (x : ℂ) n).symm
+
+theorem sqrt_exp (x : ℝ) : Real.sqrt (Real.exp x)=Real.exp (x/2) := by
+  rw [Real.sqrt_eq_rpow, ← Real.exp_mul]
+  congr 1
+  ring
+
+theorem exp_real {z : ℂ} (hi : z.im=0) : Complex.exp z=(Real.exp z.re : ℂ) := by
+  calc
+    _ = Complex.exp (z.re : ℂ) := congrArg Complex.exp (real_exponent hi).symm
+    _ = _ := (Complex.ofReal_exp z.re).symm
+
+theorem exp_cpow (z w : ℂ) (hl : -Real.pi<z.im) (hu : z.im≤Real.pi) :
+    (Complex.exp z)^w=Complex.exp (z*w) := by
+  rw [Complex.cpow_def_of_ne_zero (Complex.exp_ne_zero z), Complex.log_exp hl hu]
+
+theorem real_exp_cpow (x : ℝ) (z : ℂ) : (Complex.exp (x : ℂ))^z=Complex.exp ((x : ℂ)*z) := by
+  exact exp_cpow _ _ (by simpa using neg_lt_zero.mpr Real.pi_pos) (by simpa using Real.pi_pos.le)
+
+theorem sqrt_cexp (z : ℂ) (hl : -Real.pi<z.im) (hu : z.im≤Real.pi) :
+    (Complex.exp z)^(2⁻¹ : ℂ)=Complex.exp (z/2) := by
+  simpa only [div_eq_mul_inv] using exp_cpow z (2⁻¹) hl hu
+
+theorem phase_pow (x : ℝ) (n : ℕ) :
+    (Complex.exp ((x : ℂ)*Complex.I))^n=Complex.exp (((n : ℝ)*x : ℝ)*Complex.I) := by
+  rw [← Complex.exp_nat_mul]
+  congr 1
+  push_cast
+  ring
+
+theorem phase_zpow (x : ℝ) (n : ℤ) :
+    (Complex.exp ((x : ℂ)*Complex.I))^n=Complex.exp (((n : ℝ)*x : ℝ)*Complex.I) := by
+  rw [← Complex.exp_int_mul]
+  congr 1
+  push_cast
+  ring
+
+theorem phase_inverse (x : ℝ) :
+    (Complex.exp ((x : ℂ)*Complex.I))⁻¹=Complex.exp ((-x : ℝ)*Complex.I) := by
+  rw [← Complex.exp_neg]
+  congr 1
+  push_cast
+  ring
+
+theorem phase_conjugate (x : ℝ) :
+    starRingEnd ℂ (Complex.exp ((x : ℂ)*Complex.I))=Complex.exp ((-x : ℝ)*Complex.I) := by
+  rw [← Complex.exp_conj]
+  simp
+
 end QSym.Elementary

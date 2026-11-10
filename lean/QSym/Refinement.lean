@@ -642,6 +642,12 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (simp_all [Elementary.sin_imaginary, Elementary.cos_imaginary, Elementary.tan_imaginary,
       Elementary.sinh_imaginary, Elementary.cosh_imaginary, Elementary.tanh_imaginary])
     all_goals try (simp_all only [← Complex.ofReal_cos, Complex.ofReal_eq_zero])
+    all_goals try (solve | simp_all only [Elementary.exp_real, ← Complex.ofReal_exp])
+    all_goals try (simp_all [Elementary.real_exp_zpow, Elementary.sqrt_exp, Real.pi_pos,
+      Elementary.exp_cpow, Elementary.real_exp_cpow, Elementary.sqrt_cexp,
+      Elementary.phase_pow, Elementary.phase_zpow, Elementary.phase_inverse, Elementary.phase_conjugate,
+      ← Real.exp_mul, ← Complex.exp_int_mul, Complex.ofReal_exp, Complex.ofReal_inv, Complex.ofReal_zpow,
+      Complex.exp_re, Complex.exp_im])
     all_goals try (simp_all [abs_mul, abs_inv, abs_pow])
     all_goals try (simp_all [Int.floor_eq_iff, Int.ceil_eq_iff, Real.rpow_neg, Complex.cpow_neg,
       zpow_natCast, zpow_neg, Real.norm_eq_abs, Complex.norm_def, Complex.normSq_apply,

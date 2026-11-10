@@ -41,6 +41,8 @@ test: build/qsym
 	./build/power-tests --DRT-testmode=run-main build/powers
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functions.d -of=build/function-tests
 	./build/function-tests --DRT-testmode=run-main build/functions
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/exponentials.d -of=build/exponential-tests
+	./build/exponential-tests --DRT-testmode=run-main build/exponentials
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/predicates.d -of=build/predicate-tests
 	./build/predicate-tests --DRT-testmode=run-main build/predicates
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/quadratics.d -of=build/quadratic-tests
