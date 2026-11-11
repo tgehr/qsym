@@ -2,6 +2,7 @@ import QSym.RefinementBase
 import QSym.Trigonometry
 import QSym.PowerPredicates
 import QSym.ScalarTypes
+import QSym.ScalarOrder
 
 namespace QSym
 
@@ -283,8 +284,19 @@ macro "qsym_exact_scalar" : tactic => `(tactic| (
   all_goals try (subst v; simp [Bool.not_and, Bool.not_or, Bool.or_assoc])
 ))
 
+-- Rational normalization is useful for exact bounds and inverses, but must
+-- not spend the heartbeat budget of unrelated real/complex power proofs.
+open Lean Meta Elab Tactic in
+elab "qsym_rational_goal" : tactic => withMainContext do
+  for decl in (← getLCtx) do
+    if (← whnf decl.type).isConstOf ``Rat then return
+  throwError "no rational scalar"
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | qsym_extrema
+  | exact Value.refines_sign_product _ _
+  | exact Value.refines_sign_abs _
   | solve | qsym_exact_scalar
   | solve | qsym_real_power_bridge
   | solve | qsym_unit_power
@@ -344,6 +356,10 @@ macro "qsym_scalar" : tactic => `(tactic| (
       | split at *
     all_goals try (simp_all only [← sub_eq_add_neg, sub_eq_zero])
     all_goals subst_vars
+    all_goals try (qsym_rational_goal; solve | simp_all [← sub_eq_add_neg, sub_eq_zero, inv_inj,
+      ScalarOrder.nonnegative_inverse_lt, ScalarOrder.nonnegative_inverse_le,
+      ScalarOrder.nonpositive_inverse_lt, ScalarOrder.nonpositive_inverse_le,
+      Rat.floor_cast, Rat.ceil_cast, Int.lt_ceil, Int.le_floor])
     all_goals try (qsym_new_trig_goal; solve | (
       push_cast at *
       simp_all [Real.sin_int_mul_pi, Trigonometry.real_integer_cos,
@@ -451,7 +467,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try simp_all [Complex.I_sq, Elementary.phase_half_pi, Elementary.phase_period_normal]
     all_goals try norm_num [Complex.I_pow_eq_pow_mod] at *
     all_goals try ring
-    all_goals try (simp only [abs_eq_max_neg, max_def] at *; split_ifs at * <;> nlinarith)
+    all_goals try (simp only [abs_eq_max_neg, min_def, max_def] at *; split_ifs at * <;> nlinarith)
     all_goals try ring
     all_goals try (simp only [← decide_not, decide_eq_decide] at *)
     all_goals try (simp_all [← div_eq_mul_inv, lt_div_iff₀, le_div_iff₀,
@@ -486,6 +502,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (solve | apply Elementary.nonnegative_cases; assumption)
     all_goals try positivity
     all_goals try nlinarith
+    all_goals try omega
     all_goals try (qsym_trig_goal; simp_all [Elementary.cos_quarter_turn_normal,
       Elementary.tan_period_normal, Elementary.tan_period_domain_normal])
     all_goals try (solve | have h := eq_neg_of_add_eq_zero_left (by assumption); subst_vars; ring)

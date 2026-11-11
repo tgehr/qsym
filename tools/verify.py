@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("trig-algebra",255),("radicals",42),("inverses",81),("domains",206),("assumptions",115),("numerals",68)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("trig-algebra",255),("radicals",42),("inverses",81),("domains",218),("assumptions",115),("numerals",68),("bounds",233)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -204,6 +204,31 @@ def main():
 		"    (Functions.castQR.apply (Functions.castZQ.apply (Functions.floorR.apply (Functions.castQR.apply (some q))))) :=\n"
 		"  Value.refines_refl _\n")
 	check(negative/"BadRationalCastRounding.lean",succeeds=False)
+	# Mutate proof endpoints directly: these must fail in the kernel without
+	# spending time searching for proofs of deliberately false identities.
+	for name,source,value in (
+		("WrongIntegerStrictBound","IntegerBoundPositiveLess","some true"),
+		("WrongNegativeFractionBound","IntegerBoundNegativeLe","some true"),
+		("WrongRationalScale","RationalLessNegative","some false"),
+		("WrongNaturalSuccessor","NaturalSuccessorLess","some false"),
+		("WrongMinExponential","MinExp","some (0 : ℝ)"),
+		("WrongMaxArccos","MaxAcos","some (0 : ℝ)"),
+		("WrongSignProduct","SignProduct","some (0 : ℤ)"),
+		("WrongSignMagnitude","SignMagnitude","some (0 : ℝ)")):
+		valid=(ROOT/"build/bounds"/(source+".lean")).read_text()
+		corrupt,count=re.subn(r"(theorem refinement .*? : Value.Refines .*? )\(Expr.eval ρ n\d+\)( :=)",
+			lambda m:m[1]+"("+value+")"+m[2],valid,count=1)
+		if count!=1:
+			raise RuntimeError("could not construct "+name)
+		path=negative/(name+".lean"); path.write_text(corrupt)
+		check(path,succeeds=False)
+	valid=(ROOT/"build/bounds/MinNegativeScale.lean").read_text()
+	claim=re.search(r"theorem refinement .*? : (Value.Refines .*?) :=",valid).group(1)
+	claim=re.sub(r"\bn(\d+)\b",r"Certificate.n\1",claim)
+	path=negative/"MissingNegativeScaleCondition.lean"
+	path.write_text(valid+"\nnamespace QSym\ntheorem forged (ρ : Env) : "+claim+
+		" := Certificate.refinement ρ rfl\nend QSym\n")
+	check(path,succeeds=False)
 	bad_rules=negative/"bad.qs"
 	bad_rules.write_text("rule bad(x:ℝ):1·x⇒0;\n",encoding="utf-8")
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad.d"),

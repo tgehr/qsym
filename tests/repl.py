@@ -99,3 +99,12 @@ assert result.stdout.splitlines()==[
 	"j=0∨x=1∨x=-1∧denominator(1/2·j)=1",
 	"j·(1/2)=floor(j·(1/2))","q=r","512","3/10","x","1/80","3/2","-3/2"],result.stdout
 print("REPL checks passed.")
+
+# Exact discrete bounds, extrema, signs, and original domains.
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars n:ℕ,m:ℕ,k:ℤ,q:ℚ,x:ℝ,y:ℝ","¬(n<m)","2*q+1<4","toℝ(k)<3/2",
+	"min(exp(x),exp(y))","max(acos(x),acos(y))","sign(x/y)","min(x+2,y+2)",
+	":domain max(sqrt(-1),sqrt(4))",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["m≤n","q<3/2","k<2","exp(min(x,y))","acos(min(x,y))",
+	"sign(x)·sign(y)","min(x,y)+2","false"],result.stdout

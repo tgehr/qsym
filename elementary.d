@@ -133,6 +133,42 @@ package final class Elementary{
 	bool propose(Term t,out Instance result){
 		auto n=a.view(t); if(n.op!=Op.builtin) return false;
 		auto f=cast(Builtin)n.value;
+		// Tighten a rational literal bound on an integer without introducing a
+		// floor/ceiling expression that the comparison rules would expand again.
+		if(f==Builtin.ltQ||f==Builtin.leQ){
+			foreach(right;[false,true]){
+				auto integral=a.at(right?n.b:n.a),bound=a.at(right?n.a:n.b),v=a.view(integral);
+				if(v.op!=Op.builtin||v.value!=Builtin.castZQ||!a.isNumber(bound)) continue;
+				auto q=a.number(bound).re,m=q.numerator/q.denominator,r=q.numerator%q.denominator;
+				budget.spend(q.words);
+				bool ceiling=(f==Builtin.ltQ)!=right;
+				if(ceiling&&r>0) ++m;
+				if(!ceiling&&r<0) --m;
+				auto law=right?(f==Builtin.ltQ?Law.integer_rational_bound_lt_right:Law.integer_rational_bound_le_right)
+					:(f==Builtin.ltQ?Law.integer_rational_bound_lt:Law.integer_rational_bound_le);
+				result=instantiate(a,law,[a.at(v.a),bound,a.number(Number(Rational(m,BigInt(1))),Sort.integer)]);
+				return true;
+			}
+		}
+		if(f==Builtin.minR||f==Builtin.maxR){
+			foreach(op;[Op.add,Op.mul]){
+				auto left=a.multisetTerms(a.multiset(a.at(n.a),op)),right=a.multisetTerms(a.multiset(a.at(n.b),op));
+				foreach(i,u;left){
+					budget.spend(); if(!a.isNumber(u.term)) continue;
+					foreach(j,v;right){
+						budget.spend(); if(u.term!=v.term) continue;
+						auto value=a.number(u.term).re;
+						if(op==Op.mul&&value==Rational(0)) continue;
+						--left[i].count; --right[j].count;
+						auto law=op==Op.add?(f==Builtin.minR?Law.real_min_translate:Law.real_max_translate)
+							:value<Rational(0)?(f==Builtin.minR?Law.real_min_negative_scale:Law.real_max_negative_scale)
+							:(f==Builtin.minR?Law.real_min_positive_scale:Law.real_max_positive_scale);
+						result=instantiate(a,law,[a.region(op,Sort.real_,left),a.region(op,Sort.real_,right),u.term]);
+						return true;
+					}
+				}
+			}
+		}
 		if(f==Builtin.absC&&cartesian(a.at(n.a))){
 			result=instantiate(a,Law.complex_norm_components,[a.at(n.a)]); return true;
 		}

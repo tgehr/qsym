@@ -91,6 +91,8 @@ test: build/qsym
 	./build/assumption-tests --DRT-testmode=run-main build/assumptions
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/numerals.d -of=build/numeral-tests
 	./build/numeral-tests --DRT-testmode=run-main build/numerals
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/bounds.d -of=build/bounds-tests
+	./build/bounds-tests --DRT-testmode=run-main build/bounds
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

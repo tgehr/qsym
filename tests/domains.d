@@ -9,6 +9,19 @@ import std.exception:enforce;
 struct Example{ string name,input,expected; string[] facts; }
 Example[] examples(){
 	return [
+
+		Example("MinLogDomain","min(log(x),log(y))","0<x∧0<y"),
+		Example("MaxLogDomain","max(log(x),log(y))","0<x∧0<y"),
+		Example("MinSqrtDomain","min(sqrt(x),sqrt(y))","0≤x∧0≤y"),
+		Example("MaxSqrtDomain","max(sqrt(x),sqrt(y))","0≤x∧0≤y"),
+		Example("MaxLogInvalidOperand","max(log(-1),log(2))","false"),
+		Example("MaxSqrtInvalidOperand","max(sqrt(-1),sqrt(4))","false"),
+		Example("MinAcosInvalidOperand","min(acos(2),acos(0))","false"),
+		Example("MaxAtanhPole","max(atanh(1),atanh(0))","false"),
+		Example("SignReciprocalDomain","sign(1/x)","x≠0"),
+		Example("SignPartialProductDomain","sign(log(x)*y)","0<x"),
+		Example("MaskedSignReciprocal","[x≠0]*sign(1/x)","true"),
+		Example("IntegerRationalBoundDomain","toℚ(floor(log(x)))<3/2","0<x"),
 		Example("ComplexTanhAsinhPole","ctanh(casinh(ⅈ))","false"),
 		Example("ComplexTanhAsinhNegativePole","ctanh(casinh(-ⅈ))","false"),
 		Example("ComplexTanhAcoshPole","ctanh(cacosh(0))","false"),
