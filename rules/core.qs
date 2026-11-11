@@ -1347,3 +1347,13 @@ rewrite natural_cast_mask(p:𝔹,x:ℕ):castNZ(maskN(p,x))⇒maskZ(p,castNZ(x));
 rewrite integer_cast_mask(p:𝔹,x:ℤ):castZQ(maskZ(p,x))⇒maskQ(p,castZQ(x));
 rewrite rational_cast_mask(p:𝔹,x:ℚ):castQR(maskQ(p,x))⇒maskR(p,castQR(x));
 rewrite real_cast_mask(p:𝔹,x:ℝ):castRC(maskR(p,x))⇒maskC(p,castRC(x));
+
+rewrite real_cos_absolute_argument(x:ℝ):cos(abs(x))⇒cos(x);
+rewrite real_cosh_absolute_argument(x:ℝ):cosh(abs(x))⇒cosh(x);
+rewrite real_sinh_absolute_value(x:ℝ):abs(sinh(x))⇒sinh(abs(x));
+
+# Restore subtraction patterns after folding a literal comparison offset.
+equation integer_add_unit(x:ℤ):x+0≡x;
+equation rational_add_unit(x:ℚ):x+0≡x;
+equation integer_add_comm(x:ℤ,y:ℤ):x+y≡y+x;
+equation rational_add_comm(x:ℚ,y:ℚ):x+y≡y+x;

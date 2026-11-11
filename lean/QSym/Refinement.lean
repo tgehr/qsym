@@ -446,6 +446,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Real.sin_add, Real.cos_sub, Complex.sin_add, Complex.cos_sub,
       Real.sin_arctan, Real.cos_arctan, Real.cosh_arsinh,
       ← Complex.tan_conj, ← Complex.tanh_conj, ← Complex.cos_conj, ← Complex.cosh_conj,
+      Real.cos_abs, Real.cosh_abs, Real.abs_sinh,
       Real.sin_pi_div_three, Real.cos_pi_div_six, Elementary.cosh_ne_zero,
       Real.cos_two_mul', Complex.cos_two_mul', div_eq_mul_inv])
     all_goals try (qsym_log_hyperbolic_goal; solve | simp_all [Real.sinh_log, Real.cosh_log, Complex.sinh, Complex.cosh, Complex.exp_neg, Complex.exp_log, Real.tanh_eq_sinh_div_cosh, Complex.tanh_eq_sinh_div_cosh] <;> field_simp <;> ring)

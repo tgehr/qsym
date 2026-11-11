@@ -52,6 +52,13 @@ package final class Engine{
 	}
 	private ulong key(Term t,uint ctx,bool probe=false){ return (cast(ulong)ctx<<34)|(cast(ulong)field.expandPowers<<33)|(cast(ulong)probe<<32)|t.id; }
 	private Proof normalize(Term t,uint ctx){ return go(t,ctx); }
+	// A completed pass may have skipped a rewrite while its target was active.
+	// Revisit its result without those provisional answers, retaining the facts,
+	// derivation and shared work/rewrite limits.
+	void restart(){
+		assert(!depth&&!premiseDepth);
+		roots=null; memo=typeof(memo).init; failedProofs=typeof(failedProofs).init;
+	}
 	private Proof expanded(Term t,uint ctx){
 		auto previous=field.expandPowers; field.expandPowers=true;
 		scope(exit) field.expandPowers=previous;
@@ -392,6 +399,38 @@ package final class Engine{
 		}
 		return false;
 	}
+	private bool differenceRewrite(Term t,uint ctx,out Proof result){
+		auto n=a.view(t);
+		if(n.op!=Op.builtin||(n.value!=Builtin.nonzeroZ&&n.value!=Builtin.nonzeroQ)) return false;
+		auto residual=a.at(n.a),r=a.view(residual),s=a.sort(residual);
+		// Equality is stored as nonzero(x-y). Literal folding turns -y into
+		// a number, hiding the subtraction pattern from function rules. Restore
+		// that pattern only for matching, with checked arithmetic as its bridge.
+		auto left=residual,constant=a.number(Number(0),s); bool swapped;
+		if(r.op==Op.builtin&&(r.value==Builtin.addZ||r.value==Builtin.addQ)){
+			auto x=a.at(r.a),y=a.at(r.b);
+			if(a.isNumber(y)){ left=x; constant=y; }
+			else if(a.isNumber(x)){ left=y; constant=x; swapped=true; }
+			else return false;
+		}
+		auto right=a.number(-a.number(constant),s),difference=a.sub(left,right);
+		if(difference==residual) return false;
+		auto candidate=a.viewRebuild(t,[difference]);
+		foreach(law;rewrites(n)){
+			Proof q;
+			if(!attempt(law,candidate,ctx,q)||q.after==t||q.after==candidate) continue;
+			auto bridge=d.refl(residual,ctx);
+			if(left==residual){
+				auto i=instantiate(a,s==Sort.integer?Law.integer_add_unit:Law.rational_add_unit,[left]);
+				auto old=i.before; i.before=i.result; i.result=old; i.reversed=true;
+				bridge=d.rule(i,[],ctx);
+			}else if(swapped) bridge=d.rule(instantiate(a,s==Sort.integer?Law.integer_add_comm:
+				Law.rational_add_comm,[constant,left]),[],ctx);
+			bridge=d.trans(bridge,d.congr(bridge.after,[d.refl(left,ctx),d.numeric(constant,a.viewChild(difference,1),ctx)],ctx),ctx);
+			result=d.trans(d.congr(t,[bridge],ctx),q,ctx); return true;
+		}
+		return false;
+	}
 	Proof go(Term t,uint ctx=0,bool probe=false){
 		auto k=key(t,ctx,probe);
 		auto cached=k<=uint.max?(t.id<roots.length?roots[t.id]:0):memo.get(MemoKey(k,revision(ctx)),uint.max)+1;
@@ -403,12 +442,21 @@ package final class Engine{
 			++depth; scope(exit) --depth;
 			budget.spend(); active.set(k,true); scope(exit) active.set(k,false);
 			auto n=a.view(t); Proof[] cs;
+			// Literal values and variables without assumptions need no rule or
+			// premise search. False under assumptions still needs contextual proof.
+			if(a.isNumber(t)||n.op==Op.boolLit&&(!ctx||n.value)||n.op==Op.variable&&!ctx){
+				auto p=d.refl(t,ctx); memoize(k,p); return p;
+			}
 			// Preserve enclosing identities before their operands change shape.
 			foreach(law;earlyRewrites(n)){
 				Proof q;
 				if(attempt(law,t,ctx,q)&&q.after!=t&&!active.get(key(q.after,ctx,probe),false)){
 					auto p=d.trans(q,go(q.after,ctx,probe),ctx); memoize(k,p); return p;
 				}
+			}
+			Proof difference;
+			if(differenceRewrite(t,ctx,difference)){
+				auto p=d.trans(difference,go(difference.after,ctx,probe),ctx); memoize(k,p); return p;
 			}
 			// Normalize operands without expanding the difference used by equality.
 			if(n.op==Op.nonzero&&a.view(a.at(n.a)).op==Op.add){
@@ -439,6 +487,9 @@ package final class Engine{
 			auto current=p.after; n=a.view(current);
 			auto numeric=field.literal(current,ctx);
 			if(numeric.after!=current){ p=d.trans(p,numeric,ctx); memoize(k,p); return p; }
+			if(current!=t&&differenceRewrite(current,ctx,difference)){
+				p=d.trans(p,difference,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
+			}
 			auto retracted=embeddings.run(current,ctx);
 			if(retracted.after!=current){
 				p=d.trans(p,retracted,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;

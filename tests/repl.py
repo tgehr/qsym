@@ -108,3 +108,12 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["m≤n","q<3/2","k≤1","exp(min(x,y))","acos(min(x,y))",
 	"sign(x)·sign(y)","min(x,y)+2","false"],result.stdout
+
+# A printed result must not expose another round of rounding simplification.
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"2*floor(x)=2","floor(x)=1","2*ceil(x)=2","round(x)=1","floor(x)=0",
+	"2*floor(ceil(x)/2)=2","cos(abs(x))","cosh(abs(x))","abs(sinh(x))",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["1≤x∧x<2","1≤x∧x<2","0<x∧x≤1","1/2≤x∧x<3/2",
+	"0≤x∧x<1","1<x∧x≤3","cos(x)","cosh(x)","sinh(abs(x))"],result.stdout

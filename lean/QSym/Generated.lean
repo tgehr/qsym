@@ -9482,4 +9482,57 @@ theorem r_real_cast_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.deno
 
 #qsym_check_axioms r_real_cast_mask
 
+theorem r_real_cos_absolute_argument (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.cosR.apply (Value.abs v_x)) (Functions.cosR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_absolute_argument
+
+theorem r_real_cosh_absolute_argument (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.coshR.apply (Value.abs v_x)) (Functions.coshR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cosh_absolute_argument
+
+theorem r_real_sinh_absolute_value (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.abs (Functions.sinhR.apply v_x)) (Functions.sinhR.apply (Value.abs v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sinh_absolute_value
+
+theorem r_integer_add_unit (v_x : Option (Ty.denote .integer)) :
+    (Functions.addZ.apply v_x (some ((0) : ℤ))) = v_x := qsym_cached% by
+  cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_add_unit
+
+theorem r_rational_add_unit (v_x : Option (Ty.denote .rational)) :
+    (Functions.addQ.apply v_x (some (((0) : ℚ) / (1)))) = v_x := qsym_cached% by
+  cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_add_unit
+
+theorem r_integer_add_comm (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer)) :
+    (Functions.addZ.apply v_x v_y) = (Functions.addZ.apply v_y v_x) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_add_comm
+
+theorem r_rational_add_comm (v_x : Option (Ty.denote .rational)) (v_y : Option (Ty.denote .rational)) :
+    (Functions.addQ.apply v_x v_y) = (Functions.addQ.apply v_y v_x) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_add_comm
+
 end QSym.Generated

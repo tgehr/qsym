@@ -25,6 +25,7 @@ struct Result{
 	Term proofInput;
 	/// May have a numeric subtype of proofInput. The certificate ends at
 	/// castTo(output, sort(proofInput)), so no heterogeneous equality is trusted.
+	/// Unless exhausted, another simplification pass leaves this term unchanged.
 	Term output;
 	bool exhausted;
 	bool traced;
@@ -59,24 +60,34 @@ Result simplify(Arena a,Term input,Term[] facts,Options options=Options.init){
 	auto engine=new Engine(a,d,budget,options.maxRewrites,options.expandPowers,options.distributeLogic);
 	auto context=engine.assume(facts);
 	auto initial=d.canonical(root,context);
-	result.certificate=d.trans(initial,engine.go(initial.after,context),context);
-	result.derivation=d; result.output=result.certificate.after;
-	if(!budget.exhausted){
+	result.certificate=initial;
+	result.derivation=d; result.output=initial.after;
+	bool[uint] seen;
+	while(!budget.exhausted){
+		auto before=result.output; seen[before.id]=true;
 		auto embeddings=new Embeddings(a,d,budget);
 		try{
-			result.certificate=d.trans(result.certificate,
-				(new Subtypes(a,d,engine,embeddings,budget)).run(result.output,context),context);
-			result.output=embeddings.source(result.certificate.after);
+			auto normalized=engine.go(before,context);
+			result.certificate=d.trans(result.certificate,embeddings.lift(normalized,a.sort(root),context),context);
+			result.output=normalized.after;
+			if(budget.exhausted) break;
+			auto subtypes=(new Subtypes(a,d,engine,embeddings,budget)).run(result.output,context);
+			result.certificate=d.trans(result.certificate,embeddings.lift(subtypes,a.sort(root),context),context);
+			result.output=embeddings.source(subtypes.after);
 			while(numeric(a.sort(result.output))){
 				auto narrowed=embeddings.narrow(result.output,context),lower=embeddings.source(narrowed.after);
 				if(a.sort(lower)==a.sort(result.output)) break;
-				auto normalized=engine.go(lower,context);
-				auto step=d.trans(narrowed,embeddings.lift(normalized,a.sort(result.output),context),context);
+				auto q=engine.go(lower,context);
+				auto step=d.trans(narrowed,embeddings.lift(q,a.sort(result.output),context),context);
 				result.certificate=d.trans(result.certificate,embeddings.lift(step,a.sort(root),context),context);
-				result.output=normalized.after;
+				result.output=q.after;
 				if(budget.exhausted) break;
 			}
 		}catch(Limit e){ budget.exhausted=true; }
+		if(budget.exhausted||result.output==before) break;
+		// A rewrite cycle is an incomplete search, never a claimed normal form.
+		if(result.output.id in seen){ budget.exhausted=true; break; }
+		engine.restart();
 	}
 	result.exhausted=budget.exhausted;
 	return result;

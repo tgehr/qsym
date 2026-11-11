@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",255),("radicals",78),("inverses",196),("domains",218),("assumptions",115),("numerals",68),("bounds",233),("subtypes",85)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",273),("radicals",78),("inverses",196),("domains",218),("assumptions",115),("numerals",68),("bounds",233),("subtypes",85),("convergence",52)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -410,6 +410,8 @@ def main():
 		("BadLog2ProductDomain","rewrite bad(x:ℝ,y:ℝ):log2(x*y)⇒log2(x)+log2(y);"),
 		("BadLog10QuotientSign","rewrite bad(x:ℝ,y:ℝ):log10(x/y)⇒log10(x)+log10(y) when 0<x,0<y;"),
 		("BadLog2PowerBase","rewrite bad(x:ℝ):log2(powerR(10,x))⇒x;"),
+		("BadCosAbsolute","rewrite bad(x:ℝ):cos(abs(x))⇒abs(cos(x));"),
+		("BadSinhAbsolute","rewrite bad(x:ℝ):abs(sinh(x))⇒sinh(x);"),
 		("BadMinComparison","rewrite bad(x:ℝ,y:ℝ,t:ℝ):min(x,y)<t⇒x<t∧y<t;"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
