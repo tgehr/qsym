@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 from kernel_cache import KernelCache,compiled_rules
+from certificate_batches import make_batches
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ALLOWED_AXIOMS={"propext","Classical.choice","Quot.sound"}
@@ -89,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("radicals",42),("inverses",60),("domains",184)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("trig-algebra",255),("radicals",42),("inverses",60),("domains",184)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -128,46 +129,28 @@ def main():
 	for file in discrete:
 		certificate(file)
 
-	checks=certificates; members={}
-	if args.batch_size>1:
-		checks=[]; pending=[]; directory=ROOT/"build/verification"
-		directory.mkdir(exist_ok=True)
-		def flush():
-			if not pending:
-				return
-			path=directory/("Batch"+str(len(checks))+".lean")
-			parts=["import QSym\n"]
-			for i,(file,source) in enumerate(pending):
-				source=source.replace("QSym.Certificate","QSym.BatchCertificate"+str(i))
-				source=source.replace("QSym.DomainCertificate","QSym.BatchDomainCertificate"+str(i))
-				source=re.sub(r"\bCertificate\.","BatchCertificate"+str(i)+".",source)
-				parts.append("-- "+str(file.relative_to(ROOT))+"\n"+source)
-			path.write_text("\n".join(parts)); checks.append(path); members[path]=[file for file,_ in pending]; pending.clear()
-		for file in certificates:
-			source=file.read_text()
-			if pending and file.parent!=pending[-1][0].parent:
-				flush()
-			# Only rename the exporter's known, self-contained namespaces.
-			if re.findall(r"^namespace ([^\n]+)",source,re.M) in (["QSym.Certificate"],["QSym.Certificate","QSym.DomainCertificate"]) and re.findall(r"^import ([^\n]+)",source,re.M)==["QSym"]:
-				pending.append((file,re.sub(r"^import QSym\n","",source,flags=re.M)))
-				if len(pending)==args.batch_size:
-					flush()
-			else:
-				checks.append(file)
-		flush()
+	# Find unchanged individual certificates before constructing batches. Their
+	# original modules remain usable even if additions moved every batch boundary.
+	unchanged=cache.recheck(certificates,args.jobs) if args.fast else set()
+	checks,members=make_batches(ROOT,[p for p in certificates if p not in unchanged],args.batch_size)
 	rechecked=cache.recheck(checks,args.jobs) if args.fast else set()
 	def check_group(path):
-		if path in rechecked:
-			return
-		files=members.get(path,[path])
+		files=members.get(path,[(path,path.read_bytes())])
+		source=path.read_bytes()
 		try:
-			check(path,timeout=180*len(files),save=True)
+			if path not in rechecked:
+				check(path,timeout=180*len(files),save=True)
 		except (RuntimeError,subprocess.TimeoutExpired):
 			if path not in members:
 				raise
 			print(f"{path.name} failed; checking {len(files)} constituent certificates individually.",flush=True)
-			for file in files:
+			for file,original in files:
+				if file.read_bytes()!=original:
+					raise RuntimeError("certificate changed during batch checking: "+str(file))
 				check(file,save=True)
+			return
+		if path in members:
+			cache.remember_members(path,source,files)
 	with ThreadPoolExecutor(max_workers=args.jobs) as pool:
 		for _ in pool.map(check_group,checks):
 			pass
@@ -217,6 +200,15 @@ def main():
 		("BadComplexTanQuarterTurn","rewrite bad(z:ℂ):ctan(z+toℂ(π/2))⇒ctan(z);"),
 		("BadRealPeriodIndex","rewrite bad(x:ℝ):sin(2*π*x)⇒0;"),
 		("BadIntegerHalfPeriod","rewrite bad(k:ℤ):cos(π*k)⇒1;"),
+		("BadIntegerHalfSign","rewrite bad(x:ℝ,k:ℤ):sin(x+π*k)⇒sin(x);"),
+		("BadComplexSinhRealPeriod","rewrite bad(z:ℂ):csinh(z+toℂ(2*π))⇒csinh(z);"),
+		("BadComplexTanhHalfImaginaryPeriod","rewrite bad(z:ℂ):ctanh(z+ⅈ*toℂ(π/2))⇒ctanh(z);"),
+		("BadIntegerOddParity","rewrite bad(k:ℤ):powRZ(-1,2*k+1)⇒1;"),
+		("BadRealIndexParity","rewrite bad(x:ℝ):powerR(-1,2*x)⇒1;"),
+		("BadComplexCoshNonzero","rewrite bad(z:ℂ):ccosh(z)≠0⇒true;"),
+		("BadHyperbolicSumSquares","rewrite bad(z:ℂ):ccosh(z)^2+csinh(z)^2⇒complex(1,0);"),
+		("BadComplexPeriodIndex","rewrite bad(z:ℂ,w:ℂ):csin(z+toℂ(2*π)*w)⇒csin(z);"),
+		("BadNegativeQuarterSign","rewrite bad(z:ℂ):csin(z-toℂ(π/2))⇒ccos(z);"),
 		("BadRealAcoshInverse","rewrite bad(x:ℝ):acosh(cosh(x))⇒x;"),
 		("BadComplexAsinInverse","rewrite bad(z:ℂ):casin(csin(z))⇒z;"),
 		("BadComplexAcosInverse","rewrite bad(z:ℂ):cacos(ccos(z))⇒z;"),

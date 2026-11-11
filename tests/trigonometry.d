@@ -117,7 +117,7 @@ Example[] examples(){
 		Example("IntegerPartialPeriod","sin(2*π*floor(1/x))","0"),
 		Example("IntegerProductPartialPeriod","sin(2*π*k*floor(1/x))","0"),
 		Example("PeriodGuardedPartial","[x≠0]*cis(2*π*floor(1/x))","[x≠0]*complex(1,0)"),
-		Example("IntegerHalfPeriodUnchanged","sin(π*k)","sin(π*k)"),
+		Example("IntegerHalfPeriodUnchanged","sin(π*k)","0"),
 		Example("PeriodMaskedPole","[false]*tan(π/2+π*k)","0"),
 		Example("PeriodPole","tan(π/2+π*k)","tan(π/2)")
 	];

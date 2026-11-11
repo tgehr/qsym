@@ -10,6 +10,7 @@ import tempfile
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"tools"))
 from kernel_cache import KernelCache,compiled_rules
+from certificate_batches import make_batches
 
 def main():
 	parser=argparse.ArgumentParser()
@@ -103,7 +104,7 @@ def main (args : List String) : IO Unit := do
 
 	# Receipts bind exact source bytes, toolchain identity, and compiled bytes.
 	with tempfile.TemporaryDirectory(dir=directory) as temporary:
-		root=pathlib.Path(temporary); (root/"lean").mkdir()
+		root=pathlib.Path(temporary); (root/"lean").symlink_to(ROOT/"lean",target_is_directory=True)
 		cache=KernelCache(root,command)
 		file=root/"Case.lean"; file.write_text("import QSym\ntheorem test : True := True.intro\n")
 		compiled=root/"Case.olean"; compiled.write_bytes(cached.read_bytes())
@@ -117,6 +118,11 @@ def main (args : List String) : IO Unit := do
 		file.write_bytes(source+b"-- changed\n"); assert cache.candidate(file) is None
 		file.write_bytes(source); candidate.write_bytes(b"corrupt"); assert cache.candidate(file) is None
 		cache.store(file,source,compiled)
+		candidate=cache.candidate(file); data=candidate.read_bytes(); before=candidate.stat()
+		candidate.write_bytes(bytes([data[0]^1])+data[1:])
+		os.utime(candidate,ns=(before.st_atime_ns,before.st_mtime_ns))
+		assert cache.candidate(file) is None,"same-size edits must invalidate the hash memo"
+		cache.store(file,source,compiled)
 		candidate.with_suffix(".json").write_text("{}"); assert cache.candidate(file) is None
 		cache.store(file,source,compiled)
 		cache.version+="changed"; assert cache.candidate(file) is None
@@ -126,6 +132,47 @@ def main (args : List String) : IO Unit := do
 			pass
 		else:
 			raise AssertionError("accepted a source change during compilation")
+
+	# Adding or moving a certificate must not discard its neighbors' proofs.
+	# Replay the actual batched declarations after changing both batch size and
+	# membership, then verify exact-source and receipt corruption boundaries.
+	cache=KernelCache(ROOT,command)
+	member_dir=directory/"members"; member_dir.mkdir(exist_ok=True)
+	files=[]
+	for name,body in (("A","True := True.intro"),("C","(1 : Nat) = 1 := rfl")):
+		file=member_dir/(name+".lean")
+		file.write_text("import QSym\nnamespace QSym.Certificate\ntheorem result : "+body+"\n#qsym_check_axioms result\nend QSym.Certificate\n")
+		files.append(file)
+	checks,members=make_batches(ROOT,files,2)
+	assert len(checks)==1
+	batch=checks[0]; original=batch.read_bytes()
+	compiled,_=lean("MemberBatch",original.decode(),compile=True)
+	cache.store(batch,original,compiled.with_suffix(".olean"))
+	cache.remember_members(batch,original,members[batch])
+	assert cache.recheck(files,1)==set(files)
+	inserted=member_dir/"B.lean"
+	inserted.write_bytes(files[0].read_bytes().replace(b"True := True.intro",b"(2 : Nat) = 2 := rfl"))
+	assert cache.recheck([files[0],inserted,files[1]],1)==set(files)
+	assert make_batches(ROOT,[files[0],inserted,files[1]],1)[0]==[files[0],inserted,files[1]]
+	moved=member_dir/"Renamed.lean"; moved.write_bytes(files[0].read_bytes())
+	assert cache.recheck([moved],1)=={moved}
+	unchanged=files[0].read_bytes()
+	files[0].write_bytes(unchanged.replace(b"True := True.intro",b"False := True.intro"))
+	assert cache.recheck(files,1)=={files[1]}
+	try:
+		cache.remember_members(batch,original,members[batch])
+	except RuntimeError:
+		pass
+	else:
+		raise AssertionError("accepted a constituent source change")
+	files[0].write_bytes(unchanged)
+	receipt=cache.directory/(cache.key(files[0],unchanged)+".member.json")
+	record=json.loads(receipt.read_text())
+	for key,value in (("source","0"*64),("module_source","0"*64),("module","../escape"),("version","wrong")):
+		receipt.write_text(json.dumps({**record,key:value}))
+		assert cache.candidate(files[0]) is None
+	receipt.write_text(json.dumps(record))
+	assert cache.recheck(files,1)==set(files)
 
 	generated=(ROOT/"lean/QSym/Generated.lean").read_text()
 	first=generated[generated.index("theorem "):generated.index("\ntheorem ",generated.index("theorem ")+1)]

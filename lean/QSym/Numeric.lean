@@ -1,4 +1,4 @@
-import QSym.Refinement
+import QSym.RefinementBase
 
 namespace QSym.Numeric
 

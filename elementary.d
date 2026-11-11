@@ -78,49 +78,54 @@ package final class Elementary{
 		}
 		return true;
 	}
-	private Rational angle(Term t,out bool exact){
-		exact=true;
-		Term[] pending=[t]; Rational result;
+	private Term integerFactor(Term t){
+		auto n=a.view(t);
+		if(n.op==Op.pow){ auto base=integerFactor(a.at(n.a)); return base==Term.init?base:a.pow(base,cast(uint)n.value); }
+		if(n.op==Op.builtin&&n.value==Builtin.castRC) return integerFactor(a.at(n.a));
+		if(n.op!=Op.builtin||n.value!=Builtin.castQR) return Term.init;
+		auto q=a.view(a.at(n.a));
+		return q.op==Op.builtin&&q.value==Builtin.castZQ?a.at(q.a):Term.init;
+	}
+	private bool periodTerm(Term t,bool imaginary,out Rational scale,out Term index){
+		auto factors=a.multisetTerms(a.multiset(t,Op.mul));
+		auto coefficient=Number(1); bool foundPi;
+		foreach(e;factors){
+			budget.spend(); auto u=e.term,n=a.view(u);
+			if(a.isNumber(u)){
+				foreach(i;0..e.count) coefficient=budget.calc!"*"(coefficient,a.number(u));
+				continue;
+			}
+			if(n.op==Op.builtin&&n.value==Builtin.castRC) u=a.at(n.a);
+			if(pi(u)&&e.count==1&&!foundPi){ foundPi=true; continue; }
+			auto factor=integerFactor(e.term);
+			if(factor==Term.init) return false;
+			if(e.count!=1) factor=a.pow(factor,e.count);
+			index=index==Term.init?factor:a.mul(index,factor);
+		}
+		if(!foundPi||!(imaginary?coefficient.re.zero:coefficient.im.zero)) return false;
+		scale=imaginary?coefficient.im:coefficient.re;
+		return true;
+	}
+	private Rational angle(Term t,out bool exact,bool imaginary=false){
+		exact=true; Term[] pending=[t]; Rational result;
 		while(pending.length){
 			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.view(u);
-			if(n.op==Op.add) pending~=[a.at(n.a),a.at(n.b)];
-			else if(pi(u)) result=result+Rational(1);
-			else if(n.op==Op.mul){
-				if(a.isNumber(a.at(n.a))&&pi(a.at(n.b))) result=result+a.number(a.at(n.a)).re;
-				else if(a.isNumber(a.at(n.b))&&pi(a.at(n.a))) result=result+a.number(a.at(n.b)).re;
-				else exact=false;
-			}
+			if(n.op==Op.add){ pending~=[a.at(n.a),a.at(n.b)]; continue; }
+			Rational scale; Term index;
+			if(periodTerm(u,imaginary,scale,index)&&index==Term.init) result=result+scale;
 			else exact=false;
 		}
 		return result;
 	}
-	private bool symbolicPeriod(Term t,uint period,out Term result){
+	private bool symbolicPeriod(Term t,uint period,out Term result,bool imaginary=false){
 		Term[] pending=[t];
 		while(pending.length){
 			budget.spend(); auto u=pending[$-1]; --pending.length; auto n=a.view(u);
 			if(n.op==Op.add){ pending~=[a.at(n.a),a.at(n.b)]; continue; }
-			if(n.op!=Op.mul) continue;
-			auto factors=a.multisetTerms(a.multiset(u,Op.mul));
-			Rational scale=Rational(1); Term index; bool foundPi,valid=true;
-			foreach(e;factors){
-				budget.spend(); auto v=a.view(e.term);
-				if(a.isNumber(e.term)){
-					foreach(i;0..e.count) scale=budget.calc!"*"(Number(scale),a.number(e.term)).re;
-				}else if(pi(e.term)&&e.count==1&&!foundPi) foundPi=true;
-				else{
-					uint exponent=1;
-					if(v.op==Op.pow){ exponent=cast(uint)v.value; v=a.view(a.at(v.a)); }
-					if(v.op!=Op.builtin||v.value!=Builtin.castQR){ valid=false; break; }
-					auto q=a.view(a.at(v.a));
-					if(q.op!=Op.builtin||q.value!=Builtin.castZQ){ valid=false; break; }
-					auto factor=a.at(q.a);
-					if(exponent!=1) factor=a.pow(factor,exponent);
-					if(e.count!=1) factor=a.pow(factor,e.count);
-					index=index==Term.init?factor:a.mul(index,factor);
-				}
-			}
+			Rational scale; Term index;
+			if(!periodTerm(u,imaginary,scale,index)||index==Term.init) continue;
 			scale=budget.calc!"/"(Number(scale),Number(period)).re;
-			if(!valid||!foundPi||index==Term.init||!scale.integral||scale==Rational(0)) continue;
+			if(!scale.integral||scale==Rational(0)) continue;
 			result=scale==Rational(1)?index:a.mul(a.number(Number(scale),Sort.integer),index); return true;
 		}
 		return false;
@@ -239,6 +244,10 @@ package final class Elementary{
 					f==Builtin.tanR?Law.real_tan_period:Law.complex_phase_period;
 				result=instantiate(a,law,[a.at(n.a),turns]); return true;
 			}
+			if(f!=Builtin.tanR&&symbolicPeriod(a.at(n.a),1,turns)){
+				auto law=f==Builtin.sinR?Law.real_sin_integer_half_turn:f==Builtin.cosR?Law.real_cos_integer_half_turn:Law.phase_integer_half_turn;
+				result=instantiate(a,law,[a.at(n.a),turns]); return true;
+			}
 			bool exact;
 			auto q=angle(a.at(n.a),exact),den=q.denominator*(f==Builtin.tanR?1:2),k=q.numerator/den;
 			if(q.numerator<0&&q.numerator%den!=0) --k;
@@ -257,6 +266,36 @@ package final class Elementary{
 			if(exact&&(degree==1||degree==3||degree==4||degree==6)){
 				if(f==Builtin.cisR){ result=instantiate(a,Law.complex_phase_cartesian,[a.at(n.a)]); return true; }
 				if(f==Builtin.tanR){ result=instantiate(a,Law.real_tan_ratio,[a.at(n.a)]); return true; }
+			}
+		}
+		if(f==Builtin.sinC||f==Builtin.cosC||f==Builtin.tanC||f==Builtin.sinhC||f==Builtin.coshC||f==Builtin.tanhC||f==Builtin.expC){
+			bool imaginary=f==Builtin.sinhC||f==Builtin.coshC||f==Builtin.tanhC||f==Builtin.expC;
+			bool tangent=f==Builtin.tanC||f==Builtin.tanhC;
+			auto period=tangent?1:2;
+			auto law=f==Builtin.sinC?Law.complex_sin_period:f==Builtin.cosC?Law.complex_cos_period:f==Builtin.tanC?Law.complex_tan_period:
+				f==Builtin.sinhC?Law.complex_sinh_imaginary_period:f==Builtin.coshC?Law.complex_cosh_imaginary_period:
+				f==Builtin.tanhC?Law.complex_tanh_imaginary_period:Law.complex_exp_imaginary_period;
+			Term turns;
+			if(symbolicPeriod(a.at(n.a),period,turns,imaginary)){
+				result=instantiate(a,law,[a.at(n.a),turns]); return true;
+			}
+			if(!tangent&&symbolicPeriod(a.at(n.a),1,turns,imaginary)){
+				auto half=f==Builtin.sinC?Law.complex_sin_integer_half_turn:f==Builtin.cosC?Law.complex_cos_integer_half_turn:
+					f==Builtin.sinhC?Law.complex_sinh_imaginary_half_turn:f==Builtin.coshC?Law.complex_cosh_imaginary_half_turn:Law.complex_exp_imaginary_half_turn;
+				result=instantiate(a,half,[a.at(n.a),turns]); return true;
+			}
+			bool exact; auto q=angle(a.at(n.a),exact,imaginary),den=q.denominator*period,k=q.numerator/den;
+			if(q.numerator<0&&q.numerator%den!=0) --k;
+			if(!tangent&&f!=Builtin.expC&&q==Rational(BigInt(-1),BigInt(2))){
+				auto negative=f==Builtin.sinC?Law.complex_sin_negative_quarter:f==Builtin.cosC?Law.complex_cos_negative_quarter:
+					f==Builtin.sinhC?Law.complex_sinh_negative_quarter:Law.complex_cosh_negative_quarter;
+				result=instantiate(a,negative,[a.at(n.a)]); return true;
+			}
+			if(k!=0){ result=instantiate(a,law,[a.at(n.a),a.number(Number(Rational(k,BigInt(1))),Sort.integer)]); return true; }
+			if(!tangent&&q>=Rational(BigInt(1),BigInt(2))){
+				auto quarter=f==Builtin.sinC?Law.complex_sin_quarter_reduce:f==Builtin.cosC?Law.complex_cos_quarter_reduce:
+					f==Builtin.sinhC?Law.complex_sinh_imaginary_quarter_reduce:f==Builtin.coshC?Law.complex_cosh_imaginary_quarter_reduce:Law.complex_exp_imaginary_quarter_reduce;
+				result=instantiate(a,quarter,[a.at(n.a)]); return true;
 			}
 		}
 		return false;

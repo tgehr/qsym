@@ -85,6 +85,8 @@ test: build/qsym
 	./build/rational-tests --DRT-testmode=run-main build/rational
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/discrete.d -of=build/discrete-tests
 	./build/discrete-tests --DRT-testmode=run-main build/discrete
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/trig_algebra.d -of=build/trig-algebra-tests
+	./build/trig-algebra-tests --DRT-testmode=run-main build/trig-algebra
 	python3 tests/repl.py
 	python3 tests/terminal.py
 
