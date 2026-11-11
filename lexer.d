@@ -9,7 +9,7 @@ import std.conv:to;
 import std.string:startsWith;
 @safe:
 
-enum TokenKind{ end,identifier,integer,symbol,power }
+enum TokenKind{ end,identifier,integer,decimal,symbol,power }
 struct Token{ TokenKind kind; string text; size_t offset; }
 
 struct Lexer{
@@ -49,9 +49,22 @@ struct Lexer{
 			if(pos==begin) throw new Exception("superscript exponent expected");
 			return Token(TokenKind.power,exponent,start);
 		}
-		if(isDigit(c)){
-			do{ advance(); }while(pos<source.length&&isDigit(cur()));
-			return Token(TokenKind.integer,source[start..pos],start);
+		if(isDigit(c)||c=='.'&&pos+1<source.length&&isDigit(source[pos+1])){
+			while(pos<source.length&&isDigit(source[pos])) ++pos;
+			bool decimal;
+			if(pos<source.length&&source[pos]=='.'){
+				decimal=true; ++pos;
+				while(pos<source.length&&isDigit(source[pos])) ++pos;
+			}
+			if(pos<source.length&&(source[pos]=='e'||source[pos]=='E')&&
+				pos+1<source.length&&(isDigit(source[pos+1])||source[pos+1]=='+'||source[pos+1]=='-')){
+				decimal=true; ++pos;
+				if(source[pos]=='+'||source[pos]=='-') ++pos;
+				auto begin=pos;
+				while(pos<source.length&&isDigit(source[pos])) ++pos;
+				if(begin==pos) throw new Exception("decimal exponent expected at byte "~to!string(begin));
+			}
+			return Token(decimal?TokenKind.decimal:TokenKind.integer,source[start..pos],start);
 		}
 		if(c!='ⅈ'&&c!='𝑖'&&(isAlpha(c)||c=='_')){
 			do{ advance(); }while(pos<source.length&&(identifierChar(cur())||isDigit(cur())));

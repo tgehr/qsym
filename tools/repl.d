@@ -27,6 +27,7 @@ int repl(){
 			if(line==":help"){
 				writeln("Expressions: 2^(1/2), exp(z), sin(z), [x≠0]·x⁻¹, (1+ⅈ)^2");
 				writeln("Undeclared variables are real. ASCII operators also work.");
+				writeln("Whole numerals default to ℕ; decimals such as 0.125 or 1e-3 are exact rationals.");
 				writeln("Up/Down: session history; Left/Right, Home/End, Backspace/Delete: edit.");
 				writeln("Unicode: \\alpha → α, \\ne → ≠, \\bR → ℝ, \\^2 → ², \\ii → ⅈ.");
 				writeln("Tab completes a unique prefix; Space commits a symbol; Esc cancels it.");

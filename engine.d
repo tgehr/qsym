@@ -4,6 +4,7 @@ import qsym.derive;
 import qsym.budget;
 import qsym.field:Field,compare;
 import qsym.elementary:Elementary;
+import qsym.embeddings:Embeddings;
 import qsym.predicates:Predicates;
 import std.algorithm:sort;
 import qsym.generated.rules;
@@ -16,6 +17,7 @@ package final class Engine{
 	private Budget budget;
 	private Field field;
 	private Elementary elementary;
+	private Embeddings embeddings;
 	private Predicates predicates;
 	private size_t rewritesLeft;
 	private bool distributeLogic;
@@ -37,6 +39,7 @@ package final class Engine{
 		field=new Field(a,d,budget,&normalize);
 		field.expandPowers=expandPowers;
 		elementary=new Elementary(a,budget);
+		embeddings=new Embeddings(a,d,budget);
 		predicates=new Predicates(a,budget,field,elementary);
 	}
 	private void remember(K)(ref Table!(K,uint) index,K key,Proof p){
@@ -436,6 +439,10 @@ package final class Engine{
 			auto current=p.after; n=a.view(current);
 			auto numeric=field.literal(current,ctx);
 			if(numeric.after!=current){ p=d.trans(p,numeric,ctx); memoize(k,p); return p; }
+			auto retracted=embeddings.run(current,ctx);
+			if(retracted.after!=current){
+				p=d.trans(p,retracted,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
+			}
 			if(ctx&&!probe){
 				Proof q;
 				if(substitute(current,ctx,q)){ p=d.trans(p,q,ctx); memoize(k,p); return p; }

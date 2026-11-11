@@ -6,6 +6,7 @@ import qsym.lexer;
 import std.conv:to;
 import std.exception:enforce;
 import std.algorithm:canFind;
+import qsym.number:Rational,BigInt;
 @safe:
 
 // NatParam is a bounded constructor payload; ℕ is an expression type.
@@ -18,7 +19,7 @@ final class Pattern{
 	bool variable;
 	bool natural;
 	private uint candidates;
-	private bool constantNatural;
+	private bool constantNatural,realDefault;
 	private ulong naturalValue;
 	this(string name){ this.name=name; }
 }
@@ -33,7 +34,7 @@ struct Parser{
 	private Token token;
 	private size_t integerEnd;
 	private void next(){
-		integerEnd=token.kind==TokenKind.integer?token.offset+token.text.length:size_t.max;
+		integerEnd=token.kind==TokenKind.integer||token.kind==TokenKind.decimal?token.offset+token.text.length:size_t.max;
 		token=lexer.next();
 	}
 	private bool take(string s){
@@ -51,6 +52,30 @@ struct Parser{
 		enforce(token.kind==TokenKind.integer,"integer expected at byte "~to!string(token.offset));
 		auto p=new Pattern("#"); p.number=to!long((negative?"-":"")~token.text); next(); return p;
 	}
+	private Pattern decimal(){
+		// Parse base ten exactly; decimal syntax never passes through floating point.
+		auto spelling=token.text; next();
+		string digits; long scale; bool fraction;
+		foreach(i,c;spelling){
+			if(c=='.'){ fraction=true; continue; }
+			if(c=='e'||c=='E'){
+				auto exponent=to!long(spelling[i+1..$]);
+				enforce(exponent>=-4096&&exponent<=4096,"decimal exponent exceeds literal limit");
+				scale-=exponent; break;
+			}
+			digits~=c; if(fraction) ++scale;
+		}
+		enforce(digits.length<=4096&&scale>=-4096&&scale<=4096,"decimal exceeds literal limit");
+		auto numerator=BigInt(digits),denominator=BigInt(1);
+		if(numerator==0) return pattern("rat",[integerPattern(0),integerPattern(1)]);
+		foreach(i;0..(scale<0?-scale:scale)){
+			if(scale<0) numerator*=10; else denominator*=10;
+		}
+		auto q=Rational(numerator,denominator);
+		enforce(q.numerator<=long.max&&q.denominator<=long.max,"decimal exceeds exact literal range");
+		return pattern("rat",[integerPattern(q.numerator.toLong()),integerPattern(q.denominator.toLong())]);
+	}
+
 	private Pattern primary(uint depth){
 		enforce(depth<128,"rule pattern nesting limit exceeded");
 		if(take("(")){
@@ -62,6 +87,7 @@ struct Parser{
 		if(take("|")){ auto p=expression(depth+1); expect("|"); return pattern("$abs",[p]); }
 		if(take("ⅈ")) return pattern("complex",[integerPattern(0),integerPattern(1)]);
 		if(token.kind==TokenKind.integer) return integer();
+		if(token.kind==TokenKind.decimal) return decimal();
 		auto p=new Pattern(ident());
 		if(take("(")){
 			if(!take(")")){
@@ -76,7 +102,7 @@ struct Parser{
 			p.name="$ascribe"; p.sort=Sort.real_; return p;
 		}
 		if(p.name=="hypot"){
-			if(!p.args.length) return integerPattern(0);
+			if(!p.args.length) return pattern("real",[integerPattern(0)]);
 			if(p.args.length==1){ p.name="$abs"; return p; }
 		}
 		if((p.name=="min"||p.name=="max"||p.name=="hypot")&&p.args.length>2){
@@ -114,8 +140,11 @@ struct Parser{
 
 	private Pattern product(uint depth){
 		auto p=factor(depth);
-		bool adjacent(Pattern p){ return p.name=="#"&&token.offset==integerEnd&&
-			(token.kind==TokenKind.identifier||token.text=="("||token.text=="ⅈ"); }
+		bool adjacent(Pattern p){
+			if(p.name=="$neg") return adjacent(p.args[0]);
+			return (p.name=="#"||p.name=="rat")&&token.offset==integerEnd&&
+				(token.kind==TokenKind.identifier||token.text=="("||token.text=="ⅈ");
+		}
 		auto implicit=adjacent(p);
 		while(token.text=="*"||token.text=="/"||implicit){
 			auto op=implicit?"*":token.text;
@@ -188,7 +217,7 @@ struct Parser{
 			foreach(arg;q.args) variables(arg,depth+1);
 		}
 		variables(p);
-		p=lower(p,choose(possible(p,parameters)));
+		p=lower(p,choose(possible(p,parameters),p.realDefault));
 		infer(p,parameters);
 		return p;
 	}
@@ -225,12 +254,12 @@ struct Parser{
 			expect(";");
 			auto candidates=possible(r.lhs,r.parameters)&possible(r.rhs,r.parameters);
 			enforce((candidates&~naturalBit)!=0,"rewrite changes its type in "~r.name);
-			auto sort=choose(candidates);
+			auto sort=choose(candidates,r.lhs.realDefault||r.rhs.realDefault);
 			r.lhs=lower(r.lhs,sort); r.rhs=lower(r.rhs,sort);
 			foreach(ref p;r.premises){
 				auto types=possible(p.term,r.parameters);
 				enforce((types&~naturalBit)!=0,"conditions require an IR expression");
-				auto ty=p.defined||p.literal?choose(types):Sort.boolean;
+				auto ty=p.defined||p.literal?choose(types,p.term.realDefault):Sort.boolean;
 				enforce(types&bit(ty),"condition must be Bool");
 				p.term=lower(p.term,ty);
 			}
@@ -269,8 +298,9 @@ private Pattern integerPattern(long n){ auto p=new Pattern("#"); p.number=n; ret
 private uint bit(Sort s){ return 1u<<cast(uint)s; }
 private enum scalars=(1u<<Sort.real_)|(1u<<Sort.complex)|(1u<<Sort.natural)|(1u<<Sort.integer)|(1u<<Sort.rational);
 private enum naturalBit=1u<<8;
-private Sort choose(uint candidates){
-	foreach(s;[Sort.real_,Sort.complex,Sort.natural,Sort.integer,Sort.rational,Sort.boolean,Sort.density,Sort.measure])
+private Sort choose(uint candidates,bool realDefault=false){
+	if(realDefault&&candidates&bit(Sort.real_)) return Sort.real_;
+	foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex,Sort.boolean,Sort.density,Sort.measure])
 		if(candidates&bit(s)) return s;
 	throw new Exception("no expression type");
 }
@@ -344,7 +374,8 @@ private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 		return p.candidates=(p.number<0?scalars&~bit(Sort.natural):scalars)|(p.constantNatural?naturalBit:0);
 	}
 	uint[] args;
-	foreach(arg;p.args) args~=possible(arg,parameters,depth+1);
+	foreach(arg;p.args){ args~=possible(arg,parameters,depth+1); p.realDefault|=arg.realDefault; }
+	p.realDefault|=p.name=="$iverson";
 	if(literalName(p.name)){
 		enforce(arity==(p.name=="complex"||p.name=="rat"?2:1)||p.name=="real"&&arity==2,"literal arity mismatch");
 		foreach(arg;p.args) enforce(payload(arg),"literal integer or NatParam expected");
@@ -370,8 +401,8 @@ private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 				result=args[0]&(bit(Sort.rational)|bit(Sort.real_)|bit(Sort.complex));
 				if(!result) result=common(args[0],bit(Sort.rational));
 			}
-			else if(args[1]==bit(Sort.natural)) result=args[0]&scalars;
-			else if(args[1]==bit(Sort.integer)) result=common(args[0],bit(Sort.rational));
+			else if(choose(args[1],p.args[1].realDefault)==Sort.natural) result=args[0]&scalars;
+			else if(choose(args[1],p.args[1].realDefault)==Sort.integer) result=common(args[0],bit(Sort.rational));
 			else result=common(args[0],common(args[1],bit(Sort.real_)));
 			break;
 		case "$add","$mul":
@@ -456,7 +487,7 @@ private Pattern embed(Pattern p,Sort from,Sort to){
 }
 private Pattern lower(Pattern p,Sort s){
 	if(!(p.candidates&bit(s))){
-		auto from=choose(p.candidates&~naturalBit);
+		auto from=choose(p.candidates&~naturalBit,p.realDefault);
 		return embed(lower(p,from),from,s);
 	}
 	if(p.variable) return p;
@@ -474,7 +505,7 @@ private Pattern lower(Pattern p,Sort s){
 			}
 			if(e.name=="#") return pattern("pow"~suf~(e.number<0?"Z":"N"),
 				[lower(p.args[0],s),lower(e,e.number<0?Sort.integer:Sort.natural)]);
-			auto ty=choose(e.candidates);
+			auto ty=choose(e.candidates,e.realDefault);
 			if(ty==Sort.natural||ty==Sort.integer)
 				return pattern("pow"~suf~suffix(ty),[lower(p.args[0],s),lower(e,ty)]);
 			return pattern(s==Sort.complex?"powerC":"powerR",[lower(p.args[0],s),lower(e,s)]);
@@ -507,12 +538,12 @@ private Pattern lower(Pattern p,Sort s){
 		case "$different":
 			auto types=common(p.args[0].candidates,p.args[1].candidates);
 			if(!types) return pattern("not",[pattern("eqB",[lower(p.args[0],Sort.boolean),lower(p.args[1],Sort.boolean)])]);
-			auto ty=choose(types); if(ty==Sort.natural) ty=Sort.integer;
+			auto ty=choose(types,p.realDefault); if(ty==Sort.natural) ty=Sort.integer;
 			auto diff=p.args[1].name=="#"&&p.args[1].number==0?lower(p.args[0],ty):
 				pattern("add"~suffix(ty),[lower(p.args[0],ty),pattern("mul"~suffix(ty),[literal(-1,ty),lower(p.args[1],ty)])]);
 			return pattern("nonzero"~suffix(ty),[diff]);
 		case "$lt","$le":
-			auto ty=choose(common(p.args[0].candidates,p.args[1].candidates)&~bit(Sort.complex));
+			auto ty=choose(common(p.args[0].candidates,p.args[1].candidates)&~bit(Sort.complex),p.realDefault);
 			return pattern((p.name=="$lt"?"lt":"le")~suffix(ty),[lower(p.args[0],ty),lower(p.args[1],ty)]);
 		case "$iverson":return pattern("mask"~suf,[lower(p.args[0],Sort.boolean),literal(1,s)]);
 		case "$mask":return pattern("mask"~suf,[lower(p.args[0],Sort.boolean),lower(p.args[1],s)]);

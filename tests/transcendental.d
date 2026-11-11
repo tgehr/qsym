@@ -82,7 +82,7 @@ unittest{
 	foreach(c;examples()){
 		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
 		Term[] facts; foreach(f;c.facts) facts~=s.parse(a,f);
-		auto input=s.parse(a,c.input),expected=simplify(a,s.parse(a,c.expected),facts).output;
+		auto input=s.parse(a,c.input),expected=simplify(a,s.parse(a,c.expected,a.sort(input)),facts).output;
 		auto fast=simplify(a,input,facts),checked=simplify(a,input,facts,Options(DensityMode.preserve,true));
 		if(fast.exhausted||fast.output!=expected){
 			writeln("FAIL ",c.name,": ",s.format(a,fast.output),"; expected ",s.format(a,expected),fast.exhausted?" (exhausted)":""); ++failures;

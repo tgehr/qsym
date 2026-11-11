@@ -34,7 +34,7 @@ unittest{
 	size_t failures;
 	foreach(c;examples()){
 		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
-		auto input=s.parse(a,c.input),expected=simplify(a,s.parse(a,c.expected)).output;
+		auto input=s.parse(a,c.input),expected=simplify(a,s.parse(a,c.expected,a.sort(input))).output;
 		auto options=Options.init; options.expandPowers=c.expand;
 		auto fast=simplify(a,input,options); options.trace=true;
 		auto checked=simplify(a,input,options);

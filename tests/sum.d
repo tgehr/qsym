@@ -55,7 +55,7 @@ unittest{
 	}
 	foreach(i,source;["x+1/2+3/2","1/x+1-1","log(x)+1+2","1/0-1/0","[false]*(1/0)+3+4"]){
 		auto owner=Session.open(); auto a=owner.arena; auto pool=new SumPool(a,Sort.real_);
-		Syntax syntax; syntax.declare("x:ℝ"); auto input=pool.from(syntax.parse(a,source));
+		Syntax syntax; syntax.declare("x:ℝ"); auto input=pool.from(syntax.parse(a,source,Sort.real_));
 		auto filename="Partial"~to!string(i)~".lean";
 		write(buildPath(args[1],filename),exportSumLean(pool,input,pool.fold(input)));
 	}

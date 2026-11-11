@@ -18,7 +18,7 @@ private Example[] examples(){
 		Example("Root","2^(1/2)",Sort.real_),
 		Example("RealPower","x^(sin(x)+1/2)",Sort.real_),
 		Example("ComplexPower","z^w",Sort.complex),
-		Example("PowerAssociation","2^3^2",Sort.real_),
+		Example("PowerAssociation","2^3^2",Sort.natural),
 		Example("NaturalPower","n^(n+1)",Sort.natural),
 		Example("IntegerPower","n^k",Sort.rational),
 		Example("LargeNaturalExponent","n^4294967296",Sort.natural),
@@ -84,14 +84,14 @@ unittest{
 	assert(result("q^0")=="rat(1,1)");
 	assert(result("ccosh(0)")=="toℂ(1)");
 	assert(result("clog(cexp(z))")=="clog(cexp(z))");
-	assert(result("[false]*log(0)")=="0");
+	assert(result("[false]*log(0)")=="real(0)");
 	assert(result("sqrt(x^2)")=="abs(x)");
 	assert(result("csqrt(z^2)")!="z");
-	assert(result("n*0")=="nat(0)");
+	assert(result("n*0")=="0");
 	assert(result("min(x)")=="x");
 	assert(result("max(x)")=="x");
 	assert(result("hypot(x)")=="abs(x)");
-	assert(result("hypot()")=="0");
+	assert(result("hypot()")=="real(0)");
 	foreach(source;["mulR([p],x⁻¹)","mulC([p],z⁻¹)","mulQ([p],q⁻¹)","mulR(x⁻¹,[p])","mulC(z⁻¹,[p])","mulQ(q⁻¹,[p])",
 		"mulR([p]*x,x⁻¹)","mulR(x⁻¹,[p]*x)","mulQ([p]*q,q⁻¹)","mulQ(q⁻¹,[p]*q)"]){
 		auto t=s.parse(a,source);

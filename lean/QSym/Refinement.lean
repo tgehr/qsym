@@ -1,6 +1,7 @@
 import QSym.RefinementBase
 import QSym.Trigonometry
 import QSym.PowerPredicates
+import QSym.ScalarTypes
 
 namespace QSym
 
@@ -252,8 +253,35 @@ macro "qsym_real_power_bridge" : tactic => `(tactic| (
     Function1.apply, Functions.castRC]
 ))
 
+open Lean Meta Elab Tactic in
+elab "qsym_exact_scalar_goal" : tactic => do
+  unless ((← getMainTarget).find? fun e => e.isConstOf ``Functions.denQ).isSome do
+    throwError "not an exact scalar predicate"
+
+macro "qsym_exact_scalar" : tactic => `(tactic| (
+  qsym_exact_scalar_goal
+  classical
+  intro v hv
+  simp [Value.Refines, Function1.apply, Function2.apply,
+    Functions.isIntR, Functions.denQ, Functions.castNZ, Functions.castZQ, Functions.castQR,
+    Functions.castRC, Functions.imC, Functions.addZ, Functions.mulZ, Functions.nonzeroZ,
+    Functions.addQ, Functions.mulQ, Functions.invQ, Functions.nonzeroQ,
+    Functions.powZN, Functions.powQN, Functions.powRN, Functions.powCN,
+    Functions.powQZ, Functions.powRZ, Functions.powCZ,
+    Value.not, Value.nonzero, Value.add, Value.mul, Value.inv] at *
+  all_goals try split_ifs at *
+  all_goals simp_all [Value.add, Value.not, Value.nonzero, Value.mul, Value.inv,
+    Value.and_some, Value.or_some, Function1.apply, Functions.castNZ, Functions.nonzeroN,
+    ← sub_eq_add_neg, sub_eq_zero, add_eq_zero_iff_eq_neg, ← div_eq_mul_inv, Bool.or_assoc,
+    ScalarTypes.rational_integer, ScalarTypes.rational_integer_cast, ScalarTypes.complex_nat_unit, ScalarTypes.complex_int_unit,
+    pow_eq_one_iff_cases, pow_eq_neg_one_iff, zpow_eq_one_iff_cases₀, zpow_eq_neg_one_iff₀,
+    ScalarTypes.even_int, ScalarTypes.odd_int, ScalarTypes.even_nat, ScalarTypes.odd_nat]
+  all_goals try (subst v; simp [Bool.not_and, Bool.not_or, Bool.or_assoc])
+))
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | qsym_exact_scalar
   | solve | qsym_real_power_bridge
   | solve | qsym_unit_power
   | solve | qsym_inverse

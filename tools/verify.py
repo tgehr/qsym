@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("trig-algebra",255),("radicals",42),("inverses",60),("domains",198),("assumptions",115)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("trig-algebra",255),("radicals",42),("inverses",60),("domains",198),("assumptions",115),("numerals",68)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -180,6 +180,30 @@ def main():
 		raise RuntimeError("could not construct the invalid-guard-domain test")
 	(negative/"WrongMaskDomain.lean").write_text(head+"namespace QSym.DomainCertificate\n"+corrupt)
 	check(negative/"WrongMaskDomain.lean",succeeds=False)
+	decimal=(ROOT/"build/numerals/DecimalSum.lean").read_text()
+	corrupt,count=re.subn(r"\(\(3\) / \(10\) : ℚ\)","((7500000000000001) / (25000000000000000) : ℚ)",decimal)
+	if count!=2:
+		raise RuntimeError("could not construct the rounded-decimal test")
+	(negative/"WrongDecimalArithmetic.lean").write_text(corrupt)
+	check(negative/"WrongDecimalArithmetic.lean",succeeds=False)
+	integrality=(ROOT/"build/numerals/RealRationalIntegrality.lean").read_text()
+	corrupt,count=re.subn(r"(theorem refinement .*? : Value.Refines .*? )\(Expr.eval ρ n\d+\)( :=)",
+		r"\1(some true)\2",integrality,count=1)
+	if count!=1:
+		raise RuntimeError("could not construct the invalid-integrality test")
+	(negative/"BadRationalIntegrality.lean").write_text(corrupt)
+	check(negative/"BadRationalIntegrality.lean",succeeds=False)
+	unit=(ROOT/"build/numerals/ComplexUnitn.lean").read_text()
+	claim=re.search(r"theorem refinement .*? : (Value.Refines .*?) :=",unit).group(1)
+	claim=re.sub(r"\bn(\d+)\b",r"Certificate.n\1",claim)
+	(negative/"BadComplexNaturalUnit.lean").write_text(unit+"\nnamespace QSym\n"
+		+"theorem forged (ρ : Env) : "+claim+" := Certificate.refinement ρ rfl\nend QSym\n")
+	check(negative/"BadComplexNaturalUnit.lean",succeeds=False)
+	(negative/"BadRationalCastRounding.lean").write_text("import QSym\nopen QSym\n"
+		"theorem forged (q : ℚ) : Value.Refines (Functions.castQR.apply (some q))\n"
+		"    (Functions.castQR.apply (Functions.castZQ.apply (Functions.floorR.apply (Functions.castQR.apply (some q))))) :=\n"
+		"  Value.refines_refl _\n")
+	check(negative/"BadRationalCastRounding.lean",succeeds=False)
 	bad_rules=negative/"bad.qs"
 	bad_rules.write_text("rule bad(x:ℝ):1·x⇒0;\n",encoding="utf-8")
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad.d"),
@@ -190,6 +214,7 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadNaturalPowerParity","rewrite bad(x:ℝ,n:ℕ):powRN(x,n)=1⇒n=0∨x=1∨x=-1;"),
 		("BadPowerUnitNotOne","rewrite bad(x:ℝ,t:ℝ):powerR(x,t)=1⇒x=1 when t≠1;"),
 		("BadPowerUnitParity","rewrite bad(x:ℝ,t:ℝ):powerR(x,t)=1⇒t=0∨x=1∨x=-1;"),
 		("BadComplexRealPower","rewrite bad(z:ℂ,w:ℂ):powerC(z,w)⇒toℂ(powerR(creal(z),creal(w))) when cimag(z)=0,cimag(w)=0;"),
@@ -453,8 +478,10 @@ def main():
 	(negative/"WrongSumCancellation.lean").write_text(corrupt)
 	check(negative/"WrongSumCancellation.lean",succeeds=False)
 	rational=(ROOT/"build/scalar/Rational.lean").read_text()
-	corrupt,count=re.subn(r"(Numeric\.sound ρ n\d+) n\d+ rfl",r"\1 (.real 42) rfl",rational,count=1)
-	if count!=1:
+	# Keep the expression and its evaluation aligned so rejection tests the
+	# numeric witness directly, without unfolding unequal real values.
+	corrupt,count=re.subn(r"\(\(1\) / \(2\) : ℚ\)","(42 : ℚ)",rational)
+	if count!=2:
 		raise RuntimeError("could not construct the invalid-arithmetic test")
 	(negative/"WrongArithmetic.lean").write_text(corrupt)
 	check(negative/"WrongArithmetic.lean",succeeds=False)

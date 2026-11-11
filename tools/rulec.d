@@ -50,6 +50,8 @@ bool functionPattern(Pattern p){
 }
 bool earlyRule(Rule r){
 	if(!r.automatic) return false;
+	// Normalize exact embeddings before expanding the general integrality test.
+	if(r.lhs.name=="isIntR"&&r.lhs.args[0].variable) return false;
 	auto op=rootOp(r.lhs);
 	auto comparison=op=="nonzero"||op=="lt"||op=="le"||
 		op=="builtin"&&r.lhs.sort==Sort.boolean;

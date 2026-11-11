@@ -478,6 +478,8 @@ rewrite real_ceil_ne(x:ℝ,n:ℤ):ceil(x)≠n⇒x≤toℝ(n)-1∨toℝ(n)<x;
 fact real_floor_bound(x:ℝ):toℝ(floor(x))≤x;
 fact real_ceil_bound(x:ℝ):x≤toℝ(ceil(x));
 rewrite real_round(x:ℝ):round(x)⇒floor(x+real(1,2));
+rewrite rational_is_integer(q:ℚ):inZ(toℝ(q))⇒denominator(q)=1;
+rewrite rational_denominator_integer(k:ℤ):denominator(toℚ(k))⇒1;
 rewrite real_is_integer(x:ℝ):inZ(x)⇒x=toℝ(floor(x));
 rewrite real_hypot(x:ℝ,y:ℝ):hypot(x,y)⇒sqrt(x^2+y^2);
 # Principal-branch identities; real powers in (0,1] cannot wrap the argument.
@@ -1026,3 +1028,67 @@ rewrite integer_mask_mul_left(p:𝔹,x:ℤ,y:ℤ):mulZ(maskZ(p,x),y)⇒[p]*(x*y)
 rewrite integer_mask_mul_right(p:𝔹,x:ℤ,y:ℤ):mulZ(x,maskZ(p,y))⇒[p]*(x*y);
 rewrite rational_mask_mul_left(p:𝔹,x:ℚ,y:ℚ):mulQ(maskQ(p,x),y)⇒[p]*(x*y);
 rewrite rational_mask_mul_right(p:𝔹,x:ℚ,y:ℚ):mulQ(x,maskQ(p,y))⇒[p]*(x*y);
+
+# Retraction of exact scalar embeddings; selected by the native cast pass.
+lemma embed_NZ_add(x:ℕ,y:ℕ):castNZ(x)+castNZ(y)⇒castNZ(x+y);
+lemma embed_NZ_mul(x:ℕ,y:ℕ):castNZ(x)*castNZ(y)⇒castNZ(x*y);
+lemma embed_NZ_pow(x:ℕ,n:NatParam):castNZ(x)^n⇒castNZ(x^n);
+lemma embed_NZ_mask(p:𝔹,x:ℕ):[p]*castNZ(x)⇒castNZ([p]*x);
+lemma embed_NZ_nonzero(x:ℕ):nonzeroZ(castNZ(x))⇒nonzeroN(x);
+lemma embed_NZ_lt(x:ℕ,y:ℕ):castNZ(x)<castNZ(y)⇒x<y;
+lemma embed_NZ_le(x:ℕ,y:ℕ):castNZ(x)≤castNZ(y)⇒x≤y;
+lemma embed_ZQ_add(x:ℤ,y:ℤ):castZQ(x)+castZQ(y)⇒castZQ(x+y);
+lemma embed_ZQ_mul(x:ℤ,y:ℤ):castZQ(x)*castZQ(y)⇒castZQ(x*y);
+lemma embed_ZQ_pow(x:ℤ,n:NatParam):castZQ(x)^n⇒castZQ(x^n);
+lemma embed_ZQ_mask(p:𝔹,x:ℤ):[p]*castZQ(x)⇒castZQ([p]*x);
+lemma embed_ZQ_nonzero(x:ℤ):nonzeroQ(castZQ(x))⇒nonzeroZ(x);
+lemma embed_ZQ_lt(x:ℤ,y:ℤ):castZQ(x)<castZQ(y)⇒x<y;
+lemma embed_ZQ_le(x:ℤ,y:ℤ):castZQ(x)≤castZQ(y)⇒x≤y;
+lemma embed_QR_add(x:ℚ,y:ℚ):castQR(x)+castQR(y)⇒castQR(x+y);
+lemma embed_QR_mul(x:ℚ,y:ℚ):castQR(x)*castQR(y)⇒castQR(x*y);
+lemma embed_QR_pow(x:ℚ,n:NatParam):castQR(x)^n⇒castQR(x^n);
+lemma embed_QR_mask(p:𝔹,x:ℚ):[p]*castQR(x)⇒castQR([p]*x);
+lemma embed_QR_nonzero(x:ℚ):nonzeroR(castQR(x))⇒nonzeroQ(x);
+lemma embed_QR_lt(x:ℚ,y:ℚ):castQR(x)<castQR(y)⇒x<y;
+lemma embed_QR_le(x:ℚ,y:ℚ):castQR(x)≤castQR(y)⇒x≤y;
+lemma embed_QR_inv(x:ℚ):castQR(x)⁻¹⇒castQR(x⁻¹);
+lemma embed_RC_add(x:ℝ,y:ℝ):castRC(x)+castRC(y)⇒castRC(x+y);
+lemma embed_RC_mul(x:ℝ,y:ℝ):castRC(x)*castRC(y)⇒castRC(x*y);
+lemma embed_RC_pow(x:ℝ,n:NatParam):castRC(x)^n⇒castRC(x^n);
+lemma embed_RC_mask(p:𝔹,x:ℝ):[p]*castRC(x)⇒castRC([p]*x);
+lemma embed_RC_nonzero(x:ℝ):nonzeroC(castRC(x))⇒nonzeroR(x);
+lemma embed_RC_inv(x:ℝ):castRC(x)⁻¹⇒castRC(x⁻¹);
+
+# Unit values of powers with natural and integer exponents.
+rewrite indexed_ZN_eq_one(x:ℤ,n:ℕ):powZN(x,n)=1⇒n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1);
+rewrite indexed_ZN_ne_one(x:ℤ,n:ℕ):powZN(x,n)≠1⇒¬(n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1));
+rewrite indexed_ZN_eq_neg_one(x:ℤ,n:ℕ):powZN(x,n)=-1⇒x=-1∧denominator((toℚ(n)-1)/2)=1;
+rewrite indexed_ZN_ne_neg_one(x:ℤ,n:ℕ):powZN(x,n)≠-1⇒¬(x=-1∧denominator((toℚ(n)-1)/2)=1);
+rewrite indexed_QN_eq_one(x:ℚ,n:ℕ):powQN(x,n)=1⇒n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1);
+rewrite indexed_QN_ne_one(x:ℚ,n:ℕ):powQN(x,n)≠1⇒¬(n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1));
+rewrite indexed_QN_eq_neg_one(x:ℚ,n:ℕ):powQN(x,n)=-1⇒x=-1∧denominator((toℚ(n)-1)/2)=1;
+rewrite indexed_QN_ne_neg_one(x:ℚ,n:ℕ):powQN(x,n)≠-1⇒¬(x=-1∧denominator((toℚ(n)-1)/2)=1);
+rewrite indexed_RN_eq_one(x:ℝ,n:ℕ):powRN(x,n)=1⇒n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1);
+rewrite indexed_RN_ne_one(x:ℝ,n:ℕ):powRN(x,n)≠1⇒¬(n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1));
+rewrite indexed_RN_eq_neg_one(x:ℝ,n:ℕ):powRN(x,n)=-1⇒x=-1∧denominator((toℚ(n)-1)/2)=1;
+rewrite indexed_RN_ne_neg_one(x:ℝ,n:ℕ):powRN(x,n)≠-1⇒¬(x=-1∧denominator((toℚ(n)-1)/2)=1);
+rewrite indexed_QZ_eq_one(x:ℚ,n:ℤ):powQZ(x,n)=1⇒n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1);
+rewrite indexed_QZ_ne_one(x:ℚ,n:ℤ):powQZ(x,n)≠1⇒¬(n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1));
+rewrite indexed_QZ_eq_neg_one(x:ℚ,n:ℤ):powQZ(x,n)=-1⇒x=-1∧denominator((toℚ(n)-1)/2)=1;
+rewrite indexed_QZ_ne_neg_one(x:ℚ,n:ℤ):powQZ(x,n)≠-1⇒¬(x=-1∧denominator((toℚ(n)-1)/2)=1);
+rewrite indexed_RZ_eq_one(x:ℝ,n:ℤ):powRZ(x,n)=1⇒n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1);
+rewrite indexed_RZ_ne_one(x:ℝ,n:ℤ):powRZ(x,n)≠1⇒¬(n=0∨x=1∨(x=-1∧denominator(toℚ(n)/2)=1));
+rewrite indexed_RZ_eq_neg_one(x:ℝ,n:ℤ):powRZ(x,n)=-1⇒x=-1∧denominator((toℚ(n)-1)/2)=1;
+rewrite indexed_RZ_ne_neg_one(x:ℝ,n:ℤ):powRZ(x,n)≠-1⇒¬(x=-1∧denominator((toℚ(n)-1)/2)=1);
+rewrite indexed_CN_eq_one(z:ℂ,n:ℕ):powCN(z,n)=1⇒n=0∨z=1∨(z=-1∧denominator(toℚ(n)/2)=1) when cimag(z)=0;
+rewrite indexed_CN_ne_one(z:ℂ,n:ℕ):powCN(z,n)≠1⇒¬(n=0∨z=1∨(z=-1∧denominator(toℚ(n)/2)=1)) when cimag(z)=0;
+rewrite indexed_CZ_eq_one(z:ℂ,n:ℤ):powCZ(z,n)=1⇒n=0∨z=1∨(z=-1∧denominator(toℚ(n)/2)=1) when cimag(z)=0;
+rewrite indexed_CZ_ne_one(z:ℂ,n:ℤ):powCZ(z,n)≠1⇒¬(n=0∨z=1∨(z=-1∧denominator(toℚ(n)/2)=1)) when cimag(z)=0;
+
+# Canonical placement of literal coefficients in the discrete scalar types.
+rewrite natural_literal_coefficient(x:ℕ,c:ℕ):x*c⇒c*x when literal(c);
+rewrite natural_literal_constant(x:ℕ,c:ℕ):c+x⇒x+c when literal(c);
+rewrite integer_literal_coefficient(x:ℤ,c:ℤ):x*c⇒c*x when literal(c);
+rewrite integer_literal_constant(x:ℤ,c:ℤ):c+x⇒x+c when literal(c);
+rewrite rational_literal_coefficient(x:ℚ,c:ℚ):x*c⇒c*x when literal(c);
+rewrite rational_literal_constant(x:ℚ,c:ℚ):c+x⇒x+c when literal(c);

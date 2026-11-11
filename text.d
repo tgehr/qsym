@@ -22,6 +22,7 @@ struct Syntax{
 		}
 		variables=next;
 	}
+	Term parse(Arena a,string source,Sort expected){ return parse(a,"("~source~":"~sortName(expected)~")"); }
 	Term parse(Arena a,string source){
 		auto next=variables.dup;
 		auto p=Parser(source).parseExpression(next);
@@ -72,7 +73,7 @@ struct Syntax{
 		auto result=build(p); variables=next; return result;
 	}
 	string format(Arena a,Term root){
-		struct Piece{ string text; uint precedence=100; bool negative,iverson; }
+		struct Piece{ string text; uint precedence=100; bool negative,iverson; uint embedding=uint.max; }
 		Piece[] memo=new Piece[a.length];
 		bool[] symbolic=new bool[a.length];
 		// A rigid spelling fixes its type before the surrounding context is
@@ -89,23 +90,26 @@ struct Syntax{
 		Piece rational(Rational q){ return Piece((q<Rational(0)?-q:q).toString,q.integral?100:70,q<Rational(0)); }
 		bool conversion(Node n){ return n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castRC; }
 		Piece promoted(uint id,Sort expected,Sort minimum=Sort.natural){
-			auto t=a.at(id),n=a.view(t);
-			if(a.sort(t)!=expected) return memo[id];
-			while(conversion(n)&&rigid[n.a]&&rank(a.sort(a.at(n.a)))>=rank(minimum)){ id=n.a; n=a.view(a.at(id)); }
-			if(expected==Sort.complex&&a.isNumber(a.at(id))&&a.number(a.at(id)).im.zero)
-				return rational(a.number(a.at(id)).re);
-			return memo[id];
+			if(a.sort(a.at(id))!=expected) return memo[id];
+			auto source=memo[id].embedding==uint.max?id:memo[id].embedding;
+			auto flip=memo[id].negative!=memo[source].negative;
+			auto n=a.view(a.at(source));
+			while(conversion(n)&&rigid[n.a]&&rank(a.sort(a.at(n.a)))>=rank(minimum)){ source=n.a; n=a.view(a.at(source)); }
+			auto result=memo[source];
+			if(a.isNumber(a.at(source))&&a.number(a.at(source)).im.zero) result=rational(a.number(a.at(source)).re);
+			result.negative=result.negative!=flip; return result;
+		}
+		bool anchor(uint id){
+			auto t=a.at(id);
+			return rigid[id]&&memo[id].embedding==uint.max&&(!a.isNumber(t)||a.sort(t)==Sort.complex&&!a.number(t).im.zero)&&!conversion(a.view(t))&&
+				!(a.sort(t)==Sort.complex&&a.isNumber(t)&&a.number(t).im.zero);
 		}
 		void pair(uint x,uint y,out Piece l,out Piece r){
 			l=memo[x]; r=memo[y];
 			// Keep one type anchor. Removing both embeddings could select a
 			// different overload, even when the enclosing result is complex.
-			bool anchor(uint id){
-				auto t=a.at(id);
-				return rigid[id]&&!conversion(a.view(t))&&!(a.sort(t)==Sort.complex&&a.isNumber(t)&&a.number(t).im.zero);
-			}
 			if(anchor(x)) r=promoted(y,a.sort(a.at(x)));
-			else if(anchor(y)||!rigid[x]&&rigid[y]) l=promoted(x,a.sort(a.at(y)));
+			else if(anchor(y)||a.isNumber(a.at(x))&&!a.isNumber(a.at(y))||!rigid[x]&&rigid[y]) l=promoted(x,a.sort(a.at(y)));
 			else if(rigid[x]) r=promoted(y,a.sort(a.at(x)));
 		}
 		string expected(uint id,Sort s,uint precedence=0){ return render(promoted(id,s),precedence); }
@@ -134,9 +138,9 @@ struct Syntax{
 			if(memo[n.a].iverson||memo[n.b].iverson)
 				return Piece("mul"~suffix(n.sort)~"("~expected(n.a,n.sort)~","~expected(n.b,n.sort)~")");
 			auto l=memo[n.a],r=memo[n.b];
-			bool unit(uint id){ return (n.sort==Sort.real_||n.sort==Sort.complex)&&a.isNumber(a.at(id))&&(a.number(a.at(id)).one||(-a.number(a.at(id))).one); }
-			if(unit(n.a)){ r.negative=l.negative!=r.negative; return r; }
-			if(unit(n.b)){ l.negative=l.negative!=r.negative; return l; }
+			bool unit(uint id){ return n.sort!=Sort.natural&&a.isNumber(a.at(id))&&(a.number(a.at(id)).one||(-a.number(a.at(id))).one); }
+			if(unit(n.a)){ r.negative=(-a.number(a.at(n.a))).one!=r.negative; return r; }
+			if(unit(n.b)){ l.negative=l.negative!=(-a.number(a.at(n.b))).one; return l; }
 			pair(n.a,n.b,l,r);
 			auto v=a.view(a.at(n.b));
 			auto strict=v.op==Op.mul||v.op==Op.builtin&&(v.value==Builtin.mulN||v.value==Builtin.mulZ||v.value==Builtin.mulQ);
@@ -155,14 +159,14 @@ struct Syntax{
 			return es;
 		}
 		Piece region(Term t,Op op){
-			auto es=ordered(t,op),s=a.sort(t); uint anchor=uint.max;
-			foreach(e;es) if(rigid[e.term.id]&&!conversion(a.view(e.term))&&
-				!(s==Sort.complex&&a.isNumber(e.term)&&a.number(e.term).im.zero)){ anchor=e.term.id; break; }
-			if(anchor==uint.max) foreach(e;es) if(rigid[e.term.id]){ anchor=e.term.id; break; }
+			auto es=ordered(t,op),s=a.sort(t); uint typeAnchor=uint.max;
+			foreach(e;es) if(anchor(e.term.id)){ typeAnchor=e.term.id; break; }
+			if(typeAnchor==uint.max) foreach(e;es) if(rigid[e.term.id]&&!a.isNumber(e.term)){ typeAnchor=e.term.id; break; }
+			if(typeAnchor==uint.max) foreach(e;es) if(rigid[e.term.id]){ typeAnchor=e.term.id; break; }
 			Piece result; bool first=true;
 			foreach(e;es){
 				enforce(e.count<=100_000,"formatted expression has too many repeated operands");
-				auto p=e.term.id==anchor||anchor==uint.max?memo[e.term.id]:promoted(e.term.id,s);
+				auto p=e.term.id==typeAnchor||typeAnchor==uint.max?memo[e.term.id]:promoted(e.term.id,s);
 				foreach(i;0..e.count){
 					if(first){ result=p; first=false; continue; }
 					if(op==Op.add){
@@ -178,11 +182,26 @@ struct Syntax{
 			}
 			return result;
 		}
+		bool nonzero(Node n){
+			return n.op==Op.nonzero||n.op==Op.builtin&&
+				(n.value==Builtin.nonzeroN||n.value==Builtin.nonzeroZ||n.value==Builtin.nonzeroQ);
+		}
+		Operand[] summands(Term t){
+			if(rank(a.sort(t))>=rank(Sort.real_)) return ordered(t,Op.add);
+			Operand[] result; Term[] pending=[t];
+			while(pending.length){
+				auto u=pending[$-1]; --pending.length; auto n=a.view(u);
+				if(n.op==Op.builtin&&(n.value==Builtin.addN||n.value==Builtin.addZ||n.value==Builtin.addQ)) pending~=[a.at(n.b),a.at(n.a)];
+				else result~=Operand(u,1);
+			}
+			return result;
+		}
+
 		Piece zeroComparison(Term t,string relation){
 			Term[] terms; string left,right; Number constant;
 			Term variable; uint variables;
 			void append(ref string side,string term){ side~=(side.length?"+":"")~term; }
-			foreach(e;ordered(t,Op.add)){
+			foreach(e;summands(t)){
 				enforce(e.count<=100_000,"formatted expression has too many repeated operands");
 				foreach(i;0..e.count){
 					auto u=e.term;
@@ -193,16 +212,27 @@ struct Syntax{
 					}
 				}
 			}
+			uint typeAnchor=uint.max;
+			foreach(u;terms) if(anchor(u.id)){ typeAnchor=u.id; break; }
+			if(typeAnchor==uint.max) foreach(u;terms) if(rigid[u.id]){ typeAnchor=u.id; break; }
+			Piece termPiece(Term u){
+				// Equality already promotes natural operands to integer differences.
+				auto n=a.view(u);
+				if(n.op==Op.builtin&&n.value==Builtin.castNZ) return promoted(u.id,Sort.integer);
+				return u.id==typeAnchor||typeAnchor==uint.max?memo[u.id]:promoted(u.id,a.sort(u));
+			}
+
 			if(variables==1){
-				left=arg(variable.id,61);
+				left=render(termPiece(variable),61);
 				foreach(u;terms) if(u!=variable){
-					auto p=memo[u.id]; p.negative=!p.negative;
+					auto p=termPiece(u); p.negative=!p.negative;
 					if(!right.length) right=render(p,60);
 					else right~=(p.negative?"-":"+")~render(p,61,true);
 				}
 			}else foreach(u;terms){
-				if(memo[u.id].negative) append(right,render(memo[u.id],61,true));
-				else append(left,arg(u.id,61));
+				auto p=termPiece(u);
+				if(p.negative) append(right,render(p,61,true));
+				else append(left,render(p,61));
 			}
 			if(!left.length&&right.length){ left=right; right=""; constant=-constant; }
 			if(!constant.zero){
@@ -230,9 +260,10 @@ struct Syntax{
 			final switch(n.op){
 				case Op.realLit,Op.complexLit,Op.numberLit:
 					auto z=a.number(t);
-					if(n.sort==Sort.natural||n.sort==Sort.integer) p.text=(n.sort==Sort.natural?"nat(":"int(")~z.re.toString~")";
+					if(n.sort==Sort.natural) p.text=z.re.toString;
+					else if(n.sort==Sort.integer) p.text="int("~z.re.toString~")";
 					else if(n.sort==Sort.rational) p.text="rat("~to!string(z.re.numerator)~","~to!string(z.re.denominator)~")";
-					else if(n.sort==Sort.real_){ p=rational(z.re); rigid[id]=false; }
+					else if(n.sort==Sort.real_){ p.text="real("~to!string(z.re.numerator)~(z.re.denominator==1?"":","~to!string(z.re.denominator))~")"; }
 					else{
 						auto negative=z.re<Rational(0)||z.re.zero&&z.im<Rational(0); if(negative) z=-z;
 						auto im=z.im==Rational(1)?"ⅈ":z.im==Rational(-1)?"-ⅈ":z.im.toString~"·ⅈ";
@@ -252,7 +283,7 @@ struct Syntax{
 				case Op.conj:p.text="conj("~expected(n.a,Sort.complex)~")"; break;
 				case Op.not_:
 					auto inner=a.view(a.at(n.a));
-					p=inner.op==Op.nonzero?zeroComparison(a.at(inner.a),"="):Piece("¬"~arg(n.a,80),80); break;
+					p=nonzero(inner)?zeroComparison(a.at(inner.a),"="):Piece("¬"~arg(n.a,80),80); break;
 				case Op.and_:p=Piece(arg(n.a,40)~"∧"~arg(n.b,41),40); break;
 				case Op.or_:p=Piece(arg(n.a,30)~"∨"~arg(n.b,31),30); break;
 				case Op.lt,Op.le:p=comparison(n.a,n.b,n.op==Op.lt?"<":"≤"); break;
@@ -276,7 +307,7 @@ struct Syntax{
 					else if(code=="addN"||code=="addZ"||code=="addQ") p=sum(n.a,n.b);
 					else if(code=="mulN"||code=="mulZ"||code=="mulQ") p=product(n);
 					else if(f==Builtin.invQ) p=Piece(arg(n.a,91)~"⁻¹",90);
-					else if(code=="nonzeroN"||code=="nonzeroZ"||code=="nonzeroQ") p=Piece(arg(n.a,51)~"≠0",50);
+					else if(code=="nonzeroN"||code=="nonzeroZ"||code=="nonzeroQ") p=zeroComparison(a.at(n.a),"≠");
 					else if(code=="ltN"||code=="ltZ"||code=="ltQ") p=comparison(n.a,n.b,"<");
 					else if(code=="leN"||code=="leZ"||code=="leQ") p=comparison(n.a,n.b,"≤");
 					else if(f==Builtin.eqB) p=Piece(arg(n.a,51)~"="~arg(n.b,51),50);
@@ -287,6 +318,7 @@ struct Syntax{
 						p=Piece(base~"^"~exponent(n),90);
 					}
 					else p.text=info.name~"("~expected(n.a,info.args[0])~(n.arity==2?","~expected(n.b,info.args[1]):"")~")";
+					if(conversion(n)) p.embedding=id;
 					if(code=="powerR"||code=="powerC") rigid[id]=rigid[n.a]||rigid[n.b];
 					break;
 				case Op.lebesgue:p.text="lebesgue()"; break;
@@ -360,8 +392,8 @@ unittest{
 		["conj(toℂ(x))","conj(x)"],
 		["carg(toℂ(x))","carg(x)"],
 		["cpow(z,toℂ(toℝ(toℚ(toℤ(n)))))","z^toℝ(n)"],
-		["z*toℂ(powRN(3,n))","z·toℂ(3^n)"],
-		["z*toℂ(powRZ(3,k))","z·(3:ℝ)^k"],
+		["z*toℂ(powRN(3,n))","z·real(3)^n"],
+		["z*toℂ(powRZ(3,k))","z·real(3)^k"],
 		["cexp(toℂ(toℝ(toℚ(toℤ(n)))))","cexp(n)"],
 		["x+toℝ(q)","x+q"],
 		["q*toℚ(k)","q·k"],
@@ -372,7 +404,7 @@ unittest{
 		["toℂ(x)","toℂ(x)"],
 		["toℂ(sqrt(3))","toℂ(sqrt(3))"],
 		["toℂ(x)+toℂ(y)","toℂ(x)+y"],
-		["z*toℂ((-1)^(2⁻¹))","z·toℂ((-1)^(2⁻¹))"],
+		["z*toℂ((-1)^(2⁻¹))","z·real(-1)^(real(2)⁻¹)"],
 		["ⅈ*toℂ([p])","ⅈ·toℂ([p])"]
 	]){
 		auto input=s.parse(a,pair[0]),printed=s.format(a,input),output=s.parse(a,printed);

@@ -107,7 +107,7 @@ unittest{
 	size_t failures;
 	foreach(c;examples()){
 		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
-		auto input=s.parse(a,c.input),expected=c.input==c.expected?input:simplify(a,s.parse(a,c.expected)).output;
+		auto input=s.parse(a,c.input),expected=c.input==c.expected?input:simplify(a,s.parse(a,c.expected,a.sort(input))).output;
 		auto fast=simplify(a,input),checked=simplify(a,input,Options(DensityMode.preserve,true));
 		if(fast.exhausted||fast.output!=expected){
 			writeln("FAIL ",c.name,": ",s.format(a,fast.output),"; expected ",s.format(a,expected),fast.exhausted?" (exhausted)":""); ++failures;

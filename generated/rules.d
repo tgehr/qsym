@@ -482,6 +482,8 @@ enum Law{
 	real_floor_bound,
 	real_ceil_bound,
 	real_round,
+	rational_is_integer,
+	rational_denominator_integer,
 	real_is_integer,
 	real_hypot,
 	complex_arg_real_power,
@@ -1011,6 +1013,64 @@ enum Law{
 	integer_mask_mul_right,
 	rational_mask_mul_left,
 	rational_mask_mul_right,
+	embed_NZ_add,
+	embed_NZ_mul,
+	embed_NZ_pow,
+	embed_NZ_mask,
+	embed_NZ_nonzero,
+	embed_NZ_lt,
+	embed_NZ_le,
+	embed_ZQ_add,
+	embed_ZQ_mul,
+	embed_ZQ_pow,
+	embed_ZQ_mask,
+	embed_ZQ_nonzero,
+	embed_ZQ_lt,
+	embed_ZQ_le,
+	embed_QR_add,
+	embed_QR_mul,
+	embed_QR_pow,
+	embed_QR_mask,
+	embed_QR_nonzero,
+	embed_QR_lt,
+	embed_QR_le,
+	embed_QR_inv,
+	embed_RC_add,
+	embed_RC_mul,
+	embed_RC_pow,
+	embed_RC_mask,
+	embed_RC_nonzero,
+	embed_RC_inv,
+	indexed_ZN_eq_one,
+	indexed_ZN_ne_one,
+	indexed_ZN_eq_neg_one,
+	indexed_ZN_ne_neg_one,
+	indexed_QN_eq_one,
+	indexed_QN_ne_one,
+	indexed_QN_eq_neg_one,
+	indexed_QN_ne_neg_one,
+	indexed_RN_eq_one,
+	indexed_RN_ne_one,
+	indexed_RN_eq_neg_one,
+	indexed_RN_ne_neg_one,
+	indexed_QZ_eq_one,
+	indexed_QZ_ne_one,
+	indexed_QZ_eq_neg_one,
+	indexed_QZ_ne_neg_one,
+	indexed_RZ_eq_one,
+	indexed_RZ_ne_one,
+	indexed_RZ_eq_neg_one,
+	indexed_RZ_ne_neg_one,
+	indexed_CN_eq_one,
+	indexed_CN_ne_one,
+	indexed_CZ_eq_one,
+	indexed_CZ_ne_one,
+	natural_literal_coefficient,
+	natural_literal_constant,
+	integer_literal_coefficient,
+	integer_literal_constant,
+	rational_literal_coefficient,
+	rational_literal_constant,
 }
 Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 	switch(law){
@@ -4646,6 +4706,18 @@ Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
 			auto v_x=bindings[0];
 			return Instance(a.call(Builtin.roundR,[v_x]),a.call(Builtin.floorR,[a.add(v_x,a.real_(Rational(BigInt(1L),BigInt(2L))),raw)]),"r_real_round",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.rational_is_integer:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_q=bindings[0];
+			return Instance(a.call(Builtin.isIntR,[a.call(Builtin.castQR,[v_q])]),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[v_q])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])),"r_rational_is_integer",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.rational_denominator_integer:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_k=bindings[0];
+			return Instance(a.call(Builtin.denQ,[a.call(Builtin.castZQ,[v_k])]),a.natural_((1L)),"r_rational_denominator_integer",bindings,[],[false],false,false,law,raw);
 		}
 		case Law.real_is_integer:{
 			enforce(bindings.length==1,"rule arity mismatch");
@@ -8584,6 +8656,462 @@ Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 			enforce(a.sort(bindings[2])==Sort.rational,"rule binding type mismatch");
 			auto v_y=bindings[2];
 			return Instance(a.call(Builtin.mulQ,[v_x,a.mask(v_p,v_y)]),a.mask(v_p,a.call(Builtin.mulQ,[v_x,v_y])),"r_rational_mask_mul_right",bindings,[],[false,false,false],false,false,law,raw);
+		}
+		case Law.embed_NZ_add:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.addZ,[a.call(Builtin.castNZ,[v_x]),a.call(Builtin.castNZ,[v_y])]),a.call(Builtin.castNZ,[a.call(Builtin.addN,[v_x,v_y])]),"r_embed_NZ_add",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_NZ_mul:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.mulZ,[a.call(Builtin.castNZ,[v_x]),a.call(Builtin.castNZ,[v_y])]),a.call(Builtin.castNZ,[a.call(Builtin.mulN,[v_x,v_y])]),"r_embed_NZ_mul",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_NZ_pow:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			enforce(a.isNumber(bindings[1])&&a.number(bindings[1]).re.small&&a.number(bindings[1]).re.integer>=0&&a.number(bindings[1]).re.integer<=uint.max,"natural binding expected");
+			auto v_n=cast(uint)a.number(bindings[1]).re.integer;
+			return Instance(a.pow(a.call(Builtin.castNZ,[v_x]),v_n),a.call(Builtin.castNZ,[a.pow(v_x,v_n)]),"r_embed_NZ_pow",bindings,[],[false,true],false,false,law,raw);
+		}
+		case Law.embed_NZ_mask:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.boolean,"rule binding type mismatch");
+			auto v_p=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[1];
+			return Instance(a.mask(v_p,a.call(Builtin.castNZ,[v_x])),a.call(Builtin.castNZ,[a.mask(v_p,v_x)]),"r_embed_NZ_mask",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_NZ_nonzero:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_x])]),a.call(Builtin.nonzeroN,[v_x]),"r_embed_NZ_nonzero",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.embed_NZ_lt:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.ltZ,[a.call(Builtin.castNZ,[v_x]),a.call(Builtin.castNZ,[v_y])]),a.call(Builtin.ltN,[v_x,v_y]),"r_embed_NZ_lt",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_NZ_le:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.leZ,[a.call(Builtin.castNZ,[v_x]),a.call(Builtin.castNZ,[v_y])]),a.call(Builtin.leN,[v_x,v_y]),"r_embed_NZ_le",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_ZQ_add:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.addQ,[a.call(Builtin.castZQ,[v_x]),a.call(Builtin.castZQ,[v_y])]),a.call(Builtin.castZQ,[a.call(Builtin.addZ,[v_x,v_y])]),"r_embed_ZQ_add",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_ZQ_mul:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[v_x]),a.call(Builtin.castZQ,[v_y])]),a.call(Builtin.castZQ,[a.call(Builtin.mulZ,[v_x,v_y])]),"r_embed_ZQ_mul",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_ZQ_pow:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			enforce(a.isNumber(bindings[1])&&a.number(bindings[1]).re.small&&a.number(bindings[1]).re.integer>=0&&a.number(bindings[1]).re.integer<=uint.max,"natural binding expected");
+			auto v_n=cast(uint)a.number(bindings[1]).re.integer;
+			return Instance(a.pow(a.call(Builtin.castZQ,[v_x]),v_n),a.call(Builtin.castZQ,[a.pow(v_x,v_n)]),"r_embed_ZQ_pow",bindings,[],[false,true],false,false,law,raw);
+		}
+		case Law.embed_ZQ_mask:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.boolean,"rule binding type mismatch");
+			auto v_p=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[1];
+			return Instance(a.mask(v_p,a.call(Builtin.castZQ,[v_x])),a.call(Builtin.castZQ,[a.mask(v_p,v_x)]),"r_embed_ZQ_mask",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_ZQ_nonzero:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.call(Builtin.nonzeroQ,[a.call(Builtin.castZQ,[v_x])]),a.call(Builtin.nonzeroZ,[v_x]),"r_embed_ZQ_nonzero",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.embed_ZQ_lt:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.ltQ,[a.call(Builtin.castZQ,[v_x]),a.call(Builtin.castZQ,[v_y])]),a.call(Builtin.ltZ,[v_x,v_y]),"r_embed_ZQ_lt",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_ZQ_le:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.leQ,[a.call(Builtin.castZQ,[v_x]),a.call(Builtin.castZQ,[v_y])]),a.call(Builtin.leZ,[v_x,v_y]),"r_embed_ZQ_le",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_QR_add:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.rational,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.add(a.call(Builtin.castQR,[v_x]),a.call(Builtin.castQR,[v_y]),raw),a.call(Builtin.castQR,[a.call(Builtin.addQ,[v_x,v_y])]),"r_embed_QR_add",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_QR_mul:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.rational,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.mul(a.call(Builtin.castQR,[v_x]),a.call(Builtin.castQR,[v_y]),raw),a.call(Builtin.castQR,[a.call(Builtin.mulQ,[v_x,v_y])]),"r_embed_QR_mul",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_QR_pow:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			enforce(a.isNumber(bindings[1])&&a.number(bindings[1]).re.small&&a.number(bindings[1]).re.integer>=0&&a.number(bindings[1]).re.integer<=uint.max,"natural binding expected");
+			auto v_n=cast(uint)a.number(bindings[1]).re.integer;
+			return Instance(a.pow(a.call(Builtin.castQR,[v_x]),v_n),a.call(Builtin.castQR,[a.pow(v_x,v_n)]),"r_embed_QR_pow",bindings,[],[false,true],false,false,law,raw);
+		}
+		case Law.embed_QR_mask:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.boolean,"rule binding type mismatch");
+			auto v_p=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[1];
+			return Instance(a.mask(v_p,a.call(Builtin.castQR,[v_x])),a.call(Builtin.castQR,[a.mask(v_p,v_x)]),"r_embed_QR_mask",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_QR_nonzero:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.nonzero(a.call(Builtin.castQR,[v_x])),a.call(Builtin.nonzeroQ,[v_x]),"r_embed_QR_nonzero",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.embed_QR_lt:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.rational,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.lt(a.call(Builtin.castQR,[v_x]),a.call(Builtin.castQR,[v_y])),a.call(Builtin.ltQ,[v_x,v_y]),"r_embed_QR_lt",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_QR_le:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.rational,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.le(a.call(Builtin.castQR,[v_x]),a.call(Builtin.castQR,[v_y])),a.call(Builtin.leQ,[v_x,v_y]),"r_embed_QR_le",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_QR_inv:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.inv(a.call(Builtin.castQR,[v_x])),a.call(Builtin.castQR,[a.call(Builtin.invQ,[v_x])]),"r_embed_QR_inv",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.embed_RC_add:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.add(a.call(Builtin.castRC,[v_x]),a.call(Builtin.castRC,[v_y]),raw),a.call(Builtin.castRC,[a.add(v_x,v_y,raw)]),"r_embed_RC_add",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_RC_mul:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.mul(a.call(Builtin.castRC,[v_x]),a.call(Builtin.castRC,[v_y]),raw),a.call(Builtin.castRC,[a.mul(v_x,v_y,raw)]),"r_embed_RC_mul",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_RC_pow:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			enforce(a.isNumber(bindings[1])&&a.number(bindings[1]).re.small&&a.number(bindings[1]).re.integer>=0&&a.number(bindings[1]).re.integer<=uint.max,"natural binding expected");
+			auto v_n=cast(uint)a.number(bindings[1]).re.integer;
+			return Instance(a.pow(a.call(Builtin.castRC,[v_x]),v_n),a.call(Builtin.castRC,[a.pow(v_x,v_n)]),"r_embed_RC_pow",bindings,[],[false,true],false,false,law,raw);
+		}
+		case Law.embed_RC_mask:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.boolean,"rule binding type mismatch");
+			auto v_p=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[1];
+			return Instance(a.mask(v_p,a.call(Builtin.castRC,[v_x])),a.call(Builtin.castRC,[a.mask(v_p,v_x)]),"r_embed_RC_mask",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.embed_RC_nonzero:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.nonzero(a.call(Builtin.castRC,[v_x])),a.nonzero(v_x),"r_embed_RC_nonzero",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.embed_RC_inv:{
+			enforce(bindings.length==1,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			return Instance(a.inv(a.call(Builtin.castRC,[v_x])),a.call(Builtin.castRC,[a.inv(v_x)]),"r_embed_RC_inv",bindings,[],[false],false,false,law,raw);
+		}
+		case Law.indexed_ZN_eq_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.powZN,[v_x,v_n]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])),a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_n])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[v_x,a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))),a.and_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[v_x,a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((-1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_ZN_eq_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_ZN_ne_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.powZN,[v_x,v_n]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]),a.not_(a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_n])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[v_x,a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))),a.and_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[v_x,a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((-1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))))),"r_indexed_ZN_ne_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_ZN_eq_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.powZN,[v_x,v_n]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((-1L))])])])),a.and_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[v_x,a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((-1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))),"r_indexed_ZN_eq_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_ZN_ne_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.powZN,[v_x,v_n]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((-1L))])])]),a.not_(a.and_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[v_x,a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((-1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_ZN_ne_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_QN_eq_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[a.call(Builtin.powQN,[v_x,v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])])])),a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_n])])),a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])])]))),a.and_(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_QN_eq_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_QN_ne_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[a.call(Builtin.powQN,[v_x,v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])])]),a.not_(a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_n])])),a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])])]))),a.and_(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))))),"r_indexed_QN_ne_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_QN_eq_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[a.call(Builtin.powQN,[v_x,v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.and_(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))),"r_indexed_QN_eq_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_QN_ne_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[a.call(Builtin.powQN,[v_x,v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])]),a.not_(a.and_(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_QN_ne_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_RN_eq_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.nonzero(a.add(a.call(Builtin.powRN,[v_x,v_n]),a.mul(a.real_((-1L)),a.real_((1L)),raw),raw))),a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_n])])),a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((1L)),raw),raw)))),a.and_(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_RN_eq_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_RN_ne_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.nonzero(a.add(a.call(Builtin.powRN,[v_x,v_n]),a.mul(a.real_((-1L)),a.real_((1L)),raw),raw)),a.not_(a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_n])])),a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((1L)),raw),raw)))),a.and_(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))))),"r_indexed_RN_ne_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_RN_eq_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.nonzero(a.add(a.call(Builtin.powRN,[v_x,v_n]),a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.and_(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))),"r_indexed_RN_eq_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_RN_ne_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.nonzero(a.add(a.call(Builtin.powRN,[v_x,v_n]),a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw)),a.not_(a.and_(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_RN_ne_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_QZ_eq_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[a.call(Builtin.powQZ,[v_x,v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])])])),a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[v_n])),a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])])]))),a.and_(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_QZ_eq_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_QZ_ne_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[a.call(Builtin.powQZ,[v_x,v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])])]),a.not_(a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[v_n])),a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])])]))),a.and_(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))))),"r_indexed_QZ_ne_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_QZ_eq_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[a.call(Builtin.powQZ,[v_x,v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.and_(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))),"r_indexed_QZ_eq_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_QZ_ne_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[a.call(Builtin.powQZ,[v_x,v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])]),a.not_(a.and_(a.not_(a.call(Builtin.nonzeroQ,[a.call(Builtin.addQ,[v_x,a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((-1L),(1L))])])])),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_QZ_ne_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_RZ_eq_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.nonzero(a.add(a.call(Builtin.powRZ,[v_x,v_n]),a.mul(a.real_((-1L)),a.real_((1L)),raw),raw))),a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[v_n])),a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((1L)),raw),raw)))),a.and_(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_RZ_eq_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_RZ_ne_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.nonzero(a.add(a.call(Builtin.powRZ,[v_x,v_n]),a.mul(a.real_((-1L)),a.real_((1L)),raw),raw)),a.not_(a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[v_n])),a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((1L)),raw),raw)))),a.and_(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))))),"r_indexed_RZ_ne_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_RZ_eq_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.nonzero(a.add(a.call(Builtin.powRZ,[v_x,v_n]),a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.and_(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))),"r_indexed_RZ_eq_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_RZ_ne_neg_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.nonzero(a.add(a.call(Builtin.powRZ,[v_x,v_n]),a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw)),a.not_(a.and_(a.not_(a.nonzero(a.add(v_x,a.mul(a.real_((-1L)),a.real_((-1L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.addQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.mulQ,[a.rational((-1L),(1L)),a.rational((1L),(1L))])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_RZ_ne_neg_one",bindings,[],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_CN_eq_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_z=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.nonzero(a.add(a.call(Builtin.powCN,[v_z,v_n]),a.mul(a.complex((-1L),(0L)),a.complex((1L),(0L)),raw),raw))),a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_n])])),a.not_(a.nonzero(a.add(v_z,a.mul(a.complex((-1L),(0L)),a.complex((1L),(0L)),raw),raw)))),a.and_(a.not_(a.nonzero(a.add(v_z,a.mul(a.complex((-1L),(0L)),a.complex((-1L),(0L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_CN_eq_one",bindings,[Condition(a.not_(a.nonzero(a.call(Builtin.imC,[v_z]))),false,false)],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_CN_ne_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_z=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.nonzero(a.add(a.call(Builtin.powCN,[v_z,v_n]),a.mul(a.complex((-1L),(0L)),a.complex((1L),(0L)),raw),raw)),a.not_(a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_n])])),a.not_(a.nonzero(a.add(v_z,a.mul(a.complex((-1L),(0L)),a.complex((1L),(0L)),raw),raw)))),a.and_(a.not_(a.nonzero(a.add(v_z,a.mul(a.complex((-1L),(0L)),a.complex((-1L),(0L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[a.call(Builtin.castNZ,[v_n])]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))))),"r_indexed_CN_ne_one",bindings,[Condition(a.not_(a.nonzero(a.call(Builtin.imC,[v_z]))),false,false)],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_CZ_eq_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_z=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.not_(a.nonzero(a.add(a.call(Builtin.powCZ,[v_z,v_n]),a.mul(a.complex((-1L),(0L)),a.complex((1L),(0L)),raw),raw))),a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[v_n])),a.not_(a.nonzero(a.add(v_z,a.mul(a.complex((-1L),(0L)),a.complex((1L),(0L)),raw),raw)))),a.and_(a.not_(a.nonzero(a.add(v_z,a.mul(a.complex((-1L),(0L)),a.complex((-1L),(0L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])])))),"r_indexed_CZ_eq_one",bindings,[Condition(a.not_(a.nonzero(a.call(Builtin.imC,[v_z]))),false,false)],[false,false],false,false,law,raw);
+		}
+		case Law.indexed_CZ_ne_one:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_z=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.nonzero(a.add(a.call(Builtin.powCZ,[v_z,v_n]),a.mul(a.complex((-1L),(0L)),a.complex((1L),(0L)),raw),raw)),a.not_(a.or_(a.or_(a.not_(a.call(Builtin.nonzeroZ,[v_n])),a.not_(a.nonzero(a.add(v_z,a.mul(a.complex((-1L),(0L)),a.complex((1L),(0L)),raw),raw)))),a.and_(a.not_(a.nonzero(a.add(v_z,a.mul(a.complex((-1L),(0L)),a.complex((-1L),(0L)),raw),raw))),a.not_(a.call(Builtin.nonzeroZ,[a.call(Builtin.addZ,[a.call(Builtin.castNZ,[a.call(Builtin.denQ,[a.call(Builtin.mulQ,[a.call(Builtin.castZQ,[v_n]),a.call(Builtin.invQ,[a.rational((2L),(1L))])])])]),a.call(Builtin.mulZ,[a.integer((-1L)),a.integer((1L))])])]))))),"r_indexed_CZ_ne_one",bindings,[Condition(a.not_(a.nonzero(a.call(Builtin.imC,[v_z]))),false,false)],[false,false],false,false,law,raw);
+		}
+		case Law.natural_literal_coefficient:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_c=bindings[1];
+			return Instance(a.call(Builtin.mulN,[v_x,v_c]),a.call(Builtin.mulN,[v_c,v_x]),"r_natural_literal_coefficient",bindings,[Condition(v_c,false,true)],[false,false],false,false,law,raw);
+		}
+		case Law.natural_literal_constant:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_c=bindings[1];
+			return Instance(a.call(Builtin.addN,[v_c,v_x]),a.call(Builtin.addN,[v_x,v_c]),"r_natural_literal_constant",bindings,[Condition(v_c,false,true)],[false,false],false,false,law,raw);
+		}
+		case Law.integer_literal_coefficient:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_c=bindings[1];
+			return Instance(a.call(Builtin.mulZ,[v_x,v_c]),a.call(Builtin.mulZ,[v_c,v_x]),"r_integer_literal_coefficient",bindings,[Condition(v_c,false,true)],[false,false],false,false,law,raw);
+		}
+		case Law.integer_literal_constant:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.integer,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.integer,"rule binding type mismatch");
+			auto v_c=bindings[1];
+			return Instance(a.call(Builtin.addZ,[v_c,v_x]),a.call(Builtin.addZ,[v_x,v_c]),"r_integer_literal_constant",bindings,[Condition(v_c,false,true)],[false,false],false,false,law,raw);
+		}
+		case Law.rational_literal_coefficient:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.rational,"rule binding type mismatch");
+			auto v_c=bindings[1];
+			return Instance(a.call(Builtin.mulQ,[v_x,v_c]),a.call(Builtin.mulQ,[v_c,v_x]),"r_rational_literal_coefficient",bindings,[Condition(v_c,false,true)],[false,false],false,false,law,raw);
+		}
+		case Law.rational_literal_constant:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.rational,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.rational,"rule binding type mismatch");
+			auto v_c=bindings[1];
+			return Instance(a.call(Builtin.addQ,[v_c,v_x]),a.call(Builtin.addQ,[v_x,v_c]),"r_rational_literal_constant",bindings,[Condition(v_c,false,true)],[false,false],false,false,law,raw);
 		}
 		default:assert(0);
 	}
@@ -18083,6 +18611,34 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					if(a.view(input).value!=cast(long)Builtin.roundR) return false;
 					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
 					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.rational_is_integer:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.isIntR) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.rational_denominator_integer:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.natural) return false;
+					if(a.view(input).value!=cast(long)Builtin.denQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
 					return true;
 				default:return false;
 			}
@@ -29349,6 +29905,1288 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					return true;
 				default:return false;
 			}
+		case Law.embed_NZ_add:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.addZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_NZ_mul:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.mulZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_NZ_pow:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.pow||a.sort(input)!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.real_(cast(uint)a.view(input).value); else if(bindings[1]!=a.real_(cast(uint)a.view(input).value)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_NZ_mask:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.mask||a.sort(input)!=Sort.integer) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_NZ_nonzero:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_NZ_lt:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.ltZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_NZ_le:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.leZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_ZQ_add:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.rational) return false;
+					if(a.view(input).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_ZQ_mul:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.rational) return false;
+					if(a.view(input).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_ZQ_pow:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.pow||a.sort(input)!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.real_(cast(uint)a.view(input).value); else if(bindings[1]!=a.real_(cast(uint)a.view(input).value)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_ZQ_mask:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.mask||a.sort(input)!=Sort.rational) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_ZQ_nonzero:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_ZQ_lt:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.ltQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_ZQ_le:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.leQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castZQ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_QR_add:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.sort(input)!=Sort.real_) return false;
+					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t786,ref Term[] bs786){
+						if(a.view(t786).op!=Op.builtin||a.sort(t786)!=Sort.real_) return false;
+						if(a.view(t786).value!=cast(long)Builtin.castQR) return false;
+						if(a.sort(a.viewChild(t786,0))!=Sort.rational) return false;
+						if(bs786[0].id==uint.max) bs786[0]=a.viewChild(t786,0); else if(bs786[0]!=a.viewChild(t786,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16))),MatchOperand((Term t787,ref Term[] bs787){
+						if(a.view(t787).op!=Op.builtin||a.sort(t787)!=Sort.real_) return false;
+						if(a.view(t787).value!=cast(long)Builtin.castQR) return false;
+						if(a.sort(a.viewChild(t787,0))!=Sort.rational) return false;
+						if(bs787[1].id==uint.max) bs787[1]=a.viewChild(t787,0); else if(bs787[1]!=a.viewChild(t787,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16)))],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_QR_mul:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.sort(input)!=Sort.real_) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t788,ref Term[] bs788){
+						if(a.view(t788).op!=Op.builtin||a.sort(t788)!=Sort.real_) return false;
+						if(a.view(t788).value!=cast(long)Builtin.castQR) return false;
+						if(a.sort(a.viewChild(t788,0))!=Sort.rational) return false;
+						if(bs788[0].id==uint.max) bs788[0]=a.viewChild(t788,0); else if(bs788[0]!=a.viewChild(t788,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16))),MatchOperand((Term t789,ref Term[] bs789){
+						if(a.view(t789).op!=Op.builtin||a.sort(t789)!=Sort.real_) return false;
+						if(a.view(t789).value!=cast(long)Builtin.castQR) return false;
+						if(a.sort(a.viewChild(t789,0))!=Sort.rational) return false;
+						if(bs789[1].id==uint.max) bs789[1]=a.viewChild(t789,0); else if(bs789[1]!=a.viewChild(t789,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.castQR<<16)))],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_QR_pow:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.pow||a.sort(input)!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.real_(cast(uint)a.view(input).value); else if(bindings[1]!=a.real_(cast(uint)a.view(input).value)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_QR_mask:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.mask||a.sort(input)!=Sort.real_) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.rational) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_QR_nonzero:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_QR_lt:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.rational) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_QR_le:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.le||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.rational) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_QR_inv:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.inv||a.sort(input)!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castQR) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_RC_add:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.sort(input)!=Sort.complex) return false;
+					if(!matchRegion(a,input,Op.add,[MatchOperand((Term t790,ref Term[] bs790){
+						if(a.view(t790).op!=Op.builtin||a.sort(t790)!=Sort.complex) return false;
+						if(a.view(t790).value!=cast(long)Builtin.castRC) return false;
+						if(a.sort(a.viewChild(t790,0))!=Sort.real_) return false;
+						if(bs790[0].id==uint.max) bs790[0]=a.viewChild(t790,0); else if(bs790[0]!=a.viewChild(t790,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.castRC<<16))),MatchOperand((Term t791,ref Term[] bs791){
+						if(a.view(t791).op!=Op.builtin||a.sort(t791)!=Sort.complex) return false;
+						if(a.view(t791).value!=cast(long)Builtin.castRC) return false;
+						if(a.sort(a.viewChild(t791,0))!=Sort.real_) return false;
+						if(bs791[1].id==uint.max) bs791[1]=a.viewChild(t791,0); else if(bs791[1]!=a.viewChild(t791,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.castRC<<16)))],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_RC_mul:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.sort(input)!=Sort.complex) return false;
+					if(!matchRegion(a,input,Op.mul,[MatchOperand((Term t792,ref Term[] bs792){
+						if(a.view(t792).op!=Op.builtin||a.sort(t792)!=Sort.complex) return false;
+						if(a.view(t792).value!=cast(long)Builtin.castRC) return false;
+						if(a.sort(a.viewChild(t792,0))!=Sort.real_) return false;
+						if(bs792[0].id==uint.max) bs792[0]=a.viewChild(t792,0); else if(bs792[0]!=a.viewChild(t792,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.castRC<<16))),MatchOperand((Term t793,ref Term[] bs793){
+						if(a.view(t793).op!=Op.builtin||a.sort(t793)!=Sort.complex) return false;
+						if(a.view(t793).value!=cast(long)Builtin.castRC) return false;
+						if(a.sort(a.viewChild(t793,0))!=Sort.real_) return false;
+						if(bs793[1].id==uint.max) bs793[1]=a.viewChild(t793,0); else if(bs793[1]!=a.viewChild(t793,0)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.castRC<<16)))],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_RC_pow:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.pow||a.sort(input)!=Sort.complex) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castRC) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.real_(cast(uint)a.view(input).value); else if(bindings[1]!=a.real_(cast(uint)a.view(input).value)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_RC_mask:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.mask||a.sort(input)!=Sort.complex) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.view(a.viewChild(input,1)).op!=Op.builtin||a.sort(a.viewChild(input,1))!=Sort.complex) return false;
+					if(a.view(a.viewChild(input,1)).value!=cast(long)Builtin.castRC) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,1),0))!=Sort.real_) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,1),0); else if(bindings[1]!=a.viewChild(a.viewChild(input,1),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_RC_nonzero:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castRC) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.embed_RC_inv:
+			if(!bindings.length) bindings.length=1;
+			enforce(bindings.length==1,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.inv||a.sort(input)!=Sort.complex) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castRC) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_ZN_eq_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.nonzeroZ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.addZ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).value!=cast(long)Builtin.powZN) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).value!=cast(long)Builtin.mulZ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)!=a.integer((-1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)!=a.integer((1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_ZN_ne_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.addZ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.powZN) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).value!=cast(long)Builtin.mulZ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),0))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)!=a.integer((-1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),1))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)!=a.integer((1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_ZN_eq_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.nonzeroZ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.addZ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).value!=cast(long)Builtin.powZN) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).value!=cast(long)Builtin.mulZ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)!=a.integer((-1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)!=a.integer((-1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_ZN_ne_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.addZ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.powZN) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.integer) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).value!=cast(long)Builtin.mulZ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),0))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)!=a.integer((-1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),1))!=Sort.integer) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)!=a.integer((-1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_QN_eq_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).value!=cast(long)Builtin.powQN) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)!=a.rational((-1L),(1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)!=a.rational((1L),(1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_QN_ne_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.powQN) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),0))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)!=a.rational((-1L),(1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),1))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)!=a.rational((1L),(1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_QN_eq_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).value!=cast(long)Builtin.powQN) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)!=a.rational((-1L),(1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)!=a.rational((-1L),(1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_QN_ne_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.powQN) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),0))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)!=a.rational((-1L),(1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),1))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)!=a.rational((-1L),(1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_RN_eq_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t794,ref Term[] bs794){
+						if(a.view(t794).op!=Op.builtin||a.sort(t794)!=Sort.real_) return false;
+						if(a.view(t794).value!=cast(long)Builtin.powRN) return false;
+						if(a.sort(a.viewChild(t794,0))!=Sort.real_) return false;
+						if(bs794[0].id==uint.max) bs794[0]=a.viewChild(t794,0); else if(bs794[0]!=a.viewChild(t794,0)) return false;
+						if(a.sort(a.viewChild(t794,1))!=Sort.natural) return false;
+						if(bs794[1].id==uint.max) bs794[1]=a.viewChild(t794,1); else if(bs794[1]!=a.viewChild(t794,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powRN<<16))),MatchOperand((Term t795,ref Term[] bs795){
+						if(a.sort(t795)!=Sort.real_) return false;
+						if(!matchRegion(a,t795,Op.mul,[MatchOperand((Term t796,ref Term[] bs796){
+							if(a.view(t796).op!=Op.realLit||a.sort(t796)!=Sort.real_) return false;
+							if(a.view(t796).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t797,ref Term[] bs797){
+							if(a.view(t797).op!=Op.realLit||a.sort(t797)!=Sort.real_) return false;
+							if(a.view(t797).value!=1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs795,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_RN_ne_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t798,ref Term[] bs798){
+						if(a.view(t798).op!=Op.builtin||a.sort(t798)!=Sort.real_) return false;
+						if(a.view(t798).value!=cast(long)Builtin.powRN) return false;
+						if(a.sort(a.viewChild(t798,0))!=Sort.real_) return false;
+						if(bs798[0].id==uint.max) bs798[0]=a.viewChild(t798,0); else if(bs798[0]!=a.viewChild(t798,0)) return false;
+						if(a.sort(a.viewChild(t798,1))!=Sort.natural) return false;
+						if(bs798[1].id==uint.max) bs798[1]=a.viewChild(t798,1); else if(bs798[1]!=a.viewChild(t798,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powRN<<16))),MatchOperand((Term t799,ref Term[] bs799){
+						if(a.sort(t799)!=Sort.real_) return false;
+						if(!matchRegion(a,t799,Op.mul,[MatchOperand((Term t800,ref Term[] bs800){
+							if(a.view(t800).op!=Op.realLit||a.sort(t800)!=Sort.real_) return false;
+							if(a.view(t800).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t801,ref Term[] bs801){
+							if(a.view(t801).op!=Op.realLit||a.sort(t801)!=Sort.real_) return false;
+							if(a.view(t801).value!=1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs799,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_RN_eq_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t802,ref Term[] bs802){
+						if(a.view(t802).op!=Op.builtin||a.sort(t802)!=Sort.real_) return false;
+						if(a.view(t802).value!=cast(long)Builtin.powRN) return false;
+						if(a.sort(a.viewChild(t802,0))!=Sort.real_) return false;
+						if(bs802[0].id==uint.max) bs802[0]=a.viewChild(t802,0); else if(bs802[0]!=a.viewChild(t802,0)) return false;
+						if(a.sort(a.viewChild(t802,1))!=Sort.natural) return false;
+						if(bs802[1].id==uint.max) bs802[1]=a.viewChild(t802,1); else if(bs802[1]!=a.viewChild(t802,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powRN<<16))),MatchOperand((Term t803,ref Term[] bs803){
+						if(a.sort(t803)!=Sort.real_) return false;
+						if(!matchRegion(a,t803,Op.mul,[MatchOperand((Term t804,ref Term[] bs804){
+							if(a.view(t804).op!=Op.realLit||a.sort(t804)!=Sort.real_) return false;
+							if(a.view(t804).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t805,ref Term[] bs805){
+							if(a.view(t805).op!=Op.realLit||a.sort(t805)!=Sort.real_) return false;
+							if(a.view(t805).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs803,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_RN_ne_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t806,ref Term[] bs806){
+						if(a.view(t806).op!=Op.builtin||a.sort(t806)!=Sort.real_) return false;
+						if(a.view(t806).value!=cast(long)Builtin.powRN) return false;
+						if(a.sort(a.viewChild(t806,0))!=Sort.real_) return false;
+						if(bs806[0].id==uint.max) bs806[0]=a.viewChild(t806,0); else if(bs806[0]!=a.viewChild(t806,0)) return false;
+						if(a.sort(a.viewChild(t806,1))!=Sort.natural) return false;
+						if(bs806[1].id==uint.max) bs806[1]=a.viewChild(t806,1); else if(bs806[1]!=a.viewChild(t806,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powRN<<16))),MatchOperand((Term t807,ref Term[] bs807){
+						if(a.sort(t807)!=Sort.real_) return false;
+						if(!matchRegion(a,t807,Op.mul,[MatchOperand((Term t808,ref Term[] bs808){
+							if(a.view(t808).op!=Op.realLit||a.sort(t808)!=Sort.real_) return false;
+							if(a.view(t808).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t809,ref Term[] bs809){
+							if(a.view(t809).op!=Op.realLit||a.sort(t809)!=Sort.real_) return false;
+							if(a.view(t809).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs807,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_QZ_eq_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).value!=cast(long)Builtin.powQZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)!=a.rational((-1L),(1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)!=a.rational((1L),(1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_QZ_ne_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.powQZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),0))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)!=a.rational((-1L),(1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),1))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)!=a.rational((1L),(1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_QZ_eq_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),0)).value!=cast(long)Builtin.powQZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),0),1)).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),0)!=a.rational((-1L),(1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(a.viewChild(input,0),0),1),1)!=a.rational((-1L),(1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_QZ_ne_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroQ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.addQ) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.powQZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(a.viewChild(input,0),0),1); else if(bindings[1]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),1)) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.rational) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),1)).value!=cast(long)Builtin.mulQ) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),0))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),0)!=a.rational((-1L),(1L))) return false;
+					if(a.view(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)).op!=Op.numberLit||a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),1),1))!=Sort.rational) return false;
+					if(a.viewChild(a.viewChild(a.viewChild(input,0),1),1)!=a.rational((-1L),(1L))) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_RZ_eq_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t810,ref Term[] bs810){
+						if(a.view(t810).op!=Op.builtin||a.sort(t810)!=Sort.real_) return false;
+						if(a.view(t810).value!=cast(long)Builtin.powRZ) return false;
+						if(a.sort(a.viewChild(t810,0))!=Sort.real_) return false;
+						if(bs810[0].id==uint.max) bs810[0]=a.viewChild(t810,0); else if(bs810[0]!=a.viewChild(t810,0)) return false;
+						if(a.sort(a.viewChild(t810,1))!=Sort.integer) return false;
+						if(bs810[1].id==uint.max) bs810[1]=a.viewChild(t810,1); else if(bs810[1]!=a.viewChild(t810,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powRZ<<16))),MatchOperand((Term t811,ref Term[] bs811){
+						if(a.sort(t811)!=Sort.real_) return false;
+						if(!matchRegion(a,t811,Op.mul,[MatchOperand((Term t812,ref Term[] bs812){
+							if(a.view(t812).op!=Op.realLit||a.sort(t812)!=Sort.real_) return false;
+							if(a.view(t812).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t813,ref Term[] bs813){
+							if(a.view(t813).op!=Op.realLit||a.sort(t813)!=Sort.real_) return false;
+							if(a.view(t813).value!=1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs811,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_RZ_ne_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t814,ref Term[] bs814){
+						if(a.view(t814).op!=Op.builtin||a.sort(t814)!=Sort.real_) return false;
+						if(a.view(t814).value!=cast(long)Builtin.powRZ) return false;
+						if(a.sort(a.viewChild(t814,0))!=Sort.real_) return false;
+						if(bs814[0].id==uint.max) bs814[0]=a.viewChild(t814,0); else if(bs814[0]!=a.viewChild(t814,0)) return false;
+						if(a.sort(a.viewChild(t814,1))!=Sort.integer) return false;
+						if(bs814[1].id==uint.max) bs814[1]=a.viewChild(t814,1); else if(bs814[1]!=a.viewChild(t814,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powRZ<<16))),MatchOperand((Term t815,ref Term[] bs815){
+						if(a.sort(t815)!=Sort.real_) return false;
+						if(!matchRegion(a,t815,Op.mul,[MatchOperand((Term t816,ref Term[] bs816){
+							if(a.view(t816).op!=Op.realLit||a.sort(t816)!=Sort.real_) return false;
+							if(a.view(t816).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t817,ref Term[] bs817){
+							if(a.view(t817).op!=Op.realLit||a.sort(t817)!=Sort.real_) return false;
+							if(a.view(t817).value!=1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs815,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_RZ_eq_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t818,ref Term[] bs818){
+						if(a.view(t818).op!=Op.builtin||a.sort(t818)!=Sort.real_) return false;
+						if(a.view(t818).value!=cast(long)Builtin.powRZ) return false;
+						if(a.sort(a.viewChild(t818,0))!=Sort.real_) return false;
+						if(bs818[0].id==uint.max) bs818[0]=a.viewChild(t818,0); else if(bs818[0]!=a.viewChild(t818,0)) return false;
+						if(a.sort(a.viewChild(t818,1))!=Sort.integer) return false;
+						if(bs818[1].id==uint.max) bs818[1]=a.viewChild(t818,1); else if(bs818[1]!=a.viewChild(t818,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powRZ<<16))),MatchOperand((Term t819,ref Term[] bs819){
+						if(a.sort(t819)!=Sort.real_) return false;
+						if(!matchRegion(a,t819,Op.mul,[MatchOperand((Term t820,ref Term[] bs820){
+							if(a.view(t820).op!=Op.realLit||a.sort(t820)!=Sort.real_) return false;
+							if(a.view(t820).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t821,ref Term[] bs821){
+							if(a.view(t821).op!=Op.realLit||a.sort(t821)!=Sort.real_) return false;
+							if(a.view(t821).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs819,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_RZ_ne_neg_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t822,ref Term[] bs822){
+						if(a.view(t822).op!=Op.builtin||a.sort(t822)!=Sort.real_) return false;
+						if(a.view(t822).value!=cast(long)Builtin.powRZ) return false;
+						if(a.sort(a.viewChild(t822,0))!=Sort.real_) return false;
+						if(bs822[0].id==uint.max) bs822[0]=a.viewChild(t822,0); else if(bs822[0]!=a.viewChild(t822,0)) return false;
+						if(a.sort(a.viewChild(t822,1))!=Sort.integer) return false;
+						if(bs822[1].id==uint.max) bs822[1]=a.viewChild(t822,1); else if(bs822[1]!=a.viewChild(t822,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.powRZ<<16))),MatchOperand((Term t823,ref Term[] bs823){
+						if(a.sort(t823)!=Sort.real_) return false;
+						if(!matchRegion(a,t823,Op.mul,[MatchOperand((Term t824,ref Term[] bs824){
+							if(a.view(t824).op!=Op.realLit||a.sort(t824)!=Sort.real_) return false;
+							if(a.view(t824).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8))),MatchOperand((Term t825,ref Term[] bs825){
+							if(a.view(t825).op!=Op.realLit||a.sort(t825)!=Sort.real_) return false;
+							if(a.view(t825).value!=-1L) return false;
+							return true;
+						},-1,(cast(uint)Op.realLit|(cast(uint)Sort.real_<<8)))],bs823,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_CN_eq_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.complex) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t826,ref Term[] bs826){
+						if(a.view(t826).op!=Op.builtin||a.sort(t826)!=Sort.complex) return false;
+						if(a.view(t826).value!=cast(long)Builtin.powCN) return false;
+						if(a.sort(a.viewChild(t826,0))!=Sort.complex) return false;
+						if(bs826[0].id==uint.max) bs826[0]=a.viewChild(t826,0); else if(bs826[0]!=a.viewChild(t826,0)) return false;
+						if(a.sort(a.viewChild(t826,1))!=Sort.natural) return false;
+						if(bs826[1].id==uint.max) bs826[1]=a.viewChild(t826,1); else if(bs826[1]!=a.viewChild(t826,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.powCN<<16))),MatchOperand((Term t827,ref Term[] bs827){
+						if(a.sort(t827)!=Sort.complex) return false;
+						if(!matchRegion(a,t827,Op.mul,[MatchOperand((Term t828,ref Term[] bs828){
+							if(a.view(t828).op!=Op.complexLit||a.sort(t828)!=Sort.complex) return false;
+							if(a.view(t828).value!=-1L) return false;
+							if(a.view(t828).imaginary!=0L) return false;
+							return true;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t829,ref Term[] bs829){
+							if(a.view(t829).op!=Op.complexLit||a.sort(t829)!=Sort.complex) return false;
+							if(a.view(t829).value!=1L) return false;
+							if(a.view(t829).imaginary!=0L) return false;
+							return true;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8)))],bs827,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.imC) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_CN_ne_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t830,ref Term[] bs830){
+						if(a.view(t830).op!=Op.builtin||a.sort(t830)!=Sort.complex) return false;
+						if(a.view(t830).value!=cast(long)Builtin.powCN) return false;
+						if(a.sort(a.viewChild(t830,0))!=Sort.complex) return false;
+						if(bs830[0].id==uint.max) bs830[0]=a.viewChild(t830,0); else if(bs830[0]!=a.viewChild(t830,0)) return false;
+						if(a.sort(a.viewChild(t830,1))!=Sort.natural) return false;
+						if(bs830[1].id==uint.max) bs830[1]=a.viewChild(t830,1); else if(bs830[1]!=a.viewChild(t830,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.powCN<<16))),MatchOperand((Term t831,ref Term[] bs831){
+						if(a.sort(t831)!=Sort.complex) return false;
+						if(!matchRegion(a,t831,Op.mul,[MatchOperand((Term t832,ref Term[] bs832){
+							if(a.view(t832).op!=Op.complexLit||a.sort(t832)!=Sort.complex) return false;
+							if(a.view(t832).value!=-1L) return false;
+							if(a.view(t832).imaginary!=0L) return false;
+							return true;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t833,ref Term[] bs833){
+							if(a.view(t833).op!=Op.complexLit||a.sort(t833)!=Sort.complex) return false;
+							if(a.view(t833).value!=1L) return false;
+							if(a.view(t833).imaginary!=0L) return false;
+							return true;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8)))],bs831,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.imC) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_CZ_eq_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.complex) return false;
+					if(!matchRegion(a,a.viewChild(a.viewChild(input,0),0),Op.add,[MatchOperand((Term t834,ref Term[] bs834){
+						if(a.view(t834).op!=Op.builtin||a.sort(t834)!=Sort.complex) return false;
+						if(a.view(t834).value!=cast(long)Builtin.powCZ) return false;
+						if(a.sort(a.viewChild(t834,0))!=Sort.complex) return false;
+						if(bs834[0].id==uint.max) bs834[0]=a.viewChild(t834,0); else if(bs834[0]!=a.viewChild(t834,0)) return false;
+						if(a.sort(a.viewChild(t834,1))!=Sort.integer) return false;
+						if(bs834[1].id==uint.max) bs834[1]=a.viewChild(t834,1); else if(bs834[1]!=a.viewChild(t834,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.powCZ<<16))),MatchOperand((Term t835,ref Term[] bs835){
+						if(a.sort(t835)!=Sort.complex) return false;
+						if(!matchRegion(a,t835,Op.mul,[MatchOperand((Term t836,ref Term[] bs836){
+							if(a.view(t836).op!=Op.complexLit||a.sort(t836)!=Sort.complex) return false;
+							if(a.view(t836).value!=-1L) return false;
+							if(a.view(t836).imaginary!=0L) return false;
+							return true;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t837,ref Term[] bs837){
+							if(a.view(t837).op!=Op.complexLit||a.sort(t837)!=Sort.complex) return false;
+							if(a.view(t837).value!=1L) return false;
+							if(a.view(t837).imaginary!=0L) return false;
+							return true;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8)))],bs835,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.imC) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.indexed_CZ_ne_one:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.nonzero||a.sort(input)!=Sort.boolean) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand((Term t838,ref Term[] bs838){
+						if(a.view(t838).op!=Op.builtin||a.sort(t838)!=Sort.complex) return false;
+						if(a.view(t838).value!=cast(long)Builtin.powCZ) return false;
+						if(a.sort(a.viewChild(t838,0))!=Sort.complex) return false;
+						if(bs838[0].id==uint.max) bs838[0]=a.viewChild(t838,0); else if(bs838[0]!=a.viewChild(t838,0)) return false;
+						if(a.sort(a.viewChild(t838,1))!=Sort.integer) return false;
+						if(bs838[1].id==uint.max) bs838[1]=a.viewChild(t838,1); else if(bs838[1]!=a.viewChild(t838,1)) return false;
+						return true;
+					},-1,(cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.powCZ<<16))),MatchOperand((Term t839,ref Term[] bs839){
+						if(a.sort(t839)!=Sort.complex) return false;
+						if(!matchRegion(a,t839,Op.mul,[MatchOperand((Term t840,ref Term[] bs840){
+							if(a.view(t840).op!=Op.complexLit||a.sort(t840)!=Sort.complex) return false;
+							if(a.view(t840).value!=-1L) return false;
+							if(a.view(t840).imaginary!=0L) return false;
+							return true;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8))),MatchOperand((Term t841,ref Term[] bs841){
+							if(a.view(t841).op!=Op.complexLit||a.sort(t841)!=Sort.complex) return false;
+							if(a.view(t841).value!=1L) return false;
+							if(a.view(t841).imaginary!=0L) return false;
+							return true;
+						},-1,(cast(uint)Op.complexLit|(cast(uint)Sort.complex<<8)))],bs839,work)) return false;
+						return true;
+					},-1,uint.max)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.not_||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.nonzero||a.sort(a.viewChild(input,0))!=Sort.boolean) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).op!=Op.builtin||a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(a.viewChild(input,0),0)).value!=cast(long)Builtin.imC) return false;
+					if(a.sort(a.viewChild(a.viewChild(a.viewChild(input,0),0),0))!=Sort.complex) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(a.viewChild(input,0),0),0); else if(bindings[0]!=a.viewChild(a.viewChild(a.viewChild(input,0),0),0)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.natural_literal_coefficient:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.natural) return false;
+					if(a.view(input).value!=cast(long)Builtin.mulN) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				case 0:
+					if(a.sort(input)!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.natural_literal_constant:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.natural) return false;
+					if(a.view(input).value!=cast(long)Builtin.addN) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,0); else if(bindings[1]!=a.viewChild(input,0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,1); else if(bindings[0]!=a.viewChild(input,1)) return false;
+					return true;
+				case 0:
+					if(a.sort(input)!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.integer_literal_coefficient:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.mulZ) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				case 0:
+					if(a.sort(input)!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.integer_literal_constant:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.integer) return false;
+					if(a.view(input).value!=cast(long)Builtin.addZ) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,0); else if(bindings[1]!=a.viewChild(input,0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.integer) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,1); else if(bindings[0]!=a.viewChild(input,1)) return false;
+					return true;
+				case 0:
+					if(a.sort(input)!=Sort.integer) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.rational_literal_coefficient:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.rational) return false;
+					if(a.view(input).value!=cast(long)Builtin.mulQ) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.rational) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,1); else if(bindings[1]!=a.viewChild(input,1)) return false;
+					return true;
+				case 0:
+					if(a.sort(input)!=Sort.rational) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				default:return false;
+			}
+		case Law.rational_literal_constant:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.rational) return false;
+					if(a.view(input).value!=cast(long)Builtin.addQ) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.rational) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(input,0); else if(bindings[1]!=a.viewChild(input,0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.rational) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,1); else if(bindings[0]!=a.viewChild(input,1)) return false;
+					return true;
+				case 0:
+					if(a.sort(input)!=Sort.rational) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				default:return false;
+			}
 		default:return false;
 	}
 }
@@ -29749,6 +31587,8 @@ bool candidate(Arena a,Law law,Term input){
 		case Law.real_floor_bound:return a.view(input).op==Op.le&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.castQR&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.castZQ;
 		case Law.real_ceil_bound:return a.view(input).op==Op.le&&a.view(a.viewChild(input,1)).op==Op.builtin&&a.view(a.viewChild(input,1)).value==Builtin.castQR&&a.view(a.viewChild(a.viewChild(input,1),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,1),0)).value==Builtin.castZQ;
 		case Law.real_round:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.roundR;
+		case Law.rational_is_integer:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.isIntR&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.castQR;
+		case Law.rational_denominator_integer:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.denQ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.castZQ;
 		case Law.real_is_integer:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.isIntR;
 		case Law.real_hypot:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.hypotR;
 		case Law.complex_arg_real_power:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.argC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.powerC;
@@ -30229,6 +32069,36 @@ bool candidate(Arena a,Law law,Term input){
 		case Law.integer_mask_mul_right:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.mulZ&&a.view(a.viewChild(input,1)).op==Op.mask;
 		case Law.rational_mask_mul_left:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.mulQ&&a.view(a.viewChild(input,0)).op==Op.mask;
 		case Law.rational_mask_mul_right:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.mulQ&&a.view(a.viewChild(input,1)).op==Op.mask;
+		case Law.indexed_ZN_eq_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.nonzeroZ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.addZ;
+		case Law.indexed_ZN_ne_one:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroZ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.addZ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.powZN&&a.view(a.viewChild(a.viewChild(input,0),1)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),1)).value==Builtin.mulZ;
+		case Law.indexed_ZN_eq_neg_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.nonzeroZ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.addZ;
+		case Law.indexed_ZN_ne_neg_one:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroZ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.addZ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.powZN&&a.view(a.viewChild(a.viewChild(input,0),1)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),1)).value==Builtin.mulZ;
+		case Law.indexed_QN_eq_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.nonzeroQ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.addQ;
+		case Law.indexed_QN_ne_one:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroQ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.addQ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.powQN&&a.view(a.viewChild(a.viewChild(input,0),1)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),1)).value==Builtin.mulQ;
+		case Law.indexed_QN_eq_neg_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.nonzeroQ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.addQ;
+		case Law.indexed_QN_ne_neg_one:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroQ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.addQ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.powQN&&a.view(a.viewChild(a.viewChild(input,0),1)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),1)).value==Builtin.mulQ;
+		case Law.indexed_RN_eq_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.nonzero&&a.sort(a.viewChild(a.viewChild(input,0),0))==Sort.real_;
+		case Law.indexed_RN_ne_one:return a.view(input).op==Op.nonzero&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.indexed_RN_eq_neg_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.nonzero&&a.sort(a.viewChild(a.viewChild(input,0),0))==Sort.real_;
+		case Law.indexed_RN_ne_neg_one:return a.view(input).op==Op.nonzero&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.indexed_QZ_eq_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.nonzeroQ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.addQ;
+		case Law.indexed_QZ_ne_one:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroQ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.addQ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.powQZ&&a.view(a.viewChild(a.viewChild(input,0),1)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),1)).value==Builtin.mulQ;
+		case Law.indexed_QZ_eq_neg_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.nonzeroQ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.addQ;
+		case Law.indexed_QZ_ne_neg_one:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroQ&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.addQ&&a.view(a.viewChild(a.viewChild(input,0),0)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),0)).value==Builtin.powQZ&&a.view(a.viewChild(a.viewChild(input,0),1)).op==Op.builtin&&a.view(a.viewChild(a.viewChild(input,0),1)).value==Builtin.mulQ;
+		case Law.indexed_RZ_eq_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.nonzero&&a.sort(a.viewChild(a.viewChild(input,0),0))==Sort.real_;
+		case Law.indexed_RZ_ne_one:return a.view(input).op==Op.nonzero&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.indexed_RZ_eq_neg_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.nonzero&&a.sort(a.viewChild(a.viewChild(input,0),0))==Sort.real_;
+		case Law.indexed_RZ_ne_neg_one:return a.view(input).op==Op.nonzero&&a.sort(a.viewChild(input,0))==Sort.real_;
+		case Law.indexed_CN_eq_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.nonzero&&a.sort(a.viewChild(a.viewChild(input,0),0))==Sort.complex;
+		case Law.indexed_CN_ne_one:return a.view(input).op==Op.nonzero&&a.sort(a.viewChild(input,0))==Sort.complex;
+		case Law.indexed_CZ_eq_one:return a.view(input).op==Op.not_&&a.view(a.viewChild(input,0)).op==Op.nonzero&&a.sort(a.viewChild(a.viewChild(input,0),0))==Sort.complex;
+		case Law.indexed_CZ_ne_one:return a.view(input).op==Op.nonzero&&a.sort(a.viewChild(input,0))==Sort.complex;
+		case Law.natural_literal_coefficient:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.mulN;
+		case Law.natural_literal_constant:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.addN;
+		case Law.integer_literal_coefficient:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.mulZ;
+		case Law.integer_literal_constant:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.addZ;
+		case Law.rational_literal_coefficient:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.mulQ;
+		case Law.rational_literal_constant:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.addQ;
 		default:return false;
 	}
 }
@@ -30245,24 +32115,24 @@ const(Law)[] rewrites(Node n){
 		case (cast(uint)Op.inv|(cast(uint)Sort.real_<<8)):{ static immutable Law[] laws=[Law.real_inv_inv,Law.real_exp_inverse,Law.real_parity_inverse]; return laws; }
 		case (cast(uint)Op.inv|(cast(uint)Sort.complex<<8)):{ static immutable Law[] laws=[Law.complex_inv_inv,Law.complex_exp_inverse,Law.complex_real_exp_inverse,Law.complex_phase_inverse,Law.complex_parity_inverse]; return laws; }
 		case (cast(uint)Op.abs|(cast(uint)Sort.real_<<8)):{ static immutable Law[] laws=[Law.real_abs_abs,Law.real_abs_neg,Law.real_abs_nonnegative,Law.real_abs_nonpositive,Law.real_abs_product,Law.real_abs_inverse,Law.real_abs_power,Law.real_abs_mask,Law.real_cosh_abs]; return laws; }
-		case (cast(uint)Op.nonzero|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_nonzero_product,Law.real_nonzero_inverse,Law.real_nonzero_power,Law.complex_nonzero_product,Law.complex_nonzero_inverse,Law.complex_nonzero_power,Law.complex_nonzero_conj,Law.real_nonzero_abs,Law.real_nonzero_mask,Law.real_nonzero_nonnegative_add,Law.real_nonzero_nonpositive_add,Law.real_abs_ne,Law.real_ne_odd_power,Law.real_ne_even_power,Law.real_exp_ne,Law.real_exp_ne_one,Law.real_nonzero_exp,Law.real_log_ne,Law.real_log_ne_value,Law.real_nonzero_log,Law.real_sqrt_ne,Law.real_nonzero_sqrt,Law.real_power_base_ne,Law.real_power_exponent_ne,Law.real_noninteger_exponent_ne,Law.complex_power_exponent_ne,Law.complex_negative_exponent_ne,Law.complex_power_nonzero,Law.real_min_max_ne,Law.real_inverse_ne,Law.complex_inverse_ne,Law.complex_exp_nonzero,Law.complex_log_ne,Law.complex_log_nonzero,Law.complex_sqrt_ne,Law.complex_sqrt_nonzero,Law.complex_exp_strip_ne,Law.complex_norm_nonzero,Law.complex_conjugate_ne,Law.real_erf_ne,Law.real_sinh_ne,Law.real_asinh_ne,Law.real_tanh_ne,Law.real_atan_ne,Law.real_asin_ne,Law.real_cbrt_ne,Law.real_acosh_ne,Law.real_atanh_ne,Law.real_erfc_ne,Law.real_acos_ne,Law.real_cosh_nonzero,Law.real_power_ne_one,Law.real_power_ne_neg_one,Law.complex_real_power_ne_one,Law.complex_power_nonzero_cases]; return laws; }
+		case (cast(uint)Op.nonzero|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_nonzero_product,Law.real_nonzero_inverse,Law.real_nonzero_power,Law.complex_nonzero_product,Law.complex_nonzero_inverse,Law.complex_nonzero_power,Law.complex_nonzero_conj,Law.real_nonzero_abs,Law.real_nonzero_mask,Law.real_nonzero_nonnegative_add,Law.real_nonzero_nonpositive_add,Law.real_abs_ne,Law.real_ne_odd_power,Law.real_ne_even_power,Law.real_exp_ne,Law.real_exp_ne_one,Law.real_nonzero_exp,Law.real_log_ne,Law.real_log_ne_value,Law.real_nonzero_log,Law.real_sqrt_ne,Law.real_nonzero_sqrt,Law.real_power_base_ne,Law.real_power_exponent_ne,Law.real_noninteger_exponent_ne,Law.complex_power_exponent_ne,Law.complex_negative_exponent_ne,Law.complex_power_nonzero,Law.real_min_max_ne,Law.real_inverse_ne,Law.complex_inverse_ne,Law.complex_exp_nonzero,Law.complex_log_ne,Law.complex_log_nonzero,Law.complex_sqrt_ne,Law.complex_sqrt_nonzero,Law.complex_exp_strip_ne,Law.complex_norm_nonzero,Law.complex_conjugate_ne,Law.real_erf_ne,Law.real_sinh_ne,Law.real_asinh_ne,Law.real_tanh_ne,Law.real_atan_ne,Law.real_asin_ne,Law.real_cbrt_ne,Law.real_acosh_ne,Law.real_atanh_ne,Law.real_erfc_ne,Law.real_acos_ne,Law.real_cosh_nonzero,Law.real_power_ne_one,Law.real_power_ne_neg_one,Law.complex_real_power_ne_one,Law.complex_power_nonzero_cases,Law.indexed_RN_ne_one,Law.indexed_RN_ne_neg_one,Law.indexed_RZ_ne_one,Law.indexed_RZ_ne_neg_one,Law.indexed_CN_ne_one,Law.indexed_CZ_ne_one]; return laws; }
 		case (cast(uint)Op.pow|(cast(uint)Sort.real_<<8)):{ static immutable Law[] laws=[Law.real_pow_zero,Law.real_pow_one,Law.real_exp_power,Law.real_sqrt_squared,Law.real_sqrt_power,Law.real_abs_even_power,Law.real_cbrt_cube,Law.real_parity_square]; return laws; }
 		case (cast(uint)Op.pow|(cast(uint)Sort.complex<<8)):{ static immutable Law[] laws=[Law.complex_pow_zero,Law.complex_pow_one,Law.complex_exp_power,Law.complex_cast_power,Law.complex_sqrt_squared,Law.complex_phase_power,Law.complex_parity_square]; return laws; }
-		case (cast(uint)Op.not_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.bool_not_not,Law.bool_not_true,Law.bool_not_false,Law.bool_not_conjunction,Law.bool_not_disjunction,Law.real_not_lt,Law.real_not_le,Law.real_noninteger_power_unit,Law.real_minus_one_power_unit,Law.complex_minus_one_power_unit,Law.real_power_eq_one,Law.real_power_eq_neg_one,Law.complex_real_power_eq_one]; return laws; }
+		case (cast(uint)Op.not_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.bool_not_not,Law.bool_not_true,Law.bool_not_false,Law.bool_not_conjunction,Law.bool_not_disjunction,Law.real_not_lt,Law.real_not_le,Law.real_noninteger_power_unit,Law.real_minus_one_power_unit,Law.complex_minus_one_power_unit,Law.real_power_eq_one,Law.real_power_eq_neg_one,Law.complex_real_power_eq_one,Law.indexed_ZN_eq_one,Law.indexed_ZN_eq_neg_one,Law.indexed_QN_eq_one,Law.indexed_QN_eq_neg_one,Law.indexed_RN_eq_one,Law.indexed_RN_eq_neg_one,Law.indexed_QZ_eq_one,Law.indexed_QZ_eq_neg_one,Law.indexed_RZ_eq_one,Law.indexed_RZ_eq_neg_one,Law.indexed_CN_eq_one,Law.indexed_CZ_eq_one]; return laws; }
 		case (cast(uint)Op.and_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.bool_and_left_true,Law.bool_and_left_false,Law.bool_and_right_true,Law.bool_and_right_false,Law.bool_and_same,Law.bool_and_not,Law.bool_not_and,Law.bool_and_absorb,Law.bool_and_or,Law.bool_or_and,Law.real_interval_point,Law.real_interval_closed_point]; return laws; }
 		case (cast(uint)Op.or_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.bool_or_left_true,Law.bool_or_left_false,Law.bool_or_right_true,Law.bool_or_right_false,Law.bool_or_same,Law.bool_or_not,Law.bool_not_or,Law.bool_or_absorb,Law.bool_or_prune_left,Law.bool_or_prune_right,Law.real_interval_puncture,Law.real_interval_open_puncture,Law.real_interval_cover,Law.real_upper_union]; return laws; }
 		case (cast(uint)Op.lt|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_lt_self,Law.real_lt_shift,Law.real_lt_right_shift,Law.real_lt_scale_pos,Law.real_lt_scale_neg,Law.real_positive_nonnegative_test,Law.real_lt_common,Law.real_lt_mul_pos_left,Law.real_lt_mul_neg_left,Law.real_lt_mul_pos_right,Law.real_lt_mul_neg_right,Law.real_pos_mul_pos_left,Law.real_pos_mul_neg_left,Law.real_pos_mul_pos_right,Law.real_pos_mul_neg_right,Law.real_odd_negative,Law.real_odd_positive,Law.real_even_lt_nonpositive,Law.real_negative_lt_even,Law.real_odd_mul_negative,Law.real_odd_mul_positive,Law.real_even_mul_negative,Law.real_even_mul_positive,Law.real_power_mul_swap_negative,Law.real_power_mul_swap_positive,Law.real_abs_lt,Law.real_lt_abs,Law.real_lt_odd_power,Law.real_lt_even_power,Law.real_lt_nonnegative_power,Law.real_exp_lt,Law.real_exp_lt_one,Law.real_one_lt_exp,Law.real_log_lt,Law.real_log_lt_zero,Law.real_log_pos,Law.real_sqrt_lt,Law.real_sqrt_lt_bound,Law.real_lt_sqrt_bound,Law.real_power_base_lt,Law.real_power_small_base_lt,Law.real_power_exponent_lt,Law.real_negative_exponent_lt,Law.real_noninteger_exponent_lt,Law.real_noninteger_negative_lt,Law.real_nonnegative_inverse_lt,Law.real_nonpositive_inverse_lt,Law.real_min_lt,Law.real_lt_min,Law.real_max_lt,Law.real_lt_max,Law.real_inverse_negative,Law.real_inverse_positive,Law.real_add_lt_cancel,Law.complex_norm_positive,Law.complex_norm_negative,Law.real_erf_lt,Law.real_sinh_lt,Law.real_asinh_lt,Law.real_tanh_lt,Law.real_atan_lt,Law.real_asin_lt,Law.real_cbrt_lt,Law.real_acosh_lt,Law.real_atanh_lt,Law.real_erfc_lt,Law.real_acos_lt,Law.real_cosh_positive,Law.real_tanh_upper_strict,Law.real_tanh_lower_strict]; return laws; }
 		case (cast(uint)Op.le|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_le_self,Law.real_le_shift,Law.real_le_right_shift,Law.real_le_scale_pos,Law.real_le_scale_neg,Law.real_nonpositive_nonnegative,Law.real_le_common,Law.real_le_mul_pos_left,Law.real_le_mul_neg_left,Law.real_le_mul_pos_right,Law.real_le_mul_neg_right,Law.real_nonneg_mul_pos_left,Law.real_nonneg_mul_neg_left,Law.real_nonneg_mul_pos_right,Law.real_nonneg_mul_neg_right,Law.real_odd_nonpositive,Law.real_odd_nonnegative,Law.real_even_le_negative,Law.real_nonpositive_le_even,Law.real_odd_mul_nonpositive,Law.real_odd_mul_nonnegative,Law.real_even_mul_nonpositive,Law.real_even_mul_nonnegative,Law.real_power_mul_swap_nonpositive,Law.real_power_mul_swap_nonnegative,Law.real_abs_le,Law.real_le_abs,Law.real_le_odd_power,Law.real_le_even_power,Law.real_le_nonnegative_power,Law.real_exp_le,Law.real_exp_le_one,Law.real_one_le_exp,Law.real_log_le,Law.real_log_le_zero,Law.real_log_nonneg,Law.real_sqrt_le,Law.real_sqrt_le_bound,Law.real_le_sqrt_bound,Law.real_power_base_le,Law.real_power_small_base_le,Law.real_power_exponent_le,Law.real_negative_exponent_le,Law.real_noninteger_exponent_le,Law.real_noninteger_negative_le,Law.real_nonnegative_inverse_le,Law.real_nonpositive_inverse_le,Law.real_min_le,Law.real_le_min,Law.real_max_le,Law.real_le_max,Law.real_inverse_nonnegative,Law.real_inverse_nonpositive,Law.real_add_le_cancel,Law.complex_norm_nonpositive,Law.real_erf_le,Law.real_sinh_le,Law.real_asinh_le,Law.real_tanh_le,Law.real_atan_le,Law.real_asin_le,Law.real_cbrt_le,Law.real_acosh_le,Law.real_atanh_le,Law.real_erfc_le,Law.real_acos_le,Law.real_cosh_lower]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.natural<<8)|(cast(uint)Builtin.addN<<16)):{ static immutable Law[] laws=[Law.natural_add_zero,Law.natural_zero_add,Law.natural_double,Law.natural_collect,Law.natural_collect_left,Law.natural_collect_right,Law.natural_mask_partition,Law.natural_mask_partition_right,Law.natural_mask_or_partition,Law.natural_mask_or_partition_right,Law.natural_mask_union_overlap,Law.natural_mask_add,Law.natural_mask_complement,Law.natural_mask_partition_not,Law.natural_mask_partition_not_right]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.natural<<8)|(cast(uint)Builtin.mulN<<16)):{ static immutable Law[] laws=[Law.natural_mul_one,Law.natural_one_mul,Law.natural_mul_zero,Law.natural_zero_mul,Law.natural_mul_literals,Law.natural_square,Law.natural_pow_join,Law.natural_pow_join_left,Law.natural_pow_join_right,Law.natural_mask_mul_left,Law.natural_mask_mul_right]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.natural<<8)|(cast(uint)Builtin.addN<<16)):{ static immutable Law[] laws=[Law.natural_add_zero,Law.natural_zero_add,Law.natural_double,Law.natural_collect,Law.natural_collect_left,Law.natural_collect_right,Law.natural_mask_partition,Law.natural_mask_partition_right,Law.natural_mask_or_partition,Law.natural_mask_or_partition_right,Law.natural_mask_union_overlap,Law.natural_mask_add,Law.natural_mask_complement,Law.natural_mask_partition_not,Law.natural_mask_partition_not_right,Law.natural_literal_constant]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.natural<<8)|(cast(uint)Builtin.mulN<<16)):{ static immutable Law[] laws=[Law.natural_mul_one,Law.natural_one_mul,Law.natural_mul_zero,Law.natural_zero_mul,Law.natural_mul_literals,Law.natural_square,Law.natural_pow_join,Law.natural_pow_join_left,Law.natural_pow_join_right,Law.natural_mask_mul_left,Law.natural_mask_mul_right,Law.natural_literal_coefficient]; return laws; }
 		case (cast(uint)Op.pow|(cast(uint)Sort.natural<<8)):{ static immutable Law[] laws=[Law.natural_pow_zero,Law.natural_pow_one,Law.natural_pow_power]; return laws; }
 		case (cast(uint)Op.mask|(cast(uint)Sort.natural<<8)):{ static immutable Law[] laws=[Law.natural_mask_true,Law.natural_mask_false,Law.natural_mask_zero,Law.natural_mask_nested]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.addZ<<16)):{ static immutable Law[] laws=[Law.integer_add_zero,Law.integer_zero_add,Law.integer_double,Law.integer_collect,Law.integer_collect_left,Law.integer_collect_right,Law.integer_add_cancel_last,Law.integer_add_cancel_first,Law.integer_sub_add_cancel,Law.integer_add_sub_cancel,Law.integer_mask_partition,Law.integer_mask_partition_right,Law.integer_mask_or_partition,Law.integer_mask_or_partition_right,Law.integer_mask_union_overlap,Law.integer_mask_add,Law.integer_mask_complement,Law.integer_mask_partition_not,Law.integer_mask_partition_not_right]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.mulZ<<16)):{ static immutable Law[] laws=[Law.integer_mul_one,Law.integer_one_mul,Law.integer_mul_zero,Law.integer_zero_mul,Law.integer_mul_literals,Law.integer_square,Law.integer_pow_join,Law.integer_pow_join_left,Law.integer_pow_join_right,Law.integer_mask_mul_left,Law.integer_mask_mul_right]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.addZ<<16)):{ static immutable Law[] laws=[Law.integer_add_zero,Law.integer_zero_add,Law.integer_double,Law.integer_collect,Law.integer_collect_left,Law.integer_collect_right,Law.integer_add_cancel_last,Law.integer_add_cancel_first,Law.integer_sub_add_cancel,Law.integer_add_sub_cancel,Law.integer_mask_partition,Law.integer_mask_partition_right,Law.integer_mask_or_partition,Law.integer_mask_or_partition_right,Law.integer_mask_union_overlap,Law.integer_mask_add,Law.integer_mask_complement,Law.integer_mask_partition_not,Law.integer_mask_partition_not_right,Law.integer_literal_constant]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.mulZ<<16)):{ static immutable Law[] laws=[Law.integer_mul_one,Law.integer_one_mul,Law.integer_mul_zero,Law.integer_zero_mul,Law.integer_mul_literals,Law.integer_square,Law.integer_pow_join,Law.integer_pow_join_left,Law.integer_pow_join_right,Law.integer_mask_mul_left,Law.integer_mask_mul_right,Law.integer_literal_coefficient]; return laws; }
 		case (cast(uint)Op.pow|(cast(uint)Sort.integer<<8)):{ static immutable Law[] laws=[Law.integer_pow_zero,Law.integer_pow_one,Law.integer_pow_power]; return laws; }
 		case (cast(uint)Op.mask|(cast(uint)Sort.integer<<8)):{ static immutable Law[] laws=[Law.integer_mask_true,Law.integer_mask_false,Law.integer_mask_zero,Law.integer_mask_nested]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.rational<<8)|(cast(uint)Builtin.addQ<<16)):{ static immutable Law[] laws=[Law.rational_add_zero,Law.rational_zero_add,Law.rational_double,Law.rational_collect,Law.rational_collect_left,Law.rational_collect_right,Law.rational_add_cancel_last,Law.rational_add_cancel_first,Law.rational_sub_add_cancel,Law.rational_add_sub_cancel,Law.rational_mask_partition,Law.rational_mask_partition_right,Law.rational_mask_or_partition,Law.rational_mask_or_partition_right,Law.rational_mask_union_overlap,Law.rational_mask_add,Law.rational_mask_complement,Law.rational_mask_partition_not,Law.rational_mask_partition_not_right]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.rational<<8)|(cast(uint)Builtin.mulQ<<16)):{ static immutable Law[] laws=[Law.rational_mul_one,Law.rational_one_mul,Law.rational_mul_zero,Law.rational_zero_mul,Law.rational_mul_literals,Law.rational_square,Law.rational_pow_join,Law.rational_pow_join_left,Law.rational_pow_join_right,Law.rational_div_self,Law.rational_inv_mul_self,Law.rational_cancel_factor,Law.rational_cancel_right_factor,Law.rational_cancel_nested_left,Law.rational_cancel_nested_right,Law.rational_cancel_inverse_nested,Law.rational_cancel_inverse_nested_right,Law.rational_mask_mul_left,Law.rational_mask_mul_right]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.rational<<8)|(cast(uint)Builtin.addQ<<16)):{ static immutable Law[] laws=[Law.rational_add_zero,Law.rational_zero_add,Law.rational_double,Law.rational_collect,Law.rational_collect_left,Law.rational_collect_right,Law.rational_add_cancel_last,Law.rational_add_cancel_first,Law.rational_sub_add_cancel,Law.rational_add_sub_cancel,Law.rational_mask_partition,Law.rational_mask_partition_right,Law.rational_mask_or_partition,Law.rational_mask_or_partition_right,Law.rational_mask_union_overlap,Law.rational_mask_add,Law.rational_mask_complement,Law.rational_mask_partition_not,Law.rational_mask_partition_not_right,Law.rational_literal_constant]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.rational<<8)|(cast(uint)Builtin.mulQ<<16)):{ static immutable Law[] laws=[Law.rational_mul_one,Law.rational_one_mul,Law.rational_mul_zero,Law.rational_zero_mul,Law.rational_mul_literals,Law.rational_square,Law.rational_pow_join,Law.rational_pow_join_left,Law.rational_pow_join_right,Law.rational_div_self,Law.rational_inv_mul_self,Law.rational_cancel_factor,Law.rational_cancel_right_factor,Law.rational_cancel_nested_left,Law.rational_cancel_nested_right,Law.rational_cancel_inverse_nested,Law.rational_cancel_inverse_nested_right,Law.rational_mask_mul_left,Law.rational_mask_mul_right,Law.rational_literal_coefficient]; return laws; }
 		case (cast(uint)Op.pow|(cast(uint)Sort.rational<<8)):{ static immutable Law[] laws=[Law.rational_pow_zero,Law.rational_pow_one,Law.rational_pow_power,Law.rational_parity_square]; return laws; }
 		case (cast(uint)Op.mask|(cast(uint)Sort.rational<<8)):{ static immutable Law[] laws=[Law.rational_mask_true,Law.rational_mask_false,Law.rational_mask_zero,Law.rational_mask_nested]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.leN<<16)):{ static immutable Law[] laws=[Law.natural_nonnegative,Law.natural_le_self,Law.natural_le_common]; return laws; }
@@ -30305,9 +32175,10 @@ const(Law)[] rewrites(Node n){
 		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.ceilR<<16)):{ static immutable Law[] laws=[Law.real_ceil_cast,Law.real_ceil_neg,Law.real_ceil_shift]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.ltZ<<16)):{ static immutable Law[] laws=[Law.real_floor_lt,Law.real_lt_floor,Law.real_ceil_lt,Law.real_lt_ceil,Law.integer_lt_self,Law.integer_lt_common]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.leZ<<16)):{ static immutable Law[] laws=[Law.real_floor_le,Law.real_le_floor,Law.real_ceil_le,Law.real_le_ceil,Law.integer_le_self,Law.integer_le_common]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroZ<<16)):{ static immutable Law[] laws=[Law.real_floor_ne,Law.real_ceil_ne,Law.natural_nonzero_product,Law.natural_nonzero_power,Law.integer_nonzero_product,Law.integer_nonzero_power]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroZ<<16)):{ static immutable Law[] laws=[Law.real_floor_ne,Law.real_ceil_ne,Law.natural_nonzero_product,Law.natural_nonzero_power,Law.integer_nonzero_product,Law.integer_nonzero_power,Law.indexed_ZN_ne_one,Law.indexed_ZN_ne_neg_one]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.roundR<<16)):{ static immutable Law[] laws=[Law.real_round]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.isIntR<<16)):{ static immutable Law[] laws=[Law.real_is_integer]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.isIntR<<16)):{ static immutable Law[] laws=[Law.rational_is_integer,Law.real_is_integer]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.natural<<8)|(cast(uint)Builtin.denQ<<16)):{ static immutable Law[] laws=[Law.rational_denominator_integer]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.hypotR<<16)):{ static immutable Law[] laws=[Law.real_hypot]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.argC<<16)):{ static immutable Law[] laws=[Law.complex_arg_real_power,Law.complex_arg_sqrt,Law.complex_arg_exp,Law.complex_arg_phase,Law.complex_arg_positive,Law.complex_arg_negative,Law.complex_arg_positive_imag,Law.complex_arg_negative_imag]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.asinhR<<16)):{ static immutable Law[] laws=[Law.real_asinh_sinh,Law.real_asinh_zero]; return laws; }
@@ -30340,7 +32211,7 @@ const(Law)[] rewrites(Node n){
 		case (cast(uint)Op.builtin|(cast(uint)Sort.complex<<8)|(cast(uint)Builtin.powCZ<<16)):{ static immutable Law[] laws=[Law.complex_indexed_integer_power,Law.complex_exp_int_power,Law.complex_real_exp_int_power,Law.complex_phase_int_power,Law.complex_indexed_integer_one,Law.complex_parity_even,Law.complex_parity_odd,Law.complex_parity_neg,Law.complex_parity_literal_product,Law.complex_parity_literal_product_left]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.e<<16)):{ static immutable Law[] laws=[Law.real_e]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.ltN<<16)):{ static immutable Law[] laws=[Law.natural_lt_self,Law.natural_lt_common]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroQ<<16)):{ static immutable Law[] laws=[Law.rational_nonzero_product,Law.rational_nonzero_power,Law.rational_nonzero_inverse]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroQ<<16)):{ static immutable Law[] laws=[Law.rational_nonzero_product,Law.rational_nonzero_power,Law.rational_nonzero_inverse,Law.indexed_QN_ne_one,Law.indexed_QN_ne_neg_one,Law.indexed_QZ_ne_one,Law.indexed_QZ_ne_neg_one]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.ltQ<<16)):{ static immutable Law[] laws=[Law.rational_lt_self,Law.rational_lt_common]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.leQ<<16)):{ static immutable Law[] laws=[Law.rational_le_self,Law.rational_le_common]; return laws; }
 		default:return null;
@@ -30355,14 +32226,14 @@ const(Law)[] rewrites(Op op){
 		case Op.forget:{ static immutable Law[] laws=[Law.erase_puncture]; return laws; }
 		case Op.inv:{ static immutable Law[] laws=[Law.real_inv_inv,Law.complex_inv_inv,Law.real_exp_inverse,Law.complex_exp_inverse,Law.complex_real_exp_inverse,Law.complex_phase_inverse,Law.real_parity_inverse,Law.complex_parity_inverse]; return laws; }
 		case Op.abs:{ static immutable Law[] laws=[Law.real_abs_abs,Law.real_abs_neg,Law.real_abs_nonnegative,Law.real_abs_nonpositive,Law.real_abs_product,Law.real_abs_inverse,Law.real_abs_power,Law.real_abs_mask,Law.real_cosh_abs]; return laws; }
-		case Op.nonzero:{ static immutable Law[] laws=[Law.real_nonzero_product,Law.real_nonzero_inverse,Law.real_nonzero_power,Law.complex_nonzero_product,Law.complex_nonzero_inverse,Law.complex_nonzero_power,Law.complex_nonzero_conj,Law.real_nonzero_abs,Law.real_nonzero_mask,Law.real_nonzero_nonnegative_add,Law.real_nonzero_nonpositive_add,Law.real_abs_ne,Law.real_ne_odd_power,Law.real_ne_even_power,Law.real_exp_ne,Law.real_exp_ne_one,Law.real_nonzero_exp,Law.real_log_ne,Law.real_log_ne_value,Law.real_nonzero_log,Law.real_sqrt_ne,Law.real_nonzero_sqrt,Law.real_power_base_ne,Law.real_power_exponent_ne,Law.real_noninteger_exponent_ne,Law.complex_power_exponent_ne,Law.complex_negative_exponent_ne,Law.complex_power_nonzero,Law.real_min_max_ne,Law.real_inverse_ne,Law.complex_inverse_ne,Law.complex_exp_nonzero,Law.complex_log_ne,Law.complex_log_nonzero,Law.complex_sqrt_ne,Law.complex_sqrt_nonzero,Law.complex_exp_strip_ne,Law.complex_norm_nonzero,Law.complex_conjugate_ne,Law.real_erf_ne,Law.real_sinh_ne,Law.real_asinh_ne,Law.real_tanh_ne,Law.real_atan_ne,Law.real_asin_ne,Law.real_cbrt_ne,Law.real_acosh_ne,Law.real_atanh_ne,Law.real_erfc_ne,Law.real_acos_ne,Law.real_cosh_nonzero,Law.real_power_ne_one,Law.real_power_ne_neg_one,Law.complex_real_power_ne_one,Law.complex_power_nonzero_cases]; return laws; }
+		case Op.nonzero:{ static immutable Law[] laws=[Law.real_nonzero_product,Law.real_nonzero_inverse,Law.real_nonzero_power,Law.complex_nonzero_product,Law.complex_nonzero_inverse,Law.complex_nonzero_power,Law.complex_nonzero_conj,Law.real_nonzero_abs,Law.real_nonzero_mask,Law.real_nonzero_nonnegative_add,Law.real_nonzero_nonpositive_add,Law.real_abs_ne,Law.real_ne_odd_power,Law.real_ne_even_power,Law.real_exp_ne,Law.real_exp_ne_one,Law.real_nonzero_exp,Law.real_log_ne,Law.real_log_ne_value,Law.real_nonzero_log,Law.real_sqrt_ne,Law.real_nonzero_sqrt,Law.real_power_base_ne,Law.real_power_exponent_ne,Law.real_noninteger_exponent_ne,Law.complex_power_exponent_ne,Law.complex_negative_exponent_ne,Law.complex_power_nonzero,Law.real_min_max_ne,Law.real_inverse_ne,Law.complex_inverse_ne,Law.complex_exp_nonzero,Law.complex_log_ne,Law.complex_log_nonzero,Law.complex_sqrt_ne,Law.complex_sqrt_nonzero,Law.complex_exp_strip_ne,Law.complex_norm_nonzero,Law.complex_conjugate_ne,Law.real_erf_ne,Law.real_sinh_ne,Law.real_asinh_ne,Law.real_tanh_ne,Law.real_atan_ne,Law.real_asin_ne,Law.real_cbrt_ne,Law.real_acosh_ne,Law.real_atanh_ne,Law.real_erfc_ne,Law.real_acos_ne,Law.real_cosh_nonzero,Law.real_power_ne_one,Law.real_power_ne_neg_one,Law.complex_real_power_ne_one,Law.complex_power_nonzero_cases,Law.indexed_RN_ne_one,Law.indexed_RN_ne_neg_one,Law.indexed_RZ_ne_one,Law.indexed_RZ_ne_neg_one,Law.indexed_CN_ne_one,Law.indexed_CZ_ne_one]; return laws; }
 		case Op.pow:{ static immutable Law[] laws=[Law.real_pow_zero,Law.real_pow_one,Law.complex_pow_zero,Law.complex_pow_one,Law.natural_pow_zero,Law.natural_pow_one,Law.integer_pow_zero,Law.integer_pow_one,Law.rational_pow_zero,Law.rational_pow_one,Law.real_exp_power,Law.complex_exp_power,Law.real_sqrt_squared,Law.complex_cast_power,Law.real_sqrt_power,Law.complex_sqrt_squared,Law.real_abs_even_power,Law.complex_phase_power,Law.real_cbrt_cube,Law.natural_pow_power,Law.integer_pow_power,Law.rational_pow_power,Law.rational_parity_square,Law.real_parity_square,Law.complex_parity_square]; return laws; }
-		case Op.not_:{ static immutable Law[] laws=[Law.bool_not_not,Law.bool_not_true,Law.bool_not_false,Law.bool_not_conjunction,Law.bool_not_disjunction,Law.real_not_lt,Law.real_not_le,Law.real_noninteger_power_unit,Law.real_minus_one_power_unit,Law.complex_minus_one_power_unit,Law.real_power_eq_one,Law.real_power_eq_neg_one,Law.complex_real_power_eq_one]; return laws; }
+		case Op.not_:{ static immutable Law[] laws=[Law.bool_not_not,Law.bool_not_true,Law.bool_not_false,Law.bool_not_conjunction,Law.bool_not_disjunction,Law.real_not_lt,Law.real_not_le,Law.real_noninteger_power_unit,Law.real_minus_one_power_unit,Law.complex_minus_one_power_unit,Law.real_power_eq_one,Law.real_power_eq_neg_one,Law.complex_real_power_eq_one,Law.indexed_ZN_eq_one,Law.indexed_ZN_eq_neg_one,Law.indexed_QN_eq_one,Law.indexed_QN_eq_neg_one,Law.indexed_RN_eq_one,Law.indexed_RN_eq_neg_one,Law.indexed_QZ_eq_one,Law.indexed_QZ_eq_neg_one,Law.indexed_RZ_eq_one,Law.indexed_RZ_eq_neg_one,Law.indexed_CN_eq_one,Law.indexed_CZ_eq_one]; return laws; }
 		case Op.and_:{ static immutable Law[] laws=[Law.bool_and_left_true,Law.bool_and_left_false,Law.bool_and_right_true,Law.bool_and_right_false,Law.bool_and_same,Law.bool_and_not,Law.bool_not_and,Law.bool_and_absorb,Law.bool_and_or,Law.bool_or_and,Law.real_interval_point,Law.real_interval_closed_point]; return laws; }
 		case Op.or_:{ static immutable Law[] laws=[Law.bool_or_left_true,Law.bool_or_left_false,Law.bool_or_right_true,Law.bool_or_right_false,Law.bool_or_same,Law.bool_or_not,Law.bool_not_or,Law.bool_or_absorb,Law.bool_or_prune_left,Law.bool_or_prune_right,Law.real_interval_puncture,Law.real_interval_open_puncture,Law.real_interval_cover,Law.real_upper_union]; return laws; }
 		case Op.lt:{ static immutable Law[] laws=[Law.real_lt_self,Law.real_lt_shift,Law.real_lt_right_shift,Law.real_lt_scale_pos,Law.real_lt_scale_neg,Law.real_positive_nonnegative_test,Law.real_lt_common,Law.real_lt_mul_pos_left,Law.real_lt_mul_neg_left,Law.real_lt_mul_pos_right,Law.real_lt_mul_neg_right,Law.real_pos_mul_pos_left,Law.real_pos_mul_neg_left,Law.real_pos_mul_pos_right,Law.real_pos_mul_neg_right,Law.real_odd_negative,Law.real_odd_positive,Law.real_even_lt_nonpositive,Law.real_negative_lt_even,Law.real_odd_mul_negative,Law.real_odd_mul_positive,Law.real_even_mul_negative,Law.real_even_mul_positive,Law.real_power_mul_swap_negative,Law.real_power_mul_swap_positive,Law.real_abs_lt,Law.real_lt_abs,Law.real_lt_odd_power,Law.real_lt_even_power,Law.real_lt_nonnegative_power,Law.real_exp_lt,Law.real_exp_lt_one,Law.real_one_lt_exp,Law.real_log_lt,Law.real_log_lt_zero,Law.real_log_pos,Law.real_sqrt_lt,Law.real_sqrt_lt_bound,Law.real_lt_sqrt_bound,Law.real_power_base_lt,Law.real_power_small_base_lt,Law.real_power_exponent_lt,Law.real_negative_exponent_lt,Law.real_noninteger_exponent_lt,Law.real_noninteger_negative_lt,Law.real_nonnegative_inverse_lt,Law.real_nonpositive_inverse_lt,Law.real_min_lt,Law.real_lt_min,Law.real_max_lt,Law.real_lt_max,Law.real_inverse_negative,Law.real_inverse_positive,Law.real_add_lt_cancel,Law.complex_norm_positive,Law.complex_norm_negative,Law.real_erf_lt,Law.real_sinh_lt,Law.real_asinh_lt,Law.real_tanh_lt,Law.real_atan_lt,Law.real_asin_lt,Law.real_cbrt_lt,Law.real_acosh_lt,Law.real_atanh_lt,Law.real_erfc_lt,Law.real_acos_lt,Law.real_cosh_positive,Law.real_tanh_upper_strict,Law.real_tanh_lower_strict]; return laws; }
 		case Op.le:{ static immutable Law[] laws=[Law.real_le_self,Law.real_le_shift,Law.real_le_right_shift,Law.real_le_scale_pos,Law.real_le_scale_neg,Law.real_nonpositive_nonnegative,Law.real_le_common,Law.real_le_mul_pos_left,Law.real_le_mul_neg_left,Law.real_le_mul_pos_right,Law.real_le_mul_neg_right,Law.real_nonneg_mul_pos_left,Law.real_nonneg_mul_neg_left,Law.real_nonneg_mul_pos_right,Law.real_nonneg_mul_neg_right,Law.real_odd_nonpositive,Law.real_odd_nonnegative,Law.real_even_le_negative,Law.real_nonpositive_le_even,Law.real_odd_mul_nonpositive,Law.real_odd_mul_nonnegative,Law.real_even_mul_nonpositive,Law.real_even_mul_nonnegative,Law.real_power_mul_swap_nonpositive,Law.real_power_mul_swap_nonnegative,Law.real_abs_le,Law.real_le_abs,Law.real_le_odd_power,Law.real_le_even_power,Law.real_le_nonnegative_power,Law.real_exp_le,Law.real_exp_le_one,Law.real_one_le_exp,Law.real_log_le,Law.real_log_le_zero,Law.real_log_nonneg,Law.real_sqrt_le,Law.real_sqrt_le_bound,Law.real_le_sqrt_bound,Law.real_power_base_le,Law.real_power_small_base_le,Law.real_power_exponent_le,Law.real_negative_exponent_le,Law.real_noninteger_exponent_le,Law.real_noninteger_negative_le,Law.real_nonnegative_inverse_le,Law.real_nonpositive_inverse_le,Law.real_min_le,Law.real_le_min,Law.real_max_le,Law.real_le_max,Law.real_inverse_nonnegative,Law.real_inverse_nonpositive,Law.real_add_le_cancel,Law.complex_norm_nonpositive,Law.real_erf_le,Law.real_sinh_le,Law.real_asinh_le,Law.real_tanh_le,Law.real_atan_le,Law.real_asin_le,Law.real_cbrt_le,Law.real_acosh_le,Law.real_atanh_le,Law.real_erfc_le,Law.real_acos_le,Law.real_cosh_lower]; return laws; }
-		case Op.builtin:{ static immutable Law[] laws=[Law.natural_add_zero,Law.natural_zero_add,Law.natural_mul_one,Law.natural_one_mul,Law.natural_mul_zero,Law.natural_zero_mul,Law.integer_add_zero,Law.integer_zero_add,Law.integer_mul_one,Law.integer_one_mul,Law.integer_mul_zero,Law.integer_zero_mul,Law.rational_add_zero,Law.rational_zero_add,Law.rational_mul_one,Law.rational_one_mul,Law.rational_mul_zero,Law.rational_zero_mul,Law.natural_nonnegative,Law.rational_inv_inv,Law.real_general_power,Law.complex_general_power,Law.expR_zero,Law.expC_zero,Law.sinR_zero,Law.sinC_zero,Law.cosR_zero,Law.cosC_zero,Law.tanR_zero,Law.tanC_zero,Law.sinhR_zero,Law.sinhC_zero,Law.coshR_zero,Law.coshC_zero,Law.tanhR_zero,Law.tanhC_zero,Law.sqrtR_zero,Law.sqrtC_zero,Law.cisR_zero,Law.logR_one,Law.logC_one,Law.exp_log_real,Law.log_exp_real,Law.exp_log_complex,Law.sqrt_square_real,Law.real_part_cartesian,Law.imag_part_cartesian,Law.bool_eq_true,Law.bool_eq_false,Law.real_exp_base,Law.complex_sqrt_real_nonnegative,Law.complex_sqrt_real_negative,Law.real_log_product,Law.real_log_product_right,Law.real_log_power,Law.real_log_square,Law.real_log_inverse,Law.real_log_sqrt,Law.real_log_odd_power,Law.real_half_power,Law.real_general_power_nested,Law.real_one_power,Law.complex_one_power,Law.real_zero_power,Law.real_min_left,Law.real_min_right,Law.real_max_left,Law.real_max_right,Law.real_sign_positive,Law.real_sign_negative,Law.real_sign_zero,Law.real_sin_neg,Law.real_cos_neg,Law.real_tan_neg,Law.complex_sin_neg,Law.complex_cos_neg,Law.real_sinh_neg,Law.real_cosh_neg,Law.real_tan_atan,Law.real_sin_asin,Law.real_cos_acos,Law.real_asin_sin,Law.real_acos_cos,Law.real_sin_pi,Law.real_cos_pi,Law.real_sin_half_pi,Law.real_cos_half_pi,Law.real_sin_three_half_pi,Law.real_cos_three_half_pi,Law.real_sin_sixth_pi,Law.real_cos_third_pi,Law.real_cos_quarter_pi,Law.real_sin_quarter_pi,Law.real_part_sum,Law.imaginary_part_sum,Law.real_part_product,Law.imaginary_part_product,Law.real_part_cast,Law.imaginary_part_cast,Law.rational_cast_product,Law.real_cast_product,Law.rational_cast_power,Law.real_cast_power,Law.complex_cast_sum,Law.complex_cast_product,Law.complex_reconstruction,Law.complex_norm_product,Law.complex_norm_conj,Law.complex_phase_norm,Law.complex_exp_phase,Law.complex_phase_pi,Law.complex_phase_half_pi,Law.real_floor_cast,Law.real_ceil_cast,Law.real_floor_neg,Law.real_ceil_neg,Law.real_floor_shift,Law.real_ceil_shift,Law.real_floor_lt,Law.real_floor_le,Law.real_lt_floor,Law.real_le_floor,Law.real_floor_ne,Law.real_ceil_lt,Law.real_ceil_le,Law.real_lt_ceil,Law.real_le_ceil,Law.real_ceil_ne,Law.real_round,Law.real_is_integer,Law.real_hypot,Law.complex_arg_real_power,Law.complex_log_real_power,Law.complex_arg_sqrt,Law.complex_log_sqrt,Law.complex_norm_sqrt,Law.complex_norm_real_power,Law.complex_norm_exp,Law.complex_norm_inverse,Law.complex_norm_power,Law.complex_norm_cast,Law.complex_log_real_part,Law.complex_log_imaginary_part,Law.complex_log_exp,Law.complex_log_positive_real,Law.complex_log_scale,Law.complex_log_scale_right,Law.complex_log_inverse,Law.complex_arg_exp,Law.complex_arg_phase,Law.real_sinh_asinh,Law.real_asinh_sinh,Law.real_cos_asin,Law.real_sin_acos,Law.complex_abs_cartesian,Law.real_cbrt_nonnegative,Law.real_cbrt_negative,Law.real_exp2,Law.real_power_negative,Law.complex_polar,Law.complex_expi,Law.real_atan2,Law.complex_arg_positive,Law.complex_arg_negative,Law.complex_arg_positive_imag,Law.complex_arg_negative_imag,Law.real_log_e,Law.real_asin_zero,Law.real_asin_one,Law.real_acos_zero,Law.real_acos_one,Law.real_acos_neg_one,Law.real_atan_zero,Law.real_atan_one,Law.real_asinh_zero,Law.real_acosh_one,Law.real_atanh_zero,Law.complex_asin_zero,Law.complex_acos_zero,Law.complex_atan_zero,Law.complex_asinh_zero,Law.complex_acosh_one,Law.complex_atanh_zero,Law.real_erf_zero,Law.real_erfc_zero,Law.real_gamma_one,Law.complex_gamma_one,Law.real_lgamma_one,Law.natural_indexed_power,Law.integer_indexed_power,Law.rational_indexed_power,Law.rational_indexed_integer_power,Law.real_indexed_power,Law.real_indexed_integer_power,Law.complex_indexed_power,Law.complex_indexed_integer_power,Law.real_min_absorb,Law.real_max_absorb,Law.real_log_even_power,Law.real_exp_log_scale,Law.real_exp_log_scale_right,Law.real_exp_log_sum,Law.real_exp_log_sum_right,Law.real_exp_log_affine,Law.real_exp_log_affine_left,Law.real_tanh_neg,Law.complex_tan_neg,Law.complex_sinh_neg,Law.complex_cosh_neg,Law.complex_tanh_neg,Law.complex_exp_log_scale,Law.complex_exp_log_scale_right,Law.complex_exp_log_sum,Law.complex_exp_log_sum_right,Law.complex_exp_log_affine,Law.complex_exp_log_affine_left,Law.complex_norm_cartesian,Law.complex_norm_mask,Law.conjugate_real_part,Law.conjugate_imaginary_part,Law.complex_square_real_part,Law.complex_square_imaginary_part,Law.complex_sin_imaginary,Law.complex_cos_imaginary,Law.complex_tan_imaginary,Law.complex_sinh_imaginary,Law.complex_cosh_imaginary,Law.complex_tanh_imaginary,Law.complex_sin_real,Law.complex_cos_real,Law.complex_tan_real,Law.complex_sinh_real,Law.complex_cosh_real,Law.complex_tanh_real,Law.real_e,Law.real_exp_general_power,Law.real_sqrt_exp,Law.real_exp_nat_power,Law.real_exp_int_power,Law.complex_exp_nat_power,Law.complex_exp_int_power,Law.complex_real_exp_nat_power,Law.complex_real_exp_int_power,Law.complex_exp_real,Law.complex_real_exp_power,Law.complex_exp_general_power,Law.complex_sqrt_exp,Law.complex_phase_nat_power,Law.complex_phase_int_power,Law.complex_phase_general_power,Law.complex_phase_real_part,Law.complex_phase_imaginary_part,Law.complex_exp_real_part,Law.complex_exp_imaginary_part,Law.complex_half_power_nonnegative,Law.complex_half_power_negative,Law.real_sin_third_pi,Law.real_cos_sixth_pi,Law.real_sin_atan,Law.real_cos_atan,Law.real_cosh_asinh,Law.complex_sin_real_part,Law.complex_sin_imaginary_part,Law.complex_cos_real_part,Law.complex_cos_imaginary_part,Law.complex_sinh_real_part,Law.complex_sinh_imaginary_part,Law.complex_cosh_real_part,Law.complex_cosh_imaginary_part,Law.real_sqrt_even_power,Law.real_sqrt_even_factor,Law.real_cbrt_power,Law.real_cbrt_neg,Law.real_cosh_acosh,Law.real_sinh_acosh,Law.real_acosh_cosh,Law.real_tanh_atanh,Law.real_atanh_tanh,Law.complex_sin_asin,Law.complex_cos_acos,Law.complex_tan_atan,Law.complex_sinh_asinh,Law.complex_cosh_acosh,Law.complex_tanh_atanh,Law.complex_cos_asin,Law.complex_sin_acos,Law.complex_cosh_asinh,Law.complex_sinh_acosh,Law.natural_double,Law.natural_collect,Law.natural_collect_left,Law.natural_collect_right,Law.natural_mul_literals,Law.natural_square,Law.natural_pow_join,Law.natural_pow_join_left,Law.natural_pow_join_right,Law.natural_nonzero_product,Law.natural_nonzero_power,Law.natural_lt_self,Law.natural_le_self,Law.natural_lt_common,Law.natural_le_common,Law.integer_double,Law.integer_collect,Law.integer_collect_left,Law.integer_collect_right,Law.integer_mul_literals,Law.integer_square,Law.integer_pow_join,Law.integer_pow_join_left,Law.integer_pow_join_right,Law.integer_nonzero_product,Law.integer_nonzero_power,Law.integer_lt_self,Law.integer_le_self,Law.integer_lt_common,Law.integer_le_common,Law.rational_double,Law.rational_collect,Law.rational_collect_left,Law.rational_collect_right,Law.rational_mul_literals,Law.rational_square,Law.rational_pow_join,Law.rational_pow_join_left,Law.rational_pow_join_right,Law.rational_nonzero_product,Law.rational_nonzero_power,Law.rational_lt_self,Law.rational_le_self,Law.rational_lt_common,Law.rational_le_common,Law.rational_div_self,Law.rational_inv_mul_self,Law.rational_nonzero_inverse,Law.rational_cancel_factor,Law.rational_cancel_right_factor,Law.complex_sin_half_turn,Law.complex_cos_half_turn,Law.complex_tan_half_turn,Law.complex_sin_quarter_turn,Law.complex_cos_quarter_turn,Law.natural_indexed_one,Law.integer_indexed_one,Law.rational_indexed_one,Law.real_indexed_one,Law.complex_indexed_one,Law.rational_indexed_integer_one,Law.rational_parity_even,Law.rational_parity_odd,Law.rational_parity_neg,Law.rational_parity_inverse,Law.real_indexed_integer_one,Law.real_parity_even,Law.real_parity_odd,Law.real_parity_neg,Law.complex_indexed_integer_one,Law.complex_parity_even,Law.complex_parity_odd,Law.complex_parity_neg,Law.real_integer_sin,Law.real_integer_cos,Law.real_integer_phase,Law.rational_parity_literal_product,Law.rational_parity_literal_product_left,Law.real_parity_literal_product,Law.real_parity_literal_product_left,Law.complex_parity_literal_product,Law.complex_parity_literal_product_left,Law.integer_add_cancel_last,Law.integer_add_cancel_first,Law.integer_sub_add_cancel,Law.integer_add_sub_cancel,Law.rational_add_cancel_last,Law.rational_add_cancel_first,Law.rational_sub_add_cancel,Law.rational_add_sub_cancel,Law.rational_cancel_nested_left,Law.rational_cancel_nested_right,Law.rational_cancel_inverse_nested,Law.rational_cancel_inverse_nested_right,Law.natural_mask_partition,Law.natural_mask_partition_right,Law.natural_mask_or_partition,Law.natural_mask_or_partition_right,Law.natural_mask_union_overlap,Law.natural_mask_add,Law.natural_mask_complement,Law.integer_mask_partition,Law.integer_mask_partition_right,Law.integer_mask_or_partition,Law.integer_mask_or_partition_right,Law.integer_mask_union_overlap,Law.integer_mask_add,Law.integer_mask_complement,Law.rational_mask_partition,Law.rational_mask_partition_right,Law.rational_mask_or_partition,Law.rational_mask_or_partition_right,Law.rational_mask_union_overlap,Law.rational_mask_add,Law.rational_mask_complement,Law.natural_mask_partition_not,Law.natural_mask_partition_not_right,Law.integer_mask_partition_not,Law.integer_mask_partition_not_right,Law.rational_mask_partition_not,Law.rational_mask_partition_not_right,Law.complex_nonnegative_power,Law.natural_mask_mul_left,Law.natural_mask_mul_right,Law.integer_mask_mul_left,Law.integer_mask_mul_right,Law.rational_mask_mul_left,Law.rational_mask_mul_right]; return laws; }
+		case Op.builtin:{ static immutable Law[] laws=[Law.natural_add_zero,Law.natural_zero_add,Law.natural_mul_one,Law.natural_one_mul,Law.natural_mul_zero,Law.natural_zero_mul,Law.integer_add_zero,Law.integer_zero_add,Law.integer_mul_one,Law.integer_one_mul,Law.integer_mul_zero,Law.integer_zero_mul,Law.rational_add_zero,Law.rational_zero_add,Law.rational_mul_one,Law.rational_one_mul,Law.rational_mul_zero,Law.rational_zero_mul,Law.natural_nonnegative,Law.rational_inv_inv,Law.real_general_power,Law.complex_general_power,Law.expR_zero,Law.expC_zero,Law.sinR_zero,Law.sinC_zero,Law.cosR_zero,Law.cosC_zero,Law.tanR_zero,Law.tanC_zero,Law.sinhR_zero,Law.sinhC_zero,Law.coshR_zero,Law.coshC_zero,Law.tanhR_zero,Law.tanhC_zero,Law.sqrtR_zero,Law.sqrtC_zero,Law.cisR_zero,Law.logR_one,Law.logC_one,Law.exp_log_real,Law.log_exp_real,Law.exp_log_complex,Law.sqrt_square_real,Law.real_part_cartesian,Law.imag_part_cartesian,Law.bool_eq_true,Law.bool_eq_false,Law.real_exp_base,Law.complex_sqrt_real_nonnegative,Law.complex_sqrt_real_negative,Law.real_log_product,Law.real_log_product_right,Law.real_log_power,Law.real_log_square,Law.real_log_inverse,Law.real_log_sqrt,Law.real_log_odd_power,Law.real_half_power,Law.real_general_power_nested,Law.real_one_power,Law.complex_one_power,Law.real_zero_power,Law.real_min_left,Law.real_min_right,Law.real_max_left,Law.real_max_right,Law.real_sign_positive,Law.real_sign_negative,Law.real_sign_zero,Law.real_sin_neg,Law.real_cos_neg,Law.real_tan_neg,Law.complex_sin_neg,Law.complex_cos_neg,Law.real_sinh_neg,Law.real_cosh_neg,Law.real_tan_atan,Law.real_sin_asin,Law.real_cos_acos,Law.real_asin_sin,Law.real_acos_cos,Law.real_sin_pi,Law.real_cos_pi,Law.real_sin_half_pi,Law.real_cos_half_pi,Law.real_sin_three_half_pi,Law.real_cos_three_half_pi,Law.real_sin_sixth_pi,Law.real_cos_third_pi,Law.real_cos_quarter_pi,Law.real_sin_quarter_pi,Law.real_part_sum,Law.imaginary_part_sum,Law.real_part_product,Law.imaginary_part_product,Law.real_part_cast,Law.imaginary_part_cast,Law.rational_cast_product,Law.real_cast_product,Law.rational_cast_power,Law.real_cast_power,Law.complex_cast_sum,Law.complex_cast_product,Law.complex_reconstruction,Law.complex_norm_product,Law.complex_norm_conj,Law.complex_phase_norm,Law.complex_exp_phase,Law.complex_phase_pi,Law.complex_phase_half_pi,Law.real_floor_cast,Law.real_ceil_cast,Law.real_floor_neg,Law.real_ceil_neg,Law.real_floor_shift,Law.real_ceil_shift,Law.real_floor_lt,Law.real_floor_le,Law.real_lt_floor,Law.real_le_floor,Law.real_floor_ne,Law.real_ceil_lt,Law.real_ceil_le,Law.real_lt_ceil,Law.real_le_ceil,Law.real_ceil_ne,Law.real_round,Law.rational_is_integer,Law.rational_denominator_integer,Law.real_is_integer,Law.real_hypot,Law.complex_arg_real_power,Law.complex_log_real_power,Law.complex_arg_sqrt,Law.complex_log_sqrt,Law.complex_norm_sqrt,Law.complex_norm_real_power,Law.complex_norm_exp,Law.complex_norm_inverse,Law.complex_norm_power,Law.complex_norm_cast,Law.complex_log_real_part,Law.complex_log_imaginary_part,Law.complex_log_exp,Law.complex_log_positive_real,Law.complex_log_scale,Law.complex_log_scale_right,Law.complex_log_inverse,Law.complex_arg_exp,Law.complex_arg_phase,Law.real_sinh_asinh,Law.real_asinh_sinh,Law.real_cos_asin,Law.real_sin_acos,Law.complex_abs_cartesian,Law.real_cbrt_nonnegative,Law.real_cbrt_negative,Law.real_exp2,Law.real_power_negative,Law.complex_polar,Law.complex_expi,Law.real_atan2,Law.complex_arg_positive,Law.complex_arg_negative,Law.complex_arg_positive_imag,Law.complex_arg_negative_imag,Law.real_log_e,Law.real_asin_zero,Law.real_asin_one,Law.real_acos_zero,Law.real_acos_one,Law.real_acos_neg_one,Law.real_atan_zero,Law.real_atan_one,Law.real_asinh_zero,Law.real_acosh_one,Law.real_atanh_zero,Law.complex_asin_zero,Law.complex_acos_zero,Law.complex_atan_zero,Law.complex_asinh_zero,Law.complex_acosh_one,Law.complex_atanh_zero,Law.real_erf_zero,Law.real_erfc_zero,Law.real_gamma_one,Law.complex_gamma_one,Law.real_lgamma_one,Law.natural_indexed_power,Law.integer_indexed_power,Law.rational_indexed_power,Law.rational_indexed_integer_power,Law.real_indexed_power,Law.real_indexed_integer_power,Law.complex_indexed_power,Law.complex_indexed_integer_power,Law.real_min_absorb,Law.real_max_absorb,Law.real_log_even_power,Law.real_exp_log_scale,Law.real_exp_log_scale_right,Law.real_exp_log_sum,Law.real_exp_log_sum_right,Law.real_exp_log_affine,Law.real_exp_log_affine_left,Law.real_tanh_neg,Law.complex_tan_neg,Law.complex_sinh_neg,Law.complex_cosh_neg,Law.complex_tanh_neg,Law.complex_exp_log_scale,Law.complex_exp_log_scale_right,Law.complex_exp_log_sum,Law.complex_exp_log_sum_right,Law.complex_exp_log_affine,Law.complex_exp_log_affine_left,Law.complex_norm_cartesian,Law.complex_norm_mask,Law.conjugate_real_part,Law.conjugate_imaginary_part,Law.complex_square_real_part,Law.complex_square_imaginary_part,Law.complex_sin_imaginary,Law.complex_cos_imaginary,Law.complex_tan_imaginary,Law.complex_sinh_imaginary,Law.complex_cosh_imaginary,Law.complex_tanh_imaginary,Law.complex_sin_real,Law.complex_cos_real,Law.complex_tan_real,Law.complex_sinh_real,Law.complex_cosh_real,Law.complex_tanh_real,Law.real_e,Law.real_exp_general_power,Law.real_sqrt_exp,Law.real_exp_nat_power,Law.real_exp_int_power,Law.complex_exp_nat_power,Law.complex_exp_int_power,Law.complex_real_exp_nat_power,Law.complex_real_exp_int_power,Law.complex_exp_real,Law.complex_real_exp_power,Law.complex_exp_general_power,Law.complex_sqrt_exp,Law.complex_phase_nat_power,Law.complex_phase_int_power,Law.complex_phase_general_power,Law.complex_phase_real_part,Law.complex_phase_imaginary_part,Law.complex_exp_real_part,Law.complex_exp_imaginary_part,Law.complex_half_power_nonnegative,Law.complex_half_power_negative,Law.real_sin_third_pi,Law.real_cos_sixth_pi,Law.real_sin_atan,Law.real_cos_atan,Law.real_cosh_asinh,Law.complex_sin_real_part,Law.complex_sin_imaginary_part,Law.complex_cos_real_part,Law.complex_cos_imaginary_part,Law.complex_sinh_real_part,Law.complex_sinh_imaginary_part,Law.complex_cosh_real_part,Law.complex_cosh_imaginary_part,Law.real_sqrt_even_power,Law.real_sqrt_even_factor,Law.real_cbrt_power,Law.real_cbrt_neg,Law.real_cosh_acosh,Law.real_sinh_acosh,Law.real_acosh_cosh,Law.real_tanh_atanh,Law.real_atanh_tanh,Law.complex_sin_asin,Law.complex_cos_acos,Law.complex_tan_atan,Law.complex_sinh_asinh,Law.complex_cosh_acosh,Law.complex_tanh_atanh,Law.complex_cos_asin,Law.complex_sin_acos,Law.complex_cosh_asinh,Law.complex_sinh_acosh,Law.natural_double,Law.natural_collect,Law.natural_collect_left,Law.natural_collect_right,Law.natural_mul_literals,Law.natural_square,Law.natural_pow_join,Law.natural_pow_join_left,Law.natural_pow_join_right,Law.natural_nonzero_product,Law.natural_nonzero_power,Law.natural_lt_self,Law.natural_le_self,Law.natural_lt_common,Law.natural_le_common,Law.integer_double,Law.integer_collect,Law.integer_collect_left,Law.integer_collect_right,Law.integer_mul_literals,Law.integer_square,Law.integer_pow_join,Law.integer_pow_join_left,Law.integer_pow_join_right,Law.integer_nonzero_product,Law.integer_nonzero_power,Law.integer_lt_self,Law.integer_le_self,Law.integer_lt_common,Law.integer_le_common,Law.rational_double,Law.rational_collect,Law.rational_collect_left,Law.rational_collect_right,Law.rational_mul_literals,Law.rational_square,Law.rational_pow_join,Law.rational_pow_join_left,Law.rational_pow_join_right,Law.rational_nonzero_product,Law.rational_nonzero_power,Law.rational_lt_self,Law.rational_le_self,Law.rational_lt_common,Law.rational_le_common,Law.rational_div_self,Law.rational_inv_mul_self,Law.rational_nonzero_inverse,Law.rational_cancel_factor,Law.rational_cancel_right_factor,Law.complex_sin_half_turn,Law.complex_cos_half_turn,Law.complex_tan_half_turn,Law.complex_sin_quarter_turn,Law.complex_cos_quarter_turn,Law.natural_indexed_one,Law.integer_indexed_one,Law.rational_indexed_one,Law.real_indexed_one,Law.complex_indexed_one,Law.rational_indexed_integer_one,Law.rational_parity_even,Law.rational_parity_odd,Law.rational_parity_neg,Law.rational_parity_inverse,Law.real_indexed_integer_one,Law.real_parity_even,Law.real_parity_odd,Law.real_parity_neg,Law.complex_indexed_integer_one,Law.complex_parity_even,Law.complex_parity_odd,Law.complex_parity_neg,Law.real_integer_sin,Law.real_integer_cos,Law.real_integer_phase,Law.rational_parity_literal_product,Law.rational_parity_literal_product_left,Law.real_parity_literal_product,Law.real_parity_literal_product_left,Law.complex_parity_literal_product,Law.complex_parity_literal_product_left,Law.integer_add_cancel_last,Law.integer_add_cancel_first,Law.integer_sub_add_cancel,Law.integer_add_sub_cancel,Law.rational_add_cancel_last,Law.rational_add_cancel_first,Law.rational_sub_add_cancel,Law.rational_add_sub_cancel,Law.rational_cancel_nested_left,Law.rational_cancel_nested_right,Law.rational_cancel_inverse_nested,Law.rational_cancel_inverse_nested_right,Law.natural_mask_partition,Law.natural_mask_partition_right,Law.natural_mask_or_partition,Law.natural_mask_or_partition_right,Law.natural_mask_union_overlap,Law.natural_mask_add,Law.natural_mask_complement,Law.integer_mask_partition,Law.integer_mask_partition_right,Law.integer_mask_or_partition,Law.integer_mask_or_partition_right,Law.integer_mask_union_overlap,Law.integer_mask_add,Law.integer_mask_complement,Law.rational_mask_partition,Law.rational_mask_partition_right,Law.rational_mask_or_partition,Law.rational_mask_or_partition_right,Law.rational_mask_union_overlap,Law.rational_mask_add,Law.rational_mask_complement,Law.natural_mask_partition_not,Law.natural_mask_partition_not_right,Law.integer_mask_partition_not,Law.integer_mask_partition_not_right,Law.rational_mask_partition_not,Law.rational_mask_partition_not_right,Law.complex_nonnegative_power,Law.natural_mask_mul_left,Law.natural_mask_mul_right,Law.integer_mask_mul_left,Law.integer_mask_mul_right,Law.rational_mask_mul_left,Law.rational_mask_mul_right,Law.indexed_ZN_ne_one,Law.indexed_ZN_ne_neg_one,Law.indexed_QN_ne_one,Law.indexed_QN_ne_neg_one,Law.indexed_QZ_ne_one,Law.indexed_QZ_ne_neg_one,Law.natural_literal_coefficient,Law.natural_literal_constant,Law.integer_literal_coefficient,Law.integer_literal_constant,Law.rational_literal_coefficient,Law.rational_literal_constant]; return laws; }
 		default:return null;
 	}
 }
@@ -30394,10 +32265,10 @@ const(Law)[] earlyRewrites(Node n){
 		case (cast(uint)Op.inv|(cast(uint)Sort.real_<<8)):{ static immutable Law[] laws=[Law.real_inv_inv,Law.real_exp_inverse,Law.real_parity_inverse]; return laws; }
 		case (cast(uint)Op.inv|(cast(uint)Sort.complex<<8)):{ static immutable Law[] laws=[Law.complex_inv_inv,Law.complex_exp_inverse,Law.complex_real_exp_inverse,Law.complex_phase_inverse,Law.complex_parity_inverse]; return laws; }
 		case (cast(uint)Op.abs|(cast(uint)Sort.real_<<8)):{ static immutable Law[] laws=[Law.real_abs_abs,Law.real_abs_inverse,Law.real_abs_power,Law.real_cosh_abs]; return laws; }
-		case (cast(uint)Op.nonzero|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_nonzero_product,Law.real_nonzero_inverse,Law.real_nonzero_power,Law.complex_nonzero_product,Law.complex_nonzero_inverse,Law.complex_nonzero_power,Law.complex_nonzero_conj,Law.real_nonzero_abs,Law.real_nonzero_mask,Law.real_abs_ne,Law.real_ne_odd_power,Law.real_ne_even_power,Law.real_exp_ne,Law.real_exp_ne_one,Law.real_nonzero_exp,Law.real_log_ne,Law.real_log_ne_value,Law.real_nonzero_log,Law.real_sqrt_ne,Law.real_nonzero_sqrt,Law.real_power_base_ne,Law.real_power_exponent_ne,Law.real_noninteger_exponent_ne,Law.complex_power_exponent_ne,Law.complex_negative_exponent_ne,Law.complex_power_nonzero,Law.real_min_max_ne,Law.real_inverse_ne,Law.complex_inverse_ne,Law.complex_exp_nonzero,Law.complex_log_ne,Law.complex_log_nonzero,Law.complex_sqrt_ne,Law.complex_sqrt_nonzero,Law.complex_exp_strip_ne,Law.complex_norm_nonzero,Law.complex_conjugate_ne,Law.real_erf_ne,Law.real_sinh_ne,Law.real_asinh_ne,Law.real_tanh_ne,Law.real_atan_ne,Law.real_asin_ne,Law.real_cbrt_ne,Law.real_acosh_ne,Law.real_atanh_ne,Law.real_erfc_ne,Law.real_acos_ne,Law.real_cosh_nonzero,Law.real_power_ne_one,Law.real_power_ne_neg_one,Law.complex_real_power_ne_one,Law.complex_power_nonzero_cases]; return laws; }
+		case (cast(uint)Op.nonzero|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_nonzero_product,Law.real_nonzero_inverse,Law.real_nonzero_power,Law.complex_nonzero_product,Law.complex_nonzero_inverse,Law.complex_nonzero_power,Law.complex_nonzero_conj,Law.real_nonzero_abs,Law.real_nonzero_mask,Law.real_abs_ne,Law.real_ne_odd_power,Law.real_ne_even_power,Law.real_exp_ne,Law.real_exp_ne_one,Law.real_nonzero_exp,Law.real_log_ne,Law.real_log_ne_value,Law.real_nonzero_log,Law.real_sqrt_ne,Law.real_nonzero_sqrt,Law.real_power_base_ne,Law.real_power_exponent_ne,Law.real_noninteger_exponent_ne,Law.complex_power_exponent_ne,Law.complex_negative_exponent_ne,Law.complex_power_nonzero,Law.real_min_max_ne,Law.real_inverse_ne,Law.complex_inverse_ne,Law.complex_exp_nonzero,Law.complex_log_ne,Law.complex_log_nonzero,Law.complex_sqrt_ne,Law.complex_sqrt_nonzero,Law.complex_exp_strip_ne,Law.complex_norm_nonzero,Law.complex_conjugate_ne,Law.real_erf_ne,Law.real_sinh_ne,Law.real_asinh_ne,Law.real_tanh_ne,Law.real_atan_ne,Law.real_asin_ne,Law.real_cbrt_ne,Law.real_acosh_ne,Law.real_atanh_ne,Law.real_erfc_ne,Law.real_acos_ne,Law.real_cosh_nonzero,Law.real_power_ne_one,Law.real_power_ne_neg_one,Law.complex_real_power_ne_one,Law.complex_power_nonzero_cases,Law.indexed_RN_ne_one,Law.indexed_RN_ne_neg_one,Law.indexed_RZ_ne_one,Law.indexed_RZ_ne_neg_one,Law.indexed_CN_ne_one,Law.indexed_CZ_ne_one]; return laws; }
 		case (cast(uint)Op.pow|(cast(uint)Sort.real_<<8)):{ static immutable Law[] laws=[Law.real_pow_zero,Law.real_pow_one,Law.real_exp_power,Law.real_sqrt_squared,Law.real_sqrt_power,Law.real_abs_even_power,Law.real_cbrt_cube,Law.real_parity_square]; return laws; }
 		case (cast(uint)Op.pow|(cast(uint)Sort.complex<<8)):{ static immutable Law[] laws=[Law.complex_pow_zero,Law.complex_pow_one,Law.complex_exp_power,Law.complex_cast_power,Law.complex_sqrt_squared,Law.complex_phase_power,Law.complex_parity_square]; return laws; }
-		case (cast(uint)Op.not_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.bool_not_true,Law.bool_not_false,Law.real_noninteger_power_unit,Law.real_minus_one_power_unit,Law.complex_minus_one_power_unit,Law.real_power_eq_one,Law.real_power_eq_neg_one,Law.complex_real_power_eq_one]; return laws; }
+		case (cast(uint)Op.not_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.bool_not_true,Law.bool_not_false,Law.real_noninteger_power_unit,Law.real_minus_one_power_unit,Law.complex_minus_one_power_unit,Law.real_power_eq_one,Law.real_power_eq_neg_one,Law.complex_real_power_eq_one,Law.indexed_ZN_eq_one,Law.indexed_ZN_eq_neg_one,Law.indexed_QN_eq_one,Law.indexed_QN_eq_neg_one,Law.indexed_RN_eq_one,Law.indexed_RN_eq_neg_one,Law.indexed_QZ_eq_one,Law.indexed_QZ_eq_neg_one,Law.indexed_RZ_eq_one,Law.indexed_RZ_eq_neg_one,Law.indexed_CN_eq_one,Law.indexed_CZ_eq_one]; return laws; }
 		case (cast(uint)Op.and_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.bool_and_left_true,Law.bool_and_left_false,Law.bool_and_right_true,Law.bool_and_right_false]; return laws; }
 		case (cast(uint)Op.or_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.bool_or_left_true,Law.bool_or_left_false,Law.bool_or_right_true,Law.bool_or_right_false]; return laws; }
 		case (cast(uint)Op.lt|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_lt_self,Law.real_lt_common,Law.real_odd_negative,Law.real_odd_positive,Law.real_odd_mul_negative,Law.real_odd_mul_positive,Law.real_even_mul_negative,Law.real_even_mul_positive,Law.real_power_mul_swap_negative,Law.real_power_mul_swap_positive,Law.real_abs_lt,Law.real_lt_abs,Law.real_lt_odd_power,Law.real_lt_even_power,Law.real_exp_lt,Law.real_exp_lt_one,Law.real_one_lt_exp,Law.real_log_lt,Law.real_log_lt_zero,Law.real_log_pos,Law.real_sqrt_lt,Law.real_sqrt_lt_bound,Law.real_lt_sqrt_bound,Law.real_power_base_lt,Law.real_power_small_base_lt,Law.real_power_exponent_lt,Law.real_negative_exponent_lt,Law.real_noninteger_exponent_lt,Law.real_noninteger_negative_lt,Law.real_nonnegative_inverse_lt,Law.real_nonpositive_inverse_lt,Law.real_min_lt,Law.real_lt_min,Law.real_max_lt,Law.real_lt_max,Law.real_inverse_negative,Law.real_inverse_positive,Law.real_add_lt_cancel,Law.complex_norm_positive,Law.complex_norm_negative,Law.real_erf_lt,Law.real_sinh_lt,Law.real_asinh_lt,Law.real_tanh_lt,Law.real_atan_lt,Law.real_asin_lt,Law.real_cbrt_lt,Law.real_acosh_lt,Law.real_atanh_lt,Law.real_erfc_lt,Law.real_acos_lt,Law.real_cosh_positive,Law.real_tanh_upper_strict,Law.real_tanh_lower_strict]; return laws; }
@@ -30450,8 +32321,9 @@ const(Law)[] earlyRewrites(Node n){
 		case (cast(uint)Op.builtin|(cast(uint)Sort.integer<<8)|(cast(uint)Builtin.ceilR<<16)):{ static immutable Law[] laws=[Law.real_ceil_cast,Law.real_ceil_shift]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.ltZ<<16)):{ static immutable Law[] laws=[Law.real_floor_lt,Law.real_lt_floor,Law.real_ceil_lt,Law.real_lt_ceil,Law.integer_lt_self,Law.integer_lt_common]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.leZ<<16)):{ static immutable Law[] laws=[Law.real_floor_le,Law.real_le_floor,Law.real_ceil_le,Law.real_le_ceil,Law.integer_le_self,Law.integer_le_common]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroZ<<16)):{ static immutable Law[] laws=[Law.real_floor_ne,Law.real_ceil_ne,Law.natural_nonzero_product,Law.natural_nonzero_power,Law.integer_nonzero_product,Law.integer_nonzero_power]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.isIntR<<16)):{ static immutable Law[] laws=[Law.real_is_integer]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroZ<<16)):{ static immutable Law[] laws=[Law.real_floor_ne,Law.real_ceil_ne,Law.natural_nonzero_product,Law.natural_nonzero_power,Law.integer_nonzero_product,Law.integer_nonzero_power,Law.indexed_ZN_ne_one,Law.indexed_ZN_ne_neg_one]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.isIntR<<16)):{ static immutable Law[] laws=[Law.rational_is_integer]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.natural<<8)|(cast(uint)Builtin.denQ<<16)):{ static immutable Law[] laws=[Law.rational_denominator_integer]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.argC<<16)):{ static immutable Law[] laws=[Law.complex_arg_real_power,Law.complex_arg_sqrt,Law.complex_arg_exp,Law.complex_arg_phase]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.asinhR<<16)):{ static immutable Law[] laws=[Law.real_asinh_sinh,Law.real_asinh_zero]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.atanR<<16)):{ static immutable Law[] laws=[Law.real_atan_zero,Law.real_atan_one]; return laws; }
@@ -30480,7 +32352,7 @@ const(Law)[] earlyRewrites(Node n){
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.maxR<<16)):{ static immutable Law[] laws=[Law.real_max_absorb]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.real_<<8)|(cast(uint)Builtin.cbrtR<<16)):{ static immutable Law[] laws=[Law.real_cbrt_power]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.ltN<<16)):{ static immutable Law[] laws=[Law.natural_lt_self,Law.natural_lt_common]; return laws; }
-		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroQ<<16)):{ static immutable Law[] laws=[Law.rational_nonzero_product,Law.rational_nonzero_power,Law.rational_nonzero_inverse]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroQ<<16)):{ static immutable Law[] laws=[Law.rational_nonzero_product,Law.rational_nonzero_power,Law.rational_nonzero_inverse,Law.indexed_QN_ne_one,Law.indexed_QN_ne_neg_one,Law.indexed_QZ_ne_one,Law.indexed_QZ_ne_neg_one]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.ltQ<<16)):{ static immutable Law[] laws=[Law.rational_lt_self,Law.rational_lt_common]; return laws; }
 		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.leQ<<16)):{ static immutable Law[] laws=[Law.rational_le_self,Law.rational_le_common]; return laws; }
 		default:return null;
@@ -31897,6 +33769,8 @@ size_t conditionCount(Law law){
 		case Law.real_floor_bound:return 0;
 		case Law.real_ceil_bound:return 0;
 		case Law.real_round:return 0;
+		case Law.rational_is_integer:return 0;
+		case Law.rational_denominator_integer:return 0;
 		case Law.real_is_integer:return 0;
 		case Law.real_hypot:return 0;
 		case Law.complex_arg_real_power:return 3;
@@ -32426,6 +34300,64 @@ size_t conditionCount(Law law){
 		case Law.integer_mask_mul_right:return 0;
 		case Law.rational_mask_mul_left:return 0;
 		case Law.rational_mask_mul_right:return 0;
+		case Law.embed_NZ_add:return 0;
+		case Law.embed_NZ_mul:return 0;
+		case Law.embed_NZ_pow:return 0;
+		case Law.embed_NZ_mask:return 0;
+		case Law.embed_NZ_nonzero:return 0;
+		case Law.embed_NZ_lt:return 0;
+		case Law.embed_NZ_le:return 0;
+		case Law.embed_ZQ_add:return 0;
+		case Law.embed_ZQ_mul:return 0;
+		case Law.embed_ZQ_pow:return 0;
+		case Law.embed_ZQ_mask:return 0;
+		case Law.embed_ZQ_nonzero:return 0;
+		case Law.embed_ZQ_lt:return 0;
+		case Law.embed_ZQ_le:return 0;
+		case Law.embed_QR_add:return 0;
+		case Law.embed_QR_mul:return 0;
+		case Law.embed_QR_pow:return 0;
+		case Law.embed_QR_mask:return 0;
+		case Law.embed_QR_nonzero:return 0;
+		case Law.embed_QR_lt:return 0;
+		case Law.embed_QR_le:return 0;
+		case Law.embed_QR_inv:return 0;
+		case Law.embed_RC_add:return 0;
+		case Law.embed_RC_mul:return 0;
+		case Law.embed_RC_pow:return 0;
+		case Law.embed_RC_mask:return 0;
+		case Law.embed_RC_nonzero:return 0;
+		case Law.embed_RC_inv:return 0;
+		case Law.indexed_ZN_eq_one:return 0;
+		case Law.indexed_ZN_ne_one:return 0;
+		case Law.indexed_ZN_eq_neg_one:return 0;
+		case Law.indexed_ZN_ne_neg_one:return 0;
+		case Law.indexed_QN_eq_one:return 0;
+		case Law.indexed_QN_ne_one:return 0;
+		case Law.indexed_QN_eq_neg_one:return 0;
+		case Law.indexed_QN_ne_neg_one:return 0;
+		case Law.indexed_RN_eq_one:return 0;
+		case Law.indexed_RN_ne_one:return 0;
+		case Law.indexed_RN_eq_neg_one:return 0;
+		case Law.indexed_RN_ne_neg_one:return 0;
+		case Law.indexed_QZ_eq_one:return 0;
+		case Law.indexed_QZ_ne_one:return 0;
+		case Law.indexed_QZ_eq_neg_one:return 0;
+		case Law.indexed_QZ_ne_neg_one:return 0;
+		case Law.indexed_RZ_eq_one:return 0;
+		case Law.indexed_RZ_ne_one:return 0;
+		case Law.indexed_RZ_eq_neg_one:return 0;
+		case Law.indexed_RZ_ne_neg_one:return 0;
+		case Law.indexed_CN_eq_one:return 1;
+		case Law.indexed_CN_ne_one:return 1;
+		case Law.indexed_CZ_eq_one:return 1;
+		case Law.indexed_CZ_ne_one:return 1;
+		case Law.natural_literal_coefficient:return 1;
+		case Law.natural_literal_constant:return 1;
+		case Law.integer_literal_coefficient:return 1;
+		case Law.integer_literal_constant:return 1;
+		case Law.rational_literal_coefficient:return 1;
+		case Law.rational_literal_constant:return 1;
 		default:assert(0);
 	}
 }

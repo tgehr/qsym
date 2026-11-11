@@ -23,7 +23,7 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	"sin(z+0)","([p]:ℕ)",":functions cexp",":quit",""]),text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==[
-	"[x<2]","sqrt(2)","nat(0)","rat(1,2)","csin(z)","([p]:ℕ)",
+	"[x<2]","sqrt(2)","0","rat(1,2)","csin(z)","([p]:ℕ)",
 	"cexp(Complex): Complex","cexpi(Complex): Complex"],result.stdout
 facts_certificate=root/"build/ReplFacts.lean"
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
@@ -33,7 +33,7 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0,result.stderr
 assert result.stdout.splitlines()==[
-	"x>0","x","9","x>0","2*y+1=7","x",f"Wrote {facts_certificate}","abs(x)"],result.stdout
+	"x>0","x","real(9)","x>0","2*y+1=7","x",f"Wrote {facts_certificate}","abs(x)"],result.stdout
 assert "assumptions must be Bool" in result.stderr,result.stderr
 assert "use :clear before changing the type of x" in result.stderr,result.stderr
 # Clearing facts and changing types cannot change the last result's certificate.
@@ -47,7 +47,7 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	"[x^2<=1]·[x<1]","[x=-1∨x=1]·[x<1]","[x<0]·[y>0]·[1<x]","floor(-7/3)","log2(8)","cabs(3+4*ⅈ)",":quit",""]),
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
-assert result.stdout.splitlines()==["[-1≤x∧x<1]","[x=-1]","0","int(-3)","3","5"],result.stdout
+assert result.stdout.splitlines()==["[-1≤x∧x<1]","[x=-1]","real(0)","int(-3)","real(3)","real(5)"],result.stdout
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	":vars x:ℂ,t:ℝ","cpow(x,1/2)","cpow(x,t)","carg(cpow(x,1/2))","carg(csqrt(x))",
 	"cimag(clog(x))","cabs(cexp(x))",":quit",""]),text=True,capture_output=True,timeout=30)
@@ -86,4 +86,16 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0,result.stderr
 assert result.stdout.splitlines()==["true","true","true","z≠0","int(1)","true"],result.stdout
+# Literal defaults, exact decimals, and comparisons in the source scalar type.
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars j:ℕ","x^j=1",":vars j:ℤ","x^j=1",":vars j:ℚ","x^j=1",
+	":vars j:ℝ","j/2=toℝ(floor(j/2))",":vars q:ℚ,r:ℚ","toℝ(q)=toℝ(r)",
+	"2^3^2","0.1+0.2","-.5x+1.5x","1.25e-2",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==[
+	"j=0∨x=1∨x=-1∧denominator(1/2·toℚ(j))=1",
+	"j=0∨x=1∨x=-1∧denominator(1/2·toℚ(j))=1",
+	"j=0∨x=1∨x=-1∧denominator(1/2·j)=1",
+	"j·(1/2)=floor(j·(1/2))","q=r","512","rat(3,10)","x","rat(1,80)"],result.stdout
 print("REPL checks passed.")
