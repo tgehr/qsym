@@ -20,6 +20,20 @@ Example[] examples(){
 		add("CollectRight","3*"~x~"+"~x,"4*"~x);
 		add("NestedCoefficient","2*(3*"~x~")","6*"~x);
 		add("RepeatedCoefficient","2*(3*(4*"~x~"))","24*"~x);
+		add("CommutedDouble",x~"*"~y~"+"~y~"*"~x,"2*("~x~"*"~y~")");
+		add("FactorLeft",x~"*"~y~"+"~x~"*"~z,x~"*("~y~"+"~z~")");
+		add("FactorRight",x~"*"~z~"+"~y~"*"~z,"("~x~"+"~y~")*"~z);
+		add("FactorCrossLeft",x~"*"~y~"+"~z~"*"~x,x~"*("~y~"+"~z~")");
+		add("FactorCrossRight",x~"*"~y~"+"~y~"*"~z,"("~x~"+"~z~")*"~y);
+		add("FactorMasked","[p]*("~x~"*"~y~"+"~x~"*"~z~")","[p]*("~x~"*("~y~"+"~z~"))");
+		add("FactorMaskedZero","[false]*("~x~"*"~y~"+"~x~"*"~z~")",vars[4]);
+		add("NewProductSquare","("~x~"*"~y~")^2",x~"^2*"~y~"^2");
+		add("NewProductCube","("~x~"*"~y~")^3",x~"^3*"~y~"^3");
+		add("NewProductNested","("~x~"*("~y~"*"~z~"))^4",x~"^4*("~y~"^4*"~z~"^4)");
+		add("NewProductCoefficient","(2*"~x~")^3","8*"~x~"^3");
+		add("NewProductMasked","[p]*(("~x~"*"~y~")^2)","[p]*("~x~"^2*"~y~"^2)");
+		add("NewProductFalseMask","[false]*(("~x~"*"~y~")^3)",vars[4]);
+		add("NewProductZeroExponent","("~x~"*"~y~")^0",vars[5]);
 		add("Square",x~"*"~x,x~"^2");
 		add("PowerProduct",x~"^3*"~x~"^4",x~"^7");
 		add("PowerLeft",x~"*"~x~"^3",x~"^4");
@@ -43,6 +57,56 @@ Example[] examples(){
 		add("ZeroPower","("~x~"^2)^0",vars[5]);
 	}
 	result~=[
+		Example("NaturalCollectNested","n+(m+n)","2*n+m"),
+		Example("IntegerCollectNested","i+(j+i)","2*i+j"),
+		Example("IntegerCommutedSum","(i+j)-(j+i)","int(0)"),
+		Example("IntegerOppositeDifference","(i-j)+(j-i)","int(0)"),
+		Example("RationalCollectNested","q+(r+q)","2*q+r"),
+		Example("RationalCommutedSum","(q+r)-(r+q)","rat(0,1)"),
+		Example("RationalOppositeDifference","(q-r)+(r-q)","rat(0,1)"),
+		Example("PartialNestedCollection","q⁻¹+(r+q⁻¹)","2*q⁻¹+r"),
+		Example("PartialCommutedSum","(floor(log(x))+i)-(i+floor(log(x)))","int(0)"),
+		Example("PartialOppositeDifference","(q⁻¹-r)+(r-q⁻¹)","rat(0,1)"),
+		Example("MaskedCommutedSum","[false]*((q⁻¹+r)-(r+q⁻¹))","rat(0,1)"),
+		Example("RationalDenominatorLeft","q/(q*r)","r⁻¹"),
+		Example("RationalDenominatorRight","q/(r*q)","r⁻¹"),
+		Example("RationalCommutedQuotient","(q*r)/(r*q)","rat(1,1)"),
+		Example("RationalReciprocalQuotients","(q/r)*(r/q)","rat(1,1)"),
+		Example("RationalPartialDenominator","q⁻¹/(q⁻¹*r)","r⁻¹"),
+		Example("RationalPartialCommutedQuotient","(q⁻¹*r)/(r*q⁻¹)","rat(1,1)"),
+		Example("RationalGuardedDenominator","[q≠0]*(q/(q*r))","[q≠0]*r⁻¹"),
+		Example("RationalGuardedReciprocal","[q≠0∧r≠0]*((q/r)*(r/q))","[q≠0∧r≠0]*rat(1,1)"),
+		Example("RationalMaskedDenominator","[false]*(q/(q*r))","rat(0,1)"),
+		Example("RationalZeroDenominatorNumerator","rat(0,1)/(rat(0,1)*r)","rat(0,1)"),
+		Example("RationalMaskedReciprocal","[false]*((q/r)*(r/q))","rat(0,1)"),
+		Example("RationalUnequalDenominator","q/(r*s)","q*(r⁻¹*s⁻¹)"),
+		Example("FactorPartialRational","q⁻¹*r+q⁻¹*s","q⁻¹*(r+s)"),
+		Example("FactorPartialInteger","floor(log(x))*i+floor(log(x))*j","floor(log(x))*(i+j)"),
+		Example("FactorPartialNatural","denominator(qfromnd(i,0))*n+denominator(qfromnd(i,0))*m","denominator(qfromnd(i,0))*(n+m)"),
+		Example("FactorGuardedRational","[q≠0]*(q⁻¹*r+q⁻¹*s)","[q≠0]*(q⁻¹*(r+s))"),
+		Example("FactorDifferentProducts","n*m+l*l","n*m+l^2"),
+
+		Example("NewIntegerNegativePower2","(-i)^2","i^2"),
+		Example("NewIntegerNegativePower3","(-i)^3","-i^3"),
+		Example("NewIntegerNegativePower4","(-i)^4","i^4"),
+		Example("NewIntegerNegativePower5","(-i)^5","-i^5"),
+		Example("NewRationalNegativePower2","(-q)^2","q^2"),
+		Example("NewRationalNegativePower3","(-q)^3","-q^3"),
+		Example("NewRationalNegativePower4","(-q)^4","q^4"),
+		Example("NewRationalNegativePower5","(-q)^5","-q^5"),
+		Example("NewRationalInverseProduct","(q*r)⁻¹","q⁻¹*r⁻¹"),
+		Example("NewRationalInverseCube","(q^3)⁻¹","(q⁻¹)^3"),
+		Example("NewRationalPowerDivBase","q^4/q","q^3"),
+		Example("NewRationalBaseDivPower","q/q^4","(q⁻¹)^3"),
+		Example("NewRationalPowerDivPartial","(q⁻¹)^4/q⁻¹","(q⁻¹)^3"),
+		Example("NewRationalInverseProductGuard","[q≠0∧r≠0]*((q*r)⁻¹)","[q≠0∧r≠0]*(q⁻¹*r⁻¹)"),
+		Example("NewRationalPowerDivGuard","[q≠0]*(q^4/q)","[q≠0]*q^3"),
+		Example("NewRationalMaskedPole","[false]*((q*rat(0,1))⁻¹)","rat(0,1)"),
+		Example("NewRationalProductPartial","(q⁻¹*r)^2","(q⁻¹)^2*r^2"),
+		Example("NewIntegerProductPartial","(floor(log(x))*i)^2","floor(log(x))^2*i^2"),
+		Example("NewNaturalProductPartial","(denominator(qfromnd(i,0))*n)^2","denominator(qfromnd(i,0))^2*n^2"),
+		Example("NewRationalDifferentPower","q^3/r","q^3/r"),
+
 		Example("IntegerCancelLast","(i+j)-j","i"),
 		Example("IntegerCancelFirst","(i+j)-i","j"),
 		Example("IntegerSubAdd","(i-j)+j","i"),

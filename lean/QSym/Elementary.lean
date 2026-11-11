@@ -497,4 +497,30 @@ theorem cosh_re (z : ℂ) : (Complex.cosh z).re=Real.cosh z.re*Real.cos z.im := 
 theorem cosh_im (z : ℂ) : (Complex.cosh z).im=Real.sinh z.re*Real.sin z.im := by
   rw [cosh_cartesian]; simp [Complex.sin_ofReal_re, Complex.cos_ofReal_re, Complex.sinh_ofReal_re]
 
+theorem cosh_log_complex (z : ℂ) (hz : z≠0) :
+    Complex.cosh (Complex.log z)=(z+z⁻¹)/2 := by
+  simp [Complex.cosh, Complex.exp_neg, Complex.exp_log hz]
+
+theorem tanh_log_domain (z : ℂ) (hz : z≠0) (hc : Complex.cosh (Complex.log z)≠0) :
+    z^2+1≠0 := by
+  intro h
+  apply hc
+  rw [cosh_log_complex z hz]
+  have he : z+z⁻¹=0 := by
+    apply (mul_right_cancel₀ hz)
+    simp only [add_mul, inv_mul_cancel₀ hz, zero_mul]
+    simpa only [pow_two] using h
+  rw [he, zero_div]
+
+theorem tanh_log_complex (z : ℂ) (hz : z≠0) (hc : Complex.cosh (Complex.log z)≠0) :
+    Complex.tanh (Complex.log z)=(z^2-1)/(z^2+1) := by
+  have hd := tanh_log_domain z hz hc
+  have hd' : 1+z^2≠0 := by simpa [add_comm] using hd
+  simp only [Complex.tanh_eq_sinh_div_cosh, Complex.sinh, Complex.cosh,
+    Complex.exp_neg, Complex.exp_log hz]
+  field_simp [hz]
+  <;> ring_nf
+  <;> field_simp [hd, hd']
+  <;> ring
+
 end QSym.Elementary

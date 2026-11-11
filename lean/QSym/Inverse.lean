@@ -169,4 +169,31 @@ theorem real_atanh_tanh (x : ℝ) (h : Functions.atanhR.domain (Real.tanh x)) :
     (show Functions.tanhR.domain x from trivial)
   exact real_tanh_atanh _ h.1 h.2
 
+theorem real_cosh_atanh (x : ℝ) (hl : -1<x) (hu : x<1) :
+    Real.cosh (Functions.atanhR.value x)=(Real.sqrt (1-x^2))⁻¹ := by
+  let t := Functions.atanhR.value x
+  have hp : 0<1-x^2 := by nlinarith
+  have hs := Real.sq_sqrt hp.le
+  have hn := Real.sqrt_pos.2 hp
+  have hc := Real.cosh_pos t
+  have ht := real_tanh_atanh x hl hu
+  rw [Real.tanh_eq_sinh_div_cosh] at ht
+  have ht' : Real.sinh t=x*Real.cosh t := (div_eq_iff hc.ne').mp ht
+  have hi := Real.cosh_sq_sub_sinh_sq t
+  rw [ht', mul_pow] at hi
+  have hprod : (Real.cosh t * Real.sqrt (1-x^2))^2=1 := by
+    rw [mul_pow, hs]
+    nlinarith [sq_nonneg (Real.cosh t)]
+  have he : Real.cosh t * Real.sqrt (1-x^2)=1 := by
+    have := mul_pos hc hn
+    nlinarith
+  simpa only [one_div] using (eq_div_iff hn.ne').2 he
+
+theorem real_sinh_atanh (x : ℝ) (hl : -1<x) (hu : x<1) :
+    Real.sinh (Functions.atanhR.value x)=x*(Real.sqrt (1-x^2))⁻¹ := by
+  have ht := real_tanh_atanh x hl hu
+  rw [Real.tanh_eq_sinh_div_cosh] at ht
+  rw [← real_cosh_atanh x hl hu]
+  exact (div_eq_iff (Real.cosh_pos _).ne').mp ht
+
 end QSym.Inverse

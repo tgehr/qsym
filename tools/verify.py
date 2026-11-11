@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("trig-algebra",255),("radicals",42),("inverses",81),("domains",218),("assumptions",115),("numerals",68),("bounds",233)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",255),("radicals",78),("inverses",196),("domains",218),("assumptions",115),("numerals",68),("bounds",233)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -124,8 +124,8 @@ def main():
 		certificate(file)
 
 	discrete=sorted((ROOT/"build/discrete").glob("*.lean"))
-	if len(discrete)!=137:
-		raise RuntimeError("expected 137 discrete scalar certificates")
+	if len(discrete)!=227:
+		raise RuntimeError("expected 227 discrete scalar certificates")
 	for file in discrete:
 		certificate(file)
 
@@ -246,6 +246,8 @@ def main():
 		("BadComplexUnitNonreal","rewrite bad(z:ℂ,w:ℂ):powerC(z,w)=1⇒creal(w)=0∨z=1∨(z=-1∧inZ(creal(w)/2)) when cimag(w)=0;"),
 		("BadIndicatorOverlap","rewrite bad(p:𝔹,q:𝔹):[p]+[q]⇒[p∨q];"),
 		("BadStrictGuardReversal","lemma bad(p:𝔹,x:ℝ):[p]*x⇒mulR([p],x);"),
+		("BadNestedCollection","rewrite bad(x:ℕ,y:ℕ):x+(y+x)⇒2*y+x;"),
+		("BadReverseCommutedSum","lemma bad(x:ℚ,y:ℚ):0⇒(x+y)-(y+x);"),
 		("BadNestedIntegerCancel","rewrite bad(x:ℤ,y:ℤ):(x+y)-y⇒y;"),
 		("BadNestedRationalCancel","rewrite bad(x:ℚ,y:ℚ):x*(y/x)⇒x;"),
 		("BadReverseNestedRational","lemma bad(x:ℚ,y:ℚ):y⇒x*(y/x) when defined(x);"),
@@ -362,6 +364,32 @@ def main():
 		("BadComplexNormInjective","rewrite bad(z:ℂ,w:ℂ):cabs(z)≠cabs(w)⇒z≠w;"),
 		("BadComplexPowerProduct","rewrite bad(z:ℂ,w:ℂ,t:ℂ):powerC(z,t)*powerC(w,t)⇒powerC(z*w,t);"),
 		("BadComplexOddPower","rewrite bad(z:ℂ,w:ℂ):z^3≠w^3⇒z≠w;"),
+		("BadRationalDenominatorInverse","rewrite bad(x:ℚ,y:ℚ):x*(x*y)⁻¹⇒y;"),
+		("BadRationalDenominatorFactor","rewrite bad(x:ℚ,y:ℚ,z:ℚ):x*(y*z)⁻¹⇒z⁻¹;"),
+		("BadNaturalCommutedDouble","rewrite bad(x:ℕ,y:ℕ):x*y+y*x⇒3*(x*y);"),
+		("BadIntegerFactorCross","rewrite bad(x:ℤ,y:ℤ,z:ℤ):x*y+z*x⇒x*(y-z);"),
+		("BadRationalFactorRight","rewrite bad(x:ℚ,y:ℚ,z:ℚ):x*z+y*z⇒(x+y)*z^2;"),
+		("BadExpAcoshBranch","rewrite bad(z:ℂ):cexp(cacosh(z))⇒z+csqrt(z^2-1);"),
+		("BadSinhAtanhSign","rewrite bad(x:ℝ):sinh(atanh(x))⇒-x/sqrt(1-x^2);"),
+		("BadCoshAtanhRoot","rewrite bad(x:ℝ):cosh(atanh(x))⇒sqrt(1-x^2);"),
+		("BadRationalPowerDivision","rewrite bad(x:ℚ,n:NatParam):x^(n+1)*x⁻¹⇒x^(n+1);"),
+		("BadIntegerOddPower","rewrite bad(x:ℤ,n:NatParam):(-x)^(2*n+1)⇒x^(2*n+1);"),
+		("BadNaturalProductPower","rewrite bad(x:ℕ,y:ℕ,n:NatParam):(x*y)^n⇒x^n+y^n;"),
+		("BadSinhLogSign","rewrite bad(x:ℝ):sinh(log(x))⇒(x+x⁻¹)/2;"),
+		("BadCoshLogScale","rewrite bad(z:ℂ):ccosh(clog(z))⇒z+z⁻¹;"),
+		("BadTanhLogDenominator","rewrite bad(z:ℂ):ctanh(clog(z))⇒(z^2-1)/(z^2-1);"),
+		("BadCubeRootFactor","rewrite bad(x:ℝ,y:ℝ):cbrt(x^3*y)⇒abs(x)*cbrt(y);"),
+		("BadCubeRootFourth","rewrite bad(x:ℝ):cbrt(x)^4⇒x;"),
+		("BadCubeRootInverse","rewrite bad(x:ℝ):cbrt(x)⁻¹⇒cbrt(x);"),
+		("BadTanAsinSign","rewrite bad(x:ℝ):tan(asin(x))⇒-x/sqrt(1-x^2);"),
+		("BadTanAcosBranch","rewrite bad(z:ℂ):ctan(cacos(z))⇒csqrt(z^2-1)/z;"),
+		("BadTanAsinReciprocal","rewrite bad(z:ℂ):ctan(casin(z))⇒csqrt(1-z^2)/z;"),
+		("BadAcosOdd","rewrite bad(x:ℝ):acos(-x)⇒-acos(x);"),
+		("BadAsinReflection","rewrite bad(x:ℝ):asin(-x)⇒asin(x);"),
+		("BadComplexComplement","rewrite bad(z:ℂ):casin(z)+cacos(z)⇒toℂ(π);"),
+		("BadLog2ProductDomain","rewrite bad(x:ℝ,y:ℝ):log2(x*y)⇒log2(x)+log2(y);"),
+		("BadLog10QuotientSign","rewrite bad(x:ℝ,y:ℝ):log10(x/y)⇒log10(x)+log10(y) when 0<x,0<y;"),
+		("BadLog2PowerBase","rewrite bad(x:ℝ):log2(powerR(10,x))⇒x;"),
 		("BadMinComparison","rewrite bad(x:ℝ,y:ℝ,t:ℝ):min(x,y)<t⇒x<t∧y<t;"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")

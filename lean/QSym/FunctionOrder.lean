@@ -64,6 +64,28 @@ theorem cbrt_mul (x y : ℝ) :
   apply (show Odd 3 from ⟨1, rfl⟩).pow_inj.mp
   simp only [mul_pow, cbrt_cube]
 
+theorem cbrt_cube_input (x : ℝ) : Functions.cbrtR.value (x^3)=x := by
+  simpa using cbrt_power x 0
+
+theorem cbrt_inverse (x : ℝ) : (Functions.cbrtR.value x)⁻¹=Functions.cbrtR.value x⁻¹ := by
+  apply (show Odd 3 from ⟨1, rfl⟩).pow_inj.mp
+  simp only [inv_pow, cbrt_cube]
+
+theorem cbrt_nonzero (x : ℝ) : Functions.cbrtR.value x≠0 ↔ x≠0 := by
+  have h := cbrt_cube x
+  constructor
+  · intro hn hx; apply hn; apply (show Odd 3 from ⟨1, rfl⟩).pow_inj.mp; simpa [hx] using h
+  · intro hn hc; apply hn; simpa [hc] using h.symm
+
+theorem cbrt_power_multiple (x : ℝ) (n : ℕ) : (Functions.cbrtR.value x)^(3*n+3)=x^(n+1) := by
+  rw [show 3*n+3=3*(n+1) by omega, pow_mul, cbrt_cube]
+
+theorem cbrt_power_one (x : ℝ) (n : ℕ) : (Functions.cbrtR.value x)^(3*n+4)=x^(n+1)*Functions.cbrtR.value x := by
+  rw [show 3*n+4=(3*n+3)+1 by omega, pow_add, cbrt_power_multiple, pow_one]
+
+theorem cbrt_power_two (x : ℝ) (n : ℕ) : (Functions.cbrtR.value x)^(3*n+5)=x^(n+1)*(Functions.cbrtR.value x)^2 := by
+  rw [show 3*n+5=(3*n+3)+2 by omega, pow_add, cbrt_power_multiple]
+
 theorem cbrt : Increasing Functions.cbrtR := by
   intro x _ y _ hxy
   apply (show Odd 3 from ⟨1, rfl⟩).pow_lt_pow.mp

@@ -799,6 +799,11 @@ rewrite natural_collect(a:ℕ,b:ℕ,x:ℕ):a*x+b*x⇒(a+b)*x when literal(a),lit
 rewrite natural_collect_left(a:ℕ,x:ℕ):x+a*x⇒(1+a)*x when literal(a);
 rewrite natural_collect_right(a:ℕ,x:ℕ):a*x+x⇒(a+1)*x when literal(a);
 rewrite natural_mul_literals(a:ℕ,b:ℕ,x:ℕ):a*(b*x)⇒(a*b)*x when literal(a),literal(b);
+rewrite natural_commuted_double(x:ℕ,y:ℕ):x*y+y*x⇒2*(x*y);
+rewrite natural_factor_left(x:ℕ,y:ℕ,z:ℕ):x*y+x*z⇒x*(y+z);
+rewrite natural_factor_right(x:ℕ,y:ℕ,z:ℕ):x*z+y*z⇒(x+y)*z;
+rewrite natural_factor_cross_left(x:ℕ,y:ℕ,z:ℕ):x*y+z*x⇒x*(y+z);
+rewrite natural_factor_cross_right(x:ℕ,y:ℕ,z:ℕ):x*y+y*z⇒(x+z)*y;
 rewrite natural_square(x:ℕ):x*x⇒x^2;
 rewrite natural_pow_join(x:ℕ,m:NatParam,n:NatParam):x^m*x^n⇒x^(m+n);
 rewrite natural_pow_join_left(x:ℕ,n:NatParam):x*x^n⇒x^(n+1);
@@ -815,6 +820,11 @@ rewrite integer_collect(a:ℤ,b:ℤ,x:ℤ):a*x+b*x⇒(a+b)*x when literal(a),lit
 rewrite integer_collect_left(a:ℤ,x:ℤ):x+a*x⇒(1+a)*x when literal(a);
 rewrite integer_collect_right(a:ℤ,x:ℤ):a*x+x⇒(a+1)*x when literal(a);
 rewrite integer_mul_literals(a:ℤ,b:ℤ,x:ℤ):a*(b*x)⇒(a*b)*x when literal(a),literal(b);
+rewrite integer_commuted_double(x:ℤ,y:ℤ):x*y+y*x⇒2*(x*y);
+rewrite integer_factor_left(x:ℤ,y:ℤ,z:ℤ):x*y+x*z⇒x*(y+z);
+rewrite integer_factor_right(x:ℤ,y:ℤ,z:ℤ):x*z+y*z⇒(x+y)*z;
+rewrite integer_factor_cross_left(x:ℤ,y:ℤ,z:ℤ):x*y+z*x⇒x*(y+z);
+rewrite integer_factor_cross_right(x:ℤ,y:ℤ,z:ℤ):x*y+y*z⇒(x+z)*y;
 rewrite integer_square(x:ℤ):x*x⇒x^2;
 rewrite integer_pow_join(x:ℤ,m:NatParam,n:NatParam):x^m*x^n⇒x^(m+n);
 rewrite integer_pow_join_left(x:ℤ,n:NatParam):x*x^n⇒x^(n+1);
@@ -831,6 +841,11 @@ rewrite rational_collect(a:ℚ,b:ℚ,x:ℚ):a*x+b*x⇒(a+b)*x when literal(a),li
 rewrite rational_collect_left(a:ℚ,x:ℚ):x+a*x⇒(1+a)*x when literal(a);
 rewrite rational_collect_right(a:ℚ,x:ℚ):a*x+x⇒(a+1)*x when literal(a);
 rewrite rational_mul_literals(a:ℚ,b:ℚ,x:ℚ):a*(b*x)⇒(a*b)*x when literal(a),literal(b);
+rewrite rational_commuted_double(x:ℚ,y:ℚ):x*y+y*x⇒2*(x*y);
+rewrite rational_factor_left(x:ℚ,y:ℚ,z:ℚ):x*y+x*z⇒x*(y+z);
+rewrite rational_factor_right(x:ℚ,y:ℚ,z:ℚ):x*z+y*z⇒(x+y)*z;
+rewrite rational_factor_cross_left(x:ℚ,y:ℚ,z:ℚ):x*y+z*x⇒x*(y+z);
+rewrite rational_factor_cross_right(x:ℚ,y:ℚ,z:ℚ):x*y+y*z⇒(x+z)*y;
 rewrite rational_square(x:ℚ):x*x⇒x^2;
 rewrite rational_pow_join(x:ℚ,m:NatParam,n:NatParam):x^m*x^n⇒x^(m+n);
 rewrite rational_pow_join_left(x:ℚ,n:NatParam):x*x^n⇒x^(n+1);
@@ -1222,3 +1237,79 @@ rewrite natural_integer_lower_strict(n:ℕ,k:ℤ):k<toℤ(n)⇒true when k<0;
 rewrite natural_integer_lower_weak(n:ℕ,k:ℤ):k≤toℤ(n)⇒true when k≤0;
 rewrite natural_integer_upper_strict(n:ℕ,k:ℤ):toℤ(n)<k⇒false when k≤0;
 rewrite natural_integer_upper_weak(n:ℕ,k:ℤ):toℤ(n)≤k⇒false when k<0;
+
+# Discrete algebra and elementary-function compositions.
+rewrite natural_collect_nested(x:ℕ,y:ℕ):x+(y+x)⇒2*x+y;
+rewrite integer_collect_nested(x:ℤ,y:ℤ):x+(y+x)⇒2*x+y;
+rewrite rational_collect_nested(x:ℚ,y:ℚ):x+(y+x)⇒2*x+y;
+rewrite integer_cancel_commuted_sum(x:ℤ,y:ℤ):(x+y)-(y+x)⇒0;
+rewrite integer_cancel_opposite_difference(x:ℤ,y:ℤ):(x-y)+(y-x)⇒0;
+rewrite rational_cancel_commuted_sum(x:ℚ,y:ℚ):(x+y)-(y+x)⇒0;
+rewrite rational_cancel_opposite_difference(x:ℚ,y:ℚ):(x-y)+(y-x)⇒0;
+
+rewrite rational_cancel_denominator_left(x:ℚ,y:ℚ):x*(x*y)⁻¹⇒y⁻¹;
+rewrite rational_cancel_denominator_right(x:ℚ,y:ℚ):x*(y*x)⁻¹⇒y⁻¹;
+rewrite rational_commuted_product_quotient(x:ℚ,y:ℚ):(x*y)*(y*x)⁻¹⇒1;
+rewrite rational_reciprocal_quotients(x:ℚ,y:ℚ):(x*y⁻¹)*(y*x⁻¹)⇒1;
+
+rewrite real_exp_asinh(x:ℝ):exp(asinh(x))⇒x+sqrt(1+x^2);
+rewrite real_exp_acosh(x:ℝ):exp(acosh(x))⇒x+sqrt(x^2-1);
+rewrite complex_exp_asinh(z:ℂ):cexp(casinh(z))⇒z+csqrt(z^2+1);
+rewrite complex_exp_acosh(z:ℂ):cexp(cacosh(z))⇒z+csqrt(z-1)*csqrt(z+1);
+rewrite real_cosh_atanh(x:ℝ):cosh(atanh(x))⇒1/sqrt(1-x^2);
+rewrite real_sinh_atanh(x:ℝ):sinh(atanh(x))⇒x/sqrt(1-x^2);
+
+rewrite integer_neg_even_power(x:ℤ,n:NatParam):(-x)^(2*n)⇒x^(2*n);
+rewrite integer_neg_odd_power(x:ℤ,n:NatParam):(-x)^(2*n+1)⇒-(x^(2*n+1));
+rewrite rational_neg_even_power(x:ℚ,n:NatParam):(-x)^(2*n)⇒x^(2*n);
+rewrite rational_neg_odd_power(x:ℚ,n:NatParam):(-x)^(2*n+1)⇒-(x^(2*n+1));
+rewrite natural_pow_product(x:ℕ,y:ℕ,n:NatParam):(x*y)^n⇒x^n*y^n;
+rewrite integer_pow_product(x:ℤ,y:ℤ,n:NatParam):(x*y)^n⇒x^n*y^n;
+rewrite rational_pow_product(x:ℚ,y:ℚ,n:NatParam):(x*y)^n⇒x^n*y^n;
+rewrite rational_inverse_power(x:ℚ,n:NatParam):(x^(n+1))⁻¹⇒(x⁻¹)^(n+1);
+rewrite rational_inverse_product(x:ℚ,y:ℚ):(x*y)⁻¹⇒x⁻¹*y⁻¹;
+rewrite rational_power_div_base(x:ℚ,n:NatParam):x^(n+1)*x⁻¹⇒x^n;
+rewrite rational_base_div_power(x:ℚ,n:NatParam):x*(x^(n+1))⁻¹⇒(x⁻¹)^n;
+
+rewrite real_sinh_log(x:ℝ):sinh(log(x))⇒(x-x⁻¹)/2;
+rewrite real_cosh_log(x:ℝ):cosh(log(x))⇒(x+x⁻¹)/2;
+rewrite real_tanh_log(x:ℝ):tanh(log(x))⇒(x^2-1)/(x^2+1);
+rewrite complex_sinh_log(x:ℂ):csinh(clog(x))⇒(x-x⁻¹)/2;
+rewrite complex_cosh_log(x:ℂ):ccosh(clog(x))⇒(x+x⁻¹)/2;
+rewrite complex_tanh_log(x:ℂ):ctanh(clog(x))⇒(x^2-1)/(x^2+1);
+
+rewrite real_cbrt_inverse(x:ℝ):cbrt(x)⁻¹⇒cbrt(x⁻¹);
+rewrite real_cbrt_power_multiple(x:ℝ,n:NatParam):cbrt(x)^(3*n+3)⇒x^(n+1);
+rewrite real_cbrt_power_one(x:ℝ,n:NatParam):cbrt(x)^(3*n+4)⇒x^(n+1)*cbrt(x);
+rewrite real_cbrt_power_two(x:ℝ,n:NatParam):cbrt(x)^(3*n+5)⇒x^(n+1)*cbrt(x)^2;
+rewrite real_cbrt_factor_left(x:ℝ,y:ℝ):cbrt(x^3*y)⇒x*cbrt(y);
+rewrite real_cbrt_factor_right(x:ℝ,y:ℝ):cbrt(x*y^3)⇒cbrt(x)*y;
+
+rewrite real_tan_asin(x:ℝ):tan(asin(x))⇒x/sqrt(1-x^2);
+rewrite real_tan_acos(x:ℝ):tan(acos(x))⇒sqrt(1-x^2)/x;
+rewrite complex_tan_asin(x:ℂ):ctan(casin(x))⇒x/csqrt(1-x^2);
+rewrite complex_tan_acos(x:ℂ):ctan(cacos(x))⇒csqrt(1-x^2)/x;
+
+rewrite real_asin_neg(x:ℝ):asin(-x)⇒-asin(x);
+rewrite real_atan_neg(x:ℝ):atan(-x)⇒-atan(x);
+rewrite real_asinh_neg(x:ℝ):asinh(-x)⇒-asinh(x);
+rewrite real_atanh_neg(x:ℝ):atanh(-x)⇒-atanh(x);
+rewrite real_acos_neg(x:ℝ):acos(-x)⇒π-acos(x);
+rewrite real_inverse_trig_complement(x:ℝ):asin(x)+acos(x)⇒π/2;
+rewrite complex_inverse_trig_complement(x:ℂ):casin(x)+cacos(x)⇒toℂ(π/2);
+rewrite real_asin_negative_literal(x:ℝ):asin(x)⇒-asin(-x) when literal(x),x<0;
+rewrite real_atan_negative_literal(x:ℝ):atan(x)⇒-atan(-x) when literal(x),x<0;
+rewrite real_asinh_negative_literal(x:ℝ):asinh(x)⇒-asinh(-x) when literal(x),x<0;
+rewrite real_atanh_negative_literal(x:ℝ):atanh(x)⇒-atanh(-x) when literal(x),x<0;
+rewrite real_acos_negative_literal(x:ℝ):acos(x)⇒π-acos(-x) when literal(x),x<0;
+
+rewrite real_log2_product(x:ℝ,y:ℝ):log2(x*y)⇒log2(x)+log2(y) when 0<x,0<y;
+rewrite real_log2_quotient(x:ℝ,y:ℝ):log2(x/y)⇒log2(x)-log2(y) when 0<x,0<y;
+rewrite real_log2_inverse(x:ℝ):log2(x⁻¹)⇒-log2(x);
+rewrite real_log2_power(x:ℝ,n:NatParam):log2(x^(n+1))⇒(real(n)+1)*log2(x) when 0<x;
+rewrite real_log2_matching_power(x:ℝ):log2(powerR(2,x))⇒x;
+rewrite real_log10_product(x:ℝ,y:ℝ):log10(x*y)⇒log10(x)+log10(y) when 0<x,0<y;
+rewrite real_log10_quotient(x:ℝ,y:ℝ):log10(x/y)⇒log10(x)-log10(y) when 0<x,0<y;
+rewrite real_log10_inverse(x:ℝ):log10(x⁻¹)⇒-log10(x);
+rewrite real_log10_power(x:ℝ,n:NatParam):log10(x^(n+1))⇒(real(n)+1)*log10(x) when 0<x;
+rewrite real_log10_matching_power(x:ℝ):log10(powerR(10,x))⇒x;

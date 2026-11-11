@@ -695,4 +695,317 @@ theorem refines_sqrt_even_factor (x y : Option ℝ) (n : ℕ)
       simp [Function1.apply, Functions.sqrtR, mul, abs, h,
         mul_nonneg (Elementary.even_power_nonnegative x n) h, Elementary.sqrt_even_factor, Elementary.sqrt_even_power]
 
+theorem refines_real_exp_asinh (x : Option ℝ) :
+    Refines (Functions.expR.apply (Functions.asinhR.apply x))
+      (add x (Functions.sqrtR.apply (add (some 1) (x.map (fun v => v^2))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hp : 0≤1+x^2 := by positivity
+    apply refines_of_eq
+    simp [Function1.apply, Functions.expR, Functions.asinhR, Functions.sqrtR, add, hp,
+      ← Real.sinh_add_cosh, Real.sinh_arsinh, Real.cosh_arsinh]
+
+theorem refines_real_exp_acosh (x : Option ℝ) :
+    Refines (Functions.expR.apply (Functions.acoshR.apply x))
+      (add x (Functions.sqrtR.apply (add (x.map (fun v => v^2)) (mul (some (-1)) (some 1))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases hx : 1≤x
+    · have hp : 0≤x^2-1 := by nlinarith
+      have hs := Inverse.real_sinh_acosh x hx
+      have hc := Inverse.real_cosh_acosh x hx
+      dsimp [Functions.acoshR] at hs hc
+      apply refines_of_eq
+      simp [Function1.apply, Functions.expR, Functions.acoshR, Functions.sqrtR, add, mul,
+        hx, hp, ← sub_eq_add_neg, ← Real.cosh_add_sinh, hs, hc]
+    · intro v hv; simp [Function1.apply, Functions.acoshR, hx] at hv
+
+theorem refines_complex_exp_asinh (x : Option ℂ) :
+    Refines (Functions.expC.apply (Functions.asinhC.apply x))
+      (add x (Functions.sqrtC.apply (add (x.map (fun v => v^2)) (some 1)))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hs := Inverse.complex_sinh_asinh x
+    have hc := Inverse.complex_cosh_asinh x
+    dsimp [Functions.asinhC] at hs hc
+    simp only [one_div] at hs hc
+    apply refines_of_eq
+    simp [Function1.apply, Functions.expC, Functions.asinhC, Functions.sqrtC, add, mul,
+      ← sub_eq_add_neg, ← Complex.sinh_add_cosh, hs, hc]
+
+theorem refines_complex_exp_acosh (x : Option ℂ) :
+    Refines (Functions.expC.apply (Functions.acoshC.apply x))
+      (add x (mul (Functions.sqrtC.apply (add x (mul (some (-1)) (some 1)))) (Functions.sqrtC.apply (add x (some 1))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hs := Inverse.complex_sinh_acosh x
+    have hc := Inverse.complex_cosh_acosh x
+    dsimp [Functions.acoshC] at hs hc
+    simp only [one_div] at hs hc
+    apply refines_of_eq
+    simp [Function1.apply, Functions.expC, Functions.acoshC, Functions.sqrtC, add, mul,
+      ← sub_eq_add_neg, ← Complex.cosh_add_sinh, hs, hc]
+
+theorem refines_real_cosh_atanh (x : Option ℝ) :
+    Refines (Functions.coshR.apply (Functions.atanhR.apply x))
+      (mul (some 1) (inv (Functions.sqrtR.apply (add (some 1) (mul (some (-1)) (x.map (fun v => v^2))))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases hx : -1<x ∧ x<1
+    · have hp : 0<1-x^2 := by nlinarith [hx.1,hx.2]
+      have hn : Real.sqrt (1-x^2)≠0 := (Real.sqrt_pos.2 hp).ne'
+      have he := Inverse.real_cosh_atanh x hx.1 hx.2
+      dsimp [Functions.atanhR] at he
+      apply refines_of_eq
+      simp [Function1.apply, Functions.coshR, Functions.atanhR, Functions.sqrtR, add, mul, inv,
+        hx, hp.le, hn, ← sub_eq_add_neg, he]
+    · intro v hv; simp [Function1.apply, Functions.atanhR, hx] at hv
+
+theorem refines_real_sinh_atanh (x : Option ℝ) :
+    Refines (Functions.sinhR.apply (Functions.atanhR.apply x))
+      (mul x (inv (Functions.sqrtR.apply (add (some 1) (mul (some (-1)) (x.map (fun v => v^2))))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases hx : -1<x ∧ x<1
+    · have hp : 0<1-x^2 := by nlinarith [hx.1,hx.2]
+      have hn : Real.sqrt (1-x^2)≠0 := (Real.sqrt_pos.2 hp).ne'
+      have he := Inverse.real_sinh_atanh x hx.1 hx.2
+      dsimp [Functions.atanhR] at he
+      apply refines_of_eq
+      simp [Function1.apply, Functions.sinhR, Functions.atanhR, Functions.sqrtR, add, mul, inv,
+        hx, hp.le, hn, ← sub_eq_add_neg, he]
+    · intro v hv; simp [Function1.apply, Functions.atanhR, hx] at hv
+
+theorem refines_real_sinh_log (x : Option ℝ) :
+    Refines (Functions.sinhR.apply (Functions.logR.apply x))
+      (mul (add x (mul (some (-1)) (inv x))) (inv (some 2))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases hx : 0<x
+    · apply refines_of_eq
+      simp [Function1.apply, Functions.sinhR, Functions.logR, add, mul, inv,
+        hx, hx.ne', Real.sinh_log hx, div_eq_mul_inv, sub_eq_add_neg]
+    · intro v hv; simp [Function1.apply, Functions.logR, hx] at hv
+
+theorem refines_complex_tanh_log (x : Option ℂ) :
+    Refines (Functions.tanhC.apply (Functions.logC.apply x))
+      (mul (add (x.map (fun z => z^2)) (mul (some (-1)) (some 1)))
+        (inv (add (x.map (fun z => z^2)) (some 1)))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some z =>
+    by_cases hz : z=0
+    · intro v hv; simp [Function1.apply, Functions.logC, hz] at hv
+    · by_cases hc : Complex.cosh (Complex.log z)=0
+      · intro v hv; simp [Function1.apply, Functions.logC, Functions.tanhC, hz, hc] at hv
+      · have hd := Elementary.tanh_log_domain z hz hc
+        apply refines_of_eq
+        simp [Function1.apply, Functions.logC, Functions.tanhC, add, mul, inv,
+          hz, hc, hd, Elementary.tanh_log_complex z hz hc, div_eq_mul_inv, sub_eq_add_neg]
+
+theorem refines_cbrt_inverse (x : Option ℝ) :
+    Refines (inv (Functions.cbrtR.apply x)) (Functions.cbrtR.apply (inv x)) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases hx : x=0
+    · have hc : Functions.cbrtR.value x=0 := not_not.mp (by simpa [hx] using (FunctionOrder.cbrt_nonzero x).not)
+      intro v hv; simp [cbrt_apply, inv, hc] at hv
+    · have hc := (FunctionOrder.cbrt_nonzero x).2 hx
+      apply refines_of_eq
+      simp [cbrt_apply, inv, hx, hc, FunctionOrder.cbrt_inverse]
+
+theorem refines_cbrt_power_multiple (x : Option ℝ) (n : ℕ) :
+    Refines ((Functions.cbrtR.apply x).map (fun v => v^(3*n+3))) (x.map (fun v => v^(n+1))) := by
+  apply refines_of_eq
+  cases x <;> simp [cbrt_apply, mul, FunctionOrder.cbrt_power_multiple]
+
+theorem refines_cbrt_power_one (x : Option ℝ) (n : ℕ) :
+    Refines ((Functions.cbrtR.apply x).map (fun v => v^(3*n+4))) (mul (x.map (fun v => v^(n+1))) (Functions.cbrtR.apply x)) := by
+  apply refines_of_eq
+  cases x <;> simp [cbrt_apply, mul, FunctionOrder.cbrt_power_one]
+
+theorem refines_cbrt_power_two (x : Option ℝ) (n : ℕ) :
+    Refines ((Functions.cbrtR.apply x).map (fun v => v^(3*n+5))) (mul (x.map (fun v => v^(n+1))) ((Functions.cbrtR.apply x).map (fun v => v^2))) := by
+  apply refines_of_eq
+  cases x <;> simp [cbrt_apply, mul, FunctionOrder.cbrt_power_two]
+
+theorem refines_cbrt_factor_left (x y : Option ℝ) :
+    Refines (Functions.cbrtR.apply (mul (x.map (fun v => v^3)) y)) (mul x (Functions.cbrtR.apply y)) := by
+  apply refines_of_eq
+  cases x <;> cases y <;> simp [cbrt_apply, mul, FunctionOrder.cbrt_mul, FunctionOrder.cbrt_cube_input]
+
+theorem refines_cbrt_factor_right (x y : Option ℝ) :
+    Refines (Functions.cbrtR.apply (mul x (y.map (fun v => v^3)))) (mul (Functions.cbrtR.apply x) y) := by
+  apply refines_of_eq
+  cases x <;> cases y <;> simp [cbrt_apply, mul, FunctionOrder.cbrt_mul, FunctionOrder.cbrt_cube_input]
+
+theorem refines_real_tan_asin (x : Option ℝ) :
+    Refines (Functions.tanR.apply (Functions.asinR.apply x))
+      (mul x (Value.inv (Functions.sqrtR.apply (add (some 1) (mul (some (-1)) (x.map (fun v => v^2))))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some z =>
+    by_cases hz : -1≤z ∧ z≤1
+    · have hp : 0≤1-z^2 := by nlinarith [hz.1,hz.2]
+      have hs := Real.sin_arcsin hz.1 hz.2
+      have hc := Real.cos_arcsin z
+      by_cases hn : Real.cos (Functions.asinR.value z)=0
+      · dsimp [Functions.asinR] at hn
+        intro v hv; simp [Function1.apply, Functions.tanR, Functions.asinR, hz, hn] at hv
+      · dsimp [Functions.asinR] at hn
+        have hn' := hn
+        rw [hc] at hn'
+        apply refines_of_eq
+        simp [Function1.apply, Functions.tanR, Functions.asinR, Functions.sqrtR,
+          add, mul, Value.inv, hz, hp, hn, hn', Real.tan_eq_sin_div_cos,
+          hs, hc, div_eq_mul_inv, ← sub_eq_add_neg]
+    · intro v hv; simp [Function1.apply, Functions.asinR, hz] at hv
+
+theorem refines_real_tan_acos (x : Option ℝ) :
+    Refines (Functions.tanR.apply (Functions.acosR.apply x))
+      (mul (Functions.sqrtR.apply (add (some 1) (mul (some (-1)) (x.map (fun v => v^2))))) (Value.inv x)) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some z =>
+    by_cases hz : -1≤z ∧ z≤1
+    · have hp : 0≤1-z^2 := by nlinarith [hz.1,hz.2]
+      have hs := Real.sin_arccos z
+      have hc := Real.cos_arccos hz.1 hz.2
+      by_cases hn : Real.cos (Functions.acosR.value z)=0
+      · dsimp [Functions.acosR] at hn
+        intro v hv; simp [Function1.apply, Functions.tanR, Functions.acosR, hz, hn] at hv
+      · dsimp [Functions.acosR] at hn
+        have hn' := hn
+        rw [hc] at hn'
+        apply refines_of_eq
+        simp [Function1.apply, Functions.tanR, Functions.acosR, Functions.sqrtR,
+          add, mul, Value.inv, hz, hp, hn, hn', Real.tan_eq_sin_div_cos,
+          hs, hc, div_eq_mul_inv, ← sub_eq_add_neg]
+    · intro v hv; simp [Function1.apply, Functions.acosR, hz] at hv
+
+theorem refines_complex_tan_asin (x : Option ℂ) :
+    Refines (Functions.tanC.apply (Functions.asinC.apply x))
+      (mul x (Value.inv (Functions.sqrtC.apply (add (some 1) (mul (some (-1)) (x.map (fun v => v^2))))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some z =>
+    have hs := Inverse.complex_sin_asin z
+    have hc := Inverse.complex_cos_asin z
+    dsimp [Functions.asinC] at hs hc
+    simp only [one_div, neg_mul, Complex.cos_neg, Complex.sin_neg] at hs hc
+    by_cases hn : Complex.cos (Functions.asinC.value z)=0
+    · dsimp [Functions.asinC] at hn
+      try simp only [one_div, neg_mul, Complex.cos_neg, Complex.sin_neg] at hn
+      intro v hv; simp [Function1.apply, Functions.tanC, Functions.asinC, hn] at hv
+    · dsimp [Functions.asinC] at hn
+      try simp only [one_div, neg_mul, Complex.cos_neg, Complex.sin_neg] at hn
+      have hn' := hn
+      rw [hc] at hn'
+      try simp only [div_eq_mul_inv, neg_mul, Complex.cos_neg, Complex.sin_neg] at hs hc hn hn'
+      apply refines_of_eq
+      simp [Function1.apply, Functions.tanC, Functions.asinC, Functions.sqrtC,
+        add, mul, Value.inv, hn, hn', Complex.tan_eq_sin_div_cos,
+        hs, hc, div_eq_mul_inv, ← sub_eq_add_neg]
+
+theorem refines_complex_tan_acos (x : Option ℂ) :
+    Refines (Functions.tanC.apply (Functions.acosC.apply x))
+      (mul (Functions.sqrtC.apply (add (some 1) (mul (some (-1)) (x.map (fun v => v^2))))) (Value.inv x)) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some z =>
+    have hs := Inverse.complex_sin_acos z
+    have hc := Inverse.complex_cos_acos z
+    dsimp [Functions.acosC] at hs hc
+    simp only [one_div, neg_mul, Complex.cos_neg, Complex.sin_neg] at hs hc
+    by_cases hn : Complex.cos (Functions.acosC.value z)=0
+    · dsimp [Functions.acosC] at hn
+      try simp only [one_div, neg_mul, Complex.cos_neg, Complex.sin_neg] at hn
+      intro v hv; simp [Function1.apply, Functions.tanC, Functions.acosC, hn] at hv
+    · dsimp [Functions.acosC] at hn
+      try simp only [one_div, neg_mul, Complex.cos_neg, Complex.sin_neg] at hn
+      have hn' := hn
+      rw [hc] at hn'
+      try simp only [div_eq_mul_inv, neg_mul, Complex.cos_neg, Complex.sin_neg] at hs hc hn hn'
+      apply refines_of_eq
+      simp [Function1.apply, Functions.tanC, Functions.acosC, Functions.sqrtC,
+        add, mul, Value.inv, hn, hn', Complex.tan_eq_sin_div_cos,
+        hs, hc, div_eq_mul_inv, ← sub_eq_add_neg]
+
+theorem refines_log2_product (x y : Option ℝ)
+    (hx : Refines (lt (some 0) x) (some true))
+    (hy : Refines (lt (some 0) y) (some true)) :
+    Refines (Functions.log2R.apply (mul x y)) (add (Functions.log2R.apply x) (Functions.log2R.apply y)) := by
+  cases x with
+  | none => cases y <;> intro v hv <;> simp [mul, Function1.apply, Functions.log2R] at hv
+  | some x =>
+    cases y with
+    | none => intro v hv; simp [mul, Function1.apply, Functions.log2R] at hv
+    | some y =>
+      have hx' : 0<x := by simpa [Refines, lt] using hx
+      have hy' : 0<y := by simpa [Refines, lt] using hy
+      apply refines_of_eq
+      simp [Function1.apply, Functions.log2R, mul, add, hx', hy', mul_pos hx' hy',
+        Real.log_mul hx'.ne' hy'.ne', add_div]
+
+theorem refines_log2_power (x : Option ℝ) (n : ℕ)
+    (hx : Refines (lt (some 0) x) (some true)) :
+    Refines (Functions.log2R.apply (x.map (fun v => v^(n+1))))
+      (mul (some ((n : ℝ)+1)) (Functions.log2R.apply x)) := by
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hx' : 0<x := by simpa [Refines, lt] using hx
+    apply refines_of_eq
+    simp [Function1.apply, Functions.log2R, mul, hx', pow_pos hx' (n+1), Real.log_pow,
+      Nat.cast_add, Nat.cast_one, mul_div_assoc]
+
+theorem refines_log10_product (x y : Option ℝ)
+    (hx : Refines (lt (some 0) x) (some true))
+    (hy : Refines (lt (some 0) y) (some true)) :
+    Refines (Functions.log10R.apply (mul x y)) (add (Functions.log10R.apply x) (Functions.log10R.apply y)) := by
+  cases x with
+  | none => cases y <;> intro v hv <;> simp [mul, Function1.apply, Functions.log10R] at hv
+  | some x =>
+    cases y with
+    | none => intro v hv; simp [mul, Function1.apply, Functions.log10R] at hv
+    | some y =>
+      have hx' : 0<x := by simpa [Refines, lt] using hx
+      have hy' : 0<y := by simpa [Refines, lt] using hy
+      apply refines_of_eq
+      simp [Function1.apply, Functions.log10R, mul, add, hx', hy', mul_pos hx' hy',
+        Real.log_mul hx'.ne' hy'.ne', add_div]
+
+theorem refines_log10_power (x : Option ℝ) (n : ℕ)
+    (hx : Refines (lt (some 0) x) (some true)) :
+    Refines (Functions.log10R.apply (x.map (fun v => v^(n+1))))
+      (mul (some ((n : ℝ)+1)) (Functions.log10R.apply x)) := by
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hx' : 0<x := by simpa [Refines, lt] using hx
+    apply refines_of_eq
+    simp [Function1.apply, Functions.log10R, mul, hx', pow_pos hx' (n+1), Real.log_pow,
+      Nat.cast_add, Nat.cast_one, mul_div_assoc]
+
 end QSym.Value

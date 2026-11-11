@@ -150,12 +150,35 @@ macro "qsym_function_order" : tactic => `(tactic| (
 ))
 
 open Lean Meta Elab Tactic in
+elab "qsym_inverse_symmetry_goal" : tactic => do
+  let names := #[``Real.arcsin, ``Real.arccos, ``Real.arctan, ``Real.arsinh]
+  let target ← getMainTarget
+  unless (target.find? fun e => names.any (fun n => e.isConstOf n)).isSome do
+    throwError "not an inverse symmetry goal"
+
+open Lean Meta Elab Tactic in
 elab "qsym_trig_goal" : tactic => do
   let functions := #[``Real.sin, ``Real.cos, ``Real.tan, ``Real.sinh, ``Real.cosh, ``Real.tanh,
     ``Complex.sin, ``Complex.cos, ``Complex.tan, ``Complex.sinh, ``Complex.cosh, ``Complex.tanh, ``Complex.exp]
   let target ← getMainTarget
   unless (target.find? fun e => functions.any (fun n => e.isConstOf n)).isSome do
     throwError "not a trigonometric goal"
+
+open Lean Meta Elab Tactic in
+elab "qsym_log_hyperbolic_goal" : tactic => do
+  let target ← getMainTarget
+  let hyperbolic := #[``Real.sinh, ``Real.cosh, ``Real.tanh, ``Complex.sinh, ``Complex.cosh, ``Complex.tanh,
+    ``Functions.sinhR, ``Functions.coshR, ``Functions.tanhR, ``Functions.sinhC, ``Functions.coshC, ``Functions.tanhC]
+  let logarithms := #[``Real.log, ``Complex.log, ``Functions.logR, ``Functions.logC]
+  unless (target.find? fun e => logarithms.any (fun n => e.isConstOf n)).isSome &&
+      (target.find? fun e => hyperbolic.any (fun n => e.isConstOf n)).isSome do
+    throwError "not a logarithmic hyperbolic goal"
+
+open Lean Meta Elab Tactic in
+elab "qsym_log_base_goal" : tactic => do
+  let target ← getMainTarget
+  unless (target.find? fun e => e.isConstOf ``Functions.log2R || e.isConstOf ``Functions.log10R).isSome do
+    throwError "not a base logarithm goal"
 
 open Lean Meta Elab Tactic in
 elab "qsym_new_trig_goal" : tactic => withMainContext do
@@ -189,7 +212,9 @@ elab "qsym_inverse_goal" : tactic => do
   let functions := #[``Functions.asinhR, ``Functions.acoshR, ``Functions.atanhR, ``Functions.asinC, ``Functions.acosC,
     ``Functions.atanC, ``Functions.asinhC, ``Functions.acoshC, ``Functions.atanhC]
   let target ← getMainTarget
-  unless (target.find? fun e => functions.any (fun n => e.isConstOf n)).isSome do
+  let tangentComposition := (target.find? fun e => e.isConstOf ``Functions.tanR).isSome &&
+    (target.find? fun e => e.isConstOf ``Functions.asinR || e.isConstOf ``Functions.acosR).isSome
+  unless tangentComposition || (target.find? fun e => functions.any (fun n => e.isConstOf n)).isSome do
     throwError "not an inverse-function goal"
 
 macro "qsym_inverse" : tactic => `(tactic| (qsym_inverse_goal; first
@@ -204,6 +229,16 @@ macro "qsym_inverse" : tactic => `(tactic| (qsym_inverse_goal; first
   | exact Value.refines_inverse Functions.tanhC Functions.atanhC _ (fun z h _ => Inverse.complex_tanh_atanh z h.1 h.2)
   | exact Value.refines_real_acosh_cosh _
   | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero]; first
+    | exact Value.refines_real_exp_asinh _
+    | exact Value.refines_real_exp_acosh _
+    | exact Value.refines_complex_exp_asinh _
+    | exact Value.refines_complex_exp_acosh _
+    | exact Value.refines_real_cosh_atanh _
+    | exact Value.refines_real_sinh_atanh _
+    | exact Value.refines_real_tan_asin _
+    | exact Value.refines_real_tan_acos _
+    | exact Value.refines_complex_tan_asin _
+    | exact Value.refines_complex_tan_acos _
     | exact Value.refines_real_tanh_asinh _
     | exact Value.refines_real_tanh_acosh _
     | exact Value.refines_complex_tanh_asinh _
@@ -308,6 +343,17 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | solve | apply Value.refines_cbrt_power
   | solve | apply Value.refines_cbrt_cube
   | solve | (simp only [Int.cast_neg, Int.cast_one]; apply Value.refines_cbrt_neg)
+  | solve | apply Value.refines_cbrt_inverse
+  | solve | apply Value.refines_cbrt_power_multiple
+  | solve | apply Value.refines_cbrt_power_one
+  | solve | apply Value.refines_cbrt_power_two
+  | solve | apply Value.refines_cbrt_factor_left
+  | solve | apply Value.refines_cbrt_factor_right
+  | solve | (qsym_log_base_goal; first
+    | (simp only [Int.cast_zero, Int.cast_one, Int.cast_natCast] at *; apply Value.refines_log2_product <;> assumption)
+    | (simp only [Int.cast_zero, Int.cast_one, Int.cast_natCast] at *; apply Value.refines_log2_power <;> assumption)
+    | (simp only [Int.cast_zero, Int.cast_one, Int.cast_natCast] at *; apply Value.refines_log10_product <;> assumption)
+    | (simp only [Int.cast_zero, Int.cast_one, Int.cast_natCast] at *; apply Value.refines_log10_power <;> assumption))
   | solve | apply Value.refines_cbrt_product
   | solve | apply Value.refines_sqrt_even_power
   | solve | (simp only [Int.cast_zero] at *; apply Value.refines_sqrt_even_factor; assumption)
@@ -320,6 +366,9 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | solve | apply Value.refines_phase_period <;> assumption
   | solve | apply Value.refines_tan_cos
   | solve | apply Value.refines_complex_tan_cos
+  | solve | (qsym_log_hyperbolic_goal; first
+    | (simp only [Int.cast_one, Int.cast_neg]; apply Value.refines_real_sinh_log)
+    | (simp only [Int.cast_zero, Int.cast_one, Int.cast_neg, zero_mul, add_zero]; apply Value.refines_complex_tanh_log))
   | solve | apply Value.refines_complex_tanh_cosh
   | solve | (simp only [Int.cast_one]; apply Value.refines_sin_atan)
   | solve | (simp only [Int.cast_one]; apply Value.refines_cos_atan)
@@ -399,6 +448,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
       ← Complex.tan_conj, ← Complex.tanh_conj, ← Complex.cos_conj, ← Complex.cosh_conj,
       Real.sin_pi_div_three, Real.cos_pi_div_six, Elementary.cosh_ne_zero,
       Real.cos_two_mul', Complex.cos_two_mul', div_eq_mul_inv])
+    all_goals try (qsym_log_hyperbolic_goal; solve | simp_all [Real.sinh_log, Real.cosh_log, Complex.sinh, Complex.cosh, Complex.exp_neg, Complex.exp_log, Real.tanh_eq_sinh_div_cosh, Complex.tanh_eq_sinh_div_cosh] <;> field_simp <;> ring)
     all_goals try (qsym_trig_goal; solve | simp_all [Elementary.sin_re, Elementary.sin_im, Elementary.cos_re, Elementary.cos_im,
       Elementary.sinh_re, Elementary.sinh_im, Elementary.cosh_re, Elementary.cosh_im])
     all_goals try (have h := Elementary.log_product_domain (by assumption) (by assumption); rcases h with ⟨_, _⟩)
@@ -427,6 +477,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Elementary.sin_three_half_pi, Elementary.cos_three_half_pi, Elementary.exp_phase,
       Elementary.phase_period, Complex.exp_pi_div_two_mul_I,
       Complex.ofReal_add, add_mul, Complex.exp_add])
+    all_goals try (qsym_inverse_symmetry_goal; solve | simp_all [Real.arcsin_neg, Real.arctan_neg, Real.arsinh_neg, Real.arccos_neg, Real.arccos_eq_pi_div_two_sub_arcsin] <;> ring)
     all_goals try (simp_all [pow_add, pow_mul, mul_pow, inv_pow, Real.rpow_natCast, Complex.cpow_natCast,
       Real.exp_log, Complex.exp_log, Real.log_exp, Real.sqrt_sq_eq_abs,
       Real.exp_add, Complex.exp_add, Real.exp_sub, Complex.exp_sub, Real.exp_neg, Complex.exp_neg,
