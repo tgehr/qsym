@@ -1,5 +1,6 @@
 import QSym.RefinementBase
 import QSym.Trigonometry
+import QSym.PowerPredicates
 
 namespace QSym
 
@@ -37,6 +38,7 @@ macro "qsym_order_core" mode:ident : tactic => do
     Order.power_negative_lt, Order.power_negative_le, Order.power_noninteger_lt, Order.power_noninteger_le,
     Order.power_noninteger_negative_lt, Order.power_noninteger_negative_le, Order.power_noninteger_eq,
     Elementary.cpow_contract_eq, Elementary.cpow_negative_contract_eq, Complex.cpow_eq_zero_iff,
+    PowerPredicates.noninteger_eq_one,
     Order.nonnegative_inverse_lt, Order.nonnegative_inverse_le, Order.nonpositive_inverse_lt, Order.nonpositive_inverse_le] at *
   all_goals try assumption
   )) else `(tactic| (
@@ -206,8 +208,54 @@ macro "qsym_inverse" : tactic => `(tactic| (qsym_inverse_goal; first
     | exact Value.refines_complex_cosh_asinh _
     | exact Value.refines_complex_sinh_acosh _)))
 
+open Lean Meta Elab Tactic in
+elab "qsym_unit_power_goal" : tactic => do
+  let t ← getMainTarget
+  unless t.isAppOfArity ``Value.Refines 3 &&
+      (t.getAppArgs[2]!.find? fun e => e.isConstOf ``Functions.isIntR).isSome &&
+      (t.getAppArgs[1]!.find? fun e => e.isConstOf ``Functions.powerR || e.isConstOf ``Functions.powerC).isSome do
+    throwError "not a unit-power predicate"
+
+macro "qsym_unit_power" : tactic => `(tactic| (
+  qsym_unit_power_goal
+  classical
+  intro v hv
+  simp [Value.Refines, Function1.apply, Function2.apply, Functions.isIntR, Functions.reC, Functions.imC,
+    Value.not, Value.nonzero, Value.add, Value.mul, Value.inv] at *
+  all_goals split_ifs at *
+  all_goals simp_all [PowerPredicates.real_value, PowerPredicates.complex_value,
+    Value.add, Value.not, Value.nonzero, Value.mul, Value.inv, Value.and_some, Value.or_some,
+    Function1.apply, Functions.isIntR, ← sub_eq_add_neg, sub_eq_zero,
+    add_eq_zero_iff_eq_neg, ← div_eq_mul_inv, Bool.or_assoc]
+  all_goals try simp_all [PowerPredicates.real_neg_one_eq_one, PowerPredicates.complex_minus_one_eq_one]
+  all_goals simp_all [PowerPredicates.real_eq_one, PowerPredicates.real_eq_neg_one,
+    PowerPredicates.complex_real_eq_one, Bool.or_assoc]
+))
+
+open Lean Meta Elab Tactic in
+elab "qsym_real_power_bridge_goal" : tactic => do
+  let t ← getMainTarget
+  unless t.isAppOfArity ``Value.Refines 3 &&
+      (t.getAppArgs[2]!.find? fun e => e.isConstOf ``Functions.powerR).isSome &&
+      (t.getAppArgs[1]!.find? fun e => e.isConstOf ``Functions.powerC).isSome do
+    throwError "not a real-to-complex power bridge"
+
+macro "qsym_real_power_bridge" : tactic => `(tactic| (
+  qsym_real_power_bridge_goal
+  classical
+  intro v hv
+  simp [Value.Refines, Function1.apply, Function2.apply, Functions.castRC, Functions.reC, Functions.imC,
+    Value.not, Value.nonzero, Value.le] at *
+  all_goals split_ifs at *
+  all_goals simp_all [PowerPredicates.real_value, PowerPredicates.complex_value,
+    PowerPredicates.nonnegative_domain, PowerPredicates.complex_nonnegative_power,
+    Function1.apply, Functions.castRC]
+))
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | qsym_real_power_bridge
+  | solve | qsym_unit_power
   | solve | qsym_inverse
   | exact Value.refines_quotient_add_nonzero _ _ _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_log_rational <;> assumption)

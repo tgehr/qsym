@@ -131,7 +131,7 @@ struct Syntax{
 		}
 		Piece product(Node n){
 			// [p]·x denotes a non-strict mask, so a strict product needs an explicit call.
-			if(memo[n.a].iverson)
+			if(memo[n.a].iverson||memo[n.b].iverson)
 				return Piece("mul"~suffix(n.sort)~"("~expected(n.a,n.sort)~","~expected(n.b,n.sort)~")");
 			auto l=memo[n.a],r=memo[n.b];
 			bool unit(uint id){ return (n.sort==Sort.real_||n.sort==Sort.complex)&&a.isNumber(a.at(id))&&(a.number(a.at(id)).one||(-a.number(a.at(id))).one); }
@@ -168,7 +168,7 @@ struct Syntax{
 					if(op==Op.add){
 						auto tail=render(p,p.negative||conversion(a.view(e.term))?61:60,true);
 						result=Piece(render(result,60)~(p.negative?"-":tail.length&&tail[0]=='-'?"":"+")~tail,60);
-					}else if(result.iverson) result=Piece("mul"~suffix(s)~"("~render(result)~","~render(p)~")");
+					}else if(result.iverson||p.iverson) result=Piece("mul"~suffix(s)~"("~render(result)~","~render(p)~")");
 					else if(a.isNumber(e.term)&&(-a.number(e.term)).one) result.negative=!result.negative;
 					else if(result.text=="1"){
 						p.negative=p.negative!=result.negative; result=p;
@@ -266,6 +266,7 @@ struct Syntax{
 						rigid[id]=n.sort!=Sort.real_;
 					}
 					else p=Piece("["~arg(n.a)~"]·"~arg(n.b,71),70);
+					p.iverson=true;
 					break;
 				case Op.builtin:
 					auto f=cast(Builtin)n.value,info=builtinInfo(f),code=info.code;
@@ -351,8 +352,8 @@ unittest{
 		["z*toℂ(x^y)","z·x^y"],
 		["z*toℂ(log(x))","z·log(x)"],
 		["z*toℂ(sqrt(-1))","z·sqrt(-1)"],
-		["ⅈ*toℂ([p]*x)","ⅈ·([p]·x)"],
-		["toℂ([p]*x)*z","z·([p]·x)"],
+		["ⅈ*toℂ([p]*x)","mulC(ⅈ,[p]·x)"],
+		["toℂ([p]*x)*z","mulC(z,[p]·x)"],
 		["mulC(([p]:ℂ),toℂ(x))","mulC(([p]:ℂ),x)"],
 		["cexp(toℂ(x))","cexp(x)"],
 		["csqrt(toℂ(sqrt(x)))","csqrt(sqrt(x))"],

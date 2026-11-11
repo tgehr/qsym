@@ -22,6 +22,7 @@ package final class Engine{
 	private uint depth,epoch,premiseDepth;
 	private struct MemoKey{ ulong term; uint revision; }
 	private Table!(MemoKey,uint) memo;
+	private Table!(MemoKey,bool) failedProofs;
 	private struct ContextKey{ uint parent,guard,revision; bool value,expand; }
 	private Table!(ContextKey,uint) branches;
 	private Table!(ulong,uint) truths;
@@ -185,7 +186,8 @@ package final class Engine{
 		return false;
 	}
 	private bool attempt(Law law,Term t,uint ctx,out Proof result){
-		if(!distributeLogic&&(law==Law.bool_and_or||law==Law.bool_or_and)) return false;
+		// Searching for a premise should preserve factored Boolean formulas.
+		if((!distributeLogic||premiseDepth)&&(law==Law.bool_and_or||law==Law.bool_or_and)) return false;
 		if(!candidate(a,law,t)) return false;
 		budget.spend(); Term[] bindings;
 		return match(a,law,-1,t,bindings)&&complete(law,bindings,ctx,result);
@@ -196,6 +198,8 @@ package final class Engine{
 		if(truths.contains(k)){ result=proofs[truths.get(k,uint.max)]; return true; }
 		foreach(f;known(ctx)) if(f.before==t){ result=f; return true; }
 		if(t==a.boolean(true)){ result=d.refl(t,ctx); return true; }
+		auto failureKey=MemoKey(k,revision(ctx));
+		if(failedProofs.get(failureKey,false)) return false;
 		auto numeric=field.literal(t,ctx);
 		if(numeric.after!=t){
 			if(numeric.after!=a.boolean(true)) return false;
@@ -226,6 +230,7 @@ package final class Engine{
 			auto q=expandedEquality(p.after,ctx);
 			if(q.after==a.boolean(true)){ result=d.trans(p,q,ctx); remember(truths,k,result); return true; }
 		}
+		failedProofs.set(failureKey,true);
 		return false;
 	}
 	private Proof pairs(Term t,uint ctx){

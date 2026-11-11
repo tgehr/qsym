@@ -482,9 +482,20 @@ private Pattern lower(Pattern p,Sort s){
 		case "nat","int","rat","real","complex":return p;
 		case "$add":return pattern("add"~suf,[lower(p.args[0],s),lower(p.args[1],s)]);
 		case "$mul":
-			auto left=p.args[0]; while(left.name=="$ascribe") left=left.args[0];
-			if(left.name=="$iverson") return pattern("mask"~suf,[lower(left.args[0],Sort.boolean),lower(p.args[1],s)]);
-			return pattern("mul"~suf,[lower(p.args[0],s),lower(p.args[1],s)]);
+			// Bracket factors guard the whole surface product, on either side
+			// and across parentheses. Explicit mul*/mask* calls stay strict.
+			Pattern[] guards;
+			Pattern product(Pattern q){
+				auto bare=q; while(bare.name=="$ascribe") bare=bare.args[0];
+				if(bare.name=="$iverson"){ guards~=lower(bare.args[0],Sort.boolean); return null; }
+				if(q.name!="$mul") return lower(q,s);
+				auto l=product(q.args[0]),r=product(q.args[1]);
+				return l is null?r:r is null?l:pattern("mul"~suf,[l,r]);
+			}
+			auto result=product(p); if(result is null) result=literal(1,s);
+			// Preserve short-circuit order when predicates themselves are partial.
+			foreach_reverse(g;guards) result=pattern("mask"~suf,[g,result]);
+			return result;
 		case "$neg":return pattern("mul"~suf,[literal(-1,s),lower(p.args[0],s)]);
 		case "$inv":return pattern("inv"~suf,[lower(p.args[0],s)]);
 		case "$abs":

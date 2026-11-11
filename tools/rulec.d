@@ -60,6 +60,8 @@ bool earlyRule(Rule r){
 		if(head=="realLit"||head=="complexLit"||head=="numberLit"||head=="boolLit"||arg.natural&&arg.name=="#") return true;
 		if(head=="pow"||head=="conj") return true;
 	}
+	// Join guard partitions before simplifying away their complementary shapes.
+	if((op=="add"||r.lhs.name=="addN"||r.lhs.name=="addZ"||r.lhs.name=="addQ")&&r.lhs.args.length==2&&rootOp(r.lhs.args[0])=="mask"&&rootOp(r.lhs.args[1])=="mask") return true;
 	// Preserve function shapes before normalizing their operands. Algebraic
 	// conditions wait until counted sums and products have been collected.
 	foreach(arg;r.lhs.args) if(functionPattern(arg)) return true;

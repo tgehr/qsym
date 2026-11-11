@@ -77,4 +77,13 @@ assert ":domain EXPR" in result.stdout,result.stdout
 domain_source=domain_certificate.read_text()
 assert "theorem domain_iff" in domain_source and "theorem domain_total" in domain_source
 assert "(h0 :" in domain_source and "Expr .real" in domain_source
+
+# Brackets guard either side of a surface product; explicit calls stay strict.
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars z:ℂ,x:ℝ",":domain clog(z)*[z≠0]",":domain [z≠0]*clog(z)",
+	":domain log(x)*[0<x]/x",":domain mulC(clog(z),[z≠0])",
+	"floor(x+1)-floor(x)","[x=0]+[x≠0]*[z=0]=[x=0∨z=0]",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0,result.stderr
+assert result.stdout.splitlines()==["true","true","true","z≠0","int(1)","true"],result.stdout
 print("REPL checks passed.")

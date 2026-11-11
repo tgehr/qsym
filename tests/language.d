@@ -92,7 +92,8 @@ unittest{
 	assert(result("max(x)")=="x");
 	assert(result("hypot(x)")=="abs(x)");
 	assert(result("hypot()")=="0");
-	foreach(source;["mulR([p],x⁻¹)","mulC([p],z⁻¹)","mulQ([p],q⁻¹)"]){
+	foreach(source;["mulR([p],x⁻¹)","mulC([p],z⁻¹)","mulQ([p],q⁻¹)","mulR(x⁻¹,[p])","mulC(z⁻¹,[p])","mulQ(q⁻¹,[p])",
+		"mulR([p]*x,x⁻¹)","mulR(x⁻¹,[p]*x)","mulQ([p]*q,q⁻¹)","mulQ(q⁻¹,[p]*q)"]){
 		auto t=s.parse(a,source);
 		assert(s.parse(a,s.format(a,t))==t,source);
 	}

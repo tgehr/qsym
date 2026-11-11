@@ -55,8 +55,8 @@ unittest{
 	}
 	foreach(pair;[["x+(y+1)","x+y+1"],["x*(y*v)","x·y·v"],
 		["x+(-y+1)","x-y+1"],["x+(-y-1)","x-y-1"],["x-(-y+1)","x-(-y+1)"],
-		["x-(y+1)","x-(y+1)"],["x*([p]*y)","x·([p]·y)"],
-		["x*(y*([p]*v))","x·y·([p]·v)"]]){
+		["x-(y+1)","x-(y+1)"],["x*([p]*y)","[p]·(x·y)"],
+		["x*(y*([p]*v))","[p]·(x·y·v)"]]){
 		auto t=s.parse(a,pair[0]),printed=s.format(a,t);
 		assert(printed==pair[1],printed);
 		assert(simplify(a,s.parse(a,printed)).output==simplify(a,t).output,printed);
