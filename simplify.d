@@ -1,7 +1,9 @@
 module qsym.simplify;
 import qsym.ir;
 import qsym.derive:Derivation,Proof;
-import qsym.budget:Budget;
+import qsym.budget:Budget,Limit;
+import qsym.embeddings:Embeddings;
+import qsym.subtypes:Subtypes;
 import qsym.engine:Engine;
 import std.exception:enforce;
 @safe:
@@ -21,6 +23,8 @@ struct Result{
 	Term input;
 	/// In distributionOnly mode this is forget(input), with type Measure.
 	Term proofInput;
+	/// May have a numeric subtype of proofInput. The certificate ends at
+	/// castTo(output, sort(proofInput)), so no heterogeneous equality is trusted.
 	Term output;
 	bool exhausted;
 	bool traced;
@@ -31,7 +35,8 @@ struct Result{
 
 /// Proof search only. Generated Lean certificates are the trust boundary.
 /// Results agree with the original wherever the original was defined; the
-/// result may have a larger domain. Erasure remains an explicit root operation.
+/// result may have a larger domain and a narrower numeric type. Its certificate
+/// embeds the output into the original type. Erasure remains an explicit root operation.
 Result simplify(Arena a,Term input,Options options=Options.init){
 	return simplify(a,input,[],options);
 }
@@ -56,6 +61,23 @@ Result simplify(Arena a,Term input,Term[] facts,Options options=Options.init){
 	auto initial=d.canonical(root,context);
 	result.certificate=d.trans(initial,engine.go(initial.after,context),context);
 	result.derivation=d; result.output=result.certificate.after;
+	if(!budget.exhausted){
+		auto embeddings=new Embeddings(a,d,budget);
+		try{
+			result.certificate=d.trans(result.certificate,
+				(new Subtypes(a,d,engine,embeddings,budget)).run(result.output,context),context);
+			result.output=embeddings.source(result.certificate.after);
+			while(numeric(a.sort(result.output))){
+				auto narrowed=embeddings.narrow(result.output,context),lower=embeddings.source(narrowed.after);
+				if(a.sort(lower)==a.sort(result.output)) break;
+				auto normalized=engine.go(lower,context);
+				auto step=d.trans(narrowed,embeddings.lift(normalized,a.sort(result.output),context),context);
+				result.certificate=d.trans(result.certificate,embeddings.lift(step,a.sort(root),context),context);
+				result.output=normalized.after;
+				if(budget.exhausted) break;
+			}
+		}catch(Limit e){ budget.exhausted=true; }
+	}
 	result.exhausted=budget.exhausted;
 	return result;
 }
@@ -80,8 +102,8 @@ unittest{
 	auto r=simplify(a,a.add(a.mul(x,one),zero),Options(DensityMode.preserve,true));
 	assert(r.output==x&&r.traced&&!r.exhausted);
 	auto bad=a.mul(zero,a.inv(zero));
-	assert(simplify(a,bad).output==zero); // extends the empty original domain
-	assert(simplify(a,a.mask(a.boolean(false),a.inv(zero))).output==zero);
+	assert(simplify(a,bad).output==a.natural_(0)); // extends the empty original domain
+	assert(simplify(a,a.mask(a.boolean(false),a.inv(zero))).output==a.natural_(0));
 	auto d=a.puncture(a.lebesgue());
 	assert(simplify(a,d).output==d);
 	auto erased=simplify(a,d,Options(DensityMode.distributionOnly,true));

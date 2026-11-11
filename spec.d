@@ -50,7 +50,21 @@ struct Parser{
 	}
 	private Pattern integer(bool negative=false){
 		enforce(token.kind==TokenKind.integer,"integer expected at byte "~to!string(token.offset));
-		auto p=new Pattern("#"); p.number=to!long((negative?"-":"")~token.text); next(); return p;
+		auto digits=token.text; next();
+		enforce(digits.length<=1_000_000,"integer exceeds literal limit");
+		auto value=BigInt((negative?"-":"")~digits);
+		if(value>=long.min&&value<=long.max) return integerPattern(value.toLong());
+		// The IR already has arbitrary precision constants. Use small exact
+		// chunks in the parser so their printed decimal spelling round-trips
+		// without enlarging the bounded rule-pattern and NatParam payloads.
+		Pattern decimalInteger(string ds){
+			if(ds.length<=9) return integerPattern(to!long(ds));
+			auto middle=ds.length/2;
+			auto scale=pattern("$pow",[integerPattern(10),integerPattern(cast(long)(ds.length-middle))]);
+			return pattern("$add",[pattern("$mul",[decimalInteger(ds[0..middle]),scale]),decimalInteger(ds[middle..$])]);
+		}
+		auto p=decimalInteger(digits);
+		return negative?pattern("$neg",[p]):p;
 	}
 	private Pattern decimal(){
 		// Parse base ten exactly; decimal syntax never passes through floating point.

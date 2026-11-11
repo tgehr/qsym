@@ -72,13 +72,12 @@ struct Syntax{
 		}
 		auto result=build(p); variables=next; return result;
 	}
+	/// Prints without scalar injections. Reparse and simplify to recover the
+	/// normal form; the spelling need not retain a redundant original sort.
 	string format(Arena a,Term root){
-		struct Piece{ string text; uint precedence=100; bool negative,iverson; uint embedding=uint.max; }
+		struct Piece{ string text; uint precedence=100; bool negative,iverson; }
 		Piece[] memo=new Piece[a.length];
 		bool[] symbolic=new bool[a.length];
-		// A rigid spelling fixes its type before the surrounding context is
-		// considered. In particular, sqrt(3) is real but 3^(1/2) is overloaded.
-		bool[] rigid=new bool[a.length];
 		string render(Piece p,uint precedence=0,bool magnitude=false){
 			if(p.negative&&!magnitude){
 				p.text="-"~(p.precedence<70?"("~p.text~")":p.text);
@@ -89,40 +88,7 @@ struct Syntax{
 		string arg(uint id,uint precedence=0){ return render(memo[id],precedence); }
 		Piece rational(Rational q){ return Piece((q<Rational(0)?-q:q).toString,q.integral?100:70,q<Rational(0)); }
 		bool conversion(Node n){ return n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castRC; }
-		Piece promoted(uint id,Sort expected,Sort minimum=Sort.natural){
-			if(a.sort(a.at(id))!=expected) return memo[id];
-			auto source=memo[id].embedding==uint.max?id:memo[id].embedding;
-			auto flip=memo[id].negative!=memo[source].negative;
-			auto n=a.view(a.at(source));
-			while(conversion(n)&&rigid[n.a]&&rank(a.sort(a.at(n.a)))>=rank(minimum)){ source=n.a; n=a.view(a.at(source)); }
-			auto result=memo[source];
-			if(a.isNumber(a.at(source))&&a.number(a.at(source)).im.zero) result=rational(a.number(a.at(source)).re);
-			result.negative=result.negative!=flip; return result;
-		}
-		bool anchor(uint id){
-			auto t=a.at(id);
-			return rigid[id]&&memo[id].embedding==uint.max&&(!a.isNumber(t)||a.sort(t)==Sort.complex&&!a.number(t).im.zero)&&!conversion(a.view(t))&&
-				!(a.sort(t)==Sort.complex&&a.isNumber(t)&&a.number(t).im.zero);
-		}
-		void pair(uint x,uint y,out Piece l,out Piece r){
-			l=memo[x]; r=memo[y];
-			// Keep one type anchor. Removing both embeddings could select a
-			// different overload, even when the enclosing result is complex.
-			if(anchor(x)) r=promoted(y,a.sort(a.at(x)));
-			else if(anchor(y)||a.isNumber(a.at(x))&&!a.isNumber(a.at(y))||!rigid[x]&&rigid[y]) l=promoted(x,a.sort(a.at(y)));
-			else if(rigid[x]) r=promoted(y,a.sort(a.at(x)));
-		}
-		string expected(uint id,Sort s,uint precedence=0){ return render(promoted(id,s),precedence); }
-		string exponent(Node n){
-			// The complex base supplies the type when this is parsed again.
-			auto t=a.at(n.b);
-			if(n.value==Builtin.powerC){
-				if(a.isNumber(t)&&a.number(t).im.zero) return render(rational(a.number(t).re),91);
-				// A natural/integer exponent would select a different power.
-				if(rigid[n.a]) return render(promoted(n.b,Sort.complex,Sort.real_),91);
-			}
-			return arg(n.b,91);
-		}
+		void pair(uint x,uint y,out Piece l,out Piece r){ l=memo[x]; r=memo[y]; }
 		Piece sum(uint x,uint y){
 			Piece l,r; pair(x,y,l,r);
 			auto tail=render(r,r.negative||conversion(a.view(a.at(y)))?61:60,true);
@@ -136,7 +102,7 @@ struct Syntax{
 		Piece product(Node n){
 			// [p]·x denotes a non-strict mask, so a strict product needs an explicit call.
 			if(memo[n.a].iverson||memo[n.b].iverson)
-				return Piece("mul"~suffix(n.sort)~"("~expected(n.a,n.sort)~","~expected(n.b,n.sort)~")");
+				return Piece("mul"~suffix(n.sort)~"("~arg(n.a)~","~arg(n.b)~")");
 			auto l=memo[n.a],r=memo[n.b];
 			bool unit(uint id){ return n.sort!=Sort.natural&&a.isNumber(a.at(id))&&(a.number(a.at(id)).one||(-a.number(a.at(id))).one); }
 			if(unit(n.a)){ r.negative=(-a.number(a.at(n.a))).one!=r.negative; return r; }
@@ -159,14 +125,11 @@ struct Syntax{
 			return es;
 		}
 		Piece region(Term t,Op op){
-			auto es=ordered(t,op),s=a.sort(t); uint typeAnchor=uint.max;
-			foreach(e;es) if(anchor(e.term.id)){ typeAnchor=e.term.id; break; }
-			if(typeAnchor==uint.max) foreach(e;es) if(rigid[e.term.id]&&!a.isNumber(e.term)){ typeAnchor=e.term.id; break; }
-			if(typeAnchor==uint.max) foreach(e;es) if(rigid[e.term.id]){ typeAnchor=e.term.id; break; }
+			auto es=ordered(t,op),s=a.sort(t);
 			Piece result; bool first=true;
 			foreach(e;es){
 				enforce(e.count<=100_000,"formatted expression has too many repeated operands");
-				auto p=e.term.id==typeAnchor||typeAnchor==uint.max?memo[e.term.id]:promoted(e.term.id,s);
+				auto p=memo[e.term.id];
 				foreach(i;0..e.count){
 					if(first){ result=p; first=false; continue; }
 					if(op==Op.add){
@@ -212,15 +175,7 @@ struct Syntax{
 					}
 				}
 			}
-			uint typeAnchor=uint.max;
-			foreach(u;terms) if(anchor(u.id)){ typeAnchor=u.id; break; }
-			if(typeAnchor==uint.max) foreach(u;terms) if(rigid[u.id]){ typeAnchor=u.id; break; }
-			Piece termPiece(Term u){
-				// Equality already promotes natural operands to integer differences.
-				auto n=a.view(u);
-				if(n.op==Op.builtin&&n.value==Builtin.castNZ) return promoted(u.id,Sort.integer);
-				return u.id==typeAnchor||typeAnchor==uint.max?memo[u.id]:promoted(u.id,a.sort(u));
-			}
+			Piece termPiece(Term u){ return memo[u.id]; }
 
 			if(variables==1){
 				left=render(termPiece(variable),61);
@@ -251,28 +206,19 @@ struct Syntax{
 		foreach(id;a.postorder(root)){
 			auto t=a.at(id),n=a.view(t); Piece p;
 			if(a.node(t).region){
-				foreach(e;a.operands(t)){ symbolic[id]|=symbolic[e.term.id]; rigid[id]|=rigid[e.term.id]; }
+				foreach(e;a.operands(t)){ symbolic[id]|=symbolic[e.term.id]; }
 				memo[id]=region(t,n.op); continue;
 			}
-			rigid[id]=true;
 			symbolic[id]=n.op==Op.variable||n.op==Op.densityAt||
 				n.arity>=1&&symbolic[n.a]||n.arity==2&&symbolic[n.b];
 			final switch(n.op){
 				case Op.realLit,Op.complexLit,Op.numberLit:
 					auto z=a.number(t);
-					if(n.sort==Sort.natural) p.text=z.re.toString;
-					else if(n.sort==Sort.integer) p.text="int("~z.re.toString~")";
-					else if(n.sort==Sort.rational){
-						p=rational(z.re);
-						// A whole rational still needs a denominator to retain its type.
-						if(z.re.integral){ p.text~="/1"; p.precedence=70; }
-					}
-					else if(n.sort==Sort.real_){ p.text="real("~to!string(z.re.numerator)~(z.re.denominator==1?"":","~to!string(z.re.denominator))~")"; }
+					if(z.im.zero) p=rational(z.re);
 					else{
 						auto negative=z.re<Rational(0)||z.re.zero&&z.im<Rational(0); if(negative) z=-z;
 						auto im=z.im==Rational(1)?"ⅈ":z.im==Rational(-1)?"-ⅈ":z.im.toString~"·ⅈ";
-						p=z.im.zero?Piece("toℂ("~z.re.toString~")"):
-							z.re.zero?Piece(im,z.im==Rational(1)?100:70):Piece(z.re.toString~(z.im<Rational(0)?"":"+")~im,60);
+						p=z.re.zero?Piece(im,z.im==Rational(1)?100:70):Piece(z.re.toString~(z.im<Rational(0)?"":"+")~im,60);
 						p.negative=negative;
 					}
 					break;
@@ -280,11 +226,11 @@ struct Syntax{
 					enforce(n.value<variables.length&&variables[cast(size_t)n.value].sort==n.sort,"unknown variable index");
 					p.text=variables[cast(size_t)n.value].name; break;
 				case Op.boolLit:p.text=n.value?"true":"false"; break;
-				case Op.add,Op.mul:p=region(t,n.op); rigid[id]=rigid[n.a]||rigid[n.b]; break;
-				case Op.inv:p=Piece(arg(n.a,91)~"⁻¹",90); rigid[id]=rigid[n.a]; break;
-				case Op.pow:p=Piece(arg(n.a,91)~"^"~to!string(n.value),90); rigid[id]=rigid[n.a]; break;
-				case Op.abs:p.text="abs("~expected(n.a,Sort.real_)~")"; break;
-				case Op.conj:p.text="conj("~expected(n.a,Sort.complex)~")"; break;
+				case Op.add,Op.mul:p=region(t,n.op); break;
+				case Op.inv:p=Piece(arg(n.a,91)~"⁻¹",90); break;
+				case Op.pow:p=Piece(arg(n.a,91)~"^"~to!string(n.value),90); break;
+				case Op.abs:p.text="abs("~arg(n.a)~")"; break;
+				case Op.conj:p.text="conj("~arg(n.a)~")"; break;
 				case Op.not_:
 					auto inner=a.view(a.at(n.a));
 					p=nonzero(inner)?zeroComparison(a.at(inner.a),"="):Piece("¬"~arg(n.a,80),80); break;
@@ -293,19 +239,17 @@ struct Syntax{
 				case Op.lt,Op.le:p=comparison(n.a,n.b,n.op==Op.lt?"<":"≤"); break;
 				case Op.nonzero:p=zeroComparison(a.at(n.a),"≠"); break;
 				case Op.mask:
-					rigid[id]=rigid[n.b];
 					if(a.isNumber(a.at(n.b))&&a.number(a.at(n.b)).one){
 						p.text="["~arg(n.a)~"]";
 						p.iverson=true;
-						if(n.sort!=Sort.real_) p.text="("~p.text~":"~["ℕ","ℤ","ℚ","ℝ","ℂ"][rank(n.sort)]~")";
-						rigid[id]=n.sort!=Sort.real_;
 					}
 					else p=Piece("["~arg(n.a)~"]·"~arg(n.b,71),70);
 					p.iverson=true;
 					break;
 				case Op.builtin:
 					auto f=cast(Builtin)n.value,info=builtinInfo(f),code=info.code;
-					if(code=="pi") p.text="π";
+					if(conversion(n)){ p=memo[n.a]; }
+					else if(code=="pi") p.text="π";
 					else if(code=="e") p.text="e";
 					else if(f==Builtin.expR&&a.isNumber(a.at(n.a))&&a.number(a.at(n.a)).one) p.text="e";
 					else if(code=="addN"||code=="addZ"||code=="addQ") p=sum(n.a,n.b);
@@ -316,14 +260,14 @@ struct Syntax{
 					else if(code=="leN"||code=="leZ"||code=="leQ") p=comparison(n.a,n.b,"≤");
 					else if(f==Builtin.eqB) p=Piece(arg(n.a,51)~"="~arg(n.b,51),50);
 					else if(code=="powerR"||code=="powerC"||code.length==5&&code[0..3]=="pow"){
-						auto base=arg(n.a,91);
-						rigid[id]=rigid[n.a];
-						if(f==Builtin.powRZ&&!rigid[id]){ base="("~arg(n.a)~":ℝ)"; rigid[id]=true; }
-						p=Piece(base~"^"~exponent(n),90);
+						p=Piece(arg(n.a,91)~"^"~arg(n.b,91),90);
+						// Check the overload selected by the injection-free spelling.
+						// Use the typed operation only if ordinary notation selects another.
+						auto names=variables.dup;
+						if(Parser(p.text).parseExpression(names).name!=code)
+							p=Piece(info.name~"("~arg(n.a)~","~arg(n.b)~")");
 					}
-					else p.text=info.name~"("~expected(n.a,info.args[0])~(n.arity==2?","~expected(n.b,info.args[1]):"")~")";
-					if(conversion(n)) p.embedding=id;
-					if(code=="powerR"||code=="powerC") rigid[id]=rigid[n.a]||rigid[n.b];
+					else p.text=info.name~"("~arg(n.a)~(n.arity==2?","~arg(n.b):"")~")";
 					break;
 				case Op.lebesgue:p.text="lebesgue()"; break;
 				case Op.puncture:p.text="puncture("~arg(n.a)~")"; break;
@@ -339,6 +283,7 @@ struct Syntax{
 
 unittest{
 	import qsym.simplify;
+	import qsym.domain:simplifyDomain;
 	import std.exception:assertThrown;
 	auto session=Session.open(); auto a=session.arena; Syntax syntax;
 	assert(syntax.format(a,simplify(a,syntax.parse(a,"x+x")).output)=="2·x");
@@ -365,6 +310,7 @@ unittest{
 
 unittest{
 	import qsym.simplify;
+	import qsym.domain:simplifyDomain;
 	auto session=Session.open(); auto a=session.arena; Syntax s; s.declare("z:ℂ,x:ℝ");
 	foreach(pair;[["cpow(z,1/2)","z^(1/2)"],["cpow(z,-1/3)","z^(-1/3)"],["cpow(z,x)","z^x"],["clog(cpow(z,1/2))","1/2·clog(z)"],["toℂ(2)*z","2·z"],["z-1/2","z-1/2"]]){
 		auto input=pair[0],expected=pair[1];
@@ -376,6 +322,7 @@ unittest{
 
 unittest{
 	import qsym.simplify;
+	import qsym.domain:simplifyDomain;
 	auto session=Session.open(); auto a=session.arena; Syntax s;
 	s.declare("z:ℂ,x:ℝ,y:ℝ,q:ℚ,k:ℤ,n:ℕ,p:𝔹");
 	foreach(pair;[
@@ -390,14 +337,14 @@ unittest{
 		["z*toℂ(sqrt(-1))","z·sqrt(-1)"],
 		["ⅈ*toℂ([p]*x)","mulC(ⅈ,[p]·x)"],
 		["toℂ([p]*x)*z","mulC(z,[p]·x)"],
-		["mulC(([p]:ℂ),toℂ(x))","mulC(([p]:ℂ),x)"],
+		["mulC(([p]:ℂ),toℂ(x))","mulC([p],x)"],
 		["cexp(toℂ(x))","cexp(x)"],
 		["csqrt(toℂ(sqrt(x)))","csqrt(sqrt(x))"],
 		["conj(toℂ(x))","conj(x)"],
 		["carg(toℂ(x))","carg(x)"],
-		["cpow(z,toℂ(toℝ(toℚ(toℤ(n)))))","z^toℝ(n)"],
-		["z*toℂ(powRN(3,n))","z·real(3)^n"],
-		["z*toℂ(powRZ(3,k))","z·real(3)^k"],
+		["cpow(z,toℂ(toℝ(toℚ(toℤ(n)))))","cpow(z,n)"],
+		["z*toℂ(powRN(3,n))","z·powRN(3,n)"],
+		["z*toℂ(powRZ(3,k))","z·powRZ(3,k)"],
 		["cexp(toℂ(toℝ(toℚ(toℤ(n)))))","cexp(n)"],
 		["x+toℝ(q)","x+q"],
 		["q*toℚ(k)","q·k"],
@@ -405,16 +352,16 @@ unittest{
 		["toℝ(q)<x","q<x"],
 		["q≤toℚ(k)","q≤k"],
 		["toℤ(n)<k","n<k"],
-		["toℂ(x)","toℂ(x)"],
-		["toℂ(sqrt(3))","toℂ(sqrt(3))"],
-		["toℂ(x)+toℂ(y)","toℂ(x)+y"],
-		["z*toℂ((-1)^(2⁻¹))","z·real(-1)^(real(2)⁻¹)"],
-		["ⅈ*toℂ([p])","ⅈ·toℂ([p])"]
+		["toℂ(x)","x"],
+		["toℂ(sqrt(3))","sqrt(3)"],
+		["toℂ(x)+toℂ(y)","x+y"],
+		["z*toℂ((-1)^(2⁻¹))","z·(-1)^(2⁻¹)"],
+		["ⅈ*toℂ([p])","mulC(ⅈ,[p])"]
 	]){
 		auto input=s.parse(a,pair[0]),printed=s.format(a,input),output=s.parse(a,printed);
 		assert(printed==pair[1],pair[0]~" printed as "~printed);
-		assert(a.sort(input)==a.sort(output),printed~" changes type");
-		assert(input==output,printed~" changes typed operations or their domains");
+		assert(promotes(a.sort(simplify(a,output).output),a.sort(input)),printed~" changes type");
+		assert(simplifyDomain(a,input).output==simplifyDomain(a,output).output,printed~" changes domains");
 		assert(simplify(a,input).output==simplify(a,output).output,printed~" changes meaning");
 		assert(s.format(a,output)==printed,printed~" is not stable");
 	}
@@ -426,6 +373,7 @@ unittest{
 		Term[] args;
 		foreach(sort;builtinInfo(f).args) args~=sort==Sort.boolean?s.parse(a,"p"):a.castTo(s.parse(a,"n"),sort);
 		auto input=a.call(f,args),printed=s.format(a,input),output=s.parse(a,printed);
-		assert(input==output,builtinInfo(f).code~" changed operations: "~printed);
+		assert(simplify(a,input).output==simplify(a,output).output,builtinInfo(f).code~" changed meaning: "~printed);
+		assert(simplifyDomain(a,input).output==simplifyDomain(a,output).output,builtinInfo(f).code~" changed domain: "~printed);
 	}
 }

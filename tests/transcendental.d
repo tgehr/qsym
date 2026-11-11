@@ -99,7 +99,7 @@ unittest{
 		auto input=s.parse(a,"log(2^32)/log(2)");
 		auto options=Options(DensityMode.preserve,trace); options.maxAlgebraWork=10_000;
 		auto r=simplify(a,input,options);
-		assert(!r.exhausted&&r.output==a.real_(32),"perfect-power search work");
+		assert(!r.exhausted&&r.output==a.natural_(32),"perfect-power search work");
 		options.maxAlgebraWork=4;
 		auto limited=simplify(a,input,options);
 		assert(limited.exhausted,"perfect-power search must respect the work budget");

@@ -438,10 +438,12 @@ string exportLean(Arena a,Result result){
 		chain=d.contexts[chain].parent;
 	}
 	enforce(!chain,"undeclared certificate assumption");
-	enforce(result.certificate.before==result.proofInput&&result.certificate.after==result.output,"certificate endpoints changed");
+	enforce(promotes(a.sort(result.output),a.sort(result.proofInput)),"invalid result subtype");
+	auto embedded=a.castTo(result.output,a.sort(result.proofInput));
+	enforce(result.certificate.before==result.proofInput&&result.certificate.after==embedded,"certificate endpoints changed");
 	bool[] needed=new bool[a.length],used=new bool[d.deductions.length],evaluated=new bool[a.length];
-	foreach(t;[result.input,result.proofInput,result.output]) evaluated[t.id]=true;
-	Term[] pending=[result.input,result.proofInput,result.output];
+	foreach(t;[result.input,result.proofInput,result.output,embedded]) evaluated[t.id]=true;
+	Term[] pending=[result.input,result.proofInput,result.output,embedded];
 	pending~=result.assumptions;
 	Proof[] proofs=[result.certificate];
 	void domains(DomainProof p){
@@ -582,9 +584,9 @@ string exportLean(Arena a,Result result){
 		}
 		s~="\n";
 	}
-	s~="theorem refinement (ρ : Env)"~contexts(d,context,true)~" : Value.Refines "~exprEval(result.proofInput.id)~" "~exprEval(result.output.id)~" :=\n  Eq.mpr (congrArg₂ Value.Refines "~evalEq(result.proofInput.id)~" "~evalEq(result.output.id)~") "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
+	s~="theorem refinement (ρ : Env)"~contexts(d,context,true)~" : Value.Refines "~exprEval(result.proofInput.id)~" "~exprEval(embedded.id)~" :=\n  Eq.mpr (congrArg₂ Value.Refines "~evalEq(result.proofInput.id)~" "~evalEq(embedded.id)~") "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
 	s~="theorem simplification (ρ : Env)"~contexts(d,context,true)~" (h : Expr.Defined ρ "~name(result.proofInput.id)~") : "~
-		exprEval(result.proofInput.id)~" = "~exprEval(result.output.id)~" := (refinement ρ"~contexts(d,context,false)~").eq_of_defined h\n#qsym_check_axioms simplification\n\n";
+		exprEval(result.proofInput.id)~" = "~exprEval(embedded.id)~" := (refinement ρ"~contexts(d,context,false)~").eq_of_defined h\n#qsym_check_axioms simplification\n\n";
 	auto inputOrder=a.viewPostorder(result.input);
 	bool direct=true;
 	foreach(id;inputOrder){

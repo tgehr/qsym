@@ -210,7 +210,7 @@ unittest{
 }
 unittest{
 	auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
-	foreach(pair;[["e","e"],["exp(1)","e"],["cexp(1)","toℂ(e)"],["ⅈ*e","ⅈ·e"],["e^2","exp(2)"],["e^z","cexp(z)"]]){
+	foreach(pair;[["e","e"],["exp(1)","e"],["cexp(1)","e"],["ⅈ*e","ⅈ·e"],["e^2","exp(2)"],["e^z","cexp(z)"]]){
 		auto t=simplify(a,s.parse(a,pair[0])).output,printed=s.format(a,t);
 		assert(printed==pair[1],pair[0]~": "~printed);
 		auto roundtrip=simplify(a,s.parse(a,printed)).output;

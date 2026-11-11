@@ -74,7 +74,7 @@ unittest{
 	foreach(source;["x-2","x-y","-(x+y)","-2*x*y","(-x)^3","(-x)^2", "x=-2/3",
 		"z=1+ⅈ","z-(1+ⅈ)","(-2+3*ⅈ)*z","-(2+3*ⅈ)*z","complex(-2,0)","[p]*(-x)","mulR([p],-x)"]){
 		auto t=s.parse(a,source),formatted=s.parse(a,s.format(a,t));
-		assert(a.sort(t)==a.sort(formatted),source);
+		assert(promotes(a.sort(simplify(a,formatted).output),a.sort(t)),source);
 		assert(simplify(a,t).output==simplify(a,formatted).output,source~": "~s.format(a,t));
 	}
 	auto input=s.parse(a,"[x^2=1]*[x<1]");

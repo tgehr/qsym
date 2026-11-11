@@ -1313,3 +1313,37 @@ rewrite real_log10_quotient(x:ℝ,y:ℝ):log10(x/y)⇒log10(x)-log10(y) when 0<x
 rewrite real_log10_inverse(x:ℝ):log10(x⁻¹)⇒-log10(x);
 rewrite real_log10_power(x:ℝ,n:NatParam):log10(x^(n+1))⇒(real(n)+1)*log10(x) when 0<x;
 rewrite real_log10_matching_power(x:ℝ):log10(powerR(10,x))⇒x;
+
+# Embeddings commute with indexed powers, including their partial domains.
+lemma embed_NZ_powN(x:ℕ,n:ℕ):powZN(castNZ(x),n)⇒castNZ(powNN(x,n));
+lemma embed_ZQ_powN(x:ℤ,n:ℕ):powQN(castZQ(x),n)⇒castZQ(powZN(x,n));
+lemma embed_QR_powN(x:ℚ,n:ℕ):powRN(castQR(x),n)⇒castQR(powQN(x,n));
+lemma embed_RC_powN(x:ℝ,n:ℕ):powCN(castRC(x),n)⇒castRC(powRN(x,n));
+lemma embed_QR_powZ(x:ℚ,n:ℤ):powRZ(castQR(x),n)⇒castQR(powQZ(x,n));
+lemma embed_RC_powZ(x:ℝ,n:ℤ):powCZ(castRC(x),n)⇒castRC(powRZ(x,n));
+
+# The bottom of the natural order and singleton discrete intervals.
+rewrite natural_lt_one(x:ℕ):x<1⇒x=0;
+rewrite natural_one_le(x:ℕ):1≤x⇒x≠0;
+rewrite natural_unit_interval(x:ℕ):(nonzeroN(x)∧x<2)⇒x=1;
+rewrite natural_unit_interval_right(x:ℕ):(x<2∧nonzeroN(x))⇒x=1;
+rewrite natural_literal_closed_interval(x:ℕ,a:ℕ):(a≤x∧x≤a)⇒x=a when literal(a);
+rewrite natural_literal_closed_interval_right(x:ℕ,a:ℕ):(x≤a∧a≤x)⇒x=a when literal(a);
+rewrite integer_literal_closed_interval(x:ℤ,a:ℤ):(a≤x∧x≤a)⇒x=a when literal(a);
+rewrite integer_literal_closed_interval_right(x:ℤ,a:ℤ):(x≤a∧a≤x)⇒x=a when literal(a);
+rewrite natural_closed_interval(x:ℕ,a:ℕ):(a≤x∧x≤a)⇒x=a;
+rewrite natural_closed_interval_right(x:ℕ,a:ℕ):(x≤a∧a≤x)⇒x=a;
+rewrite integer_closed_interval(x:ℤ,a:ℤ):(a≤x∧x≤a)⇒x=a;
+rewrite integer_closed_interval_right(x:ℤ,a:ℤ):(x≤a∧a≤x)⇒x=a;
+lemma natural_literal_lt_right(x:ℕ,a:ℕ,b:ℕ):x<a⇒x≤b when a=b+1,defined(b);
+lemma natural_literal_lt_left(x:ℕ,a:ℕ,b:ℕ):a<x⇒b≤x when b=a+1,defined(b);
+lemma integer_literal_lt_right(x:ℤ,a:ℤ,b:ℤ):x<a⇒x≤b when a=b+1,defined(b);
+lemma integer_literal_lt_left(x:ℤ,a:ℤ,b:ℤ):a<x⇒b≤x when b=a+1,defined(b);
+rewrite natural_unit_closed(x:ℕ):(nonzeroN(x)∧x≤1)⇒x=1;
+rewrite natural_unit_closed_right(x:ℕ):(x≤1∧nonzeroN(x))⇒x=1;
+
+# Canonicalize masks supplied through implicit or explicit embeddings alike.
+rewrite natural_cast_mask(p:𝔹,x:ℕ):castNZ(maskN(p,x))⇒maskZ(p,castNZ(x));
+rewrite integer_cast_mask(p:𝔹,x:ℤ):castZQ(maskZ(p,x))⇒maskQ(p,castZQ(x));
+rewrite rational_cast_mask(p:𝔹,x:ℚ):castQR(maskQ(p,x))⇒maskR(p,castQR(x));
+rewrite real_cast_mask(p:𝔹,x:ℝ):castRC(maskR(p,x))⇒maskC(p,castRC(x));

@@ -72,26 +72,26 @@ unittest{
 		auto fast=simplify(a,input),checked=simplify(a,input,Options(DensityMode.preserve,true));
 		assert(!fast.exhausted&&!checked.exhausted&&fast.output==checked.output,c.name);
 		auto printed=s.format(a,fast.output);
-		assert(a.sort(s.parse(a,printed))==c.sort,c.name~": "~printed);
+		assert(simplify(a,s.parse(a,printed)).output==fast.output,c.name~": "~printed);
 		exportLean(a,checked);
 	}
 	string result(string source){ return s.format(a,simplify(a,s.parse(a,source)).output); }
 	assert(result("[x<2]")=="[x<2]");
-	assert(result("([p]:ℕ)")=="([p]:ℕ)");
+	assert(result("([p]:ℕ)")=="[p]");
 	assert(result("[q≠0]*q⁻¹")=="[q≠0]·q⁻¹");
 	assert(result("2^(1/2)")=="sqrt(2)");
 	assert(result("2^3^2")=="512");
-	assert(result("q^0")=="1/1");
-	assert(result("ccosh(0)")=="toℂ(1)");
+	assert(result("q^0")=="1");
+	assert(result("ccosh(0)")=="1");
 	assert(result("clog(cexp(z))")=="clog(cexp(z))");
-	assert(result("[false]*log(0)")=="real(0)");
+	assert(result("[false]*log(0)")=="0");
 	assert(result("sqrt(x^2)")=="abs(x)");
 	assert(result("csqrt(z^2)")!="z");
 	assert(result("n*0")=="0");
 	assert(result("min(x)")=="x");
 	assert(result("max(x)")=="x");
 	assert(result("hypot(x)")=="abs(x)");
-	assert(result("hypot()")=="real(0)");
+	assert(result("hypot()")=="0");
 	foreach(source;["mulR([p],x⁻¹)","mulC([p],z⁻¹)","mulQ([p],q⁻¹)","mulR(x⁻¹,[p])","mulC(z⁻¹,[p])","mulQ(q⁻¹,[p])",
 		"mulR([p]*x,x⁻¹)","mulR(x⁻¹,[p]*x)","mulQ([p]*q,q⁻¹)","mulQ(q⁻¹,[p]*q)"]){
 		auto t=s.parse(a,source);

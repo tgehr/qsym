@@ -133,6 +133,17 @@ package final class Elementary{
 	bool propose(Term t,out Instance result){
 		auto n=a.view(t); if(n.op!=Op.builtin) return false;
 		auto f=cast(Builtin)n.value;
+		if(f==Builtin.ltN||f==Builtin.ltZ){
+			foreach(right;[false,true]){
+				auto x=a.at(right?n.b:n.a),bound=a.at(right?n.a:n.b);
+				if(!a.isNumber(bound)||a.isNumber(x)) continue;
+				auto v=budget.calc!"+"(a.number(bound),Number(right?1:-1));
+				if(f==Builtin.ltN&&v.re<Rational(0)) continue;
+				auto law=f==Builtin.ltN?(right?Law.natural_literal_lt_left:Law.natural_literal_lt_right):
+					(right?Law.integer_literal_lt_left:Law.integer_literal_lt_right);
+				result=instantiate(a,law,[x,bound,a.number(v,a.sort(x))]); return true;
+			}
+		}
 		// Tighten a rational literal bound on an integer without introducing a
 		// floor/ceiling expression that the comparison rules would expand again.
 		if(f==Builtin.ltQ||f==Builtin.leQ){

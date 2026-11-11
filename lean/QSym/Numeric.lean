@@ -41,7 +41,7 @@ def inverseC (z : ℚ × ℚ) : Option (ℚ × ℚ) :=
   if z = (0, 0) then none else some (invC z)
 
 -- Structural fuel keeps kernel reduction independent of well-founded proofs.
-def power : ℕ → ℚ → ℕ → ℚ
+def power {α : Type} [One α] [Mul α] : ℕ → α → ℕ → α
   | 0, _, _ => 1
   | fuel+1, x, n =>
     if n=0 then 1 else
@@ -78,9 +78,9 @@ def calculate : {s : Ty} → Expr s → Option (Data s)
   | _, .eqB a b => binary (· == ·) (calculate a) (calculate b)
   | _, .numQ a => (calculate a).map Rat.num
   | _, .denQ a => (calculate a).map Rat.den
-  | _, .powN a n => (calculate a).map (· ^ n)
-  | _, .powZ a n => (calculate a).map (· ^ n)
-  | _, .powQ a n => (calculate a).map (· ^ n)
+  | _, .powN a n => (calculate a).map (fun x => power n x n)
+  | _, .powZ a n => (calculate a).map (fun x => power n x n)
+  | _, .powQ a n => (calculate a).map (fun x => power n x n)
   | _, .powR a n => (calculate a).map (fun x => power n x n)
   | _, .invQ a => (calculate a).bind inverse
   | _, .makeQ a b => do
@@ -127,12 +127,12 @@ private theorem map_some {α β : Type} {f : α → β} {x : Option α} {v : β}
     (h : x.map f = some v) : ∃ a, x = some a ∧ f a = v := by
   cases x <;> simp_all
 
-private theorem power_sound (fuel : ℕ) (x : ℚ) (n : ℕ) (h : n≤fuel) : power fuel x n = x^n := by
+private theorem power_sound {α : Type} [Monoid α] (fuel : ℕ) (x : α) (n : ℕ) (h : n≤fuel) : power fuel x n = x^n := by
   induction fuel generalizing x n with
   | zero =>
     have hn : n=0 := by omega
     subst n
-    rfl
+    simp [power]
   | succ fuel ih =>
     simp only [power]
     split
@@ -231,13 +231,13 @@ theorem calculate_sound (ρ : Env) {s : Ty} (term : Expr s) (v : Data s)
     simp [Expr.eval, ha x hx, Functions.denQ, Function1.apply, denote, complex, id]
   | powN a n ha =>
     obtain ⟨x, hx, rfl⟩ := map_some h
-    simp [Expr.eval, ha x hx, denote]
+    simp [Expr.eval, ha x hx, denote, power_sound n x n (le_refl n)]
   | powZ a n ha =>
     obtain ⟨x, hx, rfl⟩ := map_some h
-    simp [Expr.eval, ha x hx, denote]
+    simp [Expr.eval, ha x hx, denote, power_sound n x n (le_refl n)]
   | powQ a n ha =>
     obtain ⟨x, hx, rfl⟩ := map_some h
-    simp [Expr.eval, ha x hx, denote]
+    simp [Expr.eval, ha x hx, denote, power_sound n x n (le_refl n)]
   | powR a n ha =>
     obtain ⟨x, hx, rfl⟩ := map_some h
     simp [Expr.eval, ha x hx, denote, power_sound n x n (le_refl n), Rat.cast_pow]

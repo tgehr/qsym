@@ -143,8 +143,8 @@ unittest{
 unittest{
 	auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
 	assert(simplify(a,s.parse(a,"tan(π/2)")).output==s.parse(a,"tan(real(1,2)*π)"));
-	foreach(pair;[["exp(π*ⅈ)","-toℂ(1)"],["exp(2*π*ⅈ)","toℂ(1)"],
-		["exp(3*π*ⅈ/2)","-ⅈ"],["complex(0,0)","toℂ(0)"],["z+complex(-1,0)","z-1"]]){
+	foreach(pair;[["exp(π*ⅈ)","-1"],["exp(2*π*ⅈ)","1"],
+		["exp(3*π*ⅈ/2)","-ⅈ"],["complex(0,0)","0"],["z+complex(-1,0)","z-1"]]){
 		auto t=simplify(a,s.parse(a,pair[0])).output,printed=s.format(a,t);
 		assert(printed==pair[1],pair[0]~": "~printed);
 		auto roundtrip=simplify(a,s.parse(a,printed)).output;

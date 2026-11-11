@@ -176,7 +176,7 @@ unittest{
 		if(fast.exhausted||fast.output!=expected){
 			writeln("FAIL ",c.name,": ",s.format(a,fast.output),"; expected ",s.format(a,expected),fast.exhausted?" (exhausted)":""); ++failures;
 		}
-		assert(a.sort(fast.output)==a.sort(input),c.name~" changed type");
+		assert(promotes(a.sort(fast.output),a.sort(input)),c.name~" changed type");
 		assert(fast.output==checked.output&&fast.exhausted==checked.exhausted,c.name);
 		if(!fast.exhausted) assert(simplify(a,fast.output).output==fast.output,c.name~" is not idempotent");
 		exportLean(a,checked);

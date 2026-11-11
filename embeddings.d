@@ -11,7 +11,50 @@ package final class Embeddings{
 	private Arena a;
 	private Derivation d;
 	private Budget budget;
+	private Proof[ulong] narrowed;
 	this(Arena a,Derivation d,Budget budget){ this.a=a; this.d=d; this.budget=budget; }
+	static bool conversion(Node n){ return n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castRC; }
+	Term source(Term t){ while(conversion(a.view(t))) t=a.viewChild(t,0); return t; }
+	/// A homogeneous proof whose endpoint embeds the smallest available scalar
+	/// expression. This runs outside the rewrite loop: expansion of embeddings
+	/// remains useful inside real/complex algebra.
+	Proof narrow(Term t,uint ctx,uint depth=0){
+		auto key=(cast(ulong)ctx<<32)|t.id;
+		if(auto p=key in narrowed) return *p;
+		auto p=narrowUncached(t,ctx,depth); narrowed[key]=p; return p;
+	}
+	private Proof narrowUncached(Term t,uint ctx,uint depth){
+		budget.spend();
+		auto n=a.view(t);
+		if(!numeric(n.sort)||n.sort==Sort.natural) return d.refl(t,ctx);
+		if(depth>=128) throw new Limit;
+		if(a.isNumber(t)){
+			auto v=a.number(t);
+			auto s=!v.im.zero?Sort.complex:!v.re.integral?Sort.rational:v.re<Rational(0)?Sort.integer:Sort.natural;
+			return s==n.sort?d.refl(t,ctx):d.numeric(t,a.castTo(a.number(v,s),n.sort),ctx);
+		}
+		bool candidate=conversion(n)||n.op==Op.add||n.op==Op.mul||n.op==Op.inv||n.op==Op.pow||n.op==Op.mask;
+		if(n.op==Op.builtin) switch(cast(Builtin)n.value){
+			case Builtin.addZ,Builtin.addQ,Builtin.mulZ,Builtin.mulQ,
+				Builtin.powZN,Builtin.powQN,Builtin.powRN,Builtin.powCN,Builtin.powRZ,Builtin.powCZ:candidate=true; break;
+			default:break;
+		}
+		if(!candidate) return d.refl(t,ctx);
+		Proof[] children;
+		foreach(i;0..n.arity) children~=narrow(a.viewChild(t,i),ctx,depth+1);
+		auto p=d.congr(t,children,ctx);
+		if(!conversion(n)) p=d.trans(p,contract(p.after,ctx,true),ctx);
+		if(!conversion(a.view(p.after))) return d.refl(t,ctx);
+		// Each contraction descends one rank. Continue inside that embedding.
+		if(conversion(n)) return p;
+		auto lower=narrow(a.viewChild(p.after,0),ctx,depth+1);
+		return d.trans(p,d.congr(p.after,[lower],ctx),ctx);
+	}
+	Proof lift(Proof p,Sort target,uint ctx){
+		auto t=a.castTo(p.before,target);
+		if(a.sort(p.before)==target) return p;
+		return d.congr(t,[lift(p,a.sort(a.viewChild(t,0)),ctx)],ctx);
+	}
 	private Law law(string op)(Sort target){
 		switch(target){
 			case Sort.integer:return __traits(getMember,Law,"embed_NZ_"~op);
@@ -55,10 +98,17 @@ package final class Embeddings{
 		}
 		assert(0);
 	}
-	private Proof contract(Term t,uint ctx){
+	private Proof contract(Term t,uint ctx,bool narrowing=false){
 		auto n=a.view(t),op=n.op,s=n.sort;
+		bool indexedNatural,indexedInteger;
 		if(op==Op.builtin){
 			switch(cast(Builtin)n.value){
+				case Builtin.powZN,Builtin.powQN,Builtin.powRN,Builtin.powCN:
+					if(!narrowing) return d.refl(t,ctx);
+					indexedNatural=true; op=Op.pow; break;
+				case Builtin.powRZ,Builtin.powCZ:
+					if(!narrowing) return d.refl(t,ctx);
+					indexedInteger=true; op=Op.pow; break;
 				case Builtin.addZ,Builtin.addQ:op=Op.add; break;
 				case Builtin.mulZ,Builtin.mulQ:op=Op.mul; break;
 				case Builtin.nonzeroZ,Builtin.nonzeroQ:op=Op.nonzero; break;
@@ -85,10 +135,12 @@ package final class Embeddings{
 				selected=s==Sort.real_?Law.embed_QR_inv:Law.embed_RC_inv; break;
 			default:return d.refl(t,ctx);
 		}
+		if(indexedNatural) selected=law!"powN"(s);
+		if(indexedInteger) selected=s==Sort.real_?Law.embed_QR_powZ:Law.embed_RC_powZ;
 		Proof[] children; Term[] bindings; bool embedded;
 		foreach(i;0..n.arity){
 			budget.spend(); auto child=a.viewChild(t,i),c=a.view(child);
-			if(op==Op.mask&&i==0){ children~=d.refl(child,ctx); bindings~=child; continue; }
+			if(op==Op.mask&&i==0||(indexedNatural||indexedInteger)&&i==1){ children~=d.refl(child,ctx); bindings~=child; continue; }
 			if(c.op==Op.builtin&&c.value==castFunction){
 				embedded=true; children~=d.refl(child,ctx); bindings~=a.at(c.a);
 			}else if(a.isNumber(child)){
@@ -98,8 +150,8 @@ package final class Embeddings{
 				children~=d.numeric(child,lifted,ctx); bindings~=lower;
 			}else return d.refl(t,ctx);
 		}
-		if(!embedded) return d.refl(t,ctx);
-		if(op==Op.pow) bindings~=a.real_(n.value);
+		if(!embedded&&!narrowing) return d.refl(t,ctx);
+		if(op==Op.pow&&!indexedNatural&&!indexedInteger) bindings~=a.real_(n.value);
 		auto p=d.congr(t,children,ctx),q=d.rule(instantiate(a,selected,bindings),[],ctx);
 		return d.trans(p,q,ctx);
 	}

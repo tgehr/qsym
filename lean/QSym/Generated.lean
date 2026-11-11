@@ -9278,4 +9278,208 @@ theorem r_real_log10_matching_power (v_x : Option (Ty.denote .real)) :
 
 #qsym_check_axioms r_real_log10_matching_power
 
+theorem r_embed_NZ_powN (v_x : Option (Ty.denote .natural)) (v_n : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.powZN.apply (Functions.castNZ.apply v_x) v_n) (Functions.castNZ.apply (Functions.powNN.apply v_x v_n)) := qsym_cached% by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_embed_NZ_powN
+
+theorem r_embed_ZQ_powN (v_x : Option (Ty.denote .integer)) (v_n : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.powQN.apply (Functions.castZQ.apply v_x) v_n) (Functions.castZQ.apply (Functions.powZN.apply v_x v_n)) := qsym_cached% by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_embed_ZQ_powN
+
+theorem r_embed_QR_powN (v_x : Option (Ty.denote .rational)) (v_n : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.powRN.apply (Functions.castQR.apply v_x) v_n) (Functions.castQR.apply (Functions.powQN.apply v_x v_n)) := qsym_cached% by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_embed_QR_powN
+
+theorem r_embed_RC_powN (v_x : Option (Ty.denote .real)) (v_n : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.powCN.apply (Functions.castRC.apply v_x) v_n) (Functions.castRC.apply (Functions.powRN.apply v_x v_n)) := qsym_cached% by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_embed_RC_powN
+
+theorem r_embed_QR_powZ (v_x : Option (Ty.denote .rational)) (v_n : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.powRZ.apply (Functions.castQR.apply v_x) v_n) (Functions.castQR.apply (Functions.powQZ.apply v_x v_n)) := qsym_cached% by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_embed_QR_powZ
+
+theorem r_embed_RC_powZ (v_x : Option (Ty.denote .real)) (v_n : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.powCZ.apply (Functions.castRC.apply v_x) v_n) (Functions.castRC.apply (Functions.powRZ.apply v_x v_n)) := qsym_cached% by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_embed_RC_powZ
+
+theorem r_natural_lt_one (v_x : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.ltN.apply v_x (some ((1) : ℕ))) (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply v_x))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_lt_one
+
+theorem r_natural_one_le (v_x : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.leN.apply (some ((1) : ℕ)) v_x) (Functions.nonzeroZ.apply (Functions.castNZ.apply v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_one_le
+
+theorem r_natural_unit_interval (v_x : Option (Ty.denote .natural)) :
+    Value.Refines (Value.and (Functions.nonzeroN.apply v_x) (Functions.ltN.apply v_x (some ((2) : ℕ)))) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (some ((1) : ℤ)))))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_unit_interval
+
+theorem r_natural_unit_interval_right (v_x : Option (Ty.denote .natural)) :
+    Value.Refines (Value.and (Functions.ltN.apply v_x (some ((2) : ℕ))) (Functions.nonzeroN.apply v_x)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (some ((1) : ℤ)))))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_unit_interval_right
+
+theorem r_natural_literal_closed_interval (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) :
+    Value.Refines (Value.and (Functions.leN.apply v_a v_x) (Functions.leN.apply v_x v_a)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.castNZ.apply v_a))))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_literal_closed_interval
+
+theorem r_natural_literal_closed_interval_right (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) :
+    Value.Refines (Value.and (Functions.leN.apply v_x v_a) (Functions.leN.apply v_a v_x)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.castNZ.apply v_a))))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_literal_closed_interval_right
+
+theorem r_integer_literal_closed_interval (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) :
+    Value.Refines (Value.and (Functions.leZ.apply v_a v_x) (Functions.leZ.apply v_x v_a)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply v_x (Functions.mulZ.apply (some ((-1) : ℤ)) v_a)))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_literal_closed_interval
+
+theorem r_integer_literal_closed_interval_right (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) :
+    Value.Refines (Value.and (Functions.leZ.apply v_x v_a) (Functions.leZ.apply v_a v_x)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply v_x (Functions.mulZ.apply (some ((-1) : ℤ)) v_a)))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_literal_closed_interval_right
+
+theorem r_natural_closed_interval (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) :
+    Value.Refines (Value.and (Functions.leN.apply v_a v_x) (Functions.leN.apply v_x v_a)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.castNZ.apply v_a))))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_closed_interval
+
+theorem r_natural_closed_interval_right (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) :
+    Value.Refines (Value.and (Functions.leN.apply v_x v_a) (Functions.leN.apply v_a v_x)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.castNZ.apply v_a))))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_closed_interval_right
+
+theorem r_integer_closed_interval (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) :
+    Value.Refines (Value.and (Functions.leZ.apply v_a v_x) (Functions.leZ.apply v_x v_a)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply v_x (Functions.mulZ.apply (some ((-1) : ℤ)) v_a)))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_closed_interval
+
+theorem r_integer_closed_interval_right (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) :
+    Value.Refines (Value.and (Functions.leZ.apply v_x v_a) (Functions.leZ.apply v_a v_x)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply v_x (Functions.mulZ.apply (some ((-1) : ℤ)) v_a)))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_closed_interval_right
+
+theorem r_natural_literal_lt_right (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_a) (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.castNZ.apply (Functions.addN.apply v_b (some ((1) : ℕ)))))))) (some true))
+    (hp1 : Value.Defined v_b) :
+    Value.Refines (Functions.ltN.apply v_x v_a) (Functions.leN.apply v_x v_b) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_literal_lt_right
+
+theorem r_natural_literal_lt_left (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_b) (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.castNZ.apply (Functions.addN.apply v_a (some ((1) : ℕ)))))))) (some true))
+    (hp1 : Value.Defined v_b) :
+    Value.Refines (Functions.ltN.apply v_a v_x) (Functions.leN.apply v_b v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_literal_lt_left
+
+theorem r_integer_literal_lt_right (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply v_a (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.addZ.apply v_b (some ((1) : ℤ))))))) (some true))
+    (hp1 : Value.Defined v_b) :
+    Value.Refines (Functions.ltZ.apply v_x v_a) (Functions.leZ.apply v_x v_b) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_literal_lt_right
+
+theorem r_integer_literal_lt_left (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply v_b (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.addZ.apply v_a (some ((1) : ℤ))))))) (some true))
+    (hp1 : Value.Defined v_b) :
+    Value.Refines (Functions.ltZ.apply v_a v_x) (Functions.leZ.apply v_b v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_literal_lt_left
+
+theorem r_natural_unit_closed (v_x : Option (Ty.denote .natural)) :
+    Value.Refines (Value.and (Functions.nonzeroN.apply v_x) (Functions.leN.apply v_x (some ((1) : ℕ)))) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (some ((1) : ℤ)))))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_unit_closed
+
+theorem r_natural_unit_closed_right (v_x : Option (Ty.denote .natural)) :
+    Value.Refines (Value.and (Functions.leN.apply v_x (some ((1) : ℕ))) (Functions.nonzeroN.apply v_x)) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (some ((1) : ℤ)))))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_unit_closed_right
+
+theorem r_natural_cast_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.castNZ.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.castNZ.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_cast_mask
+
+theorem r_integer_cast_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.castZQ.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.castZQ.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_cast_mask
+
+theorem r_rational_cast_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .rational)) :
+    Value.Refines (Functions.castQR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.castQR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_cast_mask
+
+theorem r_real_cast_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.castRC.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.castRC.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cast_mask
+
 end QSym.Generated

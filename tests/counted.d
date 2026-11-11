@@ -21,7 +21,7 @@ private Result example(Arena a,Sort s,Op op,string kind){
 		auto sum=a.region(Op.add,s,[Operand(x,1_000_003)]);
 		auto fact=a.not_(a.nonzero(a.sub(sum,a.number(Number(7_000_021),s))));
 		auto r=simplify(a,x,[fact],o);
-		enforce(!r.exhausted&&r.output==a.number(Number(7),s),"counted affine fact failed"); return r;
+		enforce(!r.exhausted&&r.output==a.natural_(7),"counted affine fact failed"); return r;
 	}
 	if(kind=="Quadratic"){
 		auto sum=a.region(Op.add,s,[Operand(a.pow(x,2),1_000_003)]);

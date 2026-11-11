@@ -80,11 +80,11 @@ unittest{
 	assert(a.sort(s.parse(a,"[p]"))==Sort.real_);
 	assert(s.format(a,simplify(a,s.parse(a,"x/2=toℝ(floor(x/2))")).output)=="x·(1/2)=floor(x·(1/2))");
 	foreach(pair;[["3/2","3/2"],["-3/2","-3/2"],["rat(6,4)","3/2"],[".125","1/8"],
-		["2.0","2/1"],["0.0","0/1"],["-2.0","-2/1"],["rat(3,2)^n","(3/2)^n"]]){
+		["2.0","2"],["0.0","0"],["-2.0","-2"],["rat(3,2)^n","(3/2)^n"]]){
 		auto input=simplify(a,s.parse(a,pair[0])).output,printed=s.format(a,input);
 		assert(printed==pair[1],pair[0]~" printed as "~printed);
 		auto output=s.parse(a,printed);
-		assert(a.sort(output)==Sort.rational,printed~" changed its scalar type");
+		assert(promotes(a.sort(output),Sort.rational),printed~" changed its scalar type");
 		assert(simplify(a,output).output==input,printed~" failed to round-trip");
 	}
 	// Fraction notation must retain grouping and exponent kinds in context.
@@ -92,7 +92,7 @@ unittest{
 		"rat(3,2)/(q+1)","q/rat(3,2)","q<rat(3,2)","rat(3,2)<q",
 		"powQN(rat(2,1),n)","powQZ(rat(2,1),k)","mulQ(([p]:ℚ),rat(3,2))"]){
 		auto input=s.parse(a,source),printed=s.format(a,input),output=s.parse(a,printed);
-		assert(a.sort(output)==a.sort(input),printed~" changed its scalar type");
+		assert(promotes(a.sort(simplify(a,output).output),a.sort(input)),printed~" changed its scalar type");
 		assert(simplify(a,output).output==simplify(a,input).output,printed~" changed meaning");
 		assert(simplifyDomain(a,output).output==simplifyDomain(a,input).output,
 			printed~" changed its domain");
@@ -111,10 +111,10 @@ unittest{
 			writeln("FAIL ",c.name,": ",s.format(a,fast.output),"; expected ",s.format(a,expected)); ++failures;
 		}
 		assert(fast.output==checked.output&&fast.exhausted==checked.exhausted,c.name);
-		assert(a.sort(fast.output)==a.sort(input),c.name~" changes type");
+		assert(promotes(a.sort(fast.output),a.sort(input)),c.name~" changes type");
 		assert(simplify(a,fast.output,facts).output==fast.output,c.name~" is not idempotent");
 		auto printed=s.format(a,fast.output),roundtrip=s.parse(a,printed);
-		assert(a.sort(roundtrip)==a.sort(input),c.name~" printed type");
+		assert(a.sort(simplify(a,roundtrip,facts).output)==a.sort(fast.output),c.name~" printed type");
 		assert(simplify(a,roundtrip,facts).output==fast.output,c.name~" failed to round-trip: "~printed);
 		exportLean(a,checked);
 	}

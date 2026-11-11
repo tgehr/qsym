@@ -255,11 +255,11 @@ unittest{
 		if(fast.exhausted||fast.output!=expected){
 			writeln("FAIL ",c.name,": ",s.format(a,fast.output),"; expected ",s.format(a,expected),fast.exhausted?" (exhausted)":""); ++failures;
 		}
-		assert(a.sort(fast.output)==a.sort(input),c.name~" changes type");
+		assert(promotes(a.sort(fast.output),a.sort(input)),c.name~" changes type");
 		assert(fast.output==checked.output&&fast.exhausted==checked.exhausted,c.name);
 		assert(simplify(a,fast.output,facts).output==fast.output,c.name~" is not idempotent");
 		auto printed=s.format(a,fast.output),roundtrip=s.parse(a,printed);
-		assert(a.sort(roundtrip)==a.sort(input),c.name~" printed type");
+		assert(a.sort(simplify(a,roundtrip,facts).output)==a.sort(fast.output),c.name~" printed type");
 		assert(simplify(a,roundtrip,facts).output==fast.output,c.name~" failed to round-trip: "~printed);
 		exportLean(a,checked);
 	}

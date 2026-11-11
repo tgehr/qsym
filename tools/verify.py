@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",255),("radicals",78),("inverses",196),("domains",218),("assumptions",115),("numerals",68),("bounds",233)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",255),("radicals",78),("inverses",196),("domains",218),("assumptions",115),("numerals",68),("bounds",233),("subtypes",85)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -229,6 +229,26 @@ def main():
 	path.write_text(valid+"\nnamespace QSym\ntheorem forged (ρ : Env) : "+claim+
 		" := Certificate.refinement ρ rfl\nend QSym\n")
 	check(path,succeeds=False)
+	# A lowered result is certified only after its exact embedding. Changing
+	# either the returned value or that endpoint must fail kernel replay.
+	for name,source,value in (
+		("WrongNaturalHalfInterval","NaturalHalfInterval","some false"),
+		("WrongNaturalHalfIndicator","NaturalHalfIndicator","some false"),
+		("WrongSubtypeLiteral","PositiveRealLiteral","some (4 : ℝ)"),
+		("WrongSubtypeMask","NaturalMask","some (0 : ℝ)"),
+		("WrongSubtypePower","NaturalIndexedBase","some (0 : ℂ)"),
+		("WrongComplexPowerOverload","ComplexPowerOverload","some (0 : ℂ)")):
+		valid=(ROOT/"build/subtypes"/(source+".lean")).read_text()
+		corrupt,count=re.subn(r"(theorem refinement .*? : Value.Refines .*? )\(Expr.eval ρ n\d+\)( :=)",
+			lambda m:m[1]+"("+value+")"+m[2],valid,count=1)
+		if count!=1:
+			raise RuntimeError("could not construct "+name)
+		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	valid=(ROOT/"build/subtypes/PositiveRealLiteral.lean").read_text()
+	corrupt=valid.replace("(.nat (3))","(.nat (4))").replace(" := some (3)"," := some (4)")
+	if corrupt==valid or "(.nat (4))" not in corrupt or " := some (4)" not in corrupt:
+		raise RuntimeError("could not construct invalid subtype numeric witness")
+	path=negative/"WrongSubtypeWitness.lean"; path.write_text(corrupt); check(path,succeeds=False)
 	bad_rules=negative/"bad.qs"
 	bad_rules.write_text("rule bad(x:ℝ):1·x⇒0;\n",encoding="utf-8")
 	subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/"bad.d"),
