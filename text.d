@@ -262,7 +262,11 @@ struct Syntax{
 					auto z=a.number(t);
 					if(n.sort==Sort.natural) p.text=z.re.toString;
 					else if(n.sort==Sort.integer) p.text="int("~z.re.toString~")";
-					else if(n.sort==Sort.rational) p.text="rat("~to!string(z.re.numerator)~","~to!string(z.re.denominator)~")";
+					else if(n.sort==Sort.rational){
+						p=rational(z.re);
+						// A whole rational still needs a denominator to retain its type.
+						if(z.re.integral){ p.text~="/1"; p.precedence=70; }
+					}
 					else if(n.sort==Sort.real_){ p.text="real("~to!string(z.re.numerator)~(z.re.denominator==1?"":","~to!string(z.re.denominator))~")"; }
 					else{
 						auto negative=z.re<Rational(0)||z.re.zero&&z.im<Rational(0); if(negative) z=-z;

@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("trig-algebra",255),("radicals",42),("inverses",60),("domains",198),("assumptions",115),("numerals",68)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",93),("trigonometry",287),("trig-algebra",255),("radicals",42),("inverses",81),("domains",206),("assumptions",115),("numerals",68)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -243,6 +243,9 @@ def main():
 		("BadHyperbolicSumSquares","rewrite bad(z:ℂ):ccosh(z)^2+csinh(z)^2⇒complex(1,0);"),
 		("BadComplexPeriodIndex","rewrite bad(z:ℂ,w:ℂ):csin(z+toℂ(2*π)*w)⇒csin(z);"),
 		("BadNegativeQuarterSign","rewrite bad(z:ℂ):csin(z-toℂ(π/2))⇒ccos(z);"),
+		("BadComplexTanhAcoshBranch","rewrite bad(z:ℂ):ctanh(cacosh(z))⇒csqrt(z^2-1)/z;"),
+		("BadRealTanhAsinhSign","rewrite bad(x:ℝ):tanh(asinh(x))⇒abs(x)/sqrt(1+x^2);"),
+		("BadReverseRealTanhAcosh","lemma bad(x:ℝ):sqrt(x^2-1)/x⇒tanh(acosh(x));"),
 		("BadRealAcoshInverse","rewrite bad(x:ℝ):acosh(cosh(x))⇒x;"),
 		("BadComplexAsinInverse","rewrite bad(z:ℂ):casin(csin(z))⇒z;"),
 		("BadComplexAcosInverse","rewrite bad(z:ℂ):cacos(ccos(z))⇒z;"),

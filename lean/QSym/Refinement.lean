@@ -185,7 +185,7 @@ elab "qsym_integer_power_goal" : tactic => withMainContext do
 
 open Lean Meta Elab Tactic in
 elab "qsym_inverse_goal" : tactic => do
-  let functions := #[``Functions.acoshR, ``Functions.atanhR, ``Functions.asinC, ``Functions.acosC,
+  let functions := #[``Functions.asinhR, ``Functions.acoshR, ``Functions.atanhR, ``Functions.asinC, ``Functions.acosC,
     ``Functions.atanC, ``Functions.asinhC, ``Functions.acoshC, ``Functions.atanhC]
   let target ← getMainTarget
   unless (target.find? fun e => functions.any (fun n => e.isConstOf n)).isSome do
@@ -203,6 +203,10 @@ macro "qsym_inverse" : tactic => `(tactic| (qsym_inverse_goal; first
   | exact Value.refines_inverse Functions.tanhC Functions.atanhC _ (fun z h _ => Inverse.complex_tanh_atanh z h.1 h.2)
   | exact Value.refines_real_acosh_cosh _
   | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero]; first
+    | exact Value.refines_real_tanh_asinh _
+    | exact Value.refines_real_tanh_acosh _
+    | exact Value.refines_complex_tanh_asinh _
+    | exact Value.refines_complex_tanh_acosh _
     | exact Value.refines_real_sinh_acosh _
     | exact Value.refines_complex_cos_asin _
     | exact Value.refines_complex_sin_acos _

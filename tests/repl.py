@@ -23,7 +23,7 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	"sin(z+0)","([p]:ℕ)",":functions cexp",":quit",""]),text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==[
-	"[x<2]","sqrt(2)","0","rat(1,2)","csin(z)","([p]:ℕ)",
+	"[x<2]","sqrt(2)","0","1/2","csin(z)","([p]:ℕ)",
 	"cexp(Complex): Complex","cexpi(Complex): Complex"],result.stdout
 facts_certificate=root/"build/ReplFacts.lean"
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
@@ -90,12 +90,12 @@ assert result.stdout.splitlines()==["true","true","true","z≠0","int(1)","true"
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	":vars j:ℕ","x^j=1",":vars j:ℤ","x^j=1",":vars j:ℚ","x^j=1",
 	":vars j:ℝ","j/2=toℝ(floor(j/2))",":vars q:ℚ,r:ℚ","toℝ(q)=toℝ(r)",
-	"2^3^2","0.1+0.2","-.5x+1.5x","1.25e-2",":quit",""]),
+	"2^3^2","0.1+0.2","-.5x+1.5x","1.25e-2","3/2","-3/2",":quit",""]),
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==[
 	"j=0∨x=1∨x=-1∧denominator(1/2·toℚ(j))=1",
 	"j=0∨x=1∨x=-1∧denominator(1/2·toℚ(j))=1",
 	"j=0∨x=1∨x=-1∧denominator(1/2·j)=1",
-	"j·(1/2)=floor(j·(1/2))","q=r","512","rat(3,10)","x","rat(1,80)"],result.stdout
+	"j·(1/2)=floor(j·(1/2))","q=r","512","3/10","x","1/80","3/2","-3/2"],result.stdout
 print("REPL checks passed.")

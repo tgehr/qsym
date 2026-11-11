@@ -9,6 +9,14 @@ import std.exception:enforce;
 struct Example{ string name,input,expected; string[] facts; }
 Example[] examples(){
 	return [
+		Example("ComplexTanhAsinhPole","ctanh(casinh(ⅈ))","false"),
+		Example("ComplexTanhAsinhNegativePole","ctanh(casinh(-ⅈ))","false"),
+		Example("ComplexTanhAcoshPole","ctanh(cacosh(0))","false"),
+		Example("RealTanhAcoshOutside","tanh(acosh(-2))","false"),
+		Example("ComplexTanhAsinhMaskedPole","[false]*ctanh(casinh(ⅈ))","true"),
+		Example("ComplexTanhAcoshMaskedPole","[false]*ctanh(cacosh(0))","true"),
+		Example("RealTanhAcoshBoundary","tanh(acosh(1))","true"),
+		Example("RealTanhAsinhPartial","tanh(asinh(log(x)))","0<x"),
 		Example("RightComplexLog","clog(z)*[z≠0]","true"),
 		Example("LeftComplexLog","[z≠0]*clog(z)","true"),
 		Example("MiddleGuard","log(x)*[x>0]*(1/x)","true"),

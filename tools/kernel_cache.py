@@ -121,7 +121,7 @@ class KernelCache:
 			try:
 				completed=subprocess.run(self.command+["--run",str(self.root/"tools/recheck.lean")]+
 					[str(compiled) for compiled,_ in group],cwd=self.root/"lean",env=self.env,
-					stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=180*len(group))
+					stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=180*len(group))
 				if completed.returncode:
 					return []
 				records=[json.loads(line) for line in completed.stdout.splitlines()]

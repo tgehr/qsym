@@ -460,6 +460,80 @@ theorem refines_complex_tanh_cosh (x : Option ℂ) :
     · apply refines_of_eq
       simp [Function1.apply, Functions.tanhC, Functions.coshC, Functions.sinhC, mul, h, Complex.tanh_eq_sinh_div_cosh]
 
+theorem refines_real_tanh_asinh (x : Option ℝ) :
+    Refines (Functions.tanhR.apply (Functions.asinhR.apply x))
+      (mul x (inv (Functions.sqrtR.apply (add (some 1) (x.map (fun v => v^2)))))) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    have hp : 0≤1+x^2 := by positivity
+    have hn : Real.sqrt (1+x^2)≠0 := by positivity
+    apply refines_of_eq
+    simp [Function1.apply, Functions.tanhR, Functions.asinhR, Functions.sqrtR, mul, add, inv,
+      hp, hn, Real.tanh_eq_sinh_div_cosh, Real.sinh_arsinh, Real.cosh_arsinh, div_eq_mul_inv]
+
+theorem refines_real_tanh_acosh (x : Option ℝ) :
+    Refines (Functions.tanhR.apply (Functions.acoshR.apply x))
+      (mul (Functions.sqrtR.apply (add (x.map (fun v => v^2)) (mul (some (-1)) (some 1)))) (inv x)) := by
+  classical
+  cases x with
+  | none => intro v hv; cases hv
+  | some x =>
+    by_cases hx : 1≤x
+    · have hp : 0≤x^2-1 := by nlinarith
+      have hn : x≠0 := by linarith
+      have hs := Inverse.real_sinh_acosh x hx
+      have hc := Inverse.real_cosh_acosh x hx
+      dsimp [Functions.acoshR] at hs hc
+      apply refines_of_eq
+      simp [Function1.apply, Functions.tanhR, Functions.acoshR, Functions.sqrtR, mul, add, inv,
+        hx, hp, hn, ← sub_eq_add_neg, Real.tanh_eq_sinh_div_cosh, hs, hc, div_eq_mul_inv]
+    · intro v hv; simp [Function1.apply, Functions.acoshR, hx] at hv
+
+theorem refines_complex_tanh_asinh (z : Option ℂ) :
+    Refines (Functions.tanhC.apply (Functions.asinhC.apply z))
+      (mul z (inv (Functions.sqrtC.apply (add (z.map (fun z => z^2)) (some 1))))) := by
+  classical
+  cases z with
+  | none => intro v hv; cases hv
+  | some z =>
+    have hs := Inverse.complex_sinh_asinh z
+    have hc := Inverse.complex_cosh_asinh z
+    dsimp [Functions.asinhC] at hs hc
+    simp only [one_div] at hs hc
+    by_cases h : (z^2+1)^((2 : ℂ)⁻¹)=0
+    · simp [h] at hc
+      intro v hv
+      simp [Function1.apply, Functions.tanhC, Functions.asinhC, hc, h] at hv
+    · have hn : z^2+1≠0 := by
+        intro hz
+        apply h
+        simp [hz]
+      apply refines_of_eq
+      simp [Function1.apply, Functions.tanhC, Functions.asinhC, Functions.sqrtC, add, mul, inv,
+        Complex.tanh_eq_sinh_div_cosh, hs, hc, h, hn, div_eq_mul_inv]
+
+theorem refines_complex_tanh_acosh (z : Option ℂ) :
+    Refines (Functions.tanhC.apply (Functions.acoshC.apply z))
+      (mul (mul (Functions.sqrtC.apply (add z (mul (some (-1)) (some 1))))
+        (Functions.sqrtC.apply (add z (some 1)))) (inv z)) := by
+  classical
+  cases z with
+  | none => intro v hv; cases hv
+  | some z =>
+    have hs := Inverse.complex_sinh_acosh z
+    have hc := Inverse.complex_cosh_acosh z
+    dsimp [Functions.acoshC] at hs hc
+    simp only [one_div] at hs hc
+    by_cases h : z=0
+    · simp [h] at hc
+      intro v hv
+      simp [Function1.apply, Functions.tanhC, Functions.acoshC, hc, h] at hv
+    · apply refines_of_eq
+      simp [Function1.apply, Functions.tanhC, Functions.acoshC, Functions.sqrtC, add, mul, inv,
+        Complex.tanh_eq_sinh_div_cosh, hs, hc, h, div_eq_mul_inv, ← sub_eq_add_neg]
+
 theorem refines_sin_atan (x : Option ℝ) :
     Refines (Functions.sinR.apply (Functions.atanR.apply x))
       (mul x (inv (Functions.sqrtR.apply (add (some 1) (x.map (fun v => v^2)))))) := by

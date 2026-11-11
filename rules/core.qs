@@ -1092,3 +1092,8 @@ rewrite integer_literal_coefficient(x:ℤ,c:ℤ):x*c⇒c*x when literal(c);
 rewrite integer_literal_constant(x:ℤ,c:ℤ):c+x⇒x+c when literal(c);
 rewrite rational_literal_coefficient(x:ℚ,c:ℚ):x*c⇒c*x when literal(c);
 rewrite rational_literal_constant(x:ℚ,c:ℚ):c+x⇒x+c when literal(c);
+
+rewrite real_tanh_asinh(x:ℝ):tanh(asinh(x))⇒x/sqrt(1+x^2);
+rewrite real_tanh_acosh(x:ℝ):tanh(acosh(x))⇒sqrt(x^2-1)/x;
+rewrite complex_tanh_asinh(z:ℂ):ctanh(casinh(z))⇒z/csqrt(z^2+1);
+rewrite complex_tanh_acosh(z:ℂ):ctanh(cacosh(z))⇒csqrt(z-1)*csqrt(z+1)/z;

@@ -150,6 +150,11 @@ def main (args : List String) : IO Unit := do
 	cache.store(batch,original,compiled.with_suffix(".olean"))
 	cache.remember_members(batch,original,members[batch])
 	assert cache.recheck(files,1)==set(files)
+	warning_runner=directory/"warning_runner.py"
+	warning_runner.write_text("import subprocess,sys\nprint('launcher warning',file=sys.stderr)\nraise SystemExit(subprocess.call("+repr(command)+"+sys.argv[1:]))\n")
+	cache.command=[sys.executable,str(warning_runner)]
+	assert cache.recheck(files,1)==set(files)
+	cache.command=command
 	inserted=member_dir/"B.lean"
 	inserted.write_bytes(files[0].read_bytes().replace(b"True := True.intro",b"(2 : Nat) = 2 := rfl"))
 	assert cache.recheck([files[0],inserted,files[1]],1)==set(files)

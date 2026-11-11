@@ -7783,4 +7783,32 @@ theorem r_rational_literal_constant (v_x : Option (Ty.denote .rational)) (v_c : 
 
 #qsym_check_axioms r_rational_literal_constant
 
+theorem r_real_tanh_asinh (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.tanhR.apply (Functions.asinhR.apply v_x)) (Value.mul v_x (Value.inv (Functions.sqrtR.apply (Value.add (some (((1) : Int) : ℝ)) (v_x.map (fun x => x ^ (2))))))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tanh_asinh
+
+theorem r_real_tanh_acosh (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.tanhR.apply (Functions.acoshR.apply v_x)) (Value.mul (Functions.sqrtR.apply (Value.add (v_x.map (fun x => x ^ (2))) (Value.mul (some (((-1) : Int) : ℝ)) (some (((1) : Int) : ℝ))))) (Value.inv v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tanh_acosh
+
+theorem r_complex_tanh_asinh (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.tanhC.apply (Functions.asinhC.apply v_z)) (Value.mul v_z (Value.inv (Functions.sqrtC.apply (Value.add (v_z.map (fun x => x ^ (2))) (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)))))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tanh_asinh
+
+theorem r_complex_tanh_acosh (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.tanhC.apply (Functions.acoshC.apply v_z)) (Value.mul (Value.mul (Functions.sqrtC.apply (Value.add v_z (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I))))) (Functions.sqrtC.apply (Value.add v_z (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I))))) (Value.inv v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tanh_acosh
+
 end QSym.Generated

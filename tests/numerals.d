@@ -79,6 +79,24 @@ unittest{
 	assert(a.sort(s.parse(a,"0.1+z"))==Sort.complex);
 	assert(a.sort(s.parse(a,"[p]"))==Sort.real_);
 	assert(s.format(a,simplify(a,s.parse(a,"x/2=toℝ(floor(x/2))")).output)=="x·(1/2)=floor(x·(1/2))");
+	foreach(pair;[["3/2","3/2"],["-3/2","-3/2"],["rat(6,4)","3/2"],[".125","1/8"],
+		["2.0","2/1"],["0.0","0/1"],["-2.0","-2/1"],["rat(3,2)^n","(3/2)^n"]]){
+		auto input=simplify(a,s.parse(a,pair[0])).output,printed=s.format(a,input);
+		assert(printed==pair[1],pair[0]~" printed as "~printed);
+		auto output=s.parse(a,printed);
+		assert(a.sort(output)==Sort.rational,printed~" changed its scalar type");
+		assert(simplify(a,output).output==input,printed~" failed to round-trip");
+	}
+	// Fraction notation must retain grouping and exponent kinds in context.
+	foreach(source;["rat(3,2)^k","q*rat(3,2)","q+rat(-3,2)","rat(-3,2)-q",
+		"rat(3,2)/(q+1)","q/rat(3,2)","q<rat(3,2)","rat(3,2)<q",
+		"powQN(rat(2,1),n)","powQZ(rat(2,1),k)","mulQ(([p]:ℚ),rat(3,2))"]){
+		auto input=s.parse(a,source),printed=s.format(a,input),output=s.parse(a,printed);
+		assert(a.sort(output)==a.sort(input),printed~" changed its scalar type");
+		assert(simplify(a,output).output==simplify(a,input).output,printed~" changed meaning");
+		assert(simplifyDomain(a,output).output==simplifyDomain(a,input).output,
+			printed~" changed its domain");
+	}
 	foreach(source;[".","1.2.3","1e+","1e-","0.1:ℕ","0.1:ℤ","1e99999","1e-99999","1e19","1e-19"])
 		assertThrown(s.parse(a,source));
 }
