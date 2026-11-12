@@ -15,9 +15,7 @@ int repl(){
 	string last;
 	bool lastExpand,lastDomain;
 	string[] facts,lastFacts;
-	Term[] parseFacts(Arena a,ref Syntax s,string[] source){
-		Term[] result; foreach(f;source) result~=s.parse(a,f); return result;
-	}
+
 	for(;;){
 		string input; if(!reader.readLine(input)) break;
 		auto line=strip(input);
@@ -37,7 +35,7 @@ int repl(){
 				writeln("Alt-B/F: move by word; Alt-Backspace/D: kill word backward/forward; Alt-</>: first/last history.");
 				writeln("Ctrl-C: cancel line; Ctrl-D: delete character, or exit on an empty line.");
 				writeln("Functions: λ(x:ℝ). 1/x; domains: domain(f), x∈domain(f)");
-				writeln("Subsets: {x:ℝ | x>0}; restrictions: λ(x:ℝ | x>0). log(x)");
+				writeln("Subsets: {x:ℝ | x>0}, A⊆B; restrictions: λ(x:{t:ℝ | t>0}). log(x)");
 				writeln(":vars n:ℕ,k:ℤ,q:ℚ,z:ℂ,p:𝔹   declare types; :vars lists them");
 				writeln(":symbols [PREFIX] list Unicode input spellings");
 				writeln(":functions [PREFIX] list built-in signatures");
@@ -75,8 +73,10 @@ int repl(){
 			}
 			if(line.startsWith(":vars ")){
 				auto next=syntax; next.declare(strip(line[6..$]));
-				if(facts.length) foreach(i,v;syntax.scalar.variables)
-					enforce(next.scalar.variables[i].sort==v.sort,"use :clear before changing the type of "~v.name);
+				if(facts.length){
+					foreach(i,v;syntax.scalar.variables) enforce(next.scalar.variables[i].sort==v.sort,"use :clear before changing the type of "~v.name);
+					foreach(i,v;syntax.functions) enforce(next.functions[i].type==v.type,"use :clear before changing the type of "~v.name);
+				}
 				syntax=next; continue;
 			}
 			if(line==":facts"){ foreach(f;facts) writeln(f); continue; }
@@ -91,10 +91,10 @@ int repl(){
 				enforce(last.length!=0,"no expression to export");
 				auto path=strip(line[6..$]); enforce(path.length!=0,"expected a file name");
 				auto session=Session.open(); auto a=session.arena;
-				auto assumptions=parseFacts(a,lastSyntax.scalar,lastFacts);
+				auto assumptions=lastSyntax.assumptions(a,lastFacts);
 				auto options=Options(DensityMode.preserve,true); options.expandPowers=lastExpand;
-				auto result=lastSyntax.run(a,last,assumptions,options,lastDomain);
-				write(path,lastSyntax.exportCertificate(a,result));
+				auto result=lastSyntax.run(a,last,FunctionSyntax.predicates(assumptions),options,lastDomain);
+				write(path,lastSyntax.exportCertificate(a,result,assumptions));
 				writeln("Wrote ",path);
 				continue;
 			}
@@ -108,8 +108,8 @@ int repl(){
 				options.expandPowers=true;
 			}else enforce(!line.startsWith(":"),"unknown command; use :help");
 			auto session=Session.open(); auto a=session.arena;
-			auto assumptions=parseFacts(a,syntax.scalar,facts);
-			auto next=syntax,result=next.run(a,line,assumptions,options,domainQuery);
+			auto assumptions=syntax.assumptions(a,facts);
+			auto next=syntax,result=next.run(a,line,FunctionSyntax.predicates(assumptions),options,domainQuery);
 			writeln(next.format(a,result)); syntax=next;
 			if(result.exhausted) stderr.writeln("simplification budget exhausted; showing the partial result");
 			last=line; lastSyntax=syntax; lastFacts=facts.dup; lastExpand=options.expandPowers; lastDomain=domainQuery;

@@ -11,7 +11,8 @@ import qsym.number:Rational,BigInt;
 
 // NatParam is a bounded constructor payload; ℕ is an expression type.
 final class TypePattern{
-	string name;
+	string name,binder;
+	Pattern predicate;
 	TypePattern[] args;
 	this(string name,TypePattern[] args=[]){ this.name=name; this.args=args; }
 }
@@ -217,11 +218,14 @@ struct Parser{
 	private Pattern comparison(uint depth){
 		auto p=sum(depth);
 		Pattern combined;
-		while(token.text=="!="||token.text=="="||token.text=="<"||token.text==">"||token.text=="<="||token.text==">="||token.text=="∈"){
+		while(token.text=="!="||token.text=="="||token.text=="<"||token.text==">"||token.text=="<="||token.text==">="||token.text=="∈"||token.text=="∉"||token.text=="⊆"||token.text=="⊈"){
 			auto op=token.text; next();
 			auto q=sum(depth);
 			Pattern predicate;
-			if(op=="∈") predicate=pattern("$member",[p,q]);
+			if(op=="∈"||op=="∉"||op=="⊆"||op=="⊈"){
+				predicate=pattern(op=="∈"||op=="∉"?"$member":"$subset",[p,q]);
+				if(op=="∉"||op=="⊈") predicate=pattern("not",[predicate]);
+			}
 			else if(op=="!="||op=="="){
 				predicate=pattern("$different",[p,q]);
 				if(op=="=") predicate=pattern("not",[predicate]);
@@ -258,6 +262,10 @@ struct Parser{
 	private TypePattern typeExpression(uint depth=0){
 		enforce(depth<128,"type nesting limit exceeded"); TypePattern t;
 		if(take("(")){ t=typeExpression(depth+1); expect(")"); }
+		else if(take("{")){
+			auto name=ident(); expect(":"); t=new TypePattern("$subset",[typeExpression(depth+1)]); expect("|");
+			t.binder=name; t.predicate=expression(depth+1); expect("}");
+		}
 		else{
 			auto name=ident();
 			if(name=="Set"){ expect("("); t=new TypePattern("Set",[typeExpression(depth+1)]); expect(")"); }

@@ -1,0 +1,19 @@
+import QSym.Binding
+import QSym.AxiomCheck
+
+#qsym_check_axioms QSym.Binding.Reduction.subsetRefl
+#qsym_check_axioms QSym.Binding.Reduction.subsetEmpty
+#qsym_check_axioms QSym.Binding.Reduction.subsetUniv
+#qsym_check_axioms QSym.Binding.Reduction.subsetUnivEmpty
+#qsym_check_axioms QSym.Binding.Reduction.definedMember
+#qsym_check_axioms QSym.Binding.Reduction.definedSubset
+#qsym_check_axioms QSym.Binding.Reduction.definedGuard
+#qsym_check_axioms QSym.Binding.Reduction.definedApp
+#qsym_check_axioms QSym.Binding.Reduction.domainGuardFalse
+#qsym_check_axioms QSym.Binding.Reduction.definedNot
+#qsym_check_axioms QSym.Binding.holdsDomain
+#qsym_check_axioms QSym.Binding.Reduction.lamPointwise
+#qsym_check_axioms QSym.Binding.Reduction.setPointwise
+#qsym_check_axioms QSym.Binding.Reduction.guardAnd
+#qsym_check_axioms QSym.Binding.Reduction.holdsGuard
+#qsym_check_axioms QSym.Binding.Reduction.setHolds

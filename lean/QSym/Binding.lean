@@ -60,6 +60,10 @@ noncomputable def memberValue {α : Type} (s : Option (Set α)) (x : Option α) 
   classical
   exact s.bind (fun p => x.map (fun v => decide (v ∈ p)))
 
+noncomputable def subsetValue {α : Type} (s t : Option (Set α)) : Option Bool := by
+  classical
+  exact s.bind (fun a => t.map (fun b => decide (a ⊆ b)))
+
 def guardValue {α : Type} (p : Option Bool) (x : Option α) : Option α :=
   if p == some true then x else none
 
@@ -68,6 +72,8 @@ abbrev Expr.holds (p : Expr Γ (.scalar .bool)) : Expr Γ (.scalar .bool) := .un
 noncomputable abbrev Expr.domain (f : Expr Γ (.arrow a b)) : Expr Γ (.set a) := .unary inputDomain f
 noncomputable abbrev Expr.mem (s : Expr Γ (.set a)) (x : Expr Γ a) : Expr Γ (.scalar .bool) :=
   .binary memberValue s x
+noncomputable abbrev Expr.subset (s t : Expr Γ (.set a)) : Expr Γ (.scalar .bool) :=
+  .binary subsetValue s t
 abbrev Expr.guard (p : Expr Γ (.scalar .bool)) (x : Expr Γ a) : Expr Γ a :=
   .binary guardValue p x
 
@@ -314,6 +320,13 @@ theorem Reduction.scalarHolds (x d : QSym.Expr .bool)
   | none => rfl
   | some v => cases v <;> rfl)
 
+theorem holdsDomain (x d : Option Bool) (h : Domain.Correct x d) :
+    holdsValue x = Value.and d x := by
+  rw [h]
+  cases x with
+  | none => rfl
+  | some v => cases v <;> rfl
+
 theorem preserveDomain {α : Type} (x y : Option α) (d : Option Bool)
     (hd : Domain.Correct x d) (h : Value.Refines x y) : x = guardValue d y := by
   rw [hd]
@@ -326,5 +339,105 @@ theorem Reduction.scalarSimplify (x : QSym.Expr s) (d : QSym.Expr .bool) (y : QS
     (h : ∀ ξ, Value.Refines (x.eval ξ) (y.eval ξ)) :
     Reduction (Γ := Γ) (.scalar x) (.guard (.scalar d) (.scalar y)) :=
   .ofEq (fun ξ _ => preserveDomain _ _ _ (hd ξ) (h ξ))
+
+theorem Reduction.subsetRefl (s : Expr Γ (.set a)) :
+    Reduction (.subset s s) (.seq s (.scalar (.bool true))) := .ofEq (by
+  intro ξ ρ
+  cases hs : s.eval ξ ρ <;> simp [Expr.eval, QSym.Expr.eval, subsetValue, hs])
+
+theorem Reduction.subsetEmpty (s : Expr Γ (.set a)) :
+    Reduction (.subset (.set (.scalar (.bool false))) s) (.seq s (.scalar (.bool true))) := .ofEq (by
+  intro ξ ρ
+  cases hs : s.eval ξ ρ <;> simp [Expr.eval, QSym.Expr.eval, subsetValue, hs, Set.subset_def])
+
+theorem Reduction.subsetUniv (s : Expr Γ (.set a)) :
+    Reduction (.subset s (.set (.scalar (.bool true)))) (.seq s (.scalar (.bool true))) := .ofEq (by
+  intro ξ ρ
+  cases hs : s.eval ξ ρ <;> simp [Expr.eval, QSym.Expr.eval, subsetValue, hs, Set.subset_def])
+
+theorem Reduction.subsetUnivEmpty {a : Ty} (w : a.denote) :
+    Reduction (Γ := Γ) (.subset (a := a) (.set (.scalar (.bool true))) (.set (.scalar (.bool false))))
+      (.scalar (.bool false)) := .ofEq (by
+  intro ξ ρ
+  letI : Nonempty a.denote := ⟨w⟩
+  simp [Expr.eval, QSym.Expr.eval, subsetValue, Set.subset_def])
+
+theorem Reduction.definedMember (s : Expr Γ (.set a)) (x : Expr Γ a) :
+    Reduction (.defined (.mem s x)) (.binary Value.and (.defined s) (.defined x)) := .ofEq (by
+  intro ξ ρ
+  cases hs : s.eval ξ ρ <;> cases hx : x.eval ξ ρ <;>
+    simp [Expr.eval, memberValue, definedValue, Value.and, hs, hx])
+
+theorem Reduction.definedSubset (s t : Expr Γ (.set a)) :
+    Reduction (.defined (.subset s t)) (.binary Value.and (.defined s) (.defined t)) := .ofEq (by
+  intro ξ ρ
+  cases hs : s.eval ξ ρ <;> cases ht : t.eval ξ ρ <;>
+    simp [Expr.eval, subsetValue, definedValue, Value.and, hs, ht])
+
+theorem Reduction.definedGuard (p : Expr Γ (.scalar .bool)) (x : Expr Γ a) :
+    Reduction (.defined (.guard p x)) (.binary Value.and (.holds p) (.defined x)) := .ofEq (by
+  intro ξ ρ
+  cases hp : p.eval ξ ρ with
+  | none => simp [Expr.eval, guardValue, holdsValue, definedValue, Value.and, hp]
+  | some b => cases b <;> simp [Expr.eval, guardValue, holdsValue, definedValue, Value.and, hp])
+
+theorem Reduction.definedApp (f : Expr Γ (.arrow a b)) (x : Expr Γ a) :
+    Reduction (.defined (.app f x)) (.holds (.mem (.domain f) x)) := .ofEq (by
+  intro ξ ρ
+  cases hf : f.eval ξ ρ with
+  | none => cases hx : x.eval ξ ρ <;>
+      simp [Expr.eval, holdsValue, inputDomain, memberValue, definedValue, hf, hx]
+  | some g => cases hx : x.eval ξ ρ with
+    | none => simp [Expr.eval, holdsValue, inputDomain, memberValue, definedValue, hf, hx]
+    | some v => cases hv : g v <;>
+        simp [Expr.eval, holdsValue, inputDomain, memberValue, definedValue, hf, hx, hv])
+
+theorem Reduction.domainGuardFalse (f : Expr Γ (.arrow a b)) :
+    Reduction (.domain (.guard (.scalar (.bool false)) f)) (.set (.scalar (.bool false))) := .ofEq (by
+  intro ξ ρ
+  simp [Expr.eval, QSym.Expr.eval, guardValue, inputDomain])
+
+theorem Reduction.definedNot (p : Expr Γ (.scalar .bool)) :
+    Reduction (.defined (.unary (b := .scalar .bool) Value.not p)) (.defined p) := .ofEq (by
+  intro ξ ρ
+  cases hp : p.eval ξ ρ <;> simp [Expr.eval, Value.not, definedValue, hp])
+
+theorem Reduction.lamPointwise {x y : Expr (a :: Γ) b}
+    (h : ∀ (ξ : QSym.Env) (ρ : Env Γ) v, x.eval ξ (ρ.cons (some v)) = y.eval ξ (ρ.cons (some v))) :
+    Reduction (.lam x) (.lam y) := .ofEq (by
+  intro ξ ρ
+  exact congrArg some (funext (h ξ ρ)))
+
+theorem Reduction.setPointwise {x y : Expr (a :: Γ) (.scalar .bool)}
+    (h : ∀ (ξ : QSym.Env) (ρ : Env Γ) v, x.eval ξ (ρ.cons (some v)) = y.eval ξ (ρ.cons (some v))) :
+    Reduction (.set x) (.set y) := .ofEq (by
+  intro ξ ρ
+  simp only [Expr.eval]
+  congr 1
+  ext v
+  change x.eval ξ (ρ.cons (some v)) = some true ↔ y.eval ξ (ρ.cons (some v)) = some true
+  rw [h ξ ρ v])
+
+theorem Reduction.guardAnd (p q : Expr Γ (.scalar .bool)) (x : Expr Γ a) :
+    Reduction (.guard p (.guard q x)) (.guard (.binary Value.and p q) x) := .ofEq (by
+  intro ξ ρ
+  cases hp : p.eval ξ ρ with
+  | none => simp [Expr.eval, guardValue, Value.and, hp]
+  | some v => cases v <;> simp [Expr.eval, guardValue, Value.and, hp])
+
+theorem Reduction.holdsGuard (p q : Expr Γ (.scalar .bool)) :
+    Reduction (.holds (.guard p q)) (.binary Value.and (.holds p) (.holds q)) := .ofEq (by
+  intro ξ ρ
+  cases hp : p.eval ξ ρ with
+  | none => simp [Expr.eval, guardValue, holdsValue, Value.and, hp]
+  | some v => cases v <;> simp [Expr.eval, guardValue, holdsValue, Value.and, hp])
+
+theorem Reduction.setHolds (p : Expr (a :: Γ) (.scalar .bool)) :
+    Reduction (.set p) (.set (.holds p)) := .ofEq (by
+  intro ξ ρ
+  apply congrArg some
+  ext v
+  change p.eval ξ (ρ.cons (some v)) = some true ↔ holdsValue (p.eval ξ (ρ.cons (some v))) = some true
+  simp [holdsValue])
 
 end QSym.Binding

@@ -88,12 +88,25 @@ def main():
 	check(ROOT/"tests/Domain.lean")
 	check(ROOT/"tests/Binding.lean")
 	check(ROOT/"tests/Functional.lean")
+	check(ROOT/"tests/Subsets.lean")
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
 	certificate(ROOT/"build/ReplFunction.lean")
+	certificate(ROOT/"build/ReplSubsets.lean")
+	certificate(ROOT/"build/ReplSubsetSnapshot.lean")
+	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
+	if len(refinements)!=32:
+		raise RuntimeError("expected 32 refinement certificates")
+	for file in refinements:
+		certificate(file)
+	subsets=sorted((ROOT/"build/subsets").glob("*.lean"))
+	if len(subsets)!=34:
+		raise RuntimeError("expected 34 subset certificates")
+	for file in subsets:
+		certificate(file)
 	functional=sorted((ROOT/"build/functional").glob("*.lean"))
 	if len(functional)!=46:
 		raise RuntimeError("expected 46 functional certificates")
@@ -172,6 +185,12 @@ def main():
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	for name,body in (
+		("UndefinedSubsetSelf","example (s : Binding.Expr [] (.set (.scalar .real))) : Binding.Reduction (.subset s s) (.scalar (.bool true)) := .subsetRefl s"),
+		("DroppedLambdaRestriction","example : Binding.Reduction (Γ := []) (.lam (.guard (.scalar (.bool false)) (.var (.here : Binding.Var [.scalar .real] (.scalar .real))))) (.lam (.var .here)) := .lamPointwise (fun _ _ _ => rfl)")):
+		path=negative/(name+".lean")
+		path.write_text("import QSym.Binding\nopen QSym\n"+body+"\n")
+		check(path,succeeds=False)
 	for name,body in (
 		("BindingDroppedArgument","example (ξ : QSym.Env) (ρ : Binding.Env []) : (Binding.Expr.app constant bottom).eval ξ ρ = some 0 := rfl"),
 		("BindingCapture","example (ξ : QSym.Env) (ρ : Binding.Env []) : (Binding.Expr.app (.app (.lam (.lam (.var (.there .here))) : Binding.Expr [] (.arrow N (.arrow N N))) (.scalar (.nat 1))) (.scalar (.nat 2))).eval ξ ρ = some 2 := rfl")):

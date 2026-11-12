@@ -34,6 +34,7 @@ immutable Symbol[] symbols=[
 	Symbol("leftrightarrow","↔"),Symbol("<->","↔"),Symbol("iff","⇔"),Symbol("<=>","⇔"),
 	Symbol("uparrow","↑"),Symbol("u","↑"),Symbol("downarrow","↓"),Symbol("d","↓"),
 	Symbol("forall","∀"),Symbol("all","∀"),Symbol("exists","∃"),Symbol("in","∈"),Symbol("notin","∉"),
+	Symbol("sub=","⊆"),Symbol("subseteq","⊆"),Symbol("nsubseteq","⊈"),
 	Symbol("sum","∑"),Symbol("prod","∏"),Symbol("int","∫"),Symbol("infty","∞"),Symbol("infinity","∞"),
 	Symbol("partial","∂"),Symbol("nabla","∇"),Symbol("sqrt","√"),Symbol("ii","ⅈ"),
 	Symbol("langle","⟨"),Symbol("rangle","⟩"),Symbol("[","⟦"),Symbol("]","⟧"),

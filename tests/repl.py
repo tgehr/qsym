@@ -158,4 +158,17 @@ print("Function and subset REPL checks passed.")
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	":vars f:ℕ→ℕ",":assume f=0","domain(f)",":facts",":quit",""]),text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and result.stdout.splitlines()==["domain(f)"],result.stdout
-assert "function and set assumptions are not supported yet" in result.stderr,result.stderr
+assert "scalar operation received a function or set" in result.stderr,result.stderr
+subset_certificate=root/"build/ReplSubsets.lean"
+subset_snapshot=root/"build/ReplSubsetSnapshot.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":assume x∈{x:ℝ|x=1}","x","[x=1]","x∈{y:ℝ|y>0}",f":lean {subset_certificate}",":facts",":clear",
+	":vars S:Set(ℝ),T:Set(ℝ)","S⊆S","S⊆T","S⊈S","1∉{x:ℝ|x=0}",":domain 1∉guard(false,S)",
+	":assume S⊆S",":vars S:Set(ℕ)",":clear",":vars S:Set(ℕ)",f":lean {subset_snapshot}",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0,result.stderr
+assert result.stdout.splitlines()==["1","1","true",f"Wrote {subset_certificate}","x∈{x:ℝ|x=1}",
+	"true","(S⊆T)","false","true","false",f"Wrote {subset_snapshot}"],result.stdout
+assert "use :clear before changing the type of S" in result.stderr,result.stderr
+assert "AssumptionCertificate" in subset_certificate.read_text()
+print("Subset assumption REPL checks passed.")

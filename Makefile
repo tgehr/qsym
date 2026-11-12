@@ -105,6 +105,10 @@ test: build/qsym
 	./build/binding-tests --DRT-testmode=run-main build/binding
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functional.d -of=build/functional-tests
 	./build/functional-tests --DRT-testmode=run-main build/functional
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/subsets.d -of=build/subset-tests
+	./build/subset-tests --DRT-testmode=run-main build/subsets
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/refinements.d -of=build/refinement-tests
+	./build/refinement-tests --DRT-testmode=run-main build/refinements
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

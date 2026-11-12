@@ -170,3 +170,12 @@ with Terminal("dumb") as t:
 	assert b"3\r\n" in output and b"\x1b" not in output,output
 	t.finish(b":q\n")
 print("Terminal editing checks passed.")
+
+with Terminal() as t:
+	t.until(ready)
+	t.submit(":vars A:Set(ℝ),B:Set(ℝ)",None)
+	t.submit(r"A\sub=A","true","A⊆A")
+	t.submit(r"A\subseteq B","(A⊆B)","A⊆ B")
+	t.submit(r"A\nsubseteq A","false","A⊈ A")
+	t.finish()
+print("Subset input-method checks passed.")
