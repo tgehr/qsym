@@ -173,6 +173,9 @@ package final class Field{
 						while(r!=0){ budget.spend(1+l.uintLength+r.uintLength); auto rem=l%r; l=r; r=rem; }
 						result=a.number(Number(Rational(l,BigInt(1))),Sort.natural); break;
 					case Builtin.castNZ,Builtin.castZQ,Builtin.castQR,Builtin.castRC:result=a.number(v,n.sort); break;
+					case Builtin.subN:
+						if(v.re<w.re) return d.refl(t,ctx);
+						result=a.number(budget.calc!"-"(v,w),Sort.natural); break;
 					case Builtin.addN,Builtin.addZ,Builtin.addQ:result=a.number(budget.calc!"+"(v,w),n.sort); break;
 					case Builtin.mulN,Builtin.mulZ,Builtin.mulQ:result=a.number(budget.calc!"*"(v,w),n.sort); break;
 					case Builtin.invQ:if(v.zero) return d.refl(t,ctx); result=a.number(budget.calc!"/"(Number(1),v),n.sort); break;

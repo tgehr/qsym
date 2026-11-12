@@ -97,6 +97,8 @@ test: build/qsym
 	./build/subtype-tests --DRT-testmode=run-main build/subtypes
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/convergence.d -of=build/convergence-tests
 	./build/convergence-tests --DRT-testmode=run-main build/convergence
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/control.d -of=build/control-tests
+	./build/control-tests --DRT-testmode=run-main build/control
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

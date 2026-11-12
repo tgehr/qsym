@@ -10,3 +10,4 @@ import QSym.Bag
 import QSym.Numeric
 import QSym.Region
 import QSym.Domain
+import QSym.Conditionals

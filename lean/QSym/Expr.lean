@@ -71,6 +71,7 @@ inductive Expr : Ty → Type where
   | castZQ : Expr .integer → Expr .rational
   | castQR : Expr .rational → Expr .real
   | castRC : Expr .real → Expr .complex
+  | subN : Expr .natural → Expr .natural → Expr .natural
   | addN : Expr .natural → Expr .natural → Expr .natural
   | mulN : Expr .natural → Expr .natural → Expr .natural
   | ltN : Expr .natural → Expr .natural → Expr .bool
@@ -179,6 +180,7 @@ noncomputable def eval (ρ : Env) : {s : Ty} → Expr s → Option s.denote
   | _, .castZQ a => Functions.castZQ.apply (eval ρ a)
   | _, .castQR a => Functions.castQR.apply (eval ρ a)
   | _, .castRC a => Functions.castRC.apply (eval ρ a)
+  | _, .subN a b => Functions.subN.apply (eval ρ a) (eval ρ b)
   | _, .addN a b => Functions.addN.apply (eval ρ a) (eval ρ b)
   | _, .mulN a b => Functions.mulN.apply (eval ρ a) (eval ρ b)
   | _, .ltN a b => Functions.ltN.apply (eval ρ a) (eval ρ b)

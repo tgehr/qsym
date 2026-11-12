@@ -63,6 +63,8 @@ def castQR : Function1 ℚ ℝ :=
   ⟨fun x => (x : ℝ), fun _ => True⟩
 def castRC : Function1 ℝ ℂ :=
   ⟨fun x => (x : ℂ), fun _ => True⟩
+def subN : Function2 ℕ ℕ ℕ :=
+  ⟨fun x y => x - y, fun x y => y ≤ x⟩
 def addN : Function2 ℕ ℕ ℕ :=
   ⟨fun x y => x + y, fun _ _ => True⟩
 def mulN : Function2 ℕ ℕ ℕ :=

@@ -135,3 +135,10 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==[
 	"i=1","1","0","0","1","0","[j=1]","j","[n=1]","n","[r=1]","r"],result.stdout
+
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars a:ℕ,b:ℕ,p:𝔹",":domain a sub b","8 sub 3",":domain 2 sub 5",
+	"if true then 3 else 1/0","if false then 1/0 else 3","if p then true else false",
+	":domain if b≤a then a sub b else 0",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["b≤a","5","false","3","3","p","true"],result.stdout

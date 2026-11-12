@@ -92,6 +92,12 @@ struct Parser{
 
 	private Pattern primary(uint depth){
 		enforce(depth<128,"rule pattern nesting limit exceeded");
+		if(take("if")){
+			auto condition=expression(depth+1); expect("then");
+			auto yes=expression(depth+1); expect("else");
+			return pattern("$if",[condition,yes,expression(depth+1)]);
+		}
+		enforce(token.text!="then"&&token.text!="else","unexpected conditional keyword");
 		if(take("(")){
 			auto p=expression(depth+1);
 			if(take(":")){ auto q=pattern("$ascribe",[p]); q.sort=parseSort(ident()); p=q; }
@@ -172,11 +178,11 @@ struct Parser{
 	}
 	private Pattern sum(uint depth){
 		auto p=product(depth);
-		while(token.text=="+"||token.text=="-"){
+		while(token.text=="+"||token.text=="-"||token.text=="sub"){
 			auto op=token.text; next();
 			auto q=product(depth);
 			if(op=="-") q=pattern("$neg",[q]);
-			p=pattern("$add",[p,q]);
+			p=pattern(op=="sub"?"subN":"$add",[p,q]);
 		}
 		return p;
 	}
@@ -209,6 +215,7 @@ struct Parser{
 	private Parameter parameter(){
 		auto name=ident(); expect(":"); auto ty=ident();
 		auto natural=ty=="NatParam",s=natural?Sort.real_:parseSort(ty);
+		enforce(name!="if"&&name!="then"&&name!="else"&&name!="sub","reserved expression keyword");
 		enforce(!isConstructor(name)&&name!="inv"&&name!="nonzero"&&name!="mask"&&name!="abs","parameter shadows a constructor");
 		return Parameter(name,s,natural);
 	}
@@ -406,6 +413,10 @@ private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 		enforce(arity==2&&(args[1]&naturalBit),"NatParam exponent expected");
 		result=args[0]&bit(p.name=="powN"?Sort.natural:p.name=="powZ"?Sort.integer:p.name=="powQ"?Sort.rational:p.name=="powR"?Sort.real_:Sort.complex);
 	}else switch(p.name){
+		case "$if":
+			enforce(arity==3&&args[0]&bit(Sort.boolean),"conditional requires Bool condition");
+			result=common(args[1],args[2])|(args[1]&args[2]&bit(Sort.boolean));
+			p.realDefault=p.args[1].realDefault||p.args[2].realDefault; break;
 		case "$ascribe":
 			enforce(widen(args[0])&bit(p.sort),"invalid type ascription"); result=bit(p.sort); break;
 		case "$pow":
@@ -508,6 +519,11 @@ private Pattern lower(Pattern p,Sort s){
 	auto suf=numeric(s)?suffix(s):"";
 	if(powerPattern(p.name)) return pattern(p.name,[lower(p.args[0],s),lowerNat(p.args[1])]);
 	switch(p.name){
+		case "$if":
+			auto condition=lower(p.args[0],Sort.boolean),yes=lower(p.args[1],s),no=lower(p.args[2],s);
+			auto opposite=pattern("not",[condition]);
+			if(s==Sort.boolean) return pattern("or",[pattern("and",[condition,yes]),pattern("and",[opposite,no])]);
+			return pattern("add"~suf,[pattern("mask"~suf,[condition,yes]),pattern("mask"~suf,[opposite,no])]);
 		case "$ascribe":return lower(p.args[0],s);
 		case "$pow":
 			auto e=p.args[1];

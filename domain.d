@@ -33,6 +33,7 @@ package Term domainPredicate(Arena a,Term t){
 			a.and_(a.le(a.real_(0),call(Builtin.reC,y)),eq0(call(Builtin.imC,y))));
 		case Builtin.atan2R:return a.or_(nz(y),nz(x));
 		case Builtin.makeQ:return nz(y);
+		case Builtin.subN:return a.le(y,x);
 		case Builtin.gammaR:return poles(x);
 		case Builtin.lgammaR:return a.and_(poles(x),nz(call(Builtin.gammaR,x)));
 		case Builtin.gammaC:return a.or_(nz(call(Builtin.imC,x)),poles(call(Builtin.reC,x)));

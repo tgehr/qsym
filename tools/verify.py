@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",605),("radicals",78),("inverses",196),("domains",218),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",605),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -448,6 +448,10 @@ def main():
 		("BadIntegerUndefinedSubstitution","lemma bad(x:ℤ,y:ℤ):x⇒y when x=y;"),
 		("BadRationalUndefinedSubstitution","lemma bad(x:ℚ,y:ℚ):x⇒y when x=y;"),
 		("BadRationalZeroCoefficient","rewrite bad(a:ℚ,x:ℚ,b:ℚ):a*x+b≠0⇒x≠-b/a;"),
+		("BadNaturalSubZero","rewrite bad(x:ℕ,y:ℕ):x sub y⇒0;"),
+		("BadNaturalSubReverse","rewrite bad(x:ℕ,y:ℕ):x sub y⇒y sub x;"),
+		("BadConditionalStrictBranch","rewrite bad(x:ℝ,y:ℝ):if true then x else y⇒x+0*y;"),
+		("BadConditionalAlwaysThen","rewrite bad(p:𝔹,x:ℕ,y:ℕ):if p then x else y⇒x;"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
 		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),

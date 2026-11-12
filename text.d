@@ -253,6 +253,7 @@ struct Syntax{
 					else if(code=="e") p.text="e";
 					else if(f==Builtin.expR&&a.isNumber(a.at(n.a))&&a.number(a.at(n.a)).one) p.text="e";
 					else if(code=="addN"||code=="addZ"||code=="addQ") p=sum(n.a,n.b);
+					else if(f==Builtin.subN) p=Piece(arg(n.a,60)~" sub "~arg(n.b,61),60);
 					else if(code=="mulN"||code=="mulZ"||code=="mulQ") p=product(n);
 					else if(f==Builtin.invQ) p=Piece(arg(n.a,91)~"⁻¹",90);
 					else if(code=="nonzeroN"||code=="nonzeroZ"||code=="nonzeroQ") p=zeroComparison(a.at(n.a),"≠");

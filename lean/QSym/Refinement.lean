@@ -419,7 +419,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
     classical
     intro v hv
     try simp only [Value.Refines, Value.Defined] at *
-    try simp only [Function1.apply, Function2.apply, Functions.castNZ, Functions.castZQ, Functions.castQR, Functions.castRC, Functions.addN,
+    try simp only [Function1.apply, Function2.apply, Functions.castNZ, Functions.castZQ, Functions.castQR, Functions.castRC, Functions.addN, Functions.subN,
       Functions.mulN, Functions.ltN, Functions.leN, Functions.nonzeroN, Functions.addZ,
       Functions.mulZ, Functions.ltZ, Functions.leZ, Functions.nonzeroZ, Functions.addQ,
       Functions.mulQ, Functions.ltQ, Functions.leQ, Functions.nonzeroQ, Functions.invQ,

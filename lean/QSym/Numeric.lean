@@ -52,6 +52,9 @@ def calculate : {s : Ty} → Expr s → Option (Data s)
   | _, .nat v => some v
   | _, .int v => some v
   | _, .rat v => some v
+  | _, .subN a b => do
+    let x ← calculate a; let y ← calculate b
+    if y ≤ x then some (x - y) else none
   | _, .addN a b => binary (· + ·) (calculate a) (calculate b)
   | _, .mulN a b => binary (· * ·) (calculate a) (calculate b)
   | _, .ltN a b => binary (fun x y => decide (x < y)) (calculate a) (calculate b)
@@ -151,6 +154,14 @@ theorem calculate_sound (ρ : Env) {s : Ty} (term : Expr s) (v : Data s)
   | nat x => exact h
   | int x => exact h
   | rat x => exact h
+  | subN a b ha hb =>
+    obtain ⟨x, hx, hv⟩ := Option.bind_eq_some_iff.mp h
+    obtain ⟨y, hy, hv⟩ := Option.bind_eq_some_iff.mp hv
+    by_cases hle : y ≤ x
+    · have hv' : x - y = v := by simpa [hle] using hv
+      subst v
+      simp [Expr.eval, ha x hx, hb y hy, Functions.subN, Function2.apply, denote, hle]
+    · simp [hle] at hv
   | addN a b ha hb =>
     obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
     simp [Expr.eval, ha x hx, hb y hy, Functions.addN, Function2.apply, denote, complex]
