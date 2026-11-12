@@ -127,3 +127,11 @@ assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==[
 	"i=2","false","n=2","n=1","2≤x∧x<3","false","1<x∧x≤2","3/2≤x∧x<5/2",
 	"n=0","n=0","n=0","n≠0"],result.stdout
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars i:ℤ,j:ℤ,n:ℕ,r:ℚ","2*i+1=3",":assume 2*i+1=3",
+	"[2*i+1=3]","[2*i+1=2]","[i=3]","i","[i≠1]",":clear",
+	"[2*j+1=3]*j","j","[2*n+1=3]*n","n","[2*r+1=3]*r","r",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==[
+	"i=1","1","0","0","1","0","[j=1]","j","[n=1]","n","[r=1]","r"],result.stdout

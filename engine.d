@@ -288,8 +288,60 @@ package final class Engine{
 		}
 		return d.refl(t,ctx);
 	}
+	private bool orderedSubstitution(Term target,Term value){
+		if(value==target) return false;
+		foreach(id;a.viewPostorder(value)){
+			budget.spend();
+			if(a.view(a.at(id)).op==Op.variable&&compare(a,a.at(id),target)<=0) return false;
+		}
+		return true;
+	}
+	private bool discreteSubstitute(Term t,uint ctx,out Proof result){
+		auto s=a.sort(t);
+		struct Candidate{ Term value; size_t variables; }
+		Candidate[] candidates; Table!(uint,bool) seen;
+		void add(Term value){
+			if(!promotes(a.sort(value),s)) return;
+			value=a.castTo(value,s);
+			if(value==t||seen.get(value.id,false)) return;
+			seen.set(value.id,true); size_t count;
+			foreach(id;a.viewPostorder(value)){
+				budget.spend(); if(id==t.id) return;
+				if(a.view(a.at(id)).op==Op.variable) ++count;
+			}
+			candidates~=Candidate(value,count);
+		}
+		foreach(f;known(ctx)){
+			budget.spend(); auto n=a.view(f.before);
+			if(!f.known||n.op!=Op.not_) continue;
+			n=a.view(a.at(n.a));
+			if(n.op!=Op.builtin||(n.value!=Builtin.nonzeroN&&n.value!=Builtin.nonzeroZ&&n.value!=Builtin.nonzeroQ)) continue;
+			add(a.number(Number(0),s));
+			foreach(id;a.viewPostorder(a.at(n.a))){
+				budget.spend(); auto v=embeddings.source(a.at(id));
+				if(!numeric(a.sort(v))) continue;
+				add(v);
+				if(a.isNumber(v)){
+					auto value=-a.number(v);
+					if(!value.im.zero||s!=Sort.rational&&!value.re.integral||s==Sort.natural&&value.re<Rational(0)) continue;
+					add(a.number(value,s));
+				}else if(s!=Sort.natural&&promotes(a.sort(v),s)) add(a.neg(a.castTo(v,s)));
+			}
+		}
+		sort!((x,y)=>x.variables!=y.variables?x.variables<y.variables:compare(a,x.value,y.value)<0)(candidates);
+		auto law=s==Sort.natural?Law.natural_substitute:s==Sort.integer?Law.integer_substitute:Law.rational_substitute;
+		foreach(c;candidates){
+			auto changed=go(c.value,ctx);
+			if(!orderedSubstitution(t,changed.after)) continue;
+			Proof p; if(!instanceProof(instantiate(a,law,[t,c.value]),ctx,p)) continue;
+			result=d.trans(p,changed,ctx); return true;
+		}
+		return false;
+	}
 	private bool substitute(Term t,uint ctx,out Proof result){
 		auto n=a.view(t);
+		if((n.op==Op.variable||n.op==Op.builtin)&&(n.sort==Sort.natural||n.sort==Sort.integer||n.sort==Sort.rational))
+			return discreteSubstitute(t,ctx,result);
 		if((n.op!=Op.variable&&n.op!=Op.builtin&&n.op!=Op.abs&&n.op!=Op.conj)||(n.sort!=Sort.real_&&n.sort!=Sort.complex)) return false;
 		struct Candidate{ Term coefficient,remainder,value; size_t variables; }
 		Candidate[] candidates;

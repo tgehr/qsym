@@ -9839,4 +9839,53 @@ theorem r_natural_direct_nonzero_sum (v_x : Option (Ty.denote .natural)) (v_y : 
 
 #qsym_check_axioms r_natural_direct_nonzero_sum
 
+theorem r_natural_substitute (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.castNZ.apply v_y))))) (some true))
+    (hp1 : Value.Defined v_y) :
+    Value.Refines v_x v_y := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_substitute
+
+theorem r_integer_substitute (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply v_x (Functions.mulZ.apply (some ((-1) : ℤ)) v_y)))) (some true))
+    (hp1 : Value.Defined v_y) :
+    Value.Refines v_x v_y := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_substitute
+
+theorem r_rational_substitute (v_x : Option (Ty.denote .rational)) (v_y : Option (Ty.denote .rational))
+    (hp0 : Value.Refines (Value.not (Functions.nonzeroQ.apply (Functions.addQ.apply v_x (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) v_y)))) (some true))
+    (hp1 : Value.Defined v_y) :
+    Value.Refines v_x v_y := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_substitute
+
+theorem r_rational_literal_affine_nonzero (v_a : Option (Ty.denote .rational)) (v_x : Option (Ty.denote .rational)) (v_b : Option (Ty.denote .rational))
+    (hp2 : Value.Refines (Functions.nonzeroQ.apply v_a) (some true)) :
+    Value.Refines (Functions.nonzeroQ.apply (Functions.addQ.apply (Functions.mulQ.apply v_a v_x) v_b)) (Functions.nonzeroQ.apply (Functions.addQ.apply v_x (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) (Functions.mulQ.apply (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) v_b) (Functions.invQ.apply v_a))))) := qsym_cached% by
+  cases v_a <;> cases v_x <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_literal_affine_nonzero
+
+theorem r_rational_nonzero_literal_offsets (v_x : Option (Ty.denote .rational)) (v_a : Option (Ty.denote .rational)) (v_b : Option (Ty.denote .rational)) :
+    Value.Refines (Functions.nonzeroQ.apply (Functions.addQ.apply (Functions.addQ.apply v_x v_a) v_b)) (Functions.nonzeroQ.apply (Functions.addQ.apply v_x (Functions.addQ.apply v_a v_b))) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_nonzero_literal_offsets
+
+theorem r_rational_nonzero_literal_offsets_commuted (v_x : Option (Ty.denote .rational)) (v_a : Option (Ty.denote .rational)) (v_b : Option (Ty.denote .rational)) :
+    Value.Refines (Functions.nonzeroQ.apply (Functions.addQ.apply (Functions.addQ.apply v_a v_x) v_b)) (Functions.nonzeroQ.apply (Functions.addQ.apply v_x (Functions.addQ.apply v_a v_b))) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_nonzero_literal_offsets_commuted
+
 end QSym.Generated

@@ -8,7 +8,7 @@ import std.exception:enforce;
 
 struct Example{ string name,input,expected; string[] facts; }
 Example[] examples(){
-	return [
+	Example[] result=[
 		Example("NaturalPartition","[p]*n+[¬p∧q]*n","[p∨q]*n"),
 		Example("NaturalPartitionNot","[¬p]*n+[p∧q]*n","[¬p∨q]*n"),
 		Example("NaturalPartitionReordered","[p]*n+[q∧¬p]*n","[p∨q]*n"),
@@ -125,8 +125,43 @@ Example[] examples(){
 		Example("RealLiteralUnitNeg2ExpNeg2","powerR(-2,-2)=1","false"),
 		Example("RealLiteralUnitNeg2ExpNeg3","powerR(-2,-3)=1","false")
 	];
+	foreach(vars;[["Natural","n"],["Integer","k"],["Rational","r"]]){
+		auto v=vars[1];
+		void add(string name,string input,string expected,string[] facts=null){ result~=Example("Substitute"~vars[0]~name,input,expected,facts); }
+		add("Direct",v,"2",[v~"=2"]);
+		add("Affine",v,"1",["2*"~v~"+1=3"]);
+		add("Expression","("~v~"+2)^2","9",["2*"~v~"+1=3"]);
+		add("IndicatorOther","["~v~"=3]","0",["2*"~v~"+1=3"]);
+		add("IndicatorNe","["~v~"≠1]","0",["2*"~v~"+1=3"]);
+		add("Zero",v,"0",[v~"=0"]);
+		add("NegatedNe",v,"2",["¬("~v~"≠2)"]);
+		add("GuardUnit","[2*"~v~"+1=3]*"~v,"["~v~"=1]");
+		add("GuardTwo","["~v~"=2]*"~v,"2*["~v~"=2]");
+		add("GuardUnsolved","["~v~"≠2]*"~v,"["~v~"≠2]*"~v);
+		add("GuardNegated","[¬("~v~"≠2)]*"~v,"2*["~v~"=2]");
+		add("GuardZero","["~v~"=0]*"~v,"0");
+		add("Scope","["~v~"=1]*"~v~"+"~v,"["~v~"=1]+"~v);
+	}
+	result~=[
+		Example("SubstituteIntegerNegative","k","-2",["k=-2"]),
+		Example("SubstituteRationalNegative","r","-1/2",["r=-1/2"]),
+		Example("SubstituteNaturalAlias","n","2",["n=m","m=2"]),
+		Example("SubstituteNaturalAliasReverse","n","2",["m=2","n=m"]),
+		Example("SubstituteIntegerAlias","k","4",["k=h","h=4"]),
+		Example("SubstituteIntegerAliasReverse","k","4",["h=4","k=h"]),
+		Example("SubstituteRationalAlias","r","1/2",["r=s","s=1/2"]),
+		Example("SubstituteRationalAliasReverse","r","1/2",["s=1/2","r=s"]),
+		Example("SubstituteFloor","floor(x)","2",["floor(x)=2"]),
+		Example("SubstituteDisjunction","k","k",["k=1∨k=2"]),
+		Example("SubstituteRationalFraction","r","1/2",["2*r=1"]),
+		Example("SubstituteRationalZeroCoefficient","r","r",["0*r=0"]),
+		Example("SubstituteIntegerHiddenUndefined","k","k",["[false]*(k-floor(log(0)))=0"]),
+		Example("SubstituteNaturalHiddenUndefined","n","n",["[false]*(n-denominator(qfromnd(k,0)))=0"]),
+		Example("SubstituteRationalHiddenUndefined","r","r",["[false]*(r-qfromnd(k,0))=0"])
+	];
+	return result;
 }
-private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,j:ℝ,z:ℂ,w:ℂ,p:𝔹,q:𝔹,n:ℕ,k:ℤ,r:ℚ"); return s; }
+private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,j:ℝ,z:ℂ,w:ℂ,p:𝔹,q:𝔹,n:ℕ,m:ℕ,k:ℤ,h:ℤ,r:ℚ,s:ℚ"); return s; }
 private Result run(Arena a,Term t,Term[] facts,bool trace=false){
 	return simplify(a,t,facts,Options(DensityMode.preserve,trace));
 }
@@ -153,5 +188,5 @@ unittest{
 		Term[] facts; foreach(f;c.facts) facts~=s.parse(a,f);
 		write(buildPath(args[1],c.name~".lean"),exportLean(a,run(a,s.parse(a,c.input),facts,true)));
 	}
-	writeln("Wrote 115 assumption and indicator certificates.");
+	writeln("Wrote ",examples().length," assumption and indicator certificates.");
 }

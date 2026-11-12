@@ -1410,3 +1410,9 @@ rewrite natural_nonzero_literal_offsets_commuted(x:ℕ,a:ℕ,b:ℤ):castNZ(a+x)+
 rewrite natural_direct_nonzero_product(x:ℕ,y:ℕ):nonzeroN(x*y)⇒nonzeroN(x)∧nonzeroN(y);
 rewrite natural_direct_nonzero_power(x:ℕ,n:NatParam):nonzeroN(x^(n+1))⇒nonzeroN(x);
 rewrite natural_direct_nonzero_sum(x:ℕ,y:ℕ):nonzeroN(x+y)⇒nonzeroN(x)∨nonzeroN(y);
+lemma natural_substitute(x:ℕ,y:ℕ):x⇒y when x=y,defined(y);
+lemma integer_substitute(x:ℤ,y:ℤ):x⇒y when x=y,defined(y);
+lemma rational_substitute(x:ℚ,y:ℚ):x⇒y when x=y,defined(y);
+rewrite rational_literal_affine_nonzero(a:ℚ,x:ℚ,b:ℚ):a*x+b≠0⇒x≠-b/a when literal(a),literal(b),a≠0;
+rewrite rational_nonzero_literal_offsets(x:ℚ,a:ℚ,b:ℚ):(x+a)+b≠0⇒x+(a+b)≠0 when literal(a),literal(b);
+rewrite rational_nonzero_literal_offsets_commuted(x:ℚ,a:ℚ,b:ℚ):(a+x)+b≠0⇒x+(a+b)≠0 when literal(a),literal(b);
