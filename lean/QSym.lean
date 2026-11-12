@@ -1,5 +1,6 @@
 import QSym.AxiomCheck
 import QSym.Expr
+import QSym.FixedPoint
 import QSym.Integration
 import QSym.Quantum
 import QSym.Generated

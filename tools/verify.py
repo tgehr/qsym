@@ -81,6 +81,7 @@ def main():
 		check(ROOT/"lean/QSym/Generated.lean",timeout=1800)
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
+	check(ROOT/"tests/FixedPoint.lean")
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
@@ -177,6 +178,12 @@ def main():
 		("Sorry","theorem forged : False := by sorry")):
 		path=negative/(name+".lean")
 		path.write_text("import QSym\n#qsym_check_axioms QSym.Numeric.sound\n"+body+"\n#qsym_check_axioms forged\n")
+		check(path,succeeds=False)
+	for name,body in (
+		("FixedPointBoundary","example : Value.Defined (value step 10) := (option_domain 10).mpr (by decide)"),
+		("FixedPointLeast","example : (least (ContinuousHom.id : (ℕ → Part ℕ) →𝒄 (ℕ → Part ℕ))) = (fun _ => Part.some 0) := FixedPoint.least_id")):
+		path=negative/(name+".lean")
+		path.write_text((ROOT/"tests/FixedPoint.lean").read_text()+"\nnamespace QSym.FixedPointTests\nopen OmegaCompletePartialOrder FixedPoint\n"+body+"\nend QSym.FixedPointTests\n")
 		check(path,succeeds=False)
 	domain=(ROOT/"build/domains/Reciprocal.lean").read_text()
 	corrupt,count=re.subn(r"(theorem domain_correct .*?Domain.Correct .*? )\(Expr.eval ρ Certificate.n\d+\)( :=)",
