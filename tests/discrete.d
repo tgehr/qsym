@@ -4,6 +4,7 @@ import std.file:write,mkdirRecurse;
 import std.path:buildPath;
 import std.stdio:writeln;
 import std.exception:enforce;
+import std.algorithm:startsWith;
 @safe:
 
 struct Example{ string name,input,expected; }
@@ -57,6 +58,86 @@ Example[] examples(){
 		add("ZeroPower","("~x~"^2)^0",vars[5]);
 	}
 	result~=[
+		Example("OffsetNaturalZeroDifference","2*n-1=-1","n=0"),
+		Example("OffsetNaturalZeroReversed","0=-2*n","n=0"),
+		Example("OffsetNaturalZeroPositive","2*n+3=3","n=0"),
+		Example("OffsetNaturalProductZero","n*m+1=1","n=0∨m=0"),
+		Example("OffsetNaturalPowerZero","n^3+1=1","n=0"),
+		Example("OffsetNaturalSumZero","n+m+1=1","n=0∧m=0"),
+		Example("OffsetNaturalProductNonzero","n*m+1≠1","n≠0∧m≠0"),
+		Example("OffsetNaturalPowerNonzero","n^3+1≠1","n≠0"),
+		Example("OffsetNaturalSumNonzero","n+m+1≠1","n≠0∨m≠0"),
+		Example("OffsetNaturalZeroNe","2*n-1≠-1","n≠0"),
+		Example("DirectNaturalProduct","nonzeroN(n*m)","n≠0∧m≠0"),
+		Example("DirectNaturalPower","nonzeroN(n^3)","n≠0"),
+		Example("DirectNaturalSum","nonzeroN(n+m)","n≠0∨m≠0"),
+		Example("DirectNaturalZeroPower","nonzeroN(n^0)","true"),
+		Example("DirectNaturalZeroFactor","nonzeroN(n*0)","false"),
+		Example("DirectNaturalPositiveSum","nonzeroN(n+m+1)","true"),
+		Example("DirectNaturalPositiveProduct","nonzeroN(n*m+1)","true"),
+		Example("DirectNaturalMaskedUndefined","false∧nonzeroN([log(0)<0]*(n*m))","false"),
+		Example("OffsetInteger0","2*i+1=5","i=2"),
+		Example("OffsetInteger1","1+2*i=5","i=2"),
+		Example("OffsetInteger2","5=2*i+1","i=2"),
+		Example("OffsetInteger3","5=1+2*i","i=2"),
+		Example("OffsetInteger4","2*i+1=4","false"),
+		Example("OffsetInteger5","1+2*i=4","false"),
+		Example("OffsetInteger6","2*i+2=4","i=1"),
+		Example("OffsetInteger7","(2*i+1)+2=7","i=2"),
+		Example("OffsetInteger8","(1+2*i)+2=7","i=2"),
+		Example("OffsetInteger9","2*(i+1)=4","i=1"),
+		Example("OffsetInteger10","2*(1+i)=4","i=1"),
+		Example("OffsetInteger11","2*i+1≠5","i≠2"),
+		Example("OffsetInteger12","2*i+1≠4","true"),
+		Example("OffsetInteger13","0*i+1=1","true"),
+		Example("OffsetInteger14","0*i+1=2","false"),
+		Example("OffsetInteger15","2*i+3=1","i=-1"),
+		Example("OffsetNatural0","2*n+1=5","n=2"),
+		Example("OffsetNatural1","1+2*n=5","n=2"),
+		Example("OffsetNatural2","5=2*n+1","n=2"),
+		Example("OffsetNatural3","5=1+2*n","n=2"),
+		Example("OffsetNatural4","2*n+1=4","false"),
+		Example("OffsetNatural5","1+2*n=4","false"),
+		Example("OffsetNatural6","2*n+2=4","n=1"),
+		Example("OffsetNatural7","(2*n+1)+2=7","n=2"),
+		Example("OffsetNatural8","(1+2*n)+2=7","n=2"),
+		Example("OffsetNatural9","2*(n+1)=4","n=1"),
+		Example("OffsetNatural10","2*(1+n)=4","n=1"),
+		Example("OffsetNatural11","2*n+1≠5","n≠2"),
+		Example("OffsetNatural12","2*n+1≠4","true"),
+		Example("OffsetNatural13","0*n+1=1","true"),
+		Example("OffsetNatural14","0*n+1=2","false"),
+		Example("OffsetNatural15","2*n+3=1","false"),
+		Example("OffsetFloor","2*floor(x)+1=5","2≤x∧x<3"),
+		Example("OffsetFloorImpossible","2*floor(x)+1=4","false"),
+		Example("OffsetFloorCommuted","1+2*floor(x)=5","2≤x∧x<3"),
+		Example("OffsetCeiling","2*ceil(x)+1=5","1<x∧x≤2"),
+		Example("OffsetRound","2*round(x)+1=5","3/2≤x∧x<5/2"),
+		Example("OffsetNegativeCoefficient","-2*i+1=5","i=-2"),
+		Example("OffsetPartial","2*floor(log(x))+1=5","2≤log(x)∧log(x)<3"),
+		Example("OffsetMaskedUndefined","false∧(2*floor(log(0))+1=5)","false"),
+
+		Example("LinearNaturalDivisible","2*n=4","n=2"),
+		Example("LinearNaturalNondivisible","2*n=5","false"),
+		Example("LinearNaturalRightCoeff","n*2=4","n=2"),
+		Example("LinearNaturalReversed","4=2*n","n=2"),
+		Example("LinearNaturalNegative","2*n=-4","false"),
+
+		Example("LinearIntegerDivisible","2*i=4","i=2"),
+		Example("LinearIntegerNondivisible","2*i=5","false"),
+		Example("LinearIntegerKnownOne","2*i=2","i=1"),
+		Example("LinearIntegerNegativeCoeff","-2*i=4","i=-2"),
+		Example("LinearIntegerNegativeRhs","2*i=-4","i=-2"),
+		Example("LinearIntegerRightCoeff","i*2=4","i=2"),
+		Example("LinearIntegerReversed","4=2*i","i=2"),
+		Example("LinearIntegerUnequal","2*i≠5","true"),
+		Example("LinearFloorDivisible","2*floor(x)=4","2≤x∧x<3"),
+		Example("LinearFloorNondivisible","2*floor(x)=3","false"),
+		Example("LinearFloorKnownOne","2*floor(x)=2","1≤x∧x<2"),
+		Example("LinearFloorPartial","2*floor(log(x))=4","2≤log(x)∧log(x)<3"),
+		Example("LinearIntegerZero","0*i=4","false"),
+		Example("LinearIntegerZeroBoth","0*i=0","true"),
+
 		Example("NaturalCollectNested","n+(m+n)","2*n+m"),
 		Example("IntegerCollectNested","i+(j+i)","2*i+j"),
 		Example("IntegerCommutedSum","(i+j)-(j+i)","int(0)"),
@@ -179,6 +260,10 @@ unittest{
 		assert(promotes(a.sort(fast.output),a.sort(input)),c.name~" changed type");
 		assert(fast.output==checked.output&&fast.exhausted==checked.exhausted,c.name);
 		if(!fast.exhausted) assert(simplify(a,fast.output).output==fast.output,c.name~" is not idempotent");
+		if(c.name.startsWith("Offset","DirectNatural")){
+			auto roundtrip=simplify(a,s.parse(a,s.format(a,fast.output)));
+			assert(!roundtrip.exhausted&&roundtrip.output==fast.output,c.name~" round trip");
+		}
 		exportLean(a,checked);
 	}
 	assert(!failures,"discrete scalar regressions");

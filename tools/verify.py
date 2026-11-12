@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",273),("radicals",78),("inverses",196),("domains",218),("assumptions",115),("numerals",68),("bounds",233),("subtypes",85),("convergence",52)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",605),("radicals",78),("inverses",196),("domains",218),("assumptions",115),("numerals",68),("bounds",233),("subtypes",85),("convergence",52)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -124,8 +124,8 @@ def main():
 		certificate(file)
 
 	discrete=sorted((ROOT/"build/discrete").glob("*.lean"))
-	if len(discrete)!=227:
-		raise RuntimeError("expected 227 discrete scalar certificates")
+	if len(discrete)!=304:
+		raise RuntimeError("expected 304 discrete scalar certificates")
 	for file in discrete:
 		certificate(file)
 
@@ -412,7 +412,38 @@ def main():
 		("BadLog2PowerBase","rewrite bad(x:ℝ):log2(powerR(10,x))⇒x;"),
 		("BadCosAbsolute","rewrite bad(x:ℝ):cos(abs(x))⇒abs(cos(x));"),
 		("BadSinhAbsolute","rewrite bad(x:ℝ):abs(sinh(x))⇒sinh(x);"),
+		("BadTanhAbsolute","rewrite bad(x:ℝ):abs(tanh(x))⇒tanh(x);"),
+		("BadAsinhAbsolute","rewrite bad(x:ℝ):abs(asinh(x))⇒asinh(x);"),
+		("BadAtanAbsolute","rewrite bad(x:ℝ):abs(atan(x))⇒atan(x);"),
+		("BadSignAsinh","rewrite bad(x:ℝ):sign(asinh(x))⇒1;"),
+		("BadSignAtan","rewrite bad(x:ℝ):sign(atan(x))⇒-sign(x);"),
+		("BadSignAsin","rewrite bad(x:ℝ):sign(asin(x))⇒0;"),
+		("BadAbsCbrt","rewrite bad(x:ℝ):abs(cbrt(x))⇒cbrt(x);"),
+		("BadSignCbrt","rewrite bad(x:ℝ):sign(cbrt(x))⇒0;"),
+		("BadSignCbrtZero","rewrite bad(x:ℝ):sign(cbrt(x))⇒1;"),
+		("BadSignLog","rewrite bad(x:ℝ):sign(log(x))⇒sign(x);"),
+		("BadSignExp","rewrite bad(x:ℝ):sign(exp(x)-1)⇒0;"),
+		("BadSignExpZero","rewrite bad(x:ℝ):sign(exp(x)-1)⇒1;"),
+		("BadSignExpDifference","rewrite bad(x:ℝ,y:ℝ):sign(exp(x)-exp(y))⇒0;"),
+		("BadSignLogDifference","rewrite bad(x:ℝ,y:ℝ):sign(log(x)-log(y))⇒1;"),
+		("BadSignAcosDifference","rewrite bad():sign(acos(-1)-acos(1))⇒int(-1);"),
+		("BadAcosSignOrientation","rewrite bad():sign(acos(-1)-acos(1))⇒int(-1);"),
+		("BadErfcSignZero","rewrite bad(x:ℝ,y:ℝ):sign(erfc(x)-erfc(y))⇒1;"),
+		("BadAcosSignDomain","rewrite bad():sign(-2)⇒sign(acos(2)-acos(0));"),
+		("BadLog2Sign","rewrite bad(x:ℝ):sign(log2(x))⇒sign(x);"),
+		("BadLog10SignZero","rewrite bad(x:ℝ,y:ℝ):sign(log10(x)-log10(y))⇒1;"),
+		("BadLogBaseSignDomain","rewrite bad():sign(-1)⇒sign(log2(0));"),
+		("BadErfcThresholdZero","rewrite bad():sign(erfc(0)-1)⇒1;"),
+		("BadAcosThresholdDomain","rewrite bad():sign(-2)⇒sign(acos(2)-real(1,2)*π);"),
+		("BadErfcThresholdConstant","rewrite bad(x:ℝ):sign(1-erfc(x))⇒1;"),
+		("BadIntegerNonintegralRoot","rewrite bad(x:ℤ):2*x=5⇒x=2;"),
+		("BadNaturalNegativeRoot","rewrite bad(x:ℕ):2*x=-4⇒x=2;"),
+		("BadIntegerZeroCoefficient","rewrite bad(x:ℤ):int(0)*x+int(0)≠0⇒true;"),
 		("BadMinComparison","rewrite bad(x:ℝ,y:ℝ,t:ℝ):min(x,y)<t⇒x<t∧y<t;"),
+		("BadIntegerOffsetCombine","rewrite bad(x:ℤ,a:ℤ,b:ℤ):(x+a)+b≠0⇒x+(a-b)≠0;"),
+		("BadNaturalOffsetCombine","rewrite bad(x:ℕ,a:ℕ,b:ℤ):castNZ(x+a)+b≠0⇒castNZ(x)+b≠0;"),
+		("BadNaturalDirectProduct","rewrite bad(x:ℕ,y:ℕ):nonzeroN(x*y)⇒nonzeroN(x)∨nonzeroN(y);"),
+		("BadNaturalDirectZeroPower","rewrite bad(x:ℕ):nonzeroN(x^0)⇒nonzeroN(x);"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
 		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),

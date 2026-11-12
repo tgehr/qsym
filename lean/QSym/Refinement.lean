@@ -2,7 +2,15 @@ import QSym.RefinementBase
 import QSym.Trigonometry
 import QSym.PowerPredicates
 import QSym.ScalarTypes
+import QSym.CubeRootSigns
+import QSym.SignThresholds
+import QSym.SignDifferences
+import QSym.DecreasingSigns
+import QSym.LogBaseSigns
+import QSym.DecreasingThresholds
+import QSym.IntegerEquations
 import QSym.ScalarOrder
+import QSym.SignCompositions
 
 namespace QSym
 
@@ -329,8 +337,40 @@ elab "qsym_rational_goal" : tactic => withMainContext do
 
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | (apply Value.refines_integer_literal_affine_nonzero; assumption)
+  | solve | (apply Value.refines_natural_literal_affine_nonzero; assumption)
   | solve | qsym_extrema
+  | exact Value.refines_sign_sinh _
+  | exact Value.refines_sign_tanh _
+  | exact Value.refines_sign_asinh _
+  | exact Value.refines_sign_atan _
+  | exact Value.refines_sign_asin _
+  | exact Value.refines_sign_atanh _
   | exact Value.refines_sign_product _ _
+  | exact Value.refines_abs_cbrt _
+  | exact Value.refines_sign_cbrt _
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_log _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_exp_difference _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_exp_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_log_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_sinh_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_tanh_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_asinh_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_atan_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_asin_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_atanh_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_cbrt_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_acosh_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_acos_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_erfc_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_log2 _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_log2_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_log10 _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_log10_pair_difference _ _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_acos_half_pi _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_half_pi_acos _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_erfc_minus_one _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_one_minus_erfc _)
   | exact Value.refines_sign_abs _
   | solve | qsym_exact_scalar
   | solve | qsym_real_power_bridge
@@ -560,6 +600,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (solve | have h := eq_neg_of_add_eq_zero_left (by assumption); subst_vars; ring)
     all_goals try (solve | exact Or.resolve_left (by assumption) (not_lt.mpr (by assumption)))
     all_goals try (solve | exact Or.resolve_left (by assumption) (not_le.mpr (by assumption)))
+    all_goals try (solve | simp only [Elementary.abs_tanh, Elementary.abs_asinh, Elementary.abs_atan])
     all_goals try (constructor <;> intro h <;> nlinarith)
     all_goals try (qsym_new_trig_goal; solve | (simp_all [
       Trigonometry.real_sin_half_normal, Trigonometry.real_cos_half_normal,

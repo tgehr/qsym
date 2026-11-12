@@ -117,3 +117,13 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["1≤x∧x<2","1≤x∧x<2","0<x∧x≤1","1/2≤x∧x<3/2",
 	"0≤x∧x<1","1<x∧x≤3","cos(x)","cosh(x)","sinh(abs(x))"],result.stdout
+
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars i:ℤ,n:ℕ","2*i+1=5","1+2*i=4","2*n+1=5","2*(n+1)=4",
+	"2*floor(x)+1=5","2*floor(x)+1=4","2*ceil(x)+1=5","2*round(x)+1=5",
+	"2*n-1=-1","0=-2*n","n^3+1=1","n+n+1≠1",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==[
+	"i=2","false","n=2","n=1","2≤x∧x<3","false","1<x∧x≤2","3/2≤x∧x<5/2",
+	"n=0","n=0","n=0","n≠0"],result.stdout

@@ -1357,3 +1357,56 @@ equation integer_add_unit(x:ℤ):x+0≡x;
 equation rational_add_unit(x:ℚ):x+0≡x;
 equation integer_add_comm(x:ℤ,y:ℤ):x+y≡y+x;
 equation rational_add_comm(x:ℚ,y:ℚ):x+y≡y+x;
+
+rewrite real_tanh_absolute_value(x:ℝ):abs(tanh(x))⇒tanh(abs(x));
+rewrite real_asinh_absolute_value(x:ℝ):abs(asinh(x))⇒asinh(abs(x));
+rewrite real_atan_absolute_value(x:ℝ):abs(atan(x))⇒atan(abs(x));
+
+rewrite real_sign_sinh(x:ℝ):sign(sinh(x))⇒sign(x);
+rewrite real_sign_tanh(x:ℝ):sign(tanh(x))⇒sign(x);
+rewrite real_sign_asinh(x:ℝ):sign(asinh(x))⇒sign(x);
+rewrite real_sign_atan(x:ℝ):sign(atan(x))⇒sign(x);
+rewrite real_sign_asin(x:ℝ):sign(asin(x))⇒sign(x);
+rewrite real_sign_atanh(x:ℝ):sign(atanh(x))⇒sign(x);
+
+rewrite real_abs_cbrt(x:ℝ):abs(cbrt(x))⇒cbrt(abs(x));
+rewrite real_sign_cbrt(x:ℝ):sign(cbrt(x))⇒sign(x);
+
+rewrite real_sign_log(x:ℝ):sign(log(x))⇒sign(x-1);
+rewrite real_sign_exp_difference(x:ℝ):sign(exp(x)-1)⇒sign(x);
+
+rewrite real_sign_exp_pair_difference(x:ℝ,y:ℝ):sign(exp(x)-exp(y))⇒sign(x-y);
+rewrite real_sign_log_pair_difference(x:ℝ,y:ℝ):sign(log(x)-log(y))⇒sign(x-y);
+rewrite real_sign_sinh_pair_difference(x:ℝ,y:ℝ):sign(sinh(x)-sinh(y))⇒sign(x-y);
+rewrite real_sign_tanh_pair_difference(x:ℝ,y:ℝ):sign(tanh(x)-tanh(y))⇒sign(x-y);
+rewrite real_sign_asinh_pair_difference(x:ℝ,y:ℝ):sign(asinh(x)-asinh(y))⇒sign(x-y);
+rewrite real_sign_atan_pair_difference(x:ℝ,y:ℝ):sign(atan(x)-atan(y))⇒sign(x-y);
+rewrite real_sign_asin_pair_difference(x:ℝ,y:ℝ):sign(asin(x)-asin(y))⇒sign(x-y);
+rewrite real_sign_atanh_pair_difference(x:ℝ,y:ℝ):sign(atanh(x)-atanh(y))⇒sign(x-y);
+rewrite real_sign_cbrt_pair_difference(x:ℝ,y:ℝ):sign(cbrt(x)-cbrt(y))⇒sign(x-y);
+rewrite real_sign_acosh_pair_difference(x:ℝ,y:ℝ):sign(acosh(x)-acosh(y))⇒sign(x-y);
+
+rewrite real_sign_acos_pair_difference(x:ℝ,y:ℝ):sign(acos(x)-acos(y))⇒sign(y-x);
+rewrite real_sign_erfc_pair_difference(x:ℝ,y:ℝ):sign(erfc(x)-erfc(y))⇒sign(y-x);
+
+rewrite real_sign_log2(x:ℝ):sign(log2(x))⇒sign(x-1);
+rewrite real_sign_log2_pair_difference(x:ℝ,y:ℝ):sign(log2(x)-log2(y))⇒sign(x-y);
+rewrite real_sign_log10(x:ℝ):sign(log10(x))⇒sign(x-1);
+rewrite real_sign_log10_pair_difference(x:ℝ,y:ℝ):sign(log10(x)-log10(y))⇒sign(x-y);
+
+rewrite real_sign_acos_half_pi(x:ℝ):sign(acos(x)+real(-1,2)*π)⇒sign(-x);
+rewrite real_sign_half_pi_acos(x:ℝ):sign(real(1,2)*π-acos(x))⇒sign(x);
+rewrite real_sign_erfc_minus_one(x:ℝ):sign(erfc(x)-1)⇒sign(-x);
+rewrite real_sign_one_minus_erfc(x:ℝ):sign(1-erfc(x))⇒sign(x);
+
+rewrite integer_literal_affine_nonzero(a:ℤ,x:ℤ,b:ℤ):a*x+b≠0⇒¬(x=floor(-toℝ(b)/toℝ(a))∧-toℝ(b)/toℝ(a)=toℝ(floor(-toℝ(b)/toℝ(a)))) when literal(a),literal(b),a≠0;
+rewrite natural_literal_affine_nonzero(a:ℕ,x:ℕ,b:ℤ):castNZ(a*x)+b≠0⇒¬(0≤-toℝ(b)/toℝ(a)∧castNZ(x)=floor(-toℝ(b)/toℝ(a))∧-toℝ(b)/toℝ(a)=toℝ(floor(-toℝ(b)/toℝ(a)))) when literal(a),literal(b),a≠0;
+rewrite natural_positive_offset_nonzero(x:ℕ,b:ℕ):nonzeroN(x+b)⇒true when 0<b;
+
+rewrite integer_nonzero_literal_offsets(x:ℤ,a:ℤ,b:ℤ):(x+a)+b≠0⇒x+(a+b)≠0 when literal(a),literal(b);
+rewrite integer_nonzero_literal_offsets_commuted(x:ℤ,a:ℤ,b:ℤ):(a+x)+b≠0⇒x+(a+b)≠0 when literal(a),literal(b);
+rewrite natural_nonzero_literal_offsets(x:ℕ,a:ℕ,b:ℤ):castNZ(x+a)+b≠0⇒castNZ(x)+(castNZ(a)+b)≠0 when literal(a),literal(b);
+rewrite natural_nonzero_literal_offsets_commuted(x:ℕ,a:ℕ,b:ℤ):castNZ(a+x)+b≠0⇒castNZ(x)+(castNZ(a)+b)≠0 when literal(a),literal(b);
+rewrite natural_direct_nonzero_product(x:ℕ,y:ℕ):nonzeroN(x*y)⇒nonzeroN(x)∧nonzeroN(y);
+rewrite natural_direct_nonzero_power(x:ℕ,n:NatParam):nonzeroN(x^(n+1))⇒nonzeroN(x);
+rewrite natural_direct_nonzero_sum(x:ℕ,y:ℕ):nonzeroN(x+y)⇒nonzeroN(x)∨nonzeroN(y);

@@ -27,6 +27,338 @@ Example[] examples(){ return [
 	Example("NewAbsSinhInverse","abs(sinh(x⁻¹))","sinh(abs(x⁻¹))"),
 	Example("NewAbsSinhGuard","[x<0]*abs(sinh(x))","[x<0]*sinh(abs(x))"),
 	Example("NewAbsSinhMasked","[false]*abs(sinh(x))","[false]*sinh(abs(x))"),
+	Example("AbstanhSymbolic","abs(tanh(x))","tanh(abs(x))"),
+	Example("AbstanhNegative","abs(tanh(-x))","tanh(abs(-x))"),
+	Example("AbstanhZero","abs(tanh(0))","tanh(abs(0))"),
+	Example("AbstanhPositiveOne","abs(tanh(1))","tanh(abs(1))"),
+	Example("AbstanhNegativeOne","abs(tanh(-1))","tanh(abs(-1))"),
+	Example("AbstanhPartial","abs(tanh(log(x)))","tanh(abs(log(x)))"),
+	Example("AbstanhInverse","abs(tanh(x⁻¹))","tanh(abs(x⁻¹))"),
+	Example("AbstanhGuard","[x<0]*abs(tanh(x))","[x<0]*tanh(abs(x))"),
+	Example("AbstanhFalseMask","[false]*abs(tanh(x))","[false]*tanh(abs(x))"),
+	Example("AbstanhAssumed","abs(tanh(x))","-tanh(x)",["x<0"]),
+	Example("AbsasinhSymbolic","abs(asinh(x))","asinh(abs(x))"),
+	Example("AbsasinhNegative","abs(asinh(-x))","asinh(abs(-x))"),
+	Example("AbsasinhZero","abs(asinh(0))","asinh(abs(0))"),
+	Example("AbsasinhPositiveOne","abs(asinh(1))","asinh(abs(1))"),
+	Example("AbsasinhNegativeOne","abs(asinh(-1))","asinh(abs(-1))"),
+	Example("AbsasinhPartial","abs(asinh(log(x)))","asinh(abs(log(x)))"),
+	Example("AbsasinhInverse","abs(asinh(x⁻¹))","asinh(abs(x⁻¹))"),
+	Example("AbsasinhGuard","[x<0]*abs(asinh(x))","[x<0]*asinh(abs(x))"),
+	Example("AbsasinhFalseMask","[false]*abs(asinh(x))","[false]*asinh(abs(x))"),
+	Example("AbsasinhAssumed","abs(asinh(x))","-asinh(x)",["x<0"]),
+	Example("AbsatanSymbolic","abs(atan(x))","atan(abs(x))"),
+	Example("AbsatanNegative","abs(atan(-x))","atan(abs(-x))"),
+	Example("AbsatanZero","abs(atan(0))","atan(abs(0))"),
+	Example("AbsatanPositiveOne","abs(atan(1))","atan(abs(1))"),
+	Example("AbsatanNegativeOne","abs(atan(-1))","atan(abs(-1))"),
+	Example("AbsatanPartial","abs(atan(log(x)))","atan(abs(log(x)))"),
+	Example("AbsatanInverse","abs(atan(x⁻¹))","atan(abs(x⁻¹))"),
+	Example("AbsatanGuard","[x<0]*abs(atan(x))","[x<0]*atan(abs(x))"),
+	Example("AbsatanFalseMask","[false]*abs(atan(x))","[false]*atan(abs(x))"),
+	Example("AbsatanAssumed","abs(atan(x))","-atan(x)",["x<0"]),
+	Example("SignasinNegativeBoundary","sign(asin(-1))","sign(-1)"),
+	Example("SignasinPositiveBoundary","sign(asin(1))","sign(1)"),
+	Example("SignasinOutsideDomain","sign(asin(2))","sign(2)"),
+	Example("SignatanhNegativeBoundary","sign(atanh(-1))","sign(-1)"),
+	Example("SignatanhPositiveBoundary","sign(atanh(1))","sign(1)"),
+	Example("SignatanhOutsideDomain","sign(atanh(2))","sign(2)"),
+	Example("SignsinhSymbolic","sign(sinh(x))","sign(x)"),
+	Example("SignsinhNegated","sign(sinh(-x))","sign(-x)"),
+	Example("SignsinhZero","sign(sinh(0))","sign(0)"),
+	Example("SignsinhPositiveHalf","sign(sinh(1/2))","sign(1/2)"),
+	Example("SignsinhNegativeHalf","sign(sinh(-1/2))","sign(-1/2)"),
+	Example("SignsinhPartial","sign(sinh(log(x)))","sign(log(x))"),
+	Example("SignsinhInverse","sign(sinh(x⁻¹))","sign(x⁻¹)"),
+	Example("SignsinhGuard","[x<0]*sign(sinh(x))","[x<0]*sign(x)"),
+	Example("SignsinhFalseMask","[false]*sign(sinh(log(0)))","0"),
+	Example("SignsinhAssumed","sign(sinh(x))","-1",["x<0"]),
+	Example("SigntanhSymbolic","sign(tanh(x))","sign(x)"),
+	Example("SigntanhNegated","sign(tanh(-x))","sign(-x)"),
+	Example("SigntanhZero","sign(tanh(0))","sign(0)"),
+	Example("SigntanhPositiveHalf","sign(tanh(1/2))","sign(1/2)"),
+	Example("SigntanhNegativeHalf","sign(tanh(-1/2))","sign(-1/2)"),
+	Example("SigntanhPartial","sign(tanh(log(x)))","sign(log(x))"),
+	Example("SigntanhInverse","sign(tanh(x⁻¹))","sign(x⁻¹)"),
+	Example("SigntanhGuard","[x<0]*sign(tanh(x))","[x<0]*sign(x)"),
+	Example("SigntanhFalseMask","[false]*sign(tanh(log(0)))","0"),
+	Example("SigntanhAssumed","sign(tanh(x))","-1",["x<0"]),
+	Example("SignasinhSymbolic","sign(asinh(x))","sign(x)"),
+	Example("SignasinhNegated","sign(asinh(-x))","sign(-x)"),
+	Example("SignasinhZero","sign(asinh(0))","sign(0)"),
+	Example("SignasinhPositiveHalf","sign(asinh(1/2))","sign(1/2)"),
+	Example("SignasinhNegativeHalf","sign(asinh(-1/2))","sign(-1/2)"),
+	Example("SignasinhPartial","sign(asinh(log(x)))","sign(log(x))"),
+	Example("SignasinhInverse","sign(asinh(x⁻¹))","sign(x⁻¹)"),
+	Example("SignasinhGuard","[x<0]*sign(asinh(x))","[x<0]*sign(x)"),
+	Example("SignasinhFalseMask","[false]*sign(asinh(log(0)))","0"),
+	Example("SignasinhAssumed","sign(asinh(x))","-1",["x<0"]),
+	Example("SignatanSymbolic","sign(atan(x))","sign(x)"),
+	Example("SignatanNegated","sign(atan(-x))","sign(-x)"),
+	Example("SignatanZero","sign(atan(0))","sign(0)"),
+	Example("SignatanPositiveHalf","sign(atan(1/2))","sign(1/2)"),
+	Example("SignatanNegativeHalf","sign(atan(-1/2))","sign(-1/2)"),
+	Example("SignatanPartial","sign(atan(log(x)))","sign(log(x))"),
+	Example("SignatanInverse","sign(atan(x⁻¹))","sign(x⁻¹)"),
+	Example("SignatanGuard","[x<0]*sign(atan(x))","[x<0]*sign(x)"),
+	Example("SignatanFalseMask","[false]*sign(atan(log(0)))","0"),
+	Example("SignatanAssumed","sign(atan(x))","-1",["x<0"]),
+	Example("SignasinSymbolic","sign(asin(x))","sign(x)"),
+	Example("SignasinNegated","sign(asin(-x))","sign(-x)"),
+	Example("SignasinZero","sign(asin(0))","sign(0)"),
+	Example("SignasinPositiveHalf","sign(asin(1/2))","sign(1/2)"),
+	Example("SignasinNegativeHalf","sign(asin(-1/2))","sign(-1/2)"),
+	Example("SignasinPartial","sign(asin(log(x)))","sign(log(x))"),
+	Example("SignasinInverse","sign(asin(x⁻¹))","sign(x⁻¹)"),
+	Example("SignasinGuard","[x<0]*sign(asin(x))","[x<0]*sign(x)"),
+	Example("SignasinFalseMask","[false]*sign(asin(log(0)))","0"),
+	Example("SignasinAssumed","sign(asin(x))","-1",["x<0"]),
+	Example("SignatanhSymbolic","sign(atanh(x))","sign(x)"),
+	Example("SignatanhNegated","sign(atanh(-x))","sign(-x)"),
+	Example("SignatanhZero","sign(atanh(0))","sign(0)"),
+	Example("SignatanhPositiveHalf","sign(atanh(1/2))","sign(1/2)"),
+	Example("SignatanhNegativeHalf","sign(atanh(-1/2))","sign(-1/2)"),
+	Example("SignatanhPartial","sign(atanh(log(x)))","sign(log(x))"),
+	Example("SignatanhInverse","sign(atanh(x⁻¹))","sign(x⁻¹)"),
+	Example("SignatanhGuard","[x<0]*sign(atanh(x))","[x<0]*sign(x)"),
+	Example("SignatanhFalseMask","[false]*sign(atanh(log(0)))","0"),
+	Example("SignatanhAssumed","sign(atanh(x))","-1",["x<0"]),
+	Example("CubeAbs0","abs(cbrt(x))","cbrt(abs(x))"),
+	Example("CubeAbs1","abs(cbrt(-x))","cbrt(abs(-x))"),
+	Example("CubeAbs2","abs(cbrt(0))","cbrt(abs(0))"),
+	Example("CubeAbs3","abs(cbrt(1))","cbrt(abs(1))"),
+	Example("CubeAbs4","abs(cbrt(-1))","cbrt(abs(-1))"),
+	Example("CubeAbs5","abs(cbrt(8))","cbrt(abs(8))"),
+	Example("CubeAbs6","abs(cbrt(-8))","cbrt(abs(-8))"),
+	Example("CubeAbs7","abs(cbrt(1/8))","cbrt(abs(1/8))"),
+	Example("CubeAbs8","abs(cbrt(-1/8))","cbrt(abs(-1/8))"),
+	Example("CubeAbs9","abs(cbrt(1/x))","cbrt(abs(1/x))"),
+	Example("CubeAbs10","abs(cbrt(log(x)))","cbrt(abs(log(x)))"),
+	Example("CubeAbs11","abs(cbrt(x*y))","cbrt(abs(x*y))"),
+	Example("CubeAbs12","abs(cbrt(cbrt(x)))","cbrt(abs(cbrt(x)))"),
+	Example("CubeAbsFalseGuard","[false]*abs(cbrt(log(0)))","0"),
+	Example("CubeAbsTrueGuard","[true]*abs(cbrt(x))","cbrt(abs(x))"),
+	Example("CubeAbsPositiveFact","abs(cbrt(x))","cbrt(abs(x))",["0<x"]),
+	Example("CubeSign0","sign(cbrt(x))","sign(x)"),
+	Example("CubeSign1","sign(cbrt(-x))","sign(-x)"),
+	Example("CubeSign2","sign(cbrt(0))","sign(0)"),
+	Example("CubeSign3","sign(cbrt(1))","sign(1)"),
+	Example("CubeSign4","sign(cbrt(-1))","sign(-1)"),
+	Example("CubeSign5","sign(cbrt(8))","sign(8)"),
+	Example("CubeSign6","sign(cbrt(-8))","sign(-8)"),
+	Example("CubeSign7","sign(cbrt(1/8))","sign(1/8)"),
+	Example("CubeSign8","sign(cbrt(-1/8))","sign(-1/8)"),
+	Example("CubeSign9","sign(cbrt(1/x))","sign(1/x)"),
+	Example("CubeSign10","sign(cbrt(log(x)))","sign(log(x))"),
+	Example("CubeSign11","sign(cbrt(x*y))","sign(x*y)"),
+	Example("CubeSign12","sign(cbrt(cbrt(x)))","sign(cbrt(x))"),
+	Example("CubeSignFalseGuard","[false]*sign(cbrt(log(0)))","0"),
+	Example("CubeSignTrueGuard","[true]*sign(cbrt(x))","sign(x)"),
+	Example("CubeSignPositiveFact","sign(cbrt(x))","sign(x)",["0<x"]),
+	Example("SignLogThreshold0","sign(log(x))","sign((x)-1)"),
+	Example("SignLogThreshold1","sign(log(1/x))","sign((1/x)-1)"),
+	Example("SignLogThreshold2","sign(log(exp(x)))","sign((exp(x))-1)"),
+	Example("SignLogThreshold3","sign(log(x^2))","sign((x^2)-1)"),
+	Example("SignLogThreshold4","sign(log(1/2))","sign((1/2)-1)"),
+	Example("SignLogThreshold5","sign(log(1))","sign((1)-1)"),
+	Example("SignLogThreshold6","sign(log(2))","sign((2)-1)"),
+	Example("SignLogThreshold7","sign(log(-1))","sign((-1)-1)"),
+	Example("SignLogThreshold8","sign(log(0))","sign((0)-1)"),
+	Example("SignLogFalseMask","[false]*sign(log(1/0))","0"),
+	Example("SignLogTrueMask","[true]*sign(log(x))","sign((x)-1)"),
+	Example("SignLogFact","sign(log(x))","sign((x)-1)",["1<x"]),
+	Example("SignExpThreshold0","sign(exp(x)-1)","sign(x)"),
+	Example("SignExpThreshold1","sign(exp(1/x)-1)","sign(1/x)"),
+	Example("SignExpThreshold2","sign(exp(log(x))-1)","sign(log(x))"),
+	Example("SignExpThreshold3","sign(exp(x^2)-1)","sign(x^2)"),
+	Example("SignExpThreshold4","sign(exp(-1)-1)","sign(-1)"),
+	Example("SignExpThreshold5","sign(exp(0)-1)","sign(0)"),
+	Example("SignExpThreshold6","sign(exp(1)-1)","sign(1)"),
+	Example("SignExpThreshold7","sign(exp(1/2)-1)","sign(1/2)"),
+	Example("SignExpThreshold8","sign(exp(-1/2)-1)","sign(-1/2)"),
+	Example("SignExpFalseMask","[false]*sign(exp(1/0)-1)","0"),
+	Example("SignExpTrueMask","[true]*sign(exp(x)-1)","sign(x)"),
+	Example("SignExpFact","sign(exp(x)-1)","sign(x)",["1<x"]),
+	Example("SignDiffexp0","sign(exp(x)-exp(y))","sign((x)-(y))"),
+	Example("SignDiffexp1","sign(exp(1/x)-exp(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDiffexp2","sign(exp(x)-exp(x))","sign((x)-(x))"),
+	Example("SignDiffexp3","sign(exp(0)-exp(0))","sign((0)-(0))"),
+	Example("SignDiffexp4","sign(exp(1)-exp(2))","sign((1)-(2))"),
+	Example("SignDiffexp5","sign(exp(-1)-exp(1))","sign((-1)-(1))"),
+	Example("SignDiffexpMask","[false]*sign(exp(1/0)-exp(x))","0"),
+	Example("SignDiffexpFact","sign(exp(x)-exp(y))","sign(x-y)",["x<y"]),
+	Example("SignDifflog0","sign(log(x)-log(y))","sign((x)-(y))"),
+	Example("SignDifflog1","sign(log(1/x)-log(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDifflog2","sign(log(x)-log(x))","sign((x)-(x))"),
+	Example("SignDifflog3","sign(log(0)-log(0))","sign((0)-(0))"),
+	Example("SignDifflog4","sign(log(1)-log(2))","sign((1)-(2))"),
+	Example("SignDifflog5","sign(log(-1)-log(1))","sign((-1)-(1))"),
+	Example("SignDifflogMask","[false]*sign(log(1/0)-log(x))","0"),
+	Example("SignDifflogFact","sign(log(x)-log(y))","sign(x-y)",["x<y"]),
+	Example("SignDiffsinh0","sign(sinh(x)-sinh(y))","sign((x)-(y))"),
+	Example("SignDiffsinh1","sign(sinh(1/x)-sinh(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDiffsinh2","sign(sinh(x)-sinh(x))","sign((x)-(x))"),
+	Example("SignDiffsinh3","sign(sinh(0)-sinh(0))","sign((0)-(0))"),
+	Example("SignDiffsinh4","sign(sinh(1)-sinh(2))","sign((1)-(2))"),
+	Example("SignDiffsinh5","sign(sinh(-1)-sinh(1))","sign((-1)-(1))"),
+	Example("SignDiffsinhMask","[false]*sign(sinh(1/0)-sinh(x))","0"),
+	Example("SignDiffsinhFact","sign(sinh(x)-sinh(y))","sign(x-y)",["x<y"]),
+	Example("SignDifftanh0","sign(tanh(x)-tanh(y))","sign((x)-(y))"),
+	Example("SignDifftanh1","sign(tanh(1/x)-tanh(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDifftanh2","sign(tanh(x)-tanh(x))","sign((x)-(x))"),
+	Example("SignDifftanh3","sign(tanh(0)-tanh(0))","sign((0)-(0))"),
+	Example("SignDifftanh4","sign(tanh(1)-tanh(2))","sign((1)-(2))"),
+	Example("SignDifftanh5","sign(tanh(-1)-tanh(1))","sign((-1)-(1))"),
+	Example("SignDifftanhMask","[false]*sign(tanh(1/0)-tanh(x))","0"),
+	Example("SignDifftanhFact","sign(tanh(x)-tanh(y))","sign(x-y)",["x<y"]),
+	Example("SignDiffasinh0","sign(asinh(x)-asinh(y))","sign((x)-(y))"),
+	Example("SignDiffasinh1","sign(asinh(1/x)-asinh(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDiffasinh2","sign(asinh(x)-asinh(x))","sign((x)-(x))"),
+	Example("SignDiffasinh3","sign(asinh(0)-asinh(0))","sign((0)-(0))"),
+	Example("SignDiffasinh4","sign(asinh(1)-asinh(2))","sign((1)-(2))"),
+	Example("SignDiffasinh5","sign(asinh(-1)-asinh(1))","sign((-1)-(1))"),
+	Example("SignDiffasinhMask","[false]*sign(asinh(1/0)-asinh(x))","0"),
+	Example("SignDiffasinhFact","sign(asinh(x)-asinh(y))","sign(x-y)",["x<y"]),
+	Example("SignDiffatan0","sign(atan(x)-atan(y))","sign((x)-(y))"),
+	Example("SignDiffatan1","sign(atan(1/x)-atan(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDiffatan2","sign(atan(x)-atan(x))","sign((x)-(x))"),
+	Example("SignDiffatan3","sign(atan(0)-atan(0))","sign((0)-(0))"),
+	Example("SignDiffatan4","sign(atan(1)-atan(2))","sign((1)-(2))"),
+	Example("SignDiffatan5","sign(atan(-1)-atan(1))","sign((-1)-(1))"),
+	Example("SignDiffatanMask","[false]*sign(atan(1/0)-atan(x))","0"),
+	Example("SignDiffatanFact","sign(atan(x)-atan(y))","sign(x-y)",["x<y"]),
+	Example("SignDiffasin0","sign(asin(x)-asin(y))","sign((x)-(y))"),
+	Example("SignDiffasin1","sign(asin(1/x)-asin(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDiffasin2","sign(asin(x)-asin(x))","sign((x)-(x))"),
+	Example("SignDiffasin3","sign(asin(0)-asin(0))","sign((0)-(0))"),
+	Example("SignDiffasin4","sign(asin(1)-asin(2))","sign((1)-(2))"),
+	Example("SignDiffasin5","sign(asin(-1)-asin(1))","sign((-1)-(1))"),
+	Example("SignDiffasinMask","[false]*sign(asin(1/0)-asin(x))","0"),
+	Example("SignDiffasinFact","sign(asin(x)-asin(y))","sign(x-y)",["x<y"]),
+	Example("SignDiffatanh0","sign(atanh(x)-atanh(y))","sign((x)-(y))"),
+	Example("SignDiffatanh1","sign(atanh(1/x)-atanh(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDiffatanh2","sign(atanh(x)-atanh(x))","sign((x)-(x))"),
+	Example("SignDiffatanh3","sign(atanh(0)-atanh(0))","sign((0)-(0))"),
+	Example("SignDiffatanh4","sign(atanh(1)-atanh(2))","sign((1)-(2))"),
+	Example("SignDiffatanh5","sign(atanh(-1)-atanh(1))","sign((-1)-(1))"),
+	Example("SignDiffatanhMask","[false]*sign(atanh(1/0)-atanh(x))","0"),
+	Example("SignDiffatanhFact","sign(atanh(x)-atanh(y))","sign(x-y)",["x<y"]),
+	Example("SignDiffcbrt0","sign(cbrt(x)-cbrt(y))","sign((x)-(y))"),
+	Example("SignDiffcbrt1","sign(cbrt(1/x)-cbrt(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDiffcbrt2","sign(cbrt(x)-cbrt(x))","sign((x)-(x))"),
+	Example("SignDiffcbrt3","sign(cbrt(0)-cbrt(0))","sign((0)-(0))"),
+	Example("SignDiffcbrt4","sign(cbrt(1)-cbrt(2))","sign((1)-(2))"),
+	Example("SignDiffcbrt5","sign(cbrt(-1)-cbrt(1))","sign((-1)-(1))"),
+	Example("SignDiffcbrtMask","[false]*sign(cbrt(1/0)-cbrt(x))","0"),
+	Example("SignDiffcbrtFact","sign(cbrt(x)-cbrt(y))","sign(x-y)",["x<y"]),
+	Example("SignDiffacosh0","sign(acosh(x)-acosh(y))","sign((x)-(y))"),
+	Example("SignDiffacosh1","sign(acosh(1/x)-acosh(1/y))","sign((1/x)-(1/y))"),
+	Example("SignDiffacosh2","sign(acosh(x)-acosh(x))","sign((x)-(x))"),
+	Example("SignDiffacosh3","sign(acosh(0)-acosh(0))","sign((0)-(0))"),
+	Example("SignDiffacosh4","sign(acosh(1)-acosh(2))","sign((1)-(2))"),
+	Example("SignDiffacosh5","sign(acosh(-1)-acosh(1))","sign((-1)-(1))"),
+	Example("SignDiffacoshMask","[false]*sign(acosh(1/0)-acosh(x))","0"),
+	Example("SignDiffacoshFact","sign(acosh(x)-acosh(y))","sign(x-y)",["x<y"]),
+	Example("DecreasingSignacos0","sign(acos(x)-acos(y))","sign((y)-(x))"),
+	Example("DecreasingSignacos1","sign(acos(y)-acos(x))","sign((x)-(y))"),
+	Example("DecreasingSignacos2","sign(acos(1/x)-acos(1/y))","sign((1/y)-(1/x))"),
+	Example("DecreasingSignacos3","sign(acos(log(x))-acos(log(y)))","sign((log(y))-(log(x)))"),
+	Example("DecreasingSignacos4","sign(acos(x)-acos(x))","sign((x)-(x))"),
+	Example("DecreasingSignacos5","sign(acos(0)-acos(0))","sign((0)-(0))"),
+	Example("DecreasingSignacos6","sign(acos(1)-acos(-1))","sign((-1)-(1))"),
+	Example("DecreasingSignacos7","sign(acos(-1)-acos(1))","sign((1)-(-1))"),
+	Example("DecreasingSignacos8","sign(acos(1/2)-acos(-1/2))","sign((-1/2)-(1/2))"),
+	Example("DecreasingSignacos9","sign(acos(0)-acos(1))","sign((1)-(0))"),
+	Example("DecreasingSignacosMask","[false]*sign(acos(1/0)-acos(x))","0"),
+	Example("DecreasingSignacosFact","sign(acos(x)-acos(y))","sign(y-x)",["x<y"]),
+	Example("DecreasingSignerfc0","sign(erfc(x)-erfc(y))","sign((y)-(x))"),
+	Example("DecreasingSignerfc1","sign(erfc(y)-erfc(x))","sign((x)-(y))"),
+	Example("DecreasingSignerfc2","sign(erfc(1/x)-erfc(1/y))","sign((1/y)-(1/x))"),
+	Example("DecreasingSignerfc3","sign(erfc(log(x))-erfc(log(y)))","sign((log(y))-(log(x)))"),
+	Example("DecreasingSignerfc4","sign(erfc(x)-erfc(x))","sign((x)-(x))"),
+	Example("DecreasingSignerfc5","sign(erfc(0)-erfc(0))","sign((0)-(0))"),
+	Example("DecreasingSignerfc6","sign(erfc(1)-erfc(-1))","sign((-1)-(1))"),
+	Example("DecreasingSignerfc7","sign(erfc(-1)-erfc(1))","sign((1)-(-1))"),
+	Example("DecreasingSignerfc8","sign(erfc(1/2)-erfc(-1/2))","sign((-1/2)-(1/2))"),
+	Example("DecreasingSignerfc9","sign(erfc(0)-erfc(1))","sign((1)-(0))"),
+	Example("DecreasingSignerfcMask","[false]*sign(erfc(1/0)-erfc(x))","0"),
+	Example("DecreasingSignerfcFact","sign(erfc(x)-erfc(y))","sign(y-x)",["x<y"]),
+	Example("SignBaselog20","sign(log2(x))","sign((x)-1)"),
+	Example("SignBaselog21","sign(log2(1/x))","sign((1/x)-1)"),
+	Example("SignBaselog22","sign(log2(exp(x)))","sign((exp(x))-1)"),
+	Example("SignBaselog23","sign(log2(1/2))","sign((1/2)-1)"),
+	Example("SignBaselog24","sign(log2(1))","sign((1)-1)"),
+	Example("SignBaselog25","sign(log2(2))","sign((2)-1)"),
+	Example("SignBaselog26","sign(log2(0))","sign((0)-1)"),
+	Example("SignBaselog27","sign(log2(-1))","sign((-1)-1)"),
+	Example("SignBasePairlog20","sign(log2(x)-log2(y))","sign((x)-(y))"),
+	Example("SignBasePairlog21","sign(log2(1/x)-log2(1/y))","sign((1/x)-(1/y))"),
+	Example("SignBasePairlog22","sign(log2(x)-log2(x))","sign((x)-(x))"),
+	Example("SignBasePairlog23","sign(log2(1/2)-log2(2))","sign((1/2)-(2))"),
+	Example("SignBasePairlog24","sign(log2(2)-log2(1/2))","sign((2)-(1/2))"),
+	Example("SignBasePairlog25","sign(log2(0)-log2(1))","sign((0)-(1))"),
+	Example("SignBasePairlog26","sign(log2(-1)-log2(2))","sign((-1)-(2))"),
+	Example("SignBasePairlog27","sign(log2(exp(x))-log2(exp(y)))","sign((exp(x))-(exp(y)))"),
+	Example("SignBaselog2Mask","[false]*sign(log2(1/0))","0"),
+	Example("SignBaselog2Fact","sign(log2(x))","sign(x-1)",["1<x"]),
+	Example("SignBaselog100","sign(log10(x))","sign((x)-1)"),
+	Example("SignBaselog101","sign(log10(1/x))","sign((1/x)-1)"),
+	Example("SignBaselog102","sign(log10(exp(x)))","sign((exp(x))-1)"),
+	Example("SignBaselog103","sign(log10(1/2))","sign((1/2)-1)"),
+	Example("SignBaselog104","sign(log10(1))","sign((1)-1)"),
+	Example("SignBaselog105","sign(log10(2))","sign((2)-1)"),
+	Example("SignBaselog106","sign(log10(0))","sign((0)-1)"),
+	Example("SignBaselog107","sign(log10(-1))","sign((-1)-1)"),
+	Example("SignBasePairlog100","sign(log10(x)-log10(y))","sign((x)-(y))"),
+	Example("SignBasePairlog101","sign(log10(1/x)-log10(1/y))","sign((1/x)-(1/y))"),
+	Example("SignBasePairlog102","sign(log10(x)-log10(x))","sign((x)-(x))"),
+	Example("SignBasePairlog103","sign(log10(1/2)-log10(2))","sign((1/2)-(2))"),
+	Example("SignBasePairlog104","sign(log10(2)-log10(1/2))","sign((2)-(1/2))"),
+	Example("SignBasePairlog105","sign(log10(0)-log10(1))","sign((0)-(1))"),
+	Example("SignBasePairlog106","sign(log10(-1)-log10(2))","sign((-1)-(2))"),
+	Example("SignBasePairlog107","sign(log10(exp(x))-log10(exp(y)))","sign((exp(x))-(exp(y)))"),
+	Example("SignBaselog10Mask","[false]*sign(log10(1/0))","0"),
+	Example("SignBaselog10Fact","sign(log10(x))","sign(x-1)",["1<x"]),
+	Example("DecreaseThresholdAcos0","sign(acos(x)-π/2)","sign(-(x))"),
+	Example("DecreaseThresholdAcos1","sign(acos(1/x)-π/2)","sign(-(1/x))"),
+	Example("DecreaseThresholdAcos2","sign(acos(log(x))-π/2)","sign(-(log(x)))"),
+	Example("DecreaseThresholdAcos3","sign(acos(-1)-π/2)","sign(-(-1))"),
+	Example("DecreaseThresholdAcos4","sign(acos(-1/2)-π/2)","sign(-(-1/2))"),
+	Example("DecreaseThresholdAcos5","sign(acos(0)-π/2)","sign(-(0))"),
+	Example("DecreaseThresholdAcos6","sign(acos(1/2)-π/2)","sign(-(1/2))"),
+	Example("DecreaseThresholdAcos7","sign(acos(1)-π/2)","sign(-(1))"),
+	Example("DecreaseThresholdAcosMask","[false]*sign(acos(1/0)-π/2)","0"),
+	Example("DecreaseThresholdAcosFact","sign(acos(x)-π/2)","sign(-(x))",["0<x"]),
+	Example("DecreaseThresholdAcosReverse0","sign(π/2-acos(x))","sign(x)"),
+	Example("DecreaseThresholdAcosReverse1","sign(π/2-acos(1/x))","sign(1/x)"),
+	Example("DecreaseThresholdAcosReverse2","sign(π/2-acos(log(x)))","sign(log(x))"),
+	Example("DecreaseThresholdAcosReverse3","sign(π/2-acos(-1))","sign(-1)"),
+	Example("DecreaseThresholdAcosReverse4","sign(π/2-acos(-1/2))","sign(-1/2)"),
+	Example("DecreaseThresholdAcosReverse5","sign(π/2-acos(0))","sign(0)"),
+	Example("DecreaseThresholdAcosReverse6","sign(π/2-acos(1/2))","sign(1/2)"),
+	Example("DecreaseThresholdAcosReverse7","sign(π/2-acos(1))","sign(1)"),
+	Example("DecreaseThresholdAcosReverseMask","[false]*sign(π/2-acos(1/0))","0"),
+	Example("DecreaseThresholdAcosReverseFact","sign(π/2-acos(x))","sign(x)",["0<x"]),
+	Example("DecreaseThresholdErfc0","sign(erfc(x)-1)","sign(-(x))"),
+	Example("DecreaseThresholdErfc1","sign(erfc(1/x)-1)","sign(-(1/x))"),
+	Example("DecreaseThresholdErfc2","sign(erfc(log(x))-1)","sign(-(log(x)))"),
+	Example("DecreaseThresholdErfc3","sign(erfc(-1)-1)","sign(-(-1))"),
+	Example("DecreaseThresholdErfc4","sign(erfc(-1/2)-1)","sign(-(-1/2))"),
+	Example("DecreaseThresholdErfc5","sign(erfc(0)-1)","sign(-(0))"),
+	Example("DecreaseThresholdErfc6","sign(erfc(1/2)-1)","sign(-(1/2))"),
+	Example("DecreaseThresholdErfc7","sign(erfc(1)-1)","sign(-(1))"),
+	Example("DecreaseThresholdErfcMask","[false]*sign(erfc(1/0)-1)","0"),
+	Example("DecreaseThresholdErfcFact","sign(erfc(x)-1)","sign(-(x))",["0<x"]),
+	Example("DecreaseThresholdErfcReverse0","sign(1-erfc(x))","sign(x)"),
+	Example("DecreaseThresholdErfcReverse1","sign(1-erfc(1/x))","sign(1/x)"),
+	Example("DecreaseThresholdErfcReverse2","sign(1-erfc(log(x)))","sign(log(x))"),
+	Example("DecreaseThresholdErfcReverse3","sign(1-erfc(-1))","sign(-1)"),
+	Example("DecreaseThresholdErfcReverse4","sign(1-erfc(-1/2))","sign(-1/2)"),
+	Example("DecreaseThresholdErfcReverse5","sign(1-erfc(0))","sign(0)"),
+	Example("DecreaseThresholdErfcReverse6","sign(1-erfc(1/2))","sign(1/2)"),
+	Example("DecreaseThresholdErfcReverse7","sign(1-erfc(1))","sign(1)"),
+	Example("DecreaseThresholdErfcReverseMask","[false]*sign(1-erfc(1/0))","0"),
+	Example("DecreaseThresholdErfcReverseFact","sign(1-erfc(x))","sign(x)",["0<x"]),
 	Example("RationalEvenCoefficient","powQZ(rat(-1,1),6*k)","rat(1,1)"),
 	Example("RationalNegativeEvenCoefficient","powQZ(rat(-1,1),-4*k)","rat(1,1)"),
 	Example("RationalProductCoefficient","powQZ(rat(-1,1),(8*k)*m)","rat(1,1)"),
@@ -308,4 +640,85 @@ unittest{
 		write(buildPath(args[1],c.name~".lean"),exportLean(a,simplify(a,s.parse(a,c.input),facts,Options(DensityMode.preserve,true))));
 	}
 	writeln("Wrote ",examples().length," trigonometric algebra certificates.");
+}
+
+unittest{
+	foreach(f;["asin","atanh"]) foreach(v;[-2,-1,0,1,2]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		auto input=s.parse(a,"sign("~f~"("~to!string(v)~"))");
+		auto d=simplifyDomain(a,input);
+		enforce(!d.exhausted&&d.output==a.boolean(f=="asin"?v>=-1&&v<=1:v==0),"sign composition original domain");
+	}
+}
+
+unittest{
+	foreach(f;["abs","sign"]) foreach(v;[-1,0,1]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		foreach(arg;["1/"~to!string(v),"log("~to!string(v)~")"]){
+			auto input=s.parse(a,f~"(cbrt("~arg~"))");
+			auto d=simplifyDomain(a,input);
+			enforce(!d.exhausted&&d.output==a.boolean(arg[0]=='1'?v!=0:v>0),"cube root composition original domain");
+			auto masked=s.parse(a,"[false]*"~f~"(cbrt("~arg~"))");
+			auto md=simplifyDomain(a,masked);
+			enforce(!md.exhausted&&md.output==a.boolean(true),"cube root composition false guard domain");
+		}
+	}
+}
+
+unittest{
+	foreach(v;[-1,0,1,2]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		foreach(f;["sign(log("~to!string(v)~"))","sign(exp(log("~to!string(v)~"))-1)"]){
+			auto d=simplifyDomain(a,s.parse(a,f));
+			enforce(!d.exhausted&&d.output==a.boolean(v>0),"sign threshold original domain");
+			auto md=simplifyDomain(a,s.parse(a,"[false]*"~f));
+			enforce(!md.exhausted&&md.output==a.boolean(true),"sign threshold false guard domain");
+		}
+	}
+}
+
+unittest{
+	foreach(f;["log","asin","atanh","acosh"]) foreach(v;[-2,-1,0,1,2]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		auto input=s.parse(a,"sign("~f~"("~to!string(v)~")-"~f~"(1/2))");
+		auto d=simplifyDomain(a,input);
+		bool expected=f=="log"?v>0:f=="asin"?v>=-1&&v<=1:f=="atanh"?v==0:false;
+		enforce(!d.exhausted&&d.output==a.boolean(expected),"sign difference original domain");
+		auto md=simplifyDomain(a,s.parse(a,"[false]*sign("~f~"("~to!string(v)~")-"~f~"(1/2))"));
+		enforce(!md.exhausted&&md.output==a.boolean(true),"sign difference false guard domain");
+	}
+}
+
+unittest{
+	foreach(x;[-2,-1,0,1,2]) foreach(y;[-2,-1,0,1,2]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		auto input="sign(acos("~to!string(x)~")-acos("~to!string(y)~"))";
+		auto d=simplifyDomain(a,s.parse(a,input));
+		enforce(!d.exhausted&&d.output==a.boolean(x>=-1&&x<=1&&y>=-1&&y<=1),"decreasing sign original domain");
+		auto md=simplifyDomain(a,s.parse(a,"[false]*"~input));
+		enforce(!md.exhausted&&md.output==a.boolean(true),"decreasing sign false guard domain");
+	}
+}
+
+unittest{
+	foreach(f;["log2","log10"]) foreach(x;[-1,0,1,2]) foreach(y;[-1,0,1,2]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		auto input="sign("~f~"("~to!string(x)~")-"~f~"("~to!string(y)~"))";
+		auto d=simplifyDomain(a,s.parse(a,input));
+		enforce(!d.exhausted&&d.output==a.boolean(x>0&&y>0),"log base sign original domain");
+		auto md=simplifyDomain(a,s.parse(a,"[false]*"~input));
+		enforce(!md.exhausted&&md.output==a.boolean(true),"log base sign false guard domain");
+	}
+}
+
+unittest{
+	foreach(x;[-2,-1,0,1,2]) foreach(reverse;[false,true]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		auto v="acos("~to!string(x)~")";
+		auto input=reverse?"sign(π/2-"~v~")":"sign("~v~"-π/2)";
+		auto d=simplifyDomain(a,s.parse(a,input));
+		enforce(!d.exhausted&&d.output==a.boolean(x>=-1&&x<=1),"decreasing threshold original domain");
+		auto md=simplifyDomain(a,s.parse(a,"[false]*"~input));
+		enforce(!md.exhausted&&md.output==a.boolean(true),"decreasing threshold false guard domain");
+	}
 }

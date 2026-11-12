@@ -9535,4 +9535,308 @@ theorem r_rational_add_comm (v_x : Option (Ty.denote .rational)) (v_y : Option (
 
 #qsym_check_axioms r_rational_add_comm
 
+theorem r_real_tanh_absolute_value (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.abs (Functions.tanhR.apply v_x)) (Functions.tanhR.apply (Value.abs v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tanh_absolute_value
+
+theorem r_real_asinh_absolute_value (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.abs (Functions.asinhR.apply v_x)) (Functions.asinhR.apply (Value.abs v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asinh_absolute_value
+
+theorem r_real_atan_absolute_value (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.abs (Functions.atanR.apply v_x)) (Functions.atanR.apply (Value.abs v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_atan_absolute_value
+
+theorem r_real_sign_sinh (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.sinhR.apply v_x)) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_sinh
+
+theorem r_real_sign_tanh (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.tanhR.apply v_x)) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_tanh
+
+theorem r_real_sign_asinh (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.asinhR.apply v_x)) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_asinh
+
+theorem r_real_sign_atan (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.atanR.apply v_x)) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_atan
+
+theorem r_real_sign_asin (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.asinR.apply v_x)) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_asin
+
+theorem r_real_sign_atanh (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.atanhR.apply v_x)) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_atanh
+
+theorem r_real_abs_cbrt (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.abs (Functions.cbrtR.apply v_x)) (Functions.cbrtR.apply (Value.abs v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_abs_cbrt
+
+theorem r_real_sign_cbrt (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.cbrtR.apply v_x)) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_cbrt
+
+theorem r_real_sign_log (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.logR.apply v_x)) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (some (((1) : Int) : ℝ))))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_log
+
+theorem r_real_sign_exp_difference (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.expR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (some (((1) : Int) : ℝ))))) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_exp_difference
+
+theorem r_real_sign_exp_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.expR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.expR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_exp_pair_difference
+
+theorem r_real_sign_log_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.logR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.logR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_log_pair_difference
+
+theorem r_real_sign_sinh_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.sinhR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.sinhR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_sinh_pair_difference
+
+theorem r_real_sign_tanh_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.tanhR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.tanhR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_tanh_pair_difference
+
+theorem r_real_sign_asinh_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.asinhR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.asinhR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_asinh_pair_difference
+
+theorem r_real_sign_atan_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.atanR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.atanR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_atan_pair_difference
+
+theorem r_real_sign_asin_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.asinR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.asinR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_asin_pair_difference
+
+theorem r_real_sign_atanh_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.atanhR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.atanhR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_atanh_pair_difference
+
+theorem r_real_sign_cbrt_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.cbrtR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.cbrtR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_cbrt_pair_difference
+
+theorem r_real_sign_acosh_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.acoshR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.acoshR.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_acosh_pair_difference
+
+theorem r_real_sign_acos_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.acosR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.acosR.apply v_y)))) (Functions.signR.apply (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_acos_pair_difference
+
+theorem r_real_sign_erfc_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.erfcR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.erfcR.apply v_y)))) (Functions.signR.apply (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_erfc_pair_difference
+
+theorem r_real_sign_log2 (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.log2R.apply v_x)) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (some (((1) : Int) : ℝ))))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_log2
+
+theorem r_real_sign_log2_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.log2R.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.log2R.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_log2_pair_difference
+
+theorem r_real_sign_log10 (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Functions.log10R.apply v_x)) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) (some (((1) : Int) : ℝ))))) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_log10
+
+theorem r_real_sign_log10_pair_difference (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.log10R.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.log10R.apply v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_log10_pair_difference
+
+theorem r_real_sign_acos_half_pi (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.acosR.apply v_x) (Value.mul (some ((((-1) : ℚ) / (2) : ℚ) : ℝ)) (some Functions.pi)))) (Functions.signR.apply (Value.mul (some (((-1) : Int) : ℝ)) v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_acos_half_pi
+
+theorem r_real_sign_half_pi_acos (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (some Functions.pi)) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.acosR.apply v_x)))) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_half_pi_acos
+
+theorem r_real_sign_erfc_minus_one (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.erfcR.apply v_x) (Value.mul (some (((-1) : Int) : ℝ)) (some (((1) : Int) : ℝ))))) (Functions.signR.apply (Value.mul (some (((-1) : Int) : ℝ)) v_x)) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_erfc_minus_one
+
+theorem r_real_sign_one_minus_erfc (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.add (some (((1) : Int) : ℝ)) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.erfcR.apply v_x)))) (Functions.signR.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_one_minus_erfc
+
+theorem r_integer_literal_affine_nonzero (v_a : Option (Ty.denote .integer)) (v_x : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp2 : Value.Refines (Functions.nonzeroZ.apply v_a) (some true)) :
+    Value.Refines (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.mulZ.apply v_a v_x) v_b)) (Value.not (Value.and (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply v_x (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.floorR.apply (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply v_b))) (Value.inv (Functions.castQR.apply (Functions.castZQ.apply v_a))))))))) (Value.not (Value.nonzero (Value.add (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply v_b))) (Value.inv (Functions.castQR.apply (Functions.castZQ.apply v_a)))) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply (Functions.floorR.apply (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply v_b))) (Value.inv (Functions.castQR.apply (Functions.castZQ.apply v_a))))))))))))) := qsym_cached% by
+  cases v_a <;> cases v_x <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_literal_affine_nonzero
+
+theorem r_natural_literal_affine_nonzero (v_a : Option (Ty.denote .natural)) (v_x : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .integer))
+    (hp2 : Value.Refines (Functions.nonzeroZ.apply (Functions.castNZ.apply v_a)) (some true)) :
+    Value.Refines (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply (Functions.mulN.apply v_a v_x)) v_b)) (Value.not (Value.and (Value.and (Value.le (some (((0) : Int) : ℝ)) (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply v_b))) (Value.inv (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply v_a)))))) (Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.mulZ.apply (some ((-1) : ℤ)) (Functions.floorR.apply (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply v_b))) (Value.inv (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply v_a))))))))))) (Value.not (Value.nonzero (Value.add (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply v_b))) (Value.inv (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply v_a))))) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply (Functions.floorR.apply (Value.mul (Value.mul (some (((-1) : Int) : ℝ)) (Functions.castQR.apply (Functions.castZQ.apply v_b))) (Value.inv (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply v_a)))))))))))))) := qsym_cached% by
+  cases v_a <;> cases v_x <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_literal_affine_nonzero
+
+theorem r_natural_positive_offset_nonzero (v_x : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.ltN.apply (some ((0) : ℕ)) v_b) (some true)) :
+    Value.Refines (Functions.nonzeroN.apply (Functions.addN.apply v_x v_b)) (some true) := qsym_cached% by
+  cases v_x <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_positive_offset_nonzero
+
+theorem r_integer_nonzero_literal_offsets (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.addZ.apply v_x v_a) v_b)) (Functions.nonzeroZ.apply (Functions.addZ.apply v_x (Functions.addZ.apply v_a v_b))) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_nonzero_literal_offsets
+
+theorem r_integer_nonzero_literal_offsets_commuted (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.addZ.apply v_a v_x) v_b)) (Functions.nonzeroZ.apply (Functions.addZ.apply v_x (Functions.addZ.apply v_a v_b))) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_nonzero_literal_offsets_commuted
+
+theorem r_natural_nonzero_literal_offsets (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply (Functions.addN.apply v_x v_a)) v_b)) (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.addZ.apply (Functions.castNZ.apply v_a) v_b))) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_nonzero_literal_offsets
+
+theorem r_natural_nonzero_literal_offsets_commuted (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply (Functions.addN.apply v_a v_x)) v_b)) (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.addZ.apply (Functions.castNZ.apply v_a) v_b))) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_nonzero_literal_offsets_commuted
+
+theorem r_natural_direct_nonzero_product (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.nonzeroN.apply (Functions.mulN.apply v_x v_y)) (Value.and (Functions.nonzeroN.apply v_x) (Functions.nonzeroN.apply v_y)) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_direct_nonzero_product
+
+theorem r_natural_direct_nonzero_power (v_x : Option (Ty.denote .natural)) (v_n : Nat) :
+    Value.Refines (Functions.nonzeroN.apply (v_x.map (fun x => x ^ (v_n + (1))))) (Functions.nonzeroN.apply v_x) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_direct_nonzero_power
+
+theorem r_natural_direct_nonzero_sum (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.nonzeroN.apply (Functions.addN.apply v_x v_y)) (Value.or (Functions.nonzeroN.apply v_x) (Functions.nonzeroN.apply v_y)) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_direct_nonzero_sum
+
 end QSym.Generated

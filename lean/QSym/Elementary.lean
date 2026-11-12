@@ -523,4 +523,21 @@ theorem tanh_log_complex (z : ℂ) (hz : z≠0) (hc : Complex.cosh (Complex.log 
   <;> field_simp [hd, hd']
   <;> ring
 
+theorem abs_tanh (x : ℝ) : |Real.tanh x| = Real.tanh |x| := by
+  simp [Real.tanh_eq_sinh_div_cosh, abs_div, Real.abs_sinh, Real.cosh_abs,
+    abs_of_pos (Real.cosh_pos x)]
+
+theorem abs_asinh (x : ℝ) : |Real.arsinh x| = Real.arsinh |x| := by
+  rcases le_total 0 x with h | h
+  · rw [abs_of_nonneg h, abs_of_nonneg (Real.arsinh_nonneg_iff.mpr h)]
+  · have hn : Real.arsinh x ≤ 0 := by simpa using Real.arsinh_le_arsinh.mpr h
+    rw [abs_of_nonpos h, abs_of_nonpos hn, Real.arsinh_neg]
+
+theorem abs_atan (x : ℝ) : |Real.arctan x| = Real.arctan |x| := by
+  rcases le_total 0 x with h | h
+  · have hn : 0 ≤ Real.arctan x := by simpa using Real.arctan_strictMono.monotone h
+    rw [abs_of_nonneg h, abs_of_nonneg hn]
+  · have hn : Real.arctan x ≤ 0 := by simpa using Real.arctan_strictMono.monotone h
+    rw [abs_of_nonpos h, abs_of_nonpos hn, Real.arctan_neg]
+
 end QSym.Elementary
