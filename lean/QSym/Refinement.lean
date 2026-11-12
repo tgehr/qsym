@@ -1,4 +1,5 @@
 import QSym.RefinementBase
+import QSym.RuleBranches
 import QSym.Trigonometry
 import QSym.PowerPredicates
 import QSym.ScalarTypes
@@ -337,6 +338,7 @@ elab "qsym_rational_goal" : tactic => withMainContext do
 
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | qsym_branch
   | solve | (apply Value.refines_integer_literal_affine_nonzero; assumption)
   | solve | (apply Value.refines_natural_literal_affine_nonzero; assumption)
   | solve | qsym_extrema
@@ -398,8 +400,6 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | solve | apply Value.refines_sqrt_even_power
   | solve | (simp only [Int.cast_zero] at *; apply Value.refines_sqrt_even_factor; assumption)
   | exact Value.refines_inv_inv _
-  | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_real_nonzero_quadratic <;> assumption)
-  | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *; apply Value.refines_complex_nonzero_quadratic <;> assumption)
   | solve | (simp only [Int.cast_zero] at *; apply Value.refines_log_product <;> assumption)
   | solve | apply Value.refines_power_exact <;> assumption
   | solve | (simp only [Int.cast_natCast, Int.cast_zero, Int.cast_neg, Int.cast_one, Int.cast_ofNat] at *; apply Value.refines_power_scale <;> assumption)
