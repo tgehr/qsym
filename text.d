@@ -26,7 +26,10 @@ struct Syntax{
 	Term parse(Arena a,string source){
 		auto next=variables.dup;
 		auto p=Parser(source).parseExpression(next);
-		Term build(Pattern p){
+		auto result=build(a,p,next); variables=next; return result;
+	}
+	static Term build(Arena a,Pattern source,Parameter[] next){
+		Term build_(Pattern p){
 			if(p.variable){
 				foreach(i,v;next) if(v.name==p.name) return a.variable(v.sort,cast(uint)i);
 				assert(0,"missing variable");
@@ -39,8 +42,8 @@ struct Syntax{
 			if(p.name=="true"||p.name=="false") return a.boolean(p.name=="true");
 			if(p.name=="lebesgue") return a.lebesgue();
 			auto f=builtin(p.name);
-			if(f!=Builtin.invalid){ Term[] args; foreach(arg;p.args) args~=build(arg); return a.call(f,args); }
-			auto x=build(p.args[0]);
+			if(f!=Builtin.invalid){ Term[] args; foreach(arg;p.args) args~=build_(arg); return a.call(f,args); }
+			auto x=build_(p.args[0]);
 			if(p.name=="powN"||p.name=="powZ"||p.name=="powQ"||p.name=="powR"||p.name=="powC"){
 				ulong exponent(Pattern q){
 					if(q.name=="#") return cast(ulong)q.number;
@@ -50,7 +53,7 @@ struct Syntax{
 				}
 				return a.pow(x,cast(uint)exponent(p.args[1]));
 			}
-			Term y; if(p.args.length==2) y=build(p.args[1]);
+			Term y; if(p.args.length==2) y=build_(p.args[1]);
 			switch(p.name){
 				case "addR","addC":return a.add(x,y);
 				case "mulR","mulC":return a.mul(x,y);
@@ -70,7 +73,7 @@ struct Syntax{
 				default:assert(0,"unsupported expression");
 			}
 		}
-		auto result=build(p); variables=next; return result;
+		return build_(source);
 	}
 	/// Prints without scalar injections. Reparse and simplify to recover the
 	/// normal form; the spelling need not retain a redundant original sort.

@@ -103,6 +103,8 @@ test: build/qsym
 	./build/partition-tests --DRT-testmode=run-main build/partitions
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/binding.d -of=build/binding-tests
 	./build/binding-tests --DRT-testmode=run-main build/binding
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functional.d -of=build/functional-tests
+	./build/functional-tests --DRT-testmode=run-main build/functional
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

@@ -1,5 +1,6 @@
 module qsym.tools.repl;
 import qsym;
+import qsym.functional:FunctionSyntax;
 import std.stdio:stdout,stderr,writeln;
 import std.string:strip,startsWith;
 import std.file:write;
@@ -10,7 +11,7 @@ import qsym.tools.unicode:symbols;
 int repl(){
 	auto reader=LineReader.open();
 	//if(reader.interactive) writeln("enter an expression; :help for commands.");
-	Syntax syntax,lastSyntax;
+	FunctionSyntax syntax,lastSyntax;
 	string last;
 	bool lastExpand,lastDomain;
 	string[] facts,lastFacts;
@@ -35,13 +36,15 @@ int repl(){
 				writeln("Ctrl-Y: yank; Alt-Y: cycle kills; Ctrl-_: undo; Ctrl-T: transpose characters.");
 				writeln("Alt-B/F: move by word; Alt-Backspace/D: kill word backward/forward; Alt-</>: first/last history.");
 				writeln("Ctrl-C: cancel line; Ctrl-D: delete character, or exit on an empty line.");
+				writeln("Functions: λ(x:ℝ). 1/x; domains: domain(f), x∈domain(f)");
+				writeln("Subsets: {x:ℝ | x>0}; restrictions: λ(x:ℝ | x>0). log(x)");
 				writeln(":vars n:ℕ,k:ℤ,q:ℚ,z:ℂ,p:𝔹   declare types; :vars lists them");
 				writeln(":symbols [PREFIX] list Unicode input spellings");
 				writeln(":functions [PREFIX] list built-in signatures");
 				writeln(":assume EXPR      assume a defined, true Boolean expression");
 				writeln(":facts            list assumptions; :clear removes them");
 				writeln(":expand EXPR      simplify with polynomial power expansion");
-				writeln(":domain EXPR      condition for the original expression to be defined");
+				writeln(":domain EXPR      definedness condition, or input subset for a function");
 				writeln(":lean FILE        export a Lean certificate for the last expression");
 				writeln(":reset            clear assumptions, variables and the last expression");
 				writeln(":quit             exit (or EOF)");
@@ -64,15 +67,16 @@ int repl(){
 				}
 				continue;
 			}
-			if(line==":reset"){ syntax=Syntax.init; lastSyntax=Syntax.init; last=null; facts=null; lastFacts=null; continue; }
+			if(line==":reset"){ syntax=FunctionSyntax.init; lastSyntax=FunctionSyntax.init; last=null; facts=null; lastFacts=null; continue; }
 			if(line==":vars"){
-				foreach(v;syntax.variables) writeln(v.name,":",sortName(v.sort));
+				foreach(v;syntax.scalar.variables) writeln(v.name,":",sortName(v.sort));
+				foreach(f;syntax.functions) writeln(f.name,":",syntax.typeName(f.type));
 				continue;
 			}
 			if(line.startsWith(":vars ")){
 				auto next=syntax; next.declare(strip(line[6..$]));
-				if(facts.length) foreach(i,v;syntax.variables)
-					enforce(next.variables[i].sort==v.sort,"use :clear before changing the type of "~v.name);
+				if(facts.length) foreach(i,v;syntax.scalar.variables)
+					enforce(next.scalar.variables[i].sort==v.sort,"use :clear before changing the type of "~v.name);
 				syntax=next; continue;
 			}
 			if(line==":facts"){ foreach(f;facts) writeln(f); continue; }
@@ -80,18 +84,17 @@ int repl(){
 			if(line.startsWith(":assume ")){
 				auto source=strip(line[8..$]),next=syntax;
 				auto session=Session.open(); auto a=session.arena;
-				enforce(a.sort(next.parse(a,source))==Sort.boolean,"assumptions must be Bool");
+				enforce(a.sort(next.assumption(a,source))==Sort.boolean,"assumptions must be Bool");
 				syntax=next; facts~=source; continue;
 			}
 			if(line.startsWith(":lean ")){
 				enforce(last.length!=0,"no expression to export");
 				auto path=strip(line[6..$]); enforce(path.length!=0,"expected a file name");
 				auto session=Session.open(); auto a=session.arena;
-				auto assumptions=parseFacts(a,lastSyntax,lastFacts);
+				auto assumptions=parseFacts(a,lastSyntax.scalar,lastFacts);
 				auto options=Options(DensityMode.preserve,true); options.expandPowers=lastExpand;
-				auto original=lastSyntax.parse(a,last);
-				auto result=lastDomain?simplifyDomain(a,original,assumptions,options):simplify(a,original,assumptions,options);
-				write(path,lastDomain?exportDomainLean(a,original,result):exportLean(a,result));
+				auto result=lastSyntax.run(a,last,assumptions,options,lastDomain);
+				write(path,lastSyntax.exportCertificate(a,result));
 				writeln("Wrote ",path);
 				continue;
 			}
@@ -105,10 +108,9 @@ int repl(){
 				options.expandPowers=true;
 			}else enforce(!line.startsWith(":"),"unknown command; use :help");
 			auto session=Session.open(); auto a=session.arena;
-			auto assumptions=parseFacts(a,syntax,facts);
-			auto original=syntax.parse(a,line);
-			auto result=domainQuery?simplifyDomain(a,original,assumptions,options):simplify(a,original,assumptions,options);
-			writeln(syntax.format(a,result.output));
+			auto assumptions=parseFacts(a,syntax.scalar,facts);
+			auto next=syntax,result=next.run(a,line,assumptions,options,domainQuery);
+			writeln(next.format(a,result)); syntax=next;
 			if(result.exhausted) stderr.writeln("simplification budget exhausted; showing the partial result");
 			last=line; lastSyntax=syntax; lastFacts=facts.dup; lastExpand=options.expandPowers; lastDomain=domainQuery;
 		}catch(Exception e){ stderr.writeln(e.msg); }

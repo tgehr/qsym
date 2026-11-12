@@ -87,11 +87,18 @@ def main():
 	check(ROOT/"tests/Lookup.lean")
 	check(ROOT/"tests/Domain.lean")
 	check(ROOT/"tests/Binding.lean")
+	check(ROOT/"tests/Functional.lean")
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
+	certificate(ROOT/"build/ReplFunction.lean")
+	functional=sorted((ROOT/"build/functional").glob("*.lean"))
+	if len(functional)!=46:
+		raise RuntimeError("expected 46 functional certificates")
+	for file in functional:
+		certificate(file)
 	bindings=sorted((ROOT/"build/binding").glob("*.lean"))
 	if len(bindings)!=28:
 		raise RuntimeError("expected 28 binding certificates")
@@ -170,6 +177,13 @@ def main():
 		("BindingCapture","example (ξ : QSym.Env) (ρ : Binding.Env []) : (Binding.Expr.app (.app (.lam (.lam (.var (.there .here))) : Binding.Expr [] (.arrow N (.arrow N N))) (.scalar (.nat 1))) (.scalar (.nat 2))).eval ξ ρ = some 2 := rfl")):
 		path=negative/(name+".lean")
 		path.write_text((ROOT/"tests/Binding.lean").read_text()+"\nnamespace QSym.BindingTests\n"+body+"\nend QSym.BindingTests\n")
+		check(path,succeeds=False)
+	for name,body in (
+		("FunctionDomainZero","example (ξ : QSym.Env) (ρ : Binding.Env []) : (Binding.Expr.mem (.domain reciprocal) zero).eval ξ ρ = some true := zero_outside ξ ρ"),
+		("UndefinedPredicateMember","example (ξ : QSym.Env) (ρ : Binding.Env []) : (Binding.Expr.mem badPredicate one).eval ξ ρ = some true := invalid_predicate ξ ρ"),
+		("FalseRestrictionValue","example (ξ : QSym.Env) (ρ : Binding.Env []) : (Binding.Expr.guard (.scalar (.bool false)) one).eval ξ ρ = some 1 := false_restriction ξ ρ")):
+		path=negative/(name+".lean")
+		path.write_text((ROOT/"tests/Functional.lean").read_text()+"\nnamespace QSym.FunctionalTests\n"+body+"\nend QSym.FunctionalTests\n")
 		check(path,succeeds=False)
 	# Audit a shared dependency before introducing a new axiom: a cache must
 	# never hide later declarations, even through transitive dependencies.

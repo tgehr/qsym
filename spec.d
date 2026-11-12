@@ -10,9 +10,18 @@ import qsym.number:Rational,BigInt;
 @safe:
 
 // NatParam is a bounded constructor payload; ℕ is an expression type.
+final class TypePattern{
+	string name;
+	TypePattern[] args;
+	this(string name,TypePattern[] args=[]){ this.name=name; this.args=args; }
+}
+struct TypedParameter{ string name; TypePattern type; }
+
 struct Parameter{ string name; Sort sort; bool natural; }
 final class Pattern{
-	string name;
+	string name,binder;
+	TypePattern annotation;
+	bool called;
 	Pattern[] args;
 	long number;
 	Sort sort;
@@ -92,6 +101,18 @@ struct Parser{
 
 	private Pattern primary(uint depth){
 		enforce(depth<128,"rule pattern nesting limit exceeded");
+		auto lookahead=lexer;
+		if((token.text=="λ"||token.text=="lambda")&&lookahead.next().text=="("){
+			next();
+			expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
+			Pattern guard; if(take("|")) guard=expression(depth+1);
+			expect(")"); expect("."); auto body=expression(depth+1);
+			auto p=pattern("$lambda",guard is null?[body]:[guard,body]); p.binder=name; p.annotation=ty; return p;
+		}
+		if(take("{")){
+			auto name=ident(); expect(":"); auto ty=typeExpression(depth+1); expect("|");
+			auto p=pattern("$set",[expression(depth+1)]); expect("}"); p.binder=name; p.annotation=ty; return p;
+		}
 		if(take("if")){
 			auto condition=expression(depth+1); expect("then");
 			auto yes=expression(depth+1); expect("else");
@@ -100,7 +121,10 @@ struct Parser{
 		enforce(token.text!="then"&&token.text!="else","unexpected conditional keyword");
 		if(take("(")){
 			auto p=expression(depth+1);
-			if(take(":")){ auto q=pattern("$ascribe",[p]); q.sort=parseSort(ident()); p=q; }
+			if(take(":")){
+				auto q=pattern("$ascribe",[p]); q.annotation=typeExpression(depth+1);
+				if(!q.annotation.args.length) q.sort=parseSort(q.annotation.name); p=q;
+			}
 			expect(")"); return p;
 		}
 		if(take("[")){ auto p=expression(depth+1); expect("]"); return pattern("$iverson",[p]); }
@@ -110,6 +134,7 @@ struct Parser{
 		if(token.kind==TokenKind.decimal) return decimal();
 		auto p=new Pattern(ident());
 		if(take("(")){
+			p.called=true;
 			if(!take(")")){
 				do{ p.args~=expression(depth+1); }while(take(","));
 				expect(")");
@@ -150,6 +175,9 @@ struct Parser{
 		return postfix(primary(depth),depth);
 	}
 	private Pattern postfix(Pattern p,uint depth){
+		while(p.name!="#"&&p.name!="rat"&&take("(")){
+			p=pattern("$apply",[p,expression(depth+1)]); expect(")");
+		}
 		if(token.kind==TokenKind.power){
 			auto exponent=to!long(token.text); next();
 			return pattern("$pow",[p,integerPattern(exponent)]);
@@ -189,11 +217,12 @@ struct Parser{
 	private Pattern comparison(uint depth){
 		auto p=sum(depth);
 		Pattern combined;
-		while(token.text=="!="||token.text=="="||token.text=="<"||token.text==">"||token.text=="<="||token.text==">="){
+		while(token.text=="!="||token.text=="="||token.text=="<"||token.text==">"||token.text=="<="||token.text==">="||token.text=="∈"){
 			auto op=token.text; next();
 			auto q=sum(depth);
 			Pattern predicate;
-			if(op=="!="||op=="="){
+			if(op=="∈") predicate=pattern("$member",[p,q]);
+			else if(op=="!="||op=="="){
 				predicate=pattern("$different",[p,q]);
 				if(op=="=") predicate=pattern("not",[predicate]);
 			}else predicate=pattern(op=="<"||op==">"?"$lt":"$le",op==">"||op==">="?[q,p]:[p,q]);
@@ -226,22 +255,28 @@ struct Parser{
 		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text);
 		return parameters;
 	}
-	Pattern parseExpression(ref Parameter[] parameters){
-		lexer=Lexer(source); next(); auto p=expression();
-		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text);
-		void variables(Pattern q,uint depth=0){
-			enforce(depth<128,"expression nesting limit exceeded");
-			if(!q.args.length&&q.name!="#"&&!isConstructor(q.name)){
-				foreach(v;parameters) if(v.name==q.name) return;
-				parameters~=Parameter(q.name,Sort.real_);
-			}
-			foreach(arg;q.args) variables(arg,depth+1);
+	private TypePattern typeExpression(uint depth=0){
+		enforce(depth<128,"type nesting limit exceeded"); TypePattern t;
+		if(take("(")){ t=typeExpression(depth+1); expect(")"); }
+		else{
+			auto name=ident();
+			if(name=="Set"){ expect("("); t=new TypePattern("Set",[typeExpression(depth+1)]); expect(")"); }
+			else{ parseSort(name); t=new TypePattern(name); }
 		}
-		variables(p);
-		p=lower(p,choose(possible(p,parameters),p.realDefault));
-		infer(p,parameters);
-		return p;
+		if(take("=>")||take("->")) t=new TypePattern("arrow",[t,typeExpression(depth+1)]);
+		return t;
 	}
+	TypedParameter[] parseTypedParameters(){
+		lexer=Lexer(source); next(); TypedParameter[] result;
+		do{ auto name=ident(); expect(":"); result~=TypedParameter(name,typeExpression()); }while(take(","));
+		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text); return result;
+	}
+	Pattern parseRawExpression(){
+		lexer=Lexer(source); next(); auto p=expression();
+		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text); return p;
+	}
+	Pattern parseExpression(ref Parameter[] parameters){ return elaborate(parseRawExpression(),parameters); }
+
 	Rule[] parse(){
 		lexer=Lexer(source); next();
 		Rule[] rules;
@@ -291,7 +326,20 @@ struct Parser{
 	}
 }
 
-private Sort parseSort(string name){
+Pattern elaborate(Pattern p,ref Parameter[] parameters){
+	void variables(Pattern q,uint depth=0){
+		enforce(depth<128,"expression nesting limit exceeded");
+		if(!q.args.length&&q.name!="#"&&!isConstructor(q.name)){
+			foreach(v;parameters) if(v.name==q.name) return;
+			parameters~=Parameter(q.name,Sort.real_);
+		}
+		foreach(arg;q.args) variables(arg,depth+1);
+	}
+	variables(p);
+	p=lower(p,choose(possible(p,parameters),p.realDefault)); infer(p,parameters); return p;
+}
+
+Sort parseSort(string name){
 	switch(name){
 		case "Real","ℝ":return Sort.real_;
 		case "Complex","ℂ":return Sort.complex;
@@ -312,7 +360,7 @@ bool isConstructor(string n){
 		"lebesgue","puncture","densityAt","forget","powR","powC","not","and","or","ltR","leR","absR"].canFind(n);
 }
 
-private Pattern pattern(string name,Pattern[] args){
+Pattern pattern(string name,Pattern[] args){
 	auto p=new Pattern(name); p.args=args; return p;
 }
 private Pattern integerPattern(long n){ auto p=new Pattern("#"); p.number=n; return p; }

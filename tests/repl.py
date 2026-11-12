@@ -142,3 +142,20 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	":domain if b≤a then a sub b else 0",":quit",""]),text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["b≤a","5","false","3","3","p","true"],result.stdout
+function_certificate=root/"build/ReplFunction.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"(λ(a:ℕ).λ(b:ℕ).a+b)(1)(2)",f":lean {function_certificate}",
+	":vars f:ℝ→ℝ,S:Set(ℝ)","domain(f)","defined(f)",
+	"0∈domain(λ(x:ℝ).x/x)","1∈domain(λ(x:ℝ).x/x)",
+	"(λ(x:ℝ).0)(1/0)",":domain (λ(x:ℝ).0)(1/0)",
+	":domain (λ(x:ℝ | x>0).log(x))(-1)","(λ(x:ℝ).2.5)(0)",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["3",f"Wrote {function_certificate}","domain(f)","true",
+	"false","true","guard(false,0)","false","false","5/2"],result.stdout
+assert "theorem refinement" in function_certificate.read_text() and "BindingCertificate.lowered" in function_certificate.read_text()
+print("Function and subset REPL checks passed.")
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars f:ℕ→ℕ",":assume f=0","domain(f)",":facts",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and result.stdout.splitlines()==["domain(f)"],result.stdout
+assert "function and set assumptions are not supported yet" in result.stderr,result.stderr

@@ -15,6 +15,7 @@ struct Token{ TokenKind kind; string text; size_t offset; }
 struct Lexer{
 	private string source;
 	private size_t pos;
+	private string previous;
 	this(string source){ validate(source); this.source=source; }
 	private dchar cur(){ auto i=pos; return decode(source,i); }
 	private void advance(){ decode(source,pos); }
@@ -31,10 +32,11 @@ struct Lexer{
 	private static bool identifierChar(dchar c){
 		return isAlpha(c)||c=='_'||c>='₀'&&c<='₉'||c=='₋';
 	}
-	Token next(){
+	Token next(){ auto t=read(); previous=t.text; return t; }
+	private Token read(){
 		ws(); auto start=pos;
 		if(pos==source.length) return Token(TokenKind.end,"",pos);
-		foreach(s;["<=>","≡","=>","⇒","→","!=","≠","<=","≤",">=","≥","==","&&","||"]){
+		foreach(s;["<=>","≡","->","=>","⇒","→","!=","≠","<=","≤",">=","≥","==","&&","||"]){
 			if(source[pos..$].startsWith(s)){
 				pos+=s.length;
 				return Token(TokenKind.symbol,s=="≡"?"<=>":s=="⇒"||s=="→"?"=>":s=="≠"?"!=":s=="≤"?"<=":s=="≥"?">=":s=="=="?"=":s,start);
@@ -49,7 +51,7 @@ struct Lexer{
 			if(pos==begin) throw new Exception("superscript exponent expected");
 			return Token(TokenKind.power,exponent,start);
 		}
-		if(isDigit(c)||c=='.'&&pos+1<source.length&&isDigit(source[pos+1])){
+		if(isDigit(c)||c=='.'&&previous!=")"&&pos+1<source.length&&isDigit(source[pos+1])){
 			while(pos<source.length&&isDigit(source[pos])) ++pos;
 			bool decimal;
 			if(pos<source.length&&source[pos]=='.'){
@@ -81,7 +83,7 @@ struct Lexer{
 			case '∧':symbol="&&"; break;
 			case '∨':symbol="||"; break;
 			case '¬':symbol="!"; break;
-			case '(',')','[',']',',',':',';','+','-','*','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
+			case '{','}','.','∈','(',')','[',']',',',':',';','+','-','*','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
 			default:throw new Exception("unexpected character '"~source[start..pos]~"' at byte "~to!string(start));
 		}
 		return Token(TokenKind.symbol,symbol,start);
