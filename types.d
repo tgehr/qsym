@@ -13,6 +13,7 @@ enum TypeKind:ubyte{
 struct TypeId{
 	private TypePool owner;
 	private uint index=uint.max;
+	@property uint id()const{ return index; }
 	bool opEquals(TypeId rhs)const{ return owner is rhs.owner&&index==rhs.index; }
 }
 struct TypeView{

@@ -85,11 +85,17 @@ def main():
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
 	check(ROOT/"tests/Domain.lean")
+	check(ROOT/"tests/Binding.lean")
 	check(ROOT/"build/Syntax.lean")
 	certificate(ROOT/"build/Repl.lean")
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
+	bindings=sorted((ROOT/"build/binding").glob("*.lean"))
+	if len(bindings)!=28:
+		raise RuntimeError("expected 28 binding certificates")
+	for file in bindings:
+		certificate(file)
 	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",605),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
@@ -158,6 +164,12 @@ def main():
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	for name,body in (
+		("BindingDroppedArgument","example (ξ : QSym.Env) (ρ : Binding.Env []) : (Binding.Expr.app constant bottom).eval ξ ρ = some 0 := rfl"),
+		("BindingCapture","example (ξ : QSym.Env) (ρ : Binding.Env []) : (Binding.Expr.app (.app (.lam (.lam (.var (.there .here))) : Binding.Expr [] (.arrow N (.arrow N N))) (.scalar (.nat 1))) (.scalar (.nat 2))).eval ξ ρ = some 2 := rfl")):
+		path=negative/(name+".lean")
+		path.write_text((ROOT/"tests/Binding.lean").read_text()+"\nnamespace QSym.BindingTests\n"+body+"\nend QSym.BindingTests\n")
+		check(path,succeeds=False)
 	# Audit a shared dependency before introducing a new axiom: a cache must
 	# never hide later declarations, even through transitive dependencies.
 	for name,body in (

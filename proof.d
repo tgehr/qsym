@@ -25,7 +25,7 @@ private string positiveCount(uint n){
 	if(n==1) return "Positive.toNat_one";
 	return "(Positive.toNat_"~(n&1?"twicePlusOne":"twice")~" "~positive(n/2)~" "~to!string(n/2)~" "~positiveCount(n/2)~")";
 }
-private string syntaxCode(Arena a,Term t,bool expression=true){
+string leanSyntaxCode(Arena a,Term t,bool expression=true){
 	auto n=a.node(t),s=leanSort(n.sort); string code,body;
 	if(n.region){
 		string child(uint id){ auto v=a.node(a.at(id)); return v.region&&v.op==n.op?"b"~to!string(id):"(.item "~name(id)~" .one)"; }
@@ -77,7 +77,7 @@ string leanConstructor(Arena a,Node n){
 
 // Share evaluated subterms as well as syntax. Connect only public endpoints
 // and arithmetic replay to Expr.eval; intermediate steps use the values.
-private string valueCode(Arena a,Term t){
+string leanValueOperation(Arena a,Term t){
 	auto n=a.view(t); string op;
 	switch(n.op){
 		case Op.add:op="Value.add"; break;
@@ -99,6 +99,10 @@ private string valueCode(Arena a,Term t){
 		case Op.builtin:if(n.arity) op="Functions."~builtinInfo(cast(Builtin)n.value).code~".apply"; break;
 		default:enforce(!n.arity,"missing value constructor"); break;
 	}
+	return op;
+}
+private string valueCode(Arena a,Term t){
+	auto n=a.view(t); auto op=leanValueOperation(a,t);
 	string value;
 	if(n.arity) value=op~" "~ev(n.a)~(n.arity==2?" "~ev(n.b):"");
 	else switch(n.op){
@@ -490,7 +494,7 @@ string exportLean(Arena a,Result result){
 		}
 	}
 	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nattribute [local irreducible] Value.add Value.mul\nset_option maxRecDepth 8192\n";
-	foreach(i,n;syntax) if(n||bags[i]) s~=syntaxCode(a,a.at(cast(uint)i),n);
+	foreach(i,n;syntax) if(n||bags[i]) s~=leanSyntaxCode(a,a.at(cast(uint)i),n);
 	foreach(i,n;needed) if(n) s~=valueCode(a,a.at(cast(uint)i));
 	foreach(i,n;evaluated) if(n) s~="theorem eval_"~to!string(i)~" (ρ : Env) : "~exprEval(cast(uint)i)~" = "~ev(cast(uint)i)~" := rfl\n";
 	s~="\n";
@@ -651,7 +655,7 @@ string exportDomainLean(Arena a,Term source,Result result){
 	foreach(id;a.viewPostorder(source)) foreach(j;a.viewPostorder(conditions[id])) needed[j]=true;
 	foreach(i,yes;needed) if(yes){
 		auto t=a.at(cast(uint)i);
-		code~=syntaxCode(a,t)~valueCode(a,t);
+		code~=leanSyntaxCode(a,t)~valueCode(a,t);
 	}
 	string ref_(uint id){ return "(q"~to!string(id)~" ρ)"; }
 	string arg(string label,uint id){ return " ("~label~" := "~ev(id)~")"; }
