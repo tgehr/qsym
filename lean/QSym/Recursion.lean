@@ -183,4 +183,62 @@ theorem solve_nat_step (p : Program ℕ ℕ ℕ) (op : Option ℕ → Option ℕ
   | zero => rw [← p.unfold 0, hp, natStep_zero, h0]
   | succ n ih => rw [← p.unfold (n+1), hp, natStep_succ, ih, hs]
 
+noncomputable def natCutoff (a b : ℕ) (g : ℕ → Option ℕ) (n : ℕ) : Option ℕ :=
+  let p := Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))
+  let q := Functions.leN.apply (some n) (some b)
+  Functions.addN.apply (Value.mask p (some a)) (Value.mask (Value.not p)
+    (Functions.addN.apply
+      (Value.mask q ((Functions.subN.apply (some n) (some 1)).bind g))
+      (Value.mask (Value.not q) ((Functions.addN.apply (some n) (some 1)).bind g))))
+
+theorem natCutoff_eq (a b : ℕ) (g : ℕ → Option ℕ) (n : ℕ) :
+    natCutoff a b g n = if n = 0 then some a else if n ≤ b then g (n-1) else g (n+1) := by
+  rcases n with _ | n
+  · simp [natCutoff, Function1.apply, Function2.apply, Functions.nonzeroZ,
+      Functions.castNZ, Functions.addN, Value.mask, Value.not]
+  · have hn : (↑n + 1 : ℤ) ≠ 0 := by omega
+    by_cases hb : n+1 ≤ b <;>
+      simp [natCutoff, Function1.apply, Function2.apply, Functions.nonzeroZ, Functions.castNZ,
+        Functions.addN, Functions.subN, Functions.leN, Value.mask, Value.not, hn, hb]
+
+theorem solve_nat_cutoff (p : Program ℕ ℕ ℕ) (a b : ℕ)
+    (hp : ∀ g n, p.eval g n = natCutoff a b g n) :
+    FixedPoint.value p.functional = fun n =>
+      if Functions.leN.apply (some n) (some b) == some true then some a else none := by
+  classical
+  let k : ℕ → Option ℕ := fun n => if n ≤ b then some a else none
+  have hk : p.functional (fun n => Part.ofOption (k n)) = fun n => Part.ofOption (k n) := by
+    funext n
+    apply Part.equivOption.injective
+    simp only [Part.equivOption, Equiv.coe_fn_mk]
+    change (p.functional (fun n => Part.ofOption (k n)) n).toOption = _
+    rw [Program.functional, ContinuousHom.flip_apply, Program.toOption_continuous]
+    simp only [toOption_ofOption, hp, natCutoff_eq]
+    by_cases hz : n = 0
+    · subst n; simp [k]
+    · by_cases hb : n ≤ b
+      · simp [hz, hb, k, Nat.sub_le n 1 |>.trans hb]
+      · have hs : ¬ n+1 ≤ b := by omega
+        simp [hz, hb, hs, k]
+  have hle := FixedPoint.least_le p.functional (le_of_eq hk)
+  funext n
+  have he : FixedPoint.value p.functional n = k n := by
+    by_cases hb : n ≤ b
+    · have ha : ∀ n, n ≤ b → FixedPoint.value p.functional n = some a := by
+        intro n
+        induction n with
+        | zero => intro _; rw [← p.unfold 0, hp, natCutoff_eq]; simp
+        | succ n ih =>
+          intro hn
+          rw [← p.unfold (n+1), hp, natCutoff_eq]
+          simp [hn, ih (by omega)]
+      simpa [k, hb] using ha n hb
+    · have hn : FixedPoint.least p.functional n = Part.none := by
+        apply le_antisymm
+        · simpa [k, hb] using hle n
+        · exact bot_le
+      simp [FixedPoint.value, hn, k, hb, Part.none_toOption]
+  rw [he]
+  simp [k, Function2.apply, Functions.leN]
+
 end QSym.Recursion

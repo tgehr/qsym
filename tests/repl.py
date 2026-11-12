@@ -207,3 +207,15 @@ assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["λ(n:ℕ). 2·n+3","a·d^n",f"Wrote {solver_certificate}","{k:ℕ | true}"],result.stdout
 assert "Recursion.solve_nat_step" in solver_certificate.read_text()
 print("Recurrence solver REPL checks passed.")
+tensor_certificate=root/"build/ReplTensors.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"ℕ×ℕ×ℕ","((1,2),(3,4))@(5,6)","dot((ⅈ,),(1,))",
+	"(λ(v:ℝ^2).dot(v,v))((3,4))",f":lean {tensor_certificate}",
+	":vars n:ℕ,m:ℕ,A:ℝ^(m×n),x:ℝ^n","A@x","ℝ^n=ℝ^m",
+	":domain μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else if n≤10 then f(n sub 1) else f(n+1)",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["ℕ^3","(17,39)","-ⅈ","25",f"Wrote {tensor_certificate}",
+	"(A@x)","(ℝ^n=ℝ^m)","{n:ℕ | n≤10}"],result.stdout
+assert "Tensor.dotValue" in tensor_certificate.read_text()
+print("Tensor and bounded-recursion REPL checks passed.")

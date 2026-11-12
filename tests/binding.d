@@ -91,7 +91,7 @@ private Artifact[] run(){
 	assertThrown(b.type(foreign.scalar(foreign.empty(),a.natural_(1))));
 	assertThrown(b.variable(foreign.empty(),0));
 	assertThrown(b.push(s,(new TypePool).primitive(TypeKind.natural)));
-	assertThrown(b.push(s,b.typePool.primitive(TypeKind.unit)));
+	assert(b.depth(b.push(s,b.typePool.primitive(TypeKind.unit)))==b.depth(s)+1);
 	assertThrown(b.push(s,b.typePool.array(nat)));
 	assertThrown(b.scalar(s,a.lebesgue()));
 	return artifacts;

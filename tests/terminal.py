@@ -200,3 +200,11 @@ with Terminal() as t:
 	t.submit(r"\mu(f:Nat→Nat).\lambda(n:Nat).if n=0 then 3 else f(n sub 1)+2","λ(n:ℕ). 2·n+3")
 	t.finish()
 print("Recurrence solver terminal checks passed.")
+
+with Terminal() as t:
+	t.until(ready)
+	t.submit("ℕ×ℕ×ℕ","ℕ^3")
+	t.submit("((1,2),(3,4))@(5,6)","(17,39)")
+	t.submit("dot((ⅈ,),(1,))","-ⅈ")
+	t.finish()
+print("Tensor terminal checks passed.")

@@ -77,13 +77,13 @@ struct Lexer{
 		string symbol;
 		switch(c){
 			case '𝑖':symbol="ⅈ"; break;
-			case '·','⋅','×':symbol="*"; break;
+			case '·','⋅':symbol="*"; break;
 			case '÷':symbol="/"; break;
 			case '−':symbol="-"; break;
 			case '∧':symbol="&&"; break;
 			case '∨':symbol="||"; break;
 			case '¬':symbol="!"; break;
-			case '{','}','.','∈','∉','⊆','⊈','(',')','[',']',',',':',';','+','-','*','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
+			case '{','}','.','∈','∉','⊆','⊈','(',')','[',']',',',':',';','+','-','*','×','@','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
 			default:throw new Exception("unexpected character '"~source[start..pos]~"' at byte "~to!string(start));
 		}
 		return Token(TokenKind.symbol,symbol,start);

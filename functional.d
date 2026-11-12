@@ -1,7 +1,7 @@
 module qsym.functional;
 import qsym.ir;
 import qsym.binding;
-import qsym.types:TypeId,TypeKind,TypePool;
+import qsym.types:TypeId,TypeView,TypeKind,TypePool,Dimension;
 import qsym.text:Syntax;
 import qsym.spec:Parser,Pattern,TypePattern,Parameter,parseSort,isConstructor,elaborate,pattern;
 import qsym.table:Table;
@@ -46,17 +46,43 @@ struct FunctionSyntax{
 			if(t==scalarType(s)){ sort=s; return true; }
 		return false;
 	}
-	private TypeId type(TypePattern t){
+	private Dimension dimension(Pattern p,string[] locals=[],Parameter[] parameters=null){
+		if(p.name=="#"){ enforce(p.number>=0,"negative vector dimension"); return Dimension.literal(cast(ulong)p.number); }
+		if(p.name=="$add"||p.name=="$mul"||p.name=="$pow")
+			return Dimension.binary(p.name=="$add"?"+":p.name=="$mul"?"*":"^",dimension(p.args[0],locals,parameters),dimension(p.args[1],locals,parameters));
+		enforce(!p.called&&!p.args.length,"dimensions require total natural literals, parameters, sums, products, or powers");
+		foreach(name;locals) enforce(name!=p.name,"types depending on lambda-bound dimensions are not supported yet");
+		foreach(i,v;parameters is null?scalar.variables:parameters) if(v.name==p.name){
+			enforce(v.sort==Sort.natural,"dimension parameter must have type ℕ: "~p.name); return Dimension.variable(p.name,cast(uint)i);
+		}
+		throw new Exception("declare dimension parameter as ℕ: "~p.name);
+	}
+	private TypeId vectorType(TypeId element,Pattern shape,string[] locals=[],Parameter[] parameters=null){
+		if(shape.name=="$times") return pool.vector(pool.vector(element,dimension(shape.args[1],locals,parameters)),dimension(shape.args[0],locals,parameters));
+		return pool.vector(element,dimension(shape,locals,parameters));
+	}
+	private TypeId type(TypePattern t,string[] locals=[],Parameter[] parameters=null){
 		init(); enforce(t !is null,"missing type");
 		enforce(t.name!="$subset","refinement annotations require a lambda or set binder");
 		if(t.name=="Type") return pool.primitive(TypeKind.type_);
-		if(t.name=="arrow") return pool.function_(type(t.args[0]),type(t.args[1]));
-		if(t.name=="Set") return pool.set(type(t.args[0]));
+		if(t.name=="Unit") return pool.primitive(TypeKind.unit);
+		if(t.name=="arrow") return pool.function_(type(t.args[0],locals,parameters),type(t.args[1],locals,parameters));
+		if(t.name=="Set") return pool.set(type(t.args[0],locals,parameters));
+		if(t.name=="vector") return vectorType(type(t.args[0],locals,parameters),t.dimension,locals,parameters);
+		if(t.name=="tuple"){ TypeId[] fields; foreach(part;t.args) fields~=type(part,locals,parameters); return pool.tuple(fields); }
 		return scalarType(parseSort(t.name));
 	}
 	string typeName(TypeId t){
 		auto v=pool.view(t); Sort sort;
 		if(v.kind==TypeKind.type_) return "Type";
+		if(v.kind==TypeKind.unit) return "Unit";
+		if(v.kind==TypeKind.tuple){ string s; foreach(f;v.fields){ if(s.length) s~="×"; auto k=pool.view(f).kind; s~=k==TypeKind.function_||k==TypeKind.tuple?"("~typeName(f)~")":typeName(f); } return s; }
+		if(v.kind==TypeKind.vector){
+			auto element=pool.view(v.fields[0]);
+			if(element.kind==TypeKind.vector){ auto base=typeName(element.fields[0]); auto k=pool.view(element.fields[0]).kind; return (k==TypeKind.function_||k==TypeKind.tuple||k==TypeKind.vector?"("~base~")":base)~"^("~v.dimension.text~"×"~element.dimension.text~")"; }
+			auto base=typeName(v.fields[0]); if(element.kind==TypeKind.function_||element.kind==TypeKind.tuple) base="("~base~")";
+			return base~"^"~v.dimension.text;
+		}
 		if(scalarSort(t,sort)){
 			switch(sort){
 				case Sort.natural:return "ℕ";
@@ -76,10 +102,10 @@ struct FunctionSyntax{
 	}
 	private bool reserved(string name){
 		return typeAlias(name)||isConstructor(name)||name=="λ"||name=="lambda"||name=="μ"||name=="mu"||name=="undefined"||name=="if"||name=="then"||name=="else"||
-			name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub";
+			name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get";
 	}
 	private bool typeAlias(string name){
-		foreach(n;["Nat","ℕ","Int","ℤ","Rat","ℚ","Real","ℝ","Complex","ℂ","Bool","𝔹","Type"]) if(name==n) return true;
+		foreach(n;["Nat","ℕ","Int","ℤ","Rat","ℚ","Real","ℝ","Complex","ℂ","Bool","𝔹","Type","Unit"]) if(name==n) return true;
 		return false;
 	}
 	void declare(string source){
@@ -88,8 +114,13 @@ struct FunctionSyntax{
 		foreach(i,v;declarations){
 			enforce(!reserved(v.name),"reserved variable name: "~v.name);
 			foreach(old;declarations[0..i]) enforce(old.name!=v.name,"duplicate variable: "~v.name);
-			auto ty=type(v.type); Sort sort;
+			auto ty=type(v.type,[],scalars.variables); Sort sort;
 			if(scalarSort(ty,sort)){
+				bool usesDimension(TypeId t){
+					auto shape=pool.view(t); if(shape.dimension !is null) foreach(name;shape.dimension.names) if(name==v.name) return true;
+					foreach(field;shape.fields) if(usesDimension(field)) return true; return false;
+				}
+				if(sort!=Sort.natural) foreach(f;next) enforce(!usesDimension(f.type),"dimension parameter must remain ℕ: "~v.name);
 				foreach(f;next) enforce(f.name!=v.name,"use :reset before changing a function or set to a scalar");
 				scalars.declare(v.name~":"~sortName(sort));
 			}else{
@@ -102,6 +133,7 @@ struct FunctionSyntax{
 		functions=next; scalar=scalars;
 	}
 	private bool special(Pattern p){
+		if(p.name=="$tuple"||p.name=="$matmul"||p.name=="dot"||p.name=="get") return true;
 		if(typeAlias(p.name)||p.name=="Set") return true;
 		if(p.name=="$fix"||p.name=="$bottom"||p.name=="$lambda"||p.name=="$set"||p.name=="$apply"||p.name=="$member"||p.name=="$subset"||
 			p.name=="domain"||p.name=="defined"||p.name=="holds"||p.name=="guard"||p.name=="seq") return true;
@@ -119,7 +151,7 @@ struct FunctionSyntax{
 				}
 				foreach(q;p.args) collect(q,bound~p.binder); return;
 			}
-			if(!p.args.length&&!p.called&&p.name!="#"&&!reserved(p.name)){
+			if(!p.args.length&&!p.called&&p.name!="#"&&p.name!="$tuple"&&p.name!="$bottom"&&!reserved(p.name)){
 				foreach(n;bound) if(p.name==n) return;
 				foreach(f;functions) if(p.name==f.name) return;
 				foreach(v;scalar.variables) if(p.name==v.name) return;
@@ -152,17 +184,77 @@ struct FunctionSyntax{
 		}
 		BoundTerm coerce(BoundTerm t,TypeId expected){
 			if(expected==TypeId.init||b.type(t)==expected) return t;
+			auto v=pool.view(b.type(t)),w=pool.view(expected),n=b.node(t);
+			if(v.kind==TypeKind.vector&&w.kind==TypeKind.vector&&v.dimension.key==w.dimension.key&&(n.op==BoundOp.vectorCons||n.op==BoundOp.vectorNil)){
+				BoundTerm[] fields; auto current=t;
+				while(b.node(current).op==BoundOp.vectorCons){ auto q=b.node(current); fields~=coerce(b.at(q.a),w.fields[0]); current=b.at(q.b); }
+				return b.tuple(b.context(t),fields,expected);
+			}
 			Sort from,to;
 			enforce(scalarSort(b.type(t),from)&&scalarSort(expected,to),"function type mismatch");
 			auto placeholder=a.variable(from,cast(uint)scalar.variables.length);
 			return lift(a.castTo(placeholder,to),b.context(t),[t]);
 		}
+		TypeId commonType(TypeId x,TypeId y){
+			if(x==y) return x; auto v=pool.view(x),w=pool.view(y);
+			if(v.kind==TypeKind.vector&&w.kind==TypeKind.vector&&v.dimension.key==w.dimension.key){ auto element=commonType(v.fields[0],w.fields[0]); return element==TypeId.init?element:pool.vector(element,v.dimension); }
+			Sort xs,ys;
+			if(scalarSort(x,xs)&&scalarSort(y,ys)&&xs!=Sort.boolean&&ys!=Sort.boolean){
+				foreach(s;[Sort.complex,Sort.real_,Sort.rational,Sort.integer,Sort.natural]) if(xs==s||ys==s) return scalarType(s);
+			}
+			return TypeId.init;
+		}
 		BoundTerm build(Pattern p,Scope ctx,string[] locals,TypeId expected=TypeId.init,uint depth=0) @safe{
 			enforce(depth<128,"function expression nesting limit exceeded");
 			BoundTerm finish(BoundTerm t){ return coerce(t,expected); }
-			if(p.name=="$bottom") return finish(b.bottom(ctx,type(p.annotation)));
+			if(p.name=="$bottom") return finish(b.bottom(ctx,type(p.annotation,locals)));
+			if(p.name=="$tuple"){
+				BoundTerm[] elements; auto v=expected==TypeId.init?TypeView.init:pool.view(expected);
+				foreach(i,q;p.args){
+					TypeId element;
+					if(v.kind==TypeKind.vector) element=v.fields[0];
+					if(v.kind==TypeKind.tuple){ enforce(i<v.fields.length,"tuple arity mismatch"); element=v.fields[i]; }
+					elements~=build(q,ctx,locals,element,depth+1);
+				}
+				if(expected==TypeId.init&&elements.length){
+					auto common=b.type(elements[0]); foreach(e;elements[1..$]){ common=commonType(common,b.type(e)); if(common==TypeId.init) break; }
+					if(common!=TypeId.init) foreach(ref e;elements) e=coerce(e,common);
+				}
+				return b.tuple(ctx,elements,expected);
+			}
+			if(p.name=="get"){
+				enforce(p.args.length==2,"get requires a tuple or vector and an index");
+				return finish(b.get(build(p.args[0],ctx,locals,TypeId.init,depth+1),build(p.args[1],ctx,locals,scalarType(Sort.natural),depth+1)));
+			}
+			if(p.name=="$mul"||p.name=="$times"||p.name=="$add"||p.name=="$pow"||p.name=="$matmul"||p.name=="dot"){
+				enforce(p.args.length==2,"binary operation requires two arguments");
+				auto left=build(p.args[0],ctx,locals,TypeId.init,depth+1),v=pool.view(b.type(left));
+				if(v.kind==TypeKind.type_){
+					if(p.name=="$pow") return finish(b.typeValue(ctx,vectorType(b.typeDenoted(left),p.args[1],locals)));
+					enforce(p.name=="$times"||p.name=="$mul","invalid type operation"); TypeId[] fields;
+					void append(Pattern q){
+						if(q.name=="$times"||q.name=="$mul"){ append(q.args[0]); append(q.args[1]); }
+						else fields~=b.typeDenoted(build(q,ctx,locals,TypeId.init,depth+1));
+					}
+					append(p); return finish(b.typeValue(ctx,pool.tuple(fields)));
+				}
+				if(v.kind==TypeKind.vector){
+					auto target=p.name=="$pow"?scalarType(Sort.natural):p.name=="$matmul"?TypeId.init:b.type(left);
+					if(p.name=="$matmul"&&p.args[1].name=="$tuple"&&(!p.args[1].args.length||p.args[1].args[0].name!="$tuple")) target=v.fields[0];
+					auto right=build(p.args[1],ctx,locals,target,depth+1);
+					auto op=p.name=="$pow"?TensorOp.power:p.name=="dot"?TensorOp.dot:p.name=="$add"?TensorOp.add:TensorOp.mul;
+					if(p.name=="$matmul"){
+						auto w=pool.view(b.type(right)); enforce(w.kind==TypeKind.vector,"matrix multiplication requires a vector or matrix");
+						op=pool.view(w.fields[0]).kind==TypeKind.vector?TensorOp.matmul:TensorOp.matvec;
+						auto row=pool.view(v.fields[0]); enforce(row.kind==TypeKind.vector,"matrix multiplication requires a matrix on the left");
+						auto ty=op==TensorOp.matmul?pool.vector(pool.vector(row.fields[0],pool.view(w.fields[0]).dimension),w.dimension):pool.vector(row.fields[0],w.dimension);
+						right=coerce(right,ty);
+					}
+					return finish(b.tensor(op,left,right));
+				}
+			}
 			if(p.name=="$fix"){
-				auto ty=type(p.annotation),v=pool.view(ty);
+				auto ty=type(p.annotation,locals),v=pool.view(ty);
 				enforce(v.kind==TypeKind.function_,"fixed points currently require a function type");
 				auto inner=b.push(ctx,ty),body=build(p.args[0],inner,[p.binder]~locals,ty,depth+1);
 				if(b.node(body).op==BoundOp.variable&&b.node(body).data==0){
@@ -183,7 +275,7 @@ struct FunctionSyntax{
 			auto comparison=positive?p.args[0]:p;
 			if(comparison.name=="$different"){
 				auto left=build(comparison.args[0],ctx,locals,TypeId.init,depth+1),kind=pool.view(b.type(left)).kind;
-				if(kind==TypeKind.type_||kind==TypeKind.function_||kind==TypeKind.set){
+				if(kind==TypeKind.type_||kind==TypeKind.function_||kind==TypeKind.set||kind==TypeKind.vector||kind==TypeKind.tuple||kind==TypeKind.unit){
 					auto right=build(comparison.args[1],ctx,locals,b.type(left),depth+1);
 					auto eq=kind==TypeKind.type_?b.typeEq(left,right):b.equal(left,right);
 					return finish(positive?eq:b.primitive(a.not_(a.boolean(false)),[eq]));
@@ -191,7 +283,7 @@ struct FunctionSyntax{
 			}
 			if(p.name=="$lambda"||p.name=="$set"){
 				auto base=p.annotation; while(base.name=="$subset") base=base.args[0];
-				auto param=type(base),inner=b.push(ctx,param),names=[p.binder]~locals;
+				auto param=type(base,locals),inner=b.push(ctx,param),names=[p.binder]~locals;
 				BoundTerm restrict(BoundTerm body){
 					for(auto ty=p.annotation;ty.name=="$subset";ty=ty.args[0])
 						body=b.guard(build(ty.predicate,inner,[ty.binder]~locals,scalarType(Sort.boolean),depth+1),body);
@@ -208,7 +300,7 @@ struct FunctionSyntax{
 				return finish(b.hint(b.lambda(restrict(body)),p.binder,refinement));
 			}
 			if(p.name=="$ascribe"&&p.annotation !is null){
-				return finish(build(p.args[0],ctx,locals,type(p.annotation),depth+1));
+				return finish(build(p.args[0],ctx,locals,type(p.annotation,locals),depth+1));
 			}
 			if(p.name=="$apply"){
 				auto f=build(p.args[0],ctx,locals,TypeId.init,depth+1),v=pool.view(b.type(f));
@@ -307,6 +399,8 @@ struct FunctionSyntax{
 		Table!(uint,bool) seen;
 		void collectFree(BoundTerm t){
 			if(seen.get(t.id,false)) return; seen.set(t.id,true); auto n=b.node(t);
+			void dimensions(TypeId t){ auto v=pool.view(t); if(v.dimension !is null) foreach(name;v.dimension.names) free.set(name,true); foreach(f;v.fields) dimensions(f); }
+			dimensions(b.type(t)); if(n.op==BoundOp.typeValue) dimensions(b.typeDenoted(t));
 			if(n.op==BoundOp.global) free.set(functions[n.data].name,true);
 			if(n.op==BoundOp.scalar) foreach(id;a.viewPostorder(a.at(n.data))){
 				auto v=a.view(a.at(id)); if(v.op==Op.variable&&v.value<scalar.variables.length) free.set(scalar.variables[v.value].name,true);
@@ -327,7 +421,35 @@ struct FunctionSyntax{
 			enforce(depth<256,"function formatting depth exceeded");
 			auto n=b.node(t);
 			string child(uint id){ return render(b.at(id),locals,depth+1); }
+			string projection(uint base,ulong index){
+				while(b.node(b.at(base)).op==BoundOp.rest){ base=b.node(b.at(base)).a; ++index; }
+				return "get("~child(base)~","~to!string(index)~")";
+			}
 			switch(n.op){
+				case BoundOp.unit:return "()";
+				case BoundOp.vectorNil:return "(():"~typeName(b.type(t))~")";
+				case BoundOp.vectorCons,BoundOp.pair:
+					string text="("; auto current=t; bool first=true;
+					while(b.node(current).op==BoundOp.vectorCons||b.node(current).op==BoundOp.pair){
+						auto q=b.node(current); if(!first) text~=","; text~=child(q.a); first=false; current=b.at(q.b);
+					}
+					enforce(b.node(current).op==BoundOp.unit||b.node(current).op==BoundOp.vectorNil,"invalid tuple tail");
+					if(b.node(t).b==current.id) text~=",";
+					text~=")"; return n.op==BoundOp.pair?"("~text~":"~typeName(b.type(t))~")":text;
+				case BoundOp.first:return projection(n.a,0);
+				case BoundOp.rest:
+					auto v=pool.view(b.type(b.at(n.a))); string text="(";
+					foreach(i;1..v.fields.length){ if(i!=1) text~=","; text~="get("~child(n.a)~","~to!string(i)~")"; }
+					if(v.fields.length==2) text~=","; return text~")";
+				case BoundOp.get:
+					auto index=b.node(b.at(n.b));
+					if(index.op==BoundOp.scalar&&a.isNumber(a.at(index.data))&&a.number(a.at(index.data)).re.small)
+						return projection(n.a,cast(ulong)a.number(a.at(index.data)).re.integer);
+					return "get("~child(n.a)~","~child(n.b)~")";
+				case BoundOp.tensor:
+					auto op=cast(TensorOp)n.data;
+					if(op==TensorOp.dot) return "dot("~child(n.a)~","~child(n.b)~")";
+					return "("~child(n.a)~(op==TensorOp.add?"+":op==TensorOp.mul?"·":op==TensorOp.power?"^":"@")~child(n.b)~")";
 				case BoundOp.fixed:
 					auto name=fresh(locals,b.binderHint(t).name); return "μ("~name~":"~typeName(b.type(t))~"). "~render(b.at(n.a),[name]~locals,depth+1);
 				case BoundOp.bottom:return "undefined("~typeName(b.type(t))~")";
@@ -391,7 +513,8 @@ struct FunctionSyntax{
 		foreach(i,f;r.assumptions){
 			auto h="h"~to!string(i); hypotheses~=" ("~h~" : Expr.eval ξ FunctionScalar.n"~to!string(f.id)~" = some true)"; arguments~=" "~h;
 		}
-		auto original="((BindingCertificate.t"~to!string(result.reduction.input.id)~" γ).eval ξ ρ)";
+		auto dimArg=result.bindings.dependent?" ξ.natural":"";
+		auto original="((BindingCertificate.t"~to!string(result.reduction.input.id)~dimArg~" γ).eval ξ ρ)";
 		auto output="(FunctionScalar.n"~to!string(embedded.id)~".eval ξ)";
 		code~="namespace QSym.FunctionCertificate\n";
 		code~="theorem refinement (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env [])"~hypotheses~" : Value.Refines "~original~" "~output~" :=\n"~

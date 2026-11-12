@@ -24,7 +24,8 @@ struct BoundTerm{
 	@property uint id()const{ return index; }
 	bool opEquals(BoundTerm rhs)const{ return owner is rhs.owner&&index==rhs.index; }
 }
-enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal }
+enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor }
+enum TensorOp:ubyte{ add,mul,dot,matvec,matmul,power }
 struct BoundNode{
 	BoundOp op;
 	uint context,type,a=uint.max,b=uint.max,data;
@@ -35,11 +36,11 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
-private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left; }
+private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; }
 struct BindingResult{
 	BoundTerm input,output;
 	bool exhausted;
@@ -63,6 +64,8 @@ final class Bindings{
 	private Table!(BoundNode,uint) nodeIds;
 	private Table!(uint,uint) binderHints;
 	private BinderHint[] hints;
+	private bool dependent_;
+	@property bool dependent(){ return dependent_; }
 	this(Arena arena,TypePool pool=null){
 		enforce(arena !is null,"scalar arena required");
 		this.arena=arena; this.pool=pool is null?new TypePool:pool;
@@ -74,8 +77,9 @@ final class Bindings{
 	private void check(BoundTerm t)const{ enforce(t.owner is this&&t.id<nodes.length,"invalid or foreign bound term"); }
 	private uint typeId(TypeId t){
 		auto v=pool.view(t);
-		enforce(v.kind==TypeKind.type_||v.kind==TypeKind.function_||v.kind==TypeKind.set||v.kind>=TypeKind.boolean&&v.kind<=TypeKind.complex,"unsupported binding type");
-		if(v.kind==TypeKind.function_||v.kind==TypeKind.set) foreach(f;v.fields) typeId(f);
+		if(v.dimension !is null&&v.dimension.names.length) dependent_=true;
+		enforce(v.kind==TypeKind.type_||v.kind==TypeKind.function_||v.kind==TypeKind.set||v.kind==TypeKind.vector||v.kind==TypeKind.tuple||v.kind<=TypeKind.complex,"unsupported binding type");
+		foreach(f;v.fields) typeId(f);
 		auto id=typeIds.get(t.id,uint.max);
 		if(id!=uint.max) return id;
 		enforce(types.length<uint.max,"binding type limit exceeded");
@@ -136,6 +140,138 @@ final class Bindings{
 		return intern(BoundNode(BoundOp.equal,node(x).context,typeId(scalarType(Sort.boolean)),x.id,y.id));
 	}
 	BoundTerm bottom(Scope s,TypeId t){ check(s); return intern(BoundNode(BoundOp.bottom,s.index,typeId(t))); }
+	BoundTerm tuple(Scope ctx,BoundTerm[] elements,TypeId expected=TypeId.init){
+		check(ctx); enforce(elements.length<=256,"aggregate literal size limit exceeded"); TypeId[] fields;
+		foreach(e;elements){ enforce(context(e)==ctx,"tuple context mismatch"); fields~=type(e); }
+		auto ty=expected==TypeId.init?pool.tuple(fields):expected,v=pool.view(ty);
+		enforce(v.kind==TypeKind.unit||v.kind==TypeKind.tuple||v.kind==TypeKind.vector,"expected a tuple or vector type");
+		if(v.kind==TypeKind.unit){ enforce(!elements.length,"unit has no elements"); return intern(BoundNode(BoundOp.unit,ctx.index,typeId(ty))); }
+		if(v.kind==TypeKind.vector){
+			enforce(v.dimension.constant&&v.length==elements.length,"vector literal dimension mismatch");
+			foreach(f;fields) enforce(f==v.fields[0],"vector element type mismatch");
+			if(!elements.length) return intern(BoundNode(BoundOp.vectorNil,ctx.index,typeId(ty)));
+			auto tail=tuple(ctx,elements[1..$],pool.vector(v.fields[0],v.length-1));
+			return intern(BoundNode(BoundOp.vectorCons,ctx.index,typeId(ty),elements[0].id,tail.id));
+		}
+		enforce(fields==v.fields,"tuple element type mismatch");
+		auto tail=tuple(ctx,elements[1..$]);
+		return intern(BoundNode(BoundOp.pair,ctx.index,typeId(ty),elements[0].id,tail.id));
+	}
+	BoundTerm get(BoundTerm value,BoundTerm index){
+		auto n=node(value),v=pool.view(type(value));
+		enforce(context(value)==context(index)&&type(index)==scalarType(Sort.natural),"index must have type ℕ");
+		if(v.kind==TypeKind.tuple){
+			auto i=node(index); enforce(i.op==BoundOp.scalar&&arena.isNumber(arena.at(i.data)),"heterogeneous tuple indices must be literals");
+			auto number=arena.number(arena.at(i.data)); enforce(number.re.small&&number.re.integer>=0&&number.re.numerator<v.fields.length,"tuple index out of range");
+			auto k=cast(uint)number.re.integer;
+			if(!k) return intern(BoundNode(BoundOp.first,n.context,typeId(v.fields[0]),value.id));
+			auto tail=intern(BoundNode(BoundOp.rest,n.context,typeId(pool.tuple(v.fields[1..$])),value.id));
+			return get(tail,scalar(context(index),arena.natural_(k-1)));
+		}
+		enforce(v.kind==TypeKind.vector,"indexing requires a tuple or vector");
+		return intern(BoundNode(BoundOp.get,n.context,typeId(v.fields[0]),value.id,index.id));
+	}
+	private Sort elementSort(TypeId t){
+		foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex]) if(t==scalarType(s)) return s;
+		throw new Exception("numeric scalar elements required");
+	}
+	BoundTerm tensor(TensorOp op,BoundTerm x,BoundTerm y){
+		auto a=node(x),v=pool.view(type(x)),w=pool.view(type(y)); TypeId output;
+		enforce(context(x)==context(y)&&v.kind==TypeKind.vector,"tensor operation requires vectors");
+		if(op==TensorOp.add||op==TensorOp.mul){
+			enforce(type(x)==type(y),"elementwise shape or type mismatch");
+			elementSort(typeLeaf(type(x))); output=type(x);
+		}else if(op==TensorOp.dot){
+			enforce(type(x)==type(y),"inner product shape or type mismatch"); elementSort(v.fields[0]); output=v.fields[0];
+		}else{
+			auto row=pool.view(v.fields[0]); enforce(row.kind==TypeKind.vector,"matrix operation requires a matrix"); elementSort(row.fields[0]);
+			if(op==TensorOp.power){
+				enforce(v.dimension.key==row.dimension.key&&type(y)==scalarType(Sort.natural),"matrix powers require a square matrix and a natural exponent"); output=type(x);
+			}else{
+				enforce(w.kind==TypeKind.vector&&row.dimension.key==w.dimension.key,"matrix multiplication dimension mismatch");
+				if(op==TensorOp.matvec){ enforce(row.fields[0]==w.fields[0],"matrix/vector element type mismatch"); output=pool.vector(row.fields[0],v.dimension); }
+				else{ auto other=pool.view(w.fields[0]); enforce(other.kind==TypeKind.vector&&other.fields[0]==row.fields[0],"matrix element type mismatch"); output=pool.vector(pool.vector(row.fields[0],other.dimension),v.dimension); }
+			}
+		}
+		return intern(BoundNode(BoundOp.tensor,a.context,typeId(output),x.id,y.id,cast(uint)op));
+	}
+	private TypeId typeLeaf(TypeId t){ auto v=pool.view(t); return v.kind==TypeKind.vector?typeLeaf(v.fields[0]):t; }
+	private bool concreteType(TypeId t){
+		auto v=pool.view(t); if(v.dimension !is null&&!v.dimension.constant) return false;
+		foreach(f;v.fields) if(!concreteType(f)) return false; return true;
+	}
+	private bool literalData(BoundTerm t){
+		auto n=node(t);
+		if(n.op==BoundOp.unit||n.op==BoundOp.vectorNil) return true;
+		if(n.op==BoundOp.scalar){
+			bool total(Term t){
+				auto q=arena.view(t); if(!q.arity) return true;
+				return q.op==Op.builtin&&q.value>=Builtin.castNZ&&q.value<=Builtin.castRC&&total(arena.viewChild(t,0));
+			}
+			return total(arena.at(n.data));
+		}
+		return (n.op==BoundOp.pair||n.op==BoundOp.vectorCons)&&literalData(at(n.a))&&literalData(at(n.b));
+	}
+	private BoundTerm tensorEval(BoundTerm t){
+		auto n=node(t); if(n.a==uint.max||!literalData(at(n.a))) return BoundTerm.init;
+		BoundTerm entry(BoundTerm x,ulong i){ while(i--){ x=at(node(x).b); } return at(node(x).a); }
+		if(n.op==BoundOp.first) return at(nodes[n.a].a);
+		if(n.op==BoundOp.rest) return at(nodes[n.a].b);
+		if(n.op==BoundOp.get&&nodes[n.b].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[n.b].data))){
+			auto i=arena.number(arena.at(nodes[n.b].data)).re,v=pool.view(type(at(n.a)));
+			if(!i.small||i.integer>=v.length) return bottom(context(t),type(t));
+			return entry(at(n.a),cast(ulong)i.integer);
+		}
+		if(n.op!=BoundOp.tensor||!literalData(at(n.b))) return BoundTerm.init;
+		auto x=at(n.a),y=at(n.b),v=pool.view(type(x)),op=cast(TensorOp)n.data;
+		if(!v.dimension.constant||v.length>32) return BoundTerm.init;
+		auto ctx=context(t),leaf=typeLeaf(type(x));
+		BoundTerm scalarOp(TensorOp op,BoundTerm a,BoundTerm b){
+			if(pool.view(type(a)).kind==TypeKind.vector) return tensor(op,a,b);
+			auto prototype=scalarOperator(type(a),op);
+			return primitive(prototype,[a,b]);
+		}
+		BoundTerm dot(BoundTerm[] a,BoundTerm[] b,bool dual){
+			auto s=scalar(ctx,arena.number(Number(0),elementSort(leaf)));
+			foreach_reverse(i;0..a.length){
+				auto term=a[i];
+				if(dual&&leaf==scalarType(Sort.complex)) term=primitive(arena.conj(arena.variable(Sort.complex,0)),[term]);
+				s=scalarOp(TensorOp.add,scalarOp(TensorOp.mul,term,b[i]),s);
+			}
+			return s;
+		}
+		BoundTerm[] elements;
+		if(op==TensorOp.add||op==TensorOp.mul){
+			foreach(i;0..v.length) elements~=scalarOp(op,entry(x,i),entry(y,i)); return tuple(ctx,elements,type(t));
+		}
+		if(op==TensorOp.dot){
+			BoundTerm[] a,b; foreach(i;0..v.length){ a~=entry(x,i); b~=entry(y,i); } return dot(a,b,true);
+		}
+		auto row=pool.view(v.fields[0]); if(!row.dimension.constant||row.length>32) return BoundTerm.init;
+		if(op==TensorOp.power){
+			if(nodes[n.b].op!=BoundOp.scalar||!arena.isNumber(arena.at(nodes[n.b].data))) return BoundTerm.init;
+			auto exponent=arena.number(arena.at(nodes[n.b].data)).re; if(!exponent.small||exponent.integer>16) return BoundTerm.init;
+			if(exponent.integer) return tensor(TensorOp.matmul,x,tensor(TensorOp.power,x,scalar(ctx,arena.natural_(cast(ulong)exponent.integer-1))));
+			foreach(i;0..v.length){
+				BoundTerm[] cells; foreach(j;0..v.length) cells~=scalar(ctx,arena.number(Number(i==j?1:0),elementSort(leaf)));
+				elements~=tuple(ctx,cells,v.fields[0]);
+			}
+			return tuple(ctx,elements,type(x));
+		}
+		auto w=pool.view(type(y));
+		auto columns=op==TensorOp.matmul?pool.view(w.fields[0]).length:1;
+		if(columns>32) return BoundTerm.init;
+		foreach(i;0..v.length){
+			BoundTerm[] cells;
+			foreach(j;0..columns){
+				BoundTerm[] a,b;
+				foreach(k;0..row.length){ a~=entry(entry(x,i),k); b~=op==TensorOp.matmul?entry(entry(y,k),j):entry(y,k); }
+				cells~=dot(a,b,false);
+			}
+			elements~=op==TensorOp.matmul?tuple(ctx,cells,pool.view(type(t)).fields[0]):cells[0];
+		}
+		return tuple(ctx,elements,type(t));
+	}
 	private bool depends(BoundTerm t,uint index){
 		auto n=node(t); if(n.op==BoundOp.variable) return n.data==index;
 		if(n.op==BoundOp.lambda||n.op==BoundOp.set||n.op==BoundOp.fixed) ++index;
@@ -236,6 +372,11 @@ final class Bindings{
 	private BoundTerm rebuild(BoundTerm t,Scope target,BoundTerm[] args){
 		auto n=node(t);
 		final switch(n.op){
+			case BoundOp.unit,BoundOp.vectorNil:return tuple(target,[],types[n.type]);
+			case BoundOp.vectorCons,BoundOp.pair:return intern(BoundNode(n.op,target.index,n.type,args[0].id,args[1].id));
+			case BoundOp.first,BoundOp.rest:return intern(BoundNode(n.op,target.index,n.type,args[0].id));
+			case BoundOp.get:return get(args[0],args[1]);
+			case BoundOp.tensor:return tensor(cast(TensorOp)n.data,args[0],args[1]);
 			case BoundOp.scalar:return scalar(target,arena.at(n.data));
 			case BoundOp.global:return global(target,types[n.type],n.data);
 			case BoundOp.variable:assert(0,"variable requires substitution");
@@ -359,6 +500,23 @@ final class Bindings{
 		if(!unary(yes.a,Op.not_)||!unary(no.a,Op.not_)||nodes[no.a].a!=yes.a) return BoundTerm.init;
 		if(!call(p.a,Builtin.nonzeroZ)||!call(nodes[p.a].a,Builtin.castNZ)||!variableAt(nodes[nodes[p.a].a].a,0)) return BoundTerm.init;
 		if(!totalScalar(at(yes.b))||!call(no.b,Builtin.addN)&&!call(no.b,Builtin.mulN)) return BoundTerm.init;
+		if(call(no.b,Builtin.addN)){
+			auto branch=nodes[no.b],down=nodes[branch.a],up=nodes[branch.b];
+			if(unary(branch.a,Op.mask)&&unary(branch.b,Op.mask)&&call(down.a,Builtin.leN)&&
+				unary(up.a,Op.not_)&&nodes[up.a].a==down.a&&previous(down.b)){
+				auto condition=nodes[down.a],forward=nodes[up.b];
+				if(variableAt(condition.a,0)&&totalScalar(at(condition.b))&&forward.op==BoundOp.apply&&
+					variableAt(forward.a,1)&&call(forward.b,Builtin.addN)){
+					auto successor=nodes[forward.b],one=nodes[successor.b];
+					if(variableAt(successor.a,0)&&one.op==BoundOp.scalar&&arena.isNumber(arena.at(one.data))&&arena.number(arena.at(one.data)).one){
+						auto inner=push(context(t),ty.fields[0]);
+						auto predicate=primitive(arena.at(condition.data),[variable(inner,0),scalar(inner,arena.at(nodes[condition.b].data))]);
+						auto output=inheritHint(at(n.a),lambda(guard(predicate,scalar(inner,arena.at(nodes[yes.b].data)))));
+						solution=RecurrenceSolution(t.id,output.id,yes.b,condition.b,Law.init,Law.init,false,true); return output;
+					}
+				}
+			}
+		}
 		auto step=nodes[no.b]; bool left=previous(step.b); auto delta=left?step.a:step.b;
 		if(!previous(left?step.b:step.a)||!totalScalar(at(delta))) return BoundTerm.init;
 		bool mul=call(no.b,Builtin.mulN);
@@ -479,7 +637,19 @@ final class Bindings{
 				if(next!=BoundTerm.init&&steps>=budget){ next=BoundTerm.init; exhausted=true; }
 			}
 			if(domains&&next==BoundTerm.init){
-				if(current.op==BoundOp.fixed){
+				if(current.op==BoundOp.get&&nodes[current.b].op==BoundOp.scalar&&!totalScalar(at(current.b))){
+					auto source=arena.at(nodes[current.b].data),d=simplifyDomain(arena,source,[],Options(DensityMode.preserve,true)); exhausted|=d.exhausted;
+					if(d.output==arena.boolean(false)){
+						extra=cast(uint)scalarDomains.length; scalarDomains~=ScalarDomain(source,d);
+						next=bottom(ctx,type(at(result.output))); rule=BindingRule.getScalarUndefined;
+					}
+				}
+				if(current.op==BoundOp.get&&(nodes[current.a].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom)){
+					next=bottom(ctx,type(at(result.output))); rule=BindingRule.getBottom;
+				}else if(next==BoundTerm.init&&(current.op==BoundOp.tensor||current.op==BoundOp.get||current.op==BoundOp.first||current.op==BoundOp.rest)){
+					next=tensorEval(at(result.output)); if(next!=BoundTerm.init) rule=current.op==BoundOp.tensor&&current.data==TensorOp.power&&node(next).op==BoundOp.tensor?BindingRule.tensorPower:BindingRule.tensorEval;
+				}
+				if(next==BoundTerm.init&&current.op==BoundOp.fixed){
 					auto body=at(current.a),v=pool.view(type(body)),inner=push(ctx,v.fields[0]);
 					if(!depends(body,0)){
 						BoundTerm[] values=[lambda(bottom(inner,v.fields[1]))];
@@ -536,7 +706,7 @@ final class Bindings{
 						next=set(scalar(push(ctx,pool.view(types[current.type]).fields[0]),arena.boolean(false))); rule=BindingRule.domainGuardFalse;
 					}else if(current.op==BoundOp.typeEq){
 						if(current.a==current.b){ next=sequence(at(current.a),scalar(ctx,arena.boolean(true))); rule=BindingRule.typeEqSelf; }
-						else if(nodes[current.a].op==BoundOp.typeValue&&nodes[current.b].op==BoundOp.typeValue){
+						else if(nodes[current.a].op==BoundOp.typeValue&&nodes[current.b].op==BoundOp.typeValue&&concreteType(typeDenoted(at(current.a)))&&concreteType(typeDenoted(at(current.b)))){
 							next=scalar(ctx,arena.boolean(nodes[current.a].data==nodes[current.b].data)); rule=BindingRule.typeEqValues;
 						}
 					}else if(current.op==BoundOp.equal){
@@ -563,7 +733,10 @@ final class Bindings{
 						next=both(holds(at(nodes[current.a].a)),holds(at(nodes[current.a].b))); rule=BindingRule.holdsGuard;
 					}else if(current.op==BoundOp.defined){
 						auto child=nodes[current.a];
-						if(child.op==BoundOp.bottom){ next=scalar(ctx,arena.boolean(false)); rule=BindingRule.shortCircuit; }
+						if(child.op==BoundOp.pair||child.op==BoundOp.vectorCons){
+							next=both(defined(at(child.a)),defined(at(child.b))); rule=BindingRule.tensorDefined;
+						}else if(child.op==BoundOp.unit||child.op==BoundOp.vectorNil){ next=scalar(ctx,arena.boolean(true)); rule=BindingRule.tensorEval; }
+						else if(child.op==BoundOp.bottom){ next=scalar(ctx,arena.boolean(false)); rule=BindingRule.shortCircuit; }
 						else if(child.op==BoundOp.fixed){ next=scalar(ctx,arena.boolean(true)); rule=BindingRule.definedFixed; }
 						else if(child.op==BoundOp.typeValue||child.op==BoundOp.lambda||child.op==BoundOp.set||child.op==BoundOp.global||child.op==BoundOp.domain||child.op==BoundOp.defined||child.op==BoundOp.holds){
 							next=scalar(ctx,arena.boolean(true)); rule=BindingRule.definedTotal;
@@ -625,9 +798,40 @@ final class Bindings{
 		}
 		return visit(term);
 	}
-	private string name(uint id){ return "(t"~to!string(id)~" γ)"; }
+	private string name(uint id){ return "(t"~to!string(id)~(dependent_?" δ":"")~" γ)"; }
+	private string ctxName(uint id){ auto s="c"~to!string(id); return dependent_?"("~s~" δ)":s; }
+	private Term scalarOperator(TypeId t,TensorOp op){
+		auto x=arena.variable(elementSort(t),0); return op==TensorOp.add?arena.add(x,x,true):arena.mul(x,x,true);
+	}
+	private string tensorOperation(TypeId t,TensorOp op){
+		auto v=pool.view(t);
+		if(v.kind==TypeKind.vector) return "(Tensor.zipValue "~tensorOperation(v.fields[0],op)~" "~v.dimension.lean~")";
+		return leanValueOperation(arena,scalarOperator(t,op));
+	}
+	private string tensorLiteral(TypeId t,uint n){
+		auto s=to!string(n),sort=elementSort(t);
+		if(sort==Sort.rational) return "("~s~" / 1 : ℚ)";
+		if(sort==Sort.real_) return "(("~s~" : ℤ) : ℝ)";
+		if(sort==Sort.complex) return "((("~s~" : ℤ) : ℂ) + ((0 : ℤ) : ℂ) * Complex.I)";
+		return s;
+	}
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
+			case BoundOp.pair:return "Tensor.pairValue";
+			case BoundOp.vectorCons:return "Tensor.consValue";
+			case BoundOp.first:return "(fun x => x.map Prod.fst)";
+			case BoundOp.rest:return "(fun x => x.map Prod.snd)";
+			case BoundOp.get:return "Tensor.getValue";
+			case BoundOp.tensor:
+				auto op=cast(TensorOp)n.data,ty=types[nodes[n.a].type],v=pool.view(ty);
+				if(op==TensorOp.add||op==TensorOp.mul) return tensorOperation(ty,op);
+				auto element=typeLeaf(ty),add=tensorOperation(element,TensorOp.add),mul=tensorOperation(element,TensorOp.mul),zero=tensorLiteral(element,0);
+				if(op==TensorOp.dot) return "(Tensor.dotValue "~add~" "~mul~" "~(element==scalarType(Sort.complex)?"Value.conj":"id")~" "~zero~" "~v.dimension.lean~")";
+				auto row=pool.view(v.fields[0]);
+				if(op==TensorOp.power) return "(Tensor.matrixPowerValue "~add~" "~mul~" "~zero~" "~tensorLiteral(element,1)~" "~v.dimension.lean~")";
+				auto dimensions=v.dimension.lean~" "~row.dimension.lean;
+				if(op==TensorOp.matmul) dimensions~=" "~pool.view(pool.view(types[nodes[n.b].type]).fields[0]).dimension.lean;
+				return "(Tensor."~(op==TensorOp.matmul?"matmulValue":"matvecValue")~" "~add~" "~mul~" "~zero~" "~dimensions~")";
 			case BoundOp.primitive:return leanValueOperation(arena,arena.at(n.data));
 			case BoundOp.member:return "Binding.memberValue";
 			case BoundOp.subset:return "Binding.subsetValue";
@@ -637,11 +841,14 @@ final class Bindings{
 			case BoundOp.defined:return "Binding.definedValue";
 			case BoundOp.holds:return "Binding.holdsValue";
 			case BoundOp.guard:return "Binding.guardValue";
-			case BoundOp.scalar,BoundOp.variable,BoundOp.lambda,BoundOp.apply,BoundOp.sequence,BoundOp.global,BoundOp.set,BoundOp.typeValue,BoundOp.bottom,BoundOp.fixed:assert(0);
+			case BoundOp.scalar,BoundOp.variable,BoundOp.lambda,BoundOp.apply,BoundOp.sequence,BoundOp.global,BoundOp.set,BoundOp.typeValue,BoundOp.bottom,BoundOp.fixed,BoundOp.unit,BoundOp.vectorNil:assert(0);
 		}
 	}
 	private string leanType(TypeId t){
 		auto v=pool.view(t);
+		if(v.kind==TypeKind.unit) return ".unit";
+		if(v.kind==TypeKind.vector) return "(.vector "~leanType(v.fields[0])~" "~v.dimension.lean~")";
+		if(v.kind==TypeKind.tuple) return "(.pair "~leanType(v.fields[0])~" "~leanType(pool.tuple(v.fields[1..$]))~")";
 		if(v.kind==TypeKind.set) return "(.set "~leanType(v.fields[0])~")";
 		if(v.kind==TypeKind.function_) return "(.arrow "~leanType(v.fields[0])~" "~leanType(v.fields[1])~")";
 		if(v.kind==TypeKind.type_) return ".type";
@@ -649,10 +856,52 @@ final class Bindings{
 			if(t==scalarType(s)) return "(.scalar ."~leanSort(s)~")";
 		throw new Exception("unsupported binding type");
 	}
+	private string leanWitness(TypeId t){
+		auto v=pool.view(t);
+		if(v.kind==TypeKind.unit) return "()";
+		if(v.kind==TypeKind.vector) return "(fun _ => "~leanWitness(v.fields[0])~")";
+		if(v.kind==TypeKind.tuple) return "("~leanWitness(v.fields[0])~", "~leanWitness(pool.tuple(v.fields[1..$]))~")";
+		return v.kind==TypeKind.type_?"Binding.Ty.type":v.kind==TypeKind.function_?"(fun _ => none)":v.kind==TypeKind.set?"∅":v.kind==TypeKind.boolean?"false":"0";
+	}
+	private string tensorEvaluationProof(uint from,uint target){
+		uint[] leaves; Table!(uint,bool) seen;
+		void collect(uint id){
+			if(seen.get(id,false)) return; seen.set(id,true); auto n=nodes[id];
+			if(n.op==BoundOp.scalar&&arena.view(arena.at(n.data)).arity&&literalData(at(id))) leaves~=id;
+			if(n.a!=uint.max) collect(n.a); if(n.b!=uint.max) collect(n.b);
+		}
+		collect(from);
+		struct Total{ string value,proof; }
+		Total total(Term t){
+			auto n=arena.view(t);
+			auto source="n"~to!string(t.id)~".eval ξ";
+			if(!n.arity){
+				auto v="(("~source~").getD "~(n.sort==Sort.boolean?"false":"0")~")";
+				return Total(v,"(show "~source~" = some "~v~" from rfl)");
+			}
+			enforce(n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castRC,"unsupported total tensor scalar");
+			auto child=total(arena.viewChild(t,0)),f="Functions."~builtinInfo(cast(Builtin)n.value).code;
+			auto v="("~f~".value "~child.value~")";
+			return Total(v,"(show "~source~" = some "~v~" from Eq.trans (congrArg "~f~".apply "~child.proof~") (Tensor.apply_some "~f~" "~child.value~" True.intro))");
+		}
+		string[] values; foreach(id;leaves) values~="("~name(id)~".eval ξ ρ)";
+		string value(uint id){
+			foreach(i,leaf;leaves) if(id==leaf) return values[i]; auto n=nodes[id];
+			if(n.a==uint.max) return "("~name(id)~".eval ξ ρ)";
+			return "("~valueOperation(n)~" "~value(n.a)~(n.b==uint.max?"":" "~value(n.b))~")";
+		}
+		string prove(size_t i){
+			if(i==leaves.length) return "rfl";
+			auto id=leaves[i],v=total(arena.at(nodes[id].data)); values[i]="w"~to!string(i);
+			auto predicate="(fun "~values[i]~" : Option ("~leanType(type(at(id)))~" : Binding.Ty).denote => "~value(from)~" = "~value(target)~")";
+			values[i]="(some "~v.value~")"; return "(Eq.mpr (congrArg "~predicate~" "~v.proof~") "~prove(i+1)~")";
+		}
+		return ".ofEq (fun ξ ρ => "~prove(0)~")";
+	}
 	string exportLean(BindingResult result,bool lowerResult=false){
 		check(result.input); check(result.output); enforce(result.proof<result.proofs.length,"missing binding proof");
 		auto lowered=lowerResult?lower(result.output):Term.init;
-		string code="import QSym\n";
+		string code="import QSym\n",dimDecl=dependent_?" (δ : ℕ → ℕ)":"",dimArg=dependent_?" δ":"";
 		foreach(i,d;result.domains){
 			auto prefix="QSym.BindingScalar"~to!string(i),part=exportDomainLean(arena,d.input,d.result);
 			part=replace(part,"import QSym\n","");
@@ -681,17 +930,19 @@ final class Bindings{
 		bool[] needed=new bool[arena.length]; foreach(id;scalarNodes) needed[id]=true;
 		foreach(i,yes;needed) if(yes) code~=leanSyntaxCode(arena,arena.at(cast(uint)i));
 		foreach(i,ctx;contexts){
-			code~="abbrev c"~to!string(i)~" : List Binding.Ty := ";
-			code~=i==0?"[]\n":leanType(types[ctx.type])~" :: c"~to!string(ctx.parent)~"\n";
+			code~="abbrev c"~to!string(i)~dimDecl~" : List Binding.Ty := ";
+			code~=i==0?"[]\n":leanType(types[ctx.type])~" :: "~ctxName(ctx.parent)~"\n";
 		}
 		foreach(i,n;nodes) if(used[i]){
 			string expr;
 			final switch(n.op){
+				case BoundOp.unit:expr=".constant (some ())"; break;
+				case BoundOp.vectorNil:expr=".constant Tensor.nilValue"; break;
 				case BoundOp.scalar:expr=".scalar n"~to!string(n.data); break;
 				case BoundOp.variable:
 					expr=".here"; foreach(j;0..n.data) expr="(.there "~expr~")";
 					expr=".var "~expr; break;
-				case BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal:
+				case BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
 					expr="."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~name(n.a);
 					if(n.b!=uint.max) expr~=" "~name(n.b); break;
 				case BoundOp.lambda:expr=".lam "~name(n.a); break;
@@ -703,7 +954,7 @@ final class Bindings{
 				case BoundOp.apply:expr=".app "~name(n.a)~" "~name(n.b); break;
 				case BoundOp.sequence:expr=".seq "~name(n.a)~" "~name(n.b); break;
 			}
-			code~="noncomputable def t"~to!string(i)~" (γ : Binding.Globals) : Binding.Expr c"~to!string(n.context)~" "~leanType(types[n.type])~" := "~expr~"\n";
+			code~="noncomputable def t"~to!string(i)~dimDecl~" (γ : Binding.Globals) : Binding.Expr "~ctxName(n.context)~" "~leanType(types[n.type])~" := "~expr~"\n";
 		}
 		foreach(i,n;nodes) if(used[i]&&n.op==BoundOp.fixed){
 			auto v=pool.view(types[n.type]),a="("~leanType(v.fields[0])~" : Binding.Ty).denote",b="("~leanType(v.fields[1])~" : Binding.Ty).denote";
@@ -739,13 +990,19 @@ final class Bindings{
 				}
 				return bridge.length?"(Eq.trans "~proof~" ("~bridge~" _ _))":x=="rfl"&&(q.b==uint.max||y=="rfl")?"rfl":proof;
 			}
-			auto id=to!string(i),args=" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env c"~to!string(n.context)~")";
+			auto id=to!string(i),args=dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(n.context)~")";
 			auto h="(fun g => congrArg some (funext (fun x => "~programProof(nodes[n.a].a)~")))";
 			code~="noncomputable def rec"~id~args~" : Recursion.Program "~a~" "~b~" "~b~" := "~program(nodes[n.a].a)~"\n";
-			code~="theorem fixed"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = some (FixedPoint.value (rec"~id~" γ ξ ρ).functional) := Recursion.fixed_program (rec"~id~" γ ξ ρ) _ "~h~"\n";
-			code~="theorem unroll"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = (Binding.Expr.app (.lam "~name(n.a)~") "~name(cast(uint)i)~").eval ξ ρ := Recursion.program_unfold (rec"~id~" γ ξ ρ) _ "~h~"\n";
+			code~="theorem fixed"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = some (FixedPoint.value (rec"~id~dimArg~" γ ξ ρ).functional) := Recursion.fixed_program (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
+			code~="theorem unroll"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = (Binding.Expr.app (.lam "~name(n.a)~") "~name(cast(uint)i)~").eval ξ ρ := Recursion.program_unfold (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
 			foreach(s;result.solutions) if(s.source==i){
 				auto base="(n"~to!string(nodes[s.base].data)~".eval ξ)",delta="(n"~to!string(nodes[s.delta].data)~".eval ξ)";
+				if(s.cutoff){
+					auto hp="(fun g x => ("~programProof(nodes[n.a].a)~").symm)";
+					code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n"~
+						"  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (Recursion.solve_nat_cutoff (rec"~id~dimArg~" γ ξ ρ) ("~base~".getD 0) ("~delta~".getD 0) "~hp~"))\n";
+					continue;
+				}
 				auto op=s.zero==Law.natural_recurrence_mul_base?"Functions.mulN.apply":"Functions.addN.apply";
 				if(s.left) op="(fun x y => "~op~" y x)";
 				auto k="(fun (x : ℕ) => "~name(nodes[s.target].a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some x) ρ))";
@@ -754,14 +1011,26 @@ final class Bindings{
 				auto successor="(congrArg (fun (z : Option ℕ) => "~name(nodes[s.target].a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) z ρ)) (Recursion.nat_successor x).symm)";
 				auto hs="(fun x => Eq.trans "~successor~" (Generated.r_"~to!string(s.law)~" "~base~" "~delta~" (some x)).symm)";
 				code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n"~
-					"  Eq.trans (fixed"~id~" γ ξ ρ) (congrArg some (Recursion.solve_nat_step (rec"~id~" γ ξ ρ) "~op~" "~base~" "~delta~" "~k~" "~hp~" "~hz~" "~hs~"))\n";
+					"  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (Recursion.solve_nat_step (rec"~id~dimArg~" γ ξ ρ) "~op~" "~base~" "~delta~" "~k~" "~hp~" "~hz~" "~hs~"))\n";
 			}
 		}
-		string proofName(uint id){ return "(p"~to!string(id)~" γ)"; }
+		string proofName(uint id){ return "(p"~to!string(id)~dimArg~" γ)"; }
 		foreach(i,p;result.proofs){
 			auto n=nodes[p.from]; string proof;
 			final switch(p.rule){
-				case BindingRule.fixedRecurrence:proof=".ofEq (fun ξ ρ => solve"~to!string(p.from)~" γ ξ ρ)"; break;
+				case BindingRule.getScalarUndefined:
+					proof="Tensor.getScalarUndefined "~name(n.a)~" n"~to!string(nodes[n.b].data)~" QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct"; break;
+				case BindingRule.getBottom:
+					auto left=nodes[n.a].op==BoundOp.bottom;
+					proof=".ofEq (fun ξ ρ => Tensor.get_none_"~(left?"left":"right")~" ("~name(left?n.b:n.a)~".eval ξ ρ))"; break;
+				case BindingRule.tensorEval:proof=tensorEvaluationProof(p.from,p.to); break;
+				case BindingRule.tensorPower:
+					auto v=pool.view(types[n.type]),element=typeLeaf(types[n.type]),exponent=arena.number(arena.at(nodes[n.b].data)).re.integer;
+					proof=".ofEq (fun ξ ρ => Tensor.matrixPowerValue_succ "~tensorOperation(element,TensorOp.add)~" "~tensorOperation(element,TensorOp.mul)~" "~tensorLiteral(element,0)~" "~tensorLiteral(element,1)~" "~v.dimension.lean~" ("~name(n.a)~".eval ξ ρ) "~to!string(exponent-1)~")"; break;
+				case BindingRule.tensorDefined:
+					auto child=nodes[n.a];
+					proof=".ofEq (fun ξ ρ => Tensor."~(child.op==BoundOp.pair?"defined_pair":"defined_cons")~" ("~name(child.a)~".eval ξ ρ) ("~name(child.b)~".eval ξ ρ))"; break;
+				case BindingRule.fixedRecurrence:proof=".ofEq (fun ξ ρ => solve"~to!string(p.from)~dimArg~" γ ξ ρ)"; break;
 				case BindingRule.refl:proof=".refl "~name(p.from); break;
 				case BindingRule.trans:proof=".trans "~proofName(p.left)~" "~proofName(p.right); break;
 				case BindingRule.beta:proof=".beta "~name(nodes[n.a].a)~" "~name(n.b); break;
@@ -779,9 +1048,9 @@ final class Bindings{
 				case BindingRule.appBottom:proof=".appBottom "~name(n.a); break;
 				case BindingRule.appScalarUndefined:
 					proof=".appScalarUndefined "~name(n.a)~" n"~to!string(nodes[n.b].data)~" QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct"; break;
-				case BindingRule.definedFixed:proof=".ofEq (fun ξ ρ => congrArg Binding.definedValue (fixed"~to!string(n.a)~" γ ξ ρ))"; break;
+				case BindingRule.definedFixed:proof=".ofEq (fun ξ ρ => congrArg Binding.definedValue (fixed"~to!string(n.a)~dimArg~" γ ξ ρ))"; break;
 				case BindingRule.fixedApp:
-					proof=".ofEq (fun ξ ρ => congrArg (fun f : Option ("~leanType(types[nodes[n.a].type])~" : Binding.Ty).denote => f.bind (fun g => ("~name(n.b)~".eval ξ ρ).bind g)) (unroll"~to!string(n.a)~" γ ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => congrArg (fun f : Option ("~leanType(types[nodes[n.a].type])~" : Binding.Ty).denote => f.bind (fun g => ("~name(n.b)~".eval ξ ρ).bind g)) (unroll"~to!string(n.a)~dimArg~" γ ξ ρ))"; break;
 				case BindingRule.fixedConstant:
 					proof=".ofEq (fun ξ ρ => Recursion.fixed_constant (fun x => "~name(nodes[p.to].a)~".eval ξ (ρ.cons (some x))))"; break;
 				case BindingRule.fixedIdentity:proof=".ofEq (fun _ _ => Recursion.fixed_identity)"; break;
@@ -805,8 +1074,7 @@ final class Bindings{
 				case BindingRule.subsetEmpty:proof=".subsetEmpty "~name(n.b); break;
 				case BindingRule.subsetUniv:proof=".subsetUniv "~name(n.a); break;
 				case BindingRule.subsetUnivEmpty,BindingRule.equalUnivEmpty,BindingRule.equalEmptyUniv:
-					auto ty=pool.view(types[nodes[n.a].type]).fields[0],v=pool.view(ty);
-					auto witness=v.kind==TypeKind.type_?"Binding.Ty.type":v.kind==TypeKind.function_?"(fun _ => none)":v.kind==TypeKind.set?"∅":v.kind==TypeKind.boolean?"false":"0";
+					auto ty=pool.view(types[nodes[n.a].type]).fields[0],witness=leanWitness(ty);
 					auto op=p.rule==BindingRule.subsetUnivEmpty?"subsetUnivEmpty":p.rule==BindingRule.equalUnivEmpty?"equalUnivEmpty":"equalEmptyUniv";
 					proof="."~op~" (a := "~leanType(ty)~") "~witness; break;
 				case BindingRule.definedMember,BindingRule.definedSubset,BindingRule.definedGuard,BindingRule.definedApp:
@@ -842,7 +1110,7 @@ final class Bindings{
 					proof~="n"~to!string(d.input.id)~" n"~to!string(d.result.output.id)~" QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct"; break;
 				case BindingRule.congr:
 					if(n.op==BoundOp.fixed){ auto ty=leanType(types[n.type]); proof=".unary (a := .arrow "~ty~" "~ty~") (b := "~ty~") Recursion.fixedValue (.lam "~proofName(p.left)~")"; break; }
-					auto generic=n.op==BoundOp.equal||n.op==BoundOp.typeEq||n.op==BoundOp.primitive||n.op==BoundOp.member||n.op==BoundOp.subset||n.op==BoundOp.domain||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.guard;
+					auto generic=n.op==BoundOp.equal||n.op==BoundOp.typeEq||n.op==BoundOp.primitive||n.op==BoundOp.member||n.op==BoundOp.subset||n.op==BoundOp.domain||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.guard||n.op==BoundOp.pair||n.op==BoundOp.vectorCons||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor;
 					auto op=generic?(n.b==uint.max?"unary":"binary"):
 						n.op==BoundOp.lambda?"lam":n.op==BoundOp.set?"set":n.op==BoundOp.apply?"app":"seq";
 					proof="."~op;
@@ -854,14 +1122,15 @@ final class Bindings{
 					proof~=" "~proofName(p.left);
 					if(p.right!=uint.max) proof~=" "~proofName(p.right); break;
 			}
-			code~="theorem p"~to!string(i)~" (γ : Binding.Globals) : Binding.Reduction "~name(p.from)~" "~name(p.to)~" := "~proof~"\n";
+			code~="theorem p"~to!string(i)~dimDecl~" (γ : Binding.Globals) : Binding.Reduction "~name(p.from)~" "~name(p.to)~" := "~proof~"\n";
 		}
-		code~="theorem reduction (γ : Binding.Globals) : Binding.Reduction "~name(result.input.id)~" "~name(result.output.id)~" := "~proofName(result.proof)~"\n";
-		string left=name(result.input.id)~".eval ξ ρ",right=name(result.output.id)~".eval ξ ρ";
-		code~="theorem sound (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env c"~to!string(node(result.input).context)~") : "~left~" = "~right~" := Binding.Reduction.sound (reduction γ) ξ ρ\n";
-		code~="theorem domain (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env c"~to!string(node(result.input).context)~") : Value.Defined ("~left~") ↔ Value.Defined ("~right~") := Binding.Reduction.defined (reduction γ) ξ ρ\n";
+		code~="theorem reduction"~dimDecl~" (γ : Binding.Globals) : Binding.Reduction "~name(result.input.id)~" "~name(result.output.id)~" := "~proofName(result.proof)~"\n";
+		string left=replace(name(result.input.id)," δ γ"," ξ.natural γ")~".eval ξ ρ",right=replace(name(result.output.id)," δ γ"," ξ.natural γ")~".eval ξ ρ";
+		auto ctx=replace(ctxName(node(result.input).context)," δ)"," ξ.natural)"),sizes=dependent_?" ξ.natural":"";
+		code~="theorem sound (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctx~") : "~left~" = "~right~" := Binding.Reduction.sound (reduction"~sizes~" γ) ξ ρ\n";
+		code~="theorem domain (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctx~") : Value.Defined ("~left~") ↔ Value.Defined ("~right~") := Binding.Reduction.defined (reduction"~sizes~" γ) ξ ρ\n";
 		if(lowerResult){
-			code~="theorem lowered (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env c0) : "~name(result.input.id)~".eval ξ ρ = n"~to!string(lowered.id)~".eval ξ := Eq.trans (sound γ ξ ρ) rfl\n";
+			code~="theorem lowered (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctx~") : "~left~" = n"~to!string(lowered.id)~".eval ξ := Eq.trans (sound γ ξ ρ) rfl\n";
 			code~="#qsym_check_axioms lowered\n";
 		}
 		return code~"#qsym_check_axioms sound\n#qsym_check_axioms domain\nend QSym.BindingCertificate\n";

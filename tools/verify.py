@@ -101,6 +101,7 @@ def main():
 	certificate(ROOT/"build/ReplRecursion.lean")
 	certificate(ROOT/"build/ReplHigherEquality.lean")
 	certificate(ROOT/"build/ReplRecurrenceSolver.lean")
+	certificate(ROOT/"build/ReplTensors.lean")
 	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
 	if len(refinements)!=32:
 		raise RuntimeError("expected 32 refinement certificates")
@@ -116,7 +117,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -205,6 +206,17 @@ def main():
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	for source,name,old,new in (
+		("cutoff/Function.lean","StrictCutoff","Functions.leN.apply","Functions.ltN.apply"),
+		("tensors/DotComplexDual.lean","WrongComplexDual","Value.mul Value.conj","Value.mul id")):
+		valid=(ROOT/"build"/source).read_text(); corrupt=valid.replace(old,new,1)
+		if corrupt==valid:
+			raise RuntimeError("tensor/cutoff rejection fixture did not change")
+		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	for name,body in (
+		("TensorIndexOutside","example : Tensor.getValue (some (fun _ : Fin 1 => (7 : ℕ))) (some 1) = some 7 := rfl"),
+		("UnknownDimensionsDiffer","example (n m : ℕ) : Binding.typeEqValue (some (.vector (.scalar .real) n)) (some (.vector (.scalar .real) m)) = some false := rfl")):
+		path=negative/(name+".lean"); path.write_text("import QSym.Tensor\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	valid=(ROOT/"build/recurrences/Add.lean").read_text()
 	wrong_base=re.sub(r"(Generated\.r_natural_recurrence_add_base )(\(n\d+\.eval ξ\)) (\(n\d+\.eval ξ\))",r"\1\3 \2",valid,count=1)
 	wrong_step=valid.replace("Generated.r_natural_recurrence_add_step","Generated.r_natural_recurrence_mul_step",1)

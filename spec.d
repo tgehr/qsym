@@ -13,6 +13,7 @@ import qsym.number:Rational,BigInt;
 final class TypePattern{
 	string name,binder;
 	Pattern predicate;
+	Pattern dimension;
 	TypePattern[] args;
 	this(string name,TypePattern[] args=[]){ this.name=name; this.args=args; }
 }
@@ -128,10 +129,16 @@ struct Parser{
 		}
 		enforce(token.text!="then"&&token.text!="else","unexpected conditional keyword");
 		if(take("(")){
+			if(take(")")) return pattern("$tuple",[]);
 			auto p=expression(depth+1);
+			if(take(",")){
+				auto q=pattern("$tuple",[p]);
+				if(!take(")")){ do{ q.args~=expression(depth+1); }while(take(",")&&token.text!=")"); expect(")"); }
+				return q;
+			}
 			if(take(":")){
 				auto q=pattern("$ascribe",[p]); q.annotation=typeExpression(depth+1);
-				if(!q.annotation.args.length) q.sort=parseSort(q.annotation.name); p=q;
+				if(!q.annotation.args.length&&q.annotation.name!="Type"&&q.annotation.name!="Unit") q.sort=parseSort(q.annotation.name); p=q;
 			}
 			expect(")"); return p;
 		}
@@ -202,13 +209,13 @@ struct Parser{
 				(token.kind==TokenKind.identifier||token.text=="("||token.text=="ⅈ");
 		}
 		auto implicit=adjacent(p);
-		while(token.text=="*"||token.text=="/"||implicit){
+		while(token.text=="*"||token.text=="×"||token.text=="@"||token.text=="/"||implicit){
 			auto op=implicit?"*":token.text;
 			if(!implicit) next();
 			auto q=factor(depth);
 			implicit=adjacent(q);
 			if(op=="/") q=pattern("$inv",[q]);
-			p=pattern("$mul",[p,q]);
+			p=pattern(op=="@"?"$matmul":op=="×"?"$times":"$mul",[p,q]);
 		}
 		return p;
 	}
@@ -266,7 +273,7 @@ struct Parser{
 		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text);
 		return parameters;
 	}
-	private TypePattern typeExpression(uint depth=0){
+	private TypePattern typeAtom(uint depth){
 		enforce(depth<128,"type nesting limit exceeded"); TypePattern t;
 		if(take("(")){ t=typeExpression(depth+1); expect(")"); }
 		else if(take("{")){
@@ -276,7 +283,23 @@ struct Parser{
 		else{
 			auto name=ident();
 			if(name=="Set"){ expect("("); t=new TypePattern("Set",[typeExpression(depth+1)]); expect(")"); }
-			else{ if(name!="Type") parseSort(name); t=new TypePattern(name); }
+			else{ if(name!="Type"&&name!="Unit") parseSort(name); t=new TypePattern(name); }
+		}
+		if(token.kind==TokenKind.power){
+			auto n=to!long(token.text); next(); enforce(n>=0,"negative vector dimension");
+			auto v=new TypePattern("vector",[t]); v.dimension=integerPattern(n); t=v;
+		}else if(take("^")){
+			auto v=new TypePattern("vector",[t]);
+			if(take("(")){ v.dimension=expression(depth+1); expect(")"); }
+			else v.dimension=primary(depth+1); t=v;
+		}
+		return t;
+	}
+	private TypePattern typeExpression(uint depth=0){
+		auto t=typeAtom(depth);
+		if(token.text=="*"||token.text=="×"){
+			auto product=new TypePattern("tuple",[t]);
+			while(take("*")||take("×")) product.args~=typeAtom(depth+1); t=product;
 		}
 		if(take("=>")||take("->")) t=new TypePattern("arrow",[t,typeExpression(depth+1)]);
 		return t;
@@ -448,6 +471,7 @@ private Sort literalSort(string name){
 private bool literalName(string name){ return ["nat","int","rat","real","complex"].canFind(name); }
 private uint possible(Pattern p,Parameter[] parameters,uint depth=0){
 	enforce(depth<128,"rule pattern nesting limit exceeded");
+	if(p.name=="$times") p.name="$mul";
 	foreach(v;parameters) if(p.name==v.name){
 		enforce(!p.args.length,"metavariables cannot be applied");
 		p.variable=true; p.natural=v.natural; return p.candidates=v.natural?naturalBit:bit(v.sort);
@@ -736,6 +760,7 @@ unittest{
 		"rule r(z:Complex):addC(addC(complex(0,0),complex(0,0)),z)=>z;");
 	same("rule r(x:ℝ,y:ℝ):x+y·1⇒x+y;",
 		"rule r(x:Real,y:Real):addR(x,mulR(y,real(1)))=>addR(x,y);");
+	same("rule r(x:ℝ):x×1⇒x;","rule r(x:Real):mulR(x,real(1))=>x;");
 	same("rule r(x:ℝ,y:ℝ):(x+y)*1=>x+y;",
 		"rule r(x:Real,y:Real):mulR(addR(x,y),real(1))=>addR(x,y);");
 	same("rule r(x:ℝ,y:ℝ):x/1/y⇒x/y;",

@@ -5,14 +5,20 @@ import QSym.Recursion
 namespace QSym.Binding
 
 inductive Ty where
+  | unit
   | scalar : QSym.Ty → Ty
+  | pair : Ty → Ty → Ty
+  | vector : Ty → ℕ → Ty
   | arrow : Ty → Ty → Ty
   | set : Ty → Ty
   | type
   deriving DecidableEq
 
 abbrev Ty.denote : Ty → Type
+  | .unit => Unit
   | .scalar s => s.denote
+  | .pair a b => a.denote × b.denote
+  | .vector a n => Fin n → a.denote
   | .arrow a b => a.denote → Option b.denote
   | .set a => Set a.denote
   | .type => Ty
