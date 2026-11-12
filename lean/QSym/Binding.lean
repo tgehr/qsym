@@ -79,6 +79,10 @@ theorem guard_branch {α : Type} (p : Option Bool) (x : Option α) :
 def typeEqValue (x y : Option Ty) : Option Bool :=
   x.bind (fun a => y.map (fun b => decide (a = b)))
 
+noncomputable def equalValue {α : Type} (x y : Option α) : Option Bool := by
+  classical
+  exact x.bind (fun a => y.map (fun b => decide (a = b)))
+
 abbrev Expr.defined (x : Expr Γ a) : Expr Γ (.scalar .bool) := .unary definedValue x
 abbrev Expr.holds (p : Expr Γ (.scalar .bool)) : Expr Γ (.scalar .bool) := .unary holdsValue p
 noncomputable abbrev Expr.domain (f : Expr Γ (.arrow a b)) : Expr Γ (.set a) := .unary inputDomain f
@@ -500,5 +504,40 @@ theorem Reduction.typeEqSelf (x : Expr Γ .type) :
     Reduction (.binary typeEqValue x x) (.seq x (.scalar (.bool true))) := .ofEq (by
   intro ξ ρ
   cases hx : x.eval ξ ρ <;> simp [Expr.eval, QSym.Expr.eval, typeEqValue, hx])
+
+theorem Reduction.equalSelf (x : Expr Γ a) :
+    Reduction (.binary equalValue x x) (.seq x (.scalar (.bool true))) := .ofEq (by
+  intro ξ ρ
+  cases hx : x.eval ξ ρ <;> simp [Expr.eval, QSym.Expr.eval, equalValue, hx])
+
+theorem Reduction.equalBottomLeft (x : Expr Γ a) :
+    Reduction (.binary (c := .scalar .bool) equalValue (.constant (a := a) none) x) (.constant none) := .ofEq (fun _ _ => rfl)
+
+theorem Reduction.equalBottomRight (x : Expr Γ a) :
+    Reduction (.binary (c := .scalar .bool) equalValue x (.constant (a := a) none)) (.constant none) := .ofEq (by
+  intro ξ ρ
+  cases hx : x.eval ξ ρ <;> simp [Expr.eval, equalValue, hx])
+
+theorem Reduction.definedEqual (x y : Expr Γ a) :
+    Reduction (.defined (.binary (c := .scalar .bool) equalValue x y)) (.binary Value.and (.defined x) (.defined y)) := .ofEq (by
+  intro ξ ρ
+  cases hx : x.eval ξ ρ <;> cases hy : y.eval ξ ρ <;>
+    simp [Expr.eval, equalValue, definedValue, Value.and, hx, hy])
+
+theorem Reduction.equalUnivEmpty (v : a.denote) :
+    Reduction (Γ := Γ)
+      (.binary equalValue (.set (a := a) (.scalar (.bool true))) (.set (.scalar (.bool false))))
+      (.scalar (.bool false)) := .ofEq (by
+  intro ξ ρ
+  letI : Nonempty a.denote := ⟨v⟩
+  simp [Expr.eval, QSym.Expr.eval, equalValue, Set.univ_nonempty.ne_empty])
+
+theorem Reduction.equalEmptyUniv (v : a.denote) :
+    Reduction (Γ := Γ)
+      (.binary equalValue (.set (a := a) (.scalar (.bool false))) (.set (.scalar (.bool true))))
+      (.scalar (.bool false)) := .ofEq (by
+  intro ξ ρ
+  letI : Nonempty a.denote := ⟨v⟩
+  simp [Expr.eval, QSym.Expr.eval, equalValue, Set.univ_nonempty.ne_empty.symm])
 
 end QSym.Binding

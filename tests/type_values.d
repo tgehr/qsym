@@ -17,11 +17,11 @@ private Case[] cases(){
 		Case("ComplexAliases","Complex=ℂ","true"),Case("SetAliases","Set(Real)=Set(ℝ)","true"),
 		Case("RealMember","1∈ℝ","true"),Case("TypeMember","ℝ∈Type","true"),
 		Case("TypeIdentity","(λ(T:Type).T)(Real)","ℝ"),
-		Case("TypeReturn","λ(n:ℕ).Real","λ(x:ℕ). ℝ"),
+		Case("TypeReturn","λ(n:ℕ).Real","λ(n:ℕ). ℝ"),
 		Case("AppliedTypeEqual","(λ(T:Type).T)(ℝ)=Real","true"),
 		Case("CapturedType","(λ(T:Type).λ(n:ℕ).T)(ℝ)(2)","ℝ"),
-		Case("UnicodeAnnotation","λ(t:ℝ).(0:ℝ)","λ(x:ℝ). (0:ℝ)"),
-		Case("AsciiAnnotation","λ(t:Real).(0:Real)","λ(x:ℝ). (0:ℝ)"),
+		Case("UnicodeAnnotation","λ(t:ℝ).(0:ℝ)","λ(t:ℝ). (0:ℝ)"),
+		Case("AsciiAnnotation","λ(t:Real).(0:Real)","λ(t:ℝ). (0:ℝ)"),
 		Case("TypeDefined","defined(Real)","true"),
 		Case("TypeUniverseNonempty","{T:Type|true}⊆{T:Type|false}","false")
 	];

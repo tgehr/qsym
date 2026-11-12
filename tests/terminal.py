@@ -186,3 +186,11 @@ with Terminal() as t:
 	t.submit(r"(\mu(f:Nat→Nat).\lambda(n:Nat).if n=0 then 1 else f(n sub 1))(2)","1")
 	t.finish()
 print("Type and fixed-point input-method checks passed.")
+
+with Terminal() as t:
+	t.until(ready)
+	t.submit(":vars p:ℕ→𝔹,q:ℕ→𝔹",None)
+	t.submit("{x:ℕ|p(x)}={y:ℕ|p(y)}","true")
+	t.submit(r"\lambda(n:Nat).n","λ(n:ℕ). n")
+	t.finish()
+print("Equality and binder-name terminal checks passed.")

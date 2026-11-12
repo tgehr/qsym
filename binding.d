@@ -23,16 +23,18 @@ struct BoundTerm{
 	@property uint id()const{ return index; }
 	bool opEquals(BoundTerm rhs)const{ return owner is rhs.owner&&index==rhs.index; }
 }
-enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed }
+enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal }
 struct BoundNode{
 	BoundOp op;
 	uint context,type,a=uint.max,b=uint.max,data;
 }
+struct BinderHint{ string name,refinement; }
 private enum BindingRule:ubyte{
 	refl,congr,beta,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
-	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain
+	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
@@ -56,6 +58,8 @@ final class Bindings{
 	private Table!(ContextKey,uint) contextIds;
 	private BoundNode[] nodes;
 	private Table!(BoundNode,uint) nodeIds;
+	private Table!(uint,uint) binderHints;
+	private BinderHint[] hints;
 	this(Arena arena,TypePool pool=null){
 		enforce(arena !is null,"scalar arena required");
 		this.arena=arena; this.pool=pool is null?new TypePool:pool;
@@ -94,6 +98,16 @@ final class Bindings{
 		contextIds.set(key,id); return Scope(this,id);
 	}
 	BoundNode node(BoundTerm t){ check(t); return nodes[t.id]; }
+	BinderHint binderHint(BoundTerm t){ check(t); auto i=binderHints.get(t.id,uint.max); return i==uint.max?BinderHint.init:hints[i]; }
+	BoundTerm hint(BoundTerm t,string name,string refinement=""){
+		auto op=node(t).op; enforce(op==BoundOp.lambda||op==BoundOp.set||op==BoundOp.fixed,"binder hint requires a binder");
+		if(!binderHint(t).name.length){ binderHints.set(t.id,cast(uint)hints.length); hints~=BinderHint(name,refinement); }
+		return t;
+	}
+	private BoundTerm inheritHint(BoundTerm from,BoundTerm to){
+		auto h=binderHint(from); if(h.name.length) hint(to,h.name,h.refinement);
+		return to;
+	}
 	TypeId type(BoundTerm t){ return types[node(t).type]; }
 	Scope context(BoundTerm t){ return Scope(this,node(t).context); }
 	BoundTerm at(uint id){ enforce(id<nodes.length,"invalid binding index"); return BoundTerm(this,id); }
@@ -113,6 +127,10 @@ final class Bindings{
 	BoundTerm typeEq(BoundTerm x,BoundTerm y){
 		enforce(type(x)==pool.primitive(TypeKind.type_)&&type(y)==type(x)&&context(x)==context(y),"type equality requires types");
 		return intern(BoundNode(BoundOp.typeEq,node(x).context,typeId(scalarType(Sort.boolean)),x.id,y.id));
+	}
+	BoundTerm equal(BoundTerm x,BoundTerm y){
+		enforce(type(x)==type(y)&&context(x)==context(y),"equality requires matching types");
+		return intern(BoundNode(BoundOp.equal,node(x).context,typeId(scalarType(Sort.boolean)),x.id,y.id));
 	}
 	BoundTerm bottom(Scope s,TypeId t){ check(s); return intern(BoundNode(BoundOp.bottom,s.index,typeId(t))); }
 	private bool depends(BoundTerm t,uint index){
@@ -219,14 +237,15 @@ final class Bindings{
 			case BoundOp.global:return global(target,types[n.type],n.data);
 			case BoundOp.variable:assert(0,"variable requires substitution");
 			case BoundOp.primitive:return primitive(arena.at(n.data),args);
-			case BoundOp.lambda:return lambda(args[0]);
-			case BoundOp.set:return set(args[0]);
+			case BoundOp.lambda:return inheritHint(t,lambda(args[0]));
+			case BoundOp.set:return inheritHint(t,set(args[0]));
 			case BoundOp.member:return member(args[0],args[1]);
 			case BoundOp.subset:return subset(args[0],args[1]);
 			case BoundOp.typeEq:return typeEq(args[0],args[1]);
+			case BoundOp.equal:return equal(args[0],args[1]);
 			case BoundOp.typeValue:return typeValue(target,types[n.data]);
 			case BoundOp.bottom:return bottom(target,types[n.type]);
-			case BoundOp.fixed:return fixed(args[0]);
+			case BoundOp.fixed:return inheritHint(t,fixed(args[0]));
 			case BoundOp.domain:return domain(args[0]);
 			case BoundOp.defined:return defined(args[0]);
 			case BoundOp.holds:return holds(args[0]);
@@ -249,7 +268,7 @@ final class Bindings{
 			else if(n.op==BoundOp.lambda||n.op==BoundOp.set||n.op==BoundOp.fixed){
 				uint[] lifted=[0]; foreach(index;indices) lifted~=index+1;
 				auto body=rename(at(n.a),push(target,types[contexts[nodes[n.a].context].type]),lifted);
-				result=n.op==BoundOp.lambda?lambda(body):n.op==BoundOp.set?set(body):fixed(body);
+				result=inheritHint(t,n.op==BoundOp.lambda?lambda(body):n.op==BoundOp.set?set(body):fixed(body));
 			}else{
 				BoundTerm[] children;
 				if(n.a!=uint.max) children~=visit(at(n.a));
@@ -276,7 +295,7 @@ final class Bindings{
 				BoundTerm[] lifted=[variable(inner,0)]; uint[] indices;
 				foreach(i;0..contexts[target.index].length) indices~=i+1;
 				foreach(value;values) lifted~=rename(value,inner,indices);
-				auto body=substitute(at(n.a),inner,lifted); result=n.op==BoundOp.lambda?lambda(body):n.op==BoundOp.set?set(body):fixed(body);
+				auto body=substitute(at(n.a),inner,lifted); result=inheritHint(t,n.op==BoundOp.lambda?lambda(body):n.op==BoundOp.set?set(body):fixed(body));
 			}else{
 				BoundTerm[] children;
 				if(n.a!=uint.max) children~=visit(at(n.a));
@@ -366,7 +385,7 @@ final class Bindings{
 				return BoundTerm.init;
 			}
 			auto output=rewrite(body,[]);
-			return output==BoundTerm.init?output:node(binder).op==BoundOp.lambda?lambda(output):set(output);
+			return output==BoundTerm.init?output:inheritHint(binder,node(binder).op==BoundOp.lambda?lambda(output):set(output));
 		}
 		Result visit(BoundTerm t,uint depth){
 			enforce(depth<512,"binding normalization depth exceeded");
@@ -436,11 +455,13 @@ final class Bindings{
 					}else{
 						auto b=node(at(node(body).a));
 						if(b.op==BoundOp.apply&&nodes[b.a].op==BoundOp.variable&&nodes[b.a].data==1&&nodes[b.b].op==BoundOp.variable&&nodes[b.b].data==0){
-							next=lambda(bottom(inner,v.fields[1])); rule=BindingRule.fixedIdentity;
+							next=inheritHint(body,lambda(bottom(inner,v.fields[1]))); rule=BindingRule.fixedIdentity;
 						}
 					}
 				}else if(current.op==BoundOp.guard&&isTrue(current.a,false)){
 					next=bottom(ctx,type(at(current.b))); rule=BindingRule.shortCircuit;
+				}else if(current.op==BoundOp.primitive&&nodes[current.a].op==BoundOp.bottom&&arena.view(arena.at(current.data)).op==Op.not_){
+					next=bottom(ctx,scalarType(Sort.boolean)); rule=BindingRule.shortCircuit;
 				}else if(current.op==BoundOp.primitive&&nodes[current.a].op==BoundOp.scalar){
 					auto op=arena.view(arena.at(current.data)).op;
 					if(isTrue(current.a,false)&&(op==Op.mask||op==Op.and_)){
@@ -471,7 +492,7 @@ final class Bindings{
 						Term[] args=[arena.at(nodes[current.a].data)]; if(current.b!=uint.max) args~=arena.at(nodes[current.b].data);
 						next=scalar(ctx,arena.viewRebuild(arena.at(current.data),args,true)); rule=BindingRule.fold;
 					}else if(current.op==BoundOp.domain&&nodes[current.a].op==BoundOp.lambda){
-						next=set(defined(at(nodes[current.a].a))); rule=BindingRule.domainLam;
+						next=inheritHint(at(current.a),set(defined(at(nodes[current.a].a)))); rule=BindingRule.domainLam;
 					}else if(current.op==BoundOp.domain&&nodes[current.a].op==BoundOp.bottom){
 						next=set(scalar(push(ctx,pool.view(types[current.type]).fields[0]),arena.boolean(false))); rule=BindingRule.domainBottom;
 					}else if(current.op==BoundOp.domain&&nodes[current.a].op==BoundOp.guard&&isTrue(nodes[current.a].a,false)){
@@ -481,6 +502,12 @@ final class Bindings{
 						else if(nodes[current.a].op==BoundOp.typeValue&&nodes[current.b].op==BoundOp.typeValue){
 							next=scalar(ctx,arena.boolean(nodes[current.a].data==nodes[current.b].data)); rule=BindingRule.typeEqValues;
 						}
+					}else if(current.op==BoundOp.equal){
+						if(nodes[current.a].op==BoundOp.bottom){ next=bottom(ctx,scalarType(Sort.boolean)); rule=BindingRule.equalBottomLeft; }
+						else if(nodes[current.b].op==BoundOp.bottom){ next=bottom(ctx,scalarType(Sort.boolean)); rule=BindingRule.equalBottomRight; }
+						else if(current.a==current.b){ next=sequence(at(current.a),scalar(ctx,arena.boolean(true))); rule=BindingRule.equalSelf; }
+						else if(constantSet(current.a,true)&&constantSet(current.b,false)){ next=scalar(ctx,arena.boolean(false)); rule=BindingRule.equalUnivEmpty; }
+						else if(constantSet(current.a,false)&&constantSet(current.b,true)){ next=scalar(ctx,arena.boolean(false)); rule=BindingRule.equalEmptyUniv; }
 					}else if(current.op==BoundOp.subset){
 						if(current.a==current.b){ next=sequence(at(current.a),scalar(ctx,arena.boolean(true))); rule=BindingRule.subsetRefl; }
 						else if(constantSet(current.a,false)){ next=sequence(at(current.b),scalar(ctx,arena.boolean(true))); rule=BindingRule.subsetEmpty; }
@@ -507,8 +534,8 @@ final class Bindings{
 							next=scalar(ctx,arena.boolean(false)); rule=BindingRule.definedGuardFalse;
 						}else if(child.op==BoundOp.guard){
 							next=both(holds(at(child.a)),defined(at(child.b))); rule=BindingRule.definedGuard;
-						}else if(child.op==BoundOp.member||child.op==BoundOp.subset){
-							next=both(defined(at(child.a)),defined(at(child.b))); rule=child.op==BoundOp.member?BindingRule.definedMember:BindingRule.definedSubset;
+						}else if(child.op==BoundOp.member||child.op==BoundOp.subset||child.op==BoundOp.equal){
+							next=both(defined(at(child.a)),defined(at(child.b))); rule=child.op==BoundOp.member?BindingRule.definedMember:child.op==BoundOp.subset?BindingRule.definedSubset:BindingRule.definedEqual;
 						}else if(child.op==BoundOp.primitive&&arena.view(arena.at(child.data)).op==Op.not_){
 							next=defined(at(child.a)); rule=BindingRule.definedNot;
 						}else if(child.op==BoundOp.apply){
@@ -532,6 +559,7 @@ final class Bindings{
 			}
 			if(next!=BoundTerm.init&&steps>=budget){ next=BoundTerm.init; exhausted=true; }
 			if(next!=BoundTerm.init){
+				if(node(next).op==current.op&&(current.op==BoundOp.lambda||current.op==BoundOp.set||current.op==BoundOp.fixed)) inheritHint(at(result.output),next);
 				++steps; auto step=emit(rule,result.output,next.id,uint.max,uint.max,extra),tail=visit(next,depth+1);
 				auto rest=emit(BindingRule.trans,result.output,tail.output,step,tail.proof);
 				result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,result.proof,rest));
@@ -564,6 +592,7 @@ final class Bindings{
 			case BoundOp.member:return "Binding.memberValue";
 			case BoundOp.subset:return "Binding.subsetValue";
 			case BoundOp.typeEq:return "Binding.typeEqValue";
+			case BoundOp.equal:return "Binding.equalValue";
 			case BoundOp.domain:return "Binding.inputDomain";
 			case BoundOp.defined:return "Binding.definedValue";
 			case BoundOp.holds:return "Binding.holdsValue";
@@ -622,7 +651,7 @@ final class Bindings{
 				case BoundOp.variable:
 					expr=".here"; foreach(j;0..n.data) expr="(.there "~expr~")";
 					expr=".var "~expr; break;
-				case BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq:
+				case BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal:
 					expr="."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~name(n.a);
 					if(n.b!=uint.max) expr~=" "~name(n.b); break;
 				case BoundOp.lambda:expr=".lam "~name(n.a); break;
@@ -712,16 +741,21 @@ final class Bindings{
 				case BindingRule.holdsGuard:proof=".holdsGuard "~name(nodes[n.a].a)~" "~name(nodes[n.a].b); break;
 				case BindingRule.setHolds:proof=".setHolds "~name(n.a); break;
 				case BindingRule.typeEqSelf:proof=".typeEqSelf "~name(n.a); break;
+				case BindingRule.equalSelf:proof=".equalSelf "~name(n.a); break;
+				case BindingRule.equalBottomLeft:proof=".equalBottomLeft "~name(n.b); break;
+				case BindingRule.equalBottomRight:proof=".equalBottomRight "~name(n.a); break;
+				case BindingRule.definedEqual:proof=".definedEqual "~name(nodes[n.a].a)~" "~name(nodes[n.a].b); break;
 				case BindingRule.typeEqValues:proof=".ofEq (fun _ _ => rfl)"; break;
 				case BindingRule.definedGuardFalse:proof=".definedGuardFalse "~name(nodes[n.a].b); break;
 				case BindingRule.definedTotal:proof=".ofEq (fun _ _ => rfl)"; break;
 				case BindingRule.subsetRefl:proof=".subsetRefl "~name(n.a); break;
 				case BindingRule.subsetEmpty:proof=".subsetEmpty "~name(n.b); break;
 				case BindingRule.subsetUniv:proof=".subsetUniv "~name(n.a); break;
-				case BindingRule.subsetUnivEmpty:
+				case BindingRule.subsetUnivEmpty,BindingRule.equalUnivEmpty,BindingRule.equalEmptyUniv:
 					auto ty=pool.view(types[nodes[n.a].type]).fields[0],v=pool.view(ty);
 					auto witness=v.kind==TypeKind.type_?"Binding.Ty.type":v.kind==TypeKind.function_?"(fun _ => none)":v.kind==TypeKind.set?"∅":v.kind==TypeKind.boolean?"false":"0";
-					proof=".subsetUnivEmpty (a := "~leanType(ty)~") "~witness; break;
+					auto op=p.rule==BindingRule.subsetUnivEmpty?"subsetUnivEmpty":p.rule==BindingRule.equalUnivEmpty?"equalUnivEmpty":"equalEmptyUniv";
+					proof="."~op~" (a := "~leanType(ty)~") "~witness; break;
 				case BindingRule.definedMember,BindingRule.definedSubset,BindingRule.definedGuard,BindingRule.definedApp:
 					auto op=p.rule==BindingRule.definedMember?"definedMember":p.rule==BindingRule.definedSubset?"definedSubset":p.rule==BindingRule.definedGuard?"definedGuard":"definedApp";
 					proof="."~op~" "~name(nodes[n.a].a)~" "~name(nodes[n.a].b); break;
@@ -755,7 +789,7 @@ final class Bindings{
 					proof~="n"~to!string(d.input.id)~" n"~to!string(d.result.output.id)~" QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct"; break;
 				case BindingRule.congr:
 					if(n.op==BoundOp.fixed){ auto ty=leanType(types[n.type]); proof=".unary (a := .arrow "~ty~" "~ty~") (b := "~ty~") Recursion.fixedValue (.lam "~proofName(p.left)~")"; break; }
-					auto generic=n.op==BoundOp.typeEq||n.op==BoundOp.primitive||n.op==BoundOp.member||n.op==BoundOp.subset||n.op==BoundOp.domain||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.guard;
+					auto generic=n.op==BoundOp.equal||n.op==BoundOp.typeEq||n.op==BoundOp.primitive||n.op==BoundOp.member||n.op==BoundOp.subset||n.op==BoundOp.domain||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.guard;
 					auto op=generic?(n.b==uint.max?"unary":"binary"):
 						n.op==BoundOp.lambda?"lam":n.op==BoundOp.set?"set":n.op==BoundOp.apply?"app":"seq";
 					proof="."~op;

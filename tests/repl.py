@@ -158,7 +158,7 @@ print("Function and subset REPL checks passed.")
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	":vars f:ℕ→ℕ",":assume f=0","domain(f)",":facts",":quit",""]),text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and result.stdout.splitlines()==["domain(f)"],result.stdout
-assert "scalar operation received a function or set" in result.stderr,result.stderr
+assert "expected a function or set expression" in result.stderr,result.stderr
 subset_certificate=root/"build/ReplSubsets.lean"
 subset_snapshot=root/"build/ReplSubsetSnapshot.lean"
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
@@ -180,7 +180,20 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	"domain(μ(f:ℕ→ℕ).f)","defined(μ(f:ℕ→ℕ).λ(n:ℕ).f(n+1))",":quit",""]),
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
-assert result.stdout.splitlines()==["ℝ","ℝ","true",f"Wrote {type_certificate}","false","λ(x:ℝ). (0:ℝ)",
+assert result.stdout.splitlines()==["ℝ","ℝ","true",f"Wrote {type_certificate}","false","λ(t:ℝ). (0:ℝ)",
 	"5",f"Wrote {recursion_certificate}","{x:ℕ | false}","true"],result.stdout
 assert "Recursion.program_unfold" in recursion_certificate.read_text()
 print("Type value and recursion REPL checks passed.")
+equality_certificate=root/"build/ReplHigherEquality.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars p:ℕ→𝔹,q:ℕ→𝔹","{x:ℕ|p(x)}={x:ℕ|q(x)}",f":lean {equality_certificate}",
+	"{x:ℕ|p(x)}={y:ℕ|p(y)}","p=p","{x:ℕ|false}={x:ℕ|true}",
+	"μ(f:ℕ→ℕ).λ(n:ℕ).if n≤1 then n else f(n sub 1)+f(n sub 2)",
+	"(λ(x:ℝ).λ(y:ℝ).x)(y)","λ(t:ℝ).0/(2*t-1)",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["({x:ℕ | p(x)}={x:ℕ | q(x)})",f"Wrote {equality_certificate}","true","true","false",
+	"μ(f:ℕ→ℕ). λ(n:ℕ). ([n≤1]·n+[¬(n≤1)]·(f(n sub 1)+f(n sub 2)):ℕ)",
+	"λ(y1:ℝ). y","λ(t:{t:ℝ | t≠1/2}). (0:ℝ)"],result.stdout
+assert "Binding.equalValue" in equality_certificate.read_text()
+print("Higher-order equality and binder-name REPL checks passed.")

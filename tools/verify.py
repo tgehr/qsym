@@ -99,6 +99,7 @@ def main():
 	certificate(ROOT/"build/ReplSubsetSnapshot.lean")
 	certificate(ROOT/"build/ReplTypes.lean")
 	certificate(ROOT/"build/ReplRecursion.lean")
+	certificate(ROOT/"build/ReplHigherEquality.lean")
 	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
 	if len(refinements)!=32:
 		raise RuntimeError("expected 32 refinement certificates")
@@ -114,6 +115,12 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
+	for group,count in [("higher-equality",32),("binder-names",18)]:
+		files=sorted((ROOT/"build"/group).glob("*.lean"))
+		if len(files)!=count:
+			raise RuntimeError(f"expected {count} {group} certificates")
+		for file in files:
+			certificate(file)
 	subsets=sorted((ROOT/"build/subsets").glob("*.lean"))
 	if len(subsets)!=34:
 		raise RuntimeError("expected 34 subset certificates")
@@ -199,6 +206,8 @@ def main():
 	negative.mkdir(exist_ok=True)
 	for name,body in (
 		("UndefinedSubsetSelf","example (s : Binding.Expr [] (.set (.scalar .real))) : Binding.Reduction (.subset s s) (.scalar (.bool true)) := .subsetRefl s"),
+		("UndefinedEqualitySelf","example (s : Binding.Expr [] (.set (.scalar .real))) : Binding.Reduction (.binary Binding.equalValue s s) (.scalar (.bool true)) := .equalSelf s"),
+		("UniversalEqualityEmpty","example : Binding.Reduction (Γ := []) (.binary Binding.equalValue (.set (a := .scalar .natural) (.scalar (.bool true))) (.set (.scalar (.bool false)))) (.scalar (.bool true)) := .equalUnivEmpty 0"),
 		("DroppedLambdaRestriction","example : Binding.Reduction (Γ := []) (.lam (.guard (.scalar (.bool false)) (.var (.here : Binding.Var [.scalar .real] (.scalar .real))))) (.lam (.var .here)) := .lamPointwise (fun _ _ _ => rfl)")):
 		path=negative/(name+".lean")
 		path.write_text("import QSym.Binding\nopen QSym\n"+body+"\n")

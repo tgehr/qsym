@@ -113,6 +113,10 @@ test: build/qsym
 	./build/type-value-tests --DRT-testmode=run-main build/type-values
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/recursion.d -of=build/recursion-tests
 	./build/recursion-tests --DRT-testmode=run-main build/recursion
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/higher_equality.d -of=build/higher-equality-tests
+	./build/higher-equality-tests --DRT-testmode=run-main build/higher-equality
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/binder_names.d -of=build/binder-name-tests
+	./build/binder-name-tests --DRT-testmode=run-main build/binder-names
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

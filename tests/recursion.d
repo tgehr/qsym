@@ -10,9 +10,9 @@ private struct Case{ string name,source,expected,variables; bool domain; }
 private Case[] cases(){
 	return [
 		Case("Constant","(μ(f:ℕ→ℕ).λ(n:ℕ).7)(2)","7"),
-		Case("ConstantDomain","domain(μ(f:ℕ→ℕ).λ(n:ℕ).7)","{x:ℕ | true}"),
+		Case("ConstantDomain","domain(μ(f:ℕ→ℕ).λ(n:ℕ).7)","{n:ℕ | true}"),
 		Case("Identity","μ(f:ℕ→ℕ).f","λ(x:ℕ). undefined(ℕ)"),
-		Case("IdentityEta","μ(f:ℕ→ℕ).λ(n:ℕ).f(n)","λ(x:ℕ). undefined(ℕ)"),
+		Case("IdentityEta","μ(f:ℕ→ℕ).λ(n:ℕ).f(n)","λ(n:ℕ). undefined(ℕ)"),
 		Case("IdentityCall","(μ(f:ℕ→ℕ).f)(2)","undefined(ℕ)"),
 		Case("IdentityDomain","domain(μ(f:ℕ→ℕ).f)","{x:ℕ | false}"),
 		Case("IdentityMember","0∈domain(μ(f:ℕ→ℕ).f)","false"),

@@ -170,7 +170,7 @@ struct FunctionSyntax{
 					foreach(i;0..b.depth(inner)) indices~=i+1;
 					body=b.lambda(b.apply(b.rename(body,arg,indices),b.variable(arg,0)));
 				}
-				return finish(b.fixed(body));
+				return finish(b.hint(b.fixed(body),p.binder));
 			}
 			if(typeAlias(p.name)){
 				enforce(!p.called,"a type name is not a function"); return finish(b.typeValue(ctx,type(new TypePattern(p.name))));
@@ -179,11 +179,14 @@ struct FunctionSyntax{
 				enforce(p.args.length==1,"Set requires one type");
 				return finish(b.typeValue(ctx,pool.set(b.typeDenoted(build(p.args[0],ctx,locals)))));
 			}
-			if(p.name=="$different"){
-				auto left=build(p.args[0],ctx,locals);
-				if(pool.view(b.type(left)).kind==TypeKind.type_){
-					auto right=build(p.args[1],ctx,locals,b.type(left));
-					return finish(b.primitive(a.not_(a.boolean(false)),[b.typeEq(left,right)]));
+			bool positive=p.name=="not"&&p.args.length==1&&p.args[0].name=="$different";
+			auto comparison=positive?p.args[0]:p;
+			if(comparison.name=="$different"){
+				auto left=build(comparison.args[0],ctx,locals,TypeId.init,depth+1),kind=pool.view(b.type(left)).kind;
+				if(kind==TypeKind.type_||kind==TypeKind.function_||kind==TypeKind.set){
+					auto right=build(comparison.args[1],ctx,locals,b.type(left),depth+1);
+					auto eq=kind==TypeKind.type_?b.typeEq(left,right):b.equal(left,right);
+					return finish(positive?eq:b.primitive(a.not_(a.boolean(false)),[eq]));
 				}
 			}
 			if(p.name=="$lambda"||p.name=="$set"){
@@ -194,14 +197,15 @@ struct FunctionSyntax{
 						body=b.guard(build(ty.predicate,inner,[ty.binder]~locals,scalarType(Sort.boolean),depth+1),body);
 					return body;
 				}
-				if(p.name=="$set") return finish(b.set(restrict(build(p.args[0],inner,names,scalarType(Sort.boolean),depth+1))));
+				auto refinement=p.annotation.name=="$subset"?p.annotation.binder:"";
+				if(p.name=="$set") return finish(b.hint(b.set(restrict(build(p.args[0],inner,names,scalarType(Sort.boolean),depth+1))),p.binder));
 				TypeId resultType;
 				if(expected!=TypeId.init){
 					auto v=pool.view(expected); enforce(v.kind==TypeKind.function_&&v.fields[0]==param,"lambda parameter type mismatch"); resultType=v.fields[1];
 				}
 				auto body=build(p.args[$-1],inner,names,resultType,depth+1);
 				if(p.args.length==2) body=b.guard(build(p.args[0],inner,names,scalarType(Sort.boolean),depth+1),body);
-				return finish(b.lambda(restrict(body)));
+				return finish(b.hint(b.lambda(restrict(body)),p.binder,refinement));
 			}
 			if(p.name=="$ascribe"&&p.annotation !is null){
 				return finish(build(p.args[0],ctx,locals,type(p.annotation),depth+1));
@@ -299,14 +303,24 @@ struct FunctionSyntax{
 	string format(Arena a,FunctionResult result){
 		if(result.scalarOnly||result.lowered) return scalar.format(a,result.scalar.output);
 		auto b=result.bindings;
-		string fresh(string[] locals){
-			string name="x"; uint index;
+		Table!(string,bool) free;
+		Table!(uint,bool) seen;
+		void collectFree(BoundTerm t){
+			if(seen.get(t.id,false)) return; seen.set(t.id,true); auto n=b.node(t);
+			if(n.op==BoundOp.global) free.set(functions[n.data].name,true);
+			if(n.op==BoundOp.scalar) foreach(id;a.viewPostorder(a.at(n.data))){
+				auto v=a.view(a.at(id)); if(v.op==Op.variable&&v.value<scalar.variables.length) free.set(scalar.variables[v.value].name,true);
+			}
+			if(n.a!=uint.max) collectFree(b.at(n.a)); if(n.b!=uint.max) collectFree(b.at(n.b));
+		}
+		collectFree(result.reduction.output);
+		string fresh(string[] locals,string preferred=""){
+			if(!preferred.length) preferred="x";
+			string name=preferred; uint index;
 			for(;;){
-				bool used;
-				foreach(v;scalar.variables) if(v.name==name) used=true;
-				foreach(f;functions) if(f.name==name) used=true;
+				bool used=free.get(name,false);
 				foreach(v;locals) if(v==name) used=true;
-				if(!used) return name; name="x"~to!string(++index);
+				if(!used) return name; name=preferred~to!string(++index);
 			}
 		}
 		string render(BoundTerm t,string[] locals,uint depth=0) @safe{
@@ -315,12 +329,12 @@ struct FunctionSyntax{
 			string child(uint id){ return render(b.at(id),locals,depth+1); }
 			switch(n.op){
 				case BoundOp.fixed:
-					auto name=fresh(locals); return "μ("~name~":"~typeName(b.type(t))~"). "~render(b.at(n.a),[name]~locals,depth+1);
+					auto name=fresh(locals,b.binderHint(t).name); return "μ("~name~":"~typeName(b.type(t))~"). "~render(b.at(n.a),[name]~locals,depth+1);
 				case BoundOp.bottom:return "undefined("~typeName(b.type(t))~")";
 				case BoundOp.lambda,BoundOp.set:
-					auto name=fresh(locals),param=typeName(pool.view(b.type(t)).fields[0]),bodyTerm=b.at(n.a),v=b.node(bodyTerm);
+					auto h=b.binderHint(t),name=fresh(locals,h.name),param=typeName(pool.view(b.type(t)).fields[0]),bodyTerm=b.at(n.a),v=b.node(bodyTerm);
 					if(n.op==BoundOp.lambda&&v.op==BoundOp.guard){
-						auto bound=fresh([name]~locals);
+						auto bound=fresh(locals,h.refinement.length?h.refinement:name);
 						param="{"~bound~":"~param~" | "~render(b.at(v.a),[bound]~locals,depth+1)~"}"; bodyTerm=b.at(v.b);
 					}
 					auto body=render(bodyTerm,[name]~locals,depth+1);
@@ -328,7 +342,11 @@ struct FunctionSyntax{
 				case BoundOp.global:return functions[n.data].name;
 				case BoundOp.typeValue:return typeName(b.typeDenoted(t));
 				case BoundOp.typeEq:return "("~child(n.a)~"="~child(n.b)~")";
-				case BoundOp.apply:return "("~child(n.a)~")("~child(n.b)~")";
+				case BoundOp.equal:
+					string operand(uint id){ auto op=b.node(b.at(id)).op; return op==BoundOp.lambda||op==BoundOp.fixed?"("~child(id)~")":child(id); }
+					return "("~operand(n.a)~"="~operand(n.b)~")";
+				case BoundOp.apply:
+					auto f=b.node(b.at(n.a)); return (f.op==BoundOp.variable||f.op==BoundOp.global?child(n.a):"("~child(n.a)~")")~"("~child(n.b)~")";
 				case BoundOp.sequence:return "seq("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.subset:return "("~child(n.a)~"⊆"~child(n.b)~")";
 				case BoundOp.member:return "("~child(n.b)~"∈"~child(n.a)~")";
@@ -351,7 +369,7 @@ struct FunctionSyntax{
 					r=a.viewRebuild(a.at(v.data),args,true);
 				}else{
 					Sort sort; enforce(scalarSort(b.type(x),sort),"non-scalar primitive argument");
-					auto name=v.op==BoundOp.variable?locals[v.data]:"("~render(x,locals,depth+1)~")";
+					auto name=v.op==BoundOp.variable?locals[v.data]:v.op==BoundOp.apply?render(x,locals,depth+1):"("~render(x,locals,depth+1)~")";
 					r=a.variable(sort,cast(uint)printer.variables.length); printer.variables~=Parameter(name,sort);
 				}
 				memo.set(x.id,r.id); return r;
