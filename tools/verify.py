@@ -100,6 +100,7 @@ def main():
 	certificate(ROOT/"build/ReplTypes.lean")
 	certificate(ROOT/"build/ReplRecursion.lean")
 	certificate(ROOT/"build/ReplHigherEquality.lean")
+	certificate(ROOT/"build/ReplRecurrenceSolver.lean")
 	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
 	if len(refinements)!=32:
 		raise RuntimeError("expected 32 refinement certificates")
@@ -115,7 +116,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -136,7 +137,7 @@ def main():
 		raise RuntimeError("expected 28 binding certificates")
 	for file in bindings:
 		certificate(file)
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",605),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -170,8 +171,8 @@ def main():
 		certificate(file)
 
 	discrete=sorted((ROOT/"build/discrete").glob("*.lean"))
-	if len(discrete)!=304:
-		raise RuntimeError("expected 304 discrete scalar certificates")
+	if len(discrete)!=659:
+		raise RuntimeError("expected 659 discrete scalar certificates")
 	for file in discrete:
 		certificate(file)
 
@@ -204,6 +205,13 @@ def main():
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	valid=(ROOT/"build/recurrences/Add.lean").read_text()
+	wrong_base=re.sub(r"(Generated\.r_natural_recurrence_add_base )(\(n\d+\.eval ξ\)) (\(n\d+\.eval ξ\))",r"\1\3 \2",valid,count=1)
+	wrong_step=valid.replace("Generated.r_natural_recurrence_add_step","Generated.r_natural_recurrence_mul_step",1)
+	for name,corrupt in (("WrongRecurrenceBase",wrong_base),("WrongRecurrenceStep",wrong_step)):
+		if corrupt==valid:
+			raise RuntimeError("recurrence rejection fixture did not change")
+		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
 	for name,body in (
 		("UndefinedSubsetSelf","example (s : Binding.Expr [] (.set (.scalar .real))) : Binding.Reduction (.subset s s) (.scalar (.bool true)) := .subsetRefl s"),
 		("UndefinedEqualitySelf","example (s : Binding.Expr [] (.set (.scalar .real))) : Binding.Reduction (.binary Binding.equalValue s s) (.scalar (.bool true)) := .equalSelf s"),
@@ -336,6 +344,9 @@ def main():
 		("BadPartitionGuard","rewrite bad(p:𝔹,x:ℝ,y:ℝ):sin([p]*x+[¬p]*y)⇒[p]*sin(x)+[p]*sin(y);"),
 		("BadPartitionLogDomain","rewrite bad(p:𝔹,x:ℝ,y:ℝ):[p]*x+[¬p]*y⇒exp(log([p]*x+[¬p]*y));"),
 		("BadPartitionComplexSqrtBranch","rewrite bad(p:𝔹):csqrt([p]*complex(-4,0)+[¬p]*complex(4,0))⇒[p]*complex(0,-2)+[¬p]*complex(2,0);"),
+		("BadComplexCosUnitMask","rewrite bad(p:𝔹,z:ℂ):cos([p]*z)⇒[p]*cos(z);"),
+		("BadComplexCoshUnitMask","rewrite bad(p:𝔹,z:ℂ):cosh([p]*z)⇒[p]*cosh(z);"),
+		("BadComplexExpUnitMask","rewrite bad(p:𝔹,z:ℂ):exp([p]*z)⇒[p]*exp(z);"),
 		("BadNaturalPowerParity","rewrite bad(x:ℝ,n:ℕ):powRN(x,n)=1⇒n=0∨x=1∨x=-1;"),
 		("BadPowerUnitNotOne","rewrite bad(x:ℝ,t:ℝ):powerR(x,t)=1⇒x=1 when t≠1;"),
 		("BadPowerUnitParity","rewrite bad(x:ℝ,t:ℝ):powerR(x,t)=1⇒t=0∨x=1∨x=-1;"),
@@ -516,6 +527,9 @@ def main():
 		("BadIntegerNonintegralRoot","rewrite bad(x:ℤ):2*x=5⇒x=2;"),
 		("BadNaturalNegativeRoot","rewrite bad(x:ℕ):2*x=-4⇒x=2;"),
 		("BadIntegerZeroCoefficient","rewrite bad(x:ℤ):int(0)*x+int(0)≠0⇒true;"),
+		("BadPowerSignBaseOne","rewrite bad():sign(powerR(1,1)-powerR(1,0))⇒1;"),
+		("BadPowerSignOrientation","rewrite bad():sign(powerR(real(1,2),1)-powerR(real(1,2),0))⇒1;"),
+		("BadPowerSignNegativeBase","rewrite bad():sign(powerR(-2,2)-powerR(-2,1))⇒int(-1);"),
 		("BadMinComparison","rewrite bad(x:ℝ,y:ℝ,t:ℝ):min(x,y)<t⇒x<t∧y<t;"),
 		("BadIntegerOffsetCombine","rewrite bad(x:ℤ,a:ℤ,b:ℤ):(x+a)+b≠0⇒x+(a-b)≠0;"),
 		("BadNaturalOffsetCombine","rewrite bad(x:ℕ,a:ℕ,b:ℤ):castNZ(x+a)+b≠0⇒castNZ(x)+b≠0;"),
@@ -529,6 +543,29 @@ def main():
 		("BadNaturalSubReverse","rewrite bad(x:ℕ,y:ℕ):x sub y⇒y sub x;"),
 		("BadConditionalStrictBranch","rewrite bad(x:ℝ,y:ℝ):if true then x else y⇒x+0*y;"),
 		("BadConditionalAlwaysThen","rewrite bad(p:𝔹,x:ℕ,y:ℕ):if p then x else y⇒x;"),
+		("BadNaturalMaskOr","rewrite bad(p:𝔹,x:ℕ):nonzeroN([p]*x)⇒p∨nonzeroN(x);"),
+		("BadIntegerMaskDrop","rewrite bad(p:𝔹,x:ℤ):[p]*x≠0⇒x≠0;"),
+		("BadRationalMaskZero","rewrite bad(p:𝔹,x:ℚ):[p]*x=0⇒p∧x=0;"),
+		("BadComplexMaskDrop","rewrite bad(p:𝔹,x:ℂ):[p]*x≠0⇒x≠0;"),
+		("BadComplexSinMask","rewrite bad(p:𝔹,z:ℂ):sin([p]*z)⇒sin(z);"),
+		("BadComplexSinhMask","rewrite bad(p:𝔹,z:ℂ):sinh([p]*z)⇒sinh(z);"),
+		("BadComplexTanhMask","rewrite bad(p:𝔹,z:ℂ):tanh([p]*z)⇒tanh(z);"),
+		("BadIntegerMaskOffsetZero","rewrite bad(p:𝔹,x:ℤ,y:ℤ):[p]*x+y≠0⇒¬p∨x+y≠0;"),
+		("BadRationalMaskOffsetZero","rewrite bad(p:𝔹,x:ℚ,y:ℚ):[p]*x+y≠0⇒¬p∨x+y≠0;"),
+		("BadRealMaskOffsetZero","rewrite bad(p:𝔹,x:ℝ,y:ℝ):[p]*x+y≠0⇒¬p∨x+y≠0;"),
+		("BadComplexMaskOffsetZero","rewrite bad(p:𝔹,x:ℂ,y:ℂ):[p]*x+y≠0⇒¬p∨x+y≠0;"),
+		("BadRealMaskStrictZero","rewrite bad(p:𝔹,x:ℝ,y:ℝ):[p]*x<y⇒¬p∨x<y when 0≤y;"),
+		("BadRealMaskWeakZero","rewrite bad(p:𝔹,x:ℝ,y:ℝ):y≤[p]*x⇒p∧y≤x when 0≤y;"),
+		("BadIntegerMaskMissingSign","rewrite bad(p:𝔹,x:ℤ,y:ℤ):[p]*x≤y⇒p∧x≤y;"),
+		("BadNaturalMaskConjunction","rewrite bad(p:𝔹,x:ℕ,y:ℕ):[p]*x≤y⇒p∧x≤y;"),
+		("BadSignMaskDropped","rewrite bad(p:𝔹,x:ℝ):sign([p]*x)⇒sign(x);"),
+		("BadFloorMaskDropped","rewrite bad(p:𝔹,x:ℝ):floor([p]*x)⇒floor(x);"),
+		("BadCeilMaskShift","rewrite bad(p:𝔹,x:ℝ):ceil([p]*x)⇒[p]*ceil(x)+1;"),
+		("BadSinMask","rewrite bad(p:𝔹,x:ℝ):sin([p]*x)⇒sin(x);"),
+		("BadSinhMask","rewrite bad(p:𝔹,x:ℝ):sinh([p]*x)⇒sinh(x);"),
+		("BadTanhMask","rewrite bad(p:𝔹,x:ℝ):tanh([p]*x)⇒tanh(x);"),
+		("BadAtanMask","rewrite bad(p:𝔹,x:ℝ):atan([p]*x)⇒atan(x);"),
+		("BadAsinMask","rewrite bad(p:𝔹,x:ℝ):asin([p]*x)⇒asin(x);"),
 		("MissingDomain","fact bad(x:ℝ,a:ℝ,b:ℝ):x<b when x<a,a≤b;")):
 		bad_rules.write_text(rule+"\n",encoding="utf-8")
 		subprocess.run([str(ROOT/"build/rulec"),str(bad_rules),str(negative/(name+".d")),

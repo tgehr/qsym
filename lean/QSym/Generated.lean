@@ -3,6 +3,56 @@ import QSym.Refinement
 import QSym.AxiomCheck
 import QSym.ProofCache
 namespace QSym.Generated
+theorem r_natural_recurrence_add_base (v_a : Option (Ty.denote .natural)) (v_d : Option (Ty.denote .natural))
+    (hp0 : Value.Defined v_d) :
+    (Functions.addN.apply v_a (Functions.mulN.apply (some ((0) : ℕ)) v_d)) = v_a := qsym_cached% by
+  cases v_a <;> cases v_d
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_recurrence_add_base
+
+theorem r_natural_recurrence_mul_base (v_a : Option (Ty.denote .natural)) (v_d : Option (Ty.denote .natural))
+    (hp0 : Value.Defined v_d) :
+    (Functions.mulN.apply v_a (Functions.powNN.apply v_d (some ((0) : ℕ)))) = v_a := qsym_cached% by
+  cases v_a <;> cases v_d
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_recurrence_mul_base
+
+theorem r_natural_recurrence_add_step (v_a : Option (Ty.denote .natural)) (v_d : Option (Ty.denote .natural)) (v_n : Option (Ty.denote .natural)) :
+    (Functions.addN.apply (Functions.addN.apply v_a (Functions.mulN.apply v_n v_d)) v_d) = (Functions.addN.apply v_a (Functions.mulN.apply (Functions.addN.apply v_n (some ((1) : ℕ))) v_d)) := qsym_cached% by
+  cases v_a <;> cases v_d <;> cases v_n
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_recurrence_add_step
+
+theorem r_natural_recurrence_add_left_step (v_a : Option (Ty.denote .natural)) (v_d : Option (Ty.denote .natural)) (v_n : Option (Ty.denote .natural)) :
+    (Functions.addN.apply v_d (Functions.addN.apply v_a (Functions.mulN.apply v_n v_d))) = (Functions.addN.apply v_a (Functions.mulN.apply (Functions.addN.apply v_n (some ((1) : ℕ))) v_d)) := qsym_cached% by
+  cases v_a <;> cases v_d <;> cases v_n
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_recurrence_add_left_step
+
+theorem r_natural_recurrence_mul_step (v_a : Option (Ty.denote .natural)) (v_d : Option (Ty.denote .natural)) (v_n : Option (Ty.denote .natural)) :
+    (Functions.mulN.apply (Functions.mulN.apply v_a (Functions.powNN.apply v_d v_n)) v_d) = (Functions.mulN.apply v_a (Functions.powNN.apply v_d (Functions.addN.apply v_n (some ((1) : ℕ))))) := qsym_cached% by
+  cases v_a <;> cases v_d <;> cases v_n
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_recurrence_mul_step
+
+theorem r_natural_recurrence_mul_left_step (v_a : Option (Ty.denote .natural)) (v_d : Option (Ty.denote .natural)) (v_n : Option (Ty.denote .natural)) :
+    (Functions.mulN.apply v_d (Functions.mulN.apply v_a (Functions.powNN.apply v_d v_n))) = (Functions.mulN.apply v_a (Functions.powNN.apply v_d (Functions.addN.apply v_n (some ((1) : ℕ))))) := qsym_cached% by
+  cases v_a <;> cases v_d <;> cases v_n
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_recurrence_mul_left_step
+
 theorem r_real_add_zero (v_x : Option (Ty.denote .real)) :
     Value.Refines (Value.add v_x (some (((0) : Int) : ℝ))) v_x := qsym_cached% by
   cases v_x
@@ -10188,5 +10238,324 @@ theorem r_bool_eq_self (v_p : Option (Ty.denote .bool)) :
   all_goals qsym_rule
 
 #qsym_check_axioms r_bool_eq_self
+
+theorem r_natural_nonzero_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.nonzeroN.apply (Value.mask v_p v_x)) (Value.and v_p (Functions.nonzeroN.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_nonzero_mask
+
+theorem r_integer_nonzero_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .integer)) :
+    Value.Refines (Functions.nonzeroZ.apply (Value.mask v_p v_x)) (Value.and v_p (Functions.nonzeroZ.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_nonzero_mask
+
+theorem r_rational_nonzero_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .rational)) :
+    Value.Refines (Functions.nonzeroQ.apply (Value.mask v_p v_x)) (Value.and v_p (Functions.nonzeroQ.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_nonzero_mask
+
+theorem r_complex_nonzero_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) :
+    Value.Refines (Value.nonzero (Value.mask v_p v_x)) (Value.and v_p (Value.nonzero v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_nonzero_mask
+
+theorem r_complex_sin_mask (v_p : Option (Ty.denote .bool)) (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.sinC.apply (Value.mask v_p v_z)) (Value.mask v_p (Functions.sinC.apply v_z)) := qsym_cached% by
+  cases v_p <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sin_mask
+
+theorem r_complex_sinh_mask (v_p : Option (Ty.denote .bool)) (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.sinhC.apply (Value.mask v_p v_z)) (Value.mask v_p (Functions.sinhC.apply v_z)) := qsym_cached% by
+  cases v_p <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sinh_mask
+
+theorem r_complex_tanh_mask (v_p : Option (Ty.denote .bool)) (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.tanhC.apply (Value.mask v_p v_z)) (Value.mask v_p (Functions.tanhC.apply v_z)) := qsym_cached% by
+  cases v_p <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tanh_mask
+
+theorem r_complex_cos_mask (v_p : Option (Ty.denote .bool)) (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.cosC.apply (Value.mask v_p v_z)) (Value.add (Value.mask v_p (Functions.cosC.apply v_z)) (Value.mask (Value.not v_p) (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)))) := qsym_cached% by
+  cases v_p <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cos_mask
+
+theorem r_complex_cosh_mask (v_p : Option (Ty.denote .bool)) (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.coshC.apply (Value.mask v_p v_z)) (Value.add (Value.mask v_p (Functions.coshC.apply v_z)) (Value.mask (Value.not v_p) (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)))) := qsym_cached% by
+  cases v_p <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cosh_mask
+
+theorem r_complex_exp_mask (v_p : Option (Ty.denote .bool)) (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.expC.apply (Value.mask v_p v_z)) (Value.add (Value.mask v_p (Functions.expC.apply v_z)) (Value.mask (Value.not v_p) (some ((((1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)))) := qsym_cached% by
+  cases v_p <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_exp_mask
+
+theorem r_real_sign_power_pair_above_one (v_b : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((1) : Int) : ℝ)) v_b) (some true)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.powerR.apply v_b v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.powerR.apply v_b v_y)))) (Functions.signR.apply (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y))) := qsym_cached% by
+  cases v_b <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_power_pair_above_one
+
+theorem r_real_sign_power_pair_below_one (v_b : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_b) (some true))
+    (hp1 : Value.Refines (Value.lt v_b (some (((1) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.signR.apply (Value.add (Functions.powerR.apply v_b v_x) (Value.mul (some (((-1) : Int) : ℝ)) (Functions.powerR.apply v_b v_y)))) (Functions.signR.apply (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))) := qsym_cached% by
+  cases v_b <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_power_pair_below_one
+
+theorem r_integer_nonzero_mask_offset (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.nonzeroZ.apply v_y) (some true)) :
+    Value.Refines (Functions.nonzeroZ.apply (Functions.addZ.apply (Value.mask v_p v_x) v_y)) (Value.or (Value.not v_p) (Functions.nonzeroZ.apply (Functions.addZ.apply v_x v_y))) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_nonzero_mask_offset
+
+theorem r_integer_nonzero_mask_offset_commuted (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.nonzeroZ.apply v_y) (some true)) :
+    Value.Refines (Functions.nonzeroZ.apply (Functions.addZ.apply v_y (Value.mask v_p v_x))) (Value.or (Value.not v_p) (Functions.nonzeroZ.apply (Functions.addZ.apply v_x v_y))) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_nonzero_mask_offset_commuted
+
+theorem r_rational_nonzero_mask_offset (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .rational)) (v_y : Option (Ty.denote .rational))
+    (hp0 : Value.Refines (Functions.nonzeroQ.apply v_y) (some true)) :
+    Value.Refines (Functions.nonzeroQ.apply (Functions.addQ.apply (Value.mask v_p v_x) v_y)) (Value.or (Value.not v_p) (Functions.nonzeroQ.apply (Functions.addQ.apply v_x v_y))) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_nonzero_mask_offset
+
+theorem r_rational_nonzero_mask_offset_commuted (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .rational)) (v_y : Option (Ty.denote .rational))
+    (hp0 : Value.Refines (Functions.nonzeroQ.apply v_y) (some true)) :
+    Value.Refines (Functions.nonzeroQ.apply (Functions.addQ.apply v_y (Value.mask v_p v_x))) (Value.or (Value.not v_p) (Functions.nonzeroQ.apply (Functions.addQ.apply v_x v_y))) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_nonzero_mask_offset_commuted
+
+theorem r_real_nonzero_mask_offset (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.nonzero v_y) (some true)) :
+    Value.Refines (Value.nonzero (Value.add (Value.mask v_p v_x) v_y)) (Value.or (Value.not v_p) (Value.nonzero (Value.add v_x v_y))) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonzero_mask_offset
+
+theorem r_real_nonzero_mask_offset_commuted (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.nonzero v_y) (some true)) :
+    Value.Refines (Value.nonzero (Value.add v_y (Value.mask v_p v_x))) (Value.or (Value.not v_p) (Value.nonzero (Value.add v_x v_y))) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_nonzero_mask_offset_commuted
+
+theorem r_complex_nonzero_mask_offset (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.nonzero v_y) (some true)) :
+    Value.Refines (Value.nonzero (Value.add (Value.mask v_p v_x) v_y)) (Value.or (Value.not v_p) (Value.nonzero (Value.add v_x v_y))) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_nonzero_mask_offset
+
+theorem r_complex_nonzero_mask_offset_commuted (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.nonzero v_y) (some true)) :
+    Value.Refines (Value.nonzero (Value.add v_y (Value.mask v_p v_x))) (Value.or (Value.not v_p) (Value.nonzero (Value.add v_x v_y))) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_nonzero_mask_offset_commuted
+
+theorem r_natural_mask_le_upper_true (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.leN.apply (some ((0) : ℕ)) v_y) (some true)) :
+    Value.Refines (Functions.leN.apply (Value.mask v_p v_x) v_y) (Value.or (Value.not v_p) (Functions.leN.apply v_x v_y)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_mask_le_upper_true
+
+theorem r_natural_mask_le_lower_false (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.ltN.apply (some ((0) : ℕ)) v_y) (some true)) :
+    Value.Refines (Functions.leN.apply v_y (Value.mask v_p v_x)) (Value.and v_p (Functions.leN.apply v_y v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_mask_le_lower_false
+
+theorem r_integer_mask_le_upper_true (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply (some ((0) : ℤ)) v_y) (some true)) :
+    Value.Refines (Functions.leZ.apply (Value.mask v_p v_x) v_y) (Value.or (Value.not v_p) (Functions.leZ.apply v_x v_y)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_mask_le_upper_true
+
+theorem r_integer_mask_le_lower_false (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.ltZ.apply (some ((0) : ℤ)) v_y) (some true)) :
+    Value.Refines (Functions.leZ.apply v_y (Value.mask v_p v_x)) (Value.and v_p (Functions.leZ.apply v_y v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_mask_le_lower_false
+
+theorem r_integer_mask_le_upper_false (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.ltZ.apply v_y (some ((0) : ℤ))) (some true)) :
+    Value.Refines (Functions.leZ.apply (Value.mask v_p v_x) v_y) (Value.and v_p (Functions.leZ.apply v_x v_y)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_mask_le_upper_false
+
+theorem r_integer_mask_le_lower_true (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .integer)) (v_y : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_y (some ((0) : ℤ))) (some true)) :
+    Value.Refines (Functions.leZ.apply v_y (Value.mask v_p v_x)) (Value.or (Value.not v_p) (Functions.leZ.apply v_y v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_mask_le_lower_true
+
+theorem r_real_mask_lt_upper_true (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.lt (Value.mask v_p v_x) v_y) (Value.or (Value.not v_p) (Value.lt v_x v_y)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_lt_upper_true
+
+theorem r_real_mask_lt_lower_false (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.lt v_y (Value.mask v_p v_x)) (Value.and v_p (Value.lt v_y v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_lt_lower_false
+
+theorem r_real_mask_lt_upper_false (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_y (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.lt (Value.mask v_p v_x) v_y) (Value.and v_p (Value.lt v_x v_y)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_lt_upper_false
+
+theorem r_real_mask_lt_lower_true (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_y (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.lt v_y (Value.mask v_p v_x)) (Value.or (Value.not v_p) (Value.lt v_y v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_lt_lower_true
+
+theorem r_real_mask_le_upper_true (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.le (Value.mask v_p v_x) v_y) (Value.or (Value.not v_p) (Value.le v_x v_y)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_le_upper_true
+
+theorem r_real_mask_le_lower_false (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_y) (some true)) :
+    Value.Refines (Value.le v_y (Value.mask v_p v_x)) (Value.and v_p (Value.le v_y v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_le_lower_false
+
+theorem r_real_mask_le_upper_false (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_y (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.le (Value.mask v_p v_x) v_y) (Value.and v_p (Value.le v_x v_y)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_le_upper_false
+
+theorem r_real_mask_le_lower_true (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_y (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.le v_y (Value.mask v_p v_x)) (Value.or (Value.not v_p) (Value.le v_y v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_le_lower_true
+
+theorem r_real_sign_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.signR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.signR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sign_mask
+
+theorem r_real_floor_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.floorR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.floorR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_floor_mask
+
+theorem r_real_ceil_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.ceilR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.ceilR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_ceil_mask
+
+theorem r_real_sin_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.sinR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.sinR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_mask
+
+theorem r_real_sinh_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.sinhR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.sinhR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sinh_mask
+
+theorem r_real_tanh_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.tanhR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.tanhR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tanh_mask
+
+theorem r_real_atan_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.atanR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.atanR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_atan_mask
+
+theorem r_real_asin_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Functions.asinR.apply (Value.mask v_p v_x)) (Value.mask v_p (Functions.asinR.apply v_x)) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_asin_mask
 
 end QSym.Generated

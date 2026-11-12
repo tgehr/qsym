@@ -3,6 +3,7 @@ import qsym.ir;
 import qsym.types:TypeId,TypeKind,TypePool;
 import qsym.number:Number;
 import qsym.table:Table;
+import qsym.generated.rules:Law,instantiate;
 import qsym.proof:leanSyntaxCode,leanValueOperation,exportDomainLean,scalarExport=exportLean;
 import qsym.domain:simplifyDomain;
 import qsym.simplify:Result,ScalarResult=Result,Options,DensityMode,simplify;
@@ -34,10 +35,11 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
+private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left; }
 struct BindingResult{
 	BoundTerm input,output;
 	bool exhausted;
@@ -45,6 +47,7 @@ struct BindingResult{
 	private BindingStep[] proofs;
 	private uint proof;
 	private ScalarDomain[] domains;
+	private RecurrenceSolution[] solutions;
 }
 
 final class Bindings{
@@ -339,8 +342,38 @@ final class Bindings{
 		foreach(i;0..n.arity){ auto child=restoreBody(arena.viewChild(t,i),ctx,argument); args~=child; plain&=node(child).op==BoundOp.scalar; }
 		return plain?scalar(ctx,t):primitive(t,args);
 	}
+	private BoundTerm solveRecurrence(BoundTerm t,out RecurrenceSolution solution){
+		auto n=node(t),body=node(at(n.a)),ty=pool.view(type(t));
+		if(ty.fields[0]!=scalarType(Sort.natural)||ty.fields[1]!=scalarType(Sort.natural)) return BoundTerm.init;
+		bool call(uint id,Builtin f){ auto q=nodes[id]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f; }
+		bool unary(uint id,Op op){ auto q=nodes[id]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op; }
+		bool variableAt(uint id,uint index){ auto q=nodes[id]; return q.op==BoundOp.variable&&q.data==index; }
+		bool previous(uint id){
+			auto q=nodes[id]; if(q.op!=BoundOp.apply||!variableAt(q.a,1)||!call(q.b,Builtin.subN)) return false;
+			auto arg=nodes[q.b],one=nodes[arg.b];
+			return variableAt(arg.a,0)&&one.op==BoundOp.scalar&&arena.isNumber(arena.at(one.data))&&arena.number(arena.at(one.data)).one;
+		}
+		if(!call(body.a,Builtin.addN)) return BoundTerm.init;
+		auto sum=nodes[body.a]; if(!unary(sum.a,Op.mask)||!unary(sum.b,Op.mask)) return BoundTerm.init;
+		auto yes=nodes[sum.a],no=nodes[sum.b],p=nodes[yes.a];
+		if(!unary(yes.a,Op.not_)||!unary(no.a,Op.not_)||nodes[no.a].a!=yes.a) return BoundTerm.init;
+		if(!call(p.a,Builtin.nonzeroZ)||!call(nodes[p.a].a,Builtin.castNZ)||!variableAt(nodes[nodes[p.a].a].a,0)) return BoundTerm.init;
+		if(!totalScalar(at(yes.b))||!call(no.b,Builtin.addN)&&!call(no.b,Builtin.mulN)) return BoundTerm.init;
+		auto step=nodes[no.b]; bool left=previous(step.b); auto delta=left?step.a:step.b;
+		if(!previous(left?step.b:step.a)||!totalScalar(at(delta))) return BoundTerm.init;
+		bool mul=call(no.b,Builtin.mulN);
+		auto law=mul?(left?Law.natural_recurrence_mul_left_step:Law.natural_recurrence_mul_step):
+			(left?Law.natural_recurrence_add_left_step:Law.natural_recurrence_add_step);
+		uint index;
+		foreach(id;0..arena.length){ auto q=arena.node(arena.at(cast(uint)id)); if(q.op==Op.variable){ enforce(q.value<uint.max-1,"scalar variable limit exceeded"); if(q.value>=index) index=cast(uint)q.value+1; } }
+		auto argument=arena.variable(Sort.natural,index),instance=instantiate(arena,law,[arena.at(nodes[yes.b].data),arena.at(nodes[delta].data),argument],true);
+		auto candidate=arena.viewChild(instance.before,left?1:0),inner=push(context(t),ty.fields[0]);
+		auto output=inheritHint(at(n.a),lambda(restoreBody(candidate,inner,argument)));
+		solution=RecurrenceSolution(t.id,output.id,yes.b,delta,law,mul?Law.natural_recurrence_mul_base:Law.natural_recurrence_add_base,left);
+		return output;
+	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
-		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains;
+		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
@@ -458,6 +491,10 @@ final class Bindings{
 							next=inheritHint(body,lambda(bottom(inner,v.fields[1]))); rule=BindingRule.fixedIdentity;
 						}
 					}
+					if(next==BoundTerm.init){
+						RecurrenceSolution solution; next=solveRecurrence(at(result.output),solution);
+						if(next!=BoundTerm.init){ extra=cast(uint)solutions.length; solutions~=solution; rule=BindingRule.fixedRecurrence; }
+					}
 				}else if(current.op==BoundOp.guard&&isTrue(current.a,false)){
 					next=bottom(ctx,type(at(current.b))); rule=BindingRule.shortCircuit;
 				}else if(current.op==BoundOp.primitive&&nodes[current.a].op==BoundOp.bottom&&arena.view(arena.at(current.data)).op==Op.not_){
@@ -552,7 +589,10 @@ final class Bindings{
 					rule=current.op==BoundOp.defined?BindingRule.scalarDomain:BindingRule.scalarHolds;
 				}
 				if(steps>=budget){
-					if(next!=BoundTerm.init){ next=BoundTerm.init; exhausted=true; }
+					if(next!=BoundTerm.init){
+						if(rule==BindingRule.fixedRecurrence) --solutions.length;
+						next=BoundTerm.init; exhausted=true;
+					}
 					if(current.op==BoundOp.scalar&&!totalScalar(at(result.output))||
 						(current.op==BoundOp.defined||current.op==BoundOp.holds)&&nodes[current.a].op==BoundOp.scalar) exhausted=true;
 				}
@@ -566,7 +606,7 @@ final class Bindings{
 			}
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
-		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains);
+		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions);
 	}
 
 	Term lower(BoundTerm term){
@@ -704,11 +744,24 @@ final class Bindings{
 			code~="noncomputable def rec"~id~args~" : Recursion.Program "~a~" "~b~" "~b~" := "~program(nodes[n.a].a)~"\n";
 			code~="theorem fixed"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = some (FixedPoint.value (rec"~id~" γ ξ ρ).functional) := Recursion.fixed_program (rec"~id~" γ ξ ρ) _ "~h~"\n";
 			code~="theorem unroll"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = (Binding.Expr.app (.lam "~name(n.a)~") "~name(cast(uint)i)~").eval ξ ρ := Recursion.program_unfold (rec"~id~" γ ξ ρ) _ "~h~"\n";
+			foreach(s;result.solutions) if(s.source==i){
+				auto base="(n"~to!string(nodes[s.base].data)~".eval ξ)",delta="(n"~to!string(nodes[s.delta].data)~".eval ξ)";
+				auto op=s.zero==Law.natural_recurrence_mul_base?"Functions.mulN.apply":"Functions.addN.apply";
+				if(s.left) op="(fun x y => "~op~" y x)";
+				auto k="(fun (x : ℕ) => "~name(nodes[s.target].a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some x) ρ))";
+				auto hp="(fun g x => ("~programProof(nodes[n.a].a)~").symm)";
+				auto hz="(Generated.r_"~to!string(s.zero)~" "~base~" "~delta~" ⟨_, rfl⟩)";
+				auto successor="(congrArg (fun (z : Option ℕ) => "~name(nodes[s.target].a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) z ρ)) (Recursion.nat_successor x).symm)";
+				auto hs="(fun x => Eq.trans "~successor~" (Generated.r_"~to!string(s.law)~" "~base~" "~delta~" (some x)).symm)";
+				code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n"~
+					"  Eq.trans (fixed"~id~" γ ξ ρ) (congrArg some (Recursion.solve_nat_step (rec"~id~" γ ξ ρ) "~op~" "~base~" "~delta~" "~k~" "~hp~" "~hz~" "~hs~"))\n";
+			}
 		}
 		string proofName(uint id){ return "(p"~to!string(id)~" γ)"; }
 		foreach(i,p;result.proofs){
 			auto n=nodes[p.from]; string proof;
 			final switch(p.rule){
+				case BindingRule.fixedRecurrence:proof=".ofEq (fun ξ ρ => solve"~to!string(p.from)~" γ ξ ρ)"; break;
 				case BindingRule.refl:proof=".refl "~name(p.from); break;
 				case BindingRule.trans:proof=".trans "~proofName(p.left)~" "~proofName(p.right); break;
 				case BindingRule.beta:proof=".beta "~name(nodes[n.a].a)~" "~name(n.b); break;

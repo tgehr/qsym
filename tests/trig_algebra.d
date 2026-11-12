@@ -9,6 +9,28 @@ import std.exception:enforce;
 
 struct Example{ string name,input,expected; string[] facts; }
 Example[] examples(){ return [
+	Example("PowerSignFalse0","sign(powerR(2,x)-powerR(2,y))","sign((x)-(y))"),
+	Example("PowerSignFalse1","sign(powerR(2,1/x)-powerR(2,1/y))","sign((1/x)-(1/y))"),
+	Example("PowerSignFalse2","sign(powerR(2,log(x))-powerR(2,log(y)))","sign((log(x))-(log(y)))"),
+	Example("PowerSignFalse3","sign(powerR(2,x)-powerR(2,x))","sign((x)-(x))"),
+	Example("PowerSignFalse4","sign(powerR(2,0)-powerR(2,1))","sign((0)-(1))"),
+	Example("PowerSignFalse5","sign(powerR(2,1)-powerR(2,0))","sign((1)-(0))"),
+	Example("PowerSignFalse6","sign(powerR(2,-1)-powerR(2,1))","sign((-1)-(1))"),
+	Example("PowerSignFalse7","sign(powerR(2,1/2)-powerR(2,-1/2))","sign((1/2)-(-1/2))"),
+	Example("PowerSignTrue0","sign(powerR(1/2,x)-powerR(1/2,y))","sign((y)-(x))"),
+	Example("PowerSignTrue1","sign(powerR(1/2,1/x)-powerR(1/2,1/y))","sign((1/y)-(1/x))"),
+	Example("PowerSignTrue2","sign(powerR(1/2,log(x))-powerR(1/2,log(y)))","sign((log(y))-(log(x)))"),
+	Example("PowerSignTrue3","sign(powerR(1/2,x)-powerR(1/2,x))","sign((x)-(x))"),
+	Example("PowerSignTrue4","sign(powerR(1/2,0)-powerR(1/2,1))","sign((1)-(0))"),
+	Example("PowerSignTrue5","sign(powerR(1/2,1)-powerR(1/2,0))","sign((0)-(1))"),
+	Example("PowerSignTrue6","sign(powerR(1/2,-1)-powerR(1/2,1))","sign((1)-(-1))"),
+	Example("PowerSignTrue7","sign(powerR(1/2,1/2)-powerR(1/2,-1/2))","sign((-1/2)-(1/2))"),
+	Example("PowerSignBaseAbove","sign(powerR(b,x)-powerR(b,y))","sign(x-y)",["1<b"]),
+	Example("PowerSignBaseBelow","sign(powerR(b,x)-powerR(b,y))","sign(y-x)",["0<b","b<1"]),
+	Example("PowerSignFalseMask","[false]*sign(powerR(2,1/0)-powerR(2,y))","0"),
+	Example("PowerSignBaseOne","sign(powerR(1,x)-powerR(1,y))","0"),
+	Example("PowerSignNegativeBase","sign(powerR(-2,x)-powerR(-2,y))","sign(powerR(-2,x)-powerR(-2,y))"),
+	Example("PowerSignUnknownBase","sign(powerR(b,x)-powerR(b,y))","sign(powerR(b,x)-powerR(b,y))"),
 	Example("NewCosAbsSymbolic","cos(abs(x))","cos(x)"),
 	Example("NewCosAbsNegative","cos(abs(-x))","cos(-x)"),
 	Example("NewCosAbsPartial","cos(abs(log(x)))","cos(log(x))"),
@@ -615,7 +637,7 @@ Example[] examples(){ return [
 	Example("NonintegerComplexPeriod","csin(z+2*π*x)","csin(2*x*π+z)"),
 	Example("HyperbolicRealShiftUnchanged","csinh(z+2*π)","csinh(2*π+z)")
 ]; }
-private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,z:ℂ,w:ℂ,k:ℤ,m:ℤ,n:ℕ"); return s; }
+private Syntax syntax(){ Syntax s; s.declare("b:ℝ,x:ℝ,y:ℝ,z:ℂ,w:ℂ,k:ℤ,m:ℤ,n:ℕ"); return s; }
 unittest{
 	size_t failures;
 	foreach(c;examples()){
@@ -720,5 +742,16 @@ unittest{
 		enforce(!d.exhausted&&d.output==a.boolean(x>=-1&&x<=1),"decreasing threshold original domain");
 		auto md=simplifyDomain(a,s.parse(a,"[false]*"~input));
 		enforce(!md.exhausted&&md.output==a.boolean(true),"decreasing threshold false guard domain");
+	}
+}
+
+unittest{
+	foreach(b;["2","1/2"]) foreach(x;["1/0","log(-1)","0","1"]){
+		auto owner=Session.open(); auto a=owner.arena; auto s=syntax();
+		auto input="sign(powerR("~b~","~x~")-powerR("~b~",1))";
+		auto d=simplifyDomain(a,s.parse(a,input));
+		enforce(!d.exhausted&&d.output==a.boolean(x=="0"||x=="1"),"power sign original domain");
+		auto md=simplifyDomain(a,s.parse(a,"[false]*"~input));
+		enforce(!md.exhausted&&md.output==a.boolean(true),"power sign false guard domain");
 	}
 }

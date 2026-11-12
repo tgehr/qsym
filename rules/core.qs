@@ -1,6 +1,12 @@
 # Rules preserve values wherever the input is defined; domains may grow.
 # rule decreases size; rewrite is budgeted; lemma/equation is selected; fact proves a predicate.
 # All declarations produce Lean proof obligations.
+equation natural_recurrence_add_base(a:ℕ,d:ℕ):a+0*d≡a when defined(d);
+equation natural_recurrence_mul_base(a:ℕ,d:ℕ):a*powNN(d,0)≡a when defined(d);
+equation natural_recurrence_add_step(a:ℕ,d:ℕ,n:ℕ):(a+n*d)+d≡a+(n+1)*d;
+equation natural_recurrence_add_left_step(a:ℕ,d:ℕ,n:ℕ):d+(a+n*d)≡a+(n+1)*d;
+equation natural_recurrence_mul_step(a:ℕ,d:ℕ,n:ℕ):(a*powNN(d,n))*d≡a*powNN(d,n+1);
+equation natural_recurrence_mul_left_step(a:ℕ,d:ℕ,n:ℕ):d*(a*powNN(d,n))≡a*powNN(d,n+1);
 rule real_add_zero(x:ℝ):x+0⇒x;
 rule real_zero_add(x:ℝ):0+x⇒x;
 rule real_mul_one(x:ℝ):x·1⇒x;
@@ -1459,3 +1465,50 @@ rewrite complex_sqrt_partition(p:𝔹,q:𝔹,x:ℂ,y:ℂ):sqrt([p]*x+[q]*y)⇒[p
 rewrite complex_tanh_partition(p:𝔹,q:𝔹,x:ℂ,y:ℂ):tanh([p]*x+[q]*y)⇒[p]*tanh(x)+[q]*tanh(y) when q=¬p;
 rewrite complex_abs_partition(p:𝔹,q:𝔹,x:ℂ,y:ℂ):abs([p]*x+[q]*y)⇒[p]*abs(x)+[q]*abs(y) when q=¬p;
 rewrite bool_eq_self(p:𝔹):eqB(p,p)⇒true;
+rewrite natural_nonzero_mask(p:𝔹,x:ℕ):nonzeroN([p]*x)⇒p∧nonzeroN(x);
+rewrite integer_nonzero_mask(p:𝔹,x:ℤ):[p]*x≠0⇒p∧x≠0;
+rewrite rational_nonzero_mask(p:𝔹,x:ℚ):[p]*x≠0⇒p∧x≠0;
+rewrite complex_nonzero_mask(p:𝔹,x:ℂ):[p]*x≠0⇒p∧x≠0;
+
+rewrite complex_sin_mask(p:𝔹,z:ℂ):sin([p]*z)⇒[p]*sin(z);
+rewrite complex_sinh_mask(p:𝔹,z:ℂ):sinh([p]*z)⇒[p]*sinh(z);
+rewrite complex_tanh_mask(p:𝔹,z:ℂ):tanh([p]*z)⇒[p]*tanh(z);
+
+rewrite complex_cos_mask(p:𝔹,z:ℂ):cos([p]*z)⇒[p]*cos(z)+[¬p]*complex(1,0);
+rewrite complex_cosh_mask(p:𝔹,z:ℂ):cosh([p]*z)⇒[p]*cosh(z)+[¬p]*complex(1,0);
+rewrite complex_exp_mask(p:𝔹,z:ℂ):exp([p]*z)⇒[p]*exp(z)+[¬p]*complex(1,0);
+
+rewrite real_sign_power_pair_above_one(b:ℝ,x:ℝ,y:ℝ):sign(powerR(b,x)-powerR(b,y))⇒sign(x-y) when 1<b;
+rewrite real_sign_power_pair_below_one(b:ℝ,x:ℝ,y:ℝ):sign(powerR(b,x)-powerR(b,y))⇒sign(y-x) when 0<b,b<1;
+rewrite integer_nonzero_mask_offset(p:𝔹,x:ℤ,y:ℤ):[p]*x+y≠0⇒¬p∨x+y≠0 when y≠0;
+rewrite integer_nonzero_mask_offset_commuted(p:𝔹,x:ℤ,y:ℤ):y+[p]*x≠0⇒¬p∨x+y≠0 when y≠0;
+rewrite rational_nonzero_mask_offset(p:𝔹,x:ℚ,y:ℚ):[p]*x+y≠0⇒¬p∨x+y≠0 when y≠0;
+rewrite rational_nonzero_mask_offset_commuted(p:𝔹,x:ℚ,y:ℚ):y+[p]*x≠0⇒¬p∨x+y≠0 when y≠0;
+rewrite real_nonzero_mask_offset(p:𝔹,x:ℝ,y:ℝ):[p]*x+y≠0⇒¬p∨x+y≠0 when y≠0;
+rewrite real_nonzero_mask_offset_commuted(p:𝔹,x:ℝ,y:ℝ):y+[p]*x≠0⇒¬p∨x+y≠0 when y≠0;
+rewrite complex_nonzero_mask_offset(p:𝔹,x:ℂ,y:ℂ):[p]*x+y≠0⇒¬p∨x+y≠0 when y≠0;
+rewrite complex_nonzero_mask_offset_commuted(p:𝔹,x:ℂ,y:ℂ):y+[p]*x≠0⇒¬p∨x+y≠0 when y≠0;
+rewrite natural_mask_le_upper_true(p:𝔹,x:ℕ,y:ℕ):[p]*x≤y⇒¬p∨x≤y when 0≤y;
+rewrite natural_mask_le_lower_false(p:𝔹,x:ℕ,y:ℕ):y≤[p]*x⇒p∧y≤x when 0<y;
+rewrite integer_mask_le_upper_true(p:𝔹,x:ℤ,y:ℤ):[p]*x≤y⇒¬p∨x≤y when 0≤y;
+rewrite integer_mask_le_lower_false(p:𝔹,x:ℤ,y:ℤ):y≤[p]*x⇒p∧y≤x when 0<y;
+rewrite integer_mask_le_upper_false(p:𝔹,x:ℤ,y:ℤ):[p]*x≤y⇒p∧x≤y when y<0;
+rewrite integer_mask_le_lower_true(p:𝔹,x:ℤ,y:ℤ):y≤[p]*x⇒¬p∨y≤x when y≤0;
+rewrite real_mask_lt_upper_true(p:𝔹,x:ℝ,y:ℝ):[p]*x<y⇒¬p∨x<y when 0<y;
+rewrite real_mask_lt_lower_false(p:𝔹,x:ℝ,y:ℝ):y<[p]*x⇒p∧y<x when 0≤y;
+rewrite real_mask_lt_upper_false(p:𝔹,x:ℝ,y:ℝ):[p]*x<y⇒p∧x<y when y≤0;
+rewrite real_mask_lt_lower_true(p:𝔹,x:ℝ,y:ℝ):y<[p]*x⇒¬p∨y<x when y<0;
+rewrite real_mask_le_upper_true(p:𝔹,x:ℝ,y:ℝ):[p]*x≤y⇒¬p∨x≤y when 0≤y;
+rewrite real_mask_le_lower_false(p:𝔹,x:ℝ,y:ℝ):y≤[p]*x⇒p∧y≤x when 0<y;
+rewrite real_mask_le_upper_false(p:𝔹,x:ℝ,y:ℝ):[p]*x≤y⇒p∧x≤y when y<0;
+rewrite real_mask_le_lower_true(p:𝔹,x:ℝ,y:ℝ):y≤[p]*x⇒¬p∨y≤x when y≤0;
+
+rewrite real_sign_mask(p:𝔹,x:ℝ):sign([p]*x)⇒[p]*sign(x);
+rewrite real_floor_mask(p:𝔹,x:ℝ):floor([p]*x)⇒[p]*floor(x);
+rewrite real_ceil_mask(p:𝔹,x:ℝ):ceil([p]*x)⇒[p]*ceil(x);
+
+rewrite real_sin_mask(p:𝔹,x:ℝ):sin([p]*x)⇒[p]*sin(x);
+rewrite real_sinh_mask(p:𝔹,x:ℝ):sinh([p]*x)⇒[p]*sinh(x);
+rewrite real_tanh_mask(p:𝔹,x:ℝ):tanh([p]*x)⇒[p]*tanh(x);
+rewrite real_atan_mask(p:𝔹,x:ℝ):atan([p]*x)⇒[p]*atan(x);
+rewrite real_asin_mask(p:𝔹,x:ℝ):asin([p]*x)⇒[p]*asin(x);

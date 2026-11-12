@@ -117,6 +117,8 @@ test: build/qsym
 	./build/higher-equality-tests --DRT-testmode=run-main build/higher-equality
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/binder_names.d -of=build/binder-name-tests
 	./build/binder-name-tests --DRT-testmode=run-main build/binder-names
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/recurrences.d -of=build/recurrence-solver-tests
+	./build/recurrence-solver-tests --DRT-testmode=run-main build/recurrences
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

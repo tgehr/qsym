@@ -197,3 +197,13 @@ assert result.stdout.splitlines()==["({x:ℕ | p(x)}={x:ℕ | q(x)})",f"Wrote {e
 	"λ(y1:ℝ). y","λ(t:{t:ℝ | t≠1/2}). (0:ℝ)"],result.stdout
 assert "Binding.equalValue" in equality_certificate.read_text()
 print("Higher-order equality and binder-name REPL checks passed.")
+solver_certificate=root/"build/ReplRecurrenceSolver.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars a:ℕ,d:ℕ,n:ℕ","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)+2",
+	"(μ(f:ℕ→ℕ).λ(k:ℕ).if k=0 then a else f(k sub 1)*d)(n)",f":lean {solver_certificate}",
+	"domain(μ(f:ℕ→ℕ).λ(k:ℕ).if k=0 then a else f(k sub 1)+d)",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["λ(n:ℕ). 2·n+3","a·d^n",f"Wrote {solver_certificate}","{k:ℕ | true}"],result.stdout
+assert "Recursion.solve_nat_step" in solver_certificate.read_text()
+print("Recurrence solver REPL checks passed.")

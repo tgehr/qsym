@@ -194,3 +194,9 @@ with Terminal() as t:
 	t.submit(r"\lambda(n:Nat).n","λ(n:ℕ). n")
 	t.finish()
 print("Equality and binder-name terminal checks passed.")
+
+with Terminal() as t:
+	t.until(ready)
+	t.submit(r"\mu(f:Nat→Nat).\lambda(n:Nat).if n=0 then 3 else f(n sub 1)+2","λ(n:ℕ). 2·n+3")
+	t.finish()
+print("Recurrence solver terminal checks passed.")

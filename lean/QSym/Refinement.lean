@@ -11,6 +11,7 @@ import QSym.DecreasingSigns
 import QSym.LogBaseSigns
 import QSym.DecreasingThresholds
 import QSym.IntegerEquations
+import QSym.PowerSigns
 import QSym.ScalarOrder
 import QSym.SignCompositions
 
@@ -375,6 +376,8 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_half_pi_acos _)
   | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_erfc_minus_one _)
   | solve | (simp only [Int.cast_neg, Int.cast_one]; exact Value.refines_sign_one_minus_erfc _)
+  | solve | (simp only [Int.cast_neg, Int.cast_one, Int.cast_zero] at *; apply Value.refines_sign_power_pair_above_one <;> assumption)
+  | solve | (simp only [Int.cast_neg, Int.cast_one, Int.cast_zero] at *; apply Value.refines_sign_power_pair_below_one <;> assumption)
   | exact Value.refines_sign_abs _
   | solve | qsym_exact_scalar
   | solve | qsym_real_power_bridge

@@ -1,4 +1,5 @@
 import QSym.FixedPoint
+import QSym.Functions
 
 namespace QSym.Recursion
 open OmegaCompletePartialOrder
@@ -144,5 +145,42 @@ theorem fixed_identity : fixedValue (some (fun g : α → Option β => some g)) 
   funext x
   simp only [FixedPoint.value, FixedPoint.least_id]
   exact @Part.none_toOption β (Classical.propDecidable _)
+
+noncomputable def natStep (op : Option ℕ → Option ℕ → Option ℕ)
+    (a d : Option ℕ) (g : ℕ → Option ℕ) (n : ℕ) : Option ℕ :=
+  let p := Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))
+  Functions.addN.apply (Value.mask p a)
+    (Value.mask (Value.not p) (op ((Functions.subN.apply (some n) (some 1)).bind g) d))
+
+theorem nat_successor (n : ℕ) : Functions.addN.apply (some n) (some 1) = some (n+1) := by
+  simp [Function2.apply, Functions.addN]
+
+theorem natStep_zero (op : Option ℕ → Option ℕ → Option ℕ)
+    (a d : Option ℕ) (g : ℕ → Option ℕ) : natStep op a d g 0 = a := by
+  cases a <;> simp [natStep, Function1.apply, Function2.apply, Functions.nonzeroZ,
+    Functions.castNZ, Functions.addN, Value.mask, Value.not]
+
+theorem natStep_succ (op : Option ℕ → Option ℕ → Option ℕ)
+    (a d : Option ℕ) (g : ℕ → Option ℕ) (n : ℕ) :
+    natStep op a d g (n+1) = op (g n) d := by
+  have ht : Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some (n+1)))) = some false := by
+    have hn : (↑n + 1 : ℤ) ≠ 0 := by omega
+    simp [Function1.apply, Functions.nonzeroZ, Functions.castNZ, Value.not, hn]
+  have hp : Functions.subN.apply (some (n+1)) (some 1) = some n := by
+    simp [Function2.apply, Functions.subN]
+  unfold natStep
+  rw [ht, hp]
+  simp only [Option.some_bind, Value.not, Value.mask, Bool.not_false]
+  cases op (g n) d <;> simp [Function2.apply, Functions.addN]
+
+theorem solve_nat_step (p : Program ℕ ℕ ℕ) (op : Option ℕ → Option ℕ → Option ℕ)
+    (a d : Option ℕ) (k : ℕ → Option ℕ)
+    (hp : ∀ g n, p.eval g n = natStep op a d g n)
+    (h0 : k 0 = a) (hs : ∀ n, k (n+1) = op (k n) d) :
+    FixedPoint.value p.functional = k := by
+  funext n
+  induction n with
+  | zero => rw [← p.unfold 0, hp, natStep_zero, h0]
+  | succ n ih => rw [← p.unfold (n+1), hp, natStep_succ, ih, hs]
 
 end QSym.Recursion
