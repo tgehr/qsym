@@ -10070,4 +10070,123 @@ theorem r_natural_le_add_right (v_x : Option (Ty.denote .natural)) (v_y : Option
 
 #qsym_check_axioms r_natural_le_add_right
 
+theorem r_real_sin_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.sinR.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.sinR.apply v_x)) (Value.mask v_q (Functions.sinR.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sin_partition
+
+theorem r_real_cos_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.cosR.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.cosR.apply v_x)) (Value.mask v_q (Functions.cosR.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_partition
+
+theorem r_real_exp_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.expR.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.expR.apply v_x)) (Value.mask v_q (Functions.expR.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_exp_partition
+
+theorem r_real_log_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.logR.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.logR.apply v_x)) (Value.mask v_q (Functions.logR.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_log_partition
+
+theorem r_real_sqrt_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.sqrtR.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.sqrtR.apply v_x)) (Value.mask v_q (Functions.sqrtR.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_sqrt_partition
+
+theorem r_real_tanh_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.tanhR.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.tanhR.apply v_x)) (Value.mask v_q (Functions.tanhR.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_tanh_partition
+
+theorem r_real_abs_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Value.abs (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Value.abs v_x)) (Value.mask v_q (Value.abs v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_abs_partition
+
+theorem r_complex_sin_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.sinC.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.sinC.apply v_x)) (Value.mask v_q (Functions.sinC.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sin_partition
+
+theorem r_complex_cos_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.cosC.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.cosC.apply v_x)) (Value.mask v_q (Functions.cosC.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_cos_partition
+
+theorem r_complex_exp_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.expC.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.expC.apply v_x)) (Value.mask v_q (Functions.expC.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_exp_partition
+
+theorem r_complex_log_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.logC.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.logC.apply v_x)) (Value.mask v_q (Functions.logC.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_log_partition
+
+theorem r_complex_sqrt_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.sqrtC.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.sqrtC.apply v_x)) (Value.mask v_q (Functions.sqrtC.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_sqrt_partition
+
+theorem r_complex_tanh_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.tanhC.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.tanhC.apply v_x)) (Value.mask v_q (Functions.tanhC.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_tanh_partition
+
+theorem r_complex_abs_partition (v_p : Option (Ty.denote .bool)) (v_q : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.not (Functions.eqB.apply v_q (Value.not v_p)))) (some true)) :
+    Value.Refines (Functions.absC.apply (Value.add (Value.mask v_p v_x) (Value.mask v_q v_y))) (Value.add (Value.mask v_p (Functions.absC.apply v_x)) (Value.mask v_q (Functions.absC.apply v_y))) := qsym_cached% by
+  cases v_p <;> cases v_q <;> cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_abs_partition
+
+theorem r_bool_eq_self (v_p : Option (Ty.denote .bool)) :
+    Value.Refines (Functions.eqB.apply v_p v_p) (some true) := qsym_cached% by
+  cases v_p
+  all_goals qsym_rule
+
+#qsym_check_axioms r_bool_eq_self
+
 end QSym.Generated

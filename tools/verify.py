@@ -90,7 +90,7 @@ def main():
 	certificate(ROOT/"build/ReplFacts.lean")
 	certificate(ROOT/"build/ReplExpand.lean")
 	certificate(ROOT/"build/ReplDomain.lean")
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",605),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57)):
+	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",605),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -259,6 +259,10 @@ def main():
 		str(negative/"BadAbs.lean")],check=True,stdout=subprocess.PIPE)
 	check(negative/"BadAbs.lean",succeeds=False)
 	for name,rule in (
+		("BadBoolEqualityCollapse","rewrite bad(p:𝔹,q:𝔹):eqB(p,q)⇒true;"),
+		("BadPartitionGuard","rewrite bad(p:𝔹,x:ℝ,y:ℝ):sin([p]*x+[¬p]*y)⇒[p]*sin(x)+[p]*sin(y);"),
+		("BadPartitionLogDomain","rewrite bad(p:𝔹,x:ℝ,y:ℝ):[p]*x+[¬p]*y⇒exp(log([p]*x+[¬p]*y));"),
+		("BadPartitionComplexSqrtBranch","rewrite bad(p:𝔹):csqrt([p]*complex(-4,0)+[¬p]*complex(4,0))⇒[p]*complex(0,-2)+[¬p]*complex(2,0);"),
 		("BadNaturalPowerParity","rewrite bad(x:ℝ,n:ℕ):powRN(x,n)=1⇒n=0∨x=1∨x=-1;"),
 		("BadPowerUnitNotOne","rewrite bad(x:ℝ,t:ℝ):powerR(x,t)=1⇒x=1 when t≠1;"),
 		("BadPowerUnitParity","rewrite bad(x:ℝ,t:ℝ):powerR(x,t)=1⇒t=0∨x=1∨x=-1;"),

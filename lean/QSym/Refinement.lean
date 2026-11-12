@@ -1,5 +1,6 @@
 import QSym.RefinementBase
 import QSym.RuleBranches
+import QSym.Partitions
 import QSym.Trigonometry
 import QSym.PowerPredicates
 import QSym.ScalarTypes
@@ -338,6 +339,7 @@ elab "qsym_rational_goal" : tactic => withMainContext do
 
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | qsym_partition
   | solve | qsym_branch
   | solve | (apply Value.refines_integer_literal_affine_nonzero; assumption)
   | solve | (apply Value.refines_natural_literal_affine_nonzero; assumption)

@@ -99,6 +99,8 @@ test: build/qsym
 	./build/convergence-tests --DRT-testmode=run-main build/convergence
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/control.d -of=build/control-tests
 	./build/control-tests --DRT-testmode=run-main build/control
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/partitions.d -of=build/partition-tests
+	./build/partition-tests --DRT-testmode=run-main build/partitions
 	python3 tests/repl.py
 	python3 tests/terminal.py
 
