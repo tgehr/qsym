@@ -152,7 +152,7 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["3",f"Wrote {function_certificate}","domain(f)","true",
-	"false","true","guard(false,0)","false","false","5/2"],result.stdout
+	"false","true","undefined(ℕ)","false","false","5/2"],result.stdout
 assert "theorem refinement" in function_certificate.read_text() and "BindingCertificate.lowered" in function_certificate.read_text()
 print("Function and subset REPL checks passed.")
 result=subprocess.run([str(root/"build/qsym")],input="\n".join([
@@ -172,3 +172,15 @@ assert result.stdout.splitlines()==["1","1","true",f"Wrote {subset_certificate}"
 assert "use :clear before changing the type of S" in result.stderr,result.stderr
 assert "AssumptionCertificate" in subset_certificate.read_text()
 print("Subset assumption REPL checks passed.")
+type_certificate=root/"build/ReplTypes.lean"
+recursion_certificate=root/"build/ReplRecursion.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"Real","ℝ","Real=ℝ",f":lean {type_certificate}","Real=ℂ","λ(t:ℝ).(0:ℝ)",
+	"(μ(f:ℕ→ℕ).λ(n:ℕ).if n≤1 then n else f(n sub 1)+f(n sub 2))(5)",f":lean {recursion_certificate}",
+	"domain(μ(f:ℕ→ℕ).f)","defined(μ(f:ℕ→ℕ).λ(n:ℕ).f(n+1))",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["ℝ","ℝ","true",f"Wrote {type_certificate}","false","λ(x:ℝ). (0:ℝ)",
+	"5",f"Wrote {recursion_certificate}","{x:ℕ | false}","true"],result.stdout
+assert "Recursion.program_unfold" in recursion_certificate.read_text()
+print("Type value and recursion REPL checks passed.")

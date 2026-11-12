@@ -28,7 +28,7 @@ private Case[] cases(){
 		Case("LambdaDomainOne","1∈domain(λ(x:ℝ). 1/x)","true"),
 		Case("QuotientDomainZero","0∈domain(λ(x:ℝ). x/x)","false"),
 		Case("QuotientDomainOne","1∈domain(λ(x:ℝ). x/x)","true"),
-		Case("UndefinedArgument","(λ(x:ℝ).0)(1/0)","guard(false,0)"),
+		Case("UndefinedArgument","(λ(x:ℝ).0)(1/0)","undefined(ℕ)"),
 		Case("UndefinedArgumentDomain","(λ(x:ℝ).0)(1/0)","false","",true),
 		Case("MaskedArgument","(λ(x:ℝ).0)([false]*(1/0))","0"),
 		Case("NaturalPartiality","(λ(n:ℕ). n sub 1)(0)","false","",true),

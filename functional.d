@@ -49,12 +49,14 @@ struct FunctionSyntax{
 	private TypeId type(TypePattern t){
 		init(); enforce(t !is null,"missing type");
 		enforce(t.name!="$subset","refinement annotations require a lambda or set binder");
+		if(t.name=="Type") return pool.primitive(TypeKind.type_);
 		if(t.name=="arrow") return pool.function_(type(t.args[0]),type(t.args[1]));
 		if(t.name=="Set") return pool.set(type(t.args[0]));
 		return scalarType(parseSort(t.name));
 	}
 	string typeName(TypeId t){
 		auto v=pool.view(t); Sort sort;
+		if(v.kind==TypeKind.type_) return "Type";
 		if(scalarSort(t,sort)){
 			switch(sort){
 				case Sort.natural:return "ℕ";
@@ -73,8 +75,12 @@ struct FunctionSyntax{
 		return left~"→"~typeName(v.fields[1]);
 	}
 	private bool reserved(string name){
-		return isConstructor(name)||name=="λ"||name=="lambda"||name=="if"||name=="then"||name=="else"||
+		return typeAlias(name)||isConstructor(name)||name=="λ"||name=="lambda"||name=="μ"||name=="mu"||name=="undefined"||name=="if"||name=="then"||name=="else"||
 			name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub";
+	}
+	private bool typeAlias(string name){
+		foreach(n;["Nat","ℕ","Int","ℤ","Rat","ℚ","Real","ℝ","Complex","ℂ","Bool","𝔹","Type"]) if(name==n) return true;
+		return false;
 	}
 	void declare(string source){
 		init(); auto declarations=Parser(source).parseTypedParameters();
@@ -96,7 +102,8 @@ struct FunctionSyntax{
 		functions=next; scalar=scalars;
 	}
 	private bool special(Pattern p){
-		if(p.name=="$lambda"||p.name=="$set"||p.name=="$apply"||p.name=="$member"||p.name=="$subset"||
+		if(typeAlias(p.name)||p.name=="Set") return true;
+		if(p.name=="$fix"||p.name=="$bottom"||p.name=="$lambda"||p.name=="$set"||p.name=="$apply"||p.name=="$member"||p.name=="$subset"||
 			p.name=="domain"||p.name=="defined"||p.name=="holds"||p.name=="guard"||p.name=="seq") return true;
 		if(p.annotation !is null&&p.annotation.args.length) return true;
 		foreach(f;functions) if(f.name==p.name) return true;
@@ -105,7 +112,7 @@ struct FunctionSyntax{
 	}
 	private BoundTerm parseBound(Arena a,Bindings b,Pattern raw){
 		void collect(Pattern p,string[] bound){
-			if(p.name=="$lambda"||p.name=="$set"){
+			if(p.name=="$fix"||p.name=="$lambda"||p.name=="$set"){
 				enforce(!reserved(p.binder),"reserved binder name: "~p.binder);
 				for(auto ty=p.annotation;ty.name=="$subset";ty=ty.args[0]){
 					enforce(!reserved(ty.binder),"reserved binder name: "~ty.binder); collect(ty.predicate,bound~ty.binder);
@@ -153,6 +160,32 @@ struct FunctionSyntax{
 		BoundTerm build(Pattern p,Scope ctx,string[] locals,TypeId expected=TypeId.init,uint depth=0) @safe{
 			enforce(depth<128,"function expression nesting limit exceeded");
 			BoundTerm finish(BoundTerm t){ return coerce(t,expected); }
+			if(p.name=="$bottom") return finish(b.bottom(ctx,type(p.annotation)));
+			if(p.name=="$fix"){
+				auto ty=type(p.annotation),v=pool.view(ty);
+				enforce(v.kind==TypeKind.function_,"fixed points currently require a function type");
+				auto inner=b.push(ctx,ty),body=build(p.args[0],inner,[p.binder]~locals,ty,depth+1);
+				if(b.node(body).op==BoundOp.variable&&b.node(body).data==0){
+					auto arg=b.push(inner,v.fields[0]); uint[] indices;
+					foreach(i;0..b.depth(inner)) indices~=i+1;
+					body=b.lambda(b.apply(b.rename(body,arg,indices),b.variable(arg,0)));
+				}
+				return finish(b.fixed(body));
+			}
+			if(typeAlias(p.name)){
+				enforce(!p.called,"a type name is not a function"); return finish(b.typeValue(ctx,type(new TypePattern(p.name))));
+			}
+			if(p.name=="Set"){
+				enforce(p.args.length==1,"Set requires one type");
+				return finish(b.typeValue(ctx,pool.set(b.typeDenoted(build(p.args[0],ctx,locals)))));
+			}
+			if(p.name=="$different"){
+				auto left=build(p.args[0],ctx,locals);
+				if(pool.view(b.type(left)).kind==TypeKind.type_){
+					auto right=build(p.args[1],ctx,locals,b.type(left));
+					return finish(b.primitive(a.not_(a.boolean(false)),[b.typeEq(left,right)]));
+				}
+			}
 			if(p.name=="$lambda"||p.name=="$set"){
 				auto base=p.annotation; while(base.name=="$subset") base=base.args[0];
 				auto param=type(base),inner=b.push(ctx,param),names=[p.binder]~locals;
@@ -183,7 +216,9 @@ struct FunctionSyntax{
 				return finish(b.subset(left,build(p.args[1],ctx,locals,b.type(left),depth+1)));
 			}
 			if(p.name=="$member"){
-				auto s=build(p.args[1],ctx,locals,TypeId.init,depth+1),v=pool.view(b.type(s));
+				auto s=build(p.args[1],ctx,locals,TypeId.init,depth+1);
+				if(b.node(s).op==BoundOp.typeValue) s=b.set(b.scalar(b.push(ctx,b.typeDenoted(s)),a.boolean(true)));
+				auto v=pool.view(b.type(s));
 				enforce(v.kind==TypeKind.set,"membership requires a set");
 				return finish(b.member(s,build(p.args[0],ctx,locals,v.fields[0],depth+1)));
 			}
@@ -279,6 +314,9 @@ struct FunctionSyntax{
 			auto n=b.node(t);
 			string child(uint id){ return render(b.at(id),locals,depth+1); }
 			switch(n.op){
+				case BoundOp.fixed:
+					auto name=fresh(locals); return "μ("~name~":"~typeName(b.type(t))~"). "~render(b.at(n.a),[name]~locals,depth+1);
+				case BoundOp.bottom:return "undefined("~typeName(b.type(t))~")";
 				case BoundOp.lambda,BoundOp.set:
 					auto name=fresh(locals),param=typeName(pool.view(b.type(t)).fields[0]),bodyTerm=b.at(n.a),v=b.node(bodyTerm);
 					if(n.op==BoundOp.lambda&&v.op==BoundOp.guard){
@@ -288,6 +326,8 @@ struct FunctionSyntax{
 					auto body=render(bodyTerm,[name]~locals,depth+1);
 					return n.op==BoundOp.lambda?"λ("~name~":"~param~"). "~body:"{"~name~":"~param~" | "~body~"}";
 				case BoundOp.global:return functions[n.data].name;
+				case BoundOp.typeValue:return typeName(b.typeDenoted(t));
+				case BoundOp.typeEq:return "("~child(n.a)~"="~child(n.b)~")";
 				case BoundOp.apply:return "("~child(n.a)~")("~child(n.b)~")";
 				case BoundOp.sequence:return "seq("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.subset:return "("~child(n.a)~"⊆"~child(n.b)~")";
@@ -318,7 +358,7 @@ struct FunctionSyntax{
 			}
 			auto flat=flatten(t),text=printer.format(a,flat); bool same;
 			try{ auto check=printer; same=a.sort(check.parse(a,text))==a.sort(flat); }catch(Exception){}
-			return same?text:"("~text~":"~sortName(a.sort(flat))~")";
+			return same?text:"("~text~":"~typeName(scalarType(a.sort(flat)))~")";
 		}
 		return render(result.reduction.output,[]);
 	}

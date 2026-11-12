@@ -179,3 +179,10 @@ with Terminal() as t:
 	t.submit(r"A\nsubseteq A","false","A⊈ A")
 	t.finish()
 print("Subset input-method checks passed.")
+
+with Terminal() as t:
+	t.until(ready)
+	t.submit(r"Real=\bR","true","Real=ℝ")
+	t.submit(r"(\mu(f:Nat→Nat).\lambda(n:Nat).if n=0 then 1 else f(n sub 1))(2)","1")
+	t.finish()
+print("Type and fixed-point input-method checks passed.")

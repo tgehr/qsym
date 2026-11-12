@@ -97,10 +97,22 @@ def main():
 	certificate(ROOT/"build/ReplFunction.lean")
 	certificate(ROOT/"build/ReplSubsets.lean")
 	certificate(ROOT/"build/ReplSubsetSnapshot.lean")
+	certificate(ROOT/"build/ReplTypes.lean")
+	certificate(ROOT/"build/ReplRecursion.lean")
 	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
 	if len(refinements)!=32:
 		raise RuntimeError("expected 32 refinement certificates")
 	for file in refinements:
+		certificate(file)
+	types=sorted((ROOT/"build/type-values").glob("*.lean"))
+	if len(types)!=22:
+		raise RuntimeError("expected 22 type-value certificates")
+	for file in types:
+		certificate(file)
+	recursion=sorted((ROOT/"build/recursion").glob("*.lean"))
+	if len(recursion)!=34:
+		raise RuntimeError("expected 34 recursion certificates")
+	for file in recursion:
 		certificate(file)
 	subsets=sorted((ROOT/"build/subsets").glob("*.lean"))
 	if len(subsets)!=34:

@@ -109,6 +109,10 @@ test: build/qsym
 	./build/subset-tests --DRT-testmode=run-main build/subsets
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/refinements.d -of=build/refinement-tests
 	./build/refinement-tests --DRT-testmode=run-main build/refinements
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/type_values.d -of=build/type-value-tests
+	./build/type-value-tests --DRT-testmode=run-main build/type-values
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/recursion.d -of=build/recursion-tests
+	./build/recursion-tests --DRT-testmode=run-main build/recursion
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

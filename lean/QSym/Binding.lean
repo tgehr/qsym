@@ -1,5 +1,6 @@
 import QSym.Expr
 import QSym.Domain
+import QSym.Recursion
 
 namespace QSym.Binding
 
@@ -7,12 +8,14 @@ inductive Ty where
   | scalar : QSym.Ty → Ty
   | arrow : Ty → Ty → Ty
   | set : Ty → Ty
+  | type
   deriving DecidableEq
 
 abbrev Ty.denote : Ty → Type
   | .scalar s => s.denote
   | .arrow a b => a.denote → Option b.denote
   | .set a => Set a.denote
+  | .type => Ty
 
 abbrev Globals := (a : Ty) → Nat → a.denote
 
@@ -66,6 +69,15 @@ noncomputable def subsetValue {α : Type} (s t : Option (Set α)) : Option Bool 
 
 def guardValue {α : Type} (p : Option Bool) (x : Option α) : Option α :=
   if p == some true then x else none
+
+theorem guard_branch {α : Type} (p : Option Bool) (x : Option α) :
+    guardValue p x = p.bind (fun b => if b then x else none) := by
+  cases p with
+  | none => rfl
+  | some b => cases b <;> rfl
+
+def typeEqValue (x y : Option Ty) : Option Bool :=
+  x.bind (fun a => y.map (fun b => decide (a = b)))
 
 abbrev Expr.defined (x : Expr Γ a) : Expr Γ (.scalar .bool) := .unary definedValue x
 abbrev Expr.holds (p : Expr Γ (.scalar .bool)) : Expr Γ (.scalar .bool) := .unary holdsValue p
@@ -310,6 +322,34 @@ theorem Reduction.scalarDomain (x : QSym.Expr s) (d : QSym.Expr .bool)
     (h : ∀ ξ, Domain.Correct (x.eval ξ) (d.eval ξ)) :
     Reduction (Γ := Γ) (.defined (.scalar x)) (.scalar d) := .ofEq (fun ξ _ => (h ξ).symm)
 
+theorem Reduction.appBottom (f : Expr Γ (.arrow a b)) :
+    Reduction (.app f (.constant none)) (.constant none) := .ofEq (by
+  intro ξ ρ
+  cases hf : f.eval ξ ρ <;> simp [Expr.eval, hf])
+
+theorem Reduction.maskFalseQ (x : Expr Γ (.scalar .rational)) :
+    Reduction (.binary Value.mask (.scalar (.bool false)) x) (.scalar (.rat (0 / 1))) := .ofEq (by
+  intro ξ ρ
+  simp [Expr.eval, QSym.Expr.eval, Value.mask])
+
+theorem Reduction.maskFalseR (x : Expr Γ (.scalar .real)) :
+    Reduction (.binary Value.mask (.scalar (.bool false)) x) (.scalar (.real 0)) := .ofEq (by
+  intro ξ ρ
+  simp [Expr.eval, QSym.Expr.eval, Value.mask])
+
+theorem Reduction.maskFalseC (x : Expr Γ (.scalar .complex)) :
+    Reduction (.binary Value.mask (.scalar (.bool false)) x) (.scalar (.complex 0 0)) := .ofEq (by
+  intro ξ ρ
+  simp [Expr.eval, QSym.Expr.eval, Value.mask])
+
+theorem Reduction.appScalarUndefined (f : Expr Γ (.arrow (.scalar s) b)) (x : QSym.Expr s)
+    (h : ∀ ξ, Domain.Correct (x.eval ξ) (some false)) :
+    Reduction (.app f (.scalar x)) (.constant none) := .ofEq (by
+  intro ξ ρ
+  cases hx : x.eval ξ with
+  | none => cases hf : f.eval ξ ρ <;> simp [Expr.eval, hx, hf]
+  | some v => have hn := h ξ; simp [Domain.Correct, hx] at hn)
+
 theorem Reduction.scalarHolds (x d : QSym.Expr .bool)
     (h : ∀ ξ, Domain.Correct (x.eval ξ) (d.eval ξ)) :
     Reduction (Γ := Γ) (.holds (.scalar x)) (.scalar (.and d x)) := .ofEq (by
@@ -392,10 +432,26 @@ theorem Reduction.definedApp (f : Expr Γ (.arrow a b)) (x : Expr Γ a) :
     | some v => cases hv : g v <;>
         simp [Expr.eval, holdsValue, inputDomain, memberValue, definedValue, hf, hx, hv])
 
+theorem Reduction.memberDomain (f : Expr Γ (.arrow a b)) (x : Expr Γ a) :
+    Reduction (.mem (.domain f) x) (.seq x (.defined (.app f x))) := .ofEq (by
+  intro ξ ρ
+  cases hf : f.eval ξ ρ with
+  | none => cases hx : x.eval ξ ρ <;>
+      simp [Expr.eval, inputDomain, memberValue, definedValue, hf, hx]
+  | some g => cases hx : x.eval ξ ρ with
+    | none => simp [Expr.eval, inputDomain, memberValue, definedValue, hf, hx]
+    | some v => cases hv : g v <;>
+        simp [Expr.eval, inputDomain, memberValue, definedValue, hf, hx, hv])
+
 theorem Reduction.domainGuardFalse (f : Expr Γ (.arrow a b)) :
     Reduction (.domain (.guard (.scalar (.bool false)) f)) (.set (.scalar (.bool false))) := .ofEq (by
   intro ξ ρ
   simp [Expr.eval, QSym.Expr.eval, guardValue, inputDomain])
+
+theorem Reduction.domainBottom {Γ : List Ty} :
+    Reduction (.domain (.constant (Γ := Γ) (a := .arrow a b) none)) (.set (.scalar (.bool false))) := .ofEq (by
+  intro ξ ρ
+  simp [Expr.eval, QSym.Expr.eval, inputDomain])
 
 theorem Reduction.definedNot (p : Expr Γ (.scalar .bool)) :
     Reduction (.defined (.unary (b := .scalar .bool) Value.not p)) (.defined p) := .ofEq (by
@@ -439,5 +495,10 @@ theorem Reduction.setHolds (p : Expr (a :: Γ) (.scalar .bool)) :
   ext v
   change p.eval ξ (ρ.cons (some v)) = some true ↔ holdsValue (p.eval ξ (ρ.cons (some v))) = some true
   simp [holdsValue])
+
+theorem Reduction.typeEqSelf (x : Expr Γ .type) :
+    Reduction (.binary typeEqValue x x) (.seq x (.scalar (.bool true))) := .ofEq (by
+  intro ξ ρ
+  cases hx : x.eval ξ ρ <;> simp [Expr.eval, QSym.Expr.eval, typeEqValue, hx])
 
 end QSym.Binding

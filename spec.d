@@ -103,6 +103,13 @@ struct Parser{
 	private Pattern primary(uint depth){
 		enforce(depth<128,"rule pattern nesting limit exceeded");
 		auto lookahead=lexer;
+		if((token.text=="μ"||token.text=="mu")&&lookahead.next().text=="("){
+			next(); expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
+			expect(")"); expect("."); auto p=pattern("$fix",[expression(depth+1)]); p.binder=name; p.annotation=ty; return p;
+		}
+		if(token.text=="undefined"&&lookahead.next().text=="("){
+			next(); expect("("); auto p=pattern("$bottom",[]); p.annotation=typeExpression(depth+1); expect(")"); return p;
+		}
 		if((token.text=="λ"||token.text=="lambda")&&lookahead.next().text=="("){
 			next();
 			expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
@@ -269,7 +276,7 @@ struct Parser{
 		else{
 			auto name=ident();
 			if(name=="Set"){ expect("("); t=new TypePattern("Set",[typeExpression(depth+1)]); expect(")"); }
-			else{ parseSort(name); t=new TypePattern(name); }
+			else{ if(name!="Type") parseSort(name); t=new TypePattern(name); }
 		}
 		if(take("=>")||take("->")) t=new TypePattern("arrow",[t,typeExpression(depth+1)]);
 		return t;

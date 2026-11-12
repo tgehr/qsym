@@ -8,7 +8,7 @@ enum Sort:ubyte{ real_,complex,boolean,density,measure,natural,integer,rational 
 
 enum TypeKind:ubyte{
 	unit,boolean,natural,integer,rational,real_,complex,
-	uintBits,intBits,vector,tuple,array,function_,set
+	uintBits,intBits,vector,tuple,array,function_,set,type_
 }
 struct TypeId{
 	private TypePool owner;
@@ -45,7 +45,7 @@ final class TypePool{
 		check(t); auto v=nodes[t.index]; v.fields=v.fields.dup; return v;
 	}
 	TypeId primitive(TypeKind k){
-		enforce(k<=TypeKind.complex,"not a primitive type");
+		enforce(k<=TypeKind.complex||k==TypeKind.type_,"not a primitive type");
 		return intern(k,0,[]);
 	}
 	TypeId bits(bool signed_,ulong width){
