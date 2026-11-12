@@ -1,4 +1,5 @@
 import Lean.Elab.Tactic
+import QSym.Progress
 
 open Lean Meta Elab Tactic
 namespace QSym
@@ -39,6 +40,7 @@ private partial def expandAux (cache : ProofCache) (env : Environment) (e : Expr
 
 elab "qsym_cached" : tactic => withMainContext do
   let some name ← Term.getDeclName? | throwError "no declaration"
+  Progress.report "start" name
   let cache ← cachedProofs
   let some (.thmInfo old) := cache.constants.find? name | throwError "no cached proof"
   unless old.levelParams.isEmpty do throwError "polymorphic cache entry"
@@ -53,6 +55,7 @@ elab "qsym_cached" : tactic => withMainContext do
   let decl := Declaration.thmDecl { name, levelParams := [], type := closedType, value := closedProof }
   -- A cached term is only a candidate. Always ask the actual kernel, against
   -- the current type and environment; never import the cached declarations.
+  Progress.report "cache" name
   match Kernel.Environment.addDeclCore (← getEnv).toKernelEnv
       (Core.getMaxHeartbeats (← getOptions)).toUSize decl none with
   | .error e => throwError "cached proof does not check: {e.toMessageData (← getOptions)}"
@@ -61,6 +64,10 @@ elab "qsym_cached" : tactic => withMainContext do
     replaceMainGoal []
     logInfo "rechecked cached proof"
 
-macro "qsym_cached% " proof:term : term => `(by first | qsym_cached | exact $proof)
+elab "qsym_source_progress" : tactic => do
+  if let some name ← Term.getDeclName? then Progress.report "tactics" name
+
+macro "qsym_cached% " proof:term : term =>
+  `(by first | qsym_cached | (qsym_source_progress; exact $proof))
 
 end QSym

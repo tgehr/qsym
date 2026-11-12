@@ -8,7 +8,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate test demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: all generate test test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 all: build/qsym
 
 build generated:
@@ -153,8 +153,12 @@ verify-full: test build/qsym
 	./build/qsym export build/certificates
 	python3 tools/verify.py --lake $(LAKE) $(VERIFYFLAGS)
 
+test-progress:
+	python3 tests/progress.py --lake $(LAKE)
+
 verify: test build/qsym
 	python3 tools/build_lean.py --lake $(LAKE) --reuse-proofs
+	python3 tests/progress.py --lake $(LAKE)
 	python3 tests/verification.py --lake $(LAKE)
 	./build/qsym export build/certificates
 	python3 tools/verify.py --lake $(LAKE) --fast --jobs 2 --batch-size 16 $(VERIFYFLAGS)

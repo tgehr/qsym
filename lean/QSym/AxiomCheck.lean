@@ -1,4 +1,5 @@
 import Lean.Elab.Print
+import QSym.Progress
 
 open Lean Elab Command
 namespace QSym
@@ -25,6 +26,7 @@ elab_rules : command
     unless unexpected.isEmpty do
       throwError "unexpected axioms: {unexpected}"
     modifyEnv fun env => axiomCache.setState env state
+    for name in names do liftCoreM <| Progress.report "checked" name
     logInfo m!"checked axioms for {names}"
 
 end QSym
