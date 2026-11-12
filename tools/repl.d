@@ -43,6 +43,7 @@ int repl(){
 				writeln(":facts            list assumptions; :clear removes them");
 				writeln(":expand EXPR      simplify with polynomial power expansion");
 				writeln(":domain EXPR      definedness condition, or input subset for a function");
+				writeln(":type EXPR        inspect the type without simplifying");
 				writeln(":lean FILE        export a Lean certificate for the last expression");
 				writeln(":reset            clear assumptions, variables and the last expression");
 				writeln(":quit             exit (or EOF)");
@@ -80,6 +81,10 @@ int repl(){
 				syntax=next; continue;
 			}
 			if(line==":facts"){ foreach(f;facts) writeln(f); continue; }
+			if(line==":type"||line.startsWith(":type ")){
+				auto source=strip(line[5..$]); enforce(source.length!=0,"expected an expression");
+				auto next=syntax,session=Session.open(); writeln(next.inspectType(session.arena,source)); syntax=next; continue;
+			}
 			if(line==":clear"){ facts=null; continue; }
 			if(line.startsWith(":assume ")){
 				auto source=strip(line[8..$]),next=syntax;

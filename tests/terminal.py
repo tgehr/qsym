@@ -208,3 +208,11 @@ with Terminal() as t:
 	t.submit("dot((ⅈ,),(1,))","-ⅈ")
 	t.finish()
 print("Tensor terminal checks passed.")
+
+with Terminal() as t:
+	t.until(ready)
+	t.submit(r":vars f:\Pi(n:Nat).Real^n",None)
+	t.submit(":type f(3)","ℝ^3")
+	t.submit(r"\lambda(n:Nat).Real^n","λ(n:ℕ). ℝ^n")
+	t.finish()
+print("Dependent type terminal checks passed.")

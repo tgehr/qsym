@@ -4,15 +4,52 @@ import QSym.Recursion
 
 namespace QSym.Binding
 
+inductive Dimension where
+  | literal : ℕ → Dimension
+  | bound : ℕ → Dimension
+  | add : Dimension → Dimension → Dimension
+  | mul : Dimension → Dimension → Dimension
+  | pow : Dimension → Dimension → Dimension
+  deriving DecidableEq
+
+def Dimension.eval (ρ : ℕ → ℕ) : Dimension → ℕ
+  | .literal n => n
+  | .bound i => ρ i
+  | .add a b => a.eval ρ + b.eval ρ
+  | .mul a b => a.eval ρ * b.eval ρ
+  | .pow a b => a.eval ρ ^ b.eval ρ
+
+inductive Family where
+  | unit
+  | scalar : QSym.Ty → Family
+  | pair : Family → Family → Family
+  | vector : Family → Dimension → Family
+  | arrow : Family → Family → Family
+  | piNat : Family → Family
+  | set : Family → Family
+  | type
+  deriving DecidableEq
+
 inductive Ty where
   | unit
   | scalar : QSym.Ty → Ty
   | pair : Ty → Ty → Ty
   | vector : Ty → ℕ → Ty
   | arrow : Ty → Ty → Ty
+  | piNat : Family → Ty
   | set : Ty → Ty
   | type
   deriving DecidableEq
+
+abbrev Family.denote (ρ : ℕ → ℕ) : Family → Type
+  | .unit => Unit
+  | .scalar s => s.denote
+  | .pair a b => a.denote ρ × b.denote ρ
+  | .vector a n => Fin (n.eval ρ) → a.denote ρ
+  | .arrow a b => a.denote ρ → Option (b.denote ρ)
+  | .piNat b => (n : ℕ) → Option (b.denote (fun i => if i = 0 then n else ρ (i-1)))
+  | .set a => Set (a.denote ρ)
+  | .type => Ty
 
 abbrev Ty.denote : Ty → Type
   | .unit => Unit
@@ -20,6 +57,7 @@ abbrev Ty.denote : Ty → Type
   | .pair a b => a.denote × b.denote
   | .vector a n => Fin n → a.denote
   | .arrow a b => a.denote → Option b.denote
+  | .piNat b => (n : ℕ) → Option (b.denote (fun _ => n))
   | .set a => Set a.denote
   | .type => Ty
 

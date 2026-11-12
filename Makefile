@@ -123,6 +123,10 @@ test: build/qsym
 	./build/cutoff-tests --DRT-testmode=run-main build/cutoff
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/tensors.d -of=build/tensor-tests
 	./build/tensor-tests --DRT-testmode=run-main build/tensors
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/dependent.d -of=build/dependent-tests
+	./build/dependent-tests --DRT-testmode=run-main build/dependent
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/intervals.d -of=build/interval-tests
+	./build/interval-tests --DRT-testmode=run-main build/intervals
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

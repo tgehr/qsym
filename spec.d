@@ -44,6 +44,7 @@ struct Parser{
 	private Lexer lexer;
 	private Token token;
 	private size_t integerEnd;
+	private bool typeArrows;
 	private void next(){
 		integerEnd=token.kind==TokenKind.integer||token.kind==TokenKind.decimal?token.offset+token.text.length:size_t.max;
 		token=lexer.next();
@@ -104,6 +105,9 @@ struct Parser{
 	private Pattern primary(uint depth){
 		enforce(depth<128,"rule pattern nesting limit exceeded");
 		auto lookahead=lexer;
+		if((token.text=="Π"||token.text=="Pi")&&lookahead.next().text=="("){
+			auto p=pattern("$type",[]); p.annotation=typeExpression(depth+1); return p;
+		}
 		if((token.text=="μ"||token.text=="mu")&&lookahead.next().text=="("){
 			next(); expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
 			expect(")"); expect("."); auto p=pattern("$fix",[expression(depth+1)]); p.binder=name; p.annotation=ty; return p;
@@ -257,6 +261,7 @@ struct Parser{
 	private Pattern expression(uint depth=0){
 		auto p=conjunction(depth);
 		while(take("||")) p=pattern("or",[p,conjunction(depth)]);
+		if(typeArrows&&(take("->")||take("=>"))) p=pattern("$arrowtype",[p,expression(depth+1)]);
 		return p;
 	}
 	private Parameter parameter(){
@@ -275,6 +280,10 @@ struct Parser{
 	}
 	private TypePattern typeAtom(uint depth){
 		enforce(depth<128,"type nesting limit exceeded"); TypePattern t;
+		if(take("Π")||take("Pi")){
+			expect("("); auto name=ident(); expect(":"); auto input=typeExpression(depth+1); expect(")"); expect(".");
+			t=new TypePattern("pi",[input,typeExpression(depth+1)]); t.binder=name; return t;
+		}
 		if(take("(")){ t=typeExpression(depth+1); expect(")"); }
 		else if(take("{")){
 			auto name=ident(); expect(":"); t=new TypePattern("$subset",[typeExpression(depth+1)]); expect("|");
@@ -310,13 +319,13 @@ struct Parser{
 		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text); return result;
 	}
 	Pattern parseRawExpression(){
-		lexer=Lexer(source); next(); auto p=expression();
+		typeArrows=true; lexer=Lexer(source); next(); auto p=expression();
 		take(";"); enforce(token.kind==TokenKind.end,"unexpected token: "~token.text); return p;
 	}
 	Pattern parseExpression(ref Parameter[] parameters){ return elaborate(parseRawExpression(),parameters); }
 
 	Rule[] parse(){
-		lexer=Lexer(source); next();
+		typeArrows=false; lexer=Lexer(source); next();
 		Rule[] rules;
 		while(token.kind!=TokenKind.end){
 			auto kind=ident();

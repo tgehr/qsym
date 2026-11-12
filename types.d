@@ -8,7 +8,7 @@ enum Sort:ubyte{ real_,complex,boolean,density,measure,natural,integer,rational 
 
 enum TypeKind:ubyte{
 	unit,boolean,natural,integer,rational,real_,complex,
-	uintBits,intBits,vector,tuple,array,function_,set,type_
+	uintBits,intBits,vector,tuple,array,function_,set,type_,pi
 }
 struct TypeId{
 	private TypePool owner;
@@ -24,6 +24,9 @@ struct TypeView{
 }
 
 final class Dimension{
+	string op;
+	Dimension left,right;
+	uint index=uint.max;
 	immutable string key,text,lean;
 	immutable ulong value;
 	immutable bool constant;
@@ -33,6 +36,15 @@ final class Dimension{
 	}
 	static Dimension literal(ulong n){ auto s=to!string(n); return new Dimension("#"~s,s,s,n,true); }
 	static Dimension variable(string name,uint index){ return new Dimension("v"~to!string(index)~":"~name,name,"(δ "~to!string(index)~")",0,false,[name]); }
+	static Dimension bound(uint index){ auto d=new Dimension("b"~to!string(index),"?"~to!string(index),"",0,false); d.index=index; return d; }
+	Dimension map(Dimension delegate(uint) @safe f){
+		if(index!=uint.max) return f(index);
+		return op.length?binary(op,left.map(f),right.map(f)):this;
+	}
+	string format(string[] locals){
+		if(index!=uint.max){ enforce(index<locals.length,"unbound dimension"); return locals[index]; }
+		return op.length?"("~left.format(locals)~op~right.format(locals)~")":text;
+	}
 	static Dimension binary(string op,Dimension a,Dimension b){
 		enforce(op=="+"||op=="*"||op=="^","invalid dimension operator");
 		if(a.constant&&b.constant){
@@ -44,7 +56,8 @@ final class Dimension{
 				if(fits) return literal(n);
 			}
 		}
-		return new Dimension("("~a.key~op~b.key~")","("~a.text~op~b.text~")","("~a.lean~op~b.lean~")",0,false,a.names~b.names);
+		auto d=new Dimension("("~a.key~op~b.key~")","("~a.text~op~b.text~")","("~a.lean~op~b.lean~")",0,false,a.names~b.names);
+		d.op=op; d.left=a; d.right=b; return d;
 	}
 }
 
@@ -89,10 +102,36 @@ final class TypePool{
 		bool uniform=true;
 		foreach(f;fields) if(f!=fields[0]) uniform=false;
 		if(uniform) return vector(fields[0],fields.length);
+		foreach(f;fields){
+			bool open; map(f,(uint i){ open=true; return Dimension.bound(i); });
+			enforce(!open,"heterogeneous tuples with bound dimensions are not supported yet");
+		}
 		return intern(TypeKind.tuple,0,fields);
 	}
 	TypeId array(TypeId t){ return intern(TypeKind.array,0,[t]); }
 	TypeId function_(TypeId a,TypeId b){ return intern(TypeKind.function_,0,[a,b]); }
+	TypeId pi(TypeId a,TypeId b){
+		if(!binds(b,0)) return function_(a,shift(b,-1));
+		enforce(view(a).kind==TypeKind.natural,"dependent function parameters must currently be ℕ");
+		return intern(TypeKind.pi,0,[a,b]);
+	}
+	TypeId map(TypeId t,Dimension delegate(uint) @safe f,uint depth=0){
+		auto v=view(t); TypeId[] fields;
+		foreach(i,field;v.fields) fields~=map(field,f,depth+(v.kind==TypeKind.pi&&i==1?1:0));
+		auto d=v.dimension;
+		if(d !is null) d=d.map((uint i)=>i<depth?Dimension.bound(i):f(i-depth).map((uint j)=>Dimension.bound(j+depth)));
+		return v.kind==TypeKind.vector?vector(fields[0],d):intern(v.kind,v.length,fields);
+	}
+	TypeId shift(TypeId t,int amount){
+		return map(t,(uint i){ enforce(cast(long)i+amount>=0,"dimension escapes its binder"); return Dimension.bound(cast(uint)(i+amount)); });
+	}
+	TypeId instantiate(TypeId body,Dimension value){ return map(body,(uint i)=>i?Dimension.bound(i-1):value); }
+	bool binds(TypeId t,uint index){ bool found; map(t,(uint i){ found|=i==index; return Dimension.bound(i); }); return found; }
+	bool dependent(TypeId t){
+		auto v=view(t); if(v.kind==TypeKind.pi) return true;
+		if(v.dimension !is null){ bool bound; v.dimension.map((uint i){ bound=true; return Dimension.bound(i); }); if(bound) return true; }
+		foreach(f;v.fields) if(dependent(f)) return true; return false;
+	}
 	TypeId set(TypeId a){ return intern(TypeKind.set,0,[a]); }
 }
 

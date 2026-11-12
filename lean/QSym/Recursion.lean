@@ -241,4 +241,116 @@ theorem solve_nat_cutoff (p : Program ℕ ℕ ℕ) (a b : ℕ)
   rw [he]
   simp [k, Function2.apply, Functions.leN]
 
+noncomputable def natBand (a l u : ℕ) (g : ℕ → Option ℕ) (n : ℕ) : Option ℕ :=
+  if n = l then some a else if n < u then if n = 0 then none else g (n-1) else g (n+1)
+
+theorem solve_nat_band (p : Program ℕ ℕ ℕ) (a l u : ℕ) (hlu : l < u)
+    (hp : ∀ g n, p.eval g n = natBand a l u g n) :
+    FixedPoint.value p.functional = fun n => if l ≤ n ∧ n < u then some a else none := by
+  classical
+  let k : ℕ → Option ℕ := fun n => if l ≤ n ∧ n < u then some a else none
+  have hk : p.functional (fun n => Part.ofOption (k n)) = fun n => Part.ofOption (k n) := by
+    funext n
+    apply Part.equivOption.injective
+    simp only [Part.equivOption, Equiv.coe_fn_mk]
+    change (p.functional (fun n => Part.ofOption (k n)) n).toOption = _
+    rw [Program.functional, ContinuousHom.flip_apply, Program.toOption_continuous]
+    simp only [toOption_ofOption, hp, natBand]
+    by_cases he : n = l
+    · subst n; simp [k, hlu]
+    · by_cases hu : n < u
+      · by_cases hz : n = 0
+        · subst n; have hl : ¬ l ≤ 0 := by omega
+          simp [he, k, hu, hl]
+        · by_cases hl : l ≤ n
+          · have hl' : l ≤ n-1 := by omega
+            have hu' : n-1 < u := by omega
+            simp [he, hu, hz, k, hl, hl', hu']
+          · have hl' : ¬ l ≤ n-1 := by omega
+            simp [he, hu, hz, k, hl, hl']
+      · have hu' : ¬ n+1 < u := by omega
+        simp [he, hu, k, hu']
+  have hle := FixedPoint.least_le p.functional (le_of_eq hk)
+  funext n
+  by_cases h : l ≤ n ∧ n < u
+  · have ha : ∀ n, l ≤ n → n < u → FixedPoint.value p.functional n = some a := by
+      intro n
+      induction n using Nat.strong_induction_on with
+      | h n ih =>
+        intro hl hu
+        rw [← p.unfold n, hp, natBand]
+        by_cases he : n = l
+        · simp [he]
+        · have hz : n ≠ 0 := by omega
+          have hn : n-1 < n := by omega
+          have hl' : l ≤ n-1 := by omega
+          have hu' : n-1 < u := by omega
+          simp [he, hu, hz, ih (n-1) hn hl' hu']
+    simpa [h] using ha n h.1 h.2
+  · have hn : FixedPoint.least p.functional n = Part.none := by
+      apply le_antisymm
+      · simpa [k, h] using hle n
+      · exact bot_le
+    simp [FixedPoint.value, hn, h, Part.none_toOption]
+
+noncomputable def natChoose (p : Option Bool) (x y : Option ℕ) : Option ℕ :=
+  Functions.addN.apply (Value.mask p x) (Value.mask (Value.not p) y)
+
+theorem natChoose_some (b : Bool) (x y : Option ℕ) : natChoose (some b) x y = if b then x else y := by
+  cases b <;> cases x <;> cases y <;> simp [natChoose, Value.mask, Value.not, Function2.apply, Functions.addN]
+
+noncomputable def natCutoffLt (a u : ℕ) (g : ℕ → Option ℕ) (n : ℕ) : Option ℕ :=
+  natChoose (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) (some a)
+    (natChoose (Functions.ltN.apply (some n) (some u))
+      ((Functions.subN.apply (some n) (some 1)).bind g)
+      ((Functions.addN.apply (some n) (some 1)).bind g))
+
+theorem natCutoffLt_eq (a u : ℕ) (g : ℕ → Option ℕ) (n : ℕ) :
+    natCutoffLt a u g n = natBand a 0 u g n := by
+  rcases n with _ | n
+  · simp [natCutoffLt, natChoose, natBand, Function1.apply, Function2.apply,
+      Functions.castNZ, Functions.nonzeroZ, Functions.addN, Value.mask, Value.not]
+  · have hn : (↑n + 1 : ℤ) ≠ 0 := by omega
+    by_cases hu : n+1 < u <;>
+      simp [natCutoffLt, natChoose, natBand, Function1.apply, Function2.apply,
+        Functions.castNZ, Functions.nonzeroZ, Functions.addN, Functions.subN, Functions.ltN, Value.mask, Value.not, hn, hu]
+
+theorem solve_nat_cutoff_lt (p : Program ℕ ℕ ℕ) (a u : ℕ) (hu : 0 < u)
+    (hp : ∀ g n, p.eval g n = natCutoffLt a u g n) :
+    FixedPoint.value p.functional = fun n =>
+      if Functions.ltN.apply (some n) (some u) == some true then some a else none := by
+  have h := solve_nat_band p a 0 u hu (fun g n => (hp g n).trans (natCutoffLt_eq a u g n))
+  simpa [Function2.apply, Functions.ltN] using h
+
+noncomputable def natInterval (a l u : ℕ) (g : ℕ → Option ℕ) (n : ℕ) : Option ℕ :=
+  let down := (Functions.subN.apply (some n) (some 1)).bind g
+  let up := (Functions.addN.apply (some n) (some 1)).bind g
+  let eq := Value.not (Functions.nonzeroZ.apply (Functions.addZ.apply (Functions.castNZ.apply (some n))
+    (Functions.mulZ.apply (some (-1)) (some (l : ℤ)))))
+  natChoose (Functions.ltN.apply (some n) (some l)) down
+    (natChoose eq (some a) (natChoose (Functions.ltN.apply (some n) (some u)) down up))
+
+theorem natInterval_eq (a l u : ℕ) (hlu : l < u) (g : ℕ → Option ℕ) (n : ℕ) :
+    natInterval a l u g n = natBand a l u g n := by
+  have he : ((n : ℤ) + -(l : ℤ) = 0) ↔ n = l := by omega
+  have hd : (Functions.subN.apply (some n) (some 1)).bind g = if n = 0 then none else g (n-1) := by
+    rcases n with _ | n <;> simp [Function2.apply, Functions.subN]
+  simp only [natInterval]
+  rw [hd]
+  by_cases hl : n < l <;> by_cases hn : n = l <;> by_cases hu : n < u <;>
+    simp [natChoose, natBand, Function1.apply, Function2.apply, Functions.castNZ,
+      Functions.nonzeroZ, Functions.addZ, Functions.mulZ, Functions.addN, Functions.ltN,
+      Value.mask, Value.not, he, hl, hn, hu] <;> try omega
+
+theorem solve_nat_interval (p : Program ℕ ℕ ℕ) (a l u : ℕ) (hlu : l < u)
+    (hp : ∀ g n, p.eval g n = natInterval a l u g n) :
+    FixedPoint.value p.functional = fun n =>
+      if Value.and (Functions.leN.apply (some l) (some n)) (Functions.ltN.apply (some n) (some u)) == some true
+      then some a else none := by
+  have h := solve_nat_band p a l u hlu (fun g n => (hp g n).trans (natInterval_eq a l u hlu g n))
+  rw [h]
+  funext n
+  by_cases hl : l ≤ n <;> by_cases hu : n < u <;>
+    simp [Function2.apply, Functions.ltN, Functions.leN, Value.and, hl, hu]
+
 end QSym.Recursion

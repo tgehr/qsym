@@ -219,3 +219,22 @@ assert result.stdout.splitlines()==["ℕ^3","(17,39)","-ⅈ","25",f"Wrote {tenso
 	"(A@x)","(ℝ^n=ℝ^m)","{n:ℕ | n≤10}"],result.stdout
 assert "Tensor.dotValue" in tensor_certificate.read_text()
 print("Tensor and bounded-recursion REPL checks passed.")
+dependent_certificate=root/"build/ReplDependent.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":vars f:Π(n:ℕ).ℝ^n",":type f",":type f(3)",":type λ(n:ℕ).ℝ^n",":type 1/0",
+	"λ(n:ℕ).ℝ^n","(λ(n:ℕ).λ(x:ℝ^n).x)(2)","f(2)",":type f(4)",
+	f":lean {dependent_certificate}",":type",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0,result.stderr
+assert result.stdout.splitlines()==["Π(n:ℕ). ℝ^n","ℝ^3","ℕ→Type","ℚ","λ(n:ℕ). ℝ^n",
+	"λ(x:ℝ^2). x","f(2)","ℝ^4",f"Wrote {dependent_certificate}"],result.stdout
+assert "expected an expression" in result.stderr,result.stderr
+assert "Dependent.apply" in dependent_certificate.read_text()
+assert "(.scalar .real) 2" in dependent_certificate.read_text()
+assert "(.scalar .real) 4" not in dependent_certificate.read_text()
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":domain μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else if n<10 then f(n sub 1) else f(n+1)",
+	":domain μ(f:ℕ→ℕ).λ(n:ℕ).if n<10 then f(n sub 1) else if n=10 then 0 else if n<20 then f(n sub 1) else f(n+1)",
+	":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["{n:ℕ | n≤9}","{n:ℕ | 10≤n∧n≤19}"],result.stdout
+print("Dependent types, type queries, and interval-domain REPL checks passed.")

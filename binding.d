@@ -1,6 +1,6 @@
 module qsym.binding;
 import qsym.ir;
-import qsym.types:TypeId,TypeKind,TypePool;
+import qsym.types:TypeId,TypeKind,TypePool,Dimension;
 import qsym.number:Number;
 import qsym.table:Table;
 import qsym.generated.rules:Law,instantiate;
@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
-private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; }
+private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; }
 struct BindingResult{
 	BoundTerm input,output;
 	bool exhausted;
@@ -64,7 +64,10 @@ final class Bindings{
 	private Table!(BoundNode,uint) nodeIds;
 	private Table!(uint,uint) binderHints;
 	private BinderHint[] hints;
-	private bool dependent_;
+	private bool dependent_,telescope_;
+	private Table!(uint,string) dimensionParameters;
+	void dimensionParameter(string name,uint index){ dimensionParameters.set(index,name); }
+	@property bool telescope(){ return telescope_; }
 	@property bool dependent(){ return dependent_; }
 	this(Arena arena,TypePool pool=null){
 		enforce(arena !is null,"scalar arena required");
@@ -76,9 +79,9 @@ final class Bindings{
 	private void check(Scope s)const{ enforce(s.owner is this&&s.index<contexts.length,"invalid or foreign context"); }
 	private void check(BoundTerm t)const{ enforce(t.owner is this&&t.id<nodes.length,"invalid or foreign bound term"); }
 	private uint typeId(TypeId t){
-		auto v=pool.view(t);
+		auto v=pool.view(t); telescope_|=pool.dependent(t);
 		if(v.dimension !is null&&v.dimension.names.length) dependent_=true;
-		enforce(v.kind==TypeKind.type_||v.kind==TypeKind.function_||v.kind==TypeKind.set||v.kind==TypeKind.vector||v.kind==TypeKind.tuple||v.kind<=TypeKind.complex,"unsupported binding type");
+		enforce(v.kind==TypeKind.type_||v.kind==TypeKind.pi||v.kind==TypeKind.function_||v.kind==TypeKind.set||v.kind==TypeKind.vector||v.kind==TypeKind.tuple||v.kind<=TypeKind.complex,"unsupported binding type");
 		foreach(f;v.fields) typeId(f);
 		auto id=typeIds.get(t.id,uint.max);
 		if(id!=uint.max) return id;
@@ -300,7 +303,7 @@ final class Bindings{
 		check(s); auto ctx=s.index;
 		foreach(i;0..index){ enforce(ctx!=0,"unbound variable"); ctx=contexts[ctx].parent; }
 		enforce(ctx!=0,"unbound variable");
-		return intern(BoundNode(BoundOp.variable,s.index,contexts[ctx].type,uint.max,uint.max,index));
+		return intern(BoundNode(BoundOp.variable,s.index,typeId(pool.shift(types[contexts[ctx].type],cast(int)index+1)),uint.max,uint.max,index));
 	}
 	BoundTerm scalar(Scope s,Term value){
 		check(s); auto ty=typeId(scalarType(arena.sort(value)));
@@ -323,16 +326,36 @@ final class Bindings{
 		return intern(BoundNode(BoundOp.primitive,ctx.index,typeId(scalarType(n.sort)),
 			args[0].id,args.length==2?args[1].id:uint.max,prototype.id));
 	}
+	Dimension dimension(BoundTerm t){
+		enforce(type(t)==scalarType(Sort.natural),"dependent argument must have type ℕ"); auto n=node(t);
+		if(n.op==BoundOp.variable) return Dimension.bound(n.data);
+		if(n.op==BoundOp.scalar){
+			Dimension scalarDimension(Term x){
+				auto q=arena.view(x);
+				if(arena.isNumber(x)){ auto v=arena.number(x).re; enforce(v.small&&v.integer>=0,"dimension literal exceeds range"); return Dimension.literal(cast(ulong)v.integer); }
+				if(q.op==Op.variable){ auto name=dimensionParameters.get(cast(uint)q.value,""); enforce(name.length,"unknown dimension parameter"); return Dimension.variable(name,cast(uint)q.value); }
+				if(q.op==Op.builtin&&(q.value==Builtin.addN||q.value==Builtin.mulN||q.value==Builtin.powNN))
+					return Dimension.binary(q.value==Builtin.addN?"+":q.value==Builtin.mulN?"*":"^",scalarDimension(arena.viewChild(x,0)),scalarDimension(arena.viewChild(x,1)));
+				throw new Exception("dependent arguments require total natural literals, parameters, sums, products, or powers");
+			}
+			return scalarDimension(arena.at(n.data));
+		}
+		if(n.op==BoundOp.primitive){ auto q=arena.view(arena.at(n.data));
+			if(q.op==Op.builtin&&(q.value==Builtin.addN||q.value==Builtin.mulN||q.value==Builtin.powNN))
+				return Dimension.binary(q.value==Builtin.addN?"+":q.value==Builtin.mulN?"*":"^",dimension(at(n.a)),dimension(at(n.b)));
+		}
+		throw new Exception("dependent arguments require total natural dimensions");
+	}
 	BoundTerm lambda(BoundTerm body){
 		auto n=node(body); enforce(n.context!=0,"lambda requires a bound variable");
-		auto ctx=contexts[n.context],ty=typeId(pool.function_(types[ctx.type],types[n.type]));
+		auto ctx=contexts[n.context],ty=typeId(pool.pi(types[ctx.type],types[n.type]));
 		return intern(BoundNode(BoundOp.lambda,ctx.parent,ty,body.id));
 	}
 	BoundTerm apply(BoundTerm function_,BoundTerm argument){
 		auto f=node(function_),x=node(argument),ty=pool.view(types[f.type]);
 		enforce(f.context==x.context,"application context mismatch");
-		enforce(ty.kind==TypeKind.function_&&ty.fields[0]==types[x.type],"application type mismatch");
-		return intern(BoundNode(BoundOp.apply,f.context,typeId(ty.fields[1]),function_.id,argument.id));
+		enforce((ty.kind==TypeKind.function_||ty.kind==TypeKind.pi)&&ty.fields[0]==types[x.type],"application type mismatch");
+		return intern(BoundNode(BoundOp.apply,f.context,typeId(ty.kind==TypeKind.pi?pool.instantiate(ty.fields[1],dimension(argument)):ty.fields[1]),function_.id,argument.id));
 	}
 	BoundTerm sequence(BoundTerm x,BoundTerm y){
 		auto a=node(x),b=node(y); enforce(a.context==b.context,"sequence context mismatch");
@@ -355,7 +378,7 @@ final class Bindings{
 		return intern(BoundNode(BoundOp.subset,n.context,typeId(scalarType(Sort.boolean)),x.id,y.id));
 	}
 	BoundTerm domain(BoundTerm f){
-		auto n=node(f),v=pool.view(type(f)); enforce(v.kind==TypeKind.function_,"domain requires a function");
+		auto n=node(f),v=pool.view(type(f)); enforce(v.kind==TypeKind.function_||v.kind==TypeKind.pi,"domain requires a function");
 		return intern(BoundNode(BoundOp.domain,n.context,typeId(pool.set(v.fields[0])),f.id));
 	}
 	BoundTerm defined(BoundTerm x){
@@ -369,16 +392,17 @@ final class Bindings{
 		enforce(type(p)==scalarType(Sort.boolean)&&context(p)==context(x),"guard requires Bool in the same scope");
 		auto n=node(x); return intern(BoundNode(BoundOp.guard,n.context,n.type,p.id,x.id));
 	}
-	private BoundTerm rebuild(BoundTerm t,Scope target,BoundTerm[] args){
+	private BoundTerm rebuild(BoundTerm t,Scope target,BoundTerm[] args,Dimension delegate(uint) @safe dimensions=null){
 		auto n=node(t);
+		TypeId mapped(uint id){ return dimensions is null?types[id]:pool.map(types[id],dimensions); }
 		final switch(n.op){
-			case BoundOp.unit,BoundOp.vectorNil:return tuple(target,[],types[n.type]);
-			case BoundOp.vectorCons,BoundOp.pair:return intern(BoundNode(n.op,target.index,n.type,args[0].id,args[1].id));
-			case BoundOp.first,BoundOp.rest:return intern(BoundNode(n.op,target.index,n.type,args[0].id));
+			case BoundOp.unit,BoundOp.vectorNil:return tuple(target,[],mapped(n.type));
+			case BoundOp.vectorCons,BoundOp.pair:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id,args[1].id));
+			case BoundOp.first,BoundOp.rest:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id));
 			case BoundOp.get:return get(args[0],args[1]);
 			case BoundOp.tensor:return tensor(cast(TensorOp)n.data,args[0],args[1]);
 			case BoundOp.scalar:return scalar(target,arena.at(n.data));
-			case BoundOp.global:return global(target,types[n.type],n.data);
+			case BoundOp.global:return global(target,mapped(n.type),n.data);
 			case BoundOp.variable:assert(0,"variable requires substitution");
 			case BoundOp.primitive:return primitive(arena.at(n.data),args);
 			case BoundOp.lambda:return inheritHint(t,lambda(args[0]));
@@ -387,8 +411,8 @@ final class Bindings{
 			case BoundOp.subset:return subset(args[0],args[1]);
 			case BoundOp.typeEq:return typeEq(args[0],args[1]);
 			case BoundOp.equal:return equal(args[0],args[1]);
-			case BoundOp.typeValue:return typeValue(target,types[n.data]);
-			case BoundOp.bottom:return bottom(target,types[n.type]);
+			case BoundOp.typeValue:return typeValue(target,mapped(n.data));
+			case BoundOp.bottom:return bottom(target,mapped(n.type));
 			case BoundOp.fixed:return inheritHint(t,fixed(args[0]));
 			case BoundOp.domain:return domain(args[0]);
 			case BoundOp.defined:return defined(args[0]);
@@ -401,8 +425,9 @@ final class Bindings{
 	BoundTerm rename(BoundTerm term,Scope target,uint[] indices){
 		check(term); check(target); auto ctx=node(term).context;
 		enforce(indices.length==contexts[ctx].length,"renaming arity mismatch");
+		Dimension mapped(uint i){ enforce(i<indices.length,"unbound renamed dimension"); return Dimension.bound(indices[i]); }
 		foreach(i,index;indices){
-			enforce(type(variable(target,index))==type(variable(context(term),cast(uint)i)),"renaming type mismatch");
+			enforce(type(variable(target,index))==pool.map(type(variable(context(term),cast(uint)i)),&mapped),"renaming type mismatch");
 		}
 		Table!(uint,uint) memo;
 		BoundTerm visit(BoundTerm t){
@@ -411,13 +436,13 @@ final class Bindings{
 			if(n.op==BoundOp.variable) result=variable(target,indices[n.data]);
 			else if(n.op==BoundOp.lambda||n.op==BoundOp.set||n.op==BoundOp.fixed){
 				uint[] lifted=[0]; foreach(index;indices) lifted~=index+1;
-				auto body=rename(at(n.a),push(target,types[contexts[nodes[n.a].context].type]),lifted);
+				auto body=rename(at(n.a),push(target,pool.map(types[contexts[nodes[n.a].context].type],&mapped)),lifted);
 				result=inheritHint(t,n.op==BoundOp.lambda?lambda(body):n.op==BoundOp.set?set(body):fixed(body));
 			}else{
 				BoundTerm[] children;
 				if(n.a!=uint.max) children~=visit(at(n.a));
 				if(n.b!=uint.max) children~=visit(at(n.b));
-				result=rebuild(t,target,children);
+				result=rebuild(t,target,children,&mapped);
 			}
 			memo.set(t.id,result.id); return result;
 		}
@@ -426,8 +451,9 @@ final class Bindings{
 	BoundTerm substitute(BoundTerm term,Scope target,BoundTerm[] values){
 		check(term); check(target); auto ctx=node(term).context;
 		enforce(values.length==contexts[ctx].length,"substitution arity mismatch");
+		Dimension mapped(uint i){ enforce(i<values.length,"unbound substituted dimension"); return dimension(values[i]); }
 		foreach(i,value;values){
-			enforce(context(value)==target&&type(value)==type(variable(context(term),cast(uint)i)),"substitution type mismatch");
+			enforce(context(value)==target&&type(value)==pool.map(type(variable(context(term),cast(uint)i)),&mapped),"substitution type mismatch");
 		}
 		Table!(uint,uint) memo;
 		BoundTerm visit(BoundTerm t){
@@ -435,7 +461,7 @@ final class Bindings{
 			auto n=node(t); BoundTerm result;
 			if(n.op==BoundOp.variable) result=values[n.data];
 			else if(n.op==BoundOp.lambda||n.op==BoundOp.set||n.op==BoundOp.fixed){
-				auto inner=push(target,types[contexts[nodes[n.a].context].type]);
+				auto inner=push(target,pool.map(types[contexts[nodes[n.a].context].type],&mapped));
 				BoundTerm[] lifted=[variable(inner,0)]; uint[] indices;
 				foreach(i;0..contexts[target.index].length) indices~=i+1;
 				foreach(value;values) lifted~=rename(value,inner,indices);
@@ -444,7 +470,7 @@ final class Bindings{
 				BoundTerm[] children;
 				if(n.a!=uint.max) children~=visit(at(n.a));
 				if(n.b!=uint.max) children~=visit(at(n.b));
-				result=rebuild(t,target,children);
+				result=rebuild(t,target,children,&mapped);
 			}
 			memo.set(t.id,result.id); return result;
 		}
@@ -494,6 +520,42 @@ final class Bindings{
 			auto arg=nodes[q.b],one=nodes[arg.b];
 			return variableAt(arg.a,0)&&one.op==BoundOp.scalar&&arena.isNumber(arena.at(one.data))&&arena.number(arena.at(one.data)).one;
 		}
+		bool isForward(uint id){
+			auto q=nodes[id]; if(q.op!=BoundOp.apply||!variableAt(q.a,1)||!call(q.b,Builtin.addN)) return false;
+			auto x=nodes[q.b],one=nodes[x.b]; return variableAt(x.a,0)&&one.op==BoundOp.scalar&&arena.isNumber(arena.at(one.data))&&arena.number(arena.at(one.data)).one;
+		}
+		bool splitBranch(uint id,out uint p,out uint yes,out uint no){
+			if(!call(id,Builtin.addN)) return false; auto q=nodes[id];
+			if(!unary(q.a,Op.mask)||!unary(q.b,Op.mask)) return false; auto x=nodes[q.a],y=nodes[q.b];
+			if(!unary(y.a,Op.not_)||nodes[y.a].a!=x.a) return false; p=x.a; yes=x.b; no=y.b; return true;
+		}
+		bool literal(uint id,out ulong value){
+			auto q=nodes[id]; if(q.op!=BoundOp.scalar||!arena.isNumber(arena.at(q.data))) return false;
+			auto x=arena.number(arena.at(q.data)).re; if(!x.small||x.integer<0) return false; value=cast(ulong)x.integer; return true;
+		}
+		uint bandLowerTest,bandDown,bandRest,bandEq,bandBase,bandTail,bandUpperTest,bandDownAgain,bandUp; ulong bandLower,bandUpper;
+		if(splitBranch(body.a,bandLowerTest,bandDown,bandRest)&&previous(bandDown)&&call(bandLowerTest,Builtin.ltN)&&
+			variableAt(nodes[bandLowerTest].a,0)&&literal(nodes[bandLowerTest].b,bandLower)&&
+			splitBranch(bandRest,bandEq,bandBase,bandTail)&&totalScalar(at(bandBase))&&splitBranch(bandTail,bandUpperTest,bandDownAgain,bandUp)&&bandDownAgain==bandDown&&isForward(bandUp)&&
+			call(bandUpperTest,Builtin.ltN)&&variableAt(nodes[bandUpperTest].a,0)&&literal(nodes[bandUpperTest].b,bandUpper)&&bandLower<bandUpper&&
+			unary(bandEq,Op.not_)&&call(nodes[bandEq].a,Builtin.nonzeroZ)&&call(nodes[nodes[bandEq].a].a,Builtin.addZ)){
+			auto sum=nodes[nodes[nodes[bandEq].a].a]; bool matches;
+			if(call(sum.a,Builtin.castNZ)&&variableAt(nodes[sum.a].a,0)&&nodes[sum.b].op==BoundOp.scalar){
+				auto neg=arena.at(nodes[sum.b].data),q=arena.view(neg);
+				if(q.op==Op.builtin&&q.value==Builtin.mulZ){
+					auto x=arena.viewChild(neg,0),y=arena.viewChild(neg,1);
+					matches=arena.isNumber(x)&&arena.isNumber(y)&&arena.number(x).re==Rational(-1)&&arena.number(y).re==Rational(bandLower);
+				}
+			}
+			if(matches){
+				auto inner=push(context(t),ty.fields[0]),arg=variable(inner,0);
+				auto lo=primitive(arena.le(arena.natural_(0),arena.natural_(0)),[scalar(inner,arena.at(nodes[nodes[bandLowerTest].b].data)),arg]);
+				auto hi=primitive(arena.at(nodes[bandUpperTest].data),[arg,scalar(inner,arena.at(nodes[nodes[bandUpperTest].b].data))]);
+				auto pred=primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[lo,hi]);
+				auto output=inheritHint(at(n.a),lambda(guard(pred,scalar(inner,arena.at(nodes[bandBase].data)))));
+				solution=RecurrenceSolution(t.id,output.id,bandBase,nodes[bandUpperTest].b,Law.init,Law.init,false,true,2,nodes[bandLowerTest].b); return output;
+			}
+		}
 		if(!call(body.a,Builtin.addN)) return BoundTerm.init;
 		auto sum=nodes[body.a]; if(!unary(sum.a,Op.mask)||!unary(sum.b,Op.mask)) return BoundTerm.init;
 		auto yes=nodes[sum.a],no=nodes[sum.b],p=nodes[yes.a];
@@ -502,17 +564,18 @@ final class Bindings{
 		if(!totalScalar(at(yes.b))||!call(no.b,Builtin.addN)&&!call(no.b,Builtin.mulN)) return BoundTerm.init;
 		if(call(no.b,Builtin.addN)){
 			auto branch=nodes[no.b],down=nodes[branch.a],up=nodes[branch.b];
-			if(unary(branch.a,Op.mask)&&unary(branch.b,Op.mask)&&call(down.a,Builtin.leN)&&
+			if(unary(branch.a,Op.mask)&&unary(branch.b,Op.mask)&&(call(down.a,Builtin.leN)||call(down.a,Builtin.ltN))&&
 				unary(up.a,Op.not_)&&nodes[up.a].a==down.a&&previous(down.b)){
 				auto condition=nodes[down.a],forward=nodes[up.b];
 				if(variableAt(condition.a,0)&&totalScalar(at(condition.b))&&forward.op==BoundOp.apply&&
 					variableAt(forward.a,1)&&call(forward.b,Builtin.addN)){
 					auto successor=nodes[forward.b],one=nodes[successor.b];
 					if(variableAt(successor.a,0)&&one.op==BoundOp.scalar&&arena.isNumber(arena.at(one.data))&&arena.number(arena.at(one.data)).one){
+						bool strict=call(down.a,Builtin.ltN); ulong upper; if(strict&&(!literal(condition.b,upper)||!upper)) return BoundTerm.init;
 						auto inner=push(context(t),ty.fields[0]);
 						auto predicate=primitive(arena.at(condition.data),[variable(inner,0),scalar(inner,arena.at(nodes[condition.b].data))]);
 						auto output=inheritHint(at(n.a),lambda(guard(predicate,scalar(inner,arena.at(nodes[yes.b].data)))));
-						solution=RecurrenceSolution(t.id,output.id,yes.b,condition.b,Law.init,Law.init,false,true); return output;
+						solution=RecurrenceSolution(t.id,output.id,yes.b,condition.b,Law.init,Law.init,false,true,cast(ubyte)(strict?1:0)); return output;
 					}
 				}
 			}
@@ -530,7 +593,30 @@ final class Bindings{
 		solution=RecurrenceSolution(t.id,output.id,yes.b,delta,law,mul?Law.natural_recurrence_mul_base:Law.natural_recurrence_add_base,left);
 		return output;
 	}
+	private bool definitionallyTotal(BoundTerm t){
+		auto n=node(t);
+		if(n.op==BoundOp.variable||n.op==BoundOp.global||n.op==BoundOp.lambda||n.op==BoundOp.typeValue||n.op==BoundOp.unit||n.op==BoundOp.vectorNil) return true;
+		if(n.op==BoundOp.scalar) return totalScalar(t);
+		return (n.op==BoundOp.vectorCons||n.op==BoundOp.pair)&&definitionallyTotal(at(n.a))&&definitionallyTotal(at(n.b));
+	}
+	private BindingResult normalizeDependent(BoundTerm term,uint budget){
+		uint steps; bool exhausted; Table!(uint,uint) memo;
+		BoundTerm visit(BoundTerm t,uint depth=0){
+			if(depth>=128||steps>=budget){ exhausted=true; return t; }
+			auto old=memo.get(t.id,uint.max); if(old!=uint.max) return at(old);
+			auto n=node(t); BoundTerm[] args;
+			if(n.a!=uint.max) args~=visit(at(n.a),depth+1);
+			if(n.b!=uint.max) args~=visit(at(n.b),depth+1);
+			auto r=args.length?rebuild(t,context(t),args):t; n=node(r);
+			if(n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.lambda&&definitionallyTotal(at(n.b))){
+				++steps; r=visit(beta(at(nodes[n.a].a),at(n.b)),depth+1);
+			}else if(n.op==BoundOp.sequence&&definitionallyTotal(at(n.a))){ ++steps; r=at(n.b); }
+			memo.set(t.id,r.id); return r;
+		}
+		auto output=visit(term); BindingResult r; r.input=term; r.output=output; r.exhausted=exhausted; return r;
+	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
+		if(telescope_) return normalizeDependent(term,budget);
 		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
@@ -898,7 +984,93 @@ final class Bindings{
 		}
 		return ".ofEq (fun ξ ρ => "~prove(0)~")";
 	}
+	private string exportDependent(BindingResult result){
+		enforce(depth(context(result.input))==0,"dependent certificates require a closed context");
+		string code="import QSym\nnamespace QSym.DependentCertificate\n";
+		Table!(uint,bool) scalarNeeded,visited;
+		void collect(BoundTerm t){
+			if(visited.get(t.id,false)) return; visited.set(t.id,true); auto n=node(t);
+			if(n.op==BoundOp.scalar||n.op==BoundOp.primitive) foreach(id;arena.viewPostorder(arena.at(n.data))) scalarNeeded.set(id,true);
+			if(n.a!=uint.max) collect(at(n.a)); if(n.b!=uint.max) collect(at(n.b));
+		}
+		collect(result.input); collect(result.output);
+		foreach(i;0..arena.length) if(scalarNeeded.get(cast(uint)i,false)) code~=leanSyntaxCode(arena,arena.at(cast(uint)i));
+		string dim(Dimension d,string[] vars){
+			if(d.index!=uint.max){ enforce(d.index<vars.length,"unbound exported dimension"); return vars[d.index]; }
+			if(d.op.length) return "("~dim(d.left,vars)~d.op~dim(d.right,vars)~")";
+			return replace(d.lean,"δ","ξ.natural");
+		}
+		string quotedDim(Dimension d,string[] vars,uint depth){
+			bool bound; d.map((uint i){ bound|=i<depth; return Dimension.bound(i); });
+			if(!bound){ auto closed=d.map((uint i)=>Dimension.bound(i-depth)); return "(.literal "~dim(closed,vars)~")"; }
+			if(d.index!=uint.max) return "(.bound "~to!string(d.index)~")";
+			return "(."~(d.op=="+"?"add":d.op=="*"?"mul":"pow")~" "~quotedDim(d.left,vars,depth)~" "~quotedDim(d.right,vars,depth)~")";
+		}
+		string quotedType(TypeId t,string[] vars,uint depth=0){
+			auto v=pool.view(t);
+			if(v.kind==TypeKind.unit) return ".unit";
+			if(v.kind==TypeKind.type_) return ".type";
+			if(v.kind==TypeKind.vector) return "(.vector "~quotedType(v.fields[0],vars,depth)~" "~(depth?quotedDim(v.dimension,vars,depth):dim(v.dimension,vars))~")";
+			if(v.kind==TypeKind.tuple) return "(.pair "~quotedType(v.fields[0],vars,depth)~" "~quotedType(pool.tuple(v.fields[1..$]),vars,depth)~")";
+			if(v.kind==TypeKind.set) return "(.set "~quotedType(v.fields[0],vars,depth)~")";
+			if(v.kind==TypeKind.pi) return "(.piNat "~quotedType(v.fields[1],vars,depth+1)~")";
+			if(v.kind==TypeKind.function_) return "(.arrow "~quotedType(v.fields[0],vars,depth)~" "~quotedType(v.fields[1],vars,depth)~")";
+			foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex,Sort.boolean]) if(t==scalarType(s)) return "(.scalar ."~leanSort(s)~")";
+			throw new Exception("unsupported dependent type");
+		}
+		string ty(TypeId t,string[] vars){ return "("~quotedType(t,vars)~" : Binding.Ty).denote"; }
+		string tensorOp(TypeId t,TensorOp op,string[] vars){
+			auto v=pool.view(t);
+			return v.kind==TypeKind.vector?"(Tensor.zipValue "~tensorOp(v.fields[0],op,vars)~" "~dim(v.dimension,vars)~")":leanValueOperation(arena,scalarOperator(t,op));
+		}
+		string term(BoundTerm t,string[] vars) @safe{
+			auto n=node(t);
+			string child(uint id){ return term(at(id),vars); }
+			switch(n.op){
+				case BoundOp.variable:return "(some "~vars[n.data]~")";
+				case BoundOp.scalar:return "(n"~to!string(n.data)~".eval ξ)";
+				case BoundOp.global:return "(some (γ ("~ty(type(t),vars)~") "~to!string(n.data)~"))";
+				case BoundOp.typeValue:return "(some ("~quotedType(typeDenoted(t),vars)~" : Binding.Ty))";
+				case BoundOp.unit:return "(some ())";
+				case BoundOp.vectorNil:return "Tensor.nilValue";
+				case BoundOp.bottom:return "(none : Option ("~ty(type(t),vars)~"))";
+				case BoundOp.lambda,BoundOp.set:
+					auto name="x"~to!string(vars.length),param=pool.view(type(t)).fields[0];
+					if(n.op==BoundOp.set) return "(some {"~name~" : "~ty(param,vars)~" | "~term(at(n.a),[name]~vars)~" = some true})";
+					return "(some (fun "~name~" : "~ty(param,vars)~" => "~term(at(n.a),[name]~vars)~"))";
+				case BoundOp.apply:
+					if(pool.view(type(at(n.a))).kind==TypeKind.pi) return "(Dependent.apply "~child(n.a)~" "~dim(dimension(at(n.b)),vars)~")";
+					return "("~child(n.a)~".bind (fun f => "~child(n.b)~".bind f))";
+				case BoundOp.sequence:return "("~child(n.a)~".bind (fun _ => "~child(n.b)~"))";
+				case BoundOp.typeEq:return "(Binding.typeEqValue "~child(n.a)~" "~child(n.b)~")";
+				case BoundOp.domain:
+					return "("~(pool.view(type(at(n.a))).kind==TypeKind.pi?"Dependent.inputDomain":"Binding.inputDomain")~" "~child(n.a)~")";
+				case BoundOp.tensor:
+					auto op=cast(TensorOp)n.data,v=pool.view(type(at(n.a))),element=typeLeaf(type(at(n.a))); string operation;
+					if(op==TensorOp.add||op==TensorOp.mul) operation=tensorOp(type(t),op,vars);
+					else{
+						auto add=tensorOp(element,TensorOp.add,vars),mul=tensorOp(element,TensorOp.mul,vars),zero=tensorLiteral(element,0),size=dim(v.dimension,vars);
+						if(op==TensorOp.dot) operation="(Tensor.dotValue "~add~" "~mul~" "~(element==scalarType(Sort.complex)?"Value.conj":"id")~" "~zero~" "~size~")";
+						else if(op==TensorOp.power) operation="(Tensor.matrixPowerValue "~add~" "~mul~" "~zero~" "~tensorLiteral(element,1)~" "~size~")";
+						else{ auto row=pool.view(v.fields[0]); size~=" "~dim(row.dimension,vars);
+							if(op==TensorOp.matmul) size~=" "~dim(pool.view(pool.view(type(at(n.b))).fields[0]).dimension,vars);
+							operation="(Tensor."~(op==TensorOp.matmul?"matmulValue":"matvecValue")~" "~add~" "~mul~" "~zero~" "~size~")";
+						}
+					}
+					return "("~operation~" "~child(n.a)~" "~child(n.b)~")";
+				case BoundOp.fixed:throw new Exception("dependent fixed-point certificates are not supported yet");
+				default:return "("~valueOperation(n)~" "~child(n.a)~(n.b==uint.max?"":" "~child(n.b))~")";
+			}
+		}
+		auto parameters=" (γ : Dependent.Globals) (ξ : Env)",outputType=ty(type(result.input),[]);
+		code~="noncomputable def input"~parameters~" : Option ("~outputType~") := "~term(result.input,[])~"\n";
+		code~="noncomputable def output"~parameters~" : Option ("~outputType~") := "~term(result.output,[])~"\n";
+		code~="theorem sound"~parameters~" : input γ ξ = output γ ξ := rfl\n";
+		code~="theorem domain"~parameters~" : Value.Defined (input γ ξ) ↔ Value.Defined (output γ ξ) := Iff.of_eq (congrArg Value.Defined (sound γ ξ))\n";
+		return code~"#qsym_check_axioms sound\n#qsym_check_axioms domain\nend QSym.DependentCertificate\n";
+	}
 	string exportLean(BindingResult result,bool lowerResult=false){
+		if(telescope_) return exportDependent(result);
 		check(result.input); check(result.output); enforce(result.proof<result.proofs.length,"missing binding proof");
 		auto lowered=lowerResult?lower(result.output):Term.init;
 		string code="import QSym\n",dimDecl=dependent_?" (δ : ℕ → ℕ)":"",dimArg=dependent_?" δ":"";
@@ -999,8 +1171,11 @@ final class Bindings{
 				auto base="(n"~to!string(nodes[s.base].data)~".eval ξ)",delta="(n"~to!string(nodes[s.delta].data)~".eval ξ)";
 				if(s.cutoff){
 					auto hp="(fun g x => ("~programProof(nodes[n.a].a)~").symm)";
+					auto lemma=s.band==2?"solve_nat_interval":s.band==1?"solve_nat_cutoff_lt":"solve_nat_cutoff";
+					auto lower=s.band==2?" ((n"~to!string(nodes[s.lower].data)~".eval ξ).getD 0)":"";
+					auto side=s.band?" (of_decide_eq_true rfl)":"";
 					code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n"~
-						"  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (Recursion.solve_nat_cutoff (rec"~id~dimArg~" γ ξ ρ) ("~base~".getD 0) ("~delta~".getD 0) "~hp~"))\n";
+						"  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (Recursion."~lemma~" (rec"~id~dimArg~" γ ξ ρ) ("~base~".getD 0)"~lower~" ("~delta~".getD 0)"~side~" "~hp~"))\n";
 					continue;
 				}
 				auto op=s.zero==Law.natural_recurrence_mul_base?"Functions.mulN.apply":"Functions.addN.apply";

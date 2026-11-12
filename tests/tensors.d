@@ -94,7 +94,7 @@ unittest{
 	run();
 	foreach(source;["(1,2)+(1,)","((1,2),(3,4))@(1,)","((1,2,3),(4,5,6))^2",
 		"(1,2)@(3,4)","get((1,2),-1)","get((true,1),2)","((1,2):ℝ^3)","ℝ^(-1)",
-		"λ(n:ℕ).λ(x:ℝ^n).x","((true,1):ℝ^2)","dot((true,false),(true,false))"]){
+		"λ(n:ℝ).λ(x:ℝ^n).x","((true,1):ℝ^2)","dot((true,false),(true,false))"]){
 		auto owner=Session.open(); FunctionSyntax s; assertThrown(s.run(owner.arena,source));
 	}
 	FunctionSyntax s; s.declare("n:ℕ,x:ℝ^n"); assertThrown(s.declare("n:ℝ"));

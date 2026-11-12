@@ -102,6 +102,7 @@ def main():
 	certificate(ROOT/"build/ReplHigherEquality.lean")
 	certificate(ROOT/"build/ReplRecurrenceSolver.lean")
 	certificate(ROOT/"build/ReplTensors.lean")
+	certificate(ROOT/"build/ReplDependent.lean")
 	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
 	if len(refinements)!=32:
 		raise RuntimeError("expected 32 refinement certificates")
@@ -117,7 +118,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -206,6 +207,20 @@ def main():
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	valid=(ROOT/"build/dependent/Apply.lean").read_text()
+	lines=valid.splitlines(keepends=True)
+	for i,line in enumerate(lines):
+		if line.startswith("noncomputable def output"):
+			lines[i]=line.replace("(.scalar .real) 3","(.scalar .real) 4",1)
+	corrupt="".join(lines)
+	if corrupt==valid:
+		raise RuntimeError("dependent length rejection fixture did not change")
+	path=negative/"DependentWrongLength.lean"; path.write_text(corrupt); check(path,succeeds=False)
+	valid=(ROOT/"build/intervals/StrictFunction.lean").read_text()
+	corrupt=valid.replace("Functions.ltN.apply","Functions.leN.apply",1)
+	if corrupt==valid:
+		raise RuntimeError("strict interval rejection fixture did not change")
+	path=negative/"IntervalWrongBoundary.lean"; path.write_text(corrupt); check(path,succeeds=False)
 	for source,name,old,new in (
 		("cutoff/Function.lean","StrictCutoff","Functions.leN.apply","Functions.ltN.apply"),
 		("tensors/DotComplexDual.lean","WrongComplexDual","Value.mul Value.conj","Value.mul id")):
