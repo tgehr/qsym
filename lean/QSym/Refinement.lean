@@ -16,7 +16,13 @@ import QSym.PowerSigns
 import QSym.DiscreteDomains
 import QSym.ScalarOrder
 import QSym.SignCompositions
+import QSym.IndexedNorms
+import QSym.ArgumentCompositions
+import QSym.ArgumentBranches
+import QSym.PowerRecovery
+import QSym.RadicalRecovery
 import QSym.ArgumentRotation
+import QSym.NaturalFloor
 
 namespace QSym
 
@@ -433,7 +439,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Functions.mulQ, Functions.ltQ, Functions.leQ, Functions.nonzeroQ, Functions.invQ,
       Functions.eqB, Functions.powNN, Functions.powZN, Functions.powQN, Functions.powRN, Functions.powCN,
       Functions.powQZ, Functions.powRZ, Functions.powCZ, Functions.cbrtR, Functions.exp2R, Functions.log2R, Functions.log10R,
-      Functions.floorR, Functions.ceilR, Functions.roundR, Functions.isIntR, Functions.hypotR, Functions.argC,
+      Functions.floorN, Functions.floorR, Functions.ceilR, Functions.roundR, Functions.isIntR, Functions.hypotR, Functions.argC,
       Functions.expiC, Functions.polarC, Functions.atan2R, Functions.asinhR, Functions.acoshR, Functions.atanhR,
       Functions.asinC, Functions.acosC, Functions.atanC, Functions.asinhC, Functions.acoshC, Functions.atanhC,
       Functions.erfR, Functions.erfcR, Functions.gammaR, Functions.gammaC, Functions.lgammaR, Elementary.half_domain, Functions.powerR, Functions.powerC, Functions.sqrtR, Functions.sqrtC,
@@ -453,6 +459,20 @@ macro "qsym_scalar" : tactic => `(tactic| (
       | split at *
     all_goals try (simp_all only [← sub_eq_add_neg, sub_eq_zero])
     all_goals subst_vars
+    all_goals try (solve | apply RadicalRecovery.inverse_of_product; assumption)
+    all_goals try (solve | first
+      | apply PowerRecovery.nested_domain <;> assumption
+      | apply PowerRecovery.half_domain <;> assumption
+      | apply PowerRecovery.sqrt_domain <;> assumption
+      | apply PowerRecovery.natural_domain <;> assumption
+      | apply PowerRecovery.natural_outer_domain <;> assumption
+      | apply PowerRecovery.inner_domain <;> assumption
+      | apply PowerRecovery.quotient_domain <;> assumption)
+    all_goals try tauto
+    all_goals try (simp_all [PowerRecovery.domain_nonnegative, PowerRecovery.nested, PowerRecovery.sqrt_base, PowerRecovery.sqrt_power,
+      PowerRecovery.natural_outer_valid, PowerRecovery.even_inner, PowerRecovery.natural_outer, PowerRecovery.natural_inner, PowerRecovery.complex_natural_outer,
+      PowerRecovery.complex_nested, PowerRecovery.quotient, PowerRecovery.subtract,
+      PowerRecovery.complex_subtract_valid, PowerRecovery.subtract_valid, PowerRecovery.complex_subtract, PowerRecovery.inverse_base])
     all_goals try (qsym_rational_goal; solve | simp_all [← sub_eq_add_neg, sub_eq_zero, inv_inj,
       ScalarOrder.nonnegative_inverse_lt, ScalarOrder.nonnegative_inverse_le,
       ScalarOrder.nonpositive_inverse_lt, ScalarOrder.nonpositive_inverse_le,
@@ -503,6 +523,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (have h := Elementary.log_product_domain (by assumption) (by assumption); rcases h with ⟨_, _⟩)
     all_goals try (have h := Elementary.log_product_domain_right (by assumption) (by assumption); rcases h with ⟨_, _⟩)
     all_goals try (have h := Elementary.log_odd_domain _ (by assumption))
+    all_goals try (simp_all [NaturalFloor.exact, Nat.floor_natCast, Nat.floor_of_nonpos])
     all_goals try (simp_all [Int.floor_neg, Int.ceil_neg, Int.floor_add_intCast, Int.ceil_add_intCast,
       Int.floor_lt, Int.floor_le_iff, Int.lt_floor_iff, Int.le_floor,
       Int.ceil_lt_iff, Int.ceil_le, Int.lt_ceil, Int.le_ceil_iff,
@@ -536,6 +557,11 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Real.cosh_sq_sub_sinh_sq, Real.tan_arctan, Real.sin_arcsin, Real.cos_arccos,
       Real.arcsin_sin, Real.arccos_cos, min_eq_left, min_eq_right, max_eq_left, max_eq_right,
       Complex.exp_conj, Complex.mul_re, Complex.mul_im, Complex.re_add_im, norm_mul])
+    all_goals try (simp_all [sub_eq_zero, ArgumentBranches.arg_on_cut, ArgumentBranches.arg_off_cut,
+      ArgumentBranches.arg_conj_off_cut, ArgumentBranches.arg_inv_off_cut,
+      ArgumentBranches.log_conj_off_cut, ArgumentBranches.arg_conj_on_cut,
+      ArgumentBranches.arg_inv_on_cut, ArgumentBranches.log_conj_on_cut,
+      ArgumentBranches.log_inv_on_cut])
     all_goals try (solve | have h := ArgumentRotation.arg_positive_of_im_pos (by assumption); linarith)
     all_goals try (solve | have h := ArgumentRotation.arg_nonpositive_of_im_neg (by assumption); linarith)
     all_goals try (simp_all [ArgumentRotation.arg_scale, ArgumentRotation.arg_scale_right,
@@ -570,6 +596,8 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try norm_num at *
     all_goals try field_simp
     all_goals try ring_nf at *
+    all_goals try (simp_all [sub_eq_zero, ArgumentBranches.arg_on_cut,
+      ArgumentBranches.arg_off_cut])
     all_goals try (qsym_trig_goal; simp_all [Elementary.sin_quarter_turn_normal, Elementary.cos_quarter_turn_normal,
       Elementary.phase_quarter_turn_normal, Elementary.tan_period_normal, Elementary.tan_period_domain_normal,
       Complex.tan_conj, Complex.tanh_conj])
@@ -590,6 +618,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (solve | have h := Real.sqrt_pos.mpr (by assumption); linarith [h])
     all_goals try (apply Elementary.nonnegative_of_pos_or_zero; assumption)
     all_goals try (solve | (convert Elementary.phase_half_pi.symm using 2 <;> push_cast <;> ring))
+    all_goals try (solve | apply Eq.symm; apply NaturalFloor.exact <;> assumption)
     all_goals try (solve | apply Elementary.floor_exact <;> assumption)
     all_goals try (solve | apply Elementary.ceil_exact <;> assumption)
     all_goals try (solve | exact (Complex.sq_cpow_two_inv (by assumption)).symm)
@@ -609,6 +638,8 @@ macro "qsym_scalar" : tactic => `(tactic| (
     all_goals try (solve | exact (Elementary.rpow_half _).symm)
     all_goals try (solve | apply Elementary.norm_power_domain; assumption)
     all_goals try (solve | apply Elementary.nonnegative_cases; assumption)
+    all_goals try (solve | simp_all [Real.rpow_sub, Complex.cpow_sub, Real.div_rpow, Real.inv_rpow]; tauto)
+    all_goals try tauto
     all_goals try positivity
     all_goals try nlinarith
     all_goals try omega
@@ -632,6 +663,26 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Trigonometry.sinh_quarter_add_normal, Trigonometry.cosh_quarter_add_normal,
       Trigonometry.parity_cancel_mul, Trigonometry.parity_square, zpow_ne_zero]
       <;> ring_nf <;> simp [Trigonometry.parity_square, Complex.I_sq]))
+    all_goals try (solve | apply PowerRecovery.nested_domain_nonnegative <;> assumption)
+    all_goals try (solve | first
+      | apply PowerRecovery.domain_widen <;> assumption
+      | apply PowerRecovery.inner_domain_normal <;> assumption
+      | apply PowerRecovery.even_domain_normal <;> assumption
+      | apply PowerRecovery.natural_outer_normal <;> assumption
+      | apply PowerRecovery.nonzero_bounds <;> assumption
+      | apply PowerRecovery.subtract_product <;> assumption
+      | apply PowerRecovery.quotient_product <;> assumption
+      | apply PowerRecovery.subtract_normal <;> assumption
+      | apply PowerRecovery.complex_subtract_normal <;> assumption
+      | apply PowerRecovery.subtract_domain <;> assumption
+      | apply PowerRecovery.subtract_product_valid <;> assumption
+      | apply PowerRecovery.complex_subtract_domain <;> assumption
+      | exact (PowerRecovery.complex_subtract_valid _ _ _ (by assumption)).symm)
+    all_goals try (solve | apply PowerRecovery.natural_outer_domain <;> assumption)
+    all_goals try (solve | simp_all [Real.rpow_sub, Complex.cpow_sub, Real.div_rpow, Real.inv_rpow])
+    all_goals try (solve |
+      casesm* _ ∨ _, _ ∧ _
+      all_goals first | solve | simp_all | solve | tauto | solve | nlinarith)
   )
 ))
 
@@ -651,6 +702,16 @@ macro "qsym_rule" : tactic => `(tactic| (
   | solve
     | apply Value.refines_of_eq
       first
+      | apply Value.abs_powRN
+      | apply Value.abs_powRZ
+      | apply Value.norm_powCN
+      | apply Value.norm_powCZ
+      | apply Value.conj_powCN
+      | apply Value.conj_powCZ
+      | apply Value.sin_argC
+      | apply Value.cos_argC
+      | apply Value.tan_argC
+      | apply Value.cis_argC
       | apply Value.spectral_interpolation
       | exact (Value.spectral_interpolation _ _ _ _ _).symm
       | apply Value.spectral_interpolationQ

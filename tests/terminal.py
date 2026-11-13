@@ -6,6 +6,7 @@ import select
 import signal
 import struct
 import subprocess
+import sys
 import time
 
 if(os.name!="posix"):
@@ -70,6 +71,39 @@ class Terminal:
 		os.close(self.master); os.close(self.slave)
 	def __enter__(self): return self
 	def __exit__(self,*args): self.close()
+
+def motion_checks():
+	count=0
+	with Terminal() as t:
+		t.until(ready)
+		for backward,forward in ((b"\x1b\x02",b"\x1b\x06"),
+			(b"\x1b[27;7;98~",b"\x1b[27;7;102~"),
+			(b"\x1b[98;7u",b"\x1b[102;7u")):
+			t.submit(b"(1+2)+(3+4)"+backward+b"2*","17","(1+2)+2*(3+4)")
+			t.submit(b"(1+2)+(3+4)"+home+forward+b"*2","13","(1+2)*2+(3+4)")
+			count+=2
+		t.submit(b"(1+[true]*(2+3))\x1b\x022*","12","2*(1+[true]*(2+3))"); count+=1
+		t.submit(b"[true]+[false]\x1b\x022*","1","[true]+2*[false]"); count+=1
+		t.submit("{x:ℝ|x=1}".encode()+home+b"\x1b\x06"+"={x:ℝ|x=1}".encode(),"true","{x:ℝ|x=1}={x:ℝ|x=1}"); count+=1
+		t.submit("(α+β)+(γ+δ)".encode()+b"\x1b\x022*",None,"(α+β)+2*(γ+δ)"); count+=1
+		t.submit(b"123\x1b\x022*","246","2*123"); count+=1
+		output=t.submit(b"(1+2"+home+b"\x1b\x063*",None,"3*(1+2"); assert b"\a" in output; count+=1
+		output=t.submit(b"[1+(2])\x1b\x020",None,"[1+(2])0"); assert b"\a" in output; count+=1
+		t.submit(b"(1+2) # ]}\x1b\x022*","6","2*(1+2) # ]}"); count+=1
+		t.submit(b"(1+2)\x1b[98;7:2u2*","6","2*(1+2)"); count+=1
+		output=t.submit(b"(1+2)\x1b\x02\x1b[98;7:3u2*","6","2*(1+2)"); assert b"\a" not in output; count+=1
+		t.submit(b"(1+2)\x1b[98;15u*2","6","(1+2)*2"); count+=1
+		t.send(b"(1+2)")
+		for b in b"\x1b[27;7;98~": t.send(bytes([b])); time.sleep(0.002)
+		t.submit(b"2*","6","2*(1+2)"); count+=1
+		t.submit(b"\x1b[200~(1+2)\x1b\x02+3\x1b[201~","6","(1+2)+3"); count+=1
+		t.submit(b"(1+2)\x1b\x023*\x1f","3","(1+2)"); count+=1
+		t.finish()
+	print(f"{count} targeted terminal motion cases passed.")
+
+if "--motion" in sys.argv:
+	motion_checks()
+	raise SystemExit
 
 with Terminal() as t:
 	t.until(ready)
@@ -216,3 +250,5 @@ with Terminal() as t:
 	t.submit(r"\lambda(n:Nat).Real^n","λ(n:ℕ). ℝ^n")
 	t.finish()
 print("Dependent type terminal checks passed.")
+
+motion_checks()

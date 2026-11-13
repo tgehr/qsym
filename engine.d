@@ -4,6 +4,7 @@ import qsym.derive;
 import qsym.budget;
 import qsym.field:Field,compare;
 import qsym.elementary:Elementary;
+import qsym.radical:Radical;
 import qsym.embeddings:Embeddings;
 import qsym.predicates:Predicates;
 import std.algorithm:sort;
@@ -17,6 +18,7 @@ package final class Engine{
 	private Budget budget;
 	private Field field;
 	private Elementary elementary;
+	private Radical radical;
 	private Embeddings embeddings;
 	private Predicates predicates;
 	private size_t rewritesLeft;
@@ -39,6 +41,7 @@ package final class Engine{
 		field=new Field(a,d,budget,&normalize);
 		field.expandPowers=expandPowers;
 		elementary=new Elementary(a,budget);
+		radical=new Radical(a,budget,elementary);
 		embeddings=new Embeddings(a,d,budget);
 		predicates=new Predicates(a,budget,field,elementary);
 	}
@@ -340,6 +343,7 @@ package final class Engine{
 	}
 	private bool substitute(Term t,uint ctx,out Proof result){
 		auto n=a.view(t);
+		if(n.op==Op.builtin&&!n.arity) return false;
 		if((n.op==Op.variable||n.op==Op.builtin)&&(n.sort==Sort.natural||n.sort==Sort.integer||n.sort==Sort.rational))
 			return discreteSubstitute(t,ctx,result);
 		if((n.op!=Op.variable&&n.op!=Op.builtin&&n.op!=Op.abs&&n.op!=Op.conj)||(n.sort!=Sort.real_&&n.sort!=Sort.complex)) return false;
@@ -580,7 +584,7 @@ package final class Engine{
 			if(powerBound(current,ctx,proposed)){
 				p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 			}
-			if(elementary.propose(current,proposal)&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
+			if((radical.propose(current,proposal)||elementary.propose(current,proposal))&&instanceProof(proposal,ctx,proposed)&&proposed.after!=current){
 				p=d.trans(p,proposed,ctx);
 				// Fold an algorithm's new operands before recombining its expansion.
 				Proof[] operands;
@@ -626,9 +630,10 @@ package final class Engine{
 			if(q.after!=current) p=d.trans(p,go(p.after,ctx,probe),ctx);
 			// Algebraic constants can shrink under expansion, e.g. a root of unity cubed.
 			n=a.view(p.after);
-			if(!field.expandPowers&&(n.op==Op.pow||n.op==Op.add)&&closed(p.after)&&field.expandable(p.after)){
+			auto algebraic=!field.expandPowers&&(n.op==Op.pow||n.op==Op.add||n.op==Op.mul)&&radical.expandable(p.after);
+			if(!field.expandPowers&&(algebraic||((n.op==Op.pow||n.op==Op.add)&&closed(p.after)&&field.expandable(p.after)))){
 				q=expanded(p.after,0);
-				if(a.viewPostorder(q.after).length<a.viewPostorder(p.after).length)
+				if((algebraic&&q.after!=p.after)||a.viewPostorder(q.after).length<a.viewPostorder(p.after).length)
 					p=d.trans(p,d.trans(q,go(q.after,ctx,probe),ctx),ctx);
 			}
 			memoize(k,p); return p;

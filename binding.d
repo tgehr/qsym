@@ -36,7 +36,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
@@ -785,7 +785,7 @@ final class Bindings{
 	}
 	private BoundTerm spectral(BoundTerm t,out SpectralSolution solution){
 		auto n=node(t); if(n.op!=BoundOp.tensor||n.data!=TensorOp.matvec) return BoundTerm.init;
-		auto p=nodes[n.a]; if(p.op!=BoundOp.tensor||p.data!=TensorOp.power) return BoundTerm.init;
+		auto p=nodes[n.a]; if(p.op!=BoundOp.tensor||p.data!=TensorOp.power||!definitionallyTotal(at(p.b))) return BoundTerm.init;
 		auto mt=pool.view(type(at(p.a))),row=pool.view(mt.fields[0]);
 		if(!mt.dimension.constant||!row.dimension.constant||!mt.length||mt.length>16||mt.length!=row.length) return BoundTerm.init;
 		auto size=cast(uint)mt.length,sort=elementSort(row.fields[0]),ctx=context(t);
@@ -868,6 +868,41 @@ final class Bindings{
 			output~=restore(value);
 		}
 		auto result=tuple(ctx,output,type(t)); solution.target=result.id; return result;
+	}
+	private BoundTerm liftSpectrum(BoundTerm t,out uint promoted){
+		auto n=node(t); if(n.op!=BoundOp.tensor||n.data!=TensorOp.matvec) return BoundTerm.init;
+		auto p=nodes[n.a]; if(p.op!=BoundOp.tensor||p.data!=TensorOp.power||!definitionallyTotal(at(p.b))) return BoundTerm.init;
+		auto mt=pool.view(type(at(p.a))),row=pool.view(mt.fields[0]),sort=elementSort(row.fields[0]);
+		if(sort!=Sort.natural&&sort!=Sort.integer||!mt.dimension.constant||!row.dimension.constant||mt.length<2||mt.length>3||mt.length!=row.length) return BoundTerm.init;
+		auto ctx=context(t),size=cast(uint)mt.length;
+		Term[] coefficients;
+		bool entries(uint id,uint depth){
+			if(!depth){ if(nodes[id].op!=BoundOp.scalar) return false; coefficients~=arena.at(nodes[id].data); return true; }
+			foreach(i;0..size){ auto v=nodes[id]; if(v.op!=BoundOp.vectorCons||!entries(v.a,depth-1)) return false; id=v.b; }
+			return nodes[id].op==BoundOp.vectorNil;
+		}
+		if(!entries(p.a,2)) return BoundTerm.init;
+		Number[] values; foreach(c;coefficients){ Number v; if(!literalNumber(c,v)) return BoundTerm.init; values~=v; }
+		auto delta=(values[0]-values[size+1])*(values[0]-values[size+1])+Number(4)*values[1]*values[size];
+		auto target=delta.re<Rational(0)?Sort.complex:Sort.real_,leaf=scalarType(target),vec=pool.vector(leaf,size),mat=pool.vector(vec,size);
+		BoundTerm lift(uint id,uint depth){
+			auto v=nodes[id];
+			if(!depth){ if(v.op!=BoundOp.scalar) return BoundTerm.init; Number value; if(!literalNumber(arena.at(v.data),value)) return BoundTerm.init; return scalar(ctx,arena.castTo(arena.at(v.data),target)); }
+			BoundTerm[] xs;
+			foreach(i;0..size){ v=nodes[id]; if(v.op!=BoundOp.vectorCons) return BoundTerm.init; auto x=lift(v.a,depth-1); if(x==BoundTerm.init) return x; xs~=x; id=v.b; }
+			if(nodes[id].op!=BoundOp.vectorNil) return BoundTerm.init;
+			return tuple(ctx,xs,depth==1?vec:mat);
+		}
+		auto matrix=lift(p.a,2),initial=lift(n.b,1); if(matrix==BoundTerm.init||initial==BoundTerm.init) return BoundTerm.init;
+		auto source=tensor(TensorOp.matvec,tensor(TensorOp.power,matrix,at(p.b)),initial);
+		SpectralSolution probe; if(spectral(source,probe)==BoundTerm.init) return BoundTerm.init;
+		BoundTerm[] output;
+		foreach(i;0..size){
+			auto value=get(source,scalar(ctx,arena.natural_(i)));
+			if(target==Sort.complex) value=primitive(arena.call(Builtin.reC,[arena.complex(0)]),[value]);
+			output~=primitive(arena.call(sort==Sort.natural?Builtin.floorN:Builtin.floorR,[arena.real_(0)]),[value]);
+		}
+		promoted=source.id; return tuple(ctx,output,type(t));
 	}
 	private bool definitionallyTotal(BoundTerm t){
 		auto n=node(t);
@@ -1147,7 +1182,11 @@ final class Bindings{
 				}else if(next==BoundTerm.init&&(current.op==BoundOp.tensor||current.op==BoundOp.get||current.op==BoundOp.first||current.op==BoundOp.rest)){
 					SpectralSolution spectrum; next=spectral(at(result.output),spectrum);
 					if(next!=BoundTerm.init){ extra=cast(uint)spectra.length; spectra~=spectrum; rule=BindingRule.tensorSpectral; }
-					else{ next=tensorEval(at(result.output)); if(next!=BoundTerm.init) rule=current.op==BoundOp.tensor&&current.data==TensorOp.power&&node(next).op==BoundOp.tensor?BindingRule.tensorPower:BindingRule.tensorEval; }
+					else{
+						next=liftSpectrum(at(result.output),extra);
+						if(next!=BoundTerm.init) rule=BindingRule.tensorSpectrumCast;
+						else{ next=tensorEval(at(result.output)); if(next!=BoundTerm.init) rule=current.op==BoundOp.tensor&&current.data==TensorOp.power&&node(next).op==BoundOp.tensor?BindingRule.tensorPower:BindingRule.tensorEval; }
+					}
 				}
 				if(next==BoundTerm.init&&current.op==BoundOp.fixed){
 					auto body=at(current.a),v=pool.view(type(body)),inner=push(ctx,v.fields[0]);
@@ -1891,6 +1930,20 @@ final class Bindings{
 				case BindingRule.getCons:
 					auto index=arena.number(arena.at(nodes[n.b].data)).re.integer,cons=nodes[n.a];
 					proof=".ofEq (fun ξ ρ => Tensor.get_cons_"~(index?"succ":"zero")~" ("~name(cons.a)~".eval ξ ρ) ("~name(cons.b)~".eval ξ ρ)"~(index?" "~to!string(index-1):"")~")"; break;
+				case BindingRule.tensorSpectrumCast:
+					auto source=nodes[p.from],power=nodes[source.a],lifted=nodes[p.extra],liftedPower=nodes[lifted.a];
+					auto from=elementSort(typeLeaf(type(at(p.from)))),targetSort=elementSort(typeLeaf(type(at(p.extra)))),size=pool.view(type(at(p.from))).length;
+					auto tag=(from==Sort.natural?"N":"Z")~(targetSort==Sort.real_?"R":"C"),hom="("~(from==Sort.natural?"Nat":"Int")~".castRingHom "~(targetSort==Sort.real_?"ℝ":"ℂ")~")";
+					string raw(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+					string mapped(uint original,uint converted,uint depth){
+						if(!depth) return "(IntegerSpectra.cast"~tag~" "~raw(original)~")";
+						auto a=nodes[original],b=nodes[converted],f=depth==1?hom:"(fun v : Fin "~to!string(size)~" → _ => fun i => "~hom~" (v i))";
+						if(a.op==BoundOp.vectorNil) return "(IntegerSpectra.map_nil "~f~")";
+						return "(IntegerSpectra.map_cons "~f~" "~raw(a.a)~" "~raw(a.b)~" "~raw(b.a)~" "~raw(b.b)~" "~mapped(a.a,b.a,depth-1)~" "~mapped(a.b,b.b,depth)~")";
+					}
+					auto element=scalarType(targetSort),field=targetSort==Sort.real_?"R":"C";
+					auto units=" "~tensorLiteral(element,0)~" "~tensorLiteral(element,1)~" (Option.some.inj AffineRecurrence.zero"~field~") (Option.some.inj AffineRecurrence.one"~field~")";
+					proof=".ofEq (fun ξ ρ => IntegerSpectra.lift"~tag~" "~to!string(size-1)~units~" "~raw(power.a)~" "~raw(source.b)~" "~raw(power.b)~" "~raw(liftedPower.a)~" "~raw(lifted.b)~" "~mapped(power.a,liftedPower.a,2)~" "~mapped(source.b,lifted.b,1)~")"; break;
 				case BindingRule.tensorSpectral:proof=".ofEq (fun ξ ρ => spectral"~to!string(p.extra)~dimArg~" γ ξ ρ)"; break;
 				case BindingRule.tensorEval:proof=tensorEvaluationProof(p.from,p.to); break;
 				case BindingRule.tensorPower:

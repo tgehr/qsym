@@ -205,6 +205,8 @@ def polarC : Function2 ℝ ℝ ℂ :=
   ⟨fun r θ => r * Complex.exp (θ * Complex.I), fun _ _ => True⟩
 def atan2R : Function2 ℝ ℝ ℝ :=
   ⟨fun y x => Complex.arg ((x : ℂ) + y * Complex.I), fun y x => x ≠ 0 ∨ y ≠ 0⟩
+def floorN : Function1 ℝ ℕ :=
+  ⟨Nat.floor, fun _ => True⟩
 def floorR : Function1 ℝ ℤ :=
   ⟨Int.floor, fun _ => True⟩
 def ceilR : Function1 ℝ ℤ :=

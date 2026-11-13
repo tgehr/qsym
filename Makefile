@@ -8,7 +8,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate test test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: all generate test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 all: build/qsym
 
 build generated:
@@ -23,7 +23,14 @@ generate: build/rulec | generated
 build/qsym: generate tools/main.d tools/repl.d tools/lineedit.d tools/edit.d tools/unicode.d $(MODULES)
 	$(DC) $(DFLAGS) $(IMPORTS) -i tools/main.d -of=$@
 
-test: build/qsym
+build/edit-motion-tests: tests/edit_motion.d tools/edit.d tools/unicode.d | build
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/edit_motion.d -of=$@
+
+test-edit-motion: build/edit-motion-tests
+	./build/edit-motion-tests
+
+test: build/qsym build/edit-motion-tests
+	./build/edit-motion-tests
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/all.d -of=build/tests
 	./build/tests
 	./build/rulec tests/syntax.qs build/syntax.d build/Syntax.lean
@@ -37,6 +44,10 @@ test: build/qsym
 	./build/elementary-tests --DRT-testmode=run-main build/elementary
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/transcendental.d -of=build/transcendental-tests
 	./build/transcendental-tests --DRT-testmode=run-main build/transcendental
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/indexed_norms.d -of=build/indexed-norm-tests
+	./build/indexed-norm-tests build/indexed-norms
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_compositions.d -of=build/argument-composition-tests
+	./build/argument-composition-tests build/argument-compositions
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/powers.d -of=build/power-tests
 	./build/power-tests --DRT-testmode=run-main build/powers
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functions.d -of=build/function-tests
@@ -125,6 +136,8 @@ test: build/qsym
 	./build/linear-recurrence-tests --DRT-testmode=run-main build/linear-recurrences
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/spectral.d -of=build/spectral-tests
 	./build/spectral-tests build/spectral
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/integer_spectra.d -of=build/integer-spectra-tests
+	./build/integer-spectra-tests build/integer-spectra
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/cutoff.d -of=build/cutoff-tests
 	./build/cutoff-tests --DRT-testmode=run-main build/cutoff
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/tensors.d -of=build/tensor-tests
@@ -139,8 +152,12 @@ test: build/qsym
 	./build/partial-domain-tests --DRT-testmode=run-main build/partial-domains
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/real_countdown.d -of=build/real-countdown-tests
 	./build/real-countdown-tests --DRT-testmode=run-main build/real-countdown
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_branches.d -of=build/argument-branch-tests
+	./build/argument-branch-tests build/argument-branches
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_rotation.d -of=build/argument-rotation-tests
 	./build/argument-rotation-tests build/argument-rotation
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/recovered_algebra.d -of=build/recovered-algebra-tests
+	./build/recovered-algebra-tests build/recovered-algebra
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

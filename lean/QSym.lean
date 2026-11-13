@@ -17,6 +17,7 @@ import QSym.Tensor
 import QSym.AffineRecurrence
 import QSym.LinearRecurrence
 import QSym.Spectral
+import QSym.IntegerSpectra
 import QSym.Dependent
 import QSym.SetFixed
 import QSym.MaskFunctions

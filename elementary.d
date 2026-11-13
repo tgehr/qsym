@@ -218,13 +218,14 @@ package final class Elementary{
 				}
 			}
 		}
-		if((f==Builtin.floorR||f==Builtin.ceilR)&&a.isNumber(a.at(n.a))){
+		if((f==Builtin.floorN||f==Builtin.floorR||f==Builtin.ceilR)&&a.isNumber(a.at(n.a))){
 			auto q=a.number(a.at(n.a)).re,m=q.numerator/q.denominator,r=q.numerator%q.denominator;
 			budget.spend(q.words);
-			if(f==Builtin.floorR&&r<0) --m;
+			if((f==Builtin.floorN||f==Builtin.floorR)&&r<0) --m;
+			if(f==Builtin.floorN&&m<0){ result=instantiate(a,Law.natural_floor_nonpositive,[a.at(n.a)]); return true; }
 			if(f==Builtin.ceilR&&r>0) ++m;
-			result=instantiate(a,f==Builtin.floorR?Law.real_floor_exact:Law.real_ceil_exact,
-				[a.at(n.a),a.number(Number(Rational(m,BigInt(1))),Sort.integer)]); return true;
+			result=instantiate(a,f==Builtin.floorN?Law.natural_floor_exact:f==Builtin.floorR?Law.real_floor_exact:Law.real_ceil_exact,
+				[a.at(n.a),a.number(Number(Rational(m,BigInt(1))),f==Builtin.floorN?Sort.natural:Sort.integer)]); return true;
 		}
 		if((f==Builtin.log2R||f==Builtin.log10R)&&a.isNumber(a.at(n.a))){
 			auto q=a.number(a.at(n.a)).re; if(q<=Rational(0)) return false;
@@ -285,6 +286,12 @@ package final class Elementary{
 				a.real_(exponent.numerator.toLong()),a.real_(degree-2)]); return true;
 		}
 		if(f==Builtin.sinR||f==Builtin.cosR||f==Builtin.tanR||f==Builtin.cisR){
+			auto inner=a.view(a.at(n.a));
+			if(inner.op==Op.builtin&&inner.value==Builtin.argC){
+				auto law=f==Builtin.sinR?Law.complex_arg_sin:f==Builtin.cosR?Law.complex_arg_cos:
+					f==Builtin.tanR?Law.complex_arg_tan:Law.complex_arg_cis;
+				result=instantiate(a,law,[a.at(inner.a)]); return true;
+			}
 			Term turns;
 			if(symbolicPeriod(a.at(n.a),f==Builtin.tanR?1:2,turns)){
 				auto law=f==Builtin.sinR?Law.real_sin_period:f==Builtin.cosR?Law.real_cos_period:

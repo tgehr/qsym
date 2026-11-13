@@ -123,7 +123,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",22),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -144,7 +144,7 @@ def main():
 		raise RuntimeError("expected 28 binding certificates")
 	for file in bindings:
 		certificate(file)
-	for directory,count in (("argument-rotation",70),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
+	for directory,count in (("recovered-algebra",81),("argument-rotation",70),("argument-branches",74),("argument-compositions",64),("indexed-norms",54),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -263,12 +263,21 @@ def main():
 			raise RuntimeError("affine recurrence rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
 	for name,body in (
+		("ArgWrongCut","example (z : ℂ) (h : Complex.arg z=Real.pi) : Complex.arg ((starRingEnd ℂ) z)= -Complex.arg z := ArgumentBranches.arg_conj_off_cut z h"),
+		("LogInverseWrongCut","example (z : ℂ) (h : Complex.arg z=Real.pi) : Complex.log z⁻¹= -Complex.log z := ArgumentBranches.log_inv_on_cut z h"),
+		("OffCutWrongSide","example (z : ℂ) (h : z.re≤0) : Complex.arg z≠Real.pi := ArgumentBranches.arg_off_cut z |>.mpr (Or.inl h)")):
+		path=negative/(name+".lean"); path.write_text("import QSym.ArgumentBranches\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	for name,body in (
 		("WrongHalfTurnBranch","example (z : ℂ) (h : 0<Complex.arg z) : Complex.arg (-z)=Complex.arg z+Real.pi := ArgumentRotation.arg_neg_positive z h"),
 		("MissingZeroExclusion","example (z : ℂ) (h : Complex.arg z≤0) : Complex.arg (-z)=Complex.arg z+Real.pi := ArgumentRotation.arg_neg_nonpositive z h"),
 		("NegativeScaleAsPositive","example (z w : ℂ) (hi : z.im=0) (hr : z.re<0) : Complex.arg (z*w)=Complex.arg w := ArgumentRotation.arg_negative_scale hi hr"),
 		("WrongLowerLogSign","example : Complex.log (-Complex.I)=(Real.pi/2 : ℂ)*Complex.I := ArgumentRotation.log_neg_I"),
 		("MissingNegativeLogPhase","example (z : ℂ) (hi : z.im=0) (hr : z.re<0) : Complex.log z=(Real.log (-z.re) : ℂ) := ArgumentRotation.log_negative_real hi hr")):
 		path=negative/(name+".lean"); path.write_text("import QSym.ArgumentRotation\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	for name,body in (
+		("NaturalFloorOffByOne","example (x : ℝ) (n : ℕ) (hl : (n : ℝ)≤x) (hu : x<(n : ℝ)+1) : Nat.floor x=n+1 := NaturalFloor.exact hl hu"),
+		("EmptySpectralRestore","example : IntegerSpectra.restore Functions.floorN.apply 0 none = (none : Option (Fin 0 → ℕ)) := rfl")):
+		path=negative/(name+".lean"); path.write_text("import QSym.IntegerSpectra\nimport QSym.NaturalFloor\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	valid=(ROOT/"build/spectral/NaturalDiagonal.lean").read_text()
 	wrong_matrix=re.sub(r"(noncomputable def t\d+.*? : Binding\.Expr c\d+ \(\.vector \(\.scalar \.natural\) 2\) := \.binary Tensor\.consValue )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)
 	wrong_eigenvalue=re.sub(r"(\.binary Functions\.powNN\.apply )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)
@@ -290,6 +299,29 @@ def main():
 		if corrupt==valid:
 			raise RuntimeError("recurrence rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	for name,body in (
+		('MissingProductIdentity','example (x y : ℝ) : x⁻¹=y := RadicalRecovery.inverse_of_product x y'),
+		('WrongReciprocal','example : (2 : ℝ)⁻¹=3 := RadicalRecovery.inverse_of_product 2 3 (by norm_num)'),
+		('MissingPowerDomain','example (x y : ℝ) (n : ℕ) : (x^y)^(n+1)=x^(y*((n : ℝ)+1)) := PowerRecovery.natural_outer_valid x y n'),
+		('MissingEvenAbsolute','example (x y : ℝ) : (x^2)^y=x^(2*y) := PowerRecovery.even_inner x y 0'),
+		('WrongComplexBranch','example (z w u : ℂ) (h₁ : (Complex.log z*w).im≤ -Real.pi) (h₂ : (Complex.log z*w).im≤Real.pi) : (z^w)^u=z^(w*u) := PowerRecovery.complex_nested z w u h₁ h₂'),
+		('MissingPositiveDenominator','example (x y t : ℝ) (hx : 0≤x) (hy : 0≤y) (ht : Functions.powerR.domain x t) : Functions.powerR.domain (x/y) t := PowerRecovery.quotient_domain x y t hx hy ht')):
+		path=negative/(name+".lean")
+		path.write_text("import QSym.RadicalRecovery\nimport QSym.PowerRecovery\nopen QSym\n"+body+"\n")
+		check(path,succeeds=False)
+	for name,body in (
+		("WrongIndexedAbsolute","example (x : Option ℝ) (n : Option ℕ) : Value.abs (Functions.powRN.apply x n)=Functions.powRN.apply x n := Value.abs_powRN x n"),
+		("WrongIndexedConjugate","example (z : Option ℂ) (k : Option ℤ) : Value.conj (Functions.powCZ.apply z k)=Functions.powCZ.apply z k := Value.conj_powCZ z k")):
+		path=negative/(name+".lean")
+		path.write_text("import QSym.IndexedNorms\nopen QSym\n"+body+"\n")
+		check(path,succeeds=False)
+	for name,body in (
+		("WrongArgZero","example : Functions.sinR.apply (Functions.argC.apply (some (0 : ℂ)))=some 0 := Value.sin_argC (some 0)"),
+		("WrongArgTangentPole","example : Functions.tanR.apply (Functions.argC.apply (some Complex.I))=some 0 := Value.tan_argC (some Complex.I)"),
+		("WrongArgCosNumerator","example (z : Option ℂ) : Functions.cosR.apply (Functions.argC.apply z)=Value.mul (Functions.imC.apply z) (Value.inv (Functions.absC.apply z)) := Value.cos_argC z")):
+		path=negative/(name+".lean")
+		path.write_text("import QSym.ArgumentCompositions\nopen QSym\n"+body+"\n")
+		check(path,succeeds=False)
 	for name,body in (
 		("UndefinedSubsetSelf","example (s : Binding.Expr [] (.set (.scalar .real))) : Binding.Reduction (.subset s s) (.scalar (.bool true)) := .subsetRefl s"),
 		("UndefinedEqualitySelf","example (s : Binding.Expr [] (.set (.scalar .real))) : Binding.Reduction (.binary Binding.equalValue s s) (.scalar (.bool true)) := .equalSelf s"),

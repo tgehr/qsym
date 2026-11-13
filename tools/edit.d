@@ -6,7 +6,7 @@ import std.utf:decode;
 
 enum Key{ none,text,left,right,home,end,up,down,backspace,del,enter,cancel,eof,
 	killBefore,killAfter,killWord,complete,escape,suspend,clear,pasteStart,pasteEnd,wordLeft,wordRight,
-	killWordBefore,killWordAfter,yank,yankPop,undo,transpose,first,last }
+	killWordBefore,killWordAfter,yank,yankPop,undo,transpose,first,last,expressionLeft,expressionRight }
 struct Event{ Key key; string text; }
 
 // Streaming decoder: UTF-8 and escape sequences may cross read boundaries.
@@ -15,11 +15,35 @@ struct KeyDecoder{
 	private size_t expected;
 	bool pendingEscape()const{ return escape.length!=0; }
 	Event timeout(){ escape=null; return Event(Key.escape); }
+	private static Event modifiedExpression(string s){
+		if(s.length<3||s[0..2]!="\x1b[") return Event.init;
+		auto end=s[$-1]; s=s[2..$-1]; size_t at;
+		bool number(out uint n){
+			auto start=at; n=0;
+			while(at<s.length&&s[at]>='0'&&s[at]<='9'){
+				if(n>6553) return false;
+				n=n*10+s[at++]-'0';
+			}
+			return at!=start;
+		}
+		bool take(char c){ if(at==s.length||s[at]!=c) return false; ++at; return true; }
+		uint code,modifiers,kind=1;
+		if(!number(code)||!take(';')||!number(modifiers)) return Event.init;
+		if(end=='~'){
+			if(code!=27||!take(';')||!number(code)) return Event.init;
+		}else if(end=='u'){
+			if(take(':')&&!number(kind)) return Event.init;
+		}else return Event.init;
+		if(at!=s.length||!modifiers||((modifiers-1)&~(1u|64u|128u))!=6||kind<1||kind>2) return Event.init;
+		return Event(code=='b'||code=='B'?Key.expressionLeft:code=='f'||code=='F'?Key.expressionRight:Key.none);
+	}
 	Event feed(ubyte c){
 		if(escape.length){
 			if(escape.length==1&&c!='['&&c!='O'){
 				escape=null;
 				switch(c){
+					case 2:return Event(Key.expressionLeft);
+					case 6:return Event(Key.expressionRight);
 					case 'b','B':return Event(Key.wordLeft);
 					case 'f','F':return Event(Key.wordRight);
 					case 'd','D':return Event(Key.killWordAfter);
@@ -34,6 +58,9 @@ struct KeyDecoder{
 			if(escape.length>32){ escape=null; return Event.init; }
 			if(escape.length<3||c<0x40||c>0x7e) return Event.init;
 			auto s=escape; escape=null;
+			if(c=='u'||c=='~'){
+				auto event=modifiedExpression(s); if(event.key!=Key.none) return event;
+			}
 			import std.algorithm:canFind;
 			switch(c){
 				case 'A':return Event(Key.up);
@@ -191,6 +218,44 @@ struct EditBuffer{
 		while(p<text.length&&word(p)) p=following(p);
 		return p;
 	}
+	private bool expression(bool forward,out size_t result){
+		struct Cell{ size_t end; byte bracket; bool space; }
+		Cell[] cells; size_t point; bool comment;
+		for(size_t i;i<text.length;){
+			auto next=following(i),j=i,c=decode(text,j); byte bracket;
+			if(c=='#') comment=true;
+			if(!comment) switch(c){
+				case '(':bracket=1; break; case ')':bracket=-1; break;
+				case '[':bracket=2; break; case ']':bracket=-2; break;
+				case '{':bracket=3; break; case '}':bracket=-3; break;
+				default:break;
+			}
+			cells~=Cell(next,bracket,comment||isWhite(c));
+			if(c=='\n') comment=false;
+			i=next; if(i<=cursor) ++point;
+		}
+		auto at=point;
+		bool more(){ return forward?at<cells.length:at!=0; }
+		size_t index(){ return forward?at:at-1; }
+		void step(){ if(forward) ++at; else --at; }
+		while(more()&&cells[index()].space) step();
+		if(!more()) return false;
+		int sign=forward?1:-1,b=cells[index()].bracket*sign;
+		if(b<0) return false;
+		if(!b){
+			while(more()&&!cells[index()].space&&!cells[index()].bracket) step();
+		}else{
+			byte[] stack;
+			do{
+				b=cells[index()].bracket*sign;
+				if(b>0) stack~=cast(byte)b;
+				else if(b<0){ if(!stack.length||stack[$-1]!=-b) return false; --stack.length; }
+				step();
+			}while(more()&&stack.length);
+			if(stack.length) return false;
+		}
+		result=at?cells[at-1].end:0; return true;
+	}
 	private static bool killing(Key k){
 		return k==Key.killBefore||k==Key.killAfter||k==Key.killWord||k==Key.killWordBefore||k==Key.killWordAfter;
 	}
@@ -236,6 +301,10 @@ struct EditBuffer{
 			case Key.end:current.cursor=text.length; break;
 			case Key.wordLeft:current.cursor=wordLeft(); break;
 			case Key.wordRight:current.cursor=wordRight(); break;
+			case Key.expressionLeft,Key.expressionRight:
+				size_t target;
+				if(!expression(e.key==Key.expressionRight,target)) return Action.beep;
+				current.cursor=target; break;
 			case Key.up:history(true); break;
 			case Key.down:history(false); break;
 			case Key.first:while(selected) history(true); break;

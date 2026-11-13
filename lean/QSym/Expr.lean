@@ -142,6 +142,7 @@ inductive Expr : Ty → Type where
   | expiC : Expr .complex → Expr .complex
   | polarC : Expr .real → Expr .real → Expr .complex
   | atan2R : Expr .real → Expr .real → Expr .real
+  | floorN : Expr .real → Expr .natural
   | floorR : Expr .real → Expr .integer
   | ceilR : Expr .real → Expr .integer
   | roundR : Expr .real → Expr .integer
@@ -251,6 +252,7 @@ noncomputable def eval (ρ : Env) : {s : Ty} → Expr s → Option s.denote
   | _, .expiC a => Functions.expiC.apply (eval ρ a)
   | _, .polarC a b => Functions.polarC.apply (eval ρ a) (eval ρ b)
   | _, .atan2R a b => Functions.atan2R.apply (eval ρ a) (eval ρ b)
+  | _, .floorN a => Functions.floorN.apply (eval ρ a)
   | _, .floorR a => Functions.floorR.apply (eval ρ a)
   | _, .ceilR a => Functions.ceilR.apply (eval ρ a)
   | _, .roundR a => Functions.roundR.apply (eval ρ a)

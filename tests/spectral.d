@@ -64,7 +64,6 @@ private void run(string directory=""){
 		"λ(n:ℕ).(((1:ℝ),1),(0,1))^n@(1,1)",
 		"λ(n:ℕ).(((0:ℝ),-1),(1,0))^n@(1,0)",
 		"λ(n:ℕ).(((0:ℚ),1),(1,1))^n@(0,1)",
-		"λ(n:ℕ).((0,1),(1,1))^n@(0,1)",
 		"λ(n:ℕ).(((1/0:ℝ),0),(0,1))^n@(1,1)",
 		"λ(n:ℕ).(((1:ℝ),0),(0,1))^n@(1,1/0)",
 		"λ(n:ℕ).(((0:ℝ),1,1),(1,1,0),(0,0,1))^n@(0,1,1)"]){
@@ -74,5 +73,5 @@ private void run(string directory=""){
 }
 unittest{ run(); }
 int main(string[] args){
-	auto dir=args.length>1?args[1]:"build/spectral"; mkdirRecurse(dir); run(dir); writeln(cases().length," spectral certificates; 7 unsupported cases retained"); return 0;
+	auto dir=args.length>1?args[1]:"build/spectral"; mkdirRecurse(dir); run(dir); writeln(cases().length," spectral certificates; 6 unsupported cases retained"); return 0;
 }

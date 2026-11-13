@@ -33,6 +33,7 @@ int repl(){
 				writeln("Ctrl-A/E: Home/End; Ctrl-U/K/W: kill before/after cursor/previous word.");
 				writeln("Ctrl-Y: yank; Alt-Y: cycle kills; Ctrl-_: undo; Ctrl-T: transpose characters.");
 				writeln("Alt-B/F: move by word; Alt-Backspace/D: kill word backward/forward; Alt-</>: first/last history.");
+				writeln("Ctrl-Alt-B/F: move backward/forward over a balanced expression.");
 				writeln("Ctrl-C: cancel line; Ctrl-D: delete character, or exit on an empty line.");
 				writeln("Functions: λ(x:ℝ). 1/x; domains: domain(f), x∈domain(f)");
 				writeln("Subsets: {x:ℝ | x>0}, A⊆B; restrictions: λ(x:{t:ℝ | t>0}). log(x)");
