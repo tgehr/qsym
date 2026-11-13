@@ -12,6 +12,7 @@ import QSym.LogBaseSigns
 import QSym.DecreasingThresholds
 import QSym.IntegerEquations
 import QSym.PowerSigns
+import QSym.DiscreteDomains
 import QSym.ScalarOrder
 import QSym.SignCompositions
 
@@ -636,6 +637,7 @@ macro "qsym_defined" : tactic => `(tactic| (
 
 macro "qsym_rule" : tactic => `(tactic| (
   first
+  | solve | qsym_discrete
   | solve
     | apply Value.refines_of_eq
       simp only [Expr.eval, Int.cast_zero, Int.cast_one, zero_mul, add_zero,

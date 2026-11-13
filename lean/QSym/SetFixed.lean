@@ -70,6 +70,17 @@ theorem Predicate.total_nat (d : Predicate ℕ) (h : ∀ n, d.eval {m | m < n} n
   induction n using Nat.strong_induction_on with
   | h n ih => exact (d.unfold n).mp (d.monotone (fun m hm => ih m hm) (h n))
 
+theorem Predicate.start_least (d : Predicate α) :
+    {x : α | (some false : Option Bool) = some true} ⊆ d.least := by simp
+
+theorem Predicate.step_least (d : Predicate α) {s t : Set α} (hs : s ⊆ d.least)
+    (h : ∀ x, x ∈ t ↔ d.eval s x) : t ⊆ d.least :=
+  fun x hx => (d.unfold x).mp (d.monotone hs ((h x).mp hx))
+
+theorem Predicate.least_of_stable (d : Predicate α) (s : Set α) (hs : s ⊆ d.least)
+    (h : ∀ x, d.eval s x ↔ x ∈ s) : d.least = s :=
+  le_antisymm (d.hom.lfp_le (fun x hx => (h x).mp hx)) hs
+
 theorem defined_bind (a : Option α) (g : α → Option β) :
     Value.Defined (a.bind g) ↔ ∃ y, a = some y ∧ Value.Defined (g y) := by
   cases a <;> simp [Value.Defined]
@@ -94,6 +105,20 @@ theorem defined_guard (p : Option Bool) (a : Option α) :
 
 def Test (b : Option Bool) (p : Prop) : Prop := (b = some true ↔ p) ∧ Value.Defined b
 
+theorem Test.refine {a b : Option Bool} {p : Prop} (h : Test a p) (hr : Value.Refines a b) : Test b p :=
+  hr.eq_of_defined h.2 ▸ h
+
+theorem call_test {a : Option α} {d b : Option Bool} (p : α → Option Bool)
+    (ha : Domain.Correct a d) (hp : ∀ x, Value.Defined (p x))
+    (hb : ∀ x, a = some x → b = p x) :
+    Test (Value.and d b) (∃ x, a = some x ∧ p x = some true) := by
+  cases a with
+  | none => change d = some false at ha; rw [ha]; simp [Test, Value.and, Value.Defined]
+  | some a =>
+    have hd : d = some true := ha
+    rw [hd, hb a rfl]
+    simpa [Test, Value.and] using (And.intro Iff.rfl (hp a) : Test (p a) (p a = some true))
+
 theorem pure_rank {a : Option α} {d : Option Bool} (h : Domain.Correct a d) : Test d (Value.Defined a) :=
   ⟨h.iff.symm, h.total⟩
 
@@ -112,6 +137,20 @@ theorem false_rank {p d : Option Bool} (h : Domain.Correct p d) : Test (Value.an
   cases p with
   | none => change d = some false at h; rw [h]; simp [Test, Value.and, Value.Defined]
   | some p => cases p <;> simp_all [Test, Domain.Correct, Value.and, Value.not, Value.Defined]
+
+theorem mask_test {p dp b : Option Bool} {q : Prop} (hp : Domain.Correct p dp) (hb : Test b q) :
+    Test (Value.and dp (Value.or (Value.not p) b)) (p = some false ∨ (p = some true ∧ q)) := by
+  obtain ⟨b, rfl⟩ := hb.2
+  cases p with
+  | none => change dp = some false at hp; rw [hp]; simp [Test, Value.and, Value.Defined]
+  | some p => cases p <;> cases b <;> simp_all [Test, Domain.Correct, Value.and, Value.or, Value.not, Value.Defined]
+
+theorem or_test {p dp b : Option Bool} {q : Prop} (hp : Domain.Correct p dp) (hb : Test b q) :
+    Test (Value.and dp (Value.or p b)) (p = some true ∨ (p = some false ∧ q)) := by
+  obtain ⟨b, rfl⟩ := hb.2
+  cases p with
+  | none => change dp = some false at hp; rw [hp]; simp [Test, Value.and, Value.Defined]
+  | some p => cases p <;> cases b <;> simp_all [Test, Domain.Correct, Value.and, Value.or, Value.Defined]
 
 theorem both_rank {p q : Option Bool} {a b : Prop} (hp : Test p a) (hq : Test q b) : Test (Value.and p q) (a ∧ b) := by
   obtain ⟨u, rfl⟩ := hp.2
@@ -132,6 +171,18 @@ theorem domain_univ (p : Recursion.Program ℕ β β) (d : Predicate ℕ) (f : O
     (hr : ∀ n, d.eval {m | m < n} n) : Binding.inputDomain f = some Set.univ := by
   rw [hf]
   have he := (least_domain p d hd).trans (d.total_nat hr)
+  simp only [Binding.inputDomain, Option.some_bind]
+  congr 1
+  convert he using 1
+  ext x
+  exact Option.isSome_iff_exists
+
+theorem domain_set (p : Recursion.Program α β β) (d : Predicate α) (f : Option (α → Option β))
+    (hf : f = some (FixedPoint.value p.functional))
+    (hd : ∀ g x, Value.Defined (p.eval g x) ↔ d.eval {y | Value.Defined (g y)} x)
+    (s : Set α) (hs : d.least = s) : Binding.inputDomain f = some s := by
+  rw [hf]
+  have he := (least_domain p d hd).trans hs
   simp only [Binding.inputDomain, Option.some_bind]
   congr 1
   convert he using 1

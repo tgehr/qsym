@@ -104,6 +104,7 @@ def main():
 	certificate(ROOT/"build/ReplTensors.lean")
 	certificate(ROOT/"build/ReplDependent.lean")
 	certificate(ROOT/"build/ReplFixedDomain.lean")
+	certificate(ROOT/"build/ReplPartialDomain.lean")
 	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
 	if len(refinements)!=32:
 		raise RuntimeError("expected 32 refinement certificates")
@@ -119,7 +120,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -208,6 +209,11 @@ def main():
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	valid=(ROOT/"build/partial-domains/MissingBase.lean").read_text()
+	corrupt=re.sub(r"(fun x => \(\(iter0_)\d+(_test γ ξ ρ\) x\)\.1\.symm)",r"\g<1>0\2",valid)
+	if corrupt==valid:
+		raise RuntimeError("partial-domain closure rejection fixture did not change")
+	path=negative/"PartialDomainWrongClosure.lean"; path.write_text(corrupt); check(path,succeeds=False)
 	valid=(ROOT/"build/fixed-domains/Fibonacci.lean").read_text()
 	corrupt=valid.replace(".eval {y | y < x} x :=", ".eval {y | y > x} x :=",1)
 	if corrupt==valid:

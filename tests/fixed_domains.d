@@ -33,14 +33,9 @@ private void run(string directory=""){
 unittest{
 	run();
 	foreach(source;[
-		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else if n=1 then 1 else f(n sub 1)+f(n sub 2)",
-		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else f(n sub 1)+f(n sub 2)",
-		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else f(n)+1",
-		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else f(n+1)",
 		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else f(f(n sub 1))",
 		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else if f(n sub 1)=0 then 1 else f(n+1)",
 		"μ(f:ℕ→ℝ).λ(n:ℕ).if n=0 then 0 else 1/f(n sub 1)",
-		"μ(f:ℕ→ℕ).λ(n:ℕ).if n<2 then n sub 1 else f(n sub 1)+f(n sub 2)"
 	]){
 		auto owner=Session.open(); FunctionSyntax s;
 		auto text=s.format(owner.arena,s.run(owner.arena,source,[],Options(DensityMode.preserve,true),true));

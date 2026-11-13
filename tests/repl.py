@@ -246,3 +246,12 @@ assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["{n:ℕ | true}",f"Wrote {fixed_domain_certificate}"],result.stdout
 assert "SetFixed.domain_univ" in fixed_domain_certificate.read_text()
 print("Fixed-point set-domain REPL checks passed.")
+
+partial_domain_certificate=root/"build/ReplPartialDomain.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"domain(μ(f:ℕ→ℕ).λ(n:ℕ).if n≤1 then n else f(n sub 1)+f(n sub 2)+f(n sub 3))",
+	f":lean {partial_domain_certificate}",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["{n:ℕ | n≤1}",f"Wrote {partial_domain_certificate}"],result.stdout
+assert "SetFixed.domain_set" in partial_domain_certificate.read_text()
+print("Partial recursive domain REPL checks passed.")
