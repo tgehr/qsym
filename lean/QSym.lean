@@ -14,6 +14,7 @@ import QSym.Domain
 import QSym.Conditionals
 import QSym.Binding
 import QSym.Tensor
+import QSym.AffineRecurrence
 import QSym.Dependent
 import QSym.SetFixed
 import QSym.MaskFunctions

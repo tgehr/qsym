@@ -121,7 +121,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -253,6 +253,13 @@ def main():
 		("TensorIndexOutside","example : Tensor.getValue (some (fun _ : Fin 1 => (7 : ℕ))) (some 1) = some 7 := rfl"),
 		("UnknownDimensionsDiffer","example (n m : ℕ) : Binding.typeEqValue (some (.vector (.scalar .real) n)) (some (.vector (.scalar .real) m)) = some false := rfl")):
 		path=negative/(name+".lean"); path.write_text("import QSym.Tensor\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	valid=(ROOT/"build/affine-recurrences/Natural.lean").read_text()
+	wrong_base=re.sub(r"(AffineRecurrence\.solve_matrix .*? AffineRecurrence\.mulN )\(\(n\d+\.eval ξ\)\.getD 0\)",r"\g<1>0",valid,count=1)
+	wrong_matrix=re.sub(r"(noncomputable def t\d+.*? : Binding\.Expr c\d+ \(\.vector \(\.scalar \.natural\) 2\) := \.binary Tensor\.consValue )\(t\d+ γ\)",r"\1(.scalar (.nat 0))",valid,count=1)
+	for name,corrupt in (("AffineWrongBase",wrong_base),("AffineWrongMatrix",wrong_matrix)):
+		if corrupt==valid:
+			raise RuntimeError("affine recurrence rejection fixture did not change")
+		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
 	valid=(ROOT/"build/recurrences/Add.lean").read_text()
 	wrong_base=re.sub(r"(Generated\.r_natural_recurrence_add_base )(\(n\d+\.eval ξ\)) (\(n\d+\.eval ξ\))",r"\1\3 \2",valid,count=1)
 	wrong_step=valid.replace("Generated.r_natural_recurrence_add_step","Generated.r_natural_recurrence_mul_step",1)

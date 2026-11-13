@@ -264,3 +264,12 @@ assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["{x:ℝ | true}",f"Wrote {real_countdown_certificate}"],result.stdout
 assert "SetFixed.Predicate.total_measure" in real_countdown_certificate.read_text()
 print("Real countdown domain REPL checks passed.")
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"(μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else 2*f(n sub 1)+1)(10)",
+	"(μ(f:ℕ→ℤ).λ(n:ℕ).if n=0 then -3 else -2*f(n sub 1)+1)(5)",
+	":type μ(f:ℕ→ℤ).λ(n:ℕ).if n=0 then -3 else -2*f(n sub 1)+1",
+	":domain μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else 2*f(n sub 1)+1",
+	"defined((μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else 2*f(n sub 1)+1)(0 sub 1))",
+	":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["4095","107","ℕ→ℤ","{n:ℕ | true}","false"],result.stdout

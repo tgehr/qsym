@@ -10845,4 +10845,124 @@ theorem r_real_asin_mask (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.deno
 
 #qsym_check_axioms r_real_asin_mask
 
+theorem r_natural_affine_add (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural)) (v_c : Option (Ty.denote .natural)) (v_d : Option (Ty.denote .natural)) (v_x : Option (Ty.denote .natural)) :
+    (Functions.addN.apply (Functions.addN.apply (Functions.mulN.apply v_a v_x) v_b) (Functions.addN.apply (Functions.mulN.apply v_c v_x) v_d)) = (Functions.addN.apply (Functions.mulN.apply (Functions.addN.apply v_a v_c) v_x) (Functions.addN.apply v_b v_d)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_d <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_affine_add
+
+theorem r_natural_affine_left (v_c : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural)) (v_x : Option (Ty.denote .natural)) :
+    (Functions.mulN.apply v_c (Functions.addN.apply (Functions.mulN.apply v_a v_x) v_b)) = (Functions.addN.apply (Functions.mulN.apply (Functions.mulN.apply v_c v_a) v_x) (Functions.mulN.apply v_c v_b)) := qsym_cached% by
+  cases v_c <;> cases v_a <;> cases v_b <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_affine_left
+
+theorem r_natural_affine_right (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural)) (v_c : Option (Ty.denote .natural)) (v_x : Option (Ty.denote .natural)) :
+    (Functions.mulN.apply (Functions.addN.apply (Functions.mulN.apply v_a v_x) v_b) v_c) = (Functions.addN.apply (Functions.mulN.apply (Functions.mulN.apply v_a v_c) v_x) (Functions.mulN.apply v_b v_c)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_affine_right
+
+theorem r_integer_affine_add (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer)) (v_c : Option (Ty.denote .integer)) (v_d : Option (Ty.denote .integer)) (v_x : Option (Ty.denote .integer)) :
+    (Functions.addZ.apply (Functions.addZ.apply (Functions.mulZ.apply v_a v_x) v_b) (Functions.addZ.apply (Functions.mulZ.apply v_c v_x) v_d)) = (Functions.addZ.apply (Functions.mulZ.apply (Functions.addZ.apply v_a v_c) v_x) (Functions.addZ.apply v_b v_d)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_d <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_affine_add
+
+theorem r_integer_affine_left (v_c : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer)) (v_x : Option (Ty.denote .integer)) :
+    (Functions.mulZ.apply v_c (Functions.addZ.apply (Functions.mulZ.apply v_a v_x) v_b)) = (Functions.addZ.apply (Functions.mulZ.apply (Functions.mulZ.apply v_c v_a) v_x) (Functions.mulZ.apply v_c v_b)) := qsym_cached% by
+  cases v_c <;> cases v_a <;> cases v_b <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_affine_left
+
+theorem r_integer_affine_right (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer)) (v_c : Option (Ty.denote .integer)) (v_x : Option (Ty.denote .integer)) :
+    (Functions.mulZ.apply (Functions.addZ.apply (Functions.mulZ.apply v_a v_x) v_b) v_c) = (Functions.addZ.apply (Functions.mulZ.apply (Functions.mulZ.apply v_a v_c) v_x) (Functions.mulZ.apply v_b v_c)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_affine_right
+
+theorem r_rational_affine_add (v_a : Option (Ty.denote .rational)) (v_b : Option (Ty.denote .rational)) (v_c : Option (Ty.denote .rational)) (v_d : Option (Ty.denote .rational)) (v_x : Option (Ty.denote .rational)) :
+    (Functions.addQ.apply (Functions.addQ.apply (Functions.mulQ.apply v_a v_x) v_b) (Functions.addQ.apply (Functions.mulQ.apply v_c v_x) v_d)) = (Functions.addQ.apply (Functions.mulQ.apply (Functions.addQ.apply v_a v_c) v_x) (Functions.addQ.apply v_b v_d)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_d <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_affine_add
+
+theorem r_rational_affine_left (v_c : Option (Ty.denote .rational)) (v_a : Option (Ty.denote .rational)) (v_b : Option (Ty.denote .rational)) (v_x : Option (Ty.denote .rational)) :
+    (Functions.mulQ.apply v_c (Functions.addQ.apply (Functions.mulQ.apply v_a v_x) v_b)) = (Functions.addQ.apply (Functions.mulQ.apply (Functions.mulQ.apply v_c v_a) v_x) (Functions.mulQ.apply v_c v_b)) := qsym_cached% by
+  cases v_c <;> cases v_a <;> cases v_b <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_affine_left
+
+theorem r_rational_affine_right (v_a : Option (Ty.denote .rational)) (v_b : Option (Ty.denote .rational)) (v_c : Option (Ty.denote .rational)) (v_x : Option (Ty.denote .rational)) :
+    (Functions.mulQ.apply (Functions.addQ.apply (Functions.mulQ.apply v_a v_x) v_b) v_c) = (Functions.addQ.apply (Functions.mulQ.apply (Functions.mulQ.apply v_a v_c) v_x) (Functions.mulQ.apply v_b v_c)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_affine_right
+
+theorem r_real_affine_add (v_a : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real)) (v_d : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) :
+    (Value.add (Value.add (Value.mul v_a v_x) v_b) (Value.add (Value.mul v_c v_x) v_d)) = (Value.add (Value.mul (Value.add v_a v_c) v_x) (Value.add v_b v_d)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_d <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_affine_add
+
+theorem r_real_affine_left (v_c : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) :
+    (Value.mul v_c (Value.add (Value.mul v_a v_x) v_b)) = (Value.add (Value.mul (Value.mul v_c v_a) v_x) (Value.mul v_c v_b)) := qsym_cached% by
+  cases v_c <;> cases v_a <;> cases v_b <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_affine_left
+
+theorem r_real_affine_right (v_a : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) :
+    (Value.mul (Value.add (Value.mul v_a v_x) v_b) v_c) = (Value.add (Value.mul (Value.mul v_a v_c) v_x) (Value.mul v_b v_c)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_affine_right
+
+theorem r_complex_affine_add (v_a : Option (Ty.denote .complex)) (v_b : Option (Ty.denote .complex)) (v_c : Option (Ty.denote .complex)) (v_d : Option (Ty.denote .complex)) (v_x : Option (Ty.denote .complex)) :
+    (Value.add (Value.add (Value.mul v_a v_x) v_b) (Value.add (Value.mul v_c v_x) v_d)) = (Value.add (Value.mul (Value.add v_a v_c) v_x) (Value.add v_b v_d)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_d <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_affine_add
+
+theorem r_complex_affine_left (v_c : Option (Ty.denote .complex)) (v_a : Option (Ty.denote .complex)) (v_b : Option (Ty.denote .complex)) (v_x : Option (Ty.denote .complex)) :
+    (Value.mul v_c (Value.add (Value.mul v_a v_x) v_b)) = (Value.add (Value.mul (Value.mul v_c v_a) v_x) (Value.mul v_c v_b)) := qsym_cached% by
+  cases v_c <;> cases v_a <;> cases v_b <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_affine_left
+
+theorem r_complex_affine_right (v_a : Option (Ty.denote .complex)) (v_b : Option (Ty.denote .complex)) (v_c : Option (Ty.denote .complex)) (v_x : Option (Ty.denote .complex)) :
+    (Value.mul (Value.add (Value.mul v_a v_x) v_b) v_c) = (Value.add (Value.mul (Value.mul v_a v_c) v_x) (Value.mul v_b v_c)) := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_c <;> cases v_x
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_affine_right
+
 end QSym.Generated

@@ -1,4 +1,5 @@
 import QSym.RefinementBase
+import QSym.AffineAlgebra
 import QSym.RuleBranches
 import QSym.Partitions
 import QSym.Trigonometry
@@ -637,6 +638,15 @@ macro "qsym_defined" : tactic => `(tactic| (
 
 macro "qsym_rule" : tactic => `(tactic| (
   first
+  | solve
+    | apply Value.refines_of_eq
+      first
+      | apply Value.affine_add
+      | apply Value.affine_left
+      | apply Value.affine_right
+      | exact (Value.affine_add _ _ _ _ _).symm
+      | exact (Value.affine_left _ _ _ _).symm
+      | exact (Value.affine_right _ _ _ _).symm
   | solve | qsym_discrete
   | solve
     | apply Value.refines_of_eq
