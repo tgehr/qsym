@@ -9,6 +9,7 @@ import std.exception:enforce;
 struct Example{ string name,input,expected; string[] facts; }
 Example[] examples(){
 	return [
+		Example("QuadraticGuard","[x^2=1]·[x<1]","[x=-1]"),
 		Example("DisjunctiveGuard","[x=-1∨x=1]·[x<1]","[x=-1]"),
 		Example("DisjunctiveGuardReverse","[x<1]·[x=-1∨x=1]","[x=-1]"),
 		Example("DisjunctiveGuardOrder","[x=1∨x=-1]·[x<1]","[x=-1]"),

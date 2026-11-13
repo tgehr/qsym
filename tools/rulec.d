@@ -80,6 +80,9 @@ string rootTest(Pattern p,string node){
 	if(p.variable) return "true";
 	auto test=node~".op==Op."~rootOp(p);
 	if(builtin(p.name)!=Builtin.invalid) test~="&&"~node~".value==Builtin."~p.name;
+	if(p.name=="true"||p.name=="false") test~="&&"~node~".value=="~(p.name=="true"?"1":"0");
+	if(p.name=="real"&&p.args.length==1&&!p.args[0].variable) test~="&&"~node~".value=="~dInteger(p.args[0].number);
+	if(p.name=="complex") foreach(i,arg;p.args) if(!arg.variable) test~="&&"~node~(i?".imaginary==":".value==")~dInteger(arg.number);
 	return test;
 }
 string headCode(Pattern p){

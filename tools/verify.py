@@ -141,7 +141,7 @@ def main():
 		raise RuntimeError("expected 28 binding certificates")
 	for file in bindings:
 		certificate(file)
-	for directory,count in (("guards",24),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
+	for directory,count in (("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
