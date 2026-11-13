@@ -16,6 +16,7 @@ import QSym.PowerSigns
 import QSym.DiscreteDomains
 import QSym.ScalarOrder
 import QSym.SignCompositions
+import QSym.ArgumentRotation
 
 namespace QSym
 
@@ -535,6 +536,15 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Real.cosh_sq_sub_sinh_sq, Real.tan_arctan, Real.sin_arcsin, Real.cos_arccos,
       Real.arcsin_sin, Real.arccos_cos, min_eq_left, min_eq_right, max_eq_left, max_eq_right,
       Complex.exp_conj, Complex.mul_re, Complex.mul_im, Complex.re_add_im, norm_mul])
+    all_goals try (solve | have h := ArgumentRotation.arg_positive_of_im_pos (by assumption); linarith)
+    all_goals try (solve | have h := ArgumentRotation.arg_nonpositive_of_im_neg (by assumption); linarith)
+    all_goals try (simp_all [ArgumentRotation.arg_scale, ArgumentRotation.arg_scale_right,
+      ArgumentRotation.arg_negative_scale, ArgumentRotation.arg_negative_scale_right,
+      ArgumentRotation.arg_neg_scale, ArgumentRotation.arg_neg_scale_right,
+      ArgumentRotation.arg_neg_positive, ArgumentRotation.arg_neg_nonpositive,
+      ArgumentRotation.log_neg_positive, ArgumentRotation.log_neg_nonpositive,
+      ArgumentRotation.log_negative_real, ArgumentRotation.arg_positive_iff,
+      ArgumentRotation.arg_nonpositive_iff, ArgumentRotation.log_I, ArgumentRotation.log_neg_I])
     all_goals try (simp_all [Elementary.log_cpow_contract, Elementary.arg_cpow_contract,
       Elementary.log_sqrt, Elementary.arg_sqrt, Elementary.norm_cpow_real, Elementary.norm_sqrt,
       Elementary.arg_exp, Complex.log_exp, Complex.log_re, Complex.log_im, Complex.norm_exp,

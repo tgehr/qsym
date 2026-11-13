@@ -144,7 +144,7 @@ def main():
 		raise RuntimeError("expected 28 binding certificates")
 	for file in bindings:
 		certificate(file)
-	for directory,count in (("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
+	for directory,count in (("argument-rotation",70),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -262,6 +262,13 @@ def main():
 		if corrupt==valid:
 			raise RuntimeError("affine recurrence rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	for name,body in (
+		("WrongHalfTurnBranch","example (z : ℂ) (h : 0<Complex.arg z) : Complex.arg (-z)=Complex.arg z+Real.pi := ArgumentRotation.arg_neg_positive z h"),
+		("MissingZeroExclusion","example (z : ℂ) (h : Complex.arg z≤0) : Complex.arg (-z)=Complex.arg z+Real.pi := ArgumentRotation.arg_neg_nonpositive z h"),
+		("NegativeScaleAsPositive","example (z w : ℂ) (hi : z.im=0) (hr : z.re<0) : Complex.arg (z*w)=Complex.arg w := ArgumentRotation.arg_negative_scale hi hr"),
+		("WrongLowerLogSign","example : Complex.log (-Complex.I)=(Real.pi/2 : ℂ)*Complex.I := ArgumentRotation.log_neg_I"),
+		("MissingNegativeLogPhase","example (z : ℂ) (hi : z.im=0) (hr : z.re<0) : Complex.log z=(Real.log (-z.re) : ℂ) := ArgumentRotation.log_negative_real hi hr")):
+		path=negative/(name+".lean"); path.write_text("import QSym.ArgumentRotation\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	valid=(ROOT/"build/spectral/NaturalDiagonal.lean").read_text()
 	wrong_matrix=re.sub(r"(noncomputable def t\d+.*? : Binding\.Expr c\d+ \(\.vector \(\.scalar \.natural\) 2\) := \.binary Tensor\.consValue )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)
 	wrong_eigenvalue=re.sub(r"(\.binary Functions\.powNN\.apply )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)

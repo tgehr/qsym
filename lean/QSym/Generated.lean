@@ -10989,4 +10989,153 @@ theorem r_complex_spectral_interpolation (v_x : Option (Ty.denote .complex)) (v_
 
 #qsym_check_axioms r_complex_spectral_interpolation
 
+theorem r_complex_arg_scale (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_z))) (some true))
+    (hp1 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.reC.apply v_z)) (some true)) :
+    Value.Refines (Functions.argC.apply (Value.mul v_z v_w)) (Functions.argC.apply v_w) := qsym_cached% by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_scale
+
+theorem r_complex_arg_scale_right (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_w))) (some true))
+    (hp1 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.reC.apply v_w)) (some true)) :
+    Value.Refines (Functions.argC.apply (Value.mul v_z v_w)) (Functions.argC.apply v_z) := qsym_cached% by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_scale_right
+
+theorem r_complex_arg_negative_scale (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_z))) (some true))
+    (hp1 : Value.Refines (Value.lt (Functions.reC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.argC.apply (Value.mul v_z v_w)) (Functions.argC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_w)) := qsym_cached% by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_negative_scale
+
+theorem r_complex_arg_negative_scale_right (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_w))) (some true))
+    (hp1 : Value.Refines (Value.lt (Functions.reC.apply v_w) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.argC.apply (Value.mul v_z v_w)) (Functions.argC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) := qsym_cached% by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_negative_scale_right
+
+theorem r_complex_arg_neg_scale (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_z))) (some true))
+    (hp1 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.reC.apply v_z)) (some true)) :
+    Value.Refines (Functions.argC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Value.mul v_z v_w))) (Functions.argC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_w)) := qsym_cached% by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_neg_scale
+
+theorem r_complex_arg_neg_scale_right (v_z : Option (Ty.denote .complex)) (v_w : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_w))) (some true))
+    (hp1 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.reC.apply v_w)) (some true)) :
+    Value.Refines (Functions.argC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Value.mul v_z v_w))) (Functions.argC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) := qsym_cached% by
+  cases v_z <;> cases v_w
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_neg_scale_right
+
+theorem r_complex_arg_positive_upper (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.imC.apply v_z)) (some true)) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.argC.apply v_z)) (some true) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_positive_upper
+
+theorem r_complex_arg_positive_cut (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add (Functions.argC.apply v_z) (Value.mul (some (((-1) : Int) : ℝ)) (some Functions.pi))))) (some true)) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.argC.apply v_z)) (some true) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_positive_cut
+
+theorem r_complex_arg_positive_negative_real (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_z))) (some true))
+    (hp1 : Value.Refines (Value.lt (Functions.reC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.argC.apply v_z)) (some true) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_positive_negative_real
+
+theorem r_complex_arg_nonpositive_lower (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.lt (Functions.imC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.le (Functions.argC.apply v_z) (some (((0) : Int) : ℝ))) (some true) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_nonpositive_lower
+
+theorem r_complex_arg_nonpositive_positive_real (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_z))) (some true))
+    (hp1 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.reC.apply v_z)) (some true)) :
+    Value.Refines (Value.le (Functions.argC.apply v_z) (some (((0) : Int) : ℝ))) (some true) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_nonpositive_positive_real
+
+theorem r_complex_arg_neg_positive (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.argC.apply v_z)) (some true)) :
+    Value.Refines (Functions.argC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) (Value.add (Functions.argC.apply v_z) (Value.mul (some (((-1) : Int) : ℝ)) (some Functions.pi))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_neg_positive
+
+theorem r_complex_arg_neg_nonpositive (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.le (Functions.argC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.argC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) (Value.add (Functions.argC.apply v_z) (some Functions.pi)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_arg_neg_nonpositive
+
+theorem r_complex_log_neg_positive (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.argC.apply v_z)) (some true)) :
+    Value.Refines (Functions.logC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) (Value.add (Functions.logC.apply v_z) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Value.mul (Functions.castRC.apply (some Functions.pi)) (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I))))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_log_neg_positive
+
+theorem r_complex_log_neg_nonpositive (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.le (Functions.argC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.logC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) (Value.add (Functions.logC.apply v_z) (Value.mul (Functions.castRC.apply (some Functions.pi)) (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_log_neg_nonpositive
+
+theorem r_complex_log_negative_real (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Functions.imC.apply v_z))) (some true))
+    (hp1 : Value.Refines (Value.lt (Functions.reC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.logC.apply v_z) (Value.add (Functions.castRC.apply (Functions.logR.apply (Value.mul (some (((-1) : Int) : ℝ)) (Functions.reC.apply v_z)))) (Value.mul (Functions.castRC.apply (some Functions.pi)) (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I)))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_log_negative_real
+
+theorem r_complex_log_I :
+    Value.Refines (Functions.logC.apply (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I))) (Value.mul (Functions.castRC.apply (Value.mul (some Functions.pi) (Value.inv (some (((2) : Int) : ℝ))))) (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I))) := qsym_cached% by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_log_I
+
+theorem r_complex_log_neg_I :
+    Value.Refines (Functions.logC.apply (some ((((0) : Int) : ℂ) + (((-1) : Int) : ℂ) * Complex.I))) (Value.mul (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.castRC.apply (Value.mul (some Functions.pi) (Value.inv (some (((2) : Int) : ℝ)))))) (some ((((0) : Int) : ℂ) + (((1) : Int) : ℂ) * Complex.I))) := qsym_cached% by
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_log_neg_I
+
 end QSym.Generated
