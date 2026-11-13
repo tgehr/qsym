@@ -45,7 +45,7 @@ private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; 
 private struct DomainLeaf{ uint node; Term value; Result domain; }
 private struct DomainRank{ uint source,variable; Result result,lower,upper; DomainLeaf[] leaves; Result[] iterations; Sort sort; Term slope,bound,step; }
 private struct SpectralFact{ Term input; Result domain,value; }
-private struct SpectralSolution{ uint source,target,size; bool diagonal; Term[] matrix,vector; Term first,second,minus; SpectralFact[] parameters,checks; uint split; uint[4] blocks; bool repeated; }
+private struct SpectralSolution{ uint source,target,size; bool diagonal; Term[] matrix,vector; Term first,second,minus; SpectralFact[] parameters,checks; uint split; uint[4] blocks; bool repeated,nilpotent; }
 struct BindingResult{
 	BoundTerm input,output;
 	bool exhausted;
@@ -857,6 +857,7 @@ final class Bindings{
 			auto trace=arena.number(av+dv,sort);
 			auto discriminant=(av-dv)*(av-dv)+Number(4)*bv*cv;
 			solution.repeated=discriminant.zero;
+			solution.nilpotent=solution.repeated&&(av+dv).zero;
 			auto rs=sort==Sort.complex?Sort.complex:Sort.real_;
 			auto root=arena.call(sort==Sort.complex?Builtin.sqrtC:Builtin.sqrtR,[arena.number(discriminant,rs)]);
 			auto simple=simplify(arena,root,options); if(simple.exhausted) return BoundTerm.init;
@@ -868,7 +869,7 @@ final class Bindings{
 			if(!parameter(solution.first)||!parameter(solution.second)||!parameter(neg)) return BoundTerm.init;
 			if(!check(difference(arena.add(a,d,true),arena.add(solution.first,solution.second,true)),true)||
 				!check(difference(difference(arena.mul(a,d,true),arena.mul(b,c,true)),arena.mul(solution.first,solution.second,true)),true)||
-				!check(arena.inv(solution.repeated?solution.first:difference(solution.first,solution.second)),false)) return BoundTerm.init;
+				(!solution.nilpotent&&!check(arena.inv(solution.repeated?solution.first:difference(solution.first,solution.second)),false))) return BoundTerm.init;
 		}
 		uint index;
 		foreach(id;0..arena.length){ auto q=arena.view(arena.at(cast(uint)id)); if(q.op==Op.variable){ enforce(q.value<uint.max-1,"scalar variable limit exceeded"); if(q.value>=index) index=cast(uint)q.value+1; } }
@@ -889,7 +890,13 @@ final class Bindings{
 			if(solution.diagonal||i==2) value=arena.mul(arena.call(power,[solution.matrix[i*size+i],argument]),solution.vector[i],true);
 			else{
 				auto first=arena.add(arena.mul(solution.matrix[i*size],solution.vector[0],true),arena.mul(solution.matrix[i*size+1],solution.vector[1],true),true);
-				if(solution.repeated){
+				if(solution.nilpotent){
+					// A²=0: retain both boundary values without dividing by the zero eigenvalue.
+					auto one=arena.natural_(1);
+					auto atZero=arena.not_(arena.nonzero(argument));
+					auto atOne=arena.and_(arena.le(one,argument),arena.le(argument,one));
+					value=arena.add(arena.mask(atZero,solution.vector[i]),arena.mask(atOne,first),true);
+				}else if(solution.repeated){
 					auto law=sort==Sort.rational?Law.rational_spectral_repeated:sort==Sort.real_?Law.real_spectral_repeated:Law.complex_spectral_repeated;
 					value=instantiate(arena,law,[solution.vector[i],first,solution.first,argument],true).result;
 				}else{
@@ -2041,7 +2048,11 @@ final class Bindings{
 					if(sort==Sort.complex) cast_=" (fun n => Functions.castRC.apply (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply n))))";
 					hc=" RepeatedSpectra.cast"~suffix;
 				}
-				proof=(s.repeated?"RepeatedSpectra.":"Spectral.")~(s.size==2?"two_value":"block_value")~" "~add~" "~mul~" "~inv~" "~pow~cast_~" "~ha~" "~hm~" "~hi~" "~hp~hc~units~args~raws~" "~raw(s.minus)~totals~" "~hn~" "~check(0)~" "~check(1)~" (QSym.Spectral"~tag~"_1_2.DomainCertificate.domain_correct ξ) "~mat~" "~vec~" "~hmat~" "~hv~" "~exponent;
+				if(s.nilpotent){
+					proof="NilpotentSpectra."~(s.size==2?"two_value":"block_value")~" "~add~" "~mul~" "~pow~" "~ha~" "~hm~" "~hp~units~args~raws~" "~raw(s.minus)~totals~" "~hn~" "~check(0)~" "~check(1)~" rfl "~mat~" "~vec~" "~hmat~" "~hv~" "~exponent;
+				}else{
+					proof=(s.repeated?"RepeatedSpectra.":"Spectral.")~(s.size==2?"two_value":"block_value")~" "~add~" "~mul~" "~inv~" "~pow~cast_~" "~ha~" "~hm~" "~hi~" "~hp~hc~units~args~raws~" "~raw(s.minus)~totals~" "~hn~" "~check(0)~" "~check(1)~" (QSym.Spectral"~tag~"_1_2.DomainCertificate.domain_correct ξ) "~mat~" "~vec~" "~hmat~" "~hv~" "~exponent;
+				}
 			}
 			auto args=dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(source.context)~")";
 			code~="theorem spectral"~tag~args~" : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := "~proof~"\n";

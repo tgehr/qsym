@@ -85,6 +85,7 @@ def main():
 	check(ROOT/"tests/LinearRecurrences.lean")
 	check(ROOT/"tests/Spectral.lean")
 	check(ROOT/"tests/ZeroPowers.lean")
+	check(ROOT/"tests/NilpotentSpectra.lean")
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
@@ -124,7 +125,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",22),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("ranked-domains",12),("real-countdown",33)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",22),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("nilpotent-spectra",30),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("ranked-domains",12),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -268,6 +269,11 @@ def main():
 		if corrupt==valid:
 			raise RuntimeError("affine recurrence rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	for name,body in (
+		("NilpotentWrongZero", "example : NilpotentSpectra.formula (1:ℚ) 2 0 = 0 := by norm_num [NilpotentSpectra.formula]"),
+		("NilpotentWrongOne", "example : NilpotentSpectra.formula (1:ℚ) 2 1 = 0 := by norm_num [NilpotentSpectra.formula]"),
+		("NilpotentNonzeroSquare", "example : Spectral.matrix (0:ℚ) 1 1 0 ^ 2 = 0 := NilpotentSpectra.square_zero 0 1 1 0 (by norm_num) (by norm_num)")):
+		path=negative/(name+".lean"); path.write_text("import QSym.NilpotentSpectra\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	path=negative/"RepeatedZeroRoot.lean"
 	path.write_text("import QSym.RepeatedSpectra\nopen QSym\nexample : ((Spectral.matrix (0:ℚ) 1 0 0)^1).mulVec ![1,2] 0 = RepeatedSpectra.formula 1 2 0 1 := by\n  norm_num [Spectral.matrix, RepeatedSpectra.formula, Matrix.mulVec, dotProduct, Fin.sum_univ_two]\n")
 	check(path,succeeds=False)

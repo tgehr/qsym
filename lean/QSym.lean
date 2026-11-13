@@ -21,6 +21,7 @@ import QSym.AffineRecurrence
 import QSym.LinearRecurrence
 import QSym.Spectral
 import QSym.RepeatedSpectra
+import QSym.NilpotentSpectra
 import QSym.IntegerSpectra
 import QSym.Dependent
 import QSym.SetFixed

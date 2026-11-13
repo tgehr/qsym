@@ -152,6 +152,8 @@ test: build/qsym build/edit-motion-tests
 	./build/discrete-interval-tests build/discrete-intervals
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/repeated_spectra.d -of=build/repeated-spectra-tests
 	./build/repeated-spectra-tests build/repeated-spectra
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/nilpotent_spectra.d -of=build/nilpotent-spectra-tests
+	./build/nilpotent-spectra-tests build/nilpotent-spectra
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/cutoff.d -of=build/cutoff-tests
 	./build/cutoff-tests --DRT-testmode=run-main build/cutoff
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/tensors.d -of=build/tensor-tests
