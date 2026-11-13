@@ -36,11 +36,13 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; }
+private struct DomainLeaf{ uint node; Term value; Result domain; }
+private struct DomainRank{ uint source,variable; Result result; DomainLeaf[] leaves; }
 struct BindingResult{
 	BoundTerm input,output;
 	bool exhausted;
@@ -49,6 +51,7 @@ struct BindingResult{
 	private uint proof;
 	private ScalarDomain[] domains;
 	private RecurrenceSolution[] solutions;
+	private DomainRank[] ranks;
 }
 
 final class Bindings{
@@ -599,6 +602,51 @@ final class Bindings{
 		if(n.op==BoundOp.scalar) return totalScalar(t);
 		return (n.op==BoundOp.vectorCons||n.op==BoundOp.pair)&&definitionallyTotal(at(n.a))&&definitionallyTotal(at(n.b));
 	}
+	private bool domainStrict(BoundNode n){
+		if(n.op==BoundOp.sequence) return true;
+		if(n.op!=BoundOp.primitive) return false;
+		auto q=arena.view(arena.at(n.data));
+		if(q.op==Op.builtin) return builtinInfo(cast(Builtin)q.value).total;
+		return q.op==Op.add||q.op==Op.mul||q.op==Op.lt||q.op==Op.le||q.op==Op.nonzero||q.op==Op.not_||q.op==Op.conj||q.op==Op.abs||q.op==Op.pow;
+	}
+	private bool rankDomain(BoundTerm fixed_,out DomainRank rank){
+		auto n=node(fixed_),ty=pool.view(type(fixed_));
+		if(ty.fields[0]!=scalarType(Sort.natural)) return false;
+		uint index;
+		foreach(id;0..arena.length){ auto q=arena.view(arena.at(cast(uint)id)); if(q.op==Op.variable){ enforce(q.value<uint.max-1,"scalar variable limit exceeded"); if(q.value>=index) index=cast(uint)q.value+1; } }
+		auto argument=arena.variable(Sort.natural,index); rank.source=fixed_.id; rank.variable=index;
+		Term leaf(uint id){
+			foreach(d;rank.leaves) if(d.node==id) return d.domain.output;
+			auto value=scalarBody(at(id),argument); if(value==Term.init) return Term.init;
+			auto domain=simplifyDomain(arena,value,[],Options(DensityMode.preserve,true));
+			if(domain.exhausted) return Term.init;
+			rank.leaves~=DomainLeaf(id,value,domain); return domain.output;
+		}
+		Term visit(uint id){
+			auto q=nodes[id];
+			if(!depends(at(id),1)) return leaf(id);
+			if(q.op==BoundOp.apply){
+				if(nodes[q.a].op!=BoundOp.variable||nodes[q.a].data!=1||depends(at(q.b),1)) return Term.init;
+				auto d=leaf(q.b),value=scalarBody(at(q.b),argument);
+				return d==Term.init||value==Term.init?Term.init:arena.and_(d,arena.lt(value,argument));
+			}
+			auto op=q.op==BoundOp.primitive?arena.view(arena.at(q.data)).op:Op.variable;
+			if(q.op==BoundOp.guard||op==Op.mask||op==Op.and_||op==Op.or_){
+				if(depends(at(q.a),1)) return Term.init;
+				auto dp=leaf(q.a),p=scalarBody(at(q.a),argument),d=visit(q.b);
+				if(dp==Term.init||p==Term.init||d==Term.init) return Term.init;
+				auto yes=arena.and_(dp,p),no=arena.and_(dp,arena.not_(p));
+				return q.op==BoundOp.guard?arena.and_(yes,d):op==Op.or_?arena.or_(yes,arena.and_(no,d)):arena.or_(no,arena.and_(yes,d));
+			}
+			if(!domainStrict(q)) return Term.init;
+			auto x=visit(q.a); if(x==Term.init||q.b==uint.max) return x;
+			auto y=visit(q.b); return y==Term.init?Term.init:arena.and_(x,y);
+		}
+		auto condition=visit(nodes[n.a].a); if(condition==Term.init) return false;
+		rank.result=simplify(arena,condition,[],Options(DensityMode.preserve,true));
+		auto out_=arena.view(rank.result.output);
+		return !rank.result.exhausted&&out_.op==Op.boolLit&&out_.value;
+	}
 	private BindingResult normalizeDependent(BoundTerm term,uint budget){
 		uint steps; bool exhausted; Table!(uint,uint) memo;
 		BoundTerm visit(BoundTerm t,uint depth=0){
@@ -617,7 +665,7 @@ final class Bindings{
 	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
 		if(telescope_) return normalizeDependent(term,budget);
-		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions;
+		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
@@ -784,6 +832,12 @@ final class Bindings{
 						(current.b==uint.max||nodes[current.b].op==BoundOp.scalar)){
 						Term[] args=[arena.at(nodes[current.a].data)]; if(current.b!=uint.max) args~=arena.at(nodes[current.b].data);
 						next=scalar(ctx,arena.viewRebuild(arena.at(current.data),args,true)); rule=BindingRule.fold;
+					}else if(current.op==BoundOp.domain&&nodes[current.a].op==BoundOp.fixed){
+						DomainRank rank;
+						if(rankDomain(at(current.a),rank)){
+							extra=cast(uint)ranks.length; ranks~=rank;
+							next=inheritHint(at(nodes[current.a].a),set(scalar(push(ctx,scalarType(Sort.natural)),arena.boolean(true)))); rule=BindingRule.domainFixedTotal;
+						}
 					}else if(current.op==BoundOp.domain&&nodes[current.a].op==BoundOp.lambda){
 						next=inheritHint(at(current.a),set(defined(at(nodes[current.a].a)))); rule=BindingRule.domainLam;
 					}else if(current.op==BoundOp.domain&&nodes[current.a].op==BoundOp.bottom){
@@ -865,7 +919,7 @@ final class Bindings{
 			}
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
-		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions);
+		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks);
 	}
 
 	Term lower(BoundTerm term){
@@ -1084,6 +1138,15 @@ final class Bindings{
 				code~=replace(part,"QSym.Certificate",prefix~".ValueCertificate");
 			}
 		}
+		foreach(i,r;result.ranks){
+			auto prefix="QSym.BindingRank"~to!string(i);
+			code~=replace(replace(scalarExport(arena,r.result),"import QSym\n",""),"QSym.Certificate",prefix~".Certificate");
+			foreach(j,d;r.leaves){
+				auto p=prefix~".Leaf"~to!string(j),part=replace(exportDomainLean(arena,d.value,d.domain),"import QSym\n","");
+				part=replace(part,"QSym.Certificate",p~".Certificate");
+				code~=replace(part,"QSym.DomainCertificate",p~".DomainCertificate");
+			}
+		}
 		code~="namespace QSym.BindingCertificate\n";
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
@@ -1167,6 +1230,53 @@ final class Bindings{
 			code~="noncomputable def rec"~id~args~" : Recursion.Program "~a~" "~b~" "~b~" := "~program(nodes[n.a].a)~"\n";
 			code~="theorem fixed"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = some (FixedPoint.value (rec"~id~dimArg~" γ ξ ρ).functional) := Recursion.fixed_program (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
 			code~="theorem unroll"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = (Binding.Expr.app (.lam "~name(n.a)~") "~name(cast(uint)i)~").eval ξ ρ := Recursion.program_unfold (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
+			foreach(ri,r;result.ranks) if(r.source==i){
+				auto prefix="QSym.BindingRank"~to!string(ri),eta="({ ξ with natural := fun i => if i = "~to!string(r.variable)~" then x else ξ.natural i })";
+				string leafProof(uint q){ foreach(j,l;r.leaves) if(l.node==q) return "("~prefix~".Leaf"~to!string(j)~".DomainCertificate.domain_correct "~eta~")"; assert(0,"missing rank leaf"); }
+				string value(uint q){ return "("~name(q)~".eval ξ "~env~")"; }
+				string dp(uint q){
+					auto z=nodes[q]; if(!depends(at(q),1)) return "(.pure (fun x => Value.Defined "~value(q)~"))";
+					if(z.op==BoundOp.apply) return "(.call (fun x => "~value(z.b)~"))";
+					auto op=z.op==BoundOp.primitive?arena.view(arena.at(z.data)).op:Op.variable;
+					if(z.op==BoundOp.guard||op==Op.mask||op==Op.and_||op==Op.or_){
+						auto yes="(.pure (fun x => "~value(z.a)~" = some true))",no="(.pure (fun x => "~value(z.a)~" = some false))",d=dp(z.b);
+						return z.op==BoundOp.guard?"(.both "~yes~" "~d~")":op==Op.or_?"(.either "~yes~" (.both "~no~" "~d~"))":"(.either "~no~" (.both "~yes~" "~d~"))";
+					}
+					auto x=dp(z.a); return z.b==uint.max?x:"(.both "~x~" "~dp(z.b)~")";
+				}
+				string erase(uint q){
+					auto z=nodes[q]; if(!depends(at(q),1)) return "Iff.rfl";
+					if(z.op==BoundOp.apply) return "(SetFixed.defined_bind _ _)";
+					auto op=z.op==BoundOp.primitive?arena.view(arena.at(z.data)).op:Op.variable;
+					if(z.op==BoundOp.guard||op==Op.mask||op==Op.and_||op==Op.or_){
+						auto d="(and_congr Iff.rfl "~erase(z.b)~")",lemma=z.op==BoundOp.guard?"SetFixed.defined_guard":op==Op.mask?"Value.defined_mask":op==Op.and_?"Value.defined_and":"Value.defined_or";
+						return "(("~lemma~" _ _).trans "~(z.op==BoundOp.guard?d:"(or_congr Iff.rfl "~d~")")~")";
+					}
+					string lemma;
+					if(z.op==BoundOp.sequence) lemma="SetFixed.defined_sequence _ _";
+					else if(op==Op.builtin){ auto qv=arena.view(arena.at(z.data)),info=builtinInfo(cast(Builtin)qv.value); lemma="SetFixed.defined_total"~to!string(qv.arity)~" Functions."~info.code~(qv.arity==1?" (fun _ => True.intro) _":" (fun _ _ => True.intro) _ _"); }
+					else{
+						auto s=op==Op.add?"add":op==Op.mul?"mul":op==Op.lt?"lt":op==Op.le?"le":op==Op.nonzero?"nonzero":op==Op.not_?"not":op==Op.conj?"conj":"map _";
+						lemma="Value.defined_"~s~(z.b==uint.max?" _":" _ _");
+					}
+					return "(("~lemma~").trans "~(z.b==uint.max?erase(z.a):"(and_congr "~erase(z.a)~" "~erase(z.b)~")")~")";
+				}
+				string rankProof(uint q){
+					auto z=nodes[q]; if(!depends(at(q),1)) return "(SetFixed.pure_rank "~leafProof(q)~")";
+					if(z.op==BoundOp.apply) return "(SetFixed.call_rank x "~leafProof(z.b)~")";
+					auto op=z.op==BoundOp.primitive?arena.view(arena.at(z.data)).op:Op.variable;
+					if(z.op==BoundOp.guard||op==Op.mask||op==Op.and_||op==Op.or_){
+						auto yes="(SetFixed.true_rank "~leafProof(z.a)~")",no="(SetFixed.false_rank "~leafProof(z.a)~")",d=rankProof(z.b);
+						return z.op==BoundOp.guard?"(SetFixed.both_rank "~yes~" "~d~")":op==Op.or_?"(SetFixed.either_rank "~yes~" (SetFixed.both_rank "~no~" "~d~"))":"(SetFixed.either_rank "~no~" (SetFixed.both_rank "~yes~" "~d~"))";
+					}
+					auto x=rankProof(z.a); return z.b==uint.max?x:"(SetFixed.both_rank "~x~" "~rankProof(z.b)~")";
+				}
+				auto body=nodes[n.a].a,tag=to!string(ri),d="(drec"~tag~dimArg~" γ ξ ρ)",p="(rec"~id~dimArg~" γ ξ ρ)";
+				code~="noncomputable def drec"~tag~args~" : SetFixed.Predicate ℕ := "~dp(body)~"\n";
+				code~="theorem erase"~tag~args~" (g : ℕ → Option "~b~") (x : ℕ) : Value.Defined ("~p~".eval g x) ↔ "~d~".eval {y | Value.Defined (g y)} x :=\n  ((Iff.of_eq (congrArg Value.Defined "~programProof(body)~")).symm).trans "~erase(body)~"\n";
+				code~="theorem rank"~tag~args~" (x : ℕ) : "~d~".eval {y | y < x} x :=\n  SetFixed.rank_true "~rankProof(body)~" ("~prefix~".Certificate.refinement "~eta~")\n";
+				code~="theorem domainTotal"~tag~args~" : Binding.inputDomain ("~name(cast(uint)i)~".eval ξ ρ) = some Set.univ :=\n  SetFixed.domain_univ "~p~" "~d~" _ (fixed"~id~dimArg~" γ ξ ρ) (erase"~tag~dimArg~" γ ξ ρ) (rank"~tag~dimArg~" γ ξ ρ)\n";
+			}
 			foreach(s;result.solutions) if(s.source==i){
 				auto base="(n"~to!string(nodes[s.base].data)~".eval ξ)",delta="(n"~to!string(nodes[s.delta].data)~".eval ξ)";
 				if(s.cutoff){
@@ -1206,6 +1316,7 @@ final class Bindings{
 					auto child=nodes[n.a];
 					proof=".ofEq (fun ξ ρ => Tensor."~(child.op==BoundOp.pair?"defined_pair":"defined_cons")~" ("~name(child.a)~".eval ξ ρ) ("~name(child.b)~".eval ξ ρ))"; break;
 				case BindingRule.fixedRecurrence:proof=".ofEq (fun ξ ρ => solve"~to!string(p.from)~dimArg~" γ ξ ρ)"; break;
+				case BindingRule.domainFixedTotal:proof=".ofEq (fun ξ ρ => Eq.trans (domainTotal"~to!string(p.extra)~dimArg~" γ ξ ρ) (congrArg some (Set.ext (fun _ => iff_of_true True.intro rfl))))"; break;
 				case BindingRule.refl:proof=".refl "~name(p.from); break;
 				case BindingRule.trans:proof=".trans "~proofName(p.left)~" "~proofName(p.right); break;
 				case BindingRule.beta:proof=".beta "~name(nodes[n.a].a)~" "~name(n.b); break;

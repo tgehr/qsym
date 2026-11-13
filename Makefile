@@ -127,6 +127,8 @@ test: build/qsym
 	./build/dependent-tests --DRT-testmode=run-main build/dependent
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/intervals.d -of=build/interval-tests
 	./build/interval-tests --DRT-testmode=run-main build/intervals
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/fixed_domains.d -of=build/fixed-domain-tests
+	./build/fixed-domain-tests --DRT-testmode=run-main build/fixed-domains
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

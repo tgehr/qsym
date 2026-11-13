@@ -238,3 +238,11 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["{n:ℕ | n≤9}","{n:ℕ | 10≤n∧n≤19}"],result.stdout
 print("Dependent types, type queries, and interval-domain REPL checks passed.")
+fixed_domain_certificate=root/"build/ReplFixedDomain.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":domain μ(f:ℕ→ℕ).λ(n:ℕ).if n≤1 then n else f(n sub 1)+f(n sub 2)",
+	f":lean {fixed_domain_certificate}",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["{n:ℕ | true}",f"Wrote {fixed_domain_certificate}"],result.stdout
+assert "SetFixed.domain_univ" in fixed_domain_certificate.read_text()
+print("Fixed-point set-domain REPL checks passed.")

@@ -103,6 +103,7 @@ def main():
 	certificate(ROOT/"build/ReplRecurrenceSolver.lean")
 	certificate(ROOT/"build/ReplTensors.lean")
 	certificate(ROOT/"build/ReplDependent.lean")
+	certificate(ROOT/"build/ReplFixedDomain.lean")
 	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
 	if len(refinements)!=32:
 		raise RuntimeError("expected 32 refinement certificates")
@@ -118,7 +119,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -207,6 +208,11 @@ def main():
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	valid=(ROOT/"build/fixed-domains/Fibonacci.lean").read_text()
+	corrupt=valid.replace(".eval {y | y < x} x :=", ".eval {y | y > x} x :=",1)
+	if corrupt==valid:
+		raise RuntimeError("fixed-domain descent rejection fixture did not change")
+	path=negative/"FixedDomainWrongDescent.lean"; path.write_text(corrupt); check(path,succeeds=False)
 	valid=(ROOT/"build/dependent/Apply.lean").read_text()
 	lines=valid.splitlines(keepends=True)
 	for i,line in enumerate(lines):

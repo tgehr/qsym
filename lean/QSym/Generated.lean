@@ -9980,6 +9980,50 @@ theorem r_natural_sub_nested (v_x : Option (Ty.denote .natural)) (v_y : Option (
 
 #qsym_check_axioms r_natural_sub_nested
 
+theorem r_natural_sub_lt_self (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural)) :
+    Value.Refines (Functions.ltN.apply (Functions.subN.apply v_x v_y) v_x) (Functions.nonzeroZ.apply (Functions.castNZ.apply v_y)) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_sub_lt_self
+
+theorem r_natural_nonzero_lower (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.nonzeroN.apply v_y) (some true))
+    (hp1 : Value.Defined v_y) :
+    Value.Refines (Value.and (Functions.nonzeroN.apply v_x) (Functions.leN.apply v_y v_x)) (Functions.leN.apply v_y v_x) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_nonzero_lower
+
+theorem r_natural_cover (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.leN.apply v_b (Functions.addN.apply v_a (some ((1) : ℕ)))) (some true)) :
+    Value.Refines (Value.or (Functions.leN.apply v_x v_a) (Functions.leN.apply v_b v_x)) (some true) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_cover
+
+theorem r_natural_lower_absorb_left (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.leN.apply v_a v_b) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.and (Functions.leN.apply v_a v_x) (Functions.leN.apply v_b v_x)) (Functions.leN.apply v_b v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_lower_absorb_left
+
+theorem r_natural_lower_absorb_right (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.leN.apply v_b v_a) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.and (Functions.leN.apply v_a v_x) (Functions.leN.apply v_b v_x)) (Functions.leN.apply v_a v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_lower_absorb_right
+
 theorem r_natural_if_true (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural)) :
     Value.Refines (Functions.addN.apply (Value.mask (some true) v_x) (Value.mask (Value.not (some true)) v_y)) v_x := qsym_cached% by
   cases v_x <;> cases v_y
