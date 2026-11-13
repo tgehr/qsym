@@ -131,6 +131,8 @@ test: build/qsym
 	./build/fixed-domain-tests --DRT-testmode=run-main build/fixed-domains
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/partial_domains.d -of=build/partial-domain-tests
 	./build/partial-domain-tests --DRT-testmode=run-main build/partial-domains
+	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/real_countdown.d -of=build/real-countdown-tests
+	./build/real-countdown-tests --DRT-testmode=run-main build/real-countdown
 	python3 tests/repl.py
 	python3 tests/terminal.py
 

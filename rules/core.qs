@@ -599,6 +599,10 @@ lemma complex_quotient_add_nonzero(x:ℂ,y:ℂ,z:ℂ):x*y⁻¹+z≠0⇒x+y*z≠0
 
 rewrite real_add_lt_cancel(x:ℝ,y:ℝ,t:ℝ):x+t<y+t⇒x<y;
 rewrite real_add_le_cancel(x:ℝ,y:ℝ,t:ℝ):x+t≤y+t⇒x≤y;
+rewrite real_lt_offset_self(x:ℝ,a:ℝ):x+a<x⇒a<0 when literal(a);
+rewrite real_le_offset_self(x:ℝ,a:ℝ):x+a≤x⇒a≤0 when literal(a);
+rewrite real_lt_self_offset(x:ℝ,a:ℝ):x<x+a⇒0<a when literal(a);
+rewrite real_le_self_offset(x:ℝ,a:ℝ):x≤x+a⇒0≤a when literal(a);
 rewrite real_abs_even_power(x:ℝ,n:NatParam):abs(x)^(n+n)⇒x^(n+n);
 rewrite real_log_even_power(x:ℝ,n:NatParam):log(x^(n+n+2))⇒2*(real(n)+1)*log(abs(x));
 rewrite real_exp_log_scale(x:ℝ,y:ℝ):exp(y*log(x))⇒powerR(x,y);

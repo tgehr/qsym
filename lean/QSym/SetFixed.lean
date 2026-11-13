@@ -70,6 +70,29 @@ theorem Predicate.total_nat (d : Predicate ℕ) (h : ∀ n, d.eval {m | m < n} n
   induction n using Nat.strong_induction_on with
   | h n ih => exact (d.unfold n).mp (d.monotone (fun m hm => ih m hm) (h n))
 
+theorem Predicate.total_measure (d : Predicate α) (r : α → ℝ) (b e : ℝ) (he : 0 < e)
+    (h : ∀ x, d.eval {y | b < r x ∧ r y + e ≤ r x} x) : d.least = Set.univ := by
+  have bounded : ∀ n : ℕ, ∀ x, r x ≤ b + n * e → x ∈ d.least := by
+    intro n
+    induction n with
+    | zero =>
+      intro x hx
+      simp only [Nat.cast_zero, zero_mul, add_zero] at hx
+      apply (d.unfold x).mp
+      exact d.monotone (fun y hy => False.elim (not_lt_of_ge hx hy.1)) (h x)
+    | succ n ih =>
+      intro x hx
+      apply (d.unfold x).mp
+      apply d.monotone (fun y hy => ih y ?_) (h x)
+      push_cast at hx
+      linarith [hy.2]
+  apply Set.eq_univ_of_forall
+  intro x
+  obtain ⟨n, hn⟩ := exists_nat_gt ((r x - b) / e)
+  apply bounded n x
+  have := (div_lt_iff₀ he).mp hn
+  linarith
+
 theorem Predicate.start_least (d : Predicate α) :
     {x : α | (some false : Option Bool) = some true} ⊆ d.least := by simp
 
@@ -127,6 +150,22 @@ theorem call_rank {a : Option ℕ} {d : Option Bool} (n : ℕ) (h : Domain.Corre
   cases a with
   | none => change d = some false at h; rw [h]; simp [Test, Value.and, Value.Defined]
   | some a => simp_all [Test, Domain.Correct, Value.and, Function2.apply, Functions.ltN, Value.Defined]
+
+theorem call_measure {a : Option ℝ} {d : Option Bool} (x c b e : ℝ) (h : Domain.Correct a d) :
+    Test (Value.and d (Value.and (Value.lt (some b) (Value.mul (some c) (some x)))
+      (Value.le (Value.add (Value.mul (some c) a) (some e)) (Value.mul (some c) (some x)))))
+      (∃ y, a = some y ∧ b < c * x ∧ c * y + e ≤ c * x) := by
+  cases a with
+  | none => change d = some false at h; rw [h]; simp [Test, Value.and, Value.Defined]
+  | some a =>
+    change d = some true at h
+    rw [h]
+    by_cases hb : b < c * x <;> by_cases he : c * a + e ≤ c * x <;>
+      simp [Test, Value.and, Value.lt, Value.le, Value.mul, Value.add, Value.Defined, hb, he]
+
+theorem positive_step (e : ℝ)
+    (h : Value.Refines (Value.lt (some ((0 : ℤ) : ℝ)) (some e)) (some true)) : 0 < e := by
+  simpa [Value.Refines, Value.lt] using h
 
 theorem true_rank {p d : Option Bool} (h : Domain.Correct p d) : Test (Value.and d p) (p = some true) := by
   cases p with

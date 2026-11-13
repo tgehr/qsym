@@ -255,3 +255,12 @@ assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["{n:ℕ | n≤1}",f"Wrote {partial_domain_certificate}"],result.stdout
 assert "SetFixed.domain_set" in partial_domain_certificate.read_text()
 print("Partial recursive domain REPL checks passed.")
+
+real_countdown_certificate=root/"build/ReplRealCountdown.lean"
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	":domain μ(f:ℝ→ℝ).λ(x:ℝ).if x≤1 then x else 2*f(x-1)",
+	f":lean {real_countdown_certificate}",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["{x:ℝ | true}",f"Wrote {real_countdown_certificate}"],result.stdout
+assert "SetFixed.Predicate.total_measure" in real_countdown_certificate.read_text()
+print("Real countdown domain REPL checks passed.")

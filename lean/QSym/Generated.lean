@@ -4437,6 +4437,34 @@ theorem r_real_add_le_cancel (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.
 
 #qsym_check_axioms r_real_add_le_cancel
 
+theorem r_real_lt_offset_self (v_x : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt (Value.add v_x v_a) v_x) (Value.lt v_a (some (((0) : Int) : ℝ))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_lt_offset_self
+
+theorem r_real_le_offset_self (v_x : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) :
+    Value.Refines (Value.le (Value.add v_x v_a) v_x) (Value.le v_a (some (((0) : Int) : ℝ))) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_le_offset_self
+
+theorem r_real_lt_self_offset (v_x : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) :
+    Value.Refines (Value.lt v_x (Value.add v_x v_a)) (Value.lt (some (((0) : Int) : ℝ)) v_a) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_lt_self_offset
+
+theorem r_real_le_self_offset (v_x : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) :
+    Value.Refines (Value.le v_x (Value.add v_x v_a)) (Value.le (some (((0) : Int) : ℝ)) v_a) := qsym_cached% by
+  cases v_x <;> cases v_a
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_le_self_offset
+
 theorem r_real_abs_even_power (v_x : Option (Ty.denote .real)) (v_n : Nat) :
     Value.Refines ((Value.abs v_x).map (fun x => x ^ (v_n + v_n))) (v_x.map (fun x => x ^ (v_n + v_n))) := qsym_cached% by
   cases v_x

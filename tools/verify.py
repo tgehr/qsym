@@ -105,6 +105,7 @@ def main():
 	certificate(ROOT/"build/ReplDependent.lean")
 	certificate(ROOT/"build/ReplFixedDomain.lean")
 	certificate(ROOT/"build/ReplPartialDomain.lean")
+	certificate(ROOT/"build/ReplRealCountdown.lean")
 	refinements=sorted((ROOT/"build/refinements").glob("*.lean"))
 	if len(refinements)!=32:
 		raise RuntimeError("expected 32 refinement certificates")
@@ -120,7 +121,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -209,6 +210,14 @@ def main():
 
 	negative=ROOT/"build/negative"
 	negative.mkdir(exist_ok=True)
+	valid=(ROOT/"build/real-countdown/User.lean").read_text()
+	for name,pattern,replacement in [
+		("WrongBound",r"(theorem rank0[^\n]*?\{y \|.*?) < ",r"\1 > "),
+		("ZeroStep",r"(Numeric.sound ξ \(\.ltR) \(\.real 0\) (n\d+)\)",r"\1 \2 \2)")]:
+		corrupt=re.sub(pattern,replacement,valid,count=1)
+		if corrupt==valid:
+			raise RuntimeError("real countdown rejection fixture did not change")
+		path=negative/("RealCountdown"+name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
 	valid=(ROOT/"build/partial-domains/MissingBase.lean").read_text()
 	corrupt=re.sub(r"(fun x => \(\(iter0_)\d+(_test γ ξ ρ\) x\)\.1\.symm)",r"\g<1>0\2",valid)
 	if corrupt==valid:
