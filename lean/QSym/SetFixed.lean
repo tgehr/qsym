@@ -70,6 +70,16 @@ theorem Predicate.total_nat (d : Predicate ℕ) (h : ∀ n, d.eval {m | m < n} n
   induction n using Nat.strong_induction_on with
   | h n ih => exact (d.unfold n).mp (d.monotone (fun m hm => ih m hm) (h n))
 
+theorem Predicate.least_nat_of_closed (d : Predicate ℕ) (s : Set ℕ)
+    (hl : ∀ n, n ∈ s → d.eval {m | m < n ∧ m ∈ s} n)
+    (hu : ∀ n, d.eval s n → n ∈ s) : d.least = s := by
+  apply le_antisymm (d.hom.lfp_le hu)
+  intro n
+  induction n using Nat.strong_induction_on with
+  | h n ih =>
+    intro hn
+    exact (d.unfold n).mp (d.monotone (fun m hm => ih m hm.1 hm.2) (hl n hn))
+
 theorem Predicate.total_measure (d : Predicate α) (r : α → ℝ) (b e : ℝ) (he : 0 < e)
     (h : ∀ x, d.eval {y | b < r x ∧ r y + e ≤ r x} x) : d.least = Set.univ := by
   have bounded : ∀ n : ℕ, ∀ x, r x ≤ b + n * e → x ∈ d.least := by
@@ -151,6 +161,20 @@ theorem call_rank {a : Option ℕ} {d : Option Bool} (n : ℕ) (h : Domain.Corre
   | none => change d = some false at h; rw [h]; simp [Test, Value.and, Value.Defined]
   | some a => simp_all [Test, Domain.Correct, Value.and, Function2.apply, Functions.ltN, Value.Defined]
 
+theorem call_rank_test {a : Option ℕ} {d b : Option Bool} (n : ℕ) (p : ℕ → Option Bool)
+    (ha : Domain.Correct a d) (hp : ∀ x, Value.Defined (p x))
+    (hb : ∀ x, a = some x → b = p x) :
+    Test (Value.and d (Value.and (Functions.ltN.apply a (some n)) b))
+      (∃ y, a = some y ∧ y < n ∧ p y = some true) := by
+  cases a with
+  | none => change d = some false at ha; rw [ha]; simp [Test, Value.and, Value.Defined]
+  | some a =>
+    change d = some true at ha
+    rw [ha, hb a rfl]
+    obtain ⟨v,hv⟩ := hp a
+    rw [hv]
+    by_cases h : a < n <;> cases v <;> simp [Test, Value.and, Function2.apply, Functions.ltN, Value.Defined, h, hv]
+
 theorem call_measure {a : Option ℝ} {d : Option Bool} (x c b e : ℝ) (h : Domain.Correct a d) :
     Test (Value.and d (Value.and (Value.lt (some b) (Value.mul (some c) (some x)))
       (Value.le (Value.add (Value.mul (some c) a) (some e)) (Value.mul (some c) (some x)))))
@@ -200,6 +224,12 @@ theorem either_rank {p q : Option Bool} {a b : Prop} (hp : Test p a) (hq : Test 
   obtain ⟨u, rfl⟩ := hp.2
   obtain ⟨v, rfl⟩ := hq.2
   cases u <;> cases v <;> simp_all [Test, Value.or, Value.Defined]
+
+theorem implies_test {p q : Option Bool} {a b : Prop} (hp : Test p a) (hq : Test q b) :
+    Test (Value.or (Value.not p) q) (a → b) := by
+  obtain ⟨u,rfl⟩ := hp.2
+  obtain ⟨v,rfl⟩ := hq.2
+  cases u <;> cases v <;> simp_all [Test, Value.or, Value.not, Value.Defined]
 
 theorem rank_true {b : Option Bool} {p : Prop} (h : Test b p) (hr : Value.Refines b (some true)) : p :=
   h.1.mp (hr.eq_of_defined h.2)

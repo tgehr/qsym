@@ -27,6 +27,7 @@ package final class Engine{
 	private struct MemoKey{ ulong term; uint revision; }
 	private Table!(MemoKey,uint) memo;
 	private Table!(MemoKey,bool) failedProofs;
+	private Table!(ulong,bool) failedMatches;
 	private struct ContextKey{ uint parent,guard,revision; bool value,expand; }
 	private Table!(ContextKey,uint) branches;
 	private Table!(ulong,uint) truths;
@@ -202,8 +203,11 @@ package final class Engine{
 		// Searching for a premise should preserve factored Boolean formulas.
 		if((!distributeLogic||premiseDepth)&&(law==Law.bool_and_or||law==Law.bool_or_and)) return false;
 		if(!candidate(a,law,t)) return false;
+		auto pattern=(cast(ulong)law<<32)|t.id;
+		if(failedMatches.get(pattern,false)) return false;
 		budget.spend(); Term[] bindings;
-		return match(a,law,-1,t,bindings)&&complete(law,bindings,ctx,result);
+		if(!match(a,law,-1,t,bindings)){ failedMatches.set(pattern,true); return false; }
+		return complete(law,bindings,ctx,result);
 	}
 	private bool prove(Term t,uint ctx,out Proof result){
 		budget.spend();

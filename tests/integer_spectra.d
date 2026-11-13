@@ -58,11 +58,10 @@ int main(string[] args){
 		"λ(n:ℕ).((0,1),(1,1))^(n sub 1)@(0,1)",
 		"λ(n:ℕ).((0,1),(1,1))^n@(a,b)",
 		"λ(n:ℕ).(((0:ℤ),-1),(1,0))^n@(i,j)",
-		"λ(n:ℕ).((1,1),(0,1))^n@(1,1)",
 		"λ(n:ℕ).((0,1,1),(1,1,0),(0,0,1))^n@(0,1,1)",
 		"λ(n:ℕ).((0,1,0,0),(1,1,0,0),(0,0,1,1),(0,0,0,1))^n@(0,1,0,1)"]){
 		auto owner=Session.open(); FunctionSyntax s; s.declare("a:ℕ,b:ℕ,i:ℤ,j:ℤ"); auto r=s.run(owner.arena,source);
 		enforce(!r.exhausted&&s.exportCertificate(owner.arena,r).indexOf("IntegerSpectra.lift")<0,"unsupported spectrum replaced: "~source);
 	}
-	writeln(cases().length," integer spectral certificates; 8 unsupported cases retained"); return 0;
+	writeln(cases().length," integer spectral certificates; 7 unsupported cases retained"); return 0;
 }

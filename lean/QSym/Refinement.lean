@@ -23,6 +23,8 @@ import QSym.PowerRecovery
 import QSym.RadicalRecovery
 import QSym.ArgumentRotation
 import QSym.NaturalFloor
+import QSym.AtanhCompositions
+import QSym.ZeroPowers
 
 namespace QSym
 
@@ -248,13 +250,19 @@ macro "qsym_inverse" : tactic => `(tactic| (qsym_inverse_goal; first
   | exact Value.refines_inverse Functions.coshC Functions.acoshC _ (fun z _ _ => Inverse.complex_cosh_acosh z)
   | exact Value.refines_inverse Functions.tanhC Functions.atanhC _ (fun z h _ => Inverse.complex_tanh_atanh z h.1 h.2)
   | exact Value.refines_real_acosh_cosh _
-  | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero]; first
+  | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, one_mul, zero_add, add_zero]; first
     | exact Value.refines_real_exp_asinh _
     | exact Value.refines_real_exp_acosh _
     | exact Value.refines_complex_exp_asinh _
     | exact Value.refines_complex_exp_acosh _
     | exact Value.refines_real_cosh_atanh _
     | exact Value.refines_real_sinh_atanh _
+    | exact Value.refines_real_exp_atanh _
+    | exact Value.refines_complex_exp_atanh _
+    | exact Value.refines_complex_cosh_atanh _
+    | exact Value.refines_complex_sinh_atanh _
+    | exact Value.refines_complex_cos_atan _
+    | exact Value.refines_complex_sin_atan _
     | exact Value.refines_real_tan_asin _
     | exact Value.refines_real_tan_acos _
     | exact Value.refines_complex_tan_asin _
@@ -697,8 +705,46 @@ macro "qsym_defined" : tactic => `(tactic| (
   all_goals try (simp only [← not_lt]; tauto)
 ))
 
+open Lean Meta Elab Tactic in
+elab "qsym_zero_power_goal" : tactic => do
+  let t ← getMainTarget
+  unless t.isAppOfArity ``Value.Refines 3 &&
+      ((t.find? fun e => e.isConstOf ``Value.mask).isSome ||
+        t.getAppArgs[2]!.isAppOfArity ``Option.some 2) &&
+      (t.find? fun e => #[``Functions.powNN, ``Functions.powZN, ``Functions.powQN,
+        ``Functions.powRN, ``Functions.powCN, ``Functions.powQZ, ``Functions.powRZ,
+        ``Functions.powCZ, ``Functions.powerR, ``Functions.powerC].any e.isConstOf).isSome do
+    throwError "not a zero-power equation"
+
+macro "qsym_zero_power_eq" : tactic => `(tactic| (
+  first
+  | apply ZeroPowers.powNN
+  | apply ZeroPowers.powZN
+  | apply ZeroPowers.powQN
+  | apply ZeroPowers.powRN
+  | apply ZeroPowers.powCN
+  | apply ZeroPowers.powQZ
+  | apply ZeroPowers.powRZ
+  | apply ZeroPowers.powCZ
+  | apply ZeroPowers.powerR
+  | apply ZeroPowers.powerC
+  all_goals assumption
+))
+
+macro "qsym_zero_power" : tactic => `(tactic| (
+  qsym_zero_power_goal
+  simp only [Int.cast_zero, Int.cast_one, zero_mul, add_zero, div_one] at *
+  first
+  | solve | (apply ZeroPowers.powQZ_positive; assumption)
+  | solve | (apply ZeroPowers.powRZ_positive; assumption)
+  | solve | (apply ZeroPowers.powCZ_positive; assumption)
+  | solve | (apply Value.refines_of_eq; qsym_zero_power_eq)
+  | solve | (apply Value.refines_of_eq; symm; qsym_zero_power_eq)
+))
+
 macro "qsym_rule" : tactic => `(tactic| (
   first
+  | solve | qsym_zero_power
   | solve
     | apply Value.refines_of_eq
       first
@@ -722,6 +768,14 @@ macro "qsym_rule" : tactic => `(tactic| (
       | exact (Value.affine_add _ _ _ _ _).symm
       | exact (Value.affine_left _ _ _ _).symm
       | exact (Value.affine_right _ _ _ _).symm
+  | solve
+    | apply Value.refines_of_eq
+      simp only [div_one, Int.cast_neg, Int.cast_one, Int.cast_zero, zero_mul, add_zero]
+      first
+      | apply Value.spectral_repeated
+      | exact (Value.spectral_repeated _ _ _ _ _).symm
+      | apply Value.spectral_repeatedQ
+      | exact (Value.spectral_repeatedQ _ _ _ _ _).symm
   | solve | qsym_discrete
   | solve
     | apply Value.refines_of_eq

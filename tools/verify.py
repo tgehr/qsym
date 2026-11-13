@@ -84,6 +84,7 @@ def main():
 	check(ROOT/"tests/FixedPoint.lean")
 	check(ROOT/"tests/LinearRecurrences.lean")
 	check(ROOT/"tests/Spectral.lean")
+	check(ROOT/"tests/ZeroPowers.lean")
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
@@ -123,7 +124,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",22),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",22),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("ranked-domains",12),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -144,7 +145,7 @@ def main():
 		raise RuntimeError("expected 28 binding certificates")
 	for file in bindings:
 		certificate(file)
-	for directory,count in (("recovered-algebra",81),("argument-rotation",70),("argument-branches",74),("argument-compositions",64),("indexed-norms",54),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
+	for directory,count in (("atanh-compositions",121),("recovered-algebra",81),("argument-rotation",70),("argument-branches",74),("argument-compositions",64),("indexed-norms",54),("zero-powers",90),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -255,6 +256,11 @@ def main():
 		("TensorIndexOutside","example : Tensor.getValue (some (fun _ : Fin 1 => (7 : ℕ))) (some 1) = some 7 := rfl"),
 		("UnknownDimensionsDiffer","example (n m : ℕ) : Binding.typeEqValue (some (.vector (.scalar .real) n)) (some (.vector (.scalar .real) m)) = some false := rfl")):
 		path=negative/(name+".lean"); path.write_text("import QSym.Tensor\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	for name,body in (
+		("AtanhPole","example : Functions.expC.apply (Functions.atanhC.apply (some 1)) = some 1 := by norm_num [Function1.apply, Functions.expC, Functions.atanhC]"),
+		("AtanPole","example : Functions.cosC.apply (Functions.atanC.apply (some Complex.I)) = some 1 := by norm_num [Function1.apply, Functions.cosC, Functions.atanC]"),
+		("AtanhSqrtQuotient","example (z : ℂ) (hp : z≠1) (hm : z≠-1) : Complex.exp (Functions.atanhC.value z)=((1+z)/(1-z))^(1/2 : ℂ) := AtanhCompositions.complex_exp z hp hm")):
+		path=negative/(name+".lean"); path.write_text("import QSym.AtanhCompositions\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	valid=(ROOT/"build/affine-recurrences/Natural.lean").read_text()
 	wrong_base=re.sub(r"(AffineRecurrence\.solve_matrix .*? AffineRecurrence\.mulN )\(\(n\d+\.eval ξ\)\.getD 0\)",r"\g<1>0",valid,count=1)
 	wrong_matrix=re.sub(r"(noncomputable def t\d+.*? : Binding\.Expr c\d+ \(\.vector \(\.scalar \.natural\) 2\) := \.binary Tensor\.consValue )\(t\d+ γ\)",r"\1(.scalar (.nat 0))",valid,count=1)
@@ -262,6 +268,13 @@ def main():
 		if corrupt==valid:
 			raise RuntimeError("affine recurrence rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	path=negative/"RepeatedZeroRoot.lean"
+	path.write_text("import QSym.RepeatedSpectra\nopen QSym\nexample : ((Spectral.matrix (0:ℚ) 1 0 0)^1).mulVec ![1,2] 0 = RepeatedSpectra.formula 1 2 0 1 := by\n  norm_num [Spectral.matrix, RepeatedSpectra.formula, Matrix.mulVec, dotProduct, Fin.sum_univ_two]\n")
+	check(path,succeeds=False)
+	for name,body in (
+		("DiscreteIntervalGap","example : Value.or (Functions.leN.apply (some 2) (some 1)) (Value.and (Functions.leN.apply (some 3) (some 2)) (Functions.leN.apply (some 2) (some 10))) = some true := rfl"),
+		("PartialBooleanOrder","example : Value.and (none : Option Bool) (some false) = Value.and (some false) none := rfl")):
+		path=negative/(name+".lean"); path.write_text("import QSym.DiscreteDomains\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	for name,body in (
 		("ArgWrongCut","example (z : ℂ) (h : Complex.arg z=Real.pi) : Complex.arg ((starRingEnd ℂ) z)= -Complex.arg z := ArgumentBranches.arg_conj_off_cut z h"),
 		("LogInverseWrongCut","example (z : ℂ) (h : Complex.arg z=Real.pi) : Complex.log z⁻¹= -Complex.log z := ArgumentBranches.log_inv_on_cut z h"),
@@ -278,6 +291,10 @@ def main():
 		("NaturalFloorOffByOne","example (x : ℝ) (n : ℕ) (hl : (n : ℝ)≤x) (hu : x<(n : ℝ)+1) : Nat.floor x=n+1 := NaturalFloor.exact hl hu"),
 		("EmptySpectralRestore","example : IntegerSpectra.restore Functions.floorN.apply 0 none = (none : Option (Fin 0 → ℕ)) := rfl")):
 		path=negative/(name+".lean"); path.write_text("import QSym.IntegerSpectra\nimport QSym.NaturalFloor\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	for name,body in (
+		("EmptyDotDropsUndefined","example : Binding.definedValue (Tensor.dotValue Value.add Value.mul id (0 : ℝ) 0 none (some Fin.elim0))=some true := rfl"),
+		("ZeroPowerDropsUndefined","example : Binding.definedValue (Tensor.matrixPowerValue Value.add Value.mul (0 : ℝ) 1 0 none (some 0))=some true := rfl")):
+		path=negative/(name+".lean"); path.write_text("import QSym.TensorDomains\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	valid=(ROOT/"build/spectral/NaturalDiagonal.lean").read_text()
 	wrong_matrix=re.sub(r"(noncomputable def t\d+.*? : Binding\.Expr c\d+ \(\.vector \(\.scalar \.natural\) 2\) := \.binary Tensor\.consValue )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)
 	wrong_eigenvalue=re.sub(r"(\.binary Functions\.powNN\.apply )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)

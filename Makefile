@@ -46,8 +46,12 @@ test: build/qsym build/edit-motion-tests
 	./build/transcendental-tests --DRT-testmode=run-main build/transcendental
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/indexed_norms.d -of=build/indexed-norm-tests
 	./build/indexed-norm-tests build/indexed-norms
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/zero_powers.d -of=build/zero-power-tests
+	./build/zero-power-tests build/zero-powers
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_compositions.d -of=build/argument-composition-tests
 	./build/argument-composition-tests build/argument-compositions
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/atanh_compositions.d -of=build/atanh-composition-tests
+	./build/atanh-composition-tests build/atanh-compositions
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/powers.d -of=build/power-tests
 	./build/power-tests --DRT-testmode=run-main build/powers
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functions.d -of=build/function-tests
@@ -70,6 +74,8 @@ test: build/qsym build/edit-motion-tests
 	./build/order-tests --DRT-testmode=run-main build/order
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/guards.d -of=build/guard-tests
 	./build/guard-tests --DRT-testmode=run-main build/guards
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/guard_budget.d -of=build/guard-budget-tests
+	./build/guard-budget-tests build/guard-budget
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/folding.d -of=build/folding-tests
 	./build/folding-tests --DRT-testmode=run-main build/folding
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/relations.d -of=build/relation-tests
@@ -138,6 +144,14 @@ test: build/qsym build/edit-motion-tests
 	./build/spectral-tests build/spectral
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/integer_spectra.d -of=build/integer-spectra-tests
 	./build/integer-spectra-tests build/integer-spectra
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/tensor_domains.d -of=build/tensor-domain-tests
+	./build/tensor-domain-tests build/tensor-domains
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/matrix_blocks.d -of=build/matrix-block-tests
+	./build/matrix-block-tests build/matrix-blocks
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/discrete_intervals.d -of=build/discrete-interval-tests
+	./build/discrete-interval-tests build/discrete-intervals
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/repeated_spectra.d -of=build/repeated-spectra-tests
+	./build/repeated-spectra-tests build/repeated-spectra
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/cutoff.d -of=build/cutoff-tests
 	./build/cutoff-tests --DRT-testmode=run-main build/cutoff
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/tensors.d -of=build/tensor-tests
@@ -150,6 +164,8 @@ test: build/qsym build/edit-motion-tests
 	./build/fixed-domain-tests --DRT-testmode=run-main build/fixed-domains
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/partial_domains.d -of=build/partial-domain-tests
 	./build/partial-domain-tests --DRT-testmode=run-main build/partial-domains
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/ranked_domains.d -of=build/ranked-domain-tests
+	./build/ranked-domain-tests build/ranked-domains
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/real_countdown.d -of=build/real-countdown-tests
 	./build/real-countdown-tests --DRT-testmode=run-main build/real-countdown
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_branches.d -of=build/argument-branch-tests

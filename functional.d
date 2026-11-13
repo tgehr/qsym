@@ -469,7 +469,10 @@ struct FunctionSyntax{
 				case BoundOp.tensor:
 					auto op=cast(TensorOp)n.data;
 					if(op==TensorOp.dot) return "dot("~child(n.a)~","~child(n.b)~")";
-					return "("~child(n.a)~(op==TensorOp.add?"+":op==TensorOp.mul?"·":op==TensorOp.power?"^":"@")~child(n.b)~")";
+					auto right=child(n.b),exponent=b.node(b.at(n.b));
+					if(op==TensorOp.power&&exponent.op!=BoundOp.variable&&exponent.op!=BoundOp.global&&
+						!(exponent.op==BoundOp.scalar&&!a.view(a.at(exponent.data)).arity)) right="("~right~")";
+					return "("~child(n.a)~(op==TensorOp.add?"+":op==TensorOp.mul?"·":op==TensorOp.power?"^":"@")~right~")";
 				case BoundOp.fixed:
 					auto name=fresh(locals,b.binderHint(t).name); return "μ("~name~":"~typeName(b.type(t),locals)~"). "~render(b.at(n.a),[name]~locals,depth+1);
 				case BoundOp.bottom:return "undefined("~typeName(b.type(t),locals)~")";

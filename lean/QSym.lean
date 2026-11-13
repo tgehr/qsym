@@ -5,6 +5,7 @@ import QSym.Integration
 import QSym.Quantum
 import QSym.Generated
 import QSym.Refinement
+import QSym.AtanhCompositions
 import QSym.Replay
 import QSym.Sum
 import QSym.Bag
@@ -14,9 +15,12 @@ import QSym.Domain
 import QSym.Conditionals
 import QSym.Binding
 import QSym.Tensor
+import QSym.TensorDomains
+import QSym.MatrixBlocks
 import QSym.AffineRecurrence
 import QSym.LinearRecurrence
 import QSym.Spectral
+import QSym.RepeatedSpectra
 import QSym.IntegerSpectra
 import QSym.Dependent
 import QSym.SetFixed
