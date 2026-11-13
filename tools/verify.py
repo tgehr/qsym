@@ -82,6 +82,7 @@ def main():
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"tests/FixedPoint.lean")
+	check(ROOT/"tests/LinearRecurrences.lean")
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
@@ -121,7 +122,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -259,6 +260,13 @@ def main():
 	for name,corrupt in (("AffineWrongBase",wrong_base),("AffineWrongMatrix",wrong_matrix)):
 		if corrupt==valid:
 			raise RuntimeError("affine recurrence rejection fixture did not change")
+		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	valid=(ROOT/"build/linear-recurrences/Fibonacci.lean").read_text()
+	wrong_lag=valid.replace("LinearRecurrence.lag x 2 2 ","LinearRecurrence.lag x 2 1 ",1)
+	wrong_matrix=re.sub(r"(noncomputable def t\d+.*? : Binding\.Expr c\d+ \(\.vector \(\.scalar \.natural\) 3\) := \.binary Tensor\.consValue )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)
+	for name,corrupt in (("LinearWrongLag",wrong_lag),("LinearWrongMatrix",wrong_matrix)):
+		if corrupt==valid:
+			raise RuntimeError("linear recurrence rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
 	valid=(ROOT/"build/recurrences/Add.lean").read_text()
 	wrong_base=re.sub(r"(Generated\.r_natural_recurrence_add_base )(\(n\d+\.eval ξ\)) (\(n\d+\.eval ξ\))",r"\1\3 \2",valid,count=1)

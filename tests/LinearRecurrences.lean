@@ -1,0 +1,21 @@
+import QSym.LinearRecurrence
+import QSym.AxiomCheck
+
+#qsym_check_axioms QSym.LinearRecurrence.Expr.eval_some
+#qsym_check_axioms QSym.LinearRecurrence.append_castSucc
+#qsym_check_axioms QSym.LinearRecurrence.append_last
+#qsym_check_axioms QSym.LinearRecurrence.row_shift
+#qsym_check_axioms QSym.LinearRecurrence.row_last
+#qsym_check_axioms QSym.LinearRecurrence.row_one
+#qsym_check_axioms QSym.LinearRecurrence.state_step
+#qsym_check_axioms QSym.LinearRecurrence.state_one
+#qsym_check_axioms QSym.LinearRecurrence.state_shift
+#qsym_check_axioms QSym.LinearRecurrence.state_index
+#qsym_check_axioms QSym.LinearRecurrence.sequence_initial
+#qsym_check_axioms QSym.LinearRecurrence.recurrence
+#qsym_check_axioms QSym.LinearRecurrence.solve
+#qsym_check_axioms QSym.LinearRecurrence.solve_matrix
+#qsym_check_axioms QSym.LinearRecurrence.known
+#qsym_check_axioms QSym.LinearRecurrence.select
+#qsym_check_axioms QSym.LinearRecurrence.select_rev
+#qsym_check_axioms QSym.LinearRecurrence.lag
