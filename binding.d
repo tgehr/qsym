@@ -36,7 +36,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
@@ -44,6 +44,8 @@ private struct RecurrenceFact{ uint node,index; Term input; Result domain,value;
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine; uint order,variable; Term[] seeds; RecurrenceFact[] facts; }
 private struct DomainLeaf{ uint node; Term value; Result domain; }
 private struct DomainRank{ uint source,variable; Result result; DomainLeaf[] leaves; Result[] iterations; Sort sort; Term slope,bound,step; }
+private struct SpectralFact{ Term input; Result domain,value; }
+private struct SpectralSolution{ uint source,target,size; bool diagonal; Term[] matrix,vector; Term first,second,minus; SpectralFact[] parameters,checks; }
 struct BindingResult{
 	BoundTerm input,output;
 	bool exhausted;
@@ -53,6 +55,7 @@ struct BindingResult{
 	private ScalarDomain[] domains;
 	private RecurrenceSolution[] solutions;
 	private DomainRank[] ranks;
+	private SpectralSolution[] spectra;
 }
 
 final class Bindings{
@@ -776,6 +779,96 @@ final class Bindings{
 		auto output=inheritHint(at(n.a),lambda(get(tensor(TensorOp.matvec,tensor(TensorOp.power,matrix,variable(inner,0)),initial),scalar(inner,arena.natural_(0)))));
 		solution=RecurrenceSolution(t.id,output.id,0,tail); solution.order=order; solution.variable=variableIndex; solution.seeds=seeds; solution.facts=facts; return output;
 	}
+	private bool literalNumber(Term t,out Number value){
+		if(arena.isNumber(t)){ value=arena.number(t); return true; }
+		auto q=arena.view(t); return q.op==Op.builtin&&q.value>=Builtin.castNZ&&q.value<=Builtin.castRC&&literalNumber(arena.viewChild(t,0),value);
+	}
+	private BoundTerm spectral(BoundTerm t,out SpectralSolution solution){
+		auto n=node(t); if(n.op!=BoundOp.tensor||n.data!=TensorOp.matvec) return BoundTerm.init;
+		auto p=nodes[n.a]; if(p.op!=BoundOp.tensor||p.data!=TensorOp.power) return BoundTerm.init;
+		auto mt=pool.view(type(at(p.a))),row=pool.view(mt.fields[0]);
+		if(!mt.dimension.constant||!row.dimension.constant||!mt.length||mt.length>16||mt.length!=row.length) return BoundTerm.init;
+		auto size=cast(uint)mt.length,sort=elementSort(row.fields[0]),ctx=context(t);
+		solution=SpectralSolution(t.id,0,size); solution.diagonal=true;
+		bool elements(uint id,uint count,out uint[] values){
+			foreach(i;0..count){ auto q=nodes[id]; if(q.op!=BoundOp.vectorCons) return false; values~=q.a; id=q.b; }
+			return nodes[id].op==BoundOp.vectorNil;
+		}
+		uint[] rows,values; if(!elements(p.a,size,rows)||!elements(n.b,size,values)) return BoundTerm.init;
+		foreach(i,r;rows){
+			uint[] cells; if(!elements(r,size,cells)) return BoundTerm.init;
+			foreach(j,c;cells){
+				if(nodes[c].op!=BoundOp.scalar) return BoundTerm.init;
+				auto v=arena.at(nodes[c].data); solution.matrix~=v;
+				Number number; if(i!=j&&(!literalNumber(v,number)||!number.zero)) solution.diagonal=false;
+			}
+		}
+		foreach(v;values){ if(nodes[v].op!=BoundOp.scalar) return BoundTerm.init; solution.vector~=arena.at(nodes[v].data); }
+		if(!solution.diagonal){
+			if(size>3||sort==Sort.natural||sort==Sort.integer) return BoundTerm.init;
+			foreach(v;solution.matrix){ Number number; if(!literalNumber(v,number)) return BoundTerm.init; }
+			if(size==3) foreach(i;[2,5,6,7]){ Number number; literalNumber(solution.matrix[i],number); if(!number.zero) return BoundTerm.init; }
+		}
+		auto options=Options(DensityMode.preserve,true);
+		Table!(uint,uint) parameters;
+		bool parameter(Term t){
+			if(parameters.get(t.id,uint.max)!=uint.max) return true;
+			auto d=simplifyDomain(arena,t,[],options); if(d.exhausted||d.output!=arena.boolean(true)) return false;
+			parameters.set(t.id,cast(uint)solution.parameters.length); solution.parameters~=SpectralFact(t,d); return true;
+		}
+		foreach(v;solution.matrix) if(!parameter(v)) return BoundTerm.init;
+		foreach(v;solution.vector) if(!parameter(v)) return BoundTerm.init;
+		auto zero=arena.number(Number(0),sort),neg=arena.number(Number(sort==Sort.natural?0:-1),sort);
+		Term difference(Term a,Term b){ return arena.add(a,arena.mul(neg,b,true),true); }
+		bool check(Term t,bool isZero){
+			auto d=simplifyDomain(arena,t,[],options); if(d.exhausted||d.output!=arena.boolean(true)) return false;
+			Result v;
+			if(isZero){ v=simplify(arena,t,options); if(v.exhausted||!arena.isNumber(v.output)||!arena.number(v.output).zero) return false; }
+			solution.checks~=SpectralFact(t,d,v); return true;
+		}
+		if(!solution.diagonal){
+			auto a=solution.matrix[0],b=solution.matrix[1],c=solution.matrix[size],d=solution.matrix[size+1];
+			Number av,bv,cv,dv; literalNumber(a,av); literalNumber(b,bv); literalNumber(c,cv); literalNumber(d,dv);
+			auto trace=arena.number(av+dv,sort);
+			auto discriminant=(av-dv)*(av-dv)+Number(4)*bv*cv;
+			auto rs=sort==Sort.complex?Sort.complex:Sort.real_;
+			auto root=arena.call(sort==Sort.complex?Builtin.sqrtC:Builtin.sqrtR,[arena.number(discriminant,rs)]);
+			auto simple=simplify(arena,root,options); if(simple.exhausted) return BoundTerm.init;
+			if(sort==Sort.rational&&!arena.isNumber(simple.output)) return BoundTerm.init;
+			root=arena.isNumber(simple.output)?arena.number(arena.number(simple.output),sort):arena.castTo(simple.output,sort);
+			auto half=arena.number(Number(1)/Number(2),sort);
+			solution.first=arena.mul(arena.add(trace,root),half); solution.second=arena.mul(difference(trace,root),half); solution.minus=neg;
+			if(!parameter(solution.first)||!parameter(solution.second)||!parameter(neg)) return BoundTerm.init;
+			if(!check(difference(arena.add(a,d,true),arena.add(solution.first,solution.second,true)),true)||
+				!check(difference(difference(arena.mul(a,d,true),arena.mul(b,c,true)),arena.mul(solution.first,solution.second,true)),true)||
+				!check(arena.inv(difference(solution.first,solution.second)),false)) return BoundTerm.init;
+		}
+		uint index;
+		foreach(id;0..arena.length){ auto q=arena.view(arena.at(cast(uint)id)); if(q.op==Op.variable){ enforce(q.value<uint.max-1,"scalar variable limit exceeded"); if(q.value>=index) index=cast(uint)q.value+1; } }
+		auto argument=arena.variable(Sort.natural,index),exponent=at(p.b);
+		BoundTerm restore(Term v){
+			if(v==argument) return exponent;
+			auto q=arena.view(v); if(!q.arity) return scalar(ctx,v);
+			BoundTerm[] args; bool plain=true;
+			foreach(i;0..q.arity){ auto a=restore(arena.viewChild(v,i)); plain&=node(a).op==BoundOp.scalar; args~=a; }
+			if(!plain) return primitive(v,args);
+			Term[] values; foreach(a;args) values~=arena.at(node(a).data);
+			return scalar(ctx,arena.viewRebuild(v,values,true));
+		}
+		auto power=sort==Sort.natural?Builtin.powNN:sort==Sort.integer?Builtin.powZN:sort==Sort.rational?Builtin.powQN:sort==Sort.real_?Builtin.powRN:Builtin.powCN;
+		BoundTerm[] output;
+		foreach(i;0..size){
+			Term value;
+			if(solution.diagonal||i==2) value=arena.mul(arena.call(power,[solution.matrix[i*size+i],argument]),solution.vector[i],true);
+			else{
+				auto first=arena.add(arena.mul(solution.matrix[i*size],solution.vector[0],true),arena.mul(solution.matrix[i*size+1],solution.vector[1],true),true);
+				auto law=sort==Sort.rational?Law.rational_spectral_interpolation:sort==Sort.real_?Law.real_spectral_interpolation:Law.complex_spectral_interpolation;
+				value=instantiate(arena,law,[solution.vector[i],first,solution.first,solution.second,argument],true).result;
+			}
+			output~=restore(value);
+		}
+		auto result=tuple(ctx,output,type(t)); solution.target=result.id; return result;
+	}
 	private bool definitionallyTotal(BoundTerm t){
 		auto n=node(t);
 		if(n.op==BoundOp.variable||n.op==BoundOp.global||n.op==BoundOp.lambda||n.op==BoundOp.typeValue||n.op==BoundOp.unit||n.op==BoundOp.vectorNil) return true;
@@ -897,7 +990,7 @@ final class Bindings{
 	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
 		if(telescope_) return normalizeDependent(term,budget);
-		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks;
+		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
@@ -934,7 +1027,7 @@ final class Bindings{
 					if(mode==BoundOp.holds) return restoreBody(arena.and_(d.output,source),ctx,argument);
 					return d.output==arena.boolean(true)?simplified:guard(restoreBody(d.output,ctx,argument),simplified);
 				}
-				if(n.op==BoundOp.guard||n.op==BoundOp.primitive||n.op==BoundOp.defined||n.op==BoundOp.holds){
+				if(n.op==BoundOp.guard||n.op==BoundOp.primitive||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.vectorCons||n.op==BoundOp.pair||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor){
 					auto x=rewrite(at(n.a),path~0u);
 					if(x!=BoundTerm.init) return rebuild(t,ctx,n.b==uint.max?[x]:[x,at(n.b)]);
 					if(n.b!=uint.max){ auto y=rewrite(at(n.b),path~1u); if(y!=BoundTerm.init) return rebuild(t,ctx,[at(n.a),y]); }
@@ -972,7 +1065,19 @@ final class Bindings{
 			}
 			if(n.a==uint.max) result=Result(t.id,emit(BindingRule.refl,t.id,t.id));
 			else{
-				auto x=n.op==BoundOp.fixed?Result(n.a,emit(BindingRule.refl,n.a,n.a)):visit(at(n.a),depth+1); BoundTerm[] args=[at(x.output)]; uint y=uint.max;
+				Result x=Result(uint.max,uint.max);
+				bool applied=n.op==BoundOp.apply&&closedScalar(at(n.b));
+				if(domains&&applied&&nodes[n.a].op==BoundOp.fixed&&steps<budget){
+					RecurrenceSolution solution; auto function_=at(n.a),solved=solveRecurrence(function_,solution);
+					if(solved==BoundTerm.init) solved=solveAffineRecurrence(function_,solution);
+					if(solved==BoundTerm.init) solved=solveLinearRecurrence(function_,solution);
+					if(solved!=BoundTerm.init){
+						auto extra=cast(uint)solutions.length; solutions~=solution; ++steps;
+						x=Result(solved.id,emit(BindingRule.fixedRecurrence,n.a,solved.id,uint.max,uint.max,extra));
+					}
+				}
+				if(x.output==uint.max) x=n.op==BoundOp.fixed||applied&&nodes[n.a].op==BoundOp.lambda?Result(n.a,emit(BindingRule.refl,n.a,n.a)):visit(at(n.a),depth+1);
+				BoundTerm[] args=[at(x.output)]; uint y=uint.max;
 				if(n.b!=uint.max){
 					bool skip; auto left=nodes[x.output];
 					if(domains&&left.op==BoundOp.scalar){
@@ -1030,10 +1135,19 @@ final class Bindings{
 						next=bottom(ctx,type(at(result.output))); rule=BindingRule.getScalarUndefined;
 					}
 				}
+				if(next==BoundTerm.init&&current.op==BoundOp.get&&nodes[current.a].op==BoundOp.vectorCons&&nodes[current.b].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[current.b].data))){
+					auto index=arena.number(arena.at(nodes[current.b].data)).re,cons=nodes[current.a];
+					if(index.small){
+						next=index.integer?sequence(at(cons.a),get(at(cons.b),scalar(ctx,arena.natural_(cast(ulong)index.integer-1)))):sequence(at(cons.b),at(cons.a));
+						rule=BindingRule.getCons;
+					}
+				}
 				if(current.op==BoundOp.get&&(nodes[current.a].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom)){
 					next=bottom(ctx,type(at(result.output))); rule=BindingRule.getBottom;
 				}else if(next==BoundTerm.init&&(current.op==BoundOp.tensor||current.op==BoundOp.get||current.op==BoundOp.first||current.op==BoundOp.rest)){
-					next=tensorEval(at(result.output)); if(next!=BoundTerm.init) rule=current.op==BoundOp.tensor&&current.data==TensorOp.power&&node(next).op==BoundOp.tensor?BindingRule.tensorPower:BindingRule.tensorEval;
+					SpectralSolution spectrum; next=spectral(at(result.output),spectrum);
+					if(next!=BoundTerm.init){ extra=cast(uint)spectra.length; spectra~=spectrum; rule=BindingRule.tensorSpectral; }
+					else{ next=tensorEval(at(result.output)); if(next!=BoundTerm.init) rule=current.op==BoundOp.tensor&&current.data==TensorOp.power&&node(next).op==BoundOp.tensor?BindingRule.tensorPower:BindingRule.tensorEval; }
 				}
 				if(next==BoundTerm.init&&current.op==BoundOp.fixed){
 					auto body=at(current.a),v=pool.view(type(body)),inner=push(ctx,v.fields[0]);
@@ -1159,6 +1273,7 @@ final class Bindings{
 				if(steps>=budget){
 					if(next!=BoundTerm.init){
 						if(rule==BindingRule.fixedRecurrence) --solutions.length;
+						if(rule==BindingRule.tensorSpectral) --spectra.length;
 						next=BoundTerm.init; exhausted=true;
 					}
 					if(current.op==BoundOp.scalar&&!totalScalar(at(result.output))||
@@ -1174,7 +1289,7 @@ final class Bindings{
 			}
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
-		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks);
+		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra);
 	}
 
 	Term lower(BoundTerm term){
@@ -1409,6 +1524,14 @@ final class Bindings{
 			code~=replace(part,"QSym.DomainCertificate",prefix~".DomainCertificate");
 			code~=replace(replace(scalarExport(arena,f.value),"import QSym\n",""),"QSym.Certificate",prefix~".ValueCertificate");
 		}
+		foreach(i,s;result.spectra){
+			foreach(kind,fs;[s.parameters,s.checks]) foreach(j,f;fs){
+				auto prefix="QSym.Spectral"~to!string(i)~"_"~to!string(kind)~"_"~to!string(j);
+				auto part=replace(exportDomainLean(arena,f.input,f.domain),"import QSym\n","");
+				part=replace(part,"QSym.Certificate",prefix~".Certificate"); code~=replace(part,"QSym.DomainCertificate",prefix~".DomainCertificate");
+				if(f.value.traced) code~=replace(replace(scalarExport(arena,f.value),"import QSym\n",""),"QSym.Certificate",prefix~".ValueCertificate");
+			}
+		}
 		code~="namespace QSym.BindingCertificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
@@ -1426,6 +1549,14 @@ final class Bindings{
 		foreach(r;result.ranks) foreach(step;r.iterations) scalarNodes~=arena.viewPostorder(step.output);
 		foreach(r;result.ranks) if(r.step!=Term.init) foreach(t;[r.slope,r.bound,r.step]) scalarNodes~=arena.viewPostorder(t);
 		foreach(s;result.solutions) foreach(f;s.facts){ scalarNodes~=arena.viewPostorder(f.input); scalarNodes~=arena.viewPostorder(arena.castTo(f.value.output,arena.sort(f.input))); }
+		foreach(s;result.spectra){
+			foreach(fs;[s.parameters,s.checks]) foreach(f;fs){
+				scalarNodes~=arena.viewPostorder(f.input);
+				if(f.value.traced) scalarNodes~=arena.viewPostorder(arena.castTo(f.value.output,arena.sort(f.input)));
+				Number value; if(literalNumber(f.input,value)&&(value.zero||value.one)) scalarNodes~=arena.viewPostorder(arena.number(value,arena.sort(f.input)));
+			}
+			scalarNodes~=arena.viewPostorder(arena.number(Number(0),elementSort(typeLeaf(type(at(s.source))))));
+		}
 		if(lowerResult) scalarNodes~=arena.viewPostorder(lowered);
 		bool[] needed=new bool[arena.length]; foreach(id;scalarNodes) needed[id]=true;
 		foreach(i,yes;needed) if(yes) code~=leanSyntaxCode(arena,arena.at(cast(uint)i));
@@ -1694,6 +1825,60 @@ final class Bindings{
 					"  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (Recursion.solve_nat_step (rec"~id~dimArg~" γ ξ ρ) "~op~" "~base~" "~delta~" "~k~" "~hp~" "~hz~" "~hs~"))\n";
 			}
 		}
+		foreach(si,s;result.spectra){
+			auto tag=to!string(si),source=nodes[s.source],powerNode=nodes[source.a],element=typeLeaf(type(at(s.source))),sort=elementSort(element);
+			auto add=tensorOperation(element,TensorOp.add),mul=tensorOperation(element,TensorOp.mul);
+			auto suffix=sort==Sort.natural?"N":sort==Sort.integer?"Z":sort==Sort.rational?"Q":sort==Sort.real_?"R":"C";
+			auto ha=sort==Sort.real_||sort==Sort.complex?"rfl":"AffineRecurrence.add"~suffix,hm=sort==Sort.real_||sort==Sort.complex?"rfl":"AffineRecurrence.mul"~suffix;
+			auto pow="Functions.pow"~suffix~"N.apply",hp="Spectral.pow"~suffix;
+			auto hz=sort==Sort.real_||sort==Sort.complex?"(Option.some.inj AffineRecurrence.zero"~suffix~")":"rfl",ho=sort==Sort.real_||sort==Sort.complex?"(Option.some.inj AffineRecurrence.one"~suffix~")":"rfl";
+			auto units=" "~tensorLiteral(element,0)~" "~tensorLiteral(element,1)~" "~hz~" "~ho;
+			string raw(Term t){ return "(n"~to!string(t.id)~".eval ξ)"; }
+			string val(Term t){ Number v; return literalNumber(t,v)&&(v.zero||v.one)?"("~(v.zero?"0":"1")~" : "~"("~leanType(element)~" : Binding.Ty).denote"~")":"("~raw(t)~".getD 0)"; }
+			string total(Term t){
+				foreach(j,f;s.parameters) if(f.input==t){
+					auto id="spectral"~tag~"_"~to!string(j),v=val(t),h="Spectral.some_of_domain 0 "~raw(t)~" (QSym.Spectral"~tag~"_0_"~to!string(j)~".DomainCertificate.domain_correct ξ)";
+					Number number;
+					if(literalNumber(t,number)&&(number.zero||number.one)){
+						auto literal=arena.number(number,sort),last=sort==Sort.real_||sort==Sort.complex?"AffineRecurrence."~(number.zero?"zero":"one")~suffix:"rfl";
+						h="Eq.trans (LinearRecurrence.known (QSym.Spectral"~tag~"_0_"~to!string(j)~".DomainCertificate.domain_correct ξ) (Numeric.sound ξ n"~to!string(t.id)~" n"~to!string(literal.id)~" (of_decide_eq_true rfl))) "~last;
+					}
+					return "(show "~raw(t)~" = some "~v~" from "~h~")";
+				}
+				assert(0,"missing spectral parameter");
+			}
+			string cases(string[] proofs){ auto r="(fun i => i.elim0)"; foreach_reverse(p;proofs) r="(Fin.cases "~p~" "~r~")"; return r; }
+			string vector(string[] xs){ auto r="(fun i : Fin 0 => i.elim0)"; foreach_reverse(x;xs) r="(Fin.cons "~x~" "~r~")"; return r; }
+			string constants(uint q){
+				auto z=nodes[q]; if(z.op==BoundOp.scalar) return total(arena.at(z.data));
+				if(z.op==BoundOp.vectorNil) return "rfl";
+				return "(congrArg₂ Tensor.consValue "~constants(z.a)~" "~constants(z.b)~")";
+			}
+			auto mat="("~name(powerNode.a)~".eval ξ ρ)",vec="("~name(source.b)~".eval ξ ρ)",exponent="("~name(powerNode.b)~".eval ξ ρ)";
+			auto hmat=constants(powerNode.a),hv=constants(source.b); string proof;
+			if(s.diagonal){
+				string[] vals,vs,ars,vrs,da,dv,eqs,rows;
+				foreach(j;0..s.size){ auto a=s.matrix[j*s.size+j],v=s.vector[j]; vals~=val(a); vs~=val(v); ars~=raw(a); vrs~=raw(v); da~=total(a); dv~=total(v); eqs~="rfl"; }
+				foreach(j;0..s.size) rows~="(funext "~cases(eqs)~")";
+				hmat="(Eq.trans "~hmat~" (congrArg some (funext "~cases(rows)~")))";
+				proof="Spectral.diagonal_value "~add~" "~mul~" "~pow~" "~ha~" "~hm~" "~hp~units~" "~vector(vals)~" "~vector(vs)~" "~vector(ars)~" "~vector(vrs)~" "~cases(da)~" "~cases(dv)~" "~mat~" "~vec~" "~hmat~" "~hv~" "~exponent;
+			}else{
+				auto inv=sort==Sort.rational?"Functions.invQ.apply":"Value.inv",hi=sort==Sort.rational?"Spectral.invQ":"rfl";
+				auto hn=sort==Sort.real_||sort==Sort.complex?"Spectral.minus"~suffix:"rfl";
+				string check(uint j){
+					auto f=s.checks[j],prefix="QSym.Spectral"~tag~"_1_"~to!string(j),out_=arena.castTo(f.value.output,sort),zero=arena.number(Number(0),sort);
+					auto hz=sort==Sort.real_||sort==Sort.complex?"AffineRecurrence.zero"~suffix:"rfl";
+					return "(Spectral.checked_eq "~add~" "~mul~" "~ha~" "~hm~" "~raw(s.minus)~" _ _ "~hn~" (Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct ξ) (Value.Refines.trans ("~prefix~".ValueCertificate.refinement ξ) (Numeric.sound ξ n"~to!string(out_.id)~" n"~to!string(zero.id)~" (of_decide_eq_true rfl)))) "~hz~"))";
+				}
+				Term[] ps=[s.matrix[0],s.matrix[1],s.matrix[s.size],s.matrix[s.size+1],s.first,s.second,s.vector[0],s.vector[1]];
+				if(s.size==3) ps~=[s.matrix[8],s.vector[2]];
+				string args,raws,totals;
+				foreach(t;ps){ args~=" "~val(t); raws~=" "~raw(t); totals~=" "~total(t); }
+				proof="Spectral."~(s.size==2?"two_value":"block_value")~" "~add~" "~mul~" "~inv~" "~pow~" "~ha~" "~hm~" "~hi~" "~hp~units~args~raws~" "~raw(s.minus)~totals~" "~hn~" "~check(0)~" "~check(1)~" (QSym.Spectral"~tag~"_1_2.DomainCertificate.domain_correct ξ) "~mat~" "~vec~" "~hmat~" "~hv~" "~exponent;
+			}
+			auto args=dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(source.context)~")";
+			code~="theorem spectral"~tag~args~" : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := "~proof~"\n";
+		}
 		string proofName(uint id){ return "(p"~to!string(id)~dimArg~" γ)"; }
 		foreach(i,p;result.proofs){
 			auto n=nodes[p.from]; string proof;
@@ -1703,6 +1888,10 @@ final class Bindings{
 				case BindingRule.getBottom:
 					auto left=nodes[n.a].op==BoundOp.bottom;
 					proof=".ofEq (fun ξ ρ => Tensor.get_none_"~(left?"left":"right")~" ("~name(left?n.b:n.a)~".eval ξ ρ))"; break;
+				case BindingRule.getCons:
+					auto index=arena.number(arena.at(nodes[n.b].data)).re.integer,cons=nodes[n.a];
+					proof=".ofEq (fun ξ ρ => Tensor.get_cons_"~(index?"succ":"zero")~" ("~name(cons.a)~".eval ξ ρ) ("~name(cons.b)~".eval ξ ρ)"~(index?" "~to!string(index-1):"")~")"; break;
+				case BindingRule.tensorSpectral:proof=".ofEq (fun ξ ρ => spectral"~to!string(p.extra)~dimArg~" γ ξ ρ)"; break;
 				case BindingRule.tensorEval:proof=tensorEvaluationProof(p.from,p.to); break;
 				case BindingRule.tensorPower:
 					auto v=pool.view(types[n.type]),element=typeLeaf(types[n.type]),exponent=arena.number(arena.at(nodes[n.b].data)).re.integer;

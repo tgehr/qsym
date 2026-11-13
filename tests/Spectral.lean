@@ -1,0 +1,29 @@
+import QSym.Spectral
+import QSym.AffineAlgebra
+import QSym.AxiomCheck
+
+#qsym_check_axioms QSym.Spectral.eigen_power
+#qsym_check_axioms QSym.Spectral.diagonal
+#qsym_check_axioms QSym.Spectral.some_of_domain
+#qsym_check_axioms QSym.Spectral.diagonal_value
+#qsym_check_axioms QSym.Spectral.part_eigen
+#qsym_check_axioms QSym.Spectral.two
+#qsym_check_axioms QSym.Spectral.block_power
+#qsym_check_axioms QSym.Spectral.value_some
+#qsym_check_axioms QSym.Spectral.checked_eq
+#qsym_check_axioms QSym.Spectral.separated
+#qsym_check_axioms QSym.Spectral.two_value
+#qsym_check_axioms QSym.Spectral.block_value
+#qsym_check_axioms QSym.Spectral.minusR
+#qsym_check_axioms QSym.Spectral.minusC
+#qsym_check_axioms QSym.Spectral.invQ
+#qsym_check_axioms QSym.Spectral.powN
+#qsym_check_axioms QSym.Spectral.powZ
+#qsym_check_axioms QSym.Spectral.powQ
+#qsym_check_axioms QSym.Spectral.powR
+#qsym_check_axioms QSym.Spectral.powC
+#qsym_check_axioms QSym.Value.spectral_interpolation
+#qsym_check_axioms QSym.Tensor.get_cons_zero
+#qsym_check_axioms QSym.Tensor.get_cons_succ
+
+#qsym_check_axioms QSym.Value.spectral_interpolationQ

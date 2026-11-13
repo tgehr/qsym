@@ -123,6 +123,8 @@ test: build/qsym
 	./build/affine-recurrence-tests --DRT-testmode=run-main build/affine-recurrences
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/linear_recurrences.d -of=build/linear-recurrence-tests
 	./build/linear-recurrence-tests --DRT-testmode=run-main build/linear-recurrences
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/spectral.d -of=build/spectral-tests
+	./build/spectral-tests build/spectral
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/cutoff.d -of=build/cutoff-tests
 	./build/cutoff-tests --DRT-testmode=run-main build/cutoff
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/tensors.d -of=build/tensor-tests

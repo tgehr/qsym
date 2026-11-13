@@ -10965,4 +10965,28 @@ theorem r_complex_affine_right (v_a : Option (Ty.denote .complex)) (v_b : Option
 
 #qsym_check_axioms r_complex_affine_right
 
+theorem r_rational_spectral_interpolation (v_x : Option (Ty.denote .rational)) (v_y : Option (Ty.denote .rational)) (v_r : Option (Ty.denote .rational)) (v_s : Option (Ty.denote .rational)) (v_n : Option (Ty.denote .natural)) :
+    (Functions.mulQ.apply (Functions.addQ.apply (Functions.mulQ.apply (Functions.addQ.apply v_y (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) (Functions.mulQ.apply v_s v_x))) (Functions.powQN.apply v_r v_n)) (Functions.mulQ.apply (Functions.addQ.apply (Functions.mulQ.apply v_r v_x) (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) v_y)) (Functions.powQN.apply v_s v_n))) (Functions.invQ.apply (Functions.addQ.apply v_r (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) v_s)))) = (Functions.addQ.apply (Functions.mulQ.apply (Functions.mulQ.apply (Functions.addQ.apply v_y (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) (Functions.mulQ.apply v_s v_x))) (Functions.invQ.apply (Functions.addQ.apply v_r (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) v_s)))) (Functions.powQN.apply v_r v_n)) (Functions.mulQ.apply (Functions.mulQ.apply (Functions.addQ.apply (Functions.mulQ.apply v_r v_x) (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) v_y)) (Functions.invQ.apply (Functions.addQ.apply v_r (Functions.mulQ.apply (some (((-1) : ℚ) / (1))) v_s)))) (Functions.powQN.apply v_s v_n))) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_r <;> cases v_s <;> cases v_n
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_rational_spectral_interpolation
+
+theorem r_real_spectral_interpolation (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_r : Option (Ty.denote .real)) (v_s : Option (Ty.denote .real)) (v_n : Option (Ty.denote .natural)) :
+    (Value.mul (Value.add (Value.mul (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_s v_x))) (Functions.powRN.apply v_r v_n)) (Value.mul (Value.add (Value.mul v_r v_x) (Value.mul (some (((-1) : Int) : ℝ)) v_y)) (Functions.powRN.apply v_s v_n))) (Value.inv (Value.add v_r (Value.mul (some (((-1) : Int) : ℝ)) v_s)))) = (Value.add (Value.mul (Value.mul (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_s v_x))) (Value.inv (Value.add v_r (Value.mul (some (((-1) : Int) : ℝ)) v_s)))) (Functions.powRN.apply v_r v_n)) (Value.mul (Value.mul (Value.add (Value.mul v_r v_x) (Value.mul (some (((-1) : Int) : ℝ)) v_y)) (Value.inv (Value.add v_r (Value.mul (some (((-1) : Int) : ℝ)) v_s)))) (Functions.powRN.apply v_s v_n))) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_r <;> cases v_s <;> cases v_n
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_spectral_interpolation
+
+theorem r_complex_spectral_interpolation (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex)) (v_r : Option (Ty.denote .complex)) (v_s : Option (Ty.denote .complex)) (v_n : Option (Ty.denote .natural)) :
+    (Value.mul (Value.add (Value.mul (Value.add v_y (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Value.mul v_s v_x))) (Functions.powCN.apply v_r v_n)) (Value.mul (Value.add (Value.mul v_r v_x) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_y)) (Functions.powCN.apply v_s v_n))) (Value.inv (Value.add v_r (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_s)))) = (Value.add (Value.mul (Value.mul (Value.add v_y (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Value.mul v_s v_x))) (Value.inv (Value.add v_r (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_s)))) (Functions.powCN.apply v_r v_n)) (Value.mul (Value.mul (Value.add (Value.mul v_r v_x) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_y)) (Value.inv (Value.add v_r (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_s)))) (Functions.powCN.apply v_s v_n))) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_r <;> cases v_s <;> cases v_n
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_spectral_interpolation
+
 end QSym.Generated

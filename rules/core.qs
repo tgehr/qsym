@@ -1560,3 +1560,6 @@ equation real_affine_right(a:ℝ,b:ℝ,c:ℝ,x:ℝ):(a*x+b)*c≡(a*c)*x+b*c;
 equation complex_affine_add(a:ℂ,b:ℂ,c:ℂ,d:ℂ,x:ℂ):(a*x+b)+(c*x+d)≡(a+c)*x+(b+d);
 equation complex_affine_left(c:ℂ,a:ℂ,b:ℂ,x:ℂ):c*(a*x+b)≡(c*a)*x+c*b;
 equation complex_affine_right(a:ℂ,b:ℂ,c:ℂ,x:ℂ):(a*x+b)*c≡(a*c)*x+b*c;
+equation rational_spectral_interpolation(x:ℚ,y:ℚ,r:ℚ,s:ℚ,n:ℕ):((y-s*x)*powQN(r,n)+(r*x-y)*powQN(s,n))/(r-s)≡((y-s*x)/(r-s))*powQN(r,n)+((r*x-y)/(r-s))*powQN(s,n);
+equation real_spectral_interpolation(x:ℝ,y:ℝ,r:ℝ,s:ℝ,n:ℕ):((y-s*x)*powRN(r,n)+(r*x-y)*powRN(s,n))/(r-s)≡((y-s*x)/(r-s))*powRN(r,n)+((r*x-y)/(r-s))*powRN(s,n);
+equation complex_spectral_interpolation(x:ℂ,y:ℂ,r:ℂ,s:ℂ,n:ℕ):((y-s*x)*powCN(r,n)+(r*x-y)*powCN(s,n))/(r-s)≡((y-s*x)/(r-s))*powCN(r,n)+((r*x-y)/(r-s))*powCN(s,n);

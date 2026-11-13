@@ -641,6 +641,10 @@ macro "qsym_rule" : tactic => `(tactic| (
   | solve
     | apply Value.refines_of_eq
       first
+      | apply Value.spectral_interpolation
+      | exact (Value.spectral_interpolation _ _ _ _ _).symm
+      | apply Value.spectral_interpolationQ
+      | exact (Value.spectral_interpolationQ _ _ _ _ _).symm
       | apply Value.affine_add
       | apply Value.affine_left
       | apply Value.affine_right

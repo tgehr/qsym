@@ -83,6 +83,7 @@ def main():
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"tests/FixedPoint.lean")
 	check(ROOT/"tests/LinearRecurrences.lean")
+	check(ROOT/"tests/Spectral.lean")
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
@@ -122,7 +123,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -260,6 +261,13 @@ def main():
 	for name,corrupt in (("AffineWrongBase",wrong_base),("AffineWrongMatrix",wrong_matrix)):
 		if corrupt==valid:
 			raise RuntimeError("affine recurrence rejection fixture did not change")
+		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	valid=(ROOT/"build/spectral/NaturalDiagonal.lean").read_text()
+	wrong_matrix=re.sub(r"(noncomputable def t\d+.*? : Binding\.Expr c\d+ \(\.vector \(\.scalar \.natural\) 2\) := \.binary Tensor\.consValue )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)
+	wrong_eigenvalue=re.sub(r"(\.binary Functions\.powNN\.apply )\(t\d+ γ\)",r"\1(.scalar (.nat 9))",valid,count=1)
+	for name,corrupt in (("SpectralWrongMatrix",wrong_matrix),("SpectralWrongEigenvalue",wrong_eigenvalue)):
+		if corrupt==valid:
+			raise RuntimeError("spectral rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
 	valid=(ROOT/"build/linear-recurrences/Fibonacci.lean").read_text()
 	wrong_lag=valid.replace("LinearRecurrence.lag x 2 2 ","LinearRecurrence.lag x 2 1 ",1)

@@ -22,6 +22,14 @@ def tailValue {α : Type} {n : ℕ} (xs : Option (Fin (n+1) → α)) : Option (F
 def getValue {α : Type} {n : ℕ} (xs : Option (Fin n → α)) (i : Option ℕ) : Option α :=
   xs.bind (fun x => i.bind (fun j => if h : j < n then some (x ⟨j,h⟩) else none))
 
+theorem get_cons_zero {α : Type} {n : ℕ} (x : Option α) (xs : Option (Fin n → α)) :
+    getValue (consValue x xs) (some 0) = xs.bind (fun _ => x) := by
+  cases x <;> cases xs <;> simp [getValue, consValue]
+
+theorem get_cons_succ {α : Type} {n : ℕ} (x : Option α) (xs : Option (Fin n → α)) (i : ℕ) :
+    getValue (consValue x xs) (some (i+1)) = x.bind (fun _ => getValue xs (some i)) := by
+  cases x <;> cases xs <;> simp [getValue, consValue, Nat.succ_lt_succ_iff]
+
 theorem get_none_left {α : Type} {n : ℕ} (i : Option ℕ) : @getValue α n none i = none := rfl
 
 theorem get_none_right {α : Type} {n : ℕ} (x : Option (Fin n → α)) : getValue x none = none := by
