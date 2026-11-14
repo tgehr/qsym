@@ -73,6 +73,15 @@ def Env.cons (x : Option a.denote) (ρ : Env Γ) : Env (a :: Γ)
   | _, .here => x
   | _, .there v => ρ v
 
+-- Strict in the condition, with exactly one selected branch, for any result type.
+def conditionalValue {α : Type} (p : Option Bool) (x y : Option α) : Option α :=
+  p.bind (fun b => if b then x else y)
+
+theorem conditional_congr {α : Type} {p q : Option Bool} {x x' y y' : Option α}
+    (hp : p = q) (hx : x = x') (hy : y = y') :
+    conditionalValue p x y = conditionalValue q x' y' := by
+  cases hp; cases hx; cases hy; rfl
+
 inductive Expr : List Ty → Ty → Type where
   | var : Var Γ a → Expr Γ a
   | scalar : QSym.Expr s → Expr Γ (.scalar s)
@@ -80,6 +89,7 @@ inductive Expr : List Ty → Ty → Type where
   | unary : (Option a.denote → Option b.denote) → Expr Γ a → Expr Γ b
   | binary : (Option a.denote → Option b.denote → Option c.denote) →
       Expr Γ a → Expr Γ b → Expr Γ c
+  | conditional : Expr Γ (.scalar .bool) → Expr Γ a → Expr Γ a → Expr Γ a
   | lam : Expr (a :: Γ) b → Expr Γ (.arrow a b)
   | set : Expr (a :: Γ) (.scalar .bool) → Expr Γ (.set a)
   | app : Expr Γ (.arrow a b) → Expr Γ a → Expr Γ b
@@ -91,6 +101,7 @@ noncomputable def Expr.eval (ξ : QSym.Env) (ρ : Env Γ) : Expr Γ a → Option
   | .constant v => v
   | .unary f x => f (x.eval ξ ρ)
   | .binary f x y => f (x.eval ξ ρ) (y.eval ξ ρ)
+  | .conditional p x y => conditionalValue (p.eval ξ ρ) (x.eval ξ ρ) (y.eval ξ ρ)
   | .lam b => some (fun x => b.eval ξ (ρ.cons (some x)))
   | .set p => some {x | p.eval ξ (ρ.cons (some x)) = some true}
   | .app f x => (f.eval ξ ρ).bind (fun g => (x.eval ξ ρ).bind g)
@@ -149,6 +160,7 @@ def Expr.rename (r : Renaming Γ Δ) : Expr Γ a → Expr Δ a
   | .constant v => .constant v
   | .unary f x => .unary f (x.rename r)
   | .binary f x y => .binary f (x.rename r) (y.rename r)
+  | .conditional p x y => .conditional (p.rename r) (x.rename r) (y.rename r)
   | .lam b => .lam (b.rename r.lift)
   | .set p => .set (p.rename r.lift)
   | .app f x => .app (f.rename r) (x.rename r)
@@ -162,6 +174,7 @@ theorem Expr.eval_rename (e : Expr Γ a) (r : Renaming Γ Δ) (ξ : QSym.Env) (�
   | constant v => rfl
   | unary f x ih => simp only [rename, eval, ih]
   | binary f x y ihx ihy => simp only [rename, eval, ihx, ihy]
+  | conditional p x y ihp ihx ihy => simp only [rename, eval, ihp, ihx, ihy]
   | app f x ihf ihx => simp only [rename, eval, ihf, ihx]
   | seq x y ihx ihy => simp only [rename, eval, ihx, ihy]
   | lam b ih =>
@@ -195,6 +208,7 @@ def Expr.subst (σ : Substitution Γ Δ) : Expr Γ a → Expr Δ a
   | .constant v => .constant v
   | .unary f x => .unary f (x.subst σ)
   | .binary f x y => .binary f (x.subst σ) (y.subst σ)
+  | .conditional p x y => .conditional (p.subst σ) (x.subst σ) (y.subst σ)
   | .lam b => .lam (b.subst σ.lift)
   | .set p => .set (p.subst σ.lift)
   | .app f x => .app (f.subst σ) (x.subst σ)
@@ -208,6 +222,7 @@ theorem Expr.eval_subst (e : Expr Γ a) (σ : Substitution Γ Δ) (ξ : QSym.Env
   | constant v => rfl
   | unary f x ih => simp only [subst, eval, ih]
   | binary f x y ihx ihy => simp only [subst, eval, ihx, ihy]
+  | conditional p x y ihp ihx ihy => simp only [subst, eval, ihp, ihx, ihy]
   | app f x ihf ihx => simp only [subst, eval, ihf, ihx]
   | seq x y ihx ihy => simp only [subst, eval, ihx, ihy]
   | lam b ih =>
@@ -263,6 +278,9 @@ inductive Reduction : {Γ : List Ty} → {a : Ty} → Expr Γ a → Expr Γ a �
   | binary {a b c : Ty} {x x' : Expr Γ a} {y y' : Expr Γ b}
       (f : Option a.denote → Option b.denote → Option c.denote) :
       Reduction x x' → Reduction y y' → Reduction (.binary f x y) (.binary f x' y')
+  | conditional {p p' : Expr Γ (.scalar .bool)} {x x' y y' : Expr Γ a} :
+      Reduction p p' → Reduction x x' → Reduction y y' →
+      Reduction (.conditional p x y) (.conditional p' x' y')
   | lam {b b' : Expr (a :: Γ) c} : Reduction b b' → Reduction (.lam b) (.lam b')
   | set {p p' : Expr (a :: Γ) (.scalar .bool)} : Reduction p p' → Reduction (.set p) (.set p')
   | app {f f' : Expr Γ (.arrow a b)} {x x' : Expr Γ a} :
@@ -283,6 +301,7 @@ theorem Reduction.sound {x y : Expr Γ a} (h : Reduction x y) (ξ : QSym.Env) (�
   | beta b x => exact Expr.eval_beta b x ξ ρ
   | unary f _ ih => exact congrArg f (ih ρ)
   | binary f _ _ ihx ihy => exact congrArg₂ f (ihx ρ) (ihy ρ)
+  | conditional _ _ _ ihp ihx ihy => exact conditional_congr (ihp ρ) (ihx ρ) (ihy ρ)
   | lam _ ih => exact congrArg some (funext (fun x => ih (ρ.cons (some x))))
   | set _ ih =>
     simp only [Expr.eval]
@@ -583,5 +602,43 @@ theorem Reduction.equalEmptyUniv (v : a.denote) :
   intro ξ ρ
   letI : Nonempty a.denote := ⟨v⟩
   simp [Expr.eval, QSym.Expr.eval, equalValue, Set.univ_nonempty.ne_empty.symm])
+
+theorem Reduction.conditionalTrue (x y : Expr Γ a) :
+    Reduction (.conditional (.scalar (.bool true)) x y) x := .ofEq (fun _ _ => rfl)
+
+theorem Reduction.conditionalFalse (x y : Expr Γ a) :
+    Reduction (.conditional (.scalar (.bool false)) x y) y := .ofEq (fun _ _ => rfl)
+
+theorem Reduction.conditionalBottom (x y : Expr Γ a) :
+    Reduction (.conditional (.constant none) x y) (.constant none) := .ofEq (fun _ _ => rfl)
+
+theorem Reduction.conditionalSame (p : Expr Γ (.scalar .bool)) (x : Expr Γ a) :
+    Reduction (.conditional p x x) (.seq p x) := .ofEq (by
+  intro ξ ρ
+  cases h : p.eval ξ ρ with
+  | none => simp [Expr.eval, conditionalValue, h]
+  | some b => cases b <;> simp [Expr.eval, conditionalValue, h])
+
+theorem Reduction.definedConditional (p : Expr Γ (.scalar .bool)) (x y : Expr Γ a) :
+    Reduction (.defined (.conditional p x y))
+      (.holds (.conditional p (.defined x) (.defined y))) := .ofEq (by
+  intro ξ ρ
+  cases h : p.eval ξ ρ with
+  | none => simp [Expr.defined, Expr.holds, Expr.eval, definedValue, holdsValue, conditionalValue, h]
+  | some b => cases b <;> cases hx : x.eval ξ ρ <;> cases hy : y.eval ξ ρ <;>
+      simp [Expr.defined, Expr.holds, Expr.eval, definedValue, holdsValue, conditionalValue, h, hx, hy])
+
+theorem Reduction.conditionalBool (p x y : Expr Γ (.scalar .bool)) :
+    Reduction (.conditional p x y)
+      (.binary (a := .scalar .bool) (b := .scalar .bool) Value.or
+        (.binary (a := .scalar .bool) (b := .scalar .bool) Value.and p x)
+        (.binary (a := .scalar .bool) (b := .scalar .bool) Value.and
+          (.unary (a := .scalar .bool) Value.not p) y)) := .ofEq (by
+  intro ξ ρ
+  cases hp : p.eval ξ ρ with
+  | none => simp [Expr.eval, conditionalValue, Value.or, Value.and, Value.not, hp]
+  | some b => cases b <;> cases hx : x.eval ξ ρ with
+    | none => simp [Expr.eval, conditionalValue, Value.or, Value.and, Value.not, hp, hx]
+    | some c => cases c <;> simp [Expr.eval, conditionalValue, Value.or, Value.and, Value.not, hp, hx])
 
 end QSym.Binding

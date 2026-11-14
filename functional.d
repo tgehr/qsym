@@ -238,16 +238,7 @@ struct FunctionSyntax{
 				auto zero=a.number(Number(0),sort),mask=a.mask(a.boolean(false),zero);
 				return b.primitive(a.add(zero,zero,true),[b.primitive(mask,[predicate,yes]),b.primitive(mask,[neg,no])]);
 			}
-			auto v=pool.view(ty);
-			enforce(v.kind==TypeKind.tuple||v.kind==TypeKind.vector&&v.dimension.constant&&v.length>0&&v.length<=256,
-				"conditional branches require scalars or nonempty finite products of scalars");
-			BoundTerm[] fields;
-			foreach(i;0..(v.kind==TypeKind.tuple?v.fields.length:v.length)){
-				auto index=b.scalar(ctx,a.natural_(i));
-				// Project the whole branch, preserving strict product definedness.
-				fields~=conditional(predicate,b.get(yes,index),b.get(no,index));
-			}
-			return b.tuple(ctx,fields,ty);
+			return b.conditional(predicate,yes,no);
 		}
 		BoundTerm build(Pattern p,Scope ctx,string[] locals,TypeId expected=TypeId.init,uint depth=0) @safe{
 			enforce(depth<128,"function expression nesting limit exceeded");
@@ -472,7 +463,7 @@ struct FunctionSyntax{
 			if(n.op==BoundOp.scalar) foreach(id;a.viewPostorder(a.at(n.data))){
 				auto v=a.view(a.at(id)); if(v.op==Op.variable&&v.value<scalar.variables.length) free.set(scalar.variables[v.value].name,true);
 			}
-			if(n.a!=uint.max) collectFree(b.at(n.a)); if(n.b!=uint.max) collectFree(b.at(n.b));
+			if(n.a!=uint.max) collectFree(b.at(n.a)); if(n.b!=uint.max) collectFree(b.at(n.b)); if(n.c!=uint.max) collectFree(b.at(n.c));
 		}
 		collectFree(result.reduction.output);
 		string fresh(string[] locals,string preferred=""){
@@ -493,6 +484,7 @@ struct FunctionSyntax{
 				return "get("~child(base)~","~to!string(index)~")";
 			}
 			switch(n.op){
+				case BoundOp.conditional:return "(if "~child(n.a)~" then "~child(n.b)~" else "~child(n.c)~")";
 				case BoundOp.unit:return "()";
 				case BoundOp.vectorNil:return "(():"~typeName(b.type(t),locals)~")";
 				case BoundOp.vectorCons,BoundOp.pair:

@@ -25,15 +25,15 @@ struct BoundTerm{
 	@property uint id()const{ return index; }
 	bool opEquals(BoundTerm rhs)const{ return owner is rhs.owner&&index==rhs.index; }
 }
-enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum }
+enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,conditional }
 enum TensorOp:ubyte{ add,mul,dot,matvec,matmul,power }
 struct BoundNode{
 	BoundOp op;
-	uint context,type,a=uint.max,b=uint.max,data;
+	uint context,type,a=uint.max,b=uint.max,data,c=uint.max;
 }
 struct BinderHint{ string name,refinement; }
 private enum BindingRule:ubyte{
-	refl,congr,beta,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
+	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,beta,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
@@ -288,14 +288,14 @@ final class Bindings{
 	private bool depends(BoundTerm t,uint index){
 		auto n=node(t); if(n.op==BoundOp.variable) return n.data==index;
 		if(n.op==BoundOp.lambda||n.op==BoundOp.set||n.op==BoundOp.fixed) ++index;
-		return n.a!=uint.max&&depends(at(n.a),index)||n.b!=uint.max&&depends(at(n.b),index);
+		return n.a!=uint.max&&depends(at(n.a),index)||n.b!=uint.max&&depends(at(n.b),index)||n.c!=uint.max&&depends(at(n.c),index);
 	}
 	private void checkProgram(BoundTerm t){
 		if(!depends(t,1)) return;
 		auto n=node(t);
-		if(n.op==BoundOp.primitive||n.op==BoundOp.guard||n.op==BoundOp.sequence||
+		if(n.op==BoundOp.conditional||n.op==BoundOp.primitive||n.op==BoundOp.guard||n.op==BoundOp.sequence||
 			n.op==BoundOp.vectorCons||n.op==BoundOp.pair||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.get){
-			checkProgram(at(n.a)); if(n.b!=uint.max) checkProgram(at(n.b)); return;
+			checkProgram(at(n.a)); if(n.b!=uint.max) checkProgram(at(n.b)); if(n.c!=uint.max) checkProgram(at(n.c)); return;
 		}
 		if(n.op==BoundOp.apply){
 			auto f=nodes[n.a];
@@ -432,6 +432,11 @@ final class Bindings{
 		enforce(type(p)==scalarType(Sort.boolean)&&context(p)==context(x),"guard requires Bool in the same scope");
 		auto n=node(x); return intern(BoundNode(BoundOp.guard,n.context,n.type,p.id,x.id));
 	}
+	BoundTerm conditional(BoundTerm predicate,BoundTerm yes,BoundTerm no){
+		enforce(type(predicate)==scalarType(Sort.boolean)&&context(predicate)==context(yes)&&context(yes)==context(no),"conditional requires Bool in the same scope");
+		enforce(type(yes)==type(no),"conditional branch type mismatch");
+		return intern(BoundNode(BoundOp.conditional,node(yes).context,node(yes).type,predicate.id,yes.id,0,no.id));
+	}
 	private BoundTerm rebuild(BoundTerm t,Scope target,BoundTerm[] args,Dimension delegate(uint) @safe dimensions=null){
 		auto n=node(t);
 		TypeId mapped(uint id){ return dimensions is null?types[id]:pool.map(types[id],dimensions); }
@@ -439,6 +444,7 @@ final class Bindings{
 			case BoundOp.unit,BoundOp.vectorNil:return tuple(target,[],mapped(n.type));
 			case BoundOp.vectorCons,BoundOp.pair:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id,args[1].id));
 			case BoundOp.first,BoundOp.rest:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id));
+			case BoundOp.conditional:return conditional(args[0],args[1],args[2]);
 			case BoundOp.get:return get(args[0],args[1]);
 			case BoundOp.tensor:return tensor(cast(TensorOp)n.data,args[0],args[1]);
 			case BoundOp.scalar:return scalar(target,arena.at(n.data));
@@ -484,6 +490,7 @@ final class Bindings{
 				BoundTerm[] children;
 				if(n.a!=uint.max) children~=visit(at(n.a));
 				if(n.b!=uint.max) children~=visit(at(n.b));
+				if(n.c!=uint.max) children~=visit(at(n.c));
 				result=rebuild(t,target,children,&mapped);
 			}
 			memo.set(t.id,result.id); return result;
@@ -512,6 +519,7 @@ final class Bindings{
 				BoundTerm[] children;
 				if(n.a!=uint.max) children~=visit(at(n.a));
 				if(n.b!=uint.max) children~=visit(at(n.b));
+				if(n.c!=uint.max) children~=visit(at(n.c));
 				result=rebuild(t,target,children,&mapped);
 			}
 			memo.set(t.id,result.id); return result;
@@ -1239,7 +1247,15 @@ final class Bindings{
 			auto old=memo.get(t.id,uint.max); if(old!=uint.max) return at(old);
 			auto n=node(t); BoundTerm[] args;
 			if(n.a!=uint.max) args~=visit(at(n.a),depth+1);
+			if(n.op==BoundOp.conditional){
+				auto predicate=node(args[0]);
+				if(predicate.op==BoundOp.scalar&&arena.view(arena.at(predicate.data)).op==Op.boolLit){
+					++steps; auto r=visit(at(arena.view(arena.at(predicate.data)).value?n.b:n.c),depth+1); memo.set(t.id,r.id); return r;
+				}
+				if(predicate.op==BoundOp.bottom){ ++steps; auto r=bottom(context(t),type(t)); memo.set(t.id,r.id); return r; }
+			}
 			if(n.b!=uint.max) args~=visit(at(n.b),depth+1);
+			if(n.c!=uint.max) args~=visit(at(n.c),depth+1);
 			auto r=args.length?rebuild(t,context(t),args):t; n=node(r);
 			if(n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.lambda&&definitionallyTotal(at(n.b))){
 				++steps; r=visit(beta(at(nodes[n.a].a),at(n.b)),depth+1);
@@ -1497,6 +1513,7 @@ final class Bindings{
 				}
 				if(n.a!=uint.max) pending~=n.a;
 				if(n.b!=uint.max) pending~=n.b;
+				if(n.c!=uint.max) pending~=n.c;
 			}
 			auto argument=arena.variable(sort,index);
 			BoundTerm rewrite(BoundTerm t,uint[] path){
@@ -1519,10 +1536,12 @@ final class Bindings{
 					if(mode==BoundOp.holds) return restoreBody(arena.and_(d.output,source),ctx,argument);
 					return d.output==arena.boolean(true)?simplified:guard(restoreBody(d.output,ctx,argument),simplified);
 				}
-				if(n.op==BoundOp.guard||n.op==BoundOp.primitive||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.vectorCons||n.op==BoundOp.pair||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor){
-					auto x=rewrite(at(n.a),path~0u);
-					if(x!=BoundTerm.init) return rebuild(t,ctx,n.b==uint.max?[x]:[x,at(n.b)]);
-					if(n.b!=uint.max){ auto y=rewrite(at(n.b),path~1u); if(y!=BoundTerm.init) return rebuild(t,ctx,[at(n.a),y]); }
+				if(n.op==BoundOp.conditional||n.op==BoundOp.guard||n.op==BoundOp.primitive||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.vectorCons||n.op==BoundOp.pair||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor){
+					BoundTerm[] children=[at(n.a)]; if(n.b!=uint.max) children~=at(n.b); if(n.c!=uint.max) children~=at(n.c);
+					foreach(i,child;children){
+						auto changed=rewrite(child,path~cast(uint)i);
+						if(changed!=BoundTerm.init){ children[i]=changed; return rebuild(t,ctx,children); }
+					}
 				}
 				return BoundTerm.init;
 			}
@@ -1590,20 +1609,26 @@ final class Bindings{
 					}
 				}
 				if(x.output==uint.max) x=n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.fixed||applied&&nodes[n.a].op==BoundOp.lambda?Result(n.a,emit(BindingRule.refl,n.a,n.a)):visit(at(n.a),depth+1);
-				BoundTerm[] args=[at(x.output)]; uint y=uint.max;
+				BoundTerm[] args=[at(x.output)]; uint y=uint.max,z=uint.max;
 				if(n.b!=uint.max){
 					bool skip; auto left=nodes[x.output];
 					if(domains&&left.op==BoundOp.scalar){
 						auto v=arena.view(arena.at(left.data));
 						if(v.op==Op.boolLit){
 							auto op=n.op==BoundOp.primitive?arena.view(arena.at(n.data)).op:Op.variable;
-							skip=!v.value&&(n.op==BoundOp.guard||op==Op.mask||op==Op.and_)||v.value&&op==Op.or_;
+							skip=!v.value&&(n.op==BoundOp.conditional||n.op==BoundOp.guard||op==Op.mask||op==Op.and_)||v.value&&op==Op.or_;
 						}
 					}
+					if(n.op==BoundOp.conditional) skip=left.op==BoundOp.bottom||left.op==BoundOp.scalar&&arena.at(left.data)==arena.boolean(false);
 					auto r=skip?Result(n.b,emit(BindingRule.refl,n.b,n.b)):visit(at(n.b),depth+1); args~=at(r.output); y=r.proof;
 				}
+				if(n.c!=uint.max){
+					auto left=nodes[x.output];
+					bool skip=left.op==BoundOp.bottom||left.op==BoundOp.scalar&&arena.at(left.data)==arena.boolean(true);
+					auto r=skip?Result(n.c,emit(BindingRule.refl,n.c,n.c)):visit(at(n.c),depth+1); args~=at(r.output); z=r.proof;
+				}
 				auto rebuilt=rebuild(t,context(t),args);
-				result=Result(rebuilt.id,emit(BindingRule.congr,t.id,rebuilt.id,x.proof,y));
+				result=Result(rebuilt.id,emit(BindingRule.congr,t.id,rebuilt.id,x.proof,y,z));
 			}
 			auto current=node(at(result.output)); BoundTerm next; BindingRule rule; uint extra=uint.max;
 			auto ctx=context(at(result.output));
@@ -1618,7 +1643,17 @@ final class Bindings{
 				// Let pointwise normalization resolve domain queries first. Lifting
 				// them early can combine large scalar domains and exhaust their budget.
 				if(g.op==BoundOp.defined||g.op==BoundOp.holds||g.op==BoundOp.domain) return false;
-				return (g.a==uint.max||guardReady(g.a))&&(g.b==uint.max||guardReady(g.b));
+				return (g.a==uint.max||guardReady(g.a))&&(g.b==uint.max||guardReady(g.b))&&(g.c==uint.max||guardReady(g.c));
+			}
+			if(current.op==BoundOp.conditional){
+				if(isTrue(current.a,true)){ next=at(current.b); rule=BindingRule.conditionalTrue; }
+				else if(isTrue(current.a,false)){ next=at(current.c); rule=BindingRule.conditionalFalse; }
+				else if(nodes[current.a].op==BoundOp.bottom){ next=bottom(ctx,type(at(result.output))); rule=BindingRule.conditionalBottom; }
+				else if(current.b==current.c){ next=sequence(at(current.a),at(current.b)); rule=BindingRule.conditionalSame; }
+				else if(types[current.type]==scalarType(Sort.boolean)){
+					auto predicate=at(current.a),neg=primitive(arena.not_(arena.boolean(false)),[predicate]);
+					next=primitive(arena.or_(arena.boolean(false),arena.boolean(false)),[both(predicate,at(current.b)),both(neg,at(current.c))]); rule=BindingRule.conditionalBool;
+				}
 			}
 			if(current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
 				auto body=nodes[nodes[current.a].a],ty=types[current.type];
@@ -2059,7 +2094,9 @@ final class Bindings{
 						next=both(holds(at(nodes[current.a].a)),holds(at(nodes[current.a].b))); rule=BindingRule.holdsGuard;
 					}else if(current.op==BoundOp.defined){
 						auto child=nodes[current.a];
-						if(child.op==BoundOp.pair||child.op==BoundOp.vectorCons){
+						if(child.op==BoundOp.conditional){
+							next=holds(conditional(at(child.a),defined(at(child.b)),defined(at(child.c)))); rule=BindingRule.conditionalDefined;
+						}else if(child.op==BoundOp.pair||child.op==BoundOp.vectorCons){
 							next=both(defined(at(child.a)),defined(at(child.b))); rule=BindingRule.tensorDefined;
 						}else if(child.op==BoundOp.unit||child.op==BoundOp.vectorNil){ next=scalar(ctx,arena.boolean(true)); rule=BindingRule.tensorEval; }
 						else if(child.op==BoundOp.bottom){ next=scalar(ctx,arena.boolean(false)); rule=BindingRule.shortCircuit; }
@@ -2175,6 +2212,7 @@ final class Bindings{
 	}
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
+			case BoundOp.conditional:return "Binding.conditionalValue";
 			case BoundOp.pair:return "Tensor.pairValue";
 			case BoundOp.vectorCons:return "Tensor.consValue";
 			case BoundOp.first:return "(fun x => x.map Prod.fst)";
@@ -2230,7 +2268,7 @@ final class Bindings{
 		void collect(uint id){
 			if(seen.get(id,false)) return; seen.set(id,true); auto n=nodes[id];
 			if(n.op==BoundOp.scalar&&arena.view(arena.at(n.data)).arity&&literalData(at(id))) leaves~=id;
-			if(n.a!=uint.max) collect(n.a); if(n.b!=uint.max) collect(n.b);
+			if(n.a!=uint.max) collect(n.a); if(n.b!=uint.max) collect(n.b); if(n.c!=uint.max) collect(n.c);
 		}
 		collect(from);
 		struct Total{ string value,proof; }
@@ -2250,7 +2288,7 @@ final class Bindings{
 		string value(uint id){
 			foreach(i,leaf;leaves) if(id==leaf) return values[i]; auto n=nodes[id];
 			if(n.a==uint.max) return "("~name(id)~".eval ξ ρ)";
-			return "("~valueOperation(n)~" "~value(n.a)~(n.b==uint.max?"":" "~value(n.b))~")";
+			return "("~valueOperation(n)~" "~value(n.a)~(n.b==uint.max?"":" "~value(n.b))~(n.c==uint.max?"":" "~value(n.c))~")";
 		}
 		string prove(size_t i){
 			if(i==leaves.length) return "rfl";
@@ -2267,7 +2305,7 @@ final class Bindings{
 		void collect(BoundTerm t){
 			if(visited.get(t.id,false)) return; visited.set(t.id,true); auto n=node(t);
 			if(n.op==BoundOp.scalar||n.op==BoundOp.primitive) foreach(id;arena.viewPostorder(arena.at(n.data))) scalarNeeded.set(id,true);
-			if(n.a!=uint.max) collect(at(n.a)); if(n.b!=uint.max) collect(at(n.b));
+			if(n.a!=uint.max) collect(at(n.a)); if(n.b!=uint.max) collect(at(n.b)); if(n.c!=uint.max) collect(at(n.c));
 		}
 		collect(result.input); collect(result.output);
 		foreach(i;0..arena.length) if(scalarNeeded.get(cast(uint)i,false)) code~=leanSyntaxCode(arena,arena.at(cast(uint)i));
@@ -2335,7 +2373,7 @@ final class Bindings{
 					}
 					return "("~operation~" "~child(n.a)~" "~child(n.b)~")";
 				case BoundOp.fixed:throw new Exception("dependent fixed-point certificates are not supported yet");
-				default:return "("~valueOperation(n)~" "~child(n.a)~(n.b==uint.max?"":" "~child(n.b))~")";
+				default:return "("~valueOperation(n)~" "~child(n.a)~(n.b==uint.max?"":" "~child(n.b))~(n.c==uint.max?"":" "~child(n.c))~")";
 			}
 		}
 		auto parameters=" (γ : Dependent.Globals) (ξ : Env)",outputType=ty(type(result.input),[]);
@@ -2396,7 +2434,7 @@ final class Bindings{
 		while(stack.length){
 			auto id=stack[$-1]; --stack.length; if(used[id]) continue;
 			used[id]=true; auto n=nodes[id];
-			if(n.a!=uint.max) stack~=n.a; if(n.b!=uint.max) stack~=n.b;
+			if(n.a!=uint.max) stack~=n.a; if(n.b!=uint.max) stack~=n.b; if(n.c!=uint.max) stack~=n.c;
 		}
 		uint[] scalarNodes;
 		foreach(i,n;nodes) if(used[i]&&n.op==BoundOp.scalar) scalarNodes~=arena.viewPostorder(arena.at(n.data));
@@ -2426,6 +2464,7 @@ final class Bindings{
 		foreach(i,n;nodes) if(used[i]){
 			string expr;
 			final switch(n.op){
+				case BoundOp.conditional:expr=".conditional "~name(n.a)~" "~name(n.b)~" "~name(n.c); break;
 				case BoundOp.unit:expr=".constant (some ())"; break;
 				case BoundOp.vectorNil:expr=".constant Tensor.nilValue"; break;
 				case BoundOp.scalar:expr=".scalar n"~to!string(n.data); break;
@@ -2453,6 +2492,7 @@ final class Bindings{
 				auto t=at(id),q=nodes[id];
 				if(!depends(t,1)) return "(.constant (fun x => "~name(id)~".eval ξ "~env~"))";
 				if(q.op==BoundOp.apply) return "(.call "~program(q.b)~")";
+				if(q.op==BoundOp.conditional) return "(.branch "~program(q.a)~" "~program(q.b)~" "~program(q.c)~")";
 				auto x=program(q.a),y=q.b==uint.max?"":program(q.b);
 				if(q.op==BoundOp.guard) return "(.branch "~x~" "~y~" (.constant (fun _ => none)))";
 				if(q.op==BoundOp.primitive){
@@ -2467,6 +2507,7 @@ final class Bindings{
 			string programProof(uint id){
 				auto q=nodes[id]; if(!depends(at(id),1)) return "rfl";
 				if(q.op==BoundOp.apply){ auto h=programProof(q.b); return h=="rfl"?h:"(congrArg (fun z : Option "~a~" => z.bind g) "~h~")"; }
+				if(q.op==BoundOp.conditional) return "(Binding.conditional_congr "~programProof(q.a)~" "~programProof(q.b)~" "~programProof(q.c)~")";
 				auto x=programProof(q.a),y=q.b==uint.max?"":programProof(q.b);
 				auto op=q.op==BoundOp.sequence?"(fun (x : Option ("~leanType(types[nodes[q.a].type])~" : Binding.Ty).denote) (y : Option ("~leanType(types[nodes[q.b].type])~" : Binding.Ty).denote) => x.bind (fun _ => y))":valueOperation(q);
 				auto proof=q.b==uint.max?"(congrArg "~op~" "~x~")":"(congrArg₂ "~op~" "~x~" "~y~")";
@@ -3099,6 +3140,13 @@ final class Bindings{
 				case BindingRule.fixedRecurrence:proof=".ofEq (fun ξ ρ => solve"~to!string(p.from)~dimArg~" γ ξ ρ)"; break;
 				case BindingRule.domainFixedTotal:proof=".ofEq (fun ξ ρ => "~(result.ranks[p.extra].iterations.length||result.ranks[p.extra].lower.output!=Term.init?"domainTotal"~to!string(p.extra)~dimArg~" γ ξ ρ":"Eq.trans (domainTotal"~to!string(p.extra)~dimArg~" γ ξ ρ) (congrArg some (Set.ext (fun _ => iff_of_true True.intro rfl)))")~")"; break;
 				case BindingRule.refl:proof=".refl "~name(p.from); break;
+				case BindingRule.conditionalTrue:proof=".conditionalTrue "~name(n.b)~" "~name(n.c); break;
+				case BindingRule.conditionalFalse:proof=".conditionalFalse "~name(n.b)~" "~name(n.c); break;
+				case BindingRule.conditionalBottom:proof=".conditionalBottom "~name(n.b)~" "~name(n.c); break;
+				case BindingRule.conditionalSame:proof=".conditionalSame "~name(n.a)~" "~name(n.b); break;
+				case BindingRule.conditionalBool:proof=".conditionalBool "~name(n.a)~" "~name(n.b)~" "~name(n.c); break;
+				case BindingRule.conditionalDefined:
+					auto q=nodes[n.a]; proof=".definedConditional "~name(q.a)~" "~name(q.b)~" "~name(q.c); break;
 				case BindingRule.trans:proof=".trans "~proofName(p.left)~" "~proofName(p.right); break;
 				case BindingRule.beta:proof=".beta "~name(nodes[n.a].a)~" "~name(n.b); break;
 				case BindingRule.seqScalar:proof=".seqScalar n"~to!string(nodes[n.a].data)~" "~name(n.b)~" (fun _ => ⟨_, rfl⟩)"; break;
@@ -3171,6 +3219,7 @@ final class Bindings{
 						auto q=nodes[id],left=d.path[depth]==0?wrap(q.a,depth+1):"rfl";
 						if(q.b==uint.max) return "(congrArg "~valueOperation(q)~" "~left~")";
 						auto right=d.path[depth]==1?wrap(q.b,depth+1):"rfl";
+						if(q.op==BoundOp.conditional) return "(Binding.conditional_congr "~left~" "~right~" "~(d.path[depth]==2?wrap(q.c,depth+1):"rfl")~")";
 						return "(congrArg₂ "~valueOperation(q)~" "~left~" "~right~")";
 					}
 					proof=(n.op==BoundOp.lambda?".lamPointwise":".setPointwise")~" (fun ξ ρ x => "~wrap(n.a,0)~")"; break;
@@ -3183,6 +3232,7 @@ final class Bindings{
 					proof=p.rule==BindingRule.scalarDomain?".scalarDomain ":".scalarHolds ";
 					proof~="n"~to!string(d.input.id)~" n"~to!string(d.result.output.id)~" QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct"; break;
 				case BindingRule.congr:
+					if(n.op==BoundOp.conditional){ proof=".conditional "~proofName(p.left)~" "~proofName(p.right)~" "~proofName(p.extra); break; }
 					if(n.op==BoundOp.fixed){ auto ty=leanType(types[n.type]); proof=".unary (a := .arrow "~ty~" "~ty~") (b := "~ty~") Recursion.fixedValue (.lam "~proofName(p.left)~")"; break; }
 					auto generic=n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.equal||n.op==BoundOp.typeEq||n.op==BoundOp.primitive||n.op==BoundOp.member||n.op==BoundOp.subset||n.op==BoundOp.domain||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.guard||n.op==BoundOp.pair||n.op==BoundOp.vectorCons||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor;
 					auto op=generic?(n.b==uint.max?"unary":"binary"):

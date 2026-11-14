@@ -135,7 +135,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("trig-magnitudes",54),("inverse-symmetry",48),("zero-root-spectra",30),("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",41),("integer-spectra",23),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("nilpotent-spectra",30),("cube-zero-spectra",33),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",26),("product-recursion",31),("ranked-domains",12),("real-countdown",33)]:
+	for group,count in [("trig-magnitudes",54),("inverse-symmetry",48),("zero-root-spectra",30),("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",41),("integer-spectra",23),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("nilpotent-spectra",30),("cube-zero-spectra",33),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",26),("product-recursion",31),("polymorphic-conditionals",34),("ranked-domains",12),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
