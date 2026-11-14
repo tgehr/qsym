@@ -1664,3 +1664,14 @@ rewrite natural_nonzero_lower_cover(x:ℕ,y:ℕ):(nonzeroN(x)∧y≤x)∨x≤y�
 rewrite natural_lower_nonzero_cover(x:ℕ,y:ℕ):x≤y∨(nonzeroN(x)∧y≤x)⇒true when defined(y);
 rewrite natural_nonzero_upper_cover(x:ℕ,y:ℕ):nonzeroN(x)∨x≤y⇒true when defined(y);
 rewrite natural_upper_nonzero_cover(x:ℕ,y:ℕ):x≤y∨nonzeroN(x)⇒true when defined(y);
+
+rewrite complex_atanh_neg(z:ℂ):catanh(-z)⇒-catanh(z);
+rewrite complex_atan_neg(z:ℂ):catan(-z)⇒-catan(z);
+rewrite complex_atanh_conj_im(z:ℂ):conj(catanh(z))⇒catanh(conj(z)) when cimag(z)≠0;
+rewrite complex_atanh_conj_re(z:ℂ):conj(catanh(z))⇒catanh(conj(z)) when -1<creal(z),creal(z)<1;
+rewrite complex_atan_conj_re(z:ℂ):conj(catan(z))⇒catan(conj(z)) when creal(z)≠0;
+rewrite complex_atan_conj_im(z:ℂ):conj(catan(z))⇒catan(conj(z)) when -1<cimag(z),cimag(z)<1;
+rewrite complex_atanh_negative_real_literal(z:ℂ):catanh(z)⇒-catanh(-z) when literal(z),creal(z)<0;
+rewrite complex_atan_negative_real_literal(z:ℂ):catan(z)⇒-catan(-z) when literal(z),creal(z)<0;
+rewrite complex_atanh_negative_imaginary_literal(z:ℂ):catanh(z)⇒-catanh(-z) when literal(z),creal(z)=0,cimag(z)<0;
+rewrite complex_atan_negative_imaginary_literal(z:ℂ):catan(z)⇒-catan(-z) when literal(z),creal(z)=0,cimag(z)<0;

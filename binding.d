@@ -45,7 +45,7 @@ private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; 
 private struct DomainLeaf{ uint node; Term value; Result domain; }
 private struct DomainRank{ uint source,variable; Result result,lower,upper; DomainLeaf[] leaves; Result[] iterations; Sort sort; Term slope,bound,step; }
 private struct SpectralFact{ Term input; Result domain,value; }
-private struct SpectralSolution{ uint source,target,size; bool diagonal; Term[] matrix,vector; Term first,second,minus; SpectralFact[] parameters,checks; uint split; uint[4] blocks; bool repeated,nilpotent,cubeZero; }
+private struct SpectralSolution{ uint source,target,size; bool diagonal; Term[] matrix,vector; Term first,second,minus; SpectralFact[] parameters,checks; uint split; uint[4] blocks; bool repeated,nilpotent,cubeZero,zeroRoot; Term[] roots,components; }
 struct BindingResult{
 	BoundTerm input,output;
 	bool exhausted;
@@ -835,7 +835,19 @@ final class Bindings{
 			if(!solution.split&&!solution.cubeZero){
 				if(size>3||sort==Sort.natural||sort==Sort.integer) return BoundTerm.init;
 				foreach(v;solution.matrix){ Number number; if(!literalNumber(v,number)) return BoundTerm.init; }
-				if(size==3) foreach(i;[2,5,6,7]){ Number number; literalNumber(solution.matrix[i],number); if(!number.zero) return BoundTerm.init; }
+				if(size==3){
+					bool block=true;
+					foreach(i;[2,5,6,7]){ Number number; literalNumber(solution.matrix[i],number); if(!number.zero) block=false; }
+					if(!block){
+						Number[] a; foreach(v;solution.matrix){ Number number; literalNumber(v,number); a~=number; }
+						auto determinant=a[0]*(a[4]*a[8]-a[5]*a[7])-a[1]*(a[3]*a[8]-a[5]*a[6])+a[2]*(a[3]*a[7]-a[4]*a[6]);
+						auto trace=a[0]+a[4]+a[8],pairs=a[0]*a[4]+a[0]*a[8]+a[4]*a[8]-a[1]*a[3]-a[2]*a[6]-a[5]*a[7];
+						if(!determinant.zero||pairs.zero||(trace*trace-Number(4)*pairs).zero) return BoundTerm.init;
+						// Literal inputs bound coefficient normalization; every candidate is certified below.
+						foreach(v;solution.vector){ Number number; if(!literalNumber(v,number)) return BoundTerm.init; }
+						solution.zeroRoot=true;
+					}
+				}
 			}
 		}
 		auto options=Options(DensityMode.preserve,true);
@@ -876,7 +888,35 @@ final class Bindings{
 		}
 		Term step(Term[] vector,uint i){ return stepWith(solution.matrix,vector,i); }
 		Term[] stepVector(Term[] vector){ Term[] result; foreach(i;0..3) result~=step(vector,i); return result; }
-		if(solution.cubeZero){
+		if(solution.zeroRoot){
+			Number[] a; foreach(v;solution.matrix){ Number number; literalNumber(v,number); a~=number; }
+			auto trace=a[0]+a[4]+a[8],pairs=a[0]*a[4]+a[0]*a[8]+a[4]*a[8]-a[1]*a[3]-a[2]*a[6]-a[5]*a[7];
+			auto rs=sort==Sort.complex?Sort.complex:Sort.real_;
+			auto root=simplify(arena,arena.call(sort==Sort.complex?Builtin.sqrtC:Builtin.sqrtR,[arena.number(trace*trace-Number(4)*pairs,rs)]),options);
+			if(root.exhausted||(sort==Sort.rational||sort==Sort.complex)&&!arena.isNumber(root.output)) return BoundTerm.init;
+			// Irrational or nonreal complex components currently exceed scalar normalization budgets.
+			if(sort==Sort.complex){
+				if(!arena.number(root.output).im.zero) return BoundTerm.init;
+				foreach(v;solution.matrix~solution.vector){ Number value; if(!literalNumber(v,value)||!value.im.zero) return BoundTerm.init; }
+			}
+			auto delta=arena.isNumber(root.output)?arena.number(arena.number(root.output),sort):arena.castTo(root.output,sort),half=arena.number(Number(1)/Number(2),sort);
+			Term compact(Term x){ auto r=simplify(arena,x,options); return r.exhausted?Term.init:arena.castTo(r.output,sort); }
+			auto r=compact(arena.mul(arena.add(arena.number(trace,sort),delta),half)),s=compact(arena.mul(difference(arena.number(trace,sort),delta),half));
+			if(r==Term.init||s==Term.init) return BoundTerm.init;
+			solution.roots=[zero,r,s]; solution.minus=neg;
+			auto first=stepVector(solution.vector),second=stepVector(first); Term[][3] parts;
+			foreach(i;0..3){
+				auto cr=compact(arena.mul(difference(second[i],arena.mul(s,first[i],true)),arena.inv(arena.mul(r,difference(r,s),true)),true));
+				auto cs=compact(arena.mul(difference(arena.mul(r,first[i],true),second[i]),arena.inv(arena.mul(s,difference(r,s),true)),true));
+				if(cr==Term.init||cs==Term.init) return BoundTerm.init;
+				auto c0=compact(difference(difference(solution.vector[i],cr),cs)); if(c0==Term.init) return BoundTerm.init;
+				parts[0]~=c0; parts[1]~=cr; parts[2]~=cs;
+			}
+			foreach(part;parts) solution.components~=part;
+			foreach(v;solution.roots~solution.components~[neg]) if(!parameter(v)) return BoundTerm.init;
+			foreach(i;0..3) if(!check(difference(arena.add(arena.add(parts[0][i],parts[1][i],true),parts[2][i],true),solution.vector[i]),true)) return BoundTerm.init;
+			foreach(j;0..3) foreach(i;0..3) if(!check(difference(step(parts[j],i),arena.mul(solution.roots[j],parts[j][i],true)),true)) return BoundTerm.init;
+		}else if(solution.cubeZero){
 			// Numeric detection is only a candidate filter; certify all nine entries of A³.
 			foreach(i;0..3) foreach(j;0..3){
 				Term[] column; foreach(k;0..3) column~=solution.matrix[k*3+j];
@@ -933,7 +973,10 @@ final class Bindings{
 		BoundTerm[] output;
 		foreach(i;0..size){
 			Term value;
-			if(solution.cubeZero){
+			if(solution.zeroRoot){
+				Term part(uint j){ return arena.mul(arena.call(power,[solution.roots[j],argument]),solution.components[j*3+i],true); }
+				value=arena.add(arena.add(part(0),part(1),true),part(2),true);
+			}else if(solution.cubeZero){
 				Term atIndex(uint k){ auto literal=arena.natural_(k); return arena.and_(arena.le(literal,argument),arena.le(argument,literal)); }
 				value=arena.add(arena.add(arena.mask(atIndex(0),solution.vector[i]),arena.mask(atIndex(1),firstValues[i]),true),arena.mask(atIndex(2),secondValues[i]),true);
 			}else if(solution.diagonal||i==2) value=arena.mul(arena.call(power,[solution.matrix[i*size+i],argument]),solution.vector[i],true);
@@ -972,6 +1015,13 @@ final class Bindings{
 		if(!entries(p.a,2)) return BoundTerm.init;
 		Number[] values; foreach(c;coefficients){ Number v; if(!literalNumber(c,v)) return BoundTerm.init; values~=v; }
 		auto delta=(values[0]-values[size+1])*(values[0]-values[size+1])+Number(4)*values[1]*values[size];
+		if(size==3){
+			bool block=true; foreach(i;[2,5,6,7]) if(!values[i].zero) block=false;
+			if(!block){
+				auto a=values,trace=a[0]+a[4]+a[8],pairs=a[0]*a[4]+a[0]*a[8]+a[4]*a[8]-a[1]*a[3]-a[2]*a[6]-a[5]*a[7];
+				delta=trace*trace-Number(4)*pairs;
+			}
+		}
 		auto target=delta.re<Rational(0)?Sort.complex:Sort.real_,leaf=scalarType(target),vec=pool.vector(leaf,size),mat=pool.vector(vec,size);
 		BoundTerm lift(uint id,uint depth){
 			auto v=nodes[id];
@@ -2029,7 +2079,9 @@ final class Bindings{
 			auto units=" "~tensorLiteral(element,0)~" "~tensorLiteral(element,1)~" "~hz~" "~ho;
 			string raw(Term t){ return "(n"~to!string(t.id)~".eval ξ)"; }
 			string val(Term t){ Number v; return !s.cubeZero&&literalNumber(t,v)&&(v.zero||v.one)?"("~(v.zero?"0":"1")~" : "~"("~leanType(element)~" : Binding.Ty).denote"~")":"("~raw(t)~".getD 0)"; }
+			string[uint] totalProofs;
 			string total(Term t){
+				if(s.zeroRoot) if(auto old=t.id in totalProofs) return *old;
 				foreach(j,f;s.parameters) if(f.input==t){
 					auto id="spectral"~tag~"_"~to!string(j),v=val(t),h="Spectral.some_of_domain 0 "~raw(t)~" (QSym.Spectral"~tag~"_0_"~to!string(j)~".DomainCertificate.domain_correct ξ)";
 					Number number;
@@ -2037,6 +2089,11 @@ final class Bindings{
 						auto literal=arena.number(number,sort),last=sort==Sort.real_||sort==Sort.complex?"AffineRecurrence."~(number.zero?"zero":"one")~suffix:sort==Sort.rational?"(congrArg some (div_one ("~(number.zero?"0":"1")~" : ℚ)))":"rfl";
 						h="Eq.trans (LinearRecurrence.known (QSym.Spectral"~tag~"_0_"~to!string(j)~".DomainCertificate.domain_correct ξ) (Numeric.sound ξ n"~to!string(t.id)~" n"~to!string(literal.id)~" (of_decide_eq_true rfl))) "~last;
 						if(sort==Sort.rational) h=arena.isNumber(t)?last:"Numeric.calculate_sound ξ n"~to!string(t.id)~" ("~(number.zero?"0":"1")~" : ℚ) rfl";
+					}
+					if(s.zeroRoot){
+						auto name="spectralTotal"~tag~"_"~to!string(j),reference="("~name~" ξ)";
+						code~="theorem "~name~" (ξ : Env) : "~raw(t)~" = some "~v~" := "~h~"\n";
+						totalProofs[t.id]=reference; return reference;
 					}
 					return "(show "~raw(t)~" = some "~v~" from "~h~")";
 				}
@@ -2051,6 +2108,7 @@ final class Bindings{
 			}
 			auto mat="("~name(powerNode.a)~".eval ξ ρ)",vec="("~name(source.b)~".eval ξ ρ)",exponent="("~name(powerNode.b)~".eval ξ ρ)";
 			auto hmat=constants(powerNode.a),hv=constants(source.b); string proof;
+			auto spectralArgs=dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(source.context)~")";
 			if(s.split){
 				string[] matrices,vectors; auto left=s.split,right=s.size-left;
 				foreach(part;0..2){
@@ -2070,6 +2128,47 @@ final class Bindings{
 				proof~=" "~hmat~" "~hv;
 				foreach(q;s.blocks) proof~=" "~constants(q);
 				proof~=" "~exponent;
+			}else if(s.zeroRoot){
+				code~="attribute [local irreducible] Value.add Value.mul\n";
+				string[] av,ar,at_,vv,vr,vt,rv,rr,rt,cv,cr,ct;
+				foreach(i;0..3){
+					string[] vals,raws,totals,cvals,craws,ctotals;
+					foreach(j;0..3){
+						auto a=s.matrix[i*3+j],c=s.components[i*3+j];
+						vals~=val(a); raws~=raw(a); totals~=total(a);
+						cvals~=val(c); craws~=raw(c); ctotals~=total(c);
+					}
+					av~=vector(vals); ar~=vector(raws); at_~=cases(totals);
+					cv~=vector(cvals); cr~=vector(craws); ct~=cases(ctotals);
+					vv~=val(s.vector[i]); vr~=raw(s.vector[i]); vt~=total(s.vector[i]);
+					rv~=val(s.roots[i]); rr~=raw(s.roots[i]); rt~=total(s.roots[i]);
+				}
+				auto scalar="("~leanType(element)~" : Binding.Ty).denote";
+				auto rawMatrix="("~vector(ar)~" : Fin 3 → Fin 3 → Option ("~scalar~"))";
+				auto hn=sort==Sort.real_||sort==Sort.complex?"Spectral.minus"~suffix:"(congrArg some (div_one (-1 : ℚ)))";
+				string checked(uint k){
+					auto f=s.checks[k],prefix="QSym.Spectral"~tag~"_1_"~to!string(k),out_=arena.castTo(f.value.output,sort),zero=arena.number(Number(0),sort);
+					auto hz=sort==Sort.real_||sort==Sort.complex?"AffineRecurrence.zero"~suffix:"(congrArg some (div_one (0 : ℚ)))";
+					return "Spectral.checked_eq "~add~" "~mul~" "~ha~" "~hm~" "~raw(s.minus)~" _ _ "~hn~" (Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct ξ) (Value.Refines.trans ("~prefix~".ValueCertificate.refinement ξ) (Numeric.sound ξ n"~to!string(out_.id)~" n"~to!string(zero.id)~" (of_decide_eq_true rfl)))) "~hz~")";
+				}
+				string[] sums,eigen;
+				foreach(i;0..3){
+					auto id="spectralRoot"~tag~"_"~to!string(i);
+					code~="theorem "~id~" (ξ : Env) : "~add~" ("~add~" "~raw(s.components[i])~" "~raw(s.components[3+i])~") "~raw(s.components[6+i])~" = "~vr[i]~" := "~checked(i)~"\n";
+					sums~="("~id~" ξ)";
+				}
+				foreach(j;0..3){
+					string[] row;
+					foreach(i;0..3){
+						auto k=3+j*3+i,id="spectralRoot"~tag~"_"~to!string(k);
+						code~="theorem "~id~" (ξ : Env) : CubeZeroSpectra.step "~add~" "~mul~" "~rawMatrix~" "~cr[j]~" "~to!string(i)~" = "~mul~" "~rr[j]~" "~raw(s.components[j*3+i])~" := "~checked(k)~"\n";
+						row~="("~id~" ξ)";
+					}
+					eigen~=cases(row);
+				}
+				code~="theorem spectralMatrix"~tag~spectralArgs~" : "~mat~" = some "~vector(av)~" := "~hmat~"\n";
+				code~="theorem spectralVector"~tag~spectralArgs~" : "~vec~" = some "~vector(vv)~" := "~hv~"\n";
+				proof="ZeroRootSpectra.three_value "~add~" "~mul~" "~pow~" "~ha~" "~hm~" "~hp~units~" "~vector(av)~" "~vector(vv)~" "~vector(rv)~" "~vector(cv)~" "~vector(ar)~" "~vector(vr)~" "~vector(rr)~" "~vector(cr)~" "~cases(at_)~" "~cases(vt)~" "~cases(rt)~" "~cases(ct)~" "~cases(sums)~" "~cases(eigen)~" "~mat~" "~vec~" (spectralMatrix"~tag~dimArg~" γ ξ ρ) (spectralVector"~tag~dimArg~" γ ξ ρ) "~exponent;
 			}else if(s.cubeZero){
 				code~="attribute [local irreducible] Value.add Value.mul\n";
 				string[] matrixValues,matrixRaw,matrixTotal,cube,vectorValues,vectorRaw,vectorTotal,zeroProofs;
@@ -2144,9 +2243,8 @@ final class Bindings{
 					proof=(s.repeated?"RepeatedSpectra.":"Spectral.")~(s.size==2?"two_value":"block_value")~" "~add~" "~mul~" "~inv~" "~pow~cast_~" "~ha~" "~hm~" "~hi~" "~hp~hc~units~args~raws~" "~raw(s.minus)~totals~" "~hn~" "~check(0)~" "~check(1)~" (QSym.Spectral"~tag~"_1_2.DomainCertificate.domain_correct ξ) "~mat~" "~vec~" "~hmat~" "~hv~" "~exponent;
 				}
 			}
-			auto args=dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(source.context)~")";
-			code~="theorem spectral"~tag~args~" : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := "~proof~"\n";
-			if(s.cubeZero) code~="attribute [local semireducible] Value.add Value.mul\n";
+			code~="theorem spectral"~tag~spectralArgs~" : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := "~proof~"\n";
+			if(s.cubeZero||s.zeroRoot) code~="attribute [local semireducible] Value.add Value.mul\n";
 		}
 		string proofName(uint id){ return "(p"~to!string(id)~dimArg~" γ)"; }
 		foreach(i,p;result.proofs){

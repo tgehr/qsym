@@ -52,6 +52,8 @@ test: build/qsym build/edit-motion-tests
 	./build/argument-composition-tests build/argument-compositions
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/atanh_compositions.d -of=build/atanh-composition-tests
 	./build/atanh-composition-tests build/atanh-compositions
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/inverse_symmetry.d -of=build/inverse-symmetry-tests
+	./build/inverse-symmetry-tests build/inverse-symmetry
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/powers.d -of=build/power-tests
 	./build/power-tests --DRT-testmode=run-main build/powers
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functions.d -of=build/function-tests
@@ -156,6 +158,8 @@ test: build/qsym build/edit-motion-tests
 	./build/nilpotent-spectra-tests build/nilpotent-spectra
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/cube_zero_spectra.d -of=build/cube-zero-spectra-tests
 	./build/cube-zero-spectra-tests build/cube-zero-spectra
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/zero_root_spectra.d -of=build/zero-root-spectra-tests
+	./build/zero-root-spectra-tests build/zero-root-spectra
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/cutoff.d -of=build/cutoff-tests
 	./build/cutoff-tests --DRT-testmode=run-main build/cutoff
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/tensors.d -of=build/tensor-tests

@@ -23,6 +23,7 @@ import QSym.Spectral
 import QSym.RepeatedSpectra
 import QSym.NilpotentSpectra
 import QSym.CubeZeroSpectra
+import QSym.ZeroRootSpectra
 import QSym.IntegerSpectra
 import QSym.Dependent
 import QSym.SetFixed

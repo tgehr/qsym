@@ -11787,4 +11787,86 @@ theorem r_natural_upper_nonzero_cover (v_x : Option (Ty.denote .natural)) (v_y :
 
 #qsym_check_axioms r_natural_upper_nonzero_cover
 
+theorem r_complex_atanh_neg (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.atanhC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.atanhC.apply v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atanh_neg
+
+theorem r_complex_atan_neg (v_z : Option (Ty.denote .complex)) :
+    Value.Refines (Functions.atanC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z)) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.atanC.apply v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atan_neg
+
+theorem r_complex_atanh_conj_im (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.nonzero (Functions.imC.apply v_z)) (some true)) :
+    Value.Refines (Value.conj (Functions.atanhC.apply v_z)) (Functions.atanhC.apply (Value.conj v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atanh_conj_im
+
+theorem r_complex_atanh_conj_re (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.lt (some (((-1) : Int) : ℝ)) (Functions.reC.apply v_z)) (some true))
+    (hp1 : Value.Refines (Value.lt (Functions.reC.apply v_z) (some (((1) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.conj (Functions.atanhC.apply v_z)) (Functions.atanhC.apply (Value.conj v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atanh_conj_re
+
+theorem r_complex_atan_conj_re (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.nonzero (Functions.reC.apply v_z)) (some true)) :
+    Value.Refines (Value.conj (Functions.atanC.apply v_z)) (Functions.atanC.apply (Value.conj v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atan_conj_re
+
+theorem r_complex_atan_conj_im (v_z : Option (Ty.denote .complex))
+    (hp0 : Value.Refines (Value.lt (some (((-1) : Int) : ℝ)) (Functions.imC.apply v_z)) (some true))
+    (hp1 : Value.Refines (Value.lt (Functions.imC.apply v_z) (some (((1) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.conj (Functions.atanC.apply v_z)) (Functions.atanC.apply (Value.conj v_z)) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atan_conj_im
+
+theorem r_complex_atanh_negative_real_literal (v_z : Option (Ty.denote .complex))
+    (hp1 : Value.Refines (Value.lt (Functions.reC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.atanhC.apply v_z) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.atanhC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atanh_negative_real_literal
+
+theorem r_complex_atan_negative_real_literal (v_z : Option (Ty.denote .complex))
+    (hp1 : Value.Refines (Value.lt (Functions.reC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.atanC.apply v_z) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.atanC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atan_negative_real_literal
+
+theorem r_complex_atanh_negative_imaginary_literal (v_z : Option (Ty.denote .complex))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Functions.reC.apply v_z))) (some true))
+    (hp2 : Value.Refines (Value.lt (Functions.imC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.atanhC.apply v_z) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.atanhC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atanh_negative_imaginary_literal
+
+theorem r_complex_atan_negative_imaginary_literal (v_z : Option (Ty.denote .complex))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Functions.reC.apply v_z))) (some true))
+    (hp2 : Value.Refines (Value.lt (Functions.imC.apply v_z) (some (((0) : Int) : ℝ))) (some true)) :
+    Value.Refines (Functions.atanC.apply v_z) (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) (Functions.atanC.apply (Value.mul (some ((((-1) : Int) : ℂ) + (((0) : Int) : ℂ) * Complex.I)) v_z))) := qsym_cached% by
+  cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_complex_atan_negative_imaginary_literal
+
 end QSym.Generated

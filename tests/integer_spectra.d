@@ -17,6 +17,7 @@ private Case[] cases(){ return [
 	Case("IntegerBlock","λ(n:ℕ).(((0:ℤ),-1,0),(1,0,0),(0,0,-2))^n@(1,0,3)","","",true),
 	Case("NaturalRecurrence","μ(f:ℕ→ℕ).λ(n:ℕ).if n≤1 then n else f(n sub 1)+f(n sub 2)","","",true),
 	Case("IntegerRecurrence","μ(f:ℕ→ℤ).λ(n:ℕ).if n<2 then n else f(n sub 1)+f(n sub 2)","","",true),
+	Case("NaturalDirectSum","λ(n:ℕ).((0,1,0,0),(1,1,0,0),(0,0,1,1),(0,0,0,1))^n@(0,1,0,1)","","",true),
 	Case("FreeExponent","((0,1),(1,1))^n@(0,1)","","n:ℕ",true),
 	Case("ZeroEigenvalue","λ(n:ℕ).((0,1),(0,2))^n@(3,4)","","",true),
 	Case("NaturalZero","((0,1),(1,1))^0@(0,1)","(0,1)"),
@@ -58,10 +59,9 @@ int main(string[] args){
 		"λ(n:ℕ).((0,1),(1,1))^(n sub 1)@(0,1)",
 		"λ(n:ℕ).((0,1),(1,1))^n@(a,b)",
 		"λ(n:ℕ).(((0:ℤ),-1),(1,0))^n@(i,j)",
-		"λ(n:ℕ).((0,1,1),(1,1,0),(0,0,1))^n@(0,1,1)",
-		"λ(n:ℕ).((0,1,0,0),(1,1,0,0),(0,0,1,1),(0,0,0,1))^n@(0,1,0,1)"]){
-		auto owner=Session.open(); FunctionSyntax s; s.declare("a:ℕ,b:ℕ,i:ℤ,j:ℤ"); auto r=s.run(owner.arena,source);
+		"λ(n:ℕ).((0,1,1),(1,1,0),(0,0,1))^n@(0,1,1)"]){
+		auto owner=Session.open(); FunctionSyntax s; s.declare("a:ℕ,b:ℕ,i:ℤ,j:ℤ"); auto r=s.run(owner.arena,source,[],Options(DensityMode.preserve,true));
 		enforce(!r.exhausted&&s.exportCertificate(owner.arena,r).indexOf("IntegerSpectra.lift")<0,"unsupported spectrum replaced: "~source);
 	}
-	writeln(cases().length," integer spectral certificates; 7 unsupported cases retained"); return 0;
+	writeln(cases().length," integer spectral certificates; 6 unsupported cases retained"); return 0;
 }

@@ -24,6 +24,7 @@ import QSym.RadicalRecovery
 import QSym.ArgumentRotation
 import QSym.NaturalFloor
 import QSym.AtanhCompositions
+import QSym.InverseSymmetry
 import QSym.ZeroPowers
 
 namespace QSym
@@ -240,6 +241,15 @@ elab "qsym_inverse_goal" : tactic => do
     throwError "not an inverse-function goal"
 
 macro "qsym_inverse" : tactic => `(tactic| (qsym_inverse_goal; first
+  | (simp (config := {failIfUnchanged := false}) only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, one_mul, zero_add, add_zero] at *; first
+    | exact Value.refines_atanh_neg _
+    | exact Value.refines_atan_neg _
+    | exact Value.refines_atanh_negative_literal _
+    | exact Value.refines_atan_negative_literal _
+    | (apply Value.refines_atanh_conj_im; assumption)
+    | (apply Value.refines_atanh_conj_re <;> assumption)
+    | (apply Value.refines_atan_conj_re; assumption)
+    | (apply Value.refines_atan_conj_im <;> assumption))
   | exact Value.refines_inverse Functions.coshR Functions.acoshR _ (fun x h _ => Inverse.real_cosh_acosh x h)
   | exact Value.refines_inverse Functions.tanhR Functions.atanhR _ (fun x h _ => Inverse.real_tanh_atanh x h.1 h.2)
   | exact Value.refines_inverse Functions.atanhR Functions.tanhR _ (fun x _ h => Inverse.real_atanh_tanh x h)
