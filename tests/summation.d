@@ -9,6 +9,27 @@ import std.conv:to;
 @safe:
 private struct Case { string name,input,expected,proof; }
 private Case[] cases(){ return [
+ Case("RationalSmallCount","∑(i:ℕ). [i<0.1]","1","SummationBounds.rational_lt"),
+ Case("RationalCount","∑(i:ℕ). [i<1.1]","2","SummationBounds.rational_lt"),
+ Case("RationalInclusiveCount","∑(i:ℕ). [i≤1.1]","2","SummationBounds.rational_le"),
+ Case("FreshCount","∑(i:ℕ). [i<n]","floorN(ceil(n))","SummationBounds.roundN_lt"),
+ Case("FreshLinear","∑(i:ℕ). [i<n]·i","floorN(floorN(ceil(n))*(1/2*floorN(ceil(n))-1/2))","SummationBounds.roundN_lt"),
+ Case("FreshInclusive","∑(i:ℕ). [i≤n]·i","floorN(floorN(floor(n)+1)*(1/2*floorN(floor(n)+1)-1/2))","SummationBounds.roundN_le"),
+ Case("RealNaturalInterval","∑(i:ℕ). [1.2≤i∧i<4.1]·i","9"),
+ Case("RealIntegerInterval","∑(i:ℤ). [-2.5≤i∧i<3.2]·i","3"),
+ Case("NegativeRealBound","∑(i:ℕ). [i< -0.2]·(1/0)","0"),
+ Case("RealOpenClosed","∑(i:ℤ). [-2.5<i∧i≤3.2]·i","3"),
+ Case("NaturalLiteralSelector","∑(i:ℕ). [i=2]·sin(i)","sin(2)","SummationAlgebra.mask_eq_offset"),
+ Case("NaturalAffineSelector","∑(i:ℕ). [2*i=4]·sin(i)","sin(2)"),
+ Case("EmptySelector","∑(i:ℕ). [i+2=0]·(1/0)","0"),
+ Case("FiniteExcludedIndex","∑(i:ℕ). [i<10]·[i≠2]·(i:ℝ)","43","SummationAlgebra.range_add"),
+ Case("ExcludedPole","∑(i:ℕ). [i<5]·[i≠2]·1/(i-2)","0"),
+ Case("IntersectedBounds","∑(i:ℕ). [i<n]·[i<m]·i","[n≠0]·floorN(floorN(min(n,m))*(1/2*floorN(min(n,m))-1/2))","SummationAlgebra.range_mask_lt"),
+ Case("ShiftedRange","∑(i:ℕ). [i<n]·[3≤i]·i","[n≠0]·floorN(floorN(n-3)*(1/2*floorN(n-3)+5/2))","SummationAlgebra.range_mask_ge"),
+ Case("AffineExponent","∑(i:ℕ). (1/2)^(2*i+3)","1/6","Summation.tail_solution"),
+ Case("ShiftedTail","∑(i:ℕ). [3≤i]·(1/2)^i","1/4","Summation.tailN_value"),
+ Case("LowerIntegerReindex","∑(i:ℤ). [0≤i]·(1/2)^i","∑(i:ℕ). powQZ(1/2,i)","SummationTails.lowerZ"),
+ Case("UpperIntegerReindex","∑(i:ℤ). [i<0]·2^i","∑(i:ℕ). 2^(-i-1)","SummationTails.upperZ"),
  Case("Example","∑(i:ℕ). [i<n]·i","floorN(n*(1/2*n-1/2))","Summation.range_solution_partial"),
  Case("Ascii","sum(i:ℕ). [i<5]*i","10"),
  Case("FiniteInclusive","∑(i:ℕ). [i≤5]·i","15"),
@@ -71,7 +92,7 @@ int main(string[] args){
  enforce(args.length==2); mkdirRecurse(args[1]);
  uint failed;
  foreach(c;cases()) try{
-  auto session=Session.open(),a=session.arena; FunctionSyntax s; s.declare("n:ℕ,m:ℕ,q:ℝ,a:ℤ,b:ℤ");
+  auto session=Session.open(),a=session.arena; FunctionSyntax s; if(c.name.indexOf("Fresh")!=0) s.declare("n:ℕ,m:ℕ,q:ℝ,a:ℤ,b:ℤ");
   auto r=s.run(a,c.input,[],Options(DensityMode.preserve,true)),expected=s.run(a,c.expected);
   auto text=s.format(a,r),want=s.format(a,expected);
   bool equivalent(FunctionResult x,FunctionResult y){
@@ -121,9 +142,27 @@ int main(string[] args){
    enforce(!actual.exhausted&&(actual.scalarOnly||actual.lowered)&&a.isNumber(actual.scalar.output)&&a.number(actual.scalar.output)==Number(expected),"finite sum disagrees with independent iteration: "~source);
   }
  }
+ struct RealBound {string input;uint strict,inclusive;}
+ foreach(bound;[RealBound("-2.1",0,0),RealBound("-0.1",0,0),RealBound("0",0,1),RealBound("0.1",1,1),RealBound("1",1,2),RealBound("1.1",2,2),RealBound("2",2,3),RealBound("2.9",3,3),RealBound("3",3,4)]) foreach(inclusive;0..2) foreach(linear;0..2){
+  auto owner=Session.open();FunctionSyntax s;auto a=owner.arena;
+  auto source="∑(i:ℕ). [i"~(inclusive?"≤":"<")~bound.input~"]"~(linear?"·i":"");
+  auto r=s.run(a,source),count=inclusive?bound.inclusive:bound.strict;
+  auto expected=linear?count*(count?count-1:0)/2:count;
+  enforce(!r.exhausted&&(r.scalarOnly||r.lowered)&&a.isNumber(r.scalar.output)&&a.number(r.scalar.output)==Number(expected),"rounded count disagrees with enumeration: "~source);
+ }
+ foreach(source;["λ(n:ℕ). ∑(i:ℕ). [i<n]·[i≠2]·i","λ(n:ℕ). ∑(i:ℕ). [i<n]·[i≠2]·(i:ℝ)"]){
+  auto session=Session.open();FunctionSyntax s;auto a=session.arena;
+  auto closed=s.run(a,source),formula=s.format(a,closed);
+  enforce(!closed.exhausted&&formula.indexOf("∑(")<0,"excluded-index formula missing");
+  foreach(count;0..13){
+   uint expected;foreach(i;0..count)if(i!=2)expected+=i;
+   auto r=s.run(a,"("~formula~")("~to!string(count)~")");
+   enforce(!r.exhausted&&(r.scalarOnly||r.lowered)&&a.isNumber(r.scalar.output)&&a.number(r.scalar.output)==Number(expected),"excluded-index formula disagrees with iteration");
+  }
+ }
  auto session=Session.open();FunctionSyntax s;auto r=s.run(session.arena,"∑(i:ℕ). [i<5]·i",[],Options(DensityMode.preserve,true));
  auto limited=r.bindings.normalize(r.reduction.input,0,true);
  enforce(limited.exhausted&&limited.output==limited.input,"sum budget ignored");
  write(buildPath(args[1],"Budget.lean"),r.bindings.exportLean(limited));
- writeln(cases().length+1," summation certificates; 100 independent numeric checks; 3 invalid binders rejected");return 0;
+ writeln(cases().length+1," summation certificates; 187 independent numeric checks; 3 invalid binders rejected");return 0;
 }

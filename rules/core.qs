@@ -1720,3 +1720,14 @@ rewrite complex_norm_sinh(z:ℂ):cabs(csinh(z))⇒sqrt(sinh(creal(z))^2+sin(cima
 rewrite complex_norm_cosh(z:ℂ):cabs(ccosh(z))⇒sqrt(sinh(creal(z))^2+cos(cimag(z))^2);
 rewrite complex_norm_tan(z:ℂ):cabs(ctan(z))⇒cabs(csin(z))/cabs(ccos(z));
 rewrite complex_norm_tanh(z:ℂ):cabs(ctanh(z))⇒cabs(csinh(z))/cabs(ccosh(z));
+
+equation sum_add_power_NN(x:ℕ,m:ℕ,n:ℕ):powNN(x,m+n)≡powNN(x,m)*powNN(x,n);
+equation sum_mul_power_NN(x:ℕ,m:ℕ,n:ℕ):powNN(x,m*n)≡powNN(powNN(x,m),n);
+equation sum_add_power_ZN(x:ℤ,m:ℕ,n:ℕ):powZN(x,m+n)≡powZN(x,m)*powZN(x,n);
+equation sum_mul_power_ZN(x:ℤ,m:ℕ,n:ℕ):powZN(x,m*n)≡powZN(powZN(x,m),n);
+equation sum_add_power_QN(x:ℚ,m:ℕ,n:ℕ):powQN(x,m+n)≡powQN(x,m)*powQN(x,n);
+equation sum_mul_power_QN(x:ℚ,m:ℕ,n:ℕ):powQN(x,m*n)≡powQN(powQN(x,m),n);
+equation sum_add_power_RN(x:ℝ,m:ℕ,n:ℕ):powRN(x,m+n)≡powRN(x,m)*powRN(x,n);
+equation sum_mul_power_RN(x:ℝ,m:ℕ,n:ℕ):powRN(x,m*n)≡powRN(powRN(x,m),n);
+equation sum_add_power_CN(x:ℂ,m:ℕ,n:ℕ):powCN(x,m+n)≡powCN(x,m)*powCN(x,n);
+equation sum_mul_power_CN(x:ℂ,m:ℕ,n:ℕ):powCN(x,m*n)≡powCN(powCN(x,m),n);

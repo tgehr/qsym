@@ -79,14 +79,12 @@ package final class Embeddings{
 		auto p=d.congr(t,children,ctx),u=a.view(p.after);
 		if(u.op==Op.builtin&&u.value>=Builtin.powNN&&u.value<=Builtin.powCN){
 			auto exponent=a.viewChild(p.after,1),e=a.view(exponent);
-			if(e.op==Op.builtin&&e.value==Builtin.addN){
-				auto right=a.viewChild(exponent,1);
-				if(a.isNumber(right)&&a.number(right).one){
-					Law selected;
-					static foreach(suffix;["NN","ZN","QN","RN","CN"]) if(u.value==__traits(getMember,Builtin,"pow"~suffix)) selected=__traits(getMember,Law,"sum_shift_power_"~suffix);
-					auto step=d.rule(instantiate(a,selected,[a.viewChild(p.after,0),a.viewChild(exponent,0)]),[],ctx);
-					return d.trans(p,step,ctx);
-				}
+			if(e.op==Op.builtin&&(e.value==Builtin.addN||e.value==Builtin.mulN)){
+				Law selected;
+				static foreach(suffix;["NN","ZN","QN","RN","CN"]) if(u.value==__traits(getMember,Builtin,"pow"~suffix))
+					selected=e.value==Builtin.addN?__traits(getMember,Law,"sum_add_power_"~suffix):__traits(getMember,Law,"sum_mul_power_"~suffix);
+				auto step=d.rule(instantiate(a,selected,[a.viewChild(p.after,0),a.viewChild(exponent,0),a.viewChild(exponent,1)]),[],ctx);
+				return d.trans(d.trans(p,step,ctx),expand(step.after,ctx,depth+1),ctx);
 			}
 		}
 		if(!conversion(u)) return p;

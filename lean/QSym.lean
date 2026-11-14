@@ -30,5 +30,8 @@ import QSym.Dependent
 import QSym.SetFixed
 import QSym.MaskFunctions
 import QSym.Summation
+import QSym.SummationBounds
+import QSym.SummationAlgebra
+import QSym.SummationTails
 import QSym.SqrtBranches
 import QSym.SqrtProducts

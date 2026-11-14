@@ -357,6 +357,12 @@ string emitLean(Rule[] rules){
 			lean~="\n    (hp"~to!string(i)~" : "~(p.defined?"Value.Defined "~e:"Value.Refines "~e~" (some true)")~")";
 		}
 		lean~=" :\n    "~(r.equality?leanValue(r.lhs)~" = "~leanValue(r.rhs):"Value.Refines "~leanValue(r.lhs)~" "~leanValue(r.rhs))~" := qsym_cached% by\n";
+		// Apply these shared lemmas before splitting partial arguments. Splitting
+		// first makes elaboration repeatedly unfold the large affine predicate.
+		if(r.name=="natural_literal_affine_nonzero"||r.name=="integer_literal_affine_nonzero"){
+			lean~="  exact Value.refines_"~r.name~" v_a v_x v_b hp2\n\n#qsym_check_axioms "~ruleCode(r.name)~"\n\n";
+			continue;
+		}
 		string[] cases;
 		foreach(v;r.parameters) if(!v.natural) cases~="cases "~parameterCode(v.name);
 		if(cases.length) lean~="  "~cases.join(" <;> ")~"\n";

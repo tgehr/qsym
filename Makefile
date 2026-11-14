@@ -32,6 +32,8 @@ test-edit-motion: build/edit-motion-tests
 test: build/qsym build/edit-motion-tests
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/summation.d -of=build/summation-tests
 	./build/summation-tests build/summation
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/summation_tails.d -of=build/summation-tail-tests
+	./build/summation-tail-tests build/summation-tails
 	./build/edit-motion-tests
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/all.d -of=build/tests
 	./build/tests

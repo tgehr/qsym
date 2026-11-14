@@ -52,6 +52,26 @@ Term sumAntidifference(Arena a,Term input,Term index,ref SumPrimitive[] tail){
   if(n.op==Op.builtin&&n.value>=Builtin.powNN&&n.value<=Builtin.powCN){
    auto base=a.viewChild(t,0),exponent=a.viewChild(t,1);
    if(exponent==index&&!dependent(base)) return [Part(clean(a.castTo(base,sort)),[one])];
+   auto e=a.view(exponent);
+   if(!dependent(base)&&e.op==Op.builtin&&e.value==Builtin.addN){
+    auto left=a.viewChild(exponent,0),right=a.viewChild(exponent,1);
+    if(right==index){auto tmp=left;left=right;right=tmp;}
+    if(left==index&&!dependent(right)){
+     auto ratio=clean(a.castTo(base,sort)),power=sort==Sort.rational?Builtin.powQN:sort==Sort.real_?Builtin.powRN:Builtin.powCN;
+     return [Part(ratio,[clean(a.call(power,[ratio,right]))])];
+    }
+   }
+   if(!dependent(base)){
+    auto ex=parse(exponent,depth+1);
+    if(ex.length==1&&ex[0].ratio==one&&ex[0].p.length<=2){
+     auto b=ex[0].p[0],c=ex[0].p.length==2?ex[0].p[1]:zero;
+     if(a.isNumber(b)&&a.isNumber(c)&&a.number(b).re.integral&&a.number(c).re.integral&&a.number(b).re>=Rational(0)&&a.number(c).re>=Rational(0)){
+      auto power=sort==Sort.rational?Builtin.powQN:sort==Sort.real_?Builtin.powRN:Builtin.powCN;
+      auto q=a.castTo(base,sort);
+      return [Part(clean(a.call(power,[q,a.number(a.number(c),Sort.natural)])),[clean(a.call(power,[q,a.number(a.number(b),Sort.natural)]))])];
+     }
+    }
+   }
    if(a.isNumber(exponent)&&a.number(exponent).re.small&&a.number(exponent).re.integer>=0&&a.number(exponent).re.integer<=32){
     auto parts=parse(base,depth+1); if(!parts.length) return null;
     Part[] result=[Part(one,[one])]; foreach(i;0..a.number(exponent).re.integer){ result=times(result,parts); if(!result.length) break; } return result;
