@@ -28,7 +28,7 @@ private Case[] cases(){
 		Case("MulLeft","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else 2*f(n sub 1)","λ(n:ℕ). 3·2^n"),
 		Case("MulZeroBase","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else f(n sub 1)*2","λ(n:ℕ). 0"),
 		Case("MulOneRatio","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)*1","λ(n:ℕ). 3"),
-		Case("MulZeroRatio","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)*0","λ(n:ℕ). 3·0^n"),
+		Case("MulZeroRatio","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)*0","λ(n:ℕ). ([n=0]·3:ℕ)"),
 		Case("MulAtZero","(μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)*2)(0)","3"),
 		Case("MulAtOne","(μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)*2)(1)","6"),
 		Case("MulLarge","(μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)*2)(100)","3802951800684688204490109616128"),
