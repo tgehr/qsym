@@ -51,6 +51,13 @@ int main(string[] args){
   auto roundOwner=Session.open(); FunctionSyntax round; if(c.variables.length) round.declare(c.variables);
   auto again=round.run(roundOwner.arena,text);
   enforce(!again.exhausted,c.name~" round trip exhausted");
+  enforce(round.format(roundOwner.arena,again)==text,c.name~" round trip changed normal form");
+  if(!again.scalarOnly){
+   // Unrelated scalar temporaries must not restart pointwise normalization.
+   foreach(i;0..8) roundOwner.arena.variable(Sort.natural,100+i);
+   auto stable=again.bindings.normalize(again.reduction.output,4096,true);
+   enforce(!stable.exhausted&&stable.output==again.reduction.output,c.name~" unstable binding normal form");
+  }
   auto plainOwner=Session.open(); FunctionSyntax plain; if(c.variables.length) plain.declare(c.variables);
   auto plainResult=plain.run(plainOwner.arena,c.source,[],Options(DensityMode.preserve,false));
   enforce(!plainResult.exhausted,c.name~" untraced exhausted");

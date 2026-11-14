@@ -147,8 +147,8 @@ def main():
 	for file in subsets:
 		certificate(file)
 	functional=sorted((ROOT/"build/functional").glob("*.lean"))
-	if len(functional)!=46:
-		raise RuntimeError("expected 46 functional certificates")
+	if len(functional)!=60:
+		raise RuntimeError("expected 60 functional certificates")
 	for file in functional:
 		certificate(file)
 	bindings=sorted((ROOT/"build/binding").glob("*.lean"))

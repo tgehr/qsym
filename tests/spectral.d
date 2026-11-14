@@ -35,7 +35,7 @@ private Case[] cases(){ return [
 	Case("ZeroEigenvalueZero","(λ(n:ℕ).(((0:ℝ),1),(0,2))^n@(3,4))(0)","((3:ℝ),(4:ℝ))","",false),
 	Case("ZeroEigenvalueOne","(λ(n:ℕ).(((0:ℝ),1),(0,2))^n@(3,4))(1)","((4:ℝ),(8:ℝ))","",false),
 	Case("LargeExponent","(((2:ℚ),1),(0,3))^17@(1,2)","((258149254:ℚ),(258280326:ℚ))"),
-	Case("PartialExponent","λ(n:ℕ).((2,0),(0,3))^(n sub 1)@(4,5)",""),
+	Case("PartialExponent","λ(n:ℕ).((2,0),(0,3))^(n sub 1)@(4,5)","λ(n:ℕ | n≠0).(4*2^(n sub 1),5*3^(n sub 1))"),
 	Case("PartialExponentInteger","λ(n:ℕ).(((-2:ℤ),0),(0,3))^(n sub 1)@((4:ℤ),5)",""),
 	Case("PartialExponentRational","λ(n:ℕ).((1/2,0),(0,1/3))^(n sub 1)@(4,5)",""),
 	Case("PartialExponentReal","λ(n:ℕ).(((2:ℝ),0),(0,3))^(n sub 1)@(4,5)",""),

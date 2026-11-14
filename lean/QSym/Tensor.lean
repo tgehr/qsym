@@ -13,6 +13,30 @@ def nilValue {α : Type} : Option (Fin 0 → α) := some Fin.elim0
 def consValue {α : Type} {n : ℕ} (x : Option α) (xs : Option (Fin n → α)) : Option (Fin (n+1) → α) :=
   x.bind (fun a => xs.map (fun as => Fin.cases a as))
 
+theorem guard_pair_left {α β : Type} (p : Option Bool) (x : Option α) (y : Option β) :
+    pairValue (Binding.guardValue p x) y = Binding.guardValue p (pairValue x y) := by
+  cases p with
+  | none => rfl
+  | some p => cases p <;> rfl
+
+theorem guard_pair_right {α β : Type} (p : Option Bool) (x : Option α) (y : Option β) :
+    pairValue x (Binding.guardValue p y) = Binding.guardValue p (pairValue x y) := by
+  cases p with
+  | none => cases x <;> rfl
+  | some p => cases p <;> cases x <;> rfl
+
+theorem guard_cons_left {α : Type} {n : ℕ} (p : Option Bool) (x : Option α) (xs : Option (Fin n → α)) :
+    consValue (Binding.guardValue p x) xs = Binding.guardValue p (consValue x xs) := by
+  cases p with
+  | none => rfl
+  | some p => cases p <;> rfl
+
+theorem guard_cons_right {α : Type} {n : ℕ} (p : Option Bool) (x : Option α) (xs : Option (Fin n → α)) :
+    consValue x (Binding.guardValue p xs) = Binding.guardValue p (consValue x xs) := by
+  cases p with
+  | none => cases x <;> rfl
+  | some p => cases p <;> cases x <;> rfl
+
 def headValue {α : Type} {n : ℕ} (xs : Option (Fin (n+1) → α)) : Option α :=
   xs.map (fun x => x 0)
 
@@ -21,6 +45,24 @@ def tailValue {α : Type} {n : ℕ} (xs : Option (Fin (n+1) → α)) : Option (F
 
 def getValue {α : Type} {n : ℕ} (xs : Option (Fin n → α)) (i : Option ℕ) : Option α :=
   xs.bind (fun x => i.bind (fun j => if h : j < n then some (x ⟨j,h⟩) else none))
+
+theorem guard_get_left {α : Type} {n : ℕ} (p : Option Bool) (xs : Option (Fin n → α)) (i : Option ℕ) :
+    getValue (Binding.guardValue p xs) i = Binding.guardValue p (getValue xs i) := by
+  cases p with
+  | none => rfl
+  | some p => cases p <;> rfl
+
+theorem guard_get_right {α : Type} {n : ℕ} (p : Option Bool) (xs : Option (Fin n → α)) (i : Option ℕ) :
+    getValue xs (Binding.guardValue p i) = Binding.guardValue p (getValue xs i) := by
+  cases p with
+  | none => cases xs <;> rfl
+  | some p => cases p <;> cases xs <;> rfl
+
+theorem guard_map {α β : Type} (f : α → β) (p : Option Bool) (x : Option α) :
+    (Binding.guardValue p x).map f = Binding.guardValue p (x.map f) := by
+  cases p with
+  | none => rfl
+  | some p => cases p <;> rfl
 
 theorem get_cons_zero {α : Type} {n : ℕ} (x : Option α) (xs : Option (Fin n → α)) :
     getValue (consValue x xs) (some 0) = xs.bind (fun _ => x) := by

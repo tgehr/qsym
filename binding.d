@@ -36,7 +36,7 @@ private enum BindingRule:ubyte{
 	refl,congr,beta,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
-	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
+	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
@@ -1472,10 +1472,20 @@ final class Bindings{
 			foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex,Sort.boolean])
 				if(param==scalarType(s)){ sort=s; scalarParam=true; break; }
 			if(!scalarParam) return BoundTerm.init;
-			uint index;
-			foreach(id;0..arena.length){
-				auto n=arena.node(arena.at(cast(uint)id));
-				if(n.op==Op.variable){ enforce(n.value<uint.max-1,"scalar variable limit exceeded"); if(n.value>=index) index=cast(uint)n.value+1; }
+			// Freshness is relative to the binder's free scalar variables, not
+			// every temporary ever allocated in the arena. Reusing this witness
+			// keeps associative-region grouping stable across pointwise passes.
+			uint index; uint[] pending=[body.id]; Table!(uint,bool) seen;
+			while(pending.length){
+				auto id=pending[$-1]; --pending.length;
+				if(seen.get(id,false)) continue; seen.set(id,true);
+				auto n=nodes[id];
+				if(n.op==BoundOp.scalar) foreach(scalarId;arena.viewPostorder(arena.at(n.data))){
+					auto v=arena.view(arena.at(scalarId));
+					if(v.op==Op.variable){ enforce(v.value<uint.max-1,"scalar variable limit exceeded"); if(v.value>=index) index=cast(uint)v.value+1; }
+				}
+				if(n.a!=uint.max) pending~=n.a;
+				if(n.b!=uint.max) pending~=n.b;
 			}
 			auto argument=arena.variable(sort,index);
 			BoundTerm rewrite(BoundTerm t,uint[] path){
@@ -1592,6 +1602,13 @@ final class Bindings{
 			}
 			bool constantSet(uint id,bool value){ auto n=nodes[id]; return n.op==BoundOp.set&&isTrue(n.a,value); }
 			BoundTerm both(BoundTerm x,BoundTerm y){ return primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[x,y]); }
+			bool guardReady(uint id){
+				auto g=nodes[id];
+				// Let pointwise normalization resolve domain queries first. Lifting
+				// them early can combine large scalar domains and exhaust their budget.
+				if(g.op==BoundOp.defined||g.op==BoundOp.holds||g.op==BoundOp.domain) return false;
+				return (g.a==uint.max||guardReady(g.a))&&(g.b==uint.max||guardReady(g.b));
+			}
 			if(current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
 				auto body=nodes[nodes[current.a].a],ty=types[current.type];
 				if(steps<budget){
@@ -1896,6 +1913,18 @@ final class Bindings{
 			}
 			if(next==BoundTerm.init&&additive(current)&&(nodes[current.a].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom)){
 				next=bottom(ctx,types[current.type]);rule=BindingRule.addBottom;
+			}
+			// Lift guards through strict tuple constructors and projections so a
+			// lambda can display the restriction once, on its parameter.
+			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.vectorCons||current.op==BoundOp.pair||current.op==BoundOp.get)){
+				if(nodes[current.a].op==BoundOp.guard&&guardReady(nodes[current.a].a)){
+					auto g=nodes[current.a]; next=guard(at(g.a),rebuild(at(result.output),ctx,[at(g.b),at(current.b)])); rule=BindingRule.guardLeft;
+				}else if(nodes[current.b].op==BoundOp.guard&&guardReady(nodes[current.b].a)){
+					auto g=nodes[current.b]; next=guard(at(g.a),rebuild(at(result.output),ctx,[at(current.a),at(g.b)])); rule=BindingRule.guardRight;
+				}
+			}
+			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.first||current.op==BoundOp.rest)&&nodes[current.a].op==BoundOp.guard&&guardReady(nodes[current.a].a)){
+				auto g=nodes[current.a]; next=guard(at(g.a),rebuild(at(result.output),ctx,[at(g.b)])); rule=BindingRule.guardMap;
 			}
 			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.primitive||current.op==BoundOp.guard)&&current.a!=uint.max&&nodes[current.a].op==BoundOp.bottom){ next=bottom(ctx,type(at(result.output))); rule=BindingRule.shortCircuit; }
 			if(domains&&next==BoundTerm.init){
@@ -3087,6 +3116,13 @@ final class Bindings{
 				case BindingRule.memberSet:proof=".memberSet "~name(nodes[n.a].a)~" "~name(n.b); break;
 				case BindingRule.guardTrue:proof=".guardTrue "~name(n.b); break;
 				case BindingRule.guardAnd:proof=".guardAnd "~name(n.a)~" "~name(nodes[n.b].a)~" "~name(nodes[n.b].b); break;
+				case BindingRule.guardLeft,BindingRule.guardRight:
+					auto left=p.rule==BindingRule.guardLeft,g=nodes[left?n.a:n.b];
+					proof=".ofEq (fun ξ ρ => Tensor.guard_"~(n.op==BoundOp.pair?"pair":n.op==BoundOp.get?"get":"cons")~(left?"_left":"_right")~
+						" ("~name(g.a)~".eval ξ ρ) ("~name(left?g.b:n.a)~".eval ξ ρ) ("~name(left?n.b:g.b)~".eval ξ ρ))"; break;
+				case BindingRule.guardMap:
+					auto g=nodes[n.a];
+					proof=".ofEq (fun ξ ρ => Tensor.guard_map "~(n.op==BoundOp.first?"Prod.fst":"Prod.snd")~" ("~name(g.a)~".eval ξ ρ) ("~name(g.b)~".eval ξ ρ))"; break;
 				case BindingRule.holdsGuard:proof=".holdsGuard "~name(nodes[n.a].a)~" "~name(nodes[n.a].b); break;
 				case BindingRule.setHolds:proof=".setHolds "~name(n.a); break;
 				case BindingRule.typeEqSelf:proof=".typeEqSelf "~name(n.a); break;
