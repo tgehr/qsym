@@ -23,7 +23,7 @@ private Case[] cases(){return [
  Case("WrongLag","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else 2*f(n sub 2)+n","",false),
  Case("NonlinearState","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 1 else f(n sub 1)*f(n sub 1)+n","",false),
  Case("VariableCoefficient","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 1 else n*f(n sub 1)+n","",false),
- Case("QuadraticForcing","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else 2*f(n sub 1)+n*n","",false),
+ Case("QuadraticForcing","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else 2*f(n sub 1)+n*n"),
  Case("PartialForcing","μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 0 else 2*f(n sub 1)+(n sub 1)","",false)
 ];}
 int main(string[] args){
@@ -37,7 +37,7 @@ int main(string[] args){
   auto again=s.run(owner.arena,text);enforce(!again.exhausted&&s.format(owner.arena,again)==text,c.name~" round trip");
   if(c.name=="User")enforce(text==s.format(owner.arena,s.run(owner.arena,"λ(n:ℕ).floorN(2*2^n-n-2)")),"user closed form");
   auto proof=s.exportCertificate(owner.arena,r);
-  if(c.solved)enforce(proof.indexOf("IndexedRecurrence.solve_matrix")>=0,c.name~" solver proof");
+  if(c.solved)enforce((proof.indexOf("IndexedRecurrence.solve_matrix")>=0||proof.indexOf("CFiniteRecurrence.solve_matrix")>=0),c.name~" solver proof");
   write(buildPath(dir,c.name~".lean"),proof);++certificates;
  }
  ulong expected;

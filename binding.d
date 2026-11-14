@@ -43,7 +43,11 @@ private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=u
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
-private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed; }
+private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; }
+private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
+private struct CFiniteSequence{ CFiniteKind kind; Sort sort; uint source=uint.max,a,b,size,coordinate; Term value; Term[] matrix,initial,output; }
+private enum CFiniteExprKind:ubyte{ force,previous,add,left,right }
+private struct CFiniteExpression{ CFiniteExprKind kind; uint source,a,b,offset; Term coefficient,value; }
 private struct DomainLeaf{ uint node; Term value; Result domain; }
 private struct DomainRank{ uint source,variable; Result result,lower,upper; DomainLeaf[] leaves; Result[] iterations; Sort sort; Term slope,bound,step; }
 private struct SpectralFact{ Term input; Result domain,value; }
@@ -771,6 +775,144 @@ final class Bindings{
 		auto matrix=tuple(inner,[row0,row1,row2],mat),initial=tuple(inner,[scalar(inner,arena.at(nodes[yes.b].data)),scalar(inner,zero),scalar(inner,one)],vec);
 		auto output=inheritHint(at(n.a),lambda(get(tensor(TensorOp.matvec,tensor(TensorOp.power,matrix,variable(inner,0)),initial),scalar(inner,arena.natural_(0)))));
 		solution=RecurrenceSolution(t.id,output.id,yes.b,no.b); solution.indexed=true; return output;
+	}
+
+	// Compile total C-finite forcing compositionally. The state cap bounds
+	// tensor-product growth; unsupported or larger expressions keep their μ.
+	private BoundTerm solveCFiniteRecurrence(BoundTerm t,out RecurrenceSolution solution){
+		enum limit=16;
+		auto n=node(t),body=nodes[n.a],ty=pool.view(type(t));
+		if(ty.fields[0]!=scalarType(Sort.natural)||body.op!=BoundOp.lambda) return BoundTerm.init;
+		Sort sort; bool numeric;
+		foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex]) if(ty.fields[1]==scalarType(s)){ sort=s; numeric=true; }
+		if(!numeric) return BoundTerm.init;
+		bool call(uint id,Builtin f){ auto q=nodes[id]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f; }
+		bool op(uint id,Op f){ auto q=nodes[id]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==f; }
+		bool variableAt(uint id,uint k){ auto q=nodes[id]; return q.op==BoundOp.variable&&q.data==k; }
+		bool constantTerm(Term t){
+			if(recurrenceConstant(t)) return true;
+			auto q=arena.view(t);
+			if(q.op==Op.builtin&&q.value==Builtin.invQ){ Number v; return literalNumber(arena.viewChild(t,0),v)&&!v.zero; }
+			if(q.op!=Op.add&&q.op!=Op.mul&&q.op!=Op.pow&&q.op!=Op.abs&&q.op!=Op.conj&&!(q.op==Op.builtin&&builtinInfo(cast(Builtin)q.value).total)) return false;
+			foreach(i;0..q.arity) if(!constantTerm(arena.viewChild(t,i))) return false;
+			return true;
+		}
+		bool constant(uint id){ return nodes[id].op==BoundOp.scalar&&constantTerm(arena.at(nodes[id].data)); }
+		bool arithmetic(uint id,bool mul){ auto q=nodes[id]; if(q.op!=BoundOp.primitive) return false; auto x=arena.view(arena.at(q.data)),y=arena.view(scalarOperator(type(at(id)),mul?TensorOp.mul:TensorOp.add)); return x.op==y.op&&x.value==y.value; }
+		if(!arithmetic(body.a,false)) return BoundTerm.init;
+		auto sum=nodes[body.a]; if(!op(sum.a,Op.mask)||!op(sum.b,Op.mask)) return BoundTerm.init;
+		auto yes=nodes[sum.a],no=nodes[sum.b],p=nodes[yes.a];
+		if(!op(yes.a,Op.not_)||!op(no.a,Op.not_)||nodes[no.a].a!=yes.a||!call(p.a,Builtin.nonzeroZ)||!call(nodes[p.a].a,Builtin.castNZ)||!variableAt(nodes[nodes[p.a].a].a,0)||!constant(yes.b)) return BoundTerm.init;
+		CFiniteSequence[] models; CFiniteExpression[] expressions;
+		uint save(CFiniteSequence s){ if(models.length>=256||s.size>limit) return uint.max; models~=s; return cast(uint)models.length-1; }
+		Term zero(Sort s){ return arena.number(Number(0),s); }
+		Term one(Sort s){ return arena.number(Number(1),s); }
+		uint atom(CFiniteKind kind,Sort s,uint source=uint.max,Term value=Term.init){
+			CFiniteSequence m; m.kind=kind; m.sort=s; m.source=source; m.value=value;
+			if(kind==CFiniteKind.zero) return save(m);
+			if(kind==CFiniteKind.index){ m.size=2; m.matrix=[one(s),one(s),zero(s),one(s)]; m.initial=[zero(s),one(s)]; m.output=[one(s),zero(s)]; }
+			else{ m.size=1; m.matrix=[kind==CFiniteKind.geometric?value:one(s)]; m.initial=[kind==CFiniteKind.constant?value:one(s)]; m.output=[one(s)]; }
+			return save(m);
+		}
+		uint combine(CFiniteKind kind,uint a,uint b,uint source=uint.max,Term value=Term.init){
+			if(a==uint.max||b==uint.max&&(kind==CFiniteKind.add||kind==CFiniteKind.mul)) return uint.max;
+			auto x=models[a]; CFiniteSequence m; m.kind=kind; m.sort=x.sort; m.source=source; m.a=a; m.b=b; m.value=value;
+			if(kind==CFiniteKind.left||kind==CFiniteKind.right){
+				m.size=x.size; m.matrix=x.matrix; m.initial=x.initial;
+				foreach(c;x.output) m.output~=kind==CFiniteKind.left?arena.mul(value,c,true):arena.mul(c,value,true);
+			}else{
+				auto y=models[b]; m.size=kind==CFiniteKind.add?x.size+y.size:x.size*y.size;
+				if(m.size>limit) return uint.max;
+				foreach(i;0..m.size){
+					if(kind==CFiniteKind.add){ m.initial~=i<x.size?x.initial[i]:y.initial[i-x.size]; m.output~=i<x.size?x.output[i]:y.output[i-x.size]; }
+					else{ m.initial~=arena.mul(x.initial[i/y.size],y.initial[i%y.size],true); m.output~=arena.mul(x.output[i/y.size],y.output[i%y.size],true); }
+					foreach(j;0..m.size){
+						if(kind==CFiniteKind.add) m.matrix~=i<x.size&&j<x.size?x.matrix[i*x.size+j]:i>=x.size&&j>=x.size?y.matrix[(i-x.size)*y.size+j-x.size]:zero(x.sort);
+						else m.matrix~=arena.mul(x.matrix[(i/y.size)*x.size+j/y.size],y.matrix[(i%y.size)*y.size+j%y.size],true);
+					}
+				}
+			}
+			return save(m);
+		}
+		Table!(uint,uint) memo;
+		uint forcing(uint id,uint depth=0){
+			if(depth>64||models.length>=256) return uint.max;
+			auto old=memo.get(id,uint.max); if(old!=uint.max) return old;
+			auto q=nodes[id]; auto s=elementSort(type(at(id))); uint result=uint.max;
+			if(constant(id)) result=atom(CFiniteKind.constant,s,id,arena.at(q.data));
+			else if(variableAt(id,0)&&s==Sort.natural) result=atom(CFiniteKind.index,s,id);
+			else if(arithmetic(id,false)||arithmetic(id,true)){
+				auto a=forcing(q.a,depth+1),b=forcing(q.b,depth+1);
+				result=combine(arithmetic(id,false)?CFiniteKind.add:CFiniteKind.mul,a,b,id);
+			}else if(q.op==BoundOp.primitive){
+				auto f=arena.view(arena.at(q.data));
+				if(f.op==Op.builtin&&f.value>=Builtin.castNZ&&f.value<=Builtin.castRC){
+					auto a=forcing(q.a,depth+1);
+					if(a!=uint.max){ auto x=models[a]; CFiniteSequence m; m.kind=CFiniteKind.map; m.source=id; m.sort=s; m.a=a; m.size=x.size;
+						foreach(v;x.matrix)m.matrix~=arena.castTo(v,s); foreach(v;x.initial)m.initial~=arena.castTo(v,s); foreach(v;x.output)m.output~=arena.castTo(v,s); result=save(m); }
+				}else if(f.op==Op.builtin&&f.value>=Builtin.powNN&&f.value<=Builtin.powCN&&constant(q.a)&&variableAt(q.b,0)) result=atom(CFiniteKind.geometric,s,id,arena.at(nodes[q.a].data));
+				else{
+					uint exponent=uint.max;
+					if(f.op==Op.pow&&f.value<=8) exponent=cast(uint)f.value;
+					if(f.op==Op.builtin&&f.value>=Builtin.powNN&&f.value<=Builtin.powCN&&constant(q.b)){
+						auto term=arena.at(nodes[q.b].data); auto v=arena.isNumber(term)?arena.number(term):Number(-1); if(arena.isNumber(term)&&v.re.small&&v.re.integer>=0&&v.re.integer<=8) exponent=cast(uint)v.re.integer;
+					}
+					if(exponent!=uint.max){
+						auto a=forcing(q.a,depth+1);
+						if(a!=uint.max){ auto r=atom(CFiniteKind.constant,s,uint.max,one(s)); foreach(k;0..exponent){ r=combine(CFiniteKind.mul,a,r); if(r==uint.max) break; }
+							if(r!=uint.max){ auto m=models[r]; m.kind=CFiniteKind.power; m.source=id; m.a=a; m.b=exponent; result=save(m); }
+						}
+					}
+				}
+			}
+			if(result==uint.max&&q.op==BoundOp.get&&constant(q.b)&&arena.isNumber(arena.at(nodes[q.b].data))){
+				auto product=nodes[q.a];
+				if(product.op==BoundOp.tensor&&product.data==TensorOp.matvec){
+					auto power=nodes[product.a];
+					if(power.op==BoundOp.tensor&&power.data==TensorOp.power&&variableAt(power.b,0)){
+						auto v=pool.view(type(at(product.b))),idx=arena.number(arena.at(nodes[q.b].data)).re;
+						if(v.kind==TypeKind.vector&&v.dimension.constant&&v.length>0&&v.length<=limit&&idx.small&&idx.integer>=0&&idx.integer<v.length){
+							CFiniteSequence m; m.kind=CFiniteKind.coordinate; m.source=id; m.sort=s; m.a=power.a; m.b=product.b; m.size=cast(uint)v.length; m.coordinate=cast(uint)idx.integer;
+							bool cells(uint id,ref Term[] xs){ foreach(j;0..m.size){ auto z=nodes[id]; if(z.op!=BoundOp.vectorCons||!constant(z.a)) return false; xs~=arena.at(nodes[z.a].data); id=z.b; } return nodes[id].op==BoundOp.vectorNil; }
+							bool valid=cells(m.b,m.initial); auto row=m.a;
+							foreach(j;0..m.size){ auto z=nodes[row]; if(z.op!=BoundOp.vectorCons||!cells(z.a,m.matrix)){valid=false;break;} row=z.b; }
+							if(valid&&nodes[row].op==BoundOp.vectorNil){ foreach(j;0..m.size)m.output~=j==m.coordinate?one(s):zero(s); result=save(m); }
+						}
+					}
+				}
+			}
+
+			if(result!=uint.max) memo.set(id,result); return result;
+		}
+		bool recursive;
+		uint collect(uint id,uint depth=0){
+			if(depth>64||expressions.length>=256) return uint.max;
+			auto q=nodes[id]; CFiniteExpression e; e.source=id;
+			auto f=forcing(id);
+			if(f!=uint.max){ e.kind=CFiniteExprKind.force; e.a=f; e.offset=f; e.coefficient=zero(sort); }
+			else if(q.op==BoundOp.apply&&variableAt(q.a,1)&&call(q.b,Builtin.subN)&&variableAt(nodes[q.b].a,0)&&constant(nodes[q.b].b)&&arena.isNumber(arena.at(nodes[nodes[q.b].b].data))&&arena.number(arena.at(nodes[nodes[q.b].b].data)).one){
+				e.kind=CFiniteExprKind.previous; e.coefficient=one(sort); e.offset=atom(CFiniteKind.zero,sort); recursive=true;
+			}else if(arithmetic(id,false)){
+				e.kind=CFiniteExprKind.add; e.a=collect(q.a,depth+1); e.b=collect(q.b,depth+1); if(e.a==uint.max||e.b==uint.max) return uint.max;
+				e.coefficient=arena.add(expressions[e.a].coefficient,expressions[e.b].coefficient,true); e.offset=combine(CFiniteKind.add,expressions[e.a].offset,expressions[e.b].offset);
+			}else if(arithmetic(id,true)){
+				bool left=constant(q.a); auto c=left?q.a:q.b; if(!constant(c)) return uint.max;
+				e.kind=left?CFiniteExprKind.left:CFiniteExprKind.right; e.a=collect(left?q.b:q.a,depth+1); if(e.a==uint.max) return uint.max;
+				e.value=arena.at(nodes[c].data); e.coefficient=left?arena.mul(e.value,expressions[e.a].coefficient,true):arena.mul(expressions[e.a].coefficient,e.value,true);
+				e.offset=combine(left?CFiniteKind.left:CFiniteKind.right,expressions[e.a].offset,uint.max,uint.max,e.value);
+			}else return uint.max;
+			if(e.offset==uint.max) return uint.max; expressions~=e; return cast(uint)expressions.length-1;
+		}
+		auto root=collect(no.b); if(root==uint.max||!recursive) return BoundTerm.init;
+		auto expr=expressions[root],m=models[expr.offset],size=m.size+1;
+		auto inner=push(context(t),ty.fields[0]),vec=pool.vector(ty.fields[1],size),mat=pool.vector(vec,size);
+		BoundTerm[] rows,cells,initial; cells~=scalar(inner,expr.coefficient);
+		foreach(j;0..m.size){ auto c=zero(sort); foreach_reverse(i;0..m.size) c=arena.add(arena.mul(m.output[i],m.matrix[i*m.size+j],true),c,true); cells~=scalar(inner,c); }
+		rows~=tuple(inner,cells,vec); initial~=scalar(inner,arena.at(nodes[yes.b].data));
+		foreach(i;0..m.size){ cells=[scalar(inner,zero(sort))]; foreach(j;0..m.size)cells~=scalar(inner,m.matrix[i*m.size+j]); rows~=tuple(inner,cells,vec); initial~=scalar(inner,m.initial[i]); }
+		auto matrix=tuple(inner,rows,mat),seed=tuple(inner,initial,vec);
+		auto output=inheritHint(at(n.a),lambda(get(tensor(TensorOp.matvec,tensor(TensorOp.power,matrix,variable(inner,0)),seed),scalar(inner,arena.natural_(0)))));
+		solution=RecurrenceSolution(t.id,output.id,yes.b,no.b); solution.cfinite=true; solution.cfModels=models; solution.cfExpressions=expressions; solution.cfRoot=root; solution.cfSize=size; return output;
 	}
 
 	// Homogenize x(n+1)=A*x(n)+b as (x(n),1). Keep seeds and coefficients
@@ -1771,6 +1913,7 @@ final class Bindings{
 					if(solved==BoundTerm.init) solved=solvePrefixRecurrence(function_,solution);
 					if(solved==BoundTerm.init) solved=solveCoupledRecurrence(function_,solution);
 					if(solved==BoundTerm.init) solved=solveIndexedRecurrence(function_,solution);
+					if(solved==BoundTerm.init) solved=solveCFiniteRecurrence(function_,solution);
 					if(solved!=BoundTerm.init){
 						auto extra=cast(uint)solutions.length; solutions~=solution; ++steps;
 						x=Result(solved.id,emit(BindingRule.fixedRecurrence,n.a,solved.id,uint.max,uint.max,extra));
@@ -2208,6 +2351,7 @@ final class Bindings{
 						if(next==BoundTerm.init) next=solvePrefixRecurrence(at(result.output),solution);
 						if(next==BoundTerm.init) next=solveCoupledRecurrence(at(result.output),solution);
 						if(next==BoundTerm.init) next=solveIndexedRecurrence(at(result.output),solution);
+						if(next==BoundTerm.init) next=solveCFiniteRecurrence(at(result.output),solution);
 						if(next!=BoundTerm.init){ extra=cast(uint)solutions.length; solutions~=solution; rule=BindingRule.fixedRecurrence; }
 					}
 				}else if(current.op==BoundOp.guard&&isTrue(current.a,false)){
@@ -2619,6 +2763,7 @@ final class Bindings{
 			}
 		}
 		code~="namespace QSym.BindingCertificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
+		foreach(s;result.solutions) if(s.cfinite){ code~="attribute [local semireducible] Nat.div Nat.modCore\n"; break; }
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
@@ -2637,6 +2782,10 @@ final class Bindings{
 		foreach(r;result.ranks) foreach(step;r.iterations) scalarNodes~=arena.viewPostorder(step.output);
 		foreach(r;result.ranks) if(r.lower.output!=Term.init) scalarNodes~=arena.viewPostorder(r.result.output);
 		foreach(r;result.ranks) if(r.step!=Term.init) foreach(t;[r.slope,r.bound,r.step]) scalarNodes~=arena.viewPostorder(t);
+		foreach(s;result.solutions) if(s.cfinite) foreach(m;s.cfModels){
+			if(m.value!=Term.init) scalarNodes~=arena.viewPostorder(m.value);
+			foreach(t;m.matrix~m.initial~m.output) scalarNodes~=arena.viewPostorder(t);
+		}
 		foreach(s;result.solutions) foreach(f;s.facts){ scalarNodes~=arena.viewPostorder(f.input); scalarNodes~=arena.viewPostorder(arena.castTo(f.value.output,arena.sort(f.input))); }
 		foreach(s;result.spectra){
 			foreach(fs;[s.parameters,s.checks]) foreach(f;fs){
@@ -2820,7 +2969,7 @@ final class Bindings{
 					code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (Summation.solve_prefix "~add~" "~ha~" (rec"~id~dimArg~" γ ξ ρ) "~(s.left?"true":"false")~" "~base~" "~forcing~" "~hp~"))\n";
 					continue;
 				}
-				if(s.affine||s.order||s.width||s.indexed){
+				if(s.affine||s.order||s.width||s.indexed||s.cfinite){
 					auto leaf=pool.view(type(at(s.source))).fields[1]; if(s.width) leaf=pool.view(leaf).fields[0];
 					struct Total{ string value,proof; }
 					Table!(uint,uint) totalIds; Total[] totals;
@@ -2858,7 +3007,7 @@ final class Bindings{
 					}
 					string constants(uint q){
 						auto z=nodes[q];
-						if((s.width||s.indexed)&&z.op==BoundOp.vectorNil) return "(Eq.refl Tensor.nilValue)";
+						if((s.width||s.indexed||s.cfinite)&&z.op==BoundOp.vectorNil) return "(Eq.refl Tensor.nilValue)";
 						if(s.indexed&&recurrenceIndex(q)){
 							string index(uint id){ auto x=nodes[id]; return x.op==BoundOp.variable?"(some x)":"("~valueOperation(x)~" "~index(x.a)~")"; }
 							return "(Eq.refl "~index(q)~")";
@@ -2883,10 +3032,119 @@ final class Bindings{
 					auto ha=suffix.length?"AffineRecurrence.add"~suffix:"rfl",hm=suffix.length?"AffineRecurrence.mul"~suffix:"rfl";
 					auto body=nodes[n.a].a;
 					auto get=nodes[s.width?nodes[nodes[s.target].a].a:nodes[s.target].a],product=nodes[get.a],matrix=nodes[product.a].a;
-					auto expr=s.width?"":expression(s.delta),hmat=constants(matrix),hv=constants(product.b);
+					auto expr=(s.width||s.cfinite)?"":expression(s.delta),hmat=constants(matrix),hv=constants(product.b);
 					auto field=sort==Sort.complex?"C":sort==Sort.real_?"R":"";
 					auto hz=field.length?"(Option.some.inj AffineRecurrence.zero"~field~")":"rfl",ho=field.length?"(Option.some.inj AffineRecurrence.one"~field~")":"rfl";
 
+					if(s.cfinite){
+						string vectorCases(string[] xs){ auto r="(fun i => i.elim0)"; foreach_reverse(x;xs) r="(Fin.cases "~x~" "~r~")"; return r; }
+						string hom(Sort target){ final switch(target){
+							case Sort.integer:return "(Nat.castRingHom ℤ)";
+							case Sort.rational:return "(Int.castRingHom ℚ)";
+							case Sort.real_:return "(Rat.castHom ℝ)";
+							case Sort.complex:return "Complex.ofRealHom";
+							case Sort.natural,Sort.boolean,Sort.density,Sort.measure:assert(0);
+						} }
+						string[] modelNames; modelNames.length=s.cfModels.length;
+						string model(uint k){
+							if(modelNames[k].length) return modelNames[k];
+							auto m=s.cfModels[k],tag="cf"~id~"_"~to!string(k); string rhs;
+							final switch(m.kind){
+								case CFiniteKind.zero:rhs=".zero"; break;
+								case CFiniteKind.constant:rhs="(.constant "~total(m.value).value~")"; break;
+								case CFiniteKind.index:rhs=".index"; break;
+								case CFiniteKind.geometric:rhs="(.geometric "~total(m.value).value~")"; break;
+								case CFiniteKind.add:rhs="(.add "~model(m.a)~" "~model(m.b)~")"; break;
+								case CFiniteKind.mul:rhs="(.mul "~model(m.a)~" "~model(m.b)~")"; break;
+								case CFiniteKind.left:rhs="(.left "~total(m.value).value~" "~model(m.a)~")"; break;
+								case CFiniteKind.right:rhs="(.right "~model(m.a)~" "~total(m.value).value~")"; break;
+								case CFiniteKind.map:rhs="(.map "~model(m.a)~" "~hom(m.sort)~")"; break;
+								case CFiniteKind.power:rhs="(.power "~model(m.a)~" "~to!string(m.b)~")"; break;
+								case CFiniteKind.coordinate:
+									string vector(string[] xs){ auto r="(fun i : Fin 0 => i.elim0)"; foreach_reverse(x;xs)r="(Fin.cons "~x~" "~r~")"; return r; }
+									string[] rows,initial;
+									foreach(i;0..m.size){ string[] cells; foreach(j;0..m.size)cells~=total(m.matrix[i*m.size+j]).value; rows~=vector(cells); initial~=total(m.initial[i]).value; }
+									rhs="(.coordinate "~vector(rows)~" "~vector(initial)~" ⟨"~to!string(m.coordinate)~", of_decide_eq_true rfl⟩)"; break;
+							}
+							code~="noncomputable def "~tag~" (ξ : Env) : CFinite.Sequence (Ty.denote ."~leanSort(m.sort)~") := "~rhs~"\n";
+							return modelNames[k]="("~tag~" ξ)";
+						}
+						string totalBinary(BoundNode z){
+							auto q=arena.view(arena.at(z.data));
+							return q.op==Op.builtin?"(fun a b => AffineRecurrence.apply2_some Functions."~builtinInfo(cast(Builtin)q.value).code~" a b True.intro)":"(fun _ _ => rfl)";
+						}
+						string forceProof(uint k){
+							auto m=s.cfModels[k],z=nodes[m.source];
+							final switch(m.kind){
+								case CFiniteKind.constant:return "(CFinite.constant_eq "~total(m.value).value~" x "~total(m.value).proof~")";
+								case CFiniteKind.index:return "(CFinite.index_eq (R := ℕ) x (Eq.refl (some x)))";
+								case CFiniteKind.geometric:return "(CFinite.geometric_eq "~valueOperation(z)~" "~totalBinary(z)~" "~total(m.value).value~" x "~total(m.value).proof~")";
+								case CFiniteKind.add, CFiniteKind.mul:return "(CFinite."~(m.kind==CFiniteKind.add?"add":"mul")~"_eq "~valueOperation(z)~" "~totalBinary(z)~" "~model(m.a)~" "~model(m.b)~" x "~forceProof(m.a)~" "~forceProof(m.b)~")";
+								case CFiniteKind.map:return "(CFinite.map_eq "~hom(m.sort)~" "~valueOperation(z)~" (fun a => Tensor.apply_some Functions."~builtinInfo(cast(Builtin)arena.view(arena.at(z.data)).value).code~" a True.intro) "~model(m.a)~" x "~forceProof(m.a)~")";
+								case CFiniteKind.power:
+									auto operation=valueOperation(z); if(z.b!=uint.max) operation="(fun a => "~operation~" a (n"~to!string(nodes[z.b].data)~".eval ξ))";
+									auto proof=z.b==uint.max?"(fun _ => rfl)":"(fun a => AffineRecurrence.apply2_some Functions."~builtinInfo(cast(Builtin)arena.view(arena.at(z.data)).value).code~" a "~to!string(m.b)~" True.intro)";
+									return "(CFinite.power_eq "~operation~" "~to!string(m.b)~" "~proof~" "~model(m.a)~" x "~forceProof(m.a)~")";
+								case CFiniteKind.coordinate:
+									auto leaf=scalarType(m.sort),add=tensorOperation(leaf,TensorOp.add),mul=tensorOperation(leaf,TensorOp.mul);
+									auto suffix=m.sort==Sort.natural?"N":m.sort==Sort.integer?"Z":m.sort==Sort.rational?"Q":"";
+									auto ha=suffix.length?"AffineRecurrence.add"~suffix:"rfl",hm=suffix.length?"AffineRecurrence.mul"~suffix:"rfl";
+									auto field=m.sort==Sort.complex?"C":m.sort==Sort.real_?"R":"";
+									auto hz=field.length?"(Option.some.inj AffineRecurrence.zero"~field~")":"rfl",ho=field.length?"(Option.some.inj AffineRecurrence.one"~field~")":"rfl";
+									return "(CFinite.coordinate_eq "~add~" "~mul~" "~ha~" "~hm~" "~tensorLiteral(leaf,0)~" "~tensorLiteral(leaf,1)~" "~hz~" "~ho~" "~to!string(m.size)~" "~raw(m.a)~" "~raw(m.b)~" _ _ ⟨"~to!string(m.coordinate)~", of_decide_eq_true rfl⟩ "~constants(m.a)~" "~constants(m.b)~" x)";
+								case CFiniteKind.zero,CFiniteKind.left,CFiniteKind.right:assert(0);
+							}
+						}
+						string cfExpression(uint k){
+							auto e=s.cfExpressions[k]; final switch(e.kind){
+								case CFiniteExprKind.force:return "(.force "~model(e.a)~")";
+								case CFiniteExprKind.previous:return ".previous";
+								case CFiniteExprKind.add:return "(.add "~cfExpression(e.a)~" "~cfExpression(e.b)~")";
+								case CFiniteExprKind.left:return "(.left "~total(e.value).value~" "~cfExpression(e.a)~")";
+								case CFiniteExprKind.right:return "(.right "~cfExpression(e.a)~" "~total(e.value).value~")";
+							}
+						}
+						string cfProof(uint k){
+							auto e=s.cfExpressions[k],z=nodes[e.source]; final switch(e.kind){
+								case CFiniteExprKind.force:return forceProof(e.a);
+								case CFiniteExprKind.previous:return "rfl";
+								case CFiniteExprKind.add:return "(congrArg₂ "~valueOperation(z)~" "~cfProof(e.a)~" "~cfProof(e.b)~")";
+								case CFiniteExprKind.left:return "(congrArg₂ "~valueOperation(z)~" "~total(e.value).proof~" "~cfProof(e.a)~")";
+								case CFiniteExprKind.right:return "(congrArg₂ "~valueOperation(z)~" "~cfProof(e.a)~" "~total(e.value).proof~")";
+							}
+						}
+						string bridge(uint k){
+							if(k==s.delta) return cfProof(s.cfRoot);
+							auto q=nodes[k]; if(q.op==BoundOp.scalar)return total(arena.at(q.data)).proof;
+							if(q.op==BoundOp.primitive&&q.b!=uint.max)return "(congrArg₂ "~valueOperation(q)~" "~bridge(q.a)~" "~bridge(q.b)~")";
+							return "rfl";
+						}
+						auto cexpr=cfExpression(s.cfRoot),ctag="cfExpr"~id;
+						code~="noncomputable def "~ctag~" (ξ : Env) : CFiniteRecurrence.Expr (Ty.denote ."~leanSort(sort)~") := "~cexpr~"\n";
+						cexpr="("~ctag~" ξ)";
+						string[] eqs; foreach(j;0..s.cfSize)eqs~="rfl";
+						auto heq="(funext "~vectorCases(eqs)~")"; string[] rows; foreach(j;0..s.cfSize)rows~=heq;
+						hmat="(Eq.trans "~hmat~" (congrArg some (funext "~vectorCases(rows)~")))";
+						hv="(Eq.trans "~hv~" (congrArg some "~heq~"))";
+						auto hp="(fun g x => Eq.trans ("~programProof(body)~").symm "~bridge(body)~")";
+						// Check rows independently: a single nested matrix equality causes
+						// elaboration to repeatedly expand the whole tensor-product state.
+						string[] rowProofs; auto row=matrix;
+						foreach(j;0..s.cfSize){
+							auto item=nodes[row].a,tag="cfRow"~id~"_"~to!string(j);
+							auto proof="(Eq.trans "~constants(item)~" (congrArg some "~heq~"))";
+							code~="set_option maxHeartbeats 2000000 in\ntheorem "~tag~" (ξ : Env) : "~raw(item)~" = some (CFiniteRecurrence.matrix "~cexpr~" ⟨"~to!string(j)~", of_decide_eq_true rfl⟩) := "~proof~"\n";
+							rowProofs~="("~tag~" ξ)"; row=nodes[row].b;
+						}
+						auto matrixProof="(Eq.refl Tensor.nilValue)";
+						foreach_reverse(proof;rowProofs) matrixProof="(congrArg₂ Tensor.consValue "~proof~" "~matrixProof~")";
+						hmat="(Eq.trans "~matrixProof~" (congrArg some "~heq~"))";
+						code~="set_option maxHeartbeats 2000000 in\ntheorem cfMatrix"~id~" (ξ : Env) : "~raw(matrix)~" = some (CFiniteRecurrence.matrix "~cexpr~") := "~hmat~"\n";
+						code~="set_option maxHeartbeats 2000000 in\ntheorem cfSeed"~id~" (ξ : Env) : "~raw(product.b)~" = some (CFiniteRecurrence.initial "~cexpr~" "~value(s.base)~") := "~hv~"\n";
+						code~="set_option maxHeartbeats 2000000 in\ntheorem cfStep"~id~args~" : ∀ g x, (rec"~id~dimArg~" γ ξ ρ).eval g x = CFiniteRecurrence.step "~add~" "~mul~" "~cexpr~" "~value(s.base)~" g x := "~hp~"\n";
+						code~="set_option maxHeartbeats 2000000 in\ntheorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (CFiniteRecurrence.solve_matrix (rec"~id~dimArg~" γ ξ ρ) "~add~" "~mul~" "~ha~" "~hm~" "~cexpr~" "~value(s.base)~" (cfStep"~id~dimArg~" γ ξ ρ) "~tensorLiteral(leaf,0)~" "~tensorLiteral(leaf,1)~" "~hz~" "~ho~" "~raw(matrix)~" "~raw(product.b)~" (cfMatrix"~id~" ξ) (cfSeed"~id~" ξ)))\n";
+						continue;
+					}
 					if(s.indexed){
 						auto cast_="(fun n : Option ℕ => n)",hc="IndexedRecurrence.castN";
 						if(sort!=Sort.natural){

@@ -42,3 +42,5 @@ import QSym.SummationMasks
 import QSym.SummationTails
 import QSym.SqrtBranches
 import QSym.SqrtProducts
+
+import QSym.CFiniteRecurrence
