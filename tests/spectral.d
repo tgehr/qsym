@@ -5,6 +5,7 @@ import std.file:write,mkdirRecurse;
 import std.path:buildPath;
 import std.stdio:writeln;
 import std.string:indexOf;
+import std.conv:to;
 @safe:
 private struct Case{ string name,source,expected,variables; bool spectral=true; }
 private Case[] cases(){ return [
@@ -35,6 +36,14 @@ private Case[] cases(){ return [
 	Case("ZeroEigenvalueOne","(λ(n:ℕ).(((0:ℝ),1),(0,2))^n@(3,4))(1)","((4:ℝ),(8:ℝ))","",false),
 	Case("LargeExponent","(((2:ℚ),1),(0,3))^17@(1,2)","((258149254:ℚ),(258280326:ℚ))"),
 	Case("PartialExponent","λ(n:ℕ).((2,0),(0,3))^(n sub 1)@(4,5)",""),
+	Case("PartialExponentInteger","λ(n:ℕ).(((-2:ℤ),0),(0,3))^(n sub 1)@((4:ℤ),5)",""),
+	Case("PartialExponentRational","λ(n:ℕ).((1/2,0),(0,1/3))^(n sub 1)@(4,5)",""),
+	Case("PartialExponentReal","λ(n:ℕ).(((2:ℝ),0),(0,3))^(n sub 1)@(4,5)",""),
+	Case("PartialExponentComplex","λ(n:ℕ).((ⅈ,0),(0,-ⅈ))^(n sub 1)@(1,1)",""),
+	Case("PartialExponentZeroSeed","λ(n:ℕ).((0,0),(0,1))^(n sub 1)@(0,0)",""),
+	Case("PartialExponentUnitRoots","λ(n:ℕ).((1,0),(0,1))^(n sub 1)@(4,5)",""),
+	Case("PartialExponentZeroRoot","λ(n:ℕ).((0,0),(0,1))^(n sub 1)@(4,5)",""),
+	Case("PartialExponentProjection","λ(n:ℕ).get(((2,0),(0,3))^(n sub 1)@(4,5),1)",""),
 	Case("UndefinedExponent","defined((λ(n:ℕ).((2,0),(0,3))^n@(4,5))(0 sub 1))","false","",false),
 	Case("Projection","λ(n:ℕ).get(((2,0),(0,3))^n@(4,5),1)","λ(n:ℕ).5*3^n"),
 	Case("PartialProjection","defined(get((1,1/0),0))","false","",false),
@@ -60,6 +69,31 @@ private void run(string directory=""){
 		if(c.spectral) enforce(proof.indexOf("Spectral.")>=0,c.name~" missing spectral proof");
 		if(directory.length) write(buildPath(directory,c.name~".lean"),proof);
 	}
+	// Evaluate the closed form itself: simplifying the original application
+	// could bypass the spectral rewrite and hide a lost undefined boundary.
+	struct Boundary{ string name; string[3] expected; }
+	foreach(b;[
+		Boundary("PartialExponent",["(4,5)","(8,15)","(16,45)"]),
+		Boundary("PartialExponentInteger",["((4:ℤ),5)","((-8:ℤ),15)","((16:ℤ),45)"]),
+		Boundary("PartialExponentRational",["((4:ℚ),5)","((2:ℚ),5/3)","((1:ℚ),5/9)"]),
+		Boundary("PartialExponentReal",["((4:ℝ),5)","((8:ℝ),15)","((16:ℝ),45)"]),
+		Boundary("PartialExponentComplex",["((1:ℂ),1)","(ⅈ,-ⅈ)","((-1:ℂ),-1)"]),
+		Boundary("PartialExponentZeroSeed",["(0,0)","(0,0)","(0,0)"]),
+		Boundary("PartialExponentUnitRoots",["(4,5)","(4,5)","(4,5)"]),
+		Boundary("PartialExponentZeroRoot",["(4,5)","(0,5)","(0,5)"])
+	]){
+		string source; foreach(c;cases()) if(c.name==b.name) source=c.source;
+		enforce(source.length,"missing boundary case "~b.name);
+		auto owner=Session.open(); FunctionSyntax s;
+		auto closed=s.run(owner.arena,source,[],Options(DensityMode.preserve,true)),text=s.format(owner.arena,closed);
+		enforce(s.format(owner.arena,s.run(owner.arena,source,[],Options(DensityMode.preserve,false)))==text,b.name~" tracing changed output");
+		auto undefined=s.run(owner.arena,"defined(("~text~")(0))");
+		enforce(!undefined.exhausted&&s.format(owner.arena,undefined)=="false",b.name~" lost undefined exponent");
+		foreach(i,expected;b.expected){
+			auto value=s.run(owner.arena,"("~text~")("~to!string(i+1)~")");
+			enforce(!value.exhausted&&s.format(owner.arena,value)==s.format(owner.arena,s.run(owner.arena,expected)),b.name~" boundary "~to!string(i+1));
+		}
+	}
 	foreach(source;[
 		"λ(n:ℕ).(((0:ℝ),-1),(1,0))^n@(1,0)",
 		"λ(n:ℕ).(((0:ℚ),1),(1,1))^n@(0,1)",
@@ -72,5 +106,5 @@ private void run(string directory=""){
 }
 unittest{ run(); }
 int main(string[] args){
-	auto dir=args.length>1?args[1]:"build/spectral"; mkdirRecurse(dir); run(dir); writeln(cases().length," spectral certificates; 5 unsupported cases retained"); return 0;
+	auto dir=args.length>1?args[1]:"build/spectral"; mkdirRecurse(dir); run(dir); writeln(cases().length," spectral certificates; 32 boundary checks; 5 unsupported cases retained"); return 0;
 }

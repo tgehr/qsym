@@ -844,7 +844,7 @@ final class Bindings{
 	}
 	private BoundTerm spectral(BoundTerm t,out SpectralSolution solution){
 		auto n=node(t); if(n.op!=BoundOp.tensor||n.data!=TensorOp.matvec) return BoundTerm.init;
-		auto p=nodes[n.a]; if(p.op!=BoundOp.tensor||p.data!=TensorOp.power||!definitionallyTotal(at(p.b))) return BoundTerm.init;
+		auto p=nodes[n.a]; if(p.op!=BoundOp.tensor||p.data!=TensorOp.power) return BoundTerm.init;
 		auto mt=pool.view(type(at(p.a))),row=pool.view(mt.fields[0]);
 		if(!mt.dimension.constant||!row.dimension.constant||!mt.length||mt.length>16||mt.length!=row.length) return BoundTerm.init;
 		auto size=cast(uint)mt.length,sort=elementSort(row.fields[0]),ctx=context(t);
@@ -864,6 +864,10 @@ final class Bindings{
 		}
 		foreach(v;values){ if(nodes[v].op!=BoundOp.scalar) return BoundTerm.init; solution.vector~=arena.at(nodes[v].data); }
 		if(!solution.diagonal){
+			// Diagonal powers preserve an undefined exponent componentwise, as
+			// certified by Spectral.diagonal_value for an arbitrary Option Nat.
+			// Keep the totality restriction for the other spectral constructions.
+			if(!definitionallyTotal(at(p.b))) return BoundTerm.init;
 			if(size==3){
 				Number[9] entries; bool numeric=true;
 				foreach(i,v;solution.matrix) if(!literalNumber(v,entries[i])) numeric=false;
