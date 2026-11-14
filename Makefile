@@ -1,196 +1,237 @@
+# Requires GNU Make 4.3 or newer (grouped generator outputs).
 DC ?= ldc2
 LAKE ?= lake
 UTIL_PARENT ?= deps
 DFLAGS ?= -O -boundscheck=on
 VERIFYFLAGS ?=
 MODULES := $(wildcard *.d)
+UTIL_MODULES := $(wildcard $(UTIL_PARENT)/util/*.d)
 GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.DELETE_ON_ERROR:
 all: build/qsym
 
 build generated:
 	mkdir -p $@
 
-build/rulec: tools/rulec.d $(MODULES) | build
+build/rulec: tools/rulec.d $(MODULES) $(UTIL_MODULES) Makefile | build
 	$(DC) $(DFLAGS) $(IMPORTS) -i tools/rulec.d -of=$@
 
-generate: build/rulec | generated
+generate: $(GENERATED_D) $(GENERATED_LEAN)
+
+# Grouped targets ensure only one generator runs, including under make -j.
+$(GENERATED_D) $(GENERATED_LEAN) &: rules/core.qs build/rulec | generated
 	./build/rulec rules/core.qs $(GENERATED_D) $(GENERATED_LEAN)
 
-build/qsym: generate tools/main.d tools/repl.d tools/lineedit.d tools/edit.d tools/unicode.d $(MODULES)
+build/qsym: $(GENERATED_D) $(GENERATED_LEAN) Makefile $(UTIL_MODULES) tools/main.d tools/repl.d tools/lineedit.d tools/edit.d tools/unicode.d $(MODULES)
 	$(DC) $(DFLAGS) $(IMPORTS) -i tools/main.d -of=$@
 
-build/edit-motion-tests: tests/edit_motion.d tools/edit.d tools/unicode.d | build
+build/edit-motion-tests: tests/edit_motion.d tools/edit.d tools/unicode.d Makefile | build
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/edit_motion.d -of=$@
 
 test-edit-motion: build/edit-motion-tests
 	./build/edit-motion-tests
 
-test: build/qsym build/edit-motion-tests
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/summation.d -of=build/summation-tests
+# Compile the shared engine once per test mode; each executable keeps its own
+# main, unittest set, and certificate output directory. For example:
+#   make -j4 build-tests    # compile only
+#   make -j4 test          # compile in parallel, then run every suite
+#   make -j4 verify        # same builds, followed by the existing Lean checks
+TEST_DFLAGS ?= -boundscheck=on
+
+build/libqsym-test.a: $(MODULES) $(GENERATED_D) $(UTIL_MODULES) Makefile | build
+	rm -f $@
+	$(DC) $(TEST_DFLAGS) $(IMPORTS) -lib -i $(MODULES) -od=build/test-core -of=$@
+
+build/libqsym-test-unit.a: $(MODULES) $(GENERATED_D) $(UTIL_MODULES) Makefile | build
+	rm -f $@
+	$(DC) $(TEST_DFLAGS) -unittest $(IMPORTS) -lib -i $(MODULES) -od=build/test-core-unit -of=$@
+
+# Syntax tests supply a different qsym.generated.rules, so they must not link
+# against the shared engine archive containing the production rules.
+build/syntax.d build/Syntax.lean &: tests/syntax.qs build/rulec | build
+	./build/rulec tests/syntax.qs build/syntax.d build/Syntax.lean
+
+build/syntax-tests: tests/generated.d build/syntax.d build/Syntax.lean $(MODULES) $(UTIL_MODULES) Makefile
+	$(DC) $(TEST_DFLAGS) -unittest $(IMPORTS) -i tests/generated.d build/syntax.d -of=$@
+
+build/tests: tests/all.d tests/rules.d tools/edit.d tools/unicode.d build/libqsym-test-unit.a Makefile
+	$(DC) $(TEST_DFLAGS) -unittest $(IMPORTS) tests/all.d tests/rules.d tools/edit.d tools/unicode.d build/libqsym-test-unit.a -of=$@
+
+TEST_BINARIES := build/tests build/syntax-tests build/edit-motion-tests
+
+# $(1): executable name; $(2): source; $(3): optional unittest flag.
+define test_binary
+TEST_BINARIES += build/$(1)
+build/$(1): tests/$(2).d build/libqsym-test$(if $(3),-unit).a Makefile
+	$$(DC) $$(TEST_DFLAGS) $(3) $$(IMPORTS) $$< build/libqsym-test$(if $(3),-unit).a -of=$$@
+endef
+
+$(eval $(call test_binary,summation-tests,summation,))
+$(eval $(call test_binary,summation-tail-tests,summation_tails,))
+$(eval $(call test_binary,scalar-tests,scalar,-unittest))
+$(eval $(call test_binary,language-tests,language,-unittest))
+$(eval $(call test_binary,elementary-tests,elementary,-unittest))
+$(eval $(call test_binary,transcendental-tests,transcendental,-unittest))
+$(eval $(call test_binary,trig-magnitude-tests,trig_magnitudes,))
+$(eval $(call test_binary,indexed-norm-tests,indexed_norms,))
+$(eval $(call test_binary,sqrt-product-tests,sqrt_products,))
+$(eval $(call test_binary,zero-power-tests,zero_powers,))
+$(eval $(call test_binary,argument-composition-tests,argument_compositions,))
+$(eval $(call test_binary,atanh-composition-tests,atanh_compositions,))
+$(eval $(call test_binary,inverse-symmetry-tests,inverse_symmetry,))
+$(eval $(call test_binary,sqrt-branch-tests,sqrt_branches,))
+$(eval $(call test_binary,power-tests,powers,-unittest))
+$(eval $(call test_binary,function-tests,functions,-unittest))
+$(eval $(call test_binary,exponential-tests,exponentials,-unittest))
+$(eval $(call test_binary,trigonometry-tests,trigonometry,-unittest))
+$(eval $(call test_binary,radical-tests,radicals,-unittest))
+$(eval $(call test_binary,inverse-tests,inverses,-unittest))
+$(eval $(call test_binary,domain-tests,domains,-unittest))
+$(eval $(call test_binary,predicate-tests,predicates,-unittest))
+$(eval $(call test_binary,quadratic-tests,quadratics,-unittest))
+$(eval $(call test_binary,order-tests,order,-unittest))
+$(eval $(call test_binary,guard-tests,guards,-unittest))
+$(eval $(call test_binary,guard-budget-tests,guard_budget,))
+$(eval $(call test_binary,folding-tests,folding,-unittest))
+$(eval $(call test_binary,relation-tests,relations,-unittest))
+$(eval $(call test_binary,identity-tests,identities,-unittest))
+$(eval $(call test_binary,compact-tests,compact,-unittest))
+$(eval $(call test_binary,associative-tests,associative,-unittest))
+$(eval $(call test_binary,region-tests,regions,-unittest))
+$(eval $(call test_binary,counted-tests,counted,-unittest))
+$(eval $(call test_binary,join-tests,joins,-unittest))
+$(eval $(call test_binary,lookup-tests,lookup,-unittest))
+$(eval $(call test_binary,sign-tests,signs,-unittest))
+$(eval $(call test_binary,sum-tests,sum,-unittest))
+$(eval $(call test_binary,rational-tests,rational,-unittest))
+$(eval $(call test_binary,discrete-tests,discrete,-unittest))
+$(eval $(call test_binary,trig-algebra-tests,trig_algebra,-unittest))
+$(eval $(call test_binary,assumption-tests,assumptions,-unittest))
+$(eval $(call test_binary,numeral-tests,numerals,-unittest))
+$(eval $(call test_binary,bounds-tests,bounds,-unittest))
+$(eval $(call test_binary,subtype-tests,subtypes,-unittest))
+$(eval $(call test_binary,convergence-tests,convergence,-unittest))
+$(eval $(call test_binary,control-tests,control,-unittest))
+$(eval $(call test_binary,partition-tests,partitions,-unittest))
+$(eval $(call test_binary,binding-tests,binding,-unittest))
+$(eval $(call test_binary,functional-tests,functional,-unittest))
+$(eval $(call test_binary,subset-tests,subsets,-unittest))
+$(eval $(call test_binary,refinement-tests,refinements,-unittest))
+$(eval $(call test_binary,type-value-tests,type_values,-unittest))
+$(eval $(call test_binary,recursion-tests,recursion,-unittest))
+$(eval $(call test_binary,higher-equality-tests,higher_equality,-unittest))
+$(eval $(call test_binary,binder-name-tests,binder_names,-unittest))
+$(eval $(call test_binary,recurrence-solver-tests,recurrences,-unittest))
+$(eval $(call test_binary,affine-recurrence-tests,affine_recurrences,-unittest))
+$(eval $(call test_binary,linear-recurrence-tests,linear_recurrences,-unittest))
+$(eval $(call test_binary,spectral-tests,spectral,))
+$(eval $(call test_binary,integer-spectra-tests,integer_spectra,))
+$(eval $(call test_binary,tensor-domain-tests,tensor_domains,))
+$(eval $(call test_binary,matrix-block-tests,matrix_blocks,))
+$(eval $(call test_binary,discrete-interval-tests,discrete_intervals,))
+$(eval $(call test_binary,repeated-spectra-tests,repeated_spectra,))
+$(eval $(call test_binary,nilpotent-spectra-tests,nilpotent_spectra,))
+$(eval $(call test_binary,cube-zero-spectra-tests,cube_zero_spectra,))
+$(eval $(call test_binary,zero-root-spectra-tests,zero_root_spectra,))
+$(eval $(call test_binary,cutoff-tests,cutoff,-unittest))
+$(eval $(call test_binary,tensor-tests,tensors,-unittest))
+$(eval $(call test_binary,dependent-tests,dependent,-unittest))
+$(eval $(call test_binary,interval-tests,intervals,-unittest))
+$(eval $(call test_binary,fixed-domain-tests,fixed_domains,-unittest))
+$(eval $(call test_binary,partial-domain-tests,partial_domains,-unittest))
+$(eval $(call test_binary,ranked-domain-tests,ranked_domains,))
+$(eval $(call test_binary,real-countdown-tests,real_countdown,-unittest))
+$(eval $(call test_binary,argument-branch-tests,argument_branches,))
+$(eval $(call test_binary,argument-rotation-tests,argument_rotation,))
+$(eval $(call test_binary,recovered-algebra-tests,recovered_algebra,))
+
+build-tests: $(TEST_BINARIES)
+
+test: build-tests build/qsym
 	./build/summation-tests build/summation
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/summation_tails.d -of=build/summation-tail-tests
 	./build/summation-tail-tests build/summation-tails
 	./build/edit-motion-tests
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/all.d -of=build/tests
 	./build/tests
-	./build/rulec tests/syntax.qs build/syntax.d build/Syntax.lean
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/generated.d build/syntax.d -of=build/syntax-tests
 	./build/syntax-tests
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/scalar.d -of=build/scalar-tests
 	./build/scalar-tests --DRT-testmode=run-main build/scalar
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/language.d -of=build/language-tests
 	./build/language-tests --DRT-testmode=run-main build/language
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/elementary.d -of=build/elementary-tests
 	./build/elementary-tests --DRT-testmode=run-main build/elementary
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/transcendental.d -of=build/transcendental-tests
 	./build/transcendental-tests --DRT-testmode=run-main build/transcendental
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/trig_magnitudes.d -of=build/trig-magnitude-tests
 	./build/trig-magnitude-tests build/trig-magnitudes
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/indexed_norms.d -of=build/indexed-norm-tests
 	./build/indexed-norm-tests build/indexed-norms
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/sqrt_products.d -of=build/sqrt-product-tests
 	./build/sqrt-product-tests build/sqrt-products
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/zero_powers.d -of=build/zero-power-tests
 	./build/zero-power-tests build/zero-powers
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_compositions.d -of=build/argument-composition-tests
 	./build/argument-composition-tests build/argument-compositions
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/atanh_compositions.d -of=build/atanh-composition-tests
 	./build/atanh-composition-tests build/atanh-compositions
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/inverse_symmetry.d -of=build/inverse-symmetry-tests
 	./build/inverse-symmetry-tests build/inverse-symmetry
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/sqrt_branches.d -of=build/sqrt-branch-tests
 	./build/sqrt-branch-tests build/sqrt-branches
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/powers.d -of=build/power-tests
 	./build/power-tests --DRT-testmode=run-main build/powers
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functions.d -of=build/function-tests
 	./build/function-tests --DRT-testmode=run-main build/functions
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/exponentials.d -of=build/exponential-tests
 	./build/exponential-tests --DRT-testmode=run-main build/exponentials
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/trigonometry.d -of=build/trigonometry-tests
 	./build/trigonometry-tests --DRT-testmode=run-main build/trigonometry
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/radicals.d -of=build/radical-tests
 	./build/radical-tests --DRT-testmode=run-main build/radicals
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/inverses.d -of=build/inverse-tests
 	./build/inverse-tests --DRT-testmode=run-main build/inverses
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/domains.d -of=build/domain-tests
 	./build/domain-tests --DRT-testmode=run-main build/domains
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/predicates.d -of=build/predicate-tests
 	./build/predicate-tests --DRT-testmode=run-main build/predicates
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/quadratics.d -of=build/quadratic-tests
 	./build/quadratic-tests --DRT-testmode=run-main build/quadratics
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/order.d -of=build/order-tests
 	./build/order-tests --DRT-testmode=run-main build/order
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/guards.d -of=build/guard-tests
 	./build/guard-tests --DRT-testmode=run-main build/guards
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/guard_budget.d -of=build/guard-budget-tests
 	./build/guard-budget-tests build/guard-budget
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/folding.d -of=build/folding-tests
 	./build/folding-tests --DRT-testmode=run-main build/folding
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/relations.d -of=build/relation-tests
 	./build/relation-tests --DRT-testmode=run-main build/relations
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/identities.d -of=build/identity-tests
 	./build/identity-tests --DRT-testmode=run-main build/identities
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/compact.d -of=build/compact-tests
 	./build/compact-tests --DRT-testmode=run-main build/compact
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/associative.d -of=build/associative-tests
 	./build/associative-tests --DRT-testmode=run-main build/associative
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/regions.d -of=build/region-tests
 	./build/region-tests --DRT-testmode=run-main build/regions
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/counted.d -of=build/counted-tests
 	./build/counted-tests --DRT-testmode=run-main build/counted
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/joins.d -of=build/join-tests
 	./build/join-tests --DRT-testmode=run-main build/joins
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/lookup.d -of=build/lookup-tests
 	./build/lookup-tests --DRT-testmode=run-main build/lookup
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/signs.d -of=build/sign-tests
 	./build/sign-tests --DRT-testmode=run-main build/signs
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/sum.d -of=build/sum-tests
 	./build/sum-tests --DRT-testmode=run-main build/sum
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/rational.d -of=build/rational-tests
 	./build/rational-tests --DRT-testmode=run-main build/rational
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/discrete.d -of=build/discrete-tests
 	./build/discrete-tests --DRT-testmode=run-main build/discrete
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/trig_algebra.d -of=build/trig-algebra-tests
 	./build/trig-algebra-tests --DRT-testmode=run-main build/trig-algebra
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/assumptions.d -of=build/assumption-tests
 	./build/assumption-tests --DRT-testmode=run-main build/assumptions
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/numerals.d -of=build/numeral-tests
 	./build/numeral-tests --DRT-testmode=run-main build/numerals
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/bounds.d -of=build/bounds-tests
 	./build/bounds-tests --DRT-testmode=run-main build/bounds
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/subtypes.d -of=build/subtype-tests
 	./build/subtype-tests --DRT-testmode=run-main build/subtypes
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/convergence.d -of=build/convergence-tests
 	./build/convergence-tests --DRT-testmode=run-main build/convergence
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/control.d -of=build/control-tests
 	./build/control-tests --DRT-testmode=run-main build/control
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/partitions.d -of=build/partition-tests
 	./build/partition-tests --DRT-testmode=run-main build/partitions
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/binding.d -of=build/binding-tests
 	./build/binding-tests --DRT-testmode=run-main build/binding
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functional.d -of=build/functional-tests
 	./build/functional-tests --DRT-testmode=run-main build/functional
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/subsets.d -of=build/subset-tests
 	./build/subset-tests --DRT-testmode=run-main build/subsets
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/refinements.d -of=build/refinement-tests
 	./build/refinement-tests --DRT-testmode=run-main build/refinements
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/type_values.d -of=build/type-value-tests
 	./build/type-value-tests --DRT-testmode=run-main build/type-values
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/recursion.d -of=build/recursion-tests
 	./build/recursion-tests --DRT-testmode=run-main build/recursion
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/higher_equality.d -of=build/higher-equality-tests
 	./build/higher-equality-tests --DRT-testmode=run-main build/higher-equality
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/binder_names.d -of=build/binder-name-tests
 	./build/binder-name-tests --DRT-testmode=run-main build/binder-names
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/recurrences.d -of=build/recurrence-solver-tests
 	./build/recurrence-solver-tests --DRT-testmode=run-main build/recurrences
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/affine_recurrences.d -of=build/affine-recurrence-tests
 	./build/affine-recurrence-tests --DRT-testmode=run-main build/affine-recurrences
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/linear_recurrences.d -of=build/linear-recurrence-tests
 	./build/linear-recurrence-tests --DRT-testmode=run-main build/linear-recurrences
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/spectral.d -of=build/spectral-tests
 	./build/spectral-tests build/spectral
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/integer_spectra.d -of=build/integer-spectra-tests
 	./build/integer-spectra-tests build/integer-spectra
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/tensor_domains.d -of=build/tensor-domain-tests
 	./build/tensor-domain-tests build/tensor-domains
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/matrix_blocks.d -of=build/matrix-block-tests
 	./build/matrix-block-tests build/matrix-blocks
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/discrete_intervals.d -of=build/discrete-interval-tests
 	./build/discrete-interval-tests build/discrete-intervals
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/repeated_spectra.d -of=build/repeated-spectra-tests
 	./build/repeated-spectra-tests build/repeated-spectra
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/nilpotent_spectra.d -of=build/nilpotent-spectra-tests
 	./build/nilpotent-spectra-tests build/nilpotent-spectra
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/cube_zero_spectra.d -of=build/cube-zero-spectra-tests
 	./build/cube-zero-spectra-tests build/cube-zero-spectra
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/zero_root_spectra.d -of=build/zero-root-spectra-tests
 	./build/zero-root-spectra-tests build/zero-root-spectra
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/cutoff.d -of=build/cutoff-tests
 	./build/cutoff-tests --DRT-testmode=run-main build/cutoff
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/tensors.d -of=build/tensor-tests
 	./build/tensor-tests --DRT-testmode=run-main build/tensors
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/dependent.d -of=build/dependent-tests
 	./build/dependent-tests --DRT-testmode=run-main build/dependent
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/intervals.d -of=build/interval-tests
 	./build/interval-tests --DRT-testmode=run-main build/intervals
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/fixed_domains.d -of=build/fixed-domain-tests
 	./build/fixed-domain-tests --DRT-testmode=run-main build/fixed-domains
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/partial_domains.d -of=build/partial-domain-tests
 	./build/partial-domain-tests --DRT-testmode=run-main build/partial-domains
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/ranked_domains.d -of=build/ranked-domain-tests
 	./build/ranked-domain-tests build/ranked-domains
-	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/real_countdown.d -of=build/real-countdown-tests
 	./build/real-countdown-tests --DRT-testmode=run-main build/real-countdown
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_branches.d -of=build/argument-branch-tests
 	./build/argument-branch-tests build/argument-branches
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_rotation.d -of=build/argument-rotation-tests
 	./build/argument-rotation-tests build/argument-rotation
-	$(DC) -boundscheck=on $(IMPORTS) -i tests/recovered_algebra.d -of=build/recovered-algebra-tests
 	./build/recovered-algebra-tests build/recovered-algebra
 	python3 tests/repl.py
 	python3 tests/terminal.py
