@@ -85,15 +85,19 @@ def main():
 	check(ROOT/"tests/LinearRecurrences.lean")
 	check(ROOT/"tests/Spectral.lean")
 	check(ROOT/"tests/ZeroPowers.lean")
+	check(ROOT/"tests/SqrtProducts.lean")
 	check(ROOT/"tests/NilpotentSpectra.lean")
 	check(ROOT/"tests/CubeZeroSpectra.lean")
 	check(ROOT/"tests/ZeroRootSpectra.lean")
 	check(ROOT/"tests/InverseSymmetry.lean")
+	check(ROOT/"tests/SqrtBranches.lean")
+	check(ROOT/"tests/TrigMagnitudes.lean")
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
 	check(ROOT/"tests/Domain.lean")
 	check(ROOT/"tests/Binding.lean")
+	check(ROOT/"tests/Summation.lean")
 	check(ROOT/"tests/Functional.lean")
 	check(ROOT/"tests/Subsets.lean")
 	check(ROOT/"build/Syntax.lean")
@@ -128,7 +132,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("inverse-symmetry",48),("zero-root-spectra",30),("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",23),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("nilpotent-spectra",30),("cube-zero-spectra",33),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("ranked-domains",12),("real-countdown",33)]:
+	for group,count in [("trig-magnitudes",54),("inverse-symmetry",48),("zero-root-spectra",30),("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",23),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("nilpotent-spectra",30),("cube-zero-spectra",33),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("ranked-domains",12),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -149,7 +153,7 @@ def main():
 		raise RuntimeError("expected 28 binding certificates")
 	for file in bindings:
 		certificate(file)
-	for directory,count in (("atanh-compositions",121),("recovered-algebra",81),("argument-rotation",70),("argument-branches",74),("argument-compositions",64),("indexed-norms",54),("zero-powers",90),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
+	for directory,count in (("summation",58),("sqrt-branches",40),("sqrt-products",37),("atanh-compositions",121),("recovered-algebra",81),("argument-rotation",70),("argument-branches",74),("argument-compositions",64),("indexed-norms",54),("zero-powers",90),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -257,6 +261,12 @@ def main():
 			raise RuntimeError("tensor/cutoff rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
 	for name,body in (
+		("WrongSinMagnitude","example (z : ℂ) : ‖Complex.sin z‖=Real.sqrt (Real.sin z.re^2) := TrigMagnitudes.norm_sin z"),
+		("WrongCoshMagnitude","example (z : ℂ) : ‖Complex.cosh z‖=Real.sqrt (Real.sinh z.re^2+Real.sin z.im^2) := TrigMagnitudes.norm_cosh z"),
+		("WrongTanPole","example : Functions.absC.apply (Functions.tanC.apply (some ((Real.pi/2 : ℝ) : ℂ)))=some 0 := by norm_num [Function1.apply, Functions.absC, Functions.tanC, Complex.ofReal_div]"),
+		("WrongTanhPole","example : Functions.absC.apply (Functions.tanhC.apply (some (Complex.I*((Real.pi/2 : ℝ) : ℂ))))=some 0 := by norm_num [Function1.apply, Functions.absC, Functions.tanhC, Elementary.cosh_imaginary, Complex.ofReal_div]")):
+		path=negative/(name+".lean"); path.write_text("import QSym.TrigMagnitudes\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	for name,body in (
 		("TensorIndexOutside","example : Tensor.getValue (some (fun _ : Fin 1 => (7 : ℕ))) (some 1) = some 7 := rfl"),
 		("UnknownDimensionsDiffer","example (n m : ℕ) : Binding.typeEqValue (some (.vector (.scalar .real) n)) (some (.vector (.scalar .real) m)) = some false := rfl")):
 		path=negative/(name+".lean"); path.write_text("import QSym.Tensor\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
@@ -265,6 +275,25 @@ def main():
 		("AtanPole","example : Functions.cosC.apply (Functions.atanC.apply (some Complex.I)) = some 1 := by norm_num [Function1.apply, Functions.cosC, Functions.atanC]"),
 		("AtanhSqrtQuotient","example (z : ℂ) (hp : z≠1) (hm : z≠-1) : Complex.exp (Functions.atanhC.value z)=((1+z)/(1-z))^(1/2 : ℂ) := AtanhCompositions.complex_exp z hp hm")):
 		path=negative/(name+".lean"); path.write_text("import QSym.AtanhCompositions\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	for name,body in (
+		("SumDivergentGeometric","example : Summation.value norm (some (fun n : ℕ => some ((-1 : ℝ)^n))) = some 0 := by rw [Summation.geometric]; norm_num"),
+		("SumPartialSelected","example : Summation.finite (Finset.range 1) (fun _ => (none : Option ℝ)) = some 0 := by simp [Summation.finite]"),
+		("SumEmptyPartial","example : Summation.finite (Finset.range 0) (fun _ => (none : Option ℝ)) = none := by simp [Summation.finite]"),
+		("SumUncheckedSuccessor","example (n : Option ℕ) : Summation.rangeValue (some (fun _ => some (1:ℝ))) n = n.bind (fun _ => some 0) := by apply Summation.range_solution _ (fun _ => some 0) Value.add Summation.add rfl; intro k; norm_num [Value.add]")):
+		path=negative/(name+".lean"); path.write_text("import QSym.Summation\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	for name,body in (
+		("SqrtConjCut", "example : Value.Refines (Value.conj (Functions.sqrtC.apply (some (-1)))) (Functions.sqrtC.apply (Value.conj (some (-1)))) := by apply Value.refines_sqrt_conj_re; norm_num [Value.Refines, Value.le, Function1.apply, Functions.reC]"),
+		("SqrtInvCut", "example : Value.Refines (Functions.sqrtC.apply (Value.inv (some (-1)))) (Value.inv (Functions.sqrtC.apply (some (-1)))) := by apply Value.refines_sqrt_inv_re; norm_num [Value.Refines, Value.le, Function1.apply, Functions.reC]"),
+		("SqrtInvZero", "example : Functions.sqrtC.apply (Value.inv (some 0))=some 0 := by norm_num [Value.inv, Function1.apply, Functions.sqrtC]"),
+		("SqrtUndefined", "example : Value.conj (Functions.sqrtC.apply none)=some 0 := rfl")):
+		path=negative/(name+".lean"); path.write_text("import QSym.SqrtBranches\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+	for name,body in (
+		("SqrtMulNegativeBoundary","example : Functions.sqrtC.value (-Complex.I)*Functions.sqrtC.value (-Complex.I)=Functions.sqrtC.value ((-Complex.I)*(-Complex.I)) := by apply SqrtProducts.mul_middle <;> norm_num [Complex.arg_neg_I] <;> try linarith [Real.pi_pos]"),
+		("SqrtDivNegativeBoundary","example : Functions.sqrtC.value (-Complex.I)/Functions.sqrtC.value Complex.I=Functions.sqrtC.value ((-Complex.I)/Complex.I) := by apply SqrtProducts.div_middle <;> norm_num [Complex.arg_I, Complex.arg_neg_I] <;> try linarith [Real.pi_pos]"),
+		("SqrtMulPositiveBoundary","example : Functions.sqrtC.value Complex.I*Functions.sqrtC.value Complex.I= -Functions.sqrtC.value (Complex.I*Complex.I) := by apply SqrtProducts.mul_upper <;> norm_num [Complex.arg_I] <;> try linarith [Real.pi_pos]"),
+		("SqrtDivPoleDefined","example : Value.mul (Functions.sqrtC.apply (some Complex.I)) (Value.inv (Functions.sqrtC.apply (some 0)))=some 0 := by norm_num [Value.mul, Value.inv, Function1.apply, Functions.sqrtC]"),
+		("SqrtUndefinedProduct","example : Value.mul (Functions.sqrtC.apply (some 0)) (Functions.sqrtC.apply none)=some 0 := by simp [Value.mul, Function1.apply]")):
+		path=negative/(name+".lean"); path.write_text("import QSym.SqrtProducts\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	valid=(ROOT/"build/affine-recurrences/Natural.lean").read_text()
 	wrong_base=re.sub(r"(AffineRecurrence\.solve_matrix .*? AffineRecurrence\.mulN )\(\(n\d+\.eval ξ\)\.getD 0\)",r"\g<1>0",valid,count=1)
 	wrong_matrix=re.sub(r"(noncomputable def t\d+.*? : Binding\.Expr c\d+ \(\.vector \(\.scalar \.natural\) 2\) := \.binary Tensor\.consValue )\(t\d+ γ\)",r"\1(.scalar (.nat 0))",valid,count=1)

@@ -63,8 +63,6 @@ unittest{
 		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n)+2",
 		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n+1)+2",
 		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 2)+2",
-		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)+n",
-		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)+(0 sub 1)",
 		"μ(f:ℕ→ℕ).λ(n:ℕ|n<5).if n=0 then 3 else f(n sub 1)+2",
 		"μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 3 else f(n sub 1)+f(n sub 2)"]){
 		auto owner=Session.open(); FunctionSyntax s; auto r=s.run(owner.arena,source);

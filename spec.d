@@ -108,6 +108,10 @@ struct Parser{
 		if((token.text=="Π"||token.text=="Pi")&&lookahead.next().text=="("){
 			auto p=pattern("$type",[]); p.annotation=typeExpression(depth+1); return p;
 		}
+		if((token.text=="∑"||token.text=="sum")&&lookahead.next().text=="("){
+			next(); expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
+			expect(")"); expect("."); auto p=pattern("$sum",[expression(depth+1)]); p.binder=name; p.annotation=ty; return p;
+		}
 		if((token.text=="μ"||token.text=="mu")&&lookahead.next().text=="("){
 			next(); expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
 			expect(")"); expect("."); auto p=pattern("$fix",[expression(depth+1)]); p.binder=name; p.annotation=ty; return p;

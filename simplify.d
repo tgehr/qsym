@@ -18,6 +18,8 @@ struct Options{
 	size_t maxCoefficientWords=512;
 	bool expandPowers=false;
 	bool distributeLogic=true;
+	// Opt-in field identity checking; retain existing positional options.
+	bool expandScalarEmbeddings=false;
 }
 struct Result{
 	Term input;
@@ -60,6 +62,9 @@ Result simplify(Arena a,Term input,Term[] facts,Options options=Options.init){
 	auto engine=new Engine(a,d,budget,options.maxRewrites,options.expandPowers,options.distributeLogic);
 	auto context=engine.assume(facts);
 	auto initial=d.canonical(root,context);
+	if(options.expandScalarEmbeddings) try{
+		auto widening=new Embeddings(a,d,budget); initial=d.trans(initial,widening.expand(initial.after,context),context);
+	}catch(Limit e){ budget.exhausted=true; }
 	result.certificate=initial;
 	result.derivation=d; result.output=initial.after;
 	bool[uint] seen;
@@ -71,17 +76,19 @@ Result simplify(Arena a,Term input,Term[] facts,Options options=Options.init){
 			result.certificate=d.trans(result.certificate,embeddings.lift(normalized,a.sort(root),context),context);
 			result.output=normalized.after;
 			if(budget.exhausted) break;
-			auto subtypes=(new Subtypes(a,d,engine,embeddings,budget)).run(result.output,context);
-			result.certificate=d.trans(result.certificate,embeddings.lift(subtypes,a.sort(root),context),context);
-			result.output=embeddings.source(subtypes.after);
-			while(numeric(a.sort(result.output))){
-				auto narrowed=embeddings.narrow(result.output,context),lower=embeddings.source(narrowed.after);
-				if(a.sort(lower)==a.sort(result.output)) break;
-				auto q=engine.go(lower,context);
-				auto step=d.trans(narrowed,embeddings.lift(q,a.sort(result.output),context),context);
-				result.certificate=d.trans(result.certificate,embeddings.lift(step,a.sort(root),context),context);
-				result.output=q.after;
-				if(budget.exhausted) break;
+			if(!options.expandScalarEmbeddings){
+				auto subtypes=(new Subtypes(a,d,engine,embeddings,budget)).run(result.output,context);
+				result.certificate=d.trans(result.certificate,embeddings.lift(subtypes,a.sort(root),context),context);
+				result.output=embeddings.source(subtypes.after);
+				while(numeric(a.sort(result.output))){
+					auto narrowed=embeddings.narrow(result.output,context),lower=embeddings.source(narrowed.after);
+					if(a.sort(lower)==a.sort(result.output)) break;
+					auto q=engine.go(lower,context);
+					auto step=d.trans(narrowed,embeddings.lift(q,a.sort(result.output),context),context);
+					result.certificate=d.trans(result.certificate,embeddings.lift(step,a.sort(root),context),context);
+					result.output=q.after;
+					if(budget.exhausted) break;
+				}
 			}
 		}catch(Limit e){ budget.exhausted=true; }
 		if(budget.exhausted||result.output==before) break;

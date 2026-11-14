@@ -17,6 +17,7 @@ import QSym.DiscreteDomains
 import QSym.ScalarOrder
 import QSym.SignCompositions
 import QSym.IndexedNorms
+import QSym.TrigMagnitudes
 import QSym.ArgumentCompositions
 import QSym.ArgumentBranches
 import QSym.PowerRecovery
@@ -26,6 +27,8 @@ import QSym.NaturalFloor
 import QSym.AtanhCompositions
 import QSym.InverseSymmetry
 import QSym.ZeroPowers
+import QSym.SqrtBranches
+import QSym.SqrtProducts
 
 namespace QSym
 
@@ -231,6 +234,23 @@ elab "qsym_integer_power_goal" : tactic => withMainContext do
     throwError "not an integer-power goal"
 
 open Lean Meta Elab Tactic in
+elab "qsym_sqrt_branch_goal" : tactic => do
+  let t ← getMainTarget
+  unless (t.find? fun e => e.isConstOf ``Functions.sqrtC).isSome &&
+      (t.find? fun e => e.isConstOf ``Value.conj || e.isConstOf ``Value.inv).isSome do
+    throwError "not a square-root branch goal"
+
+macro "qsym_sqrt_branches" : tactic => `(tactic| (
+  qsym_sqrt_branch_goal
+  simp (config := {failIfUnchanged := false}) only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, one_mul, zero_add, add_zero] at *
+  first
+  | solve | apply Value.refines_sqrt_conj_re <;> assumption
+  | solve | apply Value.refines_sqrt_conj_im <;> assumption
+  | solve | apply Value.refines_sqrt_inv_re <;> assumption
+  | solve | apply Value.refines_sqrt_inv_im <;> assumption
+  | solve | apply Value.refines_sqrt_inv_cut <;> assumption))
+
+open Lean Meta Elab Tactic in
 elab "qsym_inverse_goal" : tactic => do
   let functions := #[``Functions.asinhR, ``Functions.acoshR, ``Functions.atanhR, ``Functions.asinC, ``Functions.acosC,
     ``Functions.atanC, ``Functions.asinhC, ``Functions.acoshC, ``Functions.atanhC]
@@ -409,6 +429,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
   | solve | qsym_exact_scalar
   | solve | qsym_real_power_bridge
   | solve | qsym_unit_power
+  | solve | qsym_sqrt_branches
   | solve | qsym_inverse
   | exact Value.refines_quotient_add_nonzero _ _ _
   | solve | (simp only [Int.cast_zero, Int.cast_neg, Int.cast_one] at *; apply Value.refines_log_rational <;> assumption)
@@ -752,14 +773,43 @@ macro "qsym_zero_power" : tactic => `(tactic| (
   | solve | (apply Value.refines_of_eq; symm; qsym_zero_power_eq)
 ))
 
+open Lean Meta Elab Tactic in
+elab "qsym_sqrt_product_goal" : tactic => do
+  let t ← getMainTarget
+  unless (t.find? fun e => e.isConstOf ``Functions.sqrtC).isSome &&
+      (t.find? fun e => e.isConstOf ``Value.mul).isSome do
+    throwError "not a square-root product goal"
+
+macro "qsym_sqrt_product" : tactic => `(tactic| (
+  qsym_sqrt_product_goal
+  simp only [Int.cast_zero, Int.cast_neg, Int.cast_one, zero_mul, add_zero] at *
+  first
+  | solve | apply Value.refines_sqrt_mul_middle <;> assumption
+  | solve | apply Value.refines_sqrt_mul_upper <;> assumption
+  | solve | apply Value.refines_sqrt_mul_lower <;> assumption
+  | solve | apply Value.refines_sqrt_div_middle <;> assumption
+  | solve | apply Value.refines_sqrt_div_upper <;> assumption
+  | solve | apply Value.refines_sqrt_div_lower <;> assumption
+  | solve | apply Value.refines_sqrt_mul_pi <;> assumption
+  | solve | apply Value.refines_sqrt_mul_neg_pi <;> assumption
+  | solve | apply Value.refines_sqrt_div_pi <;> assumption
+  | solve | apply Value.refines_sqrt_div_neg_pi <;> assumption))
+
 macro "qsym_rule" : tactic => `(tactic| (
   first
+  | solve | qsym_sqrt_product
   | solve | qsym_zero_power
   | solve
     | apply Value.refines_of_eq
       first
       | apply Value.abs_powRN
       | apply Value.abs_powRZ
+      | apply Value.norm_sin
+      | apply Value.norm_cos
+      | apply Value.norm_sinh
+      | apply Value.norm_cosh
+      | apply Value.norm_tan
+      | apply Value.norm_tanh
       | apply Value.norm_powCN
       | apply Value.norm_powCZ
       | apply Value.conj_powCN

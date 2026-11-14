@@ -30,6 +30,8 @@ test-edit-motion: build/edit-motion-tests
 	./build/edit-motion-tests
 
 test: build/qsym build/edit-motion-tests
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/summation.d -of=build/summation-tests
+	./build/summation-tests build/summation
 	./build/edit-motion-tests
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/all.d -of=build/tests
 	./build/tests
@@ -44,8 +46,12 @@ test: build/qsym build/edit-motion-tests
 	./build/elementary-tests --DRT-testmode=run-main build/elementary
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/transcendental.d -of=build/transcendental-tests
 	./build/transcendental-tests --DRT-testmode=run-main build/transcendental
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/trig_magnitudes.d -of=build/trig-magnitude-tests
+	./build/trig-magnitude-tests build/trig-magnitudes
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/indexed_norms.d -of=build/indexed-norm-tests
 	./build/indexed-norm-tests build/indexed-norms
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/sqrt_products.d -of=build/sqrt-product-tests
+	./build/sqrt-product-tests build/sqrt-products
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/zero_powers.d -of=build/zero-power-tests
 	./build/zero-power-tests build/zero-powers
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/argument_compositions.d -of=build/argument-composition-tests
@@ -54,6 +60,8 @@ test: build/qsym build/edit-motion-tests
 	./build/atanh-composition-tests build/atanh-compositions
 	$(DC) -boundscheck=on $(IMPORTS) -i tests/inverse_symmetry.d -of=build/inverse-symmetry-tests
 	./build/inverse-symmetry-tests build/inverse-symmetry
+	$(DC) -boundscheck=on $(IMPORTS) -i tests/sqrt_branches.d -of=build/sqrt-branch-tests
+	./build/sqrt-branch-tests build/sqrt-branches
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/powers.d -of=build/power-tests
 	./build/power-tests --DRT-testmode=run-main build/powers
 	$(DC) -boundscheck=on -unittest $(IMPORTS) -i tests/functions.d -of=build/function-tests

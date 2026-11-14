@@ -16,7 +16,7 @@ private Case[] cases(){ return [
 	Case("Tribonacci","μ(f:ℕ→ℕ).λ(n:ℕ).if n<3 then n*n else f(n sub 1)+f(n sub 2)+f(n sub 3)",""),
 	Case("TribonacciSix","(μ(f:ℕ→ℕ).λ(n:ℕ).if n<3 then n*n else f(n sub 1)+f(n sub 2)+f(n sub 3))(6)","34"),
 	Case("OrderFour","(μ(f:ℕ→ℕ).λ(n:ℕ).if n<4 then n else f(n sub 1)+f(n sub 2)+f(n sub 3)+f(n sub 4))(5)","12"),
-	Case("ExtraSeeds","μ(f:ℕ→ℕ).λ(n:ℕ).if n<3 then n*n else f(n sub 1)+f(n sub 2)",""),
+	Case("ExtraSeeds","μ(f:ℕ→ℕ).λ(n:ℕ).if n<3 then n*n else f(n sub 1)+f(n sub 2)","λ(n:ℕ). get(((((0,1,0),(0,0,1),(0,1,1))^n)@(0,1,4)),0)"),
 	Case("Stride","(μ(f:ℕ→ℕ).λ(n:ℕ).if n<3 then n else 2*f(n sub 3)+1)(7)","7"),
 	Case("NestedSeeds","μ(f:ℕ→ℤ).λ(n:ℕ).if n=0 then 2 else if n=1 then -1 else 2*f(n sub 1)-3*f(n sub 2)+4",""),
 	Case("NestedSeedsFive","(μ(f:ℕ→ℤ).λ(n:ℕ).if n=0 then 2 else if n=1 then -1 else 2*f(n sub 1)-3*f(n sub 2)+4)(5)","35"),

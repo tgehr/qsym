@@ -6,6 +6,7 @@ import QSym.Quantum
 import QSym.Generated
 import QSym.Refinement
 import QSym.AtanhCompositions
+import QSym.TrigMagnitudes
 import QSym.Replay
 import QSym.Sum
 import QSym.Bag
@@ -28,3 +29,6 @@ import QSym.IntegerSpectra
 import QSym.Dependent
 import QSym.SetFixed
 import QSym.MaskFunctions
+import QSym.Summation
+import QSym.SqrtBranches
+import QSym.SqrtProducts

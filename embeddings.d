@@ -11,7 +11,7 @@ package final class Embeddings{
 	private Arena a;
 	private Derivation d;
 	private Budget budget;
-	private Proof[ulong] narrowed;
+	private Proof[ulong] narrowed,expanded;
 	this(Arena a,Derivation d,Budget budget){ this.a=a; this.d=d; this.budget=budget; }
 	static bool conversion(Node n){ return n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castRC; }
 	Term source(Term t){ while(conversion(a.view(t))) t=a.viewChild(t,0); return t; }
@@ -65,6 +65,53 @@ package final class Embeddings{
 				else return __traits(getMember,Law,"embed_RC_"~op);
 			default:assert(0);
 		}
+	}
+	// This direction is opt-in and used before polynomial identity checking.
+	Proof expand(Term t,uint ctx,uint depth=0){
+		if(depth>=128) throw new Limit;
+		auto key=(cast(ulong)ctx<<32)|t.id;
+		if(auto p=key in expanded) return *p;
+		auto p=expandUncached(t,ctx,depth); expanded[key]=p; return p;
+	}
+	private Proof expandUncached(Term t,uint ctx,uint depth){
+		budget.spend(); auto n=a.view(t); Proof[] children;
+		foreach(i;0..n.arity) children~=expand(a.viewChild(t,i),ctx,depth+1);
+		auto p=d.congr(t,children,ctx),u=a.view(p.after);
+		if(u.op==Op.builtin&&u.value>=Builtin.powNN&&u.value<=Builtin.powCN){
+			auto exponent=a.viewChild(p.after,1),e=a.view(exponent);
+			if(e.op==Op.builtin&&e.value==Builtin.addN){
+				auto right=a.viewChild(exponent,1);
+				if(a.isNumber(right)&&a.number(right).one){
+					Law selected;
+					static foreach(suffix;["NN","ZN","QN","RN","CN"]) if(u.value==__traits(getMember,Builtin,"pow"~suffix)) selected=__traits(getMember,Law,"sum_shift_power_"~suffix);
+					auto step=d.rule(instantiate(a,selected,[a.viewChild(p.after,0),a.viewChild(exponent,0)]),[],ctx);
+					return d.trans(p,step,ctx);
+				}
+			}
+		}
+		if(!conversion(u)) return p;
+		auto child=a.viewChild(p.after,0),v=a.view(child);
+		if(a.isNumber(child)) return d.trans(p,d.numeric(p.after,a.number(a.number(child),u.sort),ctx),ctx);
+		string op;
+		if(v.op==Op.add||v.op==Op.builtin&&(v.value==Builtin.addN||v.value==Builtin.addZ||v.value==Builtin.addQ)) op="add";
+		if(v.op==Op.mul||v.op==Op.builtin&&(v.value==Builtin.mulN||v.value==Builtin.mulZ||v.value==Builtin.mulQ)) op="mul";
+		if(v.op==Op.pow) op="pow";
+		if(v.op==Op.builtin&&v.value>=Builtin.powNN&&v.value<=Builtin.powRN) op="powN";
+		if(v.op==Op.builtin&&v.value==Builtin.invQ&&u.sort==Sort.real_) op="inv";
+		if(!op.length) return p;
+		Law selected;
+		static foreach(pair;["NZ","ZQ","QR","RC"]){
+			if(cast(Builtin)u.value==__traits(getMember,Builtin,"cast"~pair)){
+				static foreach(kind;["add","mul","pow","powN"])
+					if(op==kind) selected=__traits(getMember,Law,"sum_expand_"~pair~"_"~kind);
+			}
+		}
+		if(op=="inv") selected=Law.sum_expand_QR_inv;
+		Term[] args=[a.viewChild(child,0)];
+		if(op=="pow") args~=a.real_(v.value); else if(v.arity==2) args~=a.viewChild(child,1);
+		auto step=d.rule(instantiate(a,selected,args),[],ctx);
+		if(step.before!=p.after) return p;
+		return d.trans(p,d.trans(step,expand(step.after,ctx,depth+1),ctx),ctx);
 	}
 	Proof run(Term t,uint ctx){
 		auto n=a.view(t);

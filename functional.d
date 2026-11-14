@@ -112,7 +112,7 @@ struct FunctionSyntax{
 	}
 	private bool reserved(string name){
 		return typeAlias(name)||isConstructor(name)||name=="λ"||name=="lambda"||name=="μ"||name=="mu"||name=="undefined"||name=="if"||name=="then"||name=="else"||
-			name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
+			name=="∑"||name=="sum"||name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
 	}
 	private bool typeAlias(string name){
 		foreach(n;["Nat","ℕ","Int","ℤ","Rat","ℚ","Real","ℝ","Complex","ℂ","Bool","𝔹","Type","Unit"]) if(name==n) return true;
@@ -145,7 +145,7 @@ struct FunctionSyntax{
 	private bool special(Pattern p){
 		if(p.name=="$type"||p.name=="$arrowtype"||p.name=="$tuple"||p.name=="$matmul"||p.name=="dot"||p.name=="get") return true;
 		if(typeAlias(p.name)||p.name=="Set") return true;
-		if(p.name=="$fix"||p.name=="$bottom"||p.name=="$lambda"||p.name=="$set"||p.name=="$apply"||p.name=="$member"||p.name=="$subset"||
+		if(p.name=="$sum"||p.name=="$fix"||p.name=="$bottom"||p.name=="$lambda"||p.name=="$set"||p.name=="$apply"||p.name=="$member"||p.name=="$subset"||
 			p.name=="domain"||p.name=="defined"||p.name=="holds"||p.name=="guard"||p.name=="seq") return true;
 		if(p.annotation !is null&&p.annotation.args.length) return true;
 		foreach(f;functions) if(f.name==p.name) return true;
@@ -154,7 +154,7 @@ struct FunctionSyntax{
 	}
 	private BoundTerm parseBound(Arena a,Bindings b,Pattern raw){
 		void collect(Pattern p,string[] bound){
-			if(p.name=="$fix"||p.name=="$lambda"||p.name=="$set"){
+			if(p.name=="$sum"||p.name=="$fix"||p.name=="$lambda"||p.name=="$set"){
 				enforce(!reserved(p.binder),"reserved binder name: "~p.binder);
 				for(auto ty=p.annotation;ty.name=="$subset";ty=ty.args[0]){
 					enforce(!reserved(ty.binder),"reserved binder name: "~ty.binder); collect(ty.predicate,bound~ty.binder);
@@ -294,6 +294,12 @@ struct FunctionSyntax{
 					auto eq=kind==TypeKind.type_?b.typeEq(left,right):b.equal(left,right);
 					return finish(positive?eq:b.primitive(a.not_(a.boolean(false)),[eq]));
 				}
+			}
+			if(p.name=="$sum"){
+				auto param=type(p.annotation,locals,null,localTypes);
+				enforce(param==scalarType(Sort.natural)||param==scalarType(Sort.integer),"summation index must be ℕ or ℤ");
+				auto inner=b.push(ctx,param),body=build(p.args[0],inner,[p.binder]~locals,expected,depth+1);
+				return finish(b.summation(b.hint(b.lambda(body),p.binder)));
 			}
 			if(p.name=="$lambda"||p.name=="$set"){
 				auto base=p.annotation; while(base.name=="$subset") base=base.args[0];
@@ -476,6 +482,13 @@ struct FunctionSyntax{
 				case BoundOp.fixed:
 					auto name=fresh(locals,b.binderHint(t).name); return "μ("~name~":"~typeName(b.type(t),locals)~"). "~render(b.at(n.a),[name]~locals,depth+1);
 				case BoundOp.bottom:return "undefined("~typeName(b.type(t),locals)~")";
+				case BoundOp.finiteSum:
+					auto fn=b.at(n.a),body=b.node(fn),name=fresh(locals,b.binderHint(fn).name);
+					return "∑("~name~":ℕ). ["~name~"<"~child(n.b)~"]·("~render(b.at(body.a),[name]~locals,depth+1)~")";
+				case BoundOp.summation:
+					auto fn=b.at(n.a),body=b.node(fn),ctx=b.context(b.at(body.a));
+					auto name=fresh(locals,b.binderHint(fn).name);
+					return "∑("~name~":"~typeName(b.type(b.variable(ctx,0)),locals)~"). "~render(b.at(body.a),[name]~locals,depth+1);
 				case BoundOp.lambda,BoundOp.set:
 					auto h=b.binderHint(t),name=fresh(locals,h.name),param=typeName(pool.view(b.type(t)).fields[0],locals),bodyTerm=b.at(n.a),v=b.node(bodyTerm);
 					if(n.op==BoundOp.lambda&&v.op==BoundOp.guard){
