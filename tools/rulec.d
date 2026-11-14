@@ -50,6 +50,12 @@ bool functionPattern(Pattern p){
 }
 bool earlyRule(Rule r){
 	if(!r.automatic) return false;
+	// Let the inner function cancel its inverse before expanding its norm into
+	// real components. These expansions remain ordinary bottom-up rewrites.
+	if(r.lhs.name=="absC"&&r.lhs.args.length==1){
+		auto inner=r.lhs.args[0].name;
+		if(inner=="sinC"||inner=="cosC"||inner=="sinhC"||inner=="coshC"||inner=="tanC"||inner=="tanhC") return false;
+	}
 	// Normalize exact embeddings before expanding the general integrality test.
 	if(r.lhs.name=="isIntR"&&r.lhs.args[0].variable) return false;
 	auto op=rootOp(r.lhs);
