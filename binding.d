@@ -293,7 +293,8 @@ final class Bindings{
 	private void checkProgram(BoundTerm t){
 		if(!depends(t,1)) return;
 		auto n=node(t);
-		if(n.op==BoundOp.primitive||n.op==BoundOp.guard||n.op==BoundOp.sequence){
+		if(n.op==BoundOp.primitive||n.op==BoundOp.guard||n.op==BoundOp.sequence||
+			n.op==BoundOp.vectorCons||n.op==BoundOp.pair||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.get){
 			checkProgram(at(n.a)); if(n.b!=uint.max) checkProgram(at(n.b)); return;
 		}
 		if(n.op==BoundOp.apply){
@@ -306,7 +307,17 @@ final class Bindings{
 	BoundTerm fixed(BoundTerm body){
 		auto n=node(body),v=pool.view(type(body));
 		enforce(n.op==BoundOp.lambda&&n.context!=0&&contexts[n.context].type==n.type,"fixed-point body must be a lambda of the declared type");
-		foreach(t;v.fields){ auto k=pool.view(t).kind; enforce(k>=TypeKind.boolean&&k<=TypeKind.complex,"fixed points currently require scalar arguments and results"); }
+		bool resultType(TypeId t){
+			auto shape=pool.view(t);
+			if(shape.kind>=TypeKind.boolean&&shape.kind<=TypeKind.complex) return true;
+			if(shape.kind!=TypeKind.tuple&&shape.kind!=TypeKind.vector) return false;
+			if(shape.kind==TypeKind.vector&&(!shape.dimension.constant||!shape.length||shape.length>256)) return false;
+			foreach(field;shape.fields) if(!resultType(field)) return false;
+			return true;
+		}
+		auto input=pool.view(v.fields[0]).kind;
+		enforce(input>=TypeKind.boolean&&input<=TypeKind.complex&&resultType(v.fields[1]),
+			"fixed points require scalar arguments and scalar or finite product results");
 		checkProgram(at(n.a)); return intern(BoundNode(BoundOp.fixed,contexts[n.context].parent,n.type,body.id));
 	}
 	BoundTerm variable(Scope s,uint index){

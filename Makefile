@@ -143,6 +143,7 @@ $(eval $(call test_binary,dependent-tests,dependent,-unittest))
 $(eval $(call test_binary,interval-tests,intervals,-unittest))
 $(eval $(call test_binary,fixed-domain-tests,fixed_domains,-unittest))
 $(eval $(call test_binary,partial-domain-tests,partial_domains,-unittest))
+$(eval $(call test_binary,product-recursion-tests,product_recursion,))
 $(eval $(call test_binary,ranked-domain-tests,ranked_domains,))
 $(eval $(call test_binary,real-countdown-tests,real_countdown,-unittest))
 $(eval $(call test_binary,argument-branch-tests,argument_branches,))
@@ -228,6 +229,7 @@ test: build-tests build/qsym
 	./build/interval-tests --DRT-testmode=run-main build/intervals
 	./build/fixed-domain-tests --DRT-testmode=run-main build/fixed-domains
 	./build/partial-domain-tests --DRT-testmode=run-main build/partial-domains
+	./build/product-recursion-tests build/product-recursion
 	./build/ranked-domain-tests build/ranked-domains
 	./build/real-countdown-tests --DRT-testmode=run-main build/real-countdown
 	./build/argument-branch-tests build/argument-branches

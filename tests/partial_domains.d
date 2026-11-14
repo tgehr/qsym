@@ -10,6 +10,8 @@ import std.string:indexOf;
 private struct Case{ string name,source,expected; }
 private Case[] cases(){ return [
 	Case("MissingBase","μ(f:ℕ→ℕ).λ(n:ℕ).if n≤1 then n else f(n sub 1)+f(n sub 2)+f(n sub 3)","{n:ℕ | n≤1}"),
+	Case("MissingFive","μ(f:ℕ→ℕ).λ(n:ℕ).if n<4 then n else f(n sub 1)+f(n sub 2)+f(n sub 3)+f(n sub 4)+f(n sub 5)","{n:ℕ | n≤3}"),
+	Case("MissingSix","μ(f:ℕ→ℕ).λ(n:ℕ).if n<5 then n else f(n sub 1)+f(n sub 2)+f(n sub 3)+f(n sub 4)+f(n sub 5)+f(n sub 6)","{n:ℕ | n≤4}"),
 	Case("Self","μ(f:ℕ→ℕ).λ(n:ℕ).if n≤1 then n else f(n)","{n:ℕ | n≤1}"),
 	Case("Increasing","μ(f:ℕ→ℕ).λ(n:ℕ).if n≤1 then n else f(n+1)","{n:ℕ | n≤1}"),
 	Case("Upward","μ(f:ℕ→ℕ).λ(n:ℕ).if n=5 then 7 else f(n+1)","{n:ℕ | n≤5}"),
@@ -55,8 +57,13 @@ unittest{
 		auto source="μ(f:ℕ→ℕ).λ(n:ℕ).if n<"~to!string(base)~" then n else "~sum;
 		auto owner=Session.open(); FunctionSyntax s;
 		auto expected=base==0?"false":base==1?"n=0":"n≤"~to!string(base-1);
-		auto text=s.format(owner.arena,s.run(owner.arena,source,[],Options(DensityMode.preserve,true),true));
-		enforce(text=="{n:ℕ | "~expected~"}","missing base "~to!string(base)~"/"~to!string(order)~": "~text);
+		auto result=s.run(owner.arena,source,[],Options(DensityMode.preserve,true),true),text=s.format(owner.arena,result);
+		enforce(!result.exhausted&&text=="{n:ℕ | "~expected~"}","missing base "~to!string(base)~"/"~to!string(order)~": "~text);
+	}
+	foreach(c;cases()[1..3]) foreach(n;0..8){
+		auto owner=Session.open(); FunctionSyntax s;
+		auto result=s.run(owner.arena,"defined(("~c.source~")("~to!string(n)~"))");
+		enforce(!result.exhausted&&s.format(owner.arena,result)==(n<(c.name=="MissingFive"?4:5)?"true":"false"),c.name~" boundary "~to!string(n));
 	}
 }
 int main(string[] args){

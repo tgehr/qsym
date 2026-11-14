@@ -201,6 +201,11 @@ struct FunctionSyntax{
 				while(b.node(current).op==BoundOp.vectorCons){ auto q=b.node(current); fields~=coerce(b.at(q.a),w.fields[0]); current=b.at(q.b); }
 				return b.tuple(b.context(t),fields,expected);
 			}
+			if(v.kind==TypeKind.tuple&&w.kind==TypeKind.tuple&&v.fields.length==w.fields.length){
+				BoundTerm[] fields; auto ctx=b.context(t);
+				foreach(i,field;w.fields) fields~=coerce(b.get(t,b.scalar(ctx,a.natural_(i))),field);
+				return b.tuple(ctx,fields,expected);
+			}
 			Sort from,to;
 			enforce(scalarSort(b.type(t),from)&&scalarSort(expected,to),"function type mismatch");
 			auto placeholder=a.variable(from,cast(uint)scalar.variables.length);
@@ -209,11 +214,40 @@ struct FunctionSyntax{
 		TypeId commonType(TypeId x,TypeId y){
 			if(x==y) return x; auto v=pool.view(x),w=pool.view(y);
 			if(v.kind==TypeKind.vector&&w.kind==TypeKind.vector&&v.dimension.key==w.dimension.key){ auto element=commonType(v.fields[0],w.fields[0]); return element==TypeId.init?element:pool.vector(element,v.dimension); }
+			if(v.kind==TypeKind.tuple&&w.kind==TypeKind.tuple&&v.fields.length==w.fields.length){
+				TypeId[] fields;
+				foreach(i,field;v.fields){ auto common=commonType(field,w.fields[i]); if(common==TypeId.init) return common; fields~=common; }
+				return pool.tuple(fields);
+			}
 			Sort xs,ys;
 			if(scalarSort(x,xs)&&scalarSort(y,ys)&&xs!=Sort.boolean&&ys!=Sort.boolean){
 				foreach(s;[Sort.complex,Sort.real_,Sort.rational,Sort.integer,Sort.natural]) if(xs==s||ys==s) return scalarType(s);
 			}
 			return TypeId.init;
+		}
+		BoundTerm conditional(BoundTerm predicate,BoundTerm yes,BoundTerm no){
+			auto ty=b.type(yes),ctx=b.context(yes); Sort sort;
+			enforce(b.type(no)==ty,"conditional branch type mismatch");
+			auto neg=b.primitive(a.not_(a.boolean(false)),[predicate]);
+			if(scalarSort(ty,sort)){
+				if(sort==Sort.boolean){
+					auto conjunction=a.and_(a.boolean(false),a.boolean(false));
+					return b.primitive(a.or_(a.boolean(false),a.boolean(false)),[
+						b.primitive(conjunction,[predicate,yes]),b.primitive(conjunction,[neg,no])]);
+				}
+				auto zero=a.number(Number(0),sort),mask=a.mask(a.boolean(false),zero);
+				return b.primitive(a.add(zero,zero,true),[b.primitive(mask,[predicate,yes]),b.primitive(mask,[neg,no])]);
+			}
+			auto v=pool.view(ty);
+			enforce(v.kind==TypeKind.tuple||v.kind==TypeKind.vector&&v.dimension.constant&&v.length>0&&v.length<=256,
+				"conditional branches require scalars or nonempty finite products of scalars");
+			BoundTerm[] fields;
+			foreach(i;0..(v.kind==TypeKind.tuple?v.fields.length:v.length)){
+				auto index=b.scalar(ctx,a.natural_(i));
+				// Project the whole branch, preserving strict product definedness.
+				fields~=conditional(predicate,b.get(yes,index),b.get(no,index));
+			}
+			return b.tuple(ctx,fields,ty);
 		}
 		BoundTerm build(Pattern p,Scope ctx,string[] locals,TypeId expected=TypeId.init,uint depth=0) @safe{
 			enforce(depth<128,"function expression nesting limit exceeded");
@@ -222,6 +256,13 @@ struct FunctionSyntax{
 			if(p.name=="$type") return finish(b.typeValue(ctx,type(p.annotation,locals,null,localTypes)));
 			if(p.name=="$arrowtype") return finish(b.typeValue(ctx,pool.function_(b.typeDenoted(build(p.args[0],ctx,locals)),b.typeDenoted(build(p.args[1],ctx,locals)))));
 			if(p.name=="$bottom") return finish(b.bottom(ctx,type(p.annotation,locals,null,localTypes)));
+			if(p.name=="$if"){
+				auto predicate=build(p.args[0],ctx,locals,scalarType(Sort.boolean),depth+1);
+				auto yes=build(p.args[1],ctx,locals,expected,depth+1),no=build(p.args[2],ctx,locals,expected,depth+1);
+				auto common=commonType(b.type(yes),b.type(no));
+				enforce(common!=TypeId.init,"conditional branch type mismatch");
+				return finish(conditional(predicate,coerce(yes,common),coerce(no,common)));
+			}
 			if(p.name=="$tuple"){
 				BoundTerm[] elements; auto v=expected==TypeId.init?TypeView.init:pool.view(expected);
 				foreach(i,q;p.args){

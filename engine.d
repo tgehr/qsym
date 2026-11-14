@@ -540,7 +540,17 @@ package final class Engine{
 			Proof p;
 			if((n.op==Op.add||n.op==Op.mul)&&(n.a==n.b||a.view(a.at(n.a)).op==n.op||a.view(a.at(n.b)).op==n.op))
 				p=associative(t,ctx,probe);
-			else{
+			else if(!probe&&(n.op==Op.mask||n.op==Op.and_||n.op==Op.or_)){
+				// Normalize the body with its guard available from the outset.
+				// An unconditional pass first repeats large Boolean proof searches.
+				auto left=go(a.at(n.a),ctx),right=a.at(n.b);
+				p=d.congr(t,[left,d.refl(right,ctx)],ctx);
+				auto guard=a.view(left.after);
+				if(guard.op!=Op.boolLit||(guard.value!=0)==(n.op!=Op.or_)){
+					auto c=enter(ctx,left.after,n.op!=Op.or_);
+					p=d.trans(p,d.scoped(p.after,go(right,c),ctx),ctx);
+				}
+			}else{
 				foreach(i;0..n.arity) cs~=go(a.viewChild(t,i),ctx,probe);
 				p=d.congr(t,cs,ctx);
 			}
