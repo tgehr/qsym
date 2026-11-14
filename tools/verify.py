@@ -86,6 +86,7 @@ def main():
 	check(ROOT/"tests/Spectral.lean")
 	check(ROOT/"tests/ZeroPowers.lean")
 	check(ROOT/"tests/NilpotentSpectra.lean")
+	check(ROOT/"tests/CubeZeroSpectra.lean")
 	check(ROOT/"tests/Language.lean")
 	check(ROOT/"tests/Certificates.lean")
 	check(ROOT/"tests/Lookup.lean")
@@ -125,7 +126,7 @@ def main():
 		raise RuntimeError("expected 34 recursion certificates")
 	for file in recursion:
 		certificate(file)
-	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",22),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("nilpotent-spectra",30),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("ranked-domains",12),("real-countdown",33)]:
+	for group,count in [("higher-equality",32),("binder-names",18),("recurrences",30),("affine-recurrences",24),("linear-recurrences",30),("spectral",33),("integer-spectra",22),("discrete-intervals",38),("guard-budget",8),("matrix-blocks",12),("repeated-spectra",28),("nilpotent-spectra",30),("cube-zero-spectra",33),("tensor-domains",38),("cutoff",9),("tensors",64),("dependent",26),("intervals",12),("fixed-domains",9),("partial-domains",24),("ranked-domains",12),("real-countdown",33)]:
 		files=sorted((ROOT/"build"/group).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {group} certificates")
@@ -269,6 +270,11 @@ def main():
 		if corrupt==valid:
 			raise RuntimeError("affine recurrence rejection fixture did not change")
 		path=negative/(name+".lean"); path.write_text(corrupt); check(path,succeeds=False)
+	for name,body in (
+		("CubeZeroWrongSecond", "example : CubeZeroSpectra.formula (1:ℚ) 2 3 2 = 0 := by norm_num [CubeZeroSpectra.formula]"),
+		("CubeZeroNonzeroCube", "def rejectedCubeMatrix : Matrix (Fin 3) (Fin 3) ℚ := ![![0,1,0],![0,0,1],![1,0,0]]\nexample : (rejectedCubeMatrix^3) 0 0 = 0 := by norm_num [rejectedCubeMatrix, pow_succ, Matrix.mul_apply, Fin.sum_univ_succ]"),
+		("CubeZeroUndefinedExponent", "example : CubeZeroSpectra.value Value.add Value.mul (fun _ _ => some (0:ℚ)) (fun _ => some 0) none 0 = some 0 := rfl")):
+		path=negative/(name+".lean"); path.write_text("import QSym.CubeZeroSpectra\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	for name,body in (
 		("NilpotentWrongZero", "example : NilpotentSpectra.formula (1:ℚ) 2 0 = 0 := by norm_num [NilpotentSpectra.formula]"),
 		("NilpotentWrongOne", "example : NilpotentSpectra.formula (1:ℚ) 2 1 = 0 := by norm_num [NilpotentSpectra.formula]"),
