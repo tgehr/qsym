@@ -19,6 +19,7 @@ import QSym.Tensor
 import QSym.TensorDomains
 import QSym.MatrixBlocks
 import QSym.AffineRecurrence
+import QSym.IndexedRecurrence
 import QSym.CoupledRecurrence
 import QSym.LinearRecurrence
 import QSym.Spectral
