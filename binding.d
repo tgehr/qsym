@@ -33,7 +33,7 @@ struct BoundNode{
 }
 struct BinderHint{ string name,refinement; }
 private enum BindingRule:ubyte{
-	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,beta,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
+	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMap,conditionalLeft,conditionalRight,beta,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
@@ -1137,6 +1137,19 @@ final class Bindings{
 		if(q.op==Op.builtin) return builtinInfo(cast(Builtin)q.value).total;
 		return q.op==Op.add||q.op==Op.mul||q.op==Op.lt||q.op==Op.le||q.op==Op.nonzero||q.op==Op.not_||q.op==Op.conj||q.op==Op.abs||q.op==Op.pow;
 	}
+	// Commuting consumers must preserve bottom in the selected argument.
+	// In particular, domain/defined/holds and inactive Boolean branches do not.
+	private bool conditionalStrict(BoundNode n,bool right=false){
+		switch(n.op){
+			case BoundOp.apply,BoundOp.sequence,BoundOp.first,BoundOp.rest,BoundOp.get,
+				BoundOp.member,BoundOp.subset,BoundOp.typeEq,BoundOp.equal,BoundOp.tensor:return true;
+			case BoundOp.primitive:
+				auto q=arena.view(arena.at(n.data));
+				return !right||q.op!=Op.mask&&q.op!=Op.and_&&q.op!=Op.or_;
+			default:return false;
+		}
+	}
+
 	private bool rankDomain(BoundTerm fixed_,out DomainRank rank){
 		auto n=node(fixed_),ty=pool.view(type(fixed_));
 		bool scalar;
@@ -1653,6 +1666,16 @@ final class Bindings{
 				else if(types[current.type]==scalarType(Sort.boolean)){
 					auto predicate=at(current.a),neg=primitive(arena.not_(arena.boolean(false)),[predicate]);
 					next=primitive(arena.or_(arena.boolean(false),arena.boolean(false)),[both(predicate,at(current.b)),both(neg,at(current.c))]); rule=BindingRule.conditionalBool;
+				}else{
+					Sort sort; bool numeric;
+					foreach(candidate;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex])
+						if(types[current.type]==scalarType(candidate)){ sort=candidate; numeric=true; break; }
+					if(numeric){
+						auto predicate=at(current.a),neg=primitive(arena.not_(arena.boolean(false)),[predicate]);
+						auto zero=arena.number(Number(0),sort),mask=arena.mask(arena.boolean(false),zero);
+						next=primitive(arena.add(zero,zero,true),[primitive(mask,[predicate,at(current.b)]),primitive(mask,[neg,at(current.c)])]);
+						rule=BindingRule.conditionalNumeric;
+					}
 				}
 			}
 			if(current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
@@ -1956,6 +1979,18 @@ final class Bindings{
 					else{ next=guard(defined(at(current.a)),at(current.b)); rule=BindingRule.seqGuard; }
 				}
 				if(next!=BoundTerm.init&&steps>=budget){ next=BoundTerm.init; exhausted=true; }
+			}
+			if(next==BoundTerm.init&&current.a!=uint.max&&conditionalStrict(current)){
+				auto left=nodes[current.a];
+				if(left.op==BoundOp.conditional){
+					auto yes=rebuild(at(result.output),ctx,current.b==uint.max?[at(left.b)]:[at(left.b),at(current.b)]);
+					auto no=rebuild(at(result.output),ctx,current.b==uint.max?[at(left.c)]:[at(left.c),at(current.b)]);
+					next=conditional(at(left.a),yes,no); rule=current.b==uint.max?BindingRule.conditionalMap:BindingRule.conditionalLeft;
+				}else if(current.b!=uint.max&&conditionalStrict(current,true)&&nodes[current.b].op==BoundOp.conditional){
+					auto right=nodes[current.b];
+					next=conditional(at(right.a),rebuild(at(result.output),ctx,[at(current.a),at(right.b)]),rebuild(at(result.output),ctx,[at(current.a),at(right.c)]));
+					rule=BindingRule.conditionalRight;
+				}
 			}
 			if(next==BoundTerm.init&&additive(current)&&(nodes[current.a].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom)){
 				next=bottom(ctx,types[current.type]);rule=BindingRule.addBottom;
@@ -3145,6 +3180,26 @@ final class Bindings{
 				case BindingRule.conditionalBottom:proof=".conditionalBottom "~name(n.b)~" "~name(n.c); break;
 				case BindingRule.conditionalSame:proof=".conditionalSame "~name(n.a)~" "~name(n.b); break;
 				case BindingRule.conditionalBool:proof=".conditionalBool "~name(n.a)~" "~name(n.b)~" "~name(n.c); break;
+				case BindingRule.conditionalNumeric:
+					auto sort=elementSort(types[n.type]);
+					auto add=sort==Sort.natural?"Functions.addN.apply":sort==Sort.integer?"Functions.addZ.apply":sort==Sort.rational?"Functions.addQ.apply":"Value.add";
+					auto h=sort==Sort.natural?"AffineRecurrence.addN":sort==Sort.integer?"AffineRecurrence.addZ":sort==Sort.rational?"AffineRecurrence.addQ":"rfl";
+					proof=".ofEq (fun ξ ρ => Binding.conditional_numeric "~add~" "~h~" ("~name(n.a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ) ("~name(n.c)~".eval ξ ρ))"; break;
+				case BindingRule.conditionalMap,BindingRule.conditionalLeft,BindingRule.conditionalRight:
+					auto right=p.rule==BindingRule.conditionalRight,q=nodes[right?n.b:n.a];
+					string operation;
+					if(n.op==BoundOp.apply||n.op==BoundOp.sequence){
+						operation="(fun (f : Option ("~leanType(types[nodes[n.a].type])~" : Binding.Ty).denote) (x : Option ("~leanType(types[nodes[n.b].type])~" : Binding.Ty).denote) => f.bind (fun g => "~(n.op==BoundOp.apply?"x.bind g":"x")~"))";
+					}else operation=valueOperation(n);
+					auto strict="rfl";
+					if(n.b!=uint.max){
+						auto other="("~name(right?n.a:n.b)~".eval ξ ρ)";
+						operation=right?"(fun v => "~operation~" "~other~" v)":"(fun v => "~operation~" v "~other~")";
+						// Case splitting also covers operations represented by a strict
+						// two-argument match, rather than nested Option.bind calls.
+						strict=n.op==BoundOp.tensor?"("~tensorDomainProof(n)~(right?".right ":".left ")~other~")":"(by cases "~other~" <;> rfl)";
+					}
+					proof=".ofEq (fun ξ ρ => Binding.conditional_map "~operation~" "~strict~" ("~name(q.a)~".eval ξ ρ) ("~name(q.b)~".eval ξ ρ) ("~name(q.c)~".eval ξ ρ))"; break;
 				case BindingRule.conditionalDefined:
 					auto q=nodes[n.a]; proof=".definedConditional "~name(q.a)~" "~name(q.b)~" "~name(q.c); break;
 				case BindingRule.trans:proof=".trans "~proofName(p.left)~" "~proofName(p.right); break;

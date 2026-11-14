@@ -641,4 +641,22 @@ theorem Reduction.conditionalBool (p x y : Expr Γ (.scalar .bool)) :
     | none => simp [Expr.eval, conditionalValue, Value.or, Value.and, Value.not, hp, hx]
     | some c => cases c <;> simp [Expr.eval, conditionalValue, Value.or, Value.and, Value.not, hp, hx])
 
+-- Only bottom-preserving consumers commute with a partial condition.
+theorem conditional_map {α β : Type} (f : Option α → Option β) (hf : f none = none)
+    (p : Option Bool) (x y : Option α) :
+    f (conditionalValue p x y) = conditionalValue p (f x) (f y) := by
+  cases p with
+  | none => exact hf
+  | some b => cases b <;> rfl
+
+theorem conditional_numeric {α : Type} [AddZeroClass α]
+    (add : Option α → Option α → Option α) (ha : add = Value.add)
+    (p : Option Bool) (x y : Option α) :
+    conditionalValue p x y = add (Value.mask p x) (Value.mask (Value.not p) y) := by
+  subst add
+  cases p with
+  | none => rfl
+  | some b => cases b <;> cases x <;> cases y <;>
+      simp [conditionalValue, Value.mask, Value.not, Value.add]
+
 end QSym.Binding

@@ -145,6 +145,7 @@ $(eval $(call test_binary,fixed-domain-tests,fixed_domains,-unittest))
 $(eval $(call test_binary,partial-domain-tests,partial_domains,-unittest))
 $(eval $(call test_binary,product-recursion-tests,product_recursion,))
 $(eval $(call test_binary,polymorphic-conditional-tests,polymorphic_conditionals,))
+$(eval $(call test_binary,conditional-consumer-tests,conditional_consumers,))
 $(eval $(call test_binary,ranked-domain-tests,ranked_domains,))
 $(eval $(call test_binary,real-countdown-tests,real_countdown,-unittest))
 $(eval $(call test_binary,argument-branch-tests,argument_branches,))
@@ -232,6 +233,7 @@ test: build-tests build/qsym
 	./build/partial-domain-tests --DRT-testmode=run-main build/partial-domains
 	./build/product-recursion-tests build/product-recursion
 	./build/polymorphic-conditional-tests build/polymorphic-conditionals
+	./build/conditional-consumer-tests build/conditional-consumers
 	./build/ranked-domain-tests build/ranked-domains
 	./build/real-countdown-tests --DRT-testmode=run-main build/real-countdown
 	./build/argument-branch-tests build/argument-branches
