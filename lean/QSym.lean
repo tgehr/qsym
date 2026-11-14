@@ -32,6 +32,10 @@ import QSym.MaskFunctions
 import QSym.Summation
 import QSym.SummationBounds
 import QSym.SummationAlgebra
+import QSym.SummationAffine
+import QSym.SummationPowers
+import QSym.SummationPrefix
+import QSym.SummationMasks
 import QSym.SummationTails
 import QSym.SqrtBranches
 import QSym.SqrtProducts

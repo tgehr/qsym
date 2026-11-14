@@ -37,7 +37,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -1243,14 +1243,49 @@ final class Bindings{
 			enforce(proofs.length<1_000_000,"binding proof limit exceeded");
 			proofs~=BindingStep(rule,from,to,left,right,extra); return cast(uint)proofs.length-1;
 		}
+		Result delegate(BoundTerm,uint) @safe normalizeClosed;
+		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
+			bool call(BoundNode q,Builtin f){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f;}
+			auto n=node(t);if(!call(n,Builtin.addN)||depends(at(n.b),0))return false;
+			auto mul=nodes[n.a];if(!call(mul,Builtin.mulN)||nodes[mul.b].op!=BoundOp.variable||nodes[mul.b].data!=0)return false;
+			auto c=nodes[mul.a];if(c.op!=BoundOp.scalar||!arena.isNumber(arena.at(c.data))||arena.number(arena.at(c.data)).re<=Number(0).re)return false;
+			coefficient=at(mul.a);offset=at(n.b);index=at(mul.b);return true;
+		}
 		// Round real comparisons only in a summand. These are equalities on
 		// partial values, including negative and undefined bounds.
 		Result roundSumBounds(BoundTerm t,bool splitMasks=false){
 			auto n=node(t);
+			if((n.op==BoundOp.scalar||n.op==BoundOp.primitive)&&!depends(t,0)&&scalarBody(t,arena.natural_(0))!=Term.init) return normalizeClosed(t,0);
 			if(n.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(n.data)).op;
 				if(op==Op.builtin){
 					auto cmp=arena.view(arena.at(n.data)).value;
+					if(cmp>=Builtin.powQZ&&cmp<=Builtin.powCZ){
+						bool call(BoundNode q,Builtin f){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f;}
+						auto exponent=nodes[n.b],pow=cast(Builtin)(Builtin.powQN+cmp-Builtin.powQZ),zero=arena.number(Number(0),elementSort(type(t)));
+						if(call(exponent,Builtin.castNZ)){
+							auto out_=primitive(arena.call(pow,[zero,arena.natural_(0)]),[at(n.a),at(exponent.a)]);
+							return Result(out_.id,emit(BindingRule.sumPowerNatural,t.id,out_.id));
+						}
+						if(call(exponent,Builtin.addZ))foreach(reverse;0..2){
+							auto offset=nodes[reverse?exponent.b:exponent.a],product=nodes[reverse?exponent.a:exponent.b];
+							if(offset.op!=BoundOp.scalar||!arena.isNumber(arena.at(offset.data))||arena.number(arena.at(offset.data)).re>=Number(0).re||!call(product,Builtin.mulZ))continue;
+							auto minus=nodes[product.a],cast_=nodes[product.b];
+							if(minus.op!=BoundOp.scalar||!arena.isNumber(arena.at(minus.data))||arena.number(arena.at(minus.data))!=Number(-1)||!call(cast_,Builtin.castNZ))continue;
+							auto count=scalar(context(t),arena.number(-arena.number(arena.at(offset.data)),Sort.natural));
+							auto power=primitive(arena.add(arena.natural_(0),arena.natural_(0),true),[at(cast_.a),count]);
+							auto out_=primitive(arena.call(pow,[zero,arena.natural_(0)]),[primitive(arena.inv(zero),[at(n.a)]),power]);
+							return Result(out_.id,emit(BindingRule.sumPowerNegative,t.id,out_.id,uint.max,uint.max,reverse));
+						}
+					}
+					if(cmp==Builtin.ltN||cmp==Builtin.leN){
+						BoundTerm a,b,i;
+						if(affineNaturalParts(at(n.a),a,b,i)&&!depends(at(n.b),0)||affineNaturalParts(at(n.b),a,b,i)&&!depends(at(n.a),0)){
+							BoundTerm asReal(BoundTerm x){foreach(c;[Builtin.castNZ,Builtin.castZQ,Builtin.castQR])x=primitive(arena.call(c,[arena.number(Number(0),builtinInfo(c).args[0])]),[x]);return x;}
+							auto out_=primitive(cmp==Builtin.ltN?arena.lt(arena.real_(0),arena.real_(0)):arena.le(arena.real_(0),arena.real_(0)),[asReal(at(n.a)),asReal(at(n.b))]);
+							return Result(out_.id,emit(BindingRule.sumNaturalBound,t.id,out_.id));
+						}
+					}
 					if(cmp==Builtin.ltQ||cmp==Builtin.leQ){
 						auto cast_=arena.call(Builtin.castQR,[arena.number(Number(0),Sort.rational)]);
 						auto left=primitive(cast_,[at(n.a)]),right=primitive(cast_,[at(n.b)]);
@@ -1291,6 +1326,22 @@ final class Bindings{
 						}
 					}
 				}
+				if(op==Op.lt||op==Op.le)foreach(reverse;0..2){
+					auto expression=at(reverse?n.b:n.a),bound=at(reverse?n.a:n.b);
+					foreach(c;[Builtin.castQR,Builtin.castZQ,Builtin.castNZ]){
+						auto v=node(expression);
+						if(v.op!=BoundOp.primitive||arena.view(arena.at(v.data)).op!=Op.builtin||arena.view(arena.at(v.data)).value!=c){expression=BoundTerm.init;break;}
+						expression=at(v.a);
+					}
+					BoundTerm a,b,i;if(expression==BoundTerm.init||depends(bound,0)||!affineNaturalParts(expression,a,b,i))continue;
+					BoundTerm asReal(BoundTerm x){foreach(c;[Builtin.castNZ,Builtin.castZQ,Builtin.castQR])x=primitive(arena.call(c,[arena.number(Number(0),builtinInfo(c).args[0])]),[x]);return x;}
+					auto ctx=context(t),z=arena.real_(0);
+					auto negative=primitive(arena.mul(z,z,true),[scalar(ctx,arena.real_(-1)),asReal(b)]);
+					auto shifted=primitive(arena.add(z,z,true),[bound,negative]);
+					auto threshold=primitive(arena.mul(z,z,true),[shifted,primitive(arena.inv(z),[asReal(a)])]);
+					auto out_=primitive(arena.at(n.data),reverse?[threshold,asReal(i)]:[asReal(i),threshold]);
+					return Result(out_.id,emit(BindingRule.sumAffineNatural,t.id,out_.id,uint.max,uint.max,reverse));
+				}
 				if(op==Op.lt||op==Op.le) foreach(reverse;0..2){
 					auto index=at(reverse?n.b:n.a),bound=at(reverse?n.a:n.b);
 					foreach(c;[Builtin.castQR,Builtin.castZQ]){
@@ -1320,6 +1371,48 @@ final class Bindings{
 			if(x.output==n.a&&y.output==n.b) return Result(t.id,emit(BindingRule.refl,t.id,t.id));
 			auto out_=rebuild(t,context(t),n.b==uint.max?[at(x.output)]:[at(x.output),at(y.output)]);
 			return Result(out_.id,emit(BindingRule.congr,t.id,out_.id,x.proof,y.proof));
+		}
+		bool boundedMask(BoundNode x){
+			if(x.op!=BoundOp.primitive||arena.view(arena.at(x.data)).op!=Op.mask) return false;
+			auto p=nodes[x.a]; if(p.op!=BoundOp.primitive) return false;
+			auto op=arena.view(arena.at(p.data));
+			return op.op==Op.builtin&&(op.value==Builtin.ltN||op.value==Builtin.leN)&&nodes[p.a].op==BoundOp.variable&&nodes[p.a].data==0&&!depends(at(p.b),0);
+		}
+		bool zeroSelector(BoundNode x){
+			if(x.op!=BoundOp.primitive||arena.view(arena.at(x.data)).op!=Op.mask)return false;
+			auto p=nodes[x.a];if(p.op!=BoundOp.primitive||arena.view(arena.at(p.data)).op!=Op.not_)return false;
+			auto nz=nodes[p.a];if(nz.op!=BoundOp.primitive)return false;
+			auto op=arena.view(arena.at(nz.data));if(op.op!=Op.builtin||(op.value!=Builtin.nonzeroN&&op.value!=Builtin.nonzeroZ))return false;
+			auto iv=nodes[nz.a];
+			if(iv.op==BoundOp.primitive&&arena.view(arena.at(iv.data)).op==Op.builtin&&arena.view(arena.at(iv.data)).value==Builtin.castNZ)iv=nodes[iv.a];
+			return iv.op==BoundOp.variable&&iv.data==0;
+		}
+		bool additive(BoundNode x){
+			if(x.op!=BoundOp.primitive) return false;
+			auto a=arena.view(arena.at(x.data));
+			return a.op==Op.add||a.op==Op.builtin&&(a.value==Builtin.addN||a.value==Builtin.addZ||a.value==Builtin.addQ);
+		}
+		// Expose finite masks across numeric embeddings, but commit this direction
+		// only when the resulting sum can immediately become a finite sum.
+		Result exposeSumMasks(BoundTerm t){
+			auto n=node(t); if(n.op!=BoundOp.primitive) return Result(t.id,emit(BindingRule.refl,t.id,t.id));
+			auto op=arena.view(arena.at(n.data));
+			bool cast_=op.op==Op.builtin&&op.value>=Builtin.castNZ&&op.value<=Builtin.castRC;
+			if(!cast_&&!additive(n)) return Result(t.id,emit(BindingRule.refl,t.id,t.id));
+			auto x=exposeSumMasks(at(n.a)),y=n.b==uint.max?Result(uint.max,uint.max):exposeSumMasks(at(n.b));
+			auto out_=rebuild(t,context(t),n.b==uint.max?[at(x.output)]:[at(x.output),at(y.output)]);
+			auto proof=emit(BindingRule.congr,t.id,out_.id,x.proof,y.proof);
+			auto child=nodes[x.output];
+			if(cast_&&child.op==BoundOp.primitive){
+				bool mask=arena.view(arena.at(child.data)).op==Op.mask;
+				if(mask||additive(child)){
+					auto left=mask?at(child.a):primitive(arena.at(n.data),[at(child.a)]),right=primitive(arena.at(n.data),[at(child.b)]);
+					auto op2=mask?arena.mask(arena.boolean(false),arena.number(Number(0),elementSort(type(t)))):scalarOperator(type(t),TensorOp.add);
+					auto next=primitive(op2,[left,right]),step=emit(mask?BindingRule.sumCastMask:BindingRule.sumCastAdd,out_.id,next.id);
+					return Result(next.id,emit(BindingRule.trans,t.id,next.id,proof,step));
+				}
+			}
+			return Result(out_.id,proof);
 		}
 		BoundTerm solveFinite(BoundTerm t,out uint extra,bool infinite=false){
 			auto n=node(t),fn=nodes[n.a]; if(fn.op!=BoundOp.lambda||pool.view(type(at(n.a))).fields[0]!=scalarType(Sort.natural)) return BoundTerm.init;
@@ -1508,7 +1601,30 @@ final class Bindings{
 						active.set(t.id,false);memo.set(t.id,result);return result;
 					}
 				}
-				if(body.op==BoundOp.scalar&&arena.isNumber(arena.at(body.data))&&arena.number(arena.at(body.data)).zero){
+				if(steps<budget){
+					auto exposed=exposeSumMasks(at(nodes[current.a].a)),b=nodes[exposed.output];
+					if(exposed.output!=nodes[current.a].a&&(boundedMask(b)||zeroSelector(b)||additive(b)&&boundedMask(nodes[b.a])&&boundedMask(nodes[b.b]))){
+						auto fn=inheritHint(at(current.a),lambda(at(exposed.output))),out_=summation(fn);
+						auto fp=emit(BindingRule.congr,current.a,fn.id,exposed.proof),sp=emit(BindingRule.congr,result.output,out_.id,fp);++steps;
+						auto tail=visit(out_,depth+1),rest=emit(BindingRule.trans,result.output,tail.output,sp,tail.proof);
+						result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,result.proof,rest));
+						active.set(t.id,false);memo.set(t.id,result);return result;
+					}
+				}
+				// Distribute finite-support summands without assuming arbitrary infinite linearity.
+				if(body.op==BoundOp.primitive&&arena.view(arena.at(body.data)).op==arena.view(scalarOperator(ty,TensorOp.add)).op&&arena.view(arena.at(body.data)).value==arena.view(scalarOperator(ty,TensorOp.add)).value&&type(variable(context(at(nodes[current.a].a)),0))==scalarType(Sort.natural)){
+					auto left=nodes[body.a],right=nodes[body.b];
+
+					if(boundedMask(left)&&boundedMask(right)){
+						auto lp=nodes[left.a],rp=nodes[right.a],lo=dropIndex(at(lp.b)),hi=dropIndex(at(rp.b));
+						bool li=arena.view(arena.at(lp.data)).value==Builtin.leN,ri=arena.view(arena.at(rp.data)).value==Builtin.leN;
+						BoundTerm upper(BoundTerm n,bool inclusive){return inclusive?primitive(arena.add(arena.natural_(0),arena.natural_(0),true),[n,scalar(ctx,arena.natural_(1))]):n;}
+						next=primitive(arena.at(body.data),[finiteSum(inheritHint(at(current.a),lambda(at(left.b))),upper(lo,li)),finiteSum(inheritHint(at(current.a),lambda(at(right.b))),upper(hi,ri))]);
+						extra=tuple(ctx,[lo,hi,scalar(ctx,arena.natural_((li?1:0)|(ri?2:0)))]).id;rule=BindingRule.sumBoundedAdd;
+					}
+				}
+				if(next!=BoundTerm.init){}
+				else if(body.op==BoundOp.scalar&&arena.isNumber(arena.at(body.data))&&arena.number(arena.at(body.data)).zero){
 					next=scalar(ctx,arena.number(Number(0),elementSort(ty))); rule=BindingRule.sumZero;
 				}else if(!depends(at(nodes[current.a].a),0)){
 					auto c=dropIndex(at(nodes[current.a].a)),sort=elementSort(ty),placeholder=arena.number(Number(0),sort);
@@ -1596,6 +1712,43 @@ final class Bindings{
 							else if(lower) values[0]=add(unary(Builtin.castNZ,j),shiftedK);
 							else values[0]=add(add(shiftedK,scalar(inner,arena.integer(-1))),primitive(arena.mul(zero,zero,true),[scalar(inner,arena.integer(-1)),unary(Builtin.castNZ,j)]));
 							next=sequence(endpoint,summation(inheritHint(at(current.a),lambda(substitute(at(body.b),inner,values)))));rule=BindingRule.sumTail;
+						}
+					}
+					if(next==BoundTerm.init&&pred.op==BoundOp.primitive&&arena.view(arena.at(pred.data)).op==Op.builtin&&arena.view(arena.at(pred.data)).value==Builtin.nonzeroZ){
+						auto cast_=nodes[pred.a];
+						if(cast_.op==BoundOp.primitive&&arena.view(arena.at(cast_.data)).op==Op.builtin&&arena.view(arena.at(cast_.data)).value==Builtin.castNZ&&nodes[cast_.a].op==BoundOp.variable&&nodes[cast_.a].data==0){
+							auto inner=context(at(body.b)),shift=primitive(arena.add(arena.natural_(0),arena.natural_(0),true),[variable(inner,0),scalar(inner,arena.natural_(1))]);
+							BoundTerm[] values=[shift];foreach(i;0..this.depth(ctx))values~=variable(inner,i+1);
+							next=summation(inheritHint(at(current.a),lambda(substitute(at(body.b),inner,values))));rule=BindingRule.sumExcludeZero;
+						}
+					}
+					if(next==BoundTerm.init&&elementSort(ty)!=Sort.natural&&pred.op==BoundOp.primitive&&arena.view(arena.at(pred.data)).op==Op.builtin&&arena.view(arena.at(pred.data)).value==Builtin.nonzeroZ){
+						auto diff=nodes[pred.a];
+						if(diff.op==BoundOp.primitive&&arena.view(arena.at(diff.data)).op==Op.builtin&&arena.view(arena.at(diff.data)).value==Builtin.addZ){
+							auto cast_=nodes[diff.a];
+							if(cast_.op==BoundOp.primitive&&arena.view(arena.at(cast_.data)).op==Op.builtin&&arena.view(arena.at(cast_.data)).value==Builtin.castNZ&&nodes[cast_.a].op==BoundOp.variable&&nodes[cast_.a].data==0&&!depends(at(diff.b),0)){
+								auto c=dropIndex(at(diff.b));extra=c.id;
+								BoundTerm unary(Builtin op,BoundTerm x){return primitive(arena.call(op,[arena.number(Number(0),builtinInfo(op).args[0])]),[x]);}
+								auto negative=primitive(arena.mul(arena.integer(0),arena.integer(0),true),[scalar(ctx,arena.integer(-1)),c]);
+								auto plus=primitive(arena.add(arena.integer(0),arena.integer(0),true),[negative,scalar(ctx,arena.integer(1))]);
+								BoundTerm count(BoundTerm x){return unary(Builtin.floorN,unary(Builtin.castQR,unary(Builtin.castZQ,x)));}
+								auto lo=count(negative),hi=count(plus),inner=context(at(body.b));
+								uint[] indices;foreach(i;0..this.depth(ctx))indices~=i+1;
+								auto shift=primitive(arena.add(arena.natural_(0),arena.natural_(0),true),[variable(inner,0),rename(hi,inner,indices)]);
+								BoundTerm[] values=[shift];foreach(i;0..this.depth(ctx))values~=variable(inner,i+1);
+								auto f=inheritHint(at(current.a),lambda(at(body.b))),g=inheritHint(at(current.a),lambda(substitute(at(body.b),inner,values)));
+								next=primitive(scalarOperator(ty,TensorOp.add),[finiteSum(f,lo),summation(g)]);rule=BindingRule.sumExcludeOffset;
+							}
+						}
+					}
+					if(next==BoundTerm.init&&pred.op==BoundOp.primitive&&arena.view(arena.at(pred.data)).op==Op.not_){
+						auto nz=nodes[pred.a],indexType=type(variable(context(at(body.a)),0));
+						if(nz.op==BoundOp.primitive&&arena.view(arena.at(nz.data)).op==Op.builtin&&(arena.view(arena.at(nz.data)).value==Builtin.nonzeroZ||arena.view(arena.at(nz.data)).value==Builtin.nonzeroN)){
+							auto iv=nodes[nz.a];
+							if(indexType==scalarType(Sort.natural)&&iv.op==BoundOp.primitive&&arena.view(arena.at(iv.data)).op==Op.builtin&&arena.view(arena.at(iv.data)).value==Builtin.castNZ) iv=nodes[iv.a];
+							if(iv.op==BoundOp.variable&&iv.data==0){
+								next=apply(inheritHint(at(current.a),lambda(at(body.b))),scalar(ctx,arena.number(Number(0),elementSort(indexType))));rule=BindingRule.sumDeltaZero;extra=arena.view(arena.at(nz.data)).value==Builtin.nonzeroN?1:0;
+							}
 						}
 					}
 					if(next==BoundTerm.init&&type(variable(context(at(body.a)),0))==scalarType(Sort.integer)&&pred.op==BoundOp.primitive&&arena.view(arena.at(pred.data)).op==Op.not_){
@@ -1736,6 +1889,9 @@ final class Bindings{
 					else{ next=guard(defined(at(current.a)),at(current.b)); rule=BindingRule.seqGuard; }
 				}
 				if(next!=BoundTerm.init&&steps>=budget){ next=BoundTerm.init; exhausted=true; }
+			}
+			if(next==BoundTerm.init&&additive(current)&&(nodes[current.a].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom)){
+				next=bottom(ctx,types[current.type]);rule=BindingRule.addBottom;
 			}
 			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.primitive||current.op==BoundOp.guard)&&current.a!=uint.max&&nodes[current.a].op==BoundOp.bottom){ next=bottom(ctx,type(at(result.output))); rule=BindingRule.shortCircuit; }
 			if(domains&&next==BoundTerm.init){
@@ -1918,6 +2074,7 @@ final class Bindings{
 			}
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
+		normalizeClosed=&visit;
 		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums);
 	}
 
@@ -2191,7 +2348,7 @@ final class Bindings{
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
-		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds) stack~=p.extra;
+		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd) stack~=p.extra;
 		while(stack.length){
 			auto id=stack[$-1]; --stack.length; if(used[id]) continue;
 			used[id]=true; auto n=nodes[id];
@@ -2727,6 +2884,49 @@ final class Bindings{
 				case BindingRule.sumMaskAnd:
 					auto pred=nodes[n.a];
 					proof=".ofEq (fun ξ ρ => SummationAlgebra.mask_and ("~name(pred.a)~".eval ξ ρ) ("~name(pred.b)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))";break;
+				case BindingRule.sumNaturalBound:
+					proof=".ofEq (fun ξ ρ => SummationAffine.natural_"~(arena.view(arena.at(n.data)).value==Builtin.ltN?"lt":"le")~" ("~name(n.a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))";break;
+				case BindingRule.sumAffineNatural:
+					auto expr=p.extra?n.b:n.a,bound=p.extra?n.a:n.b;
+					foreach(_;0..3)expr=nodes[expr].a;
+					auto add=nodes[expr],mul=nodes[add.a],m=arena.number(arena.at(nodes[mul.a].data)).re.integer;
+					proof=".ofEq (fun ξ ρ => SummationAffine.affineN ("~name(mul.a)~".eval ξ ρ) ("~name(add.b)~".eval ξ ρ) ("~name(mul.b)~".eval ξ ρ) ("~name(bound)~".eval ξ ρ) "~to!string(m)~" (of_decide_eq_true rfl) rfl (n"~to!string(arena.real_(-1).id)~".eval ξ) Spectral.minusR "~(arena.view(arena.at(n.data)).op==Op.le?"true":"false")~" "~(p.extra?"true":"false")~")";break;
+				case BindingRule.sumPowerNatural:
+					auto suffix=["Q","R","C"][arena.view(arena.at(n.data)).value-Builtin.powQZ];
+					proof=".ofEq (fun ξ ρ => SummationPowers.natural"~suffix~" ("~name(n.a)~".eval ξ ρ) ("~name(nodes[n.b].a)~".eval ξ ρ))";break;
+				case BindingRule.sumPowerNegative:
+					auto suffix=["Q","R","C"][arena.view(arena.at(n.data)).value-Builtin.powQZ],exponent=nodes[n.b];
+					auto offset=p.extra?exponent.b:exponent.a,product=nodes[p.extra?exponent.a:exponent.b],iv=nodes[product.b].a;
+					auto m=-arena.number(arena.at(nodes[offset].data)).re.integer-1;
+					proof=".ofEq (fun ξ ρ => SummationPowers.negative"~(p.extra?"Reverse":"")~suffix~" ("~name(n.a)~".eval ξ ρ) ("~name(iv)~".eval ξ ρ) "~to!string(m)~" ("~name(offset)~".eval ξ ρ) ("~name(product.a)~".eval ξ ρ) rfl rfl)";break;
+				case BindingRule.addBottom:
+					auto sort=elementSort(types[n.type]),add=tensorOperation(types[n.type],TensorOp.add),ha=sort==Sort.natural?"Summation.addN":sort==Sort.integer?"Summation.addZ":sort==Sort.rational?"Summation.addQ":"Summation.add";
+					auto left=nodes[n.a].op==BoundOp.bottom;
+					proof=".ofEq (fun ξ ρ => SummationMasks.add_none_"~(left?"left":"right")~" "~add~" "~ha~" ("~name(left?n.b:n.a)~".eval ξ ρ))";break;
+				case BindingRule.sumExcludeZero:
+					auto body=nodes[nodes[n.a].a],sort=elementSort(types[n.type]),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm",hw=sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero";
+					auto f="(fun (i : Option ℕ) => "~name(body.b)~".eval ξ (Binding.Env.cons (a := .scalar .natural) i ρ))";
+					proof=".ofEq (fun ξ ρ => SummationMasks.exclude_zero "~w~" "~hw~" "~f~")";break;
+				case BindingRule.sumExcludeOffset:
+					auto body=nodes[nodes[n.a].a],sort=elementSort(types[n.type]);
+					auto add=tensorOperation(types[n.type],TensorOp.add),ha=sort==Sort.integer?"Summation.addZ":sort==Sort.rational?"Summation.addQ":"Summation.add";
+					auto f="(fun (i : Option ℕ) => "~name(body.b)~".eval ξ (Binding.Env.cons (a := .scalar .natural) i ρ))";
+					proof=".ofEq (fun ξ ρ => SummationPrefix.exclude_offset norm "~add~" "~ha~" "~f~" ("~name(p.extra)~".eval ξ ρ))";break;
+				case BindingRule.sumCastMask,BindingRule.sumCastAdd:
+					auto child=nodes[n.a],suffix=["NZ","ZQ","QR","RC"][arena.view(arena.at(n.data)).value-Builtin.castNZ];
+					proof=".ofEq (fun ξ ρ => SummationMasks.cast"~suffix~(p.rule==BindingRule.sumCastMask?"_mask":"_add")~" ("~name(child.a)~".eval ξ ρ) ("~name(child.b)~".eval ξ ρ))";break;
+				case BindingRule.sumBoundedAdd:
+					auto body=nodes[nodes[n.a].a],bounds=nodes[p.extra],sort=elementSort(types[n.type]);
+					auto add=tensorOperation(types[n.type],TensorOp.add),ha=sort==Sort.natural?"Summation.addN":sort==Sort.integer?"Summation.addZ":sort==Sort.rational?"Summation.addQ":"Summation.add";
+					auto w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm",hw=sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero";
+					string fn(uint id){return "(fun (i : ℕ) => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some i) ρ))";}
+					auto flags=arena.number(arena.at(nodes[nodes[nodes[bounds.b].b].a].data)).re.integer;
+					proof=".ofEq (fun ξ ρ => SummationMasks.bounded_add "~w~" "~hw~" "~add~" "~ha~" "~fn(nodes[body.a].b)~" "~fn(nodes[body.b].b)~" ("~name(bounds.a)~".eval ξ ρ) ("~name(nodes[bounds.b].a)~".eval ξ ρ) "~(flags&1?"true":"false")~" "~(flags&2?"true":"false")~")";break;
+				case BindingRule.sumDeltaZero:
+					auto body=nodes[nodes[n.a].a],sort=elementSort(types[n.type]),index=pool.view(type(at(n.a))).fields[0],ns=index==scalarType(Sort.natural);
+					auto w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm",hw=sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero";
+					auto f="(fun (i : "~(ns?"ℕ":"ℤ")~") => "~name(body.b)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") (some i) ρ))";
+					proof=".ofEq (fun ξ ρ => SummationMasks.delta"~(ns?(p.extra==1?"N_nonzeroN":"N_zero"):"Z_zero")~" "~w~" "~hw~" "~f~")";break;
 				case BindingRule.rangeAdd:
 					auto body=nodes[nodes[n.a].a],sort=elementSort(types[n.type]);
 					auto add=tensorOperation(types[n.type],TensorOp.add),ha=sort==Sort.natural?"Summation.addN":sort==Sort.integer?"Summation.addZ":sort==Sort.rational?"Summation.addQ":"Summation.add";

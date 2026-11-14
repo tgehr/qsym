@@ -100,6 +100,7 @@ def main():
 	check(ROOT/"tests/Summation.lean")
 	check(ROOT/"tests/SummationTails.lean")
 	check(ROOT/"tests/SummationBounds.lean")
+	check(ROOT/"tests/SummationParity.lean")
 	check(ROOT/"tests/Functional.lean")
 	check(ROOT/"tests/Subsets.lean")
 	check(ROOT/"build/Syntax.lean")
@@ -155,7 +156,7 @@ def main():
 		raise RuntimeError("expected 28 binding certificates")
 	for file in bindings:
 		certificate(file)
-	for directory,count in (("summation",79),("summation-tails",33),("sqrt-branches",40),("sqrt-products",37),("atanh-compositions",121),("recovered-algebra",81),("argument-rotation",70),("argument-branches",74),("argument-compositions",64),("indexed-norms",54),("zero-powers",90),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
+	for directory,count in (("summation",108),("summation-tails",33),("sqrt-branches",40),("sqrt-products",37),("atanh-compositions",121),("recovered-algebra",81),("argument-rotation",70),("argument-branches",74),("argument-compositions",64),("indexed-norms",54),("zero-powers",90),("guards",25),("folding",73),("relations",37),("quadratics",42),("order",68),("identities",84),("compact",19),("associative",22),("regions",6),("counted",24),("joins",28),("lookup",20),("signs",51),("sum",7),("rational",24),("transcendental",65),("powers",62),("functions",93),("exponentials",178),("trigonometry",287),("trig-algebra",627),("radicals",78),("inverses",196),("domains",219),("assumptions",169),("numerals",68),("bounds",233),("subtypes",85),("convergence",52),("control",57),("partitions",143)):
 		files=sorted((ROOT/"build"/directory).glob("*.lean"))
 		if len(files)!=count:
 			raise RuntimeError(f"expected {count} {directory} certificates")
@@ -294,6 +295,12 @@ def main():
 		('SumRoundNegative','example : SummationBounds.ceilN (some (-1/2))=some 1 := by norm_num [SummationBounds.ceilN_some]'),
 		('SumRoundInclusive','example : SummationBounds.upperN (some 2)=some 2 := by norm_num [SummationBounds.upperN_some]')):
 		path=negative/(name+".lean"); path.write_text("import QSym.SummationBounds\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
+
+	for name,body in (
+		("SumExcludeOffset","example (f : Option ℕ → Option ℝ) : Summation.value norm (some (fun i => Value.mask (SummationAlgebra.offsetNonzero (some i) (some (-2))) (f (some i)))) = Value.add (Summation.rangeValue (some (fun i => f (some i))) (some 2)) (Summation.value norm (some (fun i => f (some (i+2))))) := SummationPrefix.exclude_offset norm Value.add Summation.add f (some (-2))"),
+		("SumNegativeZero","example : Functions.powRZ.apply (some 0) (some (-1)) = some 0 := by norm_num [Function2.apply,Functions.powRZ]"),
+		("SumExcludedSelectedPole","example : Summation.value norm (some (fun i : ℕ => if i=2 then some (0:ℝ) else if i=3 then none else some 0)) = some 0 := by have h := Summation.undefined_term norm (fun i : ℕ => if i=2 then some (0:ℝ) else if i=3 then none else some 0) 3 (by norm_num); rw [h]")):
+		path=negative/(name+".lean"); path.write_text("import QSym\nopen QSym\n"+body+"\n"); check(path,succeeds=False)
 	for name,body in (
 		("SqrtConjCut", "example : Value.Refines (Value.conj (Functions.sqrtC.apply (some (-1)))) (Functions.sqrtC.apply (Value.conj (some (-1)))) := by apply Value.refines_sqrt_conj_re; norm_num [Value.Refines, Value.le, Function1.apply, Functions.reC]"),
 		("SqrtInvCut", "example : Value.Refines (Functions.sqrtC.apply (Value.inv (some (-1)))) (Value.inv (Functions.sqrtC.apply (some (-1)))) := by apply Value.refines_sqrt_inv_re; norm_num [Value.Refines, Value.le, Function1.apply, Functions.reC]"),
