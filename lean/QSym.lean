@@ -19,11 +19,13 @@ import QSym.Tensor
 import QSym.TensorDomains
 import QSym.MatrixBlocks
 import QSym.AffineRecurrence
+import QSym.CoupledRecurrence
 import QSym.LinearRecurrence
 import QSym.Spectral
 import QSym.RepeatedSpectra
 import QSym.NilpotentSpectra
 import QSym.CubeZeroSpectra
+import QSym.JordanSpectra
 import QSym.ZeroRootSpectra
 import QSym.IntegerSpectra
 import QSym.Dependent
