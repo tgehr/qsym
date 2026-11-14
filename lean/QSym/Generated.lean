@@ -10439,6 +10439,106 @@ theorem r_natural_upper_union_right (v_x : Option (Ty.denote .natural)) (v_a : O
 
 #qsym_check_axioms r_natural_upper_union_right
 
+theorem r_natural_lower_union_left (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.leN.apply v_a v_b) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.or (Functions.leN.apply v_a v_x) (Functions.leN.apply v_b v_x)) (Functions.leN.apply v_a v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_lower_union_left
+
+theorem r_natural_lower_union_right (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.leN.apply v_b v_a) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.or (Functions.leN.apply v_a v_x) (Functions.leN.apply v_b v_x)) (Functions.leN.apply v_b v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_lower_union_right
+
+theorem r_integer_lower_absorb_left (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_a v_b) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.and (Functions.leZ.apply v_a v_x) (Functions.leZ.apply v_b v_x)) (Functions.leZ.apply v_b v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_lower_absorb_left
+
+theorem r_integer_lower_absorb_right (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_b v_a) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.and (Functions.leZ.apply v_a v_x) (Functions.leZ.apply v_b v_x)) (Functions.leZ.apply v_a v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_lower_absorb_right
+
+theorem r_integer_upper_absorb_left (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_a v_b) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.and (Functions.leZ.apply v_x v_a) (Functions.leZ.apply v_x v_b)) (Functions.leZ.apply v_x v_a) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_upper_absorb_left
+
+theorem r_integer_upper_absorb_right (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_b v_a) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.and (Functions.leZ.apply v_x v_a) (Functions.leZ.apply v_x v_b)) (Functions.leZ.apply v_x v_b) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_upper_absorb_right
+
+theorem r_integer_upper_union_left (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_a v_b) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.or (Functions.leZ.apply v_x v_a) (Functions.leZ.apply v_x v_b)) (Functions.leZ.apply v_x v_b) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_upper_union_left
+
+theorem r_integer_upper_union_right (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_b v_a) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.or (Functions.leZ.apply v_x v_a) (Functions.leZ.apply v_x v_b)) (Functions.leZ.apply v_x v_a) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_upper_union_right
+
+theorem r_integer_lower_union_left (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_a v_b) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.or (Functions.leZ.apply v_a v_x) (Functions.leZ.apply v_b v_x)) (Functions.leZ.apply v_a v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_lower_union_left
+
+theorem r_integer_lower_union_right (v_x : Option (Ty.denote .integer)) (v_a : Option (Ty.denote .integer)) (v_b : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.leZ.apply v_b v_a) (some true))
+    (hp1 : Value.Defined v_a)
+    (hp2 : Value.Defined v_b) :
+    Value.Refines (Value.or (Functions.leZ.apply v_a v_x) (Functions.leZ.apply v_b v_x)) (Functions.leZ.apply v_b v_x) := qsym_cached% by
+  cases v_x <;> cases v_a <;> cases v_b
+  all_goals qsym_rule
+
+#qsym_check_axioms r_integer_lower_union_right
+
 theorem r_natural_interval_absorb_point (v_x : Option (Ty.denote .natural)) (v_a : Option (Ty.denote .natural)) (v_b : Option (Ty.denote .natural)) (v_c : Option (Ty.denote .integer))
     (hp0 : Value.Refines (Functions.leZ.apply (Functions.addZ.apply (Functions.castNZ.apply v_a) v_c) (some ((0) : ℤ))) (some true))
     (hp1 : Value.Refines (Functions.leZ.apply (some ((0) : ℤ)) (Functions.addZ.apply (Functions.castNZ.apply v_b) v_c)) (some true))

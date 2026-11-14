@@ -5,7 +5,7 @@ import std.file:write,mkdirRecurse;
 import std.path:buildPath;
 import std.stdio:writeln;
 @safe:
-private struct Case{ string name,source,expected; string[] facts; }
+private struct Case{ string name,source,expected; string[] facts; bool domain; }
 private Case[] cases(){ return [
 	Case("AndAssociation","(p∧q)∧r","p∧(q∧r)"),
 	Case("OrAssociation","(p∨q)∨r","p∨(q∨r)"),
@@ -39,6 +39,24 @@ private Case[] cases(){ return [
 	Case("IntegerReversedBoundsRight","(i≤5∧-2≤i)∨i≤-3","i≤5"),
 	Case("IntegerOverlap","i≤-3∨(-7≤i∧i≤5)","i≤5"),
 	Case("IntegerStrict","i<-2∨(-2≤i∧i<6)","i≤5"),
+	Case("IntegerUpperUnion","i≤-3∨i≤5","i≤5"),
+	Case("IntegerUpperUnionReverse","i≤5∨i≤-3","i≤5"),
+	Case("IntegerLowerUnion","-3≤i∨5≤i","-3≤i"),
+	Case("IntegerLowerUnionReverse","5≤i∨-3≤i","-3≤i"),
+	Case("IntegerUpperMeet","i≤-3∧i≤5","i≤-3"),
+	Case("IntegerUpperMeetReverse","i≤5∧i≤-3","i≤-3"),
+	Case("IntegerLowerMeet","-3≤i∧5≤i","5≤i"),
+	Case("IntegerLowerMeetReverse","5≤i∧-3≤i","5≤i"),
+	Case("NaturalLowerUnion","3≤n∨5≤n","3≤n"),
+	Case("NaturalLowerUnionReverse","5≤n∨3≤n","3≤n"),
+	Case("IntegerUpperUnionSymbolic","i≤j∨i≤m","i≤m",["j≤m"]),
+	Case("IntegerUpperUnionSymbolicReverse","i≤m∨i≤j","i≤m",["j≤m"]),
+	Case("IntegerLowerUnionSymbolic","j≤i∨m≤i","j≤i",["j≤m"]),
+	Case("IntegerLowerUnionSymbolicReverse","m≤i∨j≤i","j≤i",["j≤m"]),
+	Case("IntegerUnordered","i≤j∨i≤m","i≤j∨i≤m"),
+	Case("IntegerUpperPartial","i≤toℤ(0 sub 1)∨i≤5","false",[],true),
+	Case("IntegerLowerPartial","toℤ(0 sub 1)≤i∨5≤i","false",[],true),
+	Case("NaturalLowerPartial","(0 sub 1)≤n∨5≤n","false",[],true),
 	Case("IntegerGap","i≤-3∨(-1≤i∧i≤5)","i≤-3∨(-1≤i∧i≤5)"),
 	Case("IntegerGapPoint","(-2:ℤ)≤-3∨(-1≤(-2:ℤ)∧(-2:ℤ)≤5)","false"),
 	Case("IntegerSymbolic","i≤j∨(l≤i∧i≤m)","i≤m",["l≤j+1","j≤m"]),
@@ -52,6 +70,7 @@ int main(string[] args){
 		auto owner=Session.open();auto a=owner.arena;Syntax s;s.declare("n:ℕ,k:ℕ,a:ℕ,b:ℕ,c:ℕ,i:ℤ,j:ℤ,l:ℤ,m:ℤ,p:𝔹,q:𝔹,r:𝔹,x:ℝ");
 		Term[] facts;foreach(f;c.facts) facts~=s.parse(a,f);
 		auto input=s.parse(a,c.source),options=Options(DensityMode.preserve,true);
+		if(c.domain) input=definedness(a,input);
 		auto result=simplify(a,input,facts,options),expected=simplify(a,s.parse(a,c.expected,a.sort(input)),facts,options);
 		auto text=s.format(a,result.output);enforce(!result.exhausted&&!expected.exhausted,c.name~" exhausted");
 		enforce(result.output==expected.output,c.name~": "~text~" expected "~s.format(a,expected.output));

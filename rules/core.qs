@@ -1483,6 +1483,16 @@ rewrite natural_upper_absorb_left(x:ℕ,a:ℕ,b:ℕ):x≤a∧x≤b⇒x≤a when 
 rewrite natural_upper_absorb_right(x:ℕ,a:ℕ,b:ℕ):x≤a∧x≤b⇒x≤b when b≤a,defined(a),defined(b);
 rewrite natural_upper_union_left(x:ℕ,a:ℕ,b:ℕ):x≤a∨x≤b⇒x≤b when a≤b,defined(a),defined(b);
 rewrite natural_upper_union_right(x:ℕ,a:ℕ,b:ℕ):x≤a∨x≤b⇒x≤a when b≤a,defined(a),defined(b);
+rewrite natural_lower_union_left(x:ℕ,a:ℕ,b:ℕ):a≤x∨b≤x⇒a≤x when a≤b,defined(a),defined(b);
+rewrite natural_lower_union_right(x:ℕ,a:ℕ,b:ℕ):a≤x∨b≤x⇒b≤x when b≤a,defined(a),defined(b);
+rewrite integer_lower_absorb_left(x:ℤ,a:ℤ,b:ℤ):a≤x∧b≤x⇒b≤x when a≤b,defined(a),defined(b);
+rewrite integer_lower_absorb_right(x:ℤ,a:ℤ,b:ℤ):a≤x∧b≤x⇒a≤x when b≤a,defined(a),defined(b);
+rewrite integer_upper_absorb_left(x:ℤ,a:ℤ,b:ℤ):x≤a∧x≤b⇒x≤a when a≤b,defined(a),defined(b);
+rewrite integer_upper_absorb_right(x:ℤ,a:ℤ,b:ℤ):x≤a∧x≤b⇒x≤b when b≤a,defined(a),defined(b);
+rewrite integer_upper_union_left(x:ℤ,a:ℤ,b:ℤ):x≤a∨x≤b⇒x≤b when a≤b,defined(a),defined(b);
+rewrite integer_upper_union_right(x:ℤ,a:ℤ,b:ℤ):x≤a∨x≤b⇒x≤a when b≤a,defined(a),defined(b);
+rewrite integer_lower_union_left(x:ℤ,a:ℤ,b:ℤ):a≤x∨b≤x⇒a≤x when a≤b,defined(a),defined(b);
+rewrite integer_lower_union_right(x:ℤ,a:ℤ,b:ℤ):a≤x∨b≤x⇒b≤x when b≤a,defined(a),defined(b);
 rewrite natural_interval_absorb_point(x:ℕ,a:ℕ,b:ℕ,c:ℤ):(a≤x∧x≤b)∨toℤ(x)+c=0⇒a≤x∧x≤b when toℤ(a)+c≤0,0≤toℤ(b)+c,defined(a),defined(b),defined(c);
 rewrite natural_point_absorb_interval(x:ℕ,a:ℕ,b:ℕ,c:ℤ):toℤ(x)+c=0∨(a≤x∧x≤b)⇒a≤x∧x≤b when toℤ(a)+c≤0,0≤toℤ(b)+c,defined(a),defined(b),defined(c);
 rewrite natural_point_prepend_interval(x:ℕ,a:ℕ,b:ℕ,c:ℤ):toℤ(x)+c=0∨(a≤x∧x≤b)⇒(a sub 1≤x)∧x≤b when toℤ(a)+c=1,1≤a,a≤b+1,defined(a),defined(b),defined(c);
