@@ -37,7 +37,7 @@ int main(string[] args){
   auto again=s.run(owner.arena,text);enforce(!again.exhausted&&s.format(owner.arena,again)==text,c.name~" round trip");
   if(c.name=="User")enforce(text==s.format(owner.arena,s.run(owner.arena,"λ(n:ℕ).floorN(2*2^n-n-2)")),"user closed form");
   auto proof=s.exportCertificate(owner.arena,r);
-  if(c.solved)enforce((proof.indexOf("IndexedRecurrence.solve_matrix")>=0||proof.indexOf("CFiniteRecurrence.solve_matrix")>=0),c.name~" solver proof");
+  if(c.solved)enforce((proof.indexOf("IndexedRecurrence.solve_matrix")>=0||proof.indexOf("CFiniteRecurrence.Prefix.solve_matrix")>=0),c.name~" solver proof");
   write(buildPath(dir,c.name~".lean"),proof);++certificates;
  }
  ulong expected;

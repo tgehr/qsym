@@ -799,10 +799,12 @@ final class Bindings{
 		}
 		bool constant(uint id){ return nodes[id].op==BoundOp.scalar&&constantTerm(arena.at(nodes[id].data)); }
 		bool arithmetic(uint id,bool mul){ auto q=nodes[id]; if(q.op!=BoundOp.primitive) return false; auto x=arena.view(arena.at(q.data)),y=arena.view(scalarOperator(type(at(id)),mul?TensorOp.mul:TensorOp.add)); return x.op==y.op&&x.value==y.value; }
-		if(!arithmetic(body.a,false)) return BoundTerm.init;
-		auto sum=nodes[body.a]; if(!op(sum.a,Op.mask)||!op(sum.b,Op.mask)) return BoundTerm.init;
-		auto yes=nodes[sum.a],no=nodes[sum.b],p=nodes[yes.a];
-		if(!op(yes.a,Op.not_)||!op(no.a,Op.not_)||nodes[no.a].a!=yes.a||!call(p.a,Builtin.nonzeroZ)||!call(nodes[p.a].a,Builtin.castNZ)||!variableAt(nodes[nodes[p.a].a].a,0)||!constant(yes.b)) return BoundTerm.init;
+		auto tail=body.a; uint test,yes,no; bool reverse;
+		while(recurrenceBranches(tail,test,yes,no,reverse)){
+			if(depends(at(yes),1)==depends(at(no),1)||depends(at(test),1)) break;
+			tail=depends(at(yes),1)?yes:no;
+		}
+		if(tail==body.a) return BoundTerm.init;
 		CFiniteSequence[] models; CFiniteExpression[] expressions;
 		uint save(CFiniteSequence s){ if(models.length>=256||s.size>limit) return uint.max; models~=s; return cast(uint)models.length-1; }
 		Term zero(Sort s){ return arena.number(Number(0),s); }
@@ -903,16 +905,68 @@ final class Bindings{
 			}else return uint.max;
 			if(e.offset==uint.max) return uint.max; expressions~=e; return cast(uint)expressions.length-1;
 		}
-		auto root=collect(no.b); if(root==uint.max||!recursive) return BoundTerm.init;
-		auto expr=expressions[root],m=models[expr.offset],size=m.size+1;
+		auto root=collect(tail); if(root==uint.max||!recursive) return BoundTerm.init;
+		// Certify both the entire initial segment and an unconditional tail.
+		// Testing only a few numeric indices would miss holes or later branches.
+		uint order=1,variableIndex;
+		foreach(id;0..arena.length){ auto q=arena.view(arena.at(cast(uint)id)); if(q.op==Op.variable){ enforce(q.value<uint.max-1,"scalar variable limit exceeded"); if(q.value>=variableIndex) variableIndex=cast(uint)q.value+1; } }
+		auto argument=arena.variable(Sort.natural,variableIndex);
+		RecurrenceFact[] facts; Term[] seeds;
+		bool fact(uint id,uint index,out Term output){
+			auto arg=index==uint.max?arena.call(Builtin.addN,[argument,arena.natural_(order)]):arena.natural_(index);
+			auto input=scalarBody(at(id),arg); if(input==Term.init) return false;
+			auto options=Options(DensityMode.preserve,true),d=simplifyDomain(arena,input,[],options),v=simplify(arena,input,options);
+			if(d.exhausted||v.exhausted||d.output!=arena.boolean(true)) return false;
+			output=arena.castTo(v.output,arena.sort(input)); facts~=RecurrenceFact(id,index,input,d,v); return true;
+		}
+		bool prefix(){
+			facts=null; seeds=null;
+			auto id=body.a; Term output;
+			while(id!=tail){
+				if(!recurrenceBranches(id,test,yes,no,reverse)||!fact(test,uint.max,output)) return false;
+				auto next=output==arena.boolean(true)?yes:output==arena.boolean(false)?no:uint.max;
+				if(next==uint.max||!depends(at(next),1)) return false; id=next;
+			}
+			foreach(i;0..order){
+				id=body.a;
+				while(depends(at(id),1)){
+					if(id==tail||!recurrenceBranches(id,test,yes,no,reverse)||!fact(test,i,output)) return false;
+					id=output==arena.boolean(true)?yes:output==arena.boolean(false)?no:uint.max; if(id==uint.max) return false;
+				}
+				if(!fact(id,i,output)||!constantTerm(output)) return false; seeds~=output;
+			}
+			return true;
+		}
+		for(;order<=16;++order) if(prefix()) break;
+		if(order>16) return BoundTerm.init;
+		auto expr=expressions[root],m=models[expr.offset],size=m.size+order;
+		// Align the forcing state with the last seed, then prepend the earlier
+		// seeds as shift-register slots. The first coordinate is f(n) for all n.
+		auto auxiliary=m.initial;
+		foreach(k;1..order){
+			Term[] next;
+			foreach(i;0..m.size){ auto c=zero(sort); foreach_reverse(j;0..m.size) c=arena.add(arena.mul(m.matrix[i*m.size+j],auxiliary[j],true),c,true); next~=c; }
+			auxiliary=next;
+		}
 		auto inner=push(context(t),ty.fields[0]),vec=pool.vector(ty.fields[1],size),mat=pool.vector(vec,size);
-		BoundTerm[] rows,cells,initial; cells~=scalar(inner,expr.coefficient);
-		foreach(j;0..m.size){ auto c=zero(sort); foreach_reverse(i;0..m.size) c=arena.add(arena.mul(m.output[i],m.matrix[i*m.size+j],true),c,true); cells~=scalar(inner,c); }
-		rows~=tuple(inner,cells,vec); initial~=scalar(inner,arena.at(nodes[yes.b].data));
-		foreach(i;0..m.size){ cells=[scalar(inner,zero(sort))]; foreach(j;0..m.size)cells~=scalar(inner,m.matrix[i*m.size+j]); rows~=tuple(inner,cells,vec); initial~=scalar(inner,m.initial[i]); }
+		BoundTerm[] rows,initial;
+		foreach(i;0..size){
+			BoundTerm[] cells;
+			foreach(j;0..size){
+				auto c=zero(sort);
+				if(i+1<order) c=j==i+1?one(sort):zero(sort);
+				else if(i+1==order){
+					if(j==i)c=expr.coefficient;
+					else if(j>=order) foreach_reverse(k;0..m.size) c=arena.add(arena.mul(m.output[k],m.matrix[k*m.size+j-order],true),c,true);
+				}else if(j>=order) c=m.matrix[(i-order)*m.size+j-order];
+				cells~=scalar(inner,c);
+			}
+			rows~=tuple(inner,cells,vec); initial~=scalar(inner,i<order?seeds[i]:auxiliary[i-order]);
+		}
 		auto matrix=tuple(inner,rows,mat),seed=tuple(inner,initial,vec);
 		auto output=inheritHint(at(n.a),lambda(get(tensor(TensorOp.matvec,tensor(TensorOp.power,matrix,variable(inner,0)),seed),scalar(inner,arena.natural_(0)))));
-		solution=RecurrenceSolution(t.id,output.id,yes.b,no.b); solution.cfinite=true; solution.cfModels=models; solution.cfExpressions=expressions; solution.cfRoot=root; solution.cfSize=size; return output;
+		solution=RecurrenceSolution(t.id,output.id,0,tail); solution.cfinite=true; solution.cfModels=models; solution.cfExpressions=expressions; solution.cfRoot=root; solution.cfSize=size;
+		solution.order=order; solution.variable=variableIndex; solution.seeds=seeds; solution.facts=facts; return output;
 	}
 
 	// Homogenize x(n+1)=A*x(n)+b as (x(n),1). Keep seeds and coefficients
@@ -1883,6 +1937,16 @@ final class Bindings{
 				active.set(t.id,false); memo.set(t.id,result); return result;
 			}
 			if(domains&&n.op==BoundOp.domain&&nodes[n.a].op==BoundOp.fixed&&steps<budget){
+				// Shifted intervals can enumerate every seed during domain inference.
+				// Reuse their known function solution; keep ranking for other domains.
+				RecurrenceSolution solution; auto solved=solveRecurrence(at(n.a),solution);
+				if(solved!=BoundTerm.init&&solution.cutoff&&solution.band==2){
+					auto extra=cast(uint)solutions.length; solutions~=solution; ++steps;
+					auto proof=emit(BindingRule.fixedRecurrence,n.a,solved.id,uint.max,uint.max,extra),next=domain(solved);
+					auto congr=emit(BindingRule.congr,t.id,next.id,proof),tail=visit(next,depth+1);
+					result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,congr,tail.proof));
+					active.set(t.id,false); memo.set(t.id,result); return result;
+				}
 				DomainRank rank;
 				if(rankDomain(at(n.a),rank)){
 					auto extra=cast(uint)ranks.length; ranks~=rank;
@@ -3073,25 +3137,26 @@ final class Bindings{
 							auto q=arena.view(arena.at(z.data));
 							return q.op==Op.builtin?"(fun a b => AffineRecurrence.apply2_some Functions."~builtinInfo(cast(Builtin)q.value).code~" a b True.intro)":"(fun _ _ => rfl)";
 						}
+						auto forceIndex="(x+"~to!string(s.order)~")";
 						string forceProof(uint k){
 							auto m=s.cfModels[k],z=nodes[m.source];
 							final switch(m.kind){
-								case CFiniteKind.constant:return "(CFinite.constant_eq "~total(m.value).value~" x "~total(m.value).proof~")";
-								case CFiniteKind.index:return "(CFinite.index_eq (R := ℕ) x (Eq.refl (some x)))";
-								case CFiniteKind.geometric:return "(CFinite.geometric_eq "~valueOperation(z)~" "~totalBinary(z)~" "~total(m.value).value~" x "~total(m.value).proof~")";
-								case CFiniteKind.add, CFiniteKind.mul:return "(CFinite."~(m.kind==CFiniteKind.add?"add":"mul")~"_eq "~valueOperation(z)~" "~totalBinary(z)~" "~model(m.a)~" "~model(m.b)~" x "~forceProof(m.a)~" "~forceProof(m.b)~")";
-								case CFiniteKind.map:return "(CFinite.map_eq "~hom(m.sort)~" "~valueOperation(z)~" (fun a => Tensor.apply_some Functions."~builtinInfo(cast(Builtin)arena.view(arena.at(z.data)).value).code~" a True.intro) "~model(m.a)~" x "~forceProof(m.a)~")";
+								case CFiniteKind.constant:return "(CFinite.constant_eq "~total(m.value).value~" "~forceIndex~" "~total(m.value).proof~")";
+								case CFiniteKind.index:return "(CFinite.index_eq (R := ℕ) "~forceIndex~" (Eq.refl (some "~forceIndex~")))";
+								case CFiniteKind.geometric:return "(CFinite.geometric_eq "~valueOperation(z)~" "~totalBinary(z)~" "~total(m.value).value~" "~forceIndex~" "~total(m.value).proof~")";
+								case CFiniteKind.add, CFiniteKind.mul:return "(CFinite."~(m.kind==CFiniteKind.add?"add":"mul")~"_eq "~valueOperation(z)~" "~totalBinary(z)~" "~model(m.a)~" "~model(m.b)~" "~forceIndex~" "~forceProof(m.a)~" "~forceProof(m.b)~")";
+								case CFiniteKind.map:return "(CFinite.map_eq "~hom(m.sort)~" "~valueOperation(z)~" (fun a => Tensor.apply_some Functions."~builtinInfo(cast(Builtin)arena.view(arena.at(z.data)).value).code~" a True.intro) "~model(m.a)~" "~forceIndex~" "~forceProof(m.a)~")";
 								case CFiniteKind.power:
 									auto operation=valueOperation(z); if(z.b!=uint.max) operation="(fun a => "~operation~" a (n"~to!string(nodes[z.b].data)~".eval ξ))";
 									auto proof=z.b==uint.max?"(fun _ => rfl)":"(fun a => AffineRecurrence.apply2_some Functions."~builtinInfo(cast(Builtin)arena.view(arena.at(z.data)).value).code~" a "~to!string(m.b)~" True.intro)";
-									return "(CFinite.power_eq "~operation~" "~to!string(m.b)~" "~proof~" "~model(m.a)~" x "~forceProof(m.a)~")";
+									return "(CFinite.power_eq "~operation~" "~to!string(m.b)~" "~proof~" "~model(m.a)~" "~forceIndex~" "~forceProof(m.a)~")";
 								case CFiniteKind.coordinate:
 									auto leaf=scalarType(m.sort),add=tensorOperation(leaf,TensorOp.add),mul=tensorOperation(leaf,TensorOp.mul);
 									auto suffix=m.sort==Sort.natural?"N":m.sort==Sort.integer?"Z":m.sort==Sort.rational?"Q":"";
 									auto ha=suffix.length?"AffineRecurrence.add"~suffix:"rfl",hm=suffix.length?"AffineRecurrence.mul"~suffix:"rfl";
 									auto field=m.sort==Sort.complex?"C":m.sort==Sort.real_?"R":"";
 									auto hz=field.length?"(Option.some.inj AffineRecurrence.zero"~field~")":"rfl",ho=field.length?"(Option.some.inj AffineRecurrence.one"~field~")":"rfl";
-									return "(CFinite.coordinate_eq "~add~" "~mul~" "~ha~" "~hm~" "~tensorLiteral(leaf,0)~" "~tensorLiteral(leaf,1)~" "~hz~" "~ho~" "~to!string(m.size)~" "~raw(m.a)~" "~raw(m.b)~" _ _ ⟨"~to!string(m.coordinate)~", of_decide_eq_true rfl⟩ "~constants(m.a)~" "~constants(m.b)~" x)";
+									return "(CFinite.coordinate_eq "~add~" "~mul~" "~ha~" "~hm~" "~tensorLiteral(leaf,0)~" "~tensorLiteral(leaf,1)~" "~hz~" "~ho~" "~to!string(m.size)~" "~raw(m.a)~" "~raw(m.b)~" _ _ ⟨"~to!string(m.coordinate)~", of_decide_eq_true rfl⟩ "~constants(m.a)~" "~constants(m.b)~" "~forceIndex~")";
 								case CFiniteKind.zero,CFiniteKind.left,CFiniteKind.right:assert(0);
 							}
 						}
@@ -3107,42 +3172,73 @@ final class Bindings{
 						string cfProof(uint k){
 							auto e=s.cfExpressions[k],z=nodes[e.source]; final switch(e.kind){
 								case CFiniteExprKind.force:return forceProof(e.a);
-								case CFiniteExprKind.previous:return "rfl";
+								case CFiniteExprKind.previous:return "(congrArg (fun z : Option ℕ => z.bind g) (LinearRecurrence.lag x "~to!string(s.order)~" 1 (of_decide_eq_true rfl)))";
 								case CFiniteExprKind.add:return "(congrArg₂ "~valueOperation(z)~" "~cfProof(e.a)~" "~cfProof(e.b)~")";
 								case CFiniteExprKind.left:return "(congrArg₂ "~valueOperation(z)~" "~total(e.value).proof~" "~cfProof(e.a)~")";
 								case CFiniteExprKind.right:return "(congrArg₂ "~valueOperation(z)~" "~cfProof(e.a)~" "~total(e.value).proof~")";
 							}
 						}
-						string bridge(uint k){
-							if(k==s.delta) return cfProof(s.cfRoot);
-							auto q=nodes[k]; if(q.op==BoundOp.scalar)return total(arena.at(q.data)).proof;
-							if(q.op==BoundOp.primitive&&q.b!=uint.max)return "(congrArg₂ "~valueOperation(q)~" "~bridge(q.a)~" "~bridge(q.b)~")";
-							return "rfl";
+						string eta="({ ξ with natural := fun i => if i = "~to!string(s.variable)~" then x else ξ.natural i })";
+						string specialized(uint q,uint index){
+							auto z=nodes[q]; if(z.op==BoundOp.scalar) return "rfl";
+							if(z.op==BoundOp.variable) return index==uint.max?"(AffineRecurrence.apply2_some Functions.addN x "~to!string(s.order)~" True.intro).symm":"rfl";
+							auto a=specialized(z.a,index),op=valueOperation(z);
+							return z.b==uint.max?"(congrArg "~op~" "~a~")":"(congrArg₂ "~op~" "~a~" "~specialized(z.b,index)~")";
+						}
+						string fact(uint q,uint index){
+							foreach(j,f;s.facts) if(f.node==q&&f.index==index){
+								auto p="QSym.Linear"~to!string(si)~"_"~to!string(j),e=index==uint.max?eta:"ξ";
+								auto at=index==uint.max?"x+"~to!string(s.order):to!string(index),rho=replace(env,"(some x)","(some ("~at~"))");
+								auto bridge="(show "~name(q)~".eval ξ "~rho~" = n"~to!string(f.input.id)~".eval "~e~" from "~specialized(q,index)~")";
+								return "(Eq.trans "~bridge~" (LinearRecurrence.known ("~p~".DomainCertificate.domain_correct "~e~") ("~p~".ValueCertificate.refinement "~e~")))";
+							}
+							assert(0,"missing recurrence fact");
+						}
+						string select(uint q,uint index){
+							if(index==uint.max&&q==s.delta) return cfProof(s.cfRoot);
+							if(!depends(at(q),1)){
+								foreach(f;s.facts) if(f.node==q&&f.index==index) return "(Eq.trans "~fact(q,index)~" "~total(arena.castTo(f.value.output,sort)).proof~")";
+								assert(0,"missing recurrence seed");
+							}
+							uint test,yes,no; bool reverse; enforce(recurrenceBranches(q,test,yes,no,reverse),"missing recurrence branch"); bool selected;
+							foreach(f;s.facts) if(f.node==test&&f.index==index) selected=f.value.output==arena.boolean(true);
+							return "(Eq.trans (LinearRecurrence."~(reverse?"select_rev":"select")~" "~add~" "~ha~" "~(selected?"true":"false")~" _ _ "~fact(test,index)~") "~select(selected?yes:no,index)~")";
+						}
+						string cases(string[] proofs){
+							auto r="(fun i => i.elim0)"; foreach_reverse(p;proofs) r="(Fin.cases "~p~" "~r~")"; return r;
+						}
+						string vector(string[] values){
+							auto r="(fun i : Fin 0 => i.elim0)"; foreach_reverse(v;values) r="(Fin.cons "~v~" "~r~")"; return r;
 						}
 						auto cexpr=cfExpression(s.cfRoot),ctag="cfExpr"~id;
 						code~="noncomputable def "~ctag~" (ξ : Env) : CFiniteRecurrence.Expr (Ty.denote ."~leanSort(sort)~") := "~cexpr~"\n";
 						cexpr="("~ctag~" ξ)";
+						string[] seeds,baseProofs;
+						foreach(j,seed;s.seeds){ seeds~=total(seed).value; baseProofs~="(Eq.trans ("~programProof(body)~").symm "~select(body,cast(uint)j)~")"; }
+						auto cseq="cfSequence"~id;
+						code~="noncomputable def "~cseq~" (ξ : Env) := CFiniteRecurrence.Prefix.sequence (k := "~to!string(s.order-1)~") "~cexpr~" "~vector(seeds)~"\n";
+						auto sequence="("~cseq~" ξ)",hb="(fun g => "~cases(baseProofs)~")";
 						string[] eqs; foreach(j;0..s.cfSize)eqs~="rfl";
 						auto heq="(funext "~vectorCases(eqs)~")"; string[] rows; foreach(j;0..s.cfSize)rows~=heq;
 						hmat="(Eq.trans "~hmat~" (congrArg some (funext "~vectorCases(rows)~")))";
 						hv="(Eq.trans "~hv~" (congrArg some "~heq~"))";
-						auto hp="(fun g x => Eq.trans ("~programProof(body)~").symm "~bridge(body)~")";
+						auto hp="(fun g x => Eq.trans ("~programProof(body)~").symm "~select(body,uint.max)~")";
 						// Check rows independently: a single nested matrix equality causes
 						// elaboration to repeatedly expand the whole tensor-product state.
 						string[] rowProofs; auto row=matrix;
 						foreach(j;0..s.cfSize){
 							auto item=nodes[row].a,tag="cfRow"~id~"_"~to!string(j);
 							auto proof="(Eq.trans "~constants(item)~" (congrArg some "~heq~"))";
-							code~="set_option maxHeartbeats 2000000 in\ntheorem "~tag~" (ξ : Env) : "~raw(item)~" = some (CFiniteRecurrence.matrix "~cexpr~" ⟨"~to!string(j)~", of_decide_eq_true rfl⟩) := "~proof~"\n";
+							code~="set_option maxHeartbeats 2000000 in\ntheorem "~tag~" (ξ : Env) : "~raw(item)~" = some ("~sequence~".matrix ⟨"~to!string(j)~", of_decide_eq_true rfl⟩) := "~proof~"\n";
 							rowProofs~="("~tag~" ξ)"; row=nodes[row].b;
 						}
 						auto matrixProof="(Eq.refl Tensor.nilValue)";
 						foreach_reverse(proof;rowProofs) matrixProof="(congrArg₂ Tensor.consValue "~proof~" "~matrixProof~")";
 						hmat="(Eq.trans "~matrixProof~" (congrArg some "~heq~"))";
-						code~="set_option maxHeartbeats 2000000 in\ntheorem cfMatrix"~id~" (ξ : Env) : "~raw(matrix)~" = some (CFiniteRecurrence.matrix "~cexpr~") := "~hmat~"\n";
-						code~="set_option maxHeartbeats 2000000 in\ntheorem cfSeed"~id~" (ξ : Env) : "~raw(product.b)~" = some (CFiniteRecurrence.initial "~cexpr~" "~value(s.base)~") := "~hv~"\n";
-						code~="set_option maxHeartbeats 2000000 in\ntheorem cfStep"~id~args~" : ∀ g x, (rec"~id~dimArg~" γ ξ ρ).eval g x = CFiniteRecurrence.step "~add~" "~mul~" "~cexpr~" "~value(s.base)~" g x := "~hp~"\n";
-						code~="set_option maxHeartbeats 2000000 in\ntheorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (CFiniteRecurrence.solve_matrix (rec"~id~dimArg~" γ ξ ρ) "~add~" "~mul~" "~ha~" "~hm~" "~cexpr~" "~value(s.base)~" (cfStep"~id~dimArg~" γ ξ ρ) "~tensorLiteral(leaf,0)~" "~tensorLiteral(leaf,1)~" "~hz~" "~ho~" "~raw(matrix)~" "~raw(product.b)~" (cfMatrix"~id~" ξ) (cfSeed"~id~" ξ)))\n";
+						code~="set_option maxHeartbeats 2000000 in\ntheorem cfMatrix"~id~" (ξ : Env) : "~raw(matrix)~" = some "~sequence~".matrix := "~hmat~"\n";
+						code~="set_option maxHeartbeats 2000000 in\ntheorem cfSeed"~id~" (ξ : Env) : "~raw(product.b)~" = some "~sequence~".initial := "~hv~"\n";
+						code~="set_option maxHeartbeats 2000000 in\ntheorem cfStep"~id~args~" : ∀ g x, (rec"~id~dimArg~" γ ξ ρ).eval g (x+"~to!string(s.order)~") = CFiniteRecurrence.Expr.eval "~add~" "~mul~" (g (x+"~to!string(s.order-1)~")) (x+"~to!string(s.order)~") "~cexpr~" := "~hp~"\n";
+						code~="set_option maxHeartbeats 2000000 in\ntheorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (CFiniteRecurrence.Prefix.solve_matrix (k := "~to!string(s.order-1)~") (rec"~id~dimArg~" γ ξ ρ) "~add~" "~mul~" "~ha~" "~hm~" "~cexpr~" "~vector(seeds)~" "~hb~" (cfStep"~id~dimArg~" γ ξ ρ) "~tensorLiteral(leaf,0)~" "~tensorLiteral(leaf,1)~" "~hz~" "~ho~" "~raw(matrix)~" "~raw(product.b)~" (cfMatrix"~id~" ξ) (cfSeed"~id~" ξ)))\n";
 						continue;
 					}
 					if(s.indexed){

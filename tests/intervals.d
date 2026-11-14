@@ -28,7 +28,9 @@ private Case[] cases(){
 		Case("ShiftedBelow","defined(("~interval()~")(9))","false"),
 		Case("ShiftedZero","defined(("~interval()~")(0))","false"),
 		Case("ShiftedAbove","defined(("~interval()~")(20))","false"),
-		Case("ShiftedPartial","defined(("~interval()~")(0 sub 1))","false")
+		Case("ShiftedPartial","defined(("~interval()~")(0 sub 1))","false"),
+		Case("WideDomain","domain("~interval("1000000","2000000")~")","{n:ℕ | 1000000≤n∧n≤1999999}"),
+		Case("WideBelow","defined(("~interval("1000000","2000000")~")(999999))","false")
 	];
 }
 private void run(string directory=""){
@@ -37,7 +39,10 @@ private void run(string directory=""){
 		auto r=s.run(a,c.source,[],Options(DensityMode.preserve,true)),text=s.format(a,r);
 		enforce(!r.exhausted&&text==c.expected,c.name~": "~text);
 		enforce(s.format(a,s.run(a,text))==text,c.name~" round trip");
-		if(directory.length) write(buildPath(directory,c.name~".lean"),s.exportCertificate(a,r));
+		auto proof=s.exportCertificate(a,r);
+		if(c.name=="ShiftedDomain"||c.name=="WideDomain"||c.name=="WideBelow")
+			enforce(proof.indexOf("Recursion.solve_nat_interval")>=0,"interval domain did not reuse function solution");
+		if(directory.length) write(buildPath(directory,c.name~".lean"),proof);
 	}
 }
 unittest{

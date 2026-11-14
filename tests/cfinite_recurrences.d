@@ -8,7 +8,7 @@ import std.string:indexOf;
 import std.conv:to;
 @safe:
 private enum fib="((0,1),(1,1))^n@(0,1)";
-private struct Case{ string name,forcing,sort="ℕ",vars; int oracle=-1; long coefficient=2,seed=0; bool solved=true; }
+private struct Case{ string name,forcing,sort="ℕ",vars; int oracle=-1; long coefficient=2,seed=0; bool solved=true; string condition="n=0",initial,multiplier; uint seedCount=1; long seedStep; }
 private Case[] cases(){ return [
  Case("Quadratic","n*n","ℕ","",0),
  Case("Cube","n^3","ℕ","",1),
@@ -34,6 +34,16 @@ private Case[] cases(){ return [
  Case("SquarePower","n^2","ℕ","",0),
  Case("SymbolicReal","a*n*n+b^n","ℝ","a:ℝ,b:ℝ"),
  Case("Reciprocal","1/(n+1)","ℚ","",-1,2,0,false),
+ Case("TwoSeeds","3*n*n","ℕ","",8,4,0,true,"n≤1","n","",2,1),
+ Case("ThreeSeeds","n*n","ℤ","",0,-2,4,true,"n<3","n+4","",3,1),
+ Case("GeometricPrefix","3^n","ℕ","",2,2,5,true,"n<3","5","",3),
+ Case("ProductPrefix","get("~fib~",0)*get("~fib~",1)","ℕ","",7,2,0,true,"n≤1","n","",2,1),
+ Case("SymbolicPrefix","a*n^2","ℕ","a:ℕ,b:ℕ",-1,2,0,true,"n≤1","n","2*b",2,1),
+ Case("RealPrefix","n*n","ℝ","",0,2,0,true,"n≤1","n","",2,1),
+ Case("NestedSeeds","n^2","ℕ","",0,2,4,true,"n<3","if n=1 then 5 else if n=0 then 4 else 6","",3,1),
+ Case("MissingZeroSeed","n*n","ℕ","",-1,2,0,false,"n=1","n"),
+ Case("LaterSeed","n*n","ℕ","",-1,2,0,false,"n=0 ∨ n=20","n"),
+ Case("PrefixBudget","n*n","ℕ","",-1,2,0,false,"n≤16","n"),
  Case("StateBudget","n^5","ℕ","",-1,2,0,false)
 ]; }
 private long power(long a,uint n){long r=1;foreach(i;0..n)r*=a;return r;}
@@ -60,13 +70,13 @@ int main(string[] args){
  uint certificates,evaluations;
  foreach(c;cases()){
   auto owner=Session.open();FunctionSyntax s;if(c.vars.length)s.declare(c.vars);
-  auto source="μ(f:ℕ→"~c.sort~").λ(n:ℕ).if n=0 then "~to!string(c.seed)~" else "~to!string(c.coefficient)~"*f(n sub 1)+("~c.forcing~")";
+  auto source="μ(f:ℕ→"~c.sort~").λ(n:ℕ).if "~c.condition~" then "~(c.initial.length?"("~c.initial~")":to!string(c.seed))~" else "~(c.multiplier.length?c.multiplier:to!string(c.coefficient))~"*f(n sub 1)+("~c.forcing~")";
   auto r=s.run(owner.arena,source,[],Options(DensityMode.preserve,true)),text=s.format(owner.arena,r);
   writeln(c.name,": ",text);
   enforce(!r.exhausted,c.name~" exhausted");enforce((text.indexOf("μ(")<0)==c.solved,c.name~" eligibility");
   auto again=s.run(owner.arena,text);enforce(!again.exhausted&&s.format(owner.arena,again)==text,c.name~" round trip");
   auto proof=s.exportCertificate(owner.arena,r);
-  if(c.solved&&c.coefficient!=0&&c.name!="ZeroGeometric")enforce(proof.indexOf("CFiniteRecurrence.solve_matrix")>=0,c.name~" solver proof");
+  if(c.solved&&c.coefficient!=0&&c.name!="ZeroGeometric")enforce(proof.indexOf("CFiniteRecurrence.Prefix.solve_matrix")>=0,c.name~" solver proof");
   write(buildPath(dir,c.name~".lean"),proof);++certificates;
   if(c.oracle>=0){
    long expected=c.seed;
@@ -76,7 +86,7 @@ int main(string[] args){
      auto want=s.run(owner.arena,"("~to!string(expected)~":"~c.sort~")");
      enforce(!value.exhausted&&s.format(owner.arena,value)==s.format(owner.arena,want),c.name~" value "~to!string(n)~": "~s.format(owner.arena,value));++evaluations;
     }
-    expected=c.coefficient*expected+force(c.oracle,n+1);
+    expected=n+1<c.seedCount?c.seed+(n+1)*c.seedStep:c.coefficient*expected+force(c.oracle,n+1);
    }
   }
  }
