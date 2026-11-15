@@ -1,6 +1,7 @@
 import QSym.Expr
 import QSym.Domain
 import QSym.Recursion
+import QSym.Distribution
 
 namespace QSym.Binding
 
@@ -27,6 +28,7 @@ inductive Family where
   | arrow : Family → Family → Family
   | piNat : Family → Family
   | set : Family → Family
+  | distribution : Family → Family
   | type
   deriving DecidableEq
 
@@ -38,6 +40,7 @@ inductive Ty where
   | arrow : Ty → Ty → Ty
   | piNat : Family → Ty
   | set : Ty → Ty
+  | distribution : Ty → Ty
   | type
   deriving DecidableEq
 
@@ -49,6 +52,7 @@ abbrev Family.denote (ρ : ℕ → ℕ) : Family → Type
   | .arrow a b => a.denote ρ → Option (b.denote ρ)
   | .piNat b => (n : ℕ) → Option (b.denote (fun i => if i = 0 then n else ρ (i-1)))
   | .set a => Set (a.denote ρ)
+  | .distribution a => Distribution.D (a.denote ρ)
   | .type => Ty
 
 abbrev Ty.denote : Ty → Type
@@ -59,6 +63,7 @@ abbrev Ty.denote : Ty → Type
   | .arrow a b => a.denote → Option b.denote
   | .piNat b => (n : ℕ) → Option (b.denote (fun _ => n))
   | .set a => Set a.denote
+  | .distribution a => Distribution.D a.denote
   | .type => Ty
 
 abbrev Globals := (a : Ty) → Nat → a.denote

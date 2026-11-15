@@ -36,13 +36,14 @@ struct Lexer{
 	private Token read(){
 		ws(); auto start=pos;
 		if(pos==source.length) return Token(TokenKind.end,"",pos);
-		foreach(s;["<=>","≡","->","=>","⇒","→","!=","≠","<=","≤",">=","≥","==","&&","||"]){
+		foreach(s;["<=>","≡","->","=>","⇒","→","!=","≠","<=","≤",">=","≥","==","&&","||","//"]){
 			if(source[pos..$].startsWith(s)){
 				pos+=s.length;
 				return Token(TokenKind.symbol,s=="≡"?"<=>":s=="⇒"||s=="→"?"=>":s=="≠"?"!=":s=="≤"?"<=":s=="≥"?">=":s=="=="?"=":s,start);
 			}
 		}
 		auto c=cur();
+		if(c=='Λ'){ advance(); return Token(TokenKind.identifier,"Λ",start); }
 		if(c=='⁻'||superscript(c)>=0){
 			string exponent;
 			if(c=='⁻'){ exponent="-"; advance(); }
@@ -83,7 +84,7 @@ struct Lexer{
 			case '∧':symbol="&&"; break;
 			case '∨':symbol="||"; break;
 			case '¬':symbol="!"; break;
-			case '∑','{','}','.','∈','∉','⊆','⊈','(',')','[',']',',',':',';','+','-','*','×','@','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
+			case '∫','∑','{','}','.','∈','∉','⊆','⊈','(',')','[',']',',',':',';','+','-','*','×','@','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
 			default:throw new Exception("unexpected character '"~source[start..pos]~"' at byte "~to!string(start));
 		}
 		return Token(TokenKind.symbol,symbol,start);

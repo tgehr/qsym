@@ -126,6 +126,7 @@ $(eval $(call test_binary,functional-tests,functional,-unittest))
 $(eval $(call test_binary,subset-tests,subsets,-unittest))
 $(eval $(call test_binary,refinement-tests,refinements,-unittest))
 $(eval $(call test_binary,type-value-tests,type_values,-unittest))
+$(eval $(call test_binary,distribution-tests,distributions,))
 $(eval $(call test_binary,recursion-tests,recursion,-unittest))
 $(eval $(call test_binary,higher-equality-tests,higher_equality,-unittest))
 $(eval $(call test_binary,binder-name-tests,binder_names,-unittest))
@@ -223,6 +224,7 @@ test: build-tests build/qsym
 	./build/subset-tests --DRT-testmode=run-main build/subsets
 	./build/refinement-tests --DRT-testmode=run-main build/refinements
 	./build/type-value-tests --DRT-testmode=run-main build/type-values
+	./build/distribution-tests build/distributions
 	./build/recursion-tests --DRT-testmode=run-main build/recursion
 	./build/higher-equality-tests --DRT-testmode=run-main build/higher-equality
 	./build/binder-name-tests --DRT-testmode=run-main build/binder-names

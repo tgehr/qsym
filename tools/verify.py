@@ -82,6 +82,7 @@ def main():
 	check(ROOT/"lean/QSym/Audit.lean")
 	check(ROOT/"tests/Regression.lean")
 	check(ROOT/"tests/FixedPoint.lean")
+	check(ROOT/"tests/Distributions.lean")
 	check(ROOT/"tests/LinearRecurrences.lean")
 	check(ROOT/"tests/Spectral.lean")
 	check(ROOT/"tests/ZeroPowers.lean")
@@ -129,6 +130,11 @@ def main():
 	if len(types)!=22:
 		raise RuntimeError("expected 22 type-value certificates")
 	for file in types:
+		certificate(file)
+	distributions=sorted((ROOT/"build/distributions").glob("*.lean"))
+	if len(distributions)!=23:
+		raise RuntimeError("expected 23 distribution certificates")
+	for file in distributions:
 		certificate(file)
 	recursion=sorted((ROOT/"build/recursion").glob("*.lean"))
 	if len(recursion)!=34:

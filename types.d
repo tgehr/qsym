@@ -8,7 +8,7 @@ enum Sort:ubyte{ real_,complex,boolean,density,measure,natural,integer,rational 
 
 enum TypeKind:ubyte{
 	unit,boolean,natural,integer,rational,real_,complex,
-	uintBits,intBits,vector,tuple,array,function_,set,type_,pi
+	uintBits,intBits,vector,tuple,array,function_,set,type_,pi,distribution
 }
 struct TypeId{
 	private TypePool owner;
@@ -133,6 +133,7 @@ final class TypePool{
 		foreach(f;v.fields) if(dependent(f)) return true; return false;
 	}
 	TypeId set(TypeId a){ return intern(TypeKind.set,0,[a]); }
+	TypeId distribution(TypeId a){ return intern(TypeKind.distribution,0,[a]); }
 }
 
 unittest{

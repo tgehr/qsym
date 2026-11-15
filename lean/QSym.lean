@@ -2,6 +2,8 @@ import QSym.AxiomCheck
 import QSym.Expr
 import QSym.FixedPoint
 import QSym.Integration
+import QSym.Distribution
+import QSym.PositiveIntegral
 import QSym.Quantum
 import QSym.Generated
 import QSym.Refinement

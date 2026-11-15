@@ -105,6 +105,19 @@ struct Parser{
 	private Pattern primary(uint depth){
 		enforce(depth<128,"rule pattern nesting limit exceeded");
 		auto lookahead=lexer;
+		if((token.text=="Λ"||token.text=="∫")&&lookahead.next().text!="("){
+			auto distribution=token.text=="Λ"; next(); auto name=ident();
+			if(!distribution){ enforce(name.length>1&&name[0]=='d',"expected a differential such as dx"); name=name[1..$]; }
+			if(distribution) expect(".");
+			auto p=pattern(distribution?"$distribution":"$integral",[expression(depth+1)]);
+			p.binder=name; p.annotation=new TypePattern("Real"); return p;
+		}
+		lookahead=lexer;
+		if((token.text=="Λ"||token.text=="distribution"||token.text=="∫"||token.text=="integral")&&lookahead.next().text=="("){
+			auto distribution=token.text=="Λ"||token.text=="distribution";
+			next(); expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
+			expect(")"); expect("."); auto p=pattern(distribution?"$distribution":"$integral",[expression(depth+1)]); p.binder=name; p.annotation=ty; return p;
+		}
 		if((token.text=="Π"||token.text=="Pi")&&lookahead.next().text=="("){
 			auto p=pattern("$type",[]); p.annotation=typeExpression(depth+1); return p;
 		}
@@ -198,6 +211,9 @@ struct Parser{
 		return postfix(primary(depth),depth);
 	}
 	private Pattern postfix(Pattern p,uint depth){
+		if(take("[")){
+			auto axis=new Pattern(ident()); expect("]"); p=pattern("$distributionApply",[p,axis]);
+		}
 		while(p.name!="#"&&p.name!="rat"&&take("(")){
 			p=pattern("$apply",[p,expression(depth+1)]); expect(")");
 		}
@@ -217,13 +233,13 @@ struct Parser{
 				(token.kind==TokenKind.identifier||token.text=="("||token.text=="ⅈ");
 		}
 		auto implicit=adjacent(p);
-		while(token.text=="*"||token.text=="×"||token.text=="@"||token.text=="/"||implicit){
+		while(token.text=="*"||token.text=="×"||token.text=="@"||token.text=="/"||token.text=="//"||implicit){
 			auto op=implicit?"*":token.text;
 			if(!implicit) next();
 			auto q=factor(depth);
 			implicit=adjacent(q);
 			if(op=="/") q=pattern("$inv",[q]);
-			p=pattern(op=="@"?"$matmul":op=="×"?"$times":"$mul",[p,q]);
+			p=pattern(op=="//"?"$disintegrate":op=="@"?"$matmul":op=="×"?"$times":"$mul",[p,q]);
 		}
 		return p;
 	}
@@ -295,7 +311,7 @@ struct Parser{
 		}
 		else{
 			auto name=ident();
-			if(name=="Set"){ expect("("); t=new TypePattern("Set",[typeExpression(depth+1)]); expect(")"); }
+			if(name=="Set"||name=="Distribution"||name=="Dist"){ expect("("); t=new TypePattern(name=="Dist"?"Distribution":name,[typeExpression(depth+1)]); expect(")"); }
 			else{ if(name!="Type"&&name!="Unit") parseSort(name); t=new TypePattern(name); }
 		}
 		if(token.kind==TokenKind.power){

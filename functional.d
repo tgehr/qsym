@@ -1,6 +1,7 @@
 module qsym.functional;
 import qsym.ir;
 import qsym.binding;
+import qsym.distribution_syntax:distributionSyntax;
 import qsym.types:TypeId,TypeView,TypeKind,TypePool,Dimension;
 import qsym.text:Syntax;
 import qsym.spec:Parser,Pattern,TypePattern,Parameter,parseSort,isConstructor,elaborate,pattern;
@@ -72,6 +73,7 @@ struct FunctionSyntax{
 		if(t.name=="Unit") return pool.primitive(TypeKind.unit);
 		if(t.name=="arrow") return pool.function_(type(t.args[0],locals,parameters,localTypes),type(t.args[1],locals,parameters,localTypes));
 		if(t.name=="Set") return pool.set(type(t.args[0],locals,parameters,localTypes));
+		if(t.name=="Distribution") return pool.distribution(type(t.args[0],locals,parameters,localTypes));
 		if(t.name=="vector") return vectorType(type(t.args[0],locals,parameters,localTypes),t.dimension,locals,parameters,localTypes);
 		if(t.name=="tuple"){ TypeId[] fields; foreach(part;t.args) fields~=type(part,locals,parameters,localTypes); return pool.tuple(fields); }
 		return scalarType(parseSort(t.name));
@@ -105,14 +107,20 @@ struct FunctionSyntax{
 			}
 		}
 		if(v.kind==TypeKind.set) return "Set("~typeName(v.fields[0],locals)~")";
+		if(v.kind==TypeKind.distribution) return "Distribution("~typeName(v.fields[0],locals)~")";
 		enforce(v.kind==TypeKind.function_,"unsupported function type");
 		auto left=typeName(v.fields[0],locals);
 		if(pool.view(v.fields[0]).kind==TypeKind.function_||pool.view(v.fields[0]).kind==TypeKind.pi) left="("~left~")";
 		return left~"→"~typeName(v.fields[1],locals);
 	}
 	private bool reserved(string name){
-		return typeAlias(name)||isConstructor(name)||name=="λ"||name=="lambda"||name=="μ"||name=="mu"||name=="undefined"||name=="if"||name=="then"||name=="else"||
+		return distributionName(name)||typeAlias(name)||isConstructor(name)||name=="λ"||name=="lambda"||name=="μ"||name=="mu"||name=="undefined"||name=="if"||name=="then"||name=="else"||
 			name=="∑"||name=="sum"||name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
+	}
+	private bool distributionName(string name){
+		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD"])
+			if(name==n) return true;
+		return false;
 	}
 	private bool typeAlias(string name){
 		foreach(n;["Nat","ℕ","Int","ℤ","Rat","ℚ","Real","ℝ","Complex","ℂ","Bool","𝔹","Type","Unit"]) if(name==n) return true;
@@ -144,7 +152,7 @@ struct FunctionSyntax{
 	}
 	private bool special(Pattern p){
 		if(p.name=="$type"||p.name=="$arrowtype"||p.name=="$tuple"||p.name=="$matmul"||p.name=="dot"||p.name=="get") return true;
-		if(typeAlias(p.name)||p.name=="Set") return true;
+		if(typeAlias(p.name)||p.name=="Set"||distributionName(p.name)||p.name=="$distribution"||p.name=="$integral"||p.name=="$disintegrate"||p.name=="$distributionApply") return true;
 		if(p.name=="$sum"||p.name=="$fix"||p.name=="$bottom"||p.name=="$lambda"||p.name=="$set"||p.name=="$apply"||p.name=="$member"||p.name=="$subset"||
 			p.name=="domain"||p.name=="defined"||p.name=="holds"||p.name=="guard"||p.name=="seq") return true;
 		if(p.annotation !is null&&p.annotation.args.length) return true;
@@ -254,6 +262,41 @@ struct FunctionSyntax{
 				enforce(common!=TypeId.init,"conditional branch type mismatch");
 				return finish(conditional(predicate,coerce(yes,common),coerce(no,common)));
 			}
+			if(p.name=="Distribution"||p.name=="Dist"){
+				enforce(p.args.length==1,"Distribution requires one type");
+				return finish(b.typeValue(ctx,pool.distribution(b.typeDenoted(build(p.args[0],ctx,locals)))));
+			}
+			if(distributionName(p.name)){
+				BoundOp op; TypeId element;
+				switch(p.name){
+					case "dirac":op=BoundOp.distributionDirac; break;
+					case "lebesgueD":op=BoundOp.distributionLebesgue; break;
+					case "zeroD":
+						enforce(p.args.length==1,"zeroD requires an element type");
+						element=b.typeDenoted(build(p.args[0],ctx,locals)); return finish(b.distribution(ctx,BoundOp.distributionZero,[],element));
+					case "addD":op=BoundOp.distributionAdd; break;
+					case "scaleD":op=BoundOp.distributionScale; break;
+					case "weightD":op=BoundOp.distributionWeight; break;
+					case "bindD":op=BoundOp.distributionBind; break;
+					case "integralD":op=BoundOp.distributionIntegral; break;
+					case "massD":op=BoundOp.distributionMass; break;
+					case "densityAtD":op=BoundOp.distributionDensityAt; break;
+					default:throw new Exception("unsupported distribution constructor: "~p.name);
+				}
+				BoundTerm[] args;
+				foreach(i,arg;p.args){
+					TypeId want;
+					if(p.name=="dirac"&&expected!=TypeId.init&&pool.view(expected).kind==TypeKind.distribution) want=pool.view(expected).fields[0];
+					if(p.name=="scaleD"&&i==0||p.name=="densityAtD"&&i==1) want=scalarType(Sort.real_);
+					if(p.name=="weightD"&&i==0){
+						enforce(p.args.length==2,"weightD takes two arguments");
+						auto d=build(p.args[1],ctx,locals,TypeId.init,depth+1),v=pool.view(b.type(d));
+						enforce(v.kind==TypeKind.distribution,"weightD requires a distribution"); want=pool.function_(v.fields[0],scalarType(Sort.real_));
+					}
+					args~=build(arg,ctx,locals,want,depth+1);
+				}
+				return finish(b.distribution(ctx,op,args));
+			}
 			if(p.name=="$tuple"){
 				BoundTerm[] elements; auto v=expected==TypeId.init?TypeView.init:pool.view(expected);
 				foreach(i,q;p.args){
@@ -321,7 +364,7 @@ struct FunctionSyntax{
 			auto comparison=positive?p.args[0]:p;
 			if(comparison.name=="$different"){
 				auto left=build(comparison.args[0],ctx,locals,TypeId.init,depth+1),kind=pool.view(b.type(left)).kind;
-				if(kind==TypeKind.type_||kind==TypeKind.function_||kind==TypeKind.pi||kind==TypeKind.set||kind==TypeKind.vector||kind==TypeKind.tuple||kind==TypeKind.unit){
+				if(kind==TypeKind.distribution||kind==TypeKind.type_||kind==TypeKind.function_||kind==TypeKind.pi||kind==TypeKind.set||kind==TypeKind.vector||kind==TypeKind.tuple||kind==TypeKind.unit){
 					auto right=build(comparison.args[1],ctx,locals,b.type(left),depth+1);
 					auto eq=kind==TypeKind.type_?b.typeEq(left,right):b.equal(left,right);
 					return finish(positive?eq:b.primitive(a.not_(a.boolean(false)),[eq]));
@@ -428,12 +471,12 @@ struct FunctionSyntax{
 		Term[] result; foreach(f;facts) result~=f.term; return result;
 	}
 	string inspectType(Arena a,string source){
-		init(); auto raw=Parser(source).parseRawExpression();
+		init(); auto raw=distributionSyntax(Parser(source).parseRawExpression());
 		if(!special(raw)) return typeName(scalarType(a.sort(scalar.parse(a,source))));
 		auto b=new Bindings(a,pool); return typeName(b.type(parseBound(a,b,raw)));
 	}
 	FunctionResult run(Arena a,string source,Term[] facts=[],Options options=Options.init,bool domainQuery=false){
-		init(); auto raw=Parser(source).parseRawExpression(); FunctionResult result; result.domainQuery=domainQuery;
+		init(); auto raw=distributionSyntax(Parser(source).parseRawExpression()); FunctionResult result; result.domainQuery=domainQuery;
 		if(!special(raw)){
 			result.scalarOnly=true; result.scalarInput=scalar.parse(a,source);
 			result.scalar=domainQuery?simplifyDomain(a,result.scalarInput,facts,options):simplify(a,result.scalarInput,facts,options);
@@ -484,6 +527,11 @@ struct FunctionSyntax{
 				return "get("~child(base)~","~to!string(index)~")";
 			}
 			switch(n.op){
+				case BoundOp.distributionZero:return "zeroD("~typeName(pool.view(b.type(t)).fields[0],locals)~")";
+				case BoundOp.distributionLebesgue:return "lebesgueD()";
+				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind:
+					auto name=n.op==BoundOp.distributionDirac?"dirac":n.op==BoundOp.distributionAdd?"addD":n.op==BoundOp.distributionScale?"scaleD":n.op==BoundOp.distributionWeight?"weightD":n.op==BoundOp.distributionIntegral?"integralD":n.op==BoundOp.distributionMass?"massD":n.op==BoundOp.distributionBind?"bindD":"densityAtD";
+					return name~"("~child(n.a)~(n.b==uint.max?"":","~child(n.b))~")";
 				case BoundOp.conditional:return "(if "~child(n.a)~" then "~child(n.b)~" else "~child(n.c)~")";
 				case BoundOp.unit:return "()";
 				case BoundOp.vectorNil:return "(():"~typeName(b.type(t),locals)~")";
