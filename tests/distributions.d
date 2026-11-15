@@ -73,6 +73,11 @@ private void run(string directory){
 		if(c.name=="DensityOne") enforce(certificate.indexOf("Distribution.model_density_lebesgueValue")>=0);
 		if(c.name=="Integral") enforce(certificate.indexOf("Distribution.model_mass_weight_diracValue")>=0);
 		if(c.name=="RecursiveAtom") enforce(certificate.indexOf("Distribution.model_mass_diracValue")>=0);
+		if(c.name=="Interval"||c.name=="PuncturedInterval"||c.name=="SignedInterval"||c.name=="MixedIntegral"){
+			enforce(certificate.indexOf("qsym_density_integral%")>=0);
+			enforce(certificate.indexOf("Distribution.DensityProgram.weight")>=0);
+		}
+		if(c.name=="UnboundedPuncture") enforce(certificate.indexOf("qsym_density_integral_ae%")>=0);
 		write(buildPath(directory,c.name~".lean"),certificate);
 	}
 	auto owner=Session.open(),a=owner.arena; FunctionSyntax s;

@@ -331,13 +331,13 @@ clean:
 	rm -rf build
 
 # Focused, source-checked distribution prototype regression suite.
-test-distributions: build/distribution-tests test-distribution-model-rules test-dependent-references
+test-distributions: build/distribution-tests test-distribution-model-rules test-dependent-references test-distribution-source-model
 	./build/distribution-tests build/distributions
 	cd lean && $(LAKE) build QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.Tensor QSym.AC QSym.Bag
 	python3 tools/check_distributions.py --lake $(LAKE)
 
 # Standalone semantic model and closed law/counterexample audits.
-test-weighted-parameters: test-weighted-marginals test-weighted-fibres test-distribution-model-rules test-dependent-references
+test-weighted-parameters: test-weighted-marginals test-weighted-fibres test-distribution-model-rules test-dependent-references test-distribution-source-model
 	cd lean && $(LAKE) build QSym.WeightedParameterSpace QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/WeightedParameters.lean
 
@@ -362,3 +362,9 @@ test-distribution-model-rules:
 test-dependent-references:
 	cd lean && $(LAKE) build QSym.DistributionModelBridge QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/DependentReferences.lean
+
+# Source-generated interval/AE certificates and their model interpretation.
+.PHONY: test-distribution-source-model
+test-distribution-source-model:
+	cd lean && $(LAKE) build QSym.DistributionIntegral QSym.AxiomCheck
+	cd lean && $(LAKE) env lean ../tests/DistributionSourceModel.lean

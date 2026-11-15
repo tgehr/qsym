@@ -4690,15 +4690,15 @@ final class Bindings{
 					auto s=result.integrals[p.extra]; string defs;
 					foreach(j,yes;used) if(yes){ if(defs.length) defs~=","; defs~="t"~to!string(j); }
 					foreach(id;scalarNodes){ if(defs.length) defs~=","; defs~="n"~to!string(id); if(arena.node(arena.at(id)).region) defs~=",b"~to!string(id); }
-					string integral(uint[] bodies){
-						string value="(some (1 : ℝ))";
-						foreach(id;bodies) value="(Value.mul "~value~" ("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ)))";
-						return "(fun x : ℝ => Value.mul "~value~" (some (1 : ℝ)))";
+					string densityProgram(uint[] bodies){
+						string value="Distribution.DensityProgram.lebesgue";
+						foreach(id;bodies) value="(Distribution.DensityProgram.weight (fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ)) "~value~")";
+						return "("~value~")";
 					}
 					string realQ(Rational q){ return "(((("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ) : ℝ))"; }
 					string holes="["; foreach(k,q;s.exceptions){ if(k) holes~=","; holes~=realQ(q); } holes~="]";
-					auto args=s.ae?integral(s.to)~" "~holes:realQ(s.lower)~" "~realQ(s.upper)~" "~realQ(s.coefficient)~" "~holes;
-					proof=".ofEq (fun ξ ρ => "~(s.ae?"qsym_integral_ae%":"qsym_integral%")~" ["~defs~"] "~integral(s.from)~" "~args~")"; break;
+					auto args=s.ae?densityProgram(s.to)~" "~holes:realQ(s.lower)~" "~realQ(s.upper)~" "~realQ(s.coefficient)~" "~holes;
+					proof=".ofEq (fun ξ ρ => "~(s.ae?"qsym_density_integral_ae%":"qsym_density_integral%")~" ["~defs~"] "~densityProgram(s.from)~" "~args~")"; break;
 				}
 				case BindingRule.distributionMassWeightedDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;

@@ -89,6 +89,7 @@ def main():
 	check(ROOT/"tests/WeightedFibreModel.lean")
 	check(ROOT/"tests/DistributionModelRules.lean")
 	check(ROOT/"tests/DependentReferences.lean")
+	check(ROOT/"tests/DistributionSourceModel.lean")
 	check(ROOT/"tests/LinearRecurrences.lean")
 	check(ROOT/"tests/Spectral.lean")
 	check(ROOT/"tests/ZeroPowers.lean")
