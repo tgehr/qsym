@@ -34,12 +34,12 @@ struct LineReader{
 	}
 	version(Posix) private bool readEdited(out string line,string prompt){
 		if(kills is null) kills=new KillRing;
-		auto buffer=EditBuffer(history,kills); KeyDecoder decoder; size_t start; uint paintedColumns;
+		auto buffer=EditBuffer(history,kills); KeyDecoder decoder; size_t start; TerminalSize paintedSize;
 		RawTerminal terminal;
 		scope(exit) terminal.leave();
 		terminal.enter();
 		void draw(){
-			auto columns=terminal.columns; paintedColumns=columns;
+			paintedSize=terminal.size; auto columns=paintedSize.columns;
 			auto p=prompt[0..min(prompt.length,columns-2)];
 			auto v=viewport(buffer.text,buffer.cursor,start,cast(uint)(columns-p.length-1),&characterWidth);
 			start=v.start;
@@ -52,10 +52,9 @@ struct LineReader{
 		}
 		draw();
 		for(;;){
-			if(terminal.columns!=paintedColumns){
-				// Reflow differs between terminals; start a fresh row after a resize.
-				stdout.write("\r\n"); draw();
-			}
+			// Redraw in place: a fresh row on every resize leaves stale prompts
+			// in the transcript, even when the input buffer is empty.
+			if(terminal.size!=paintedSize){ start=0; draw(); }
 			auto signals=atomicExchange(&pendingSignals,0u);
 			foreach(i,sig;handledSignals) if(signals&(1u<<i)){
 				if(sig==SIGINT){ echo("^C"); return true; }
@@ -106,6 +105,7 @@ version(Posix){
 	import core.stdc.locale:setlocale,LC_CTYPE;
 	import core.atomic:atomicOp,atomicExchange;
 	private extern(C) int wcwidth(dchar) nothrow @nogc;
+	private struct TerminalSize{ uint columns=80,rows=24; }
 	private int characterWidth(dchar c)@trusted{ auto n=wcwidth(c); return n<0?1:n; }
 	private enum handledSignals=[SIGTERM,SIGHUP,SIGQUIT,SIGTSTP,SIGINT];
 	private shared uint pendingSignals;
@@ -144,9 +144,10 @@ version(Posix){
 			while(installed){ --installed; sigaction(handledSignals[installed],&handlers[installed],null); }
 			if(disable){ stdout.write("\x1b[?2004l"); stdout.flush(); }
 		}
-		uint columns(){
-			winsize size;
-			return ioctl(stdout.fileno(),TIOCGWINSZ,&size)==0&&size.ws_col?max(2u,size.ws_col):80;
+		TerminalSize size(){
+			winsize value;
+			if(ioctl(stdout.fileno(),TIOCGWINSZ,&value)!=0) return TerminalSize.init;
+			return TerminalSize(value.ws_col?max(2u,value.ws_col):80,value.ws_row?value.ws_row:24);
 		}
 	}
 }

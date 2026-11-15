@@ -2,6 +2,7 @@
 import errno
 import os
 import pathlib
+import re
 import select
 import signal
 import struct
@@ -35,8 +36,8 @@ class Terminal:
 		self.process=subprocess.Popen([str(root/"build/qsym")],stdin=self.slave,
 			stdout=self.slave,stderr=self.slave,preexec_fn=os.setpgrp,
 			env={**os.environ,"TERM":term,"LC_ALL":"C.UTF-8"})
-	def resize(self,columns):
-		fcntl.ioctl(self.slave,termios.TIOCSWINSZ,struct.pack("HHHH",24,columns,0,0))
+	def resize(self,columns,rows=24):
+		fcntl.ioctl(self.slave,termios.TIOCSWINSZ,struct.pack("HHHH",rows,columns,0,0))
 	def send(self,data):
 		if(isinstance(data,str)): data=data.encode()
 		while(data): data=data[os.write(self.master,data):]
@@ -72,6 +73,34 @@ class Terminal:
 	def __enter__(self): return self
 	def __exit__(self,*args): self.close()
 
+def resize_checks():
+	with Terminal() as t:
+		t.until(ready)
+		# An idle resize must replace the current prompt, not append a line.
+		# Include height-only changes and windows narrower than the prompt.
+		for columns,rows in [(40,24),(160,24),(80,24),(80,8),(80,40),(5,24),(4,24),(2,24),(80,24)]*3:
+			prompt=b">>> "[:min(4,columns-2)]
+			frame=b"\r\x1b[2K"+prompt+b"\r"
+			if prompt: frame+=f"\x1b[{len(prompt)}C".encode()
+			t.resize(columns,rows)
+			output=t.until(frame)
+			assert output==frame,("resize appended output",columns,rows,output)
+		# Recompute the horizontal viewport without changing the draft or
+		# its cursor. Include wide and combining characters in the tail.
+		draft="1+"*30+"1 # 界e\u0301α"
+		t.send(b"\x1b[200~"+draft.encode()+b"\x1b[201~")
+		t.until(b"C")
+		for columns in (20,36,12,80):
+			t.resize(columns)
+			output=t.until(b"C")
+			assert b"\n" not in output and output.count(b">>> ")==1,output
+			cursor=re.search(rb"\r\x1b\[(\d+)C$",output)
+			assert cursor and 4<=int(cursor[1])<columns,(columns,output)
+			if columns==80: assert b">>> "+draft.encode()+b"\r" in output,output
+		t.submit(home+b"2+"+end,"33","2+"+draft)
+		t.finish()
+	print("Repeated width/height resize and Unicode draft checks passed.")
+
 def motion_checks():
 	count=0
 	with Terminal() as t:
@@ -100,6 +129,10 @@ def motion_checks():
 		t.submit(b"(1+2)\x1b\x023*\x1f","3","(1+2)"); count+=1
 		t.finish()
 	print(f"{count} targeted terminal motion cases passed.")
+
+if "--resize" in sys.argv:
+	resize_checks()
+	raise SystemExit
 
 if "--motion" in sys.argv:
 	motion_checks()
@@ -135,7 +168,9 @@ with Terminal() as t:
 	t.submit(b"[x\\ne0]\\cdot x\\^-1","[x≠0]·x⁻¹","[x≠0]· x⁻¹")
 	t.submit(b":vars z:\\bC",None,":vars z:ℂ")
 	t.submit(b"(1+\\ii)\\^2","2·ⅈ","(1+ⅈ)²")
-	t.submit(b"\\lam\t+\\lambda","2·λ","λ+λ")
+	# Lambda is now reserved by distribution syntax; use alpha to check
+	# unique-prefix completion and subsequent editing as a scalar expression.
+	t.submit(b"\\alp\t+\\alpha","2·α","α+α")
 	t.submit(b"[x\\le 2]","[x≤2]","[x≤2]")
 	t.submit(b"1\\alp\x07+2","3","1+2")
 	t.send(b"1\\alp\x1b"); t.until(b"\x1b[5C")
@@ -252,3 +287,4 @@ with Terminal() as t:
 print("Dependent type terminal checks passed.")
 
 motion_checks()
+resize_checks()
