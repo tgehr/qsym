@@ -163,6 +163,9 @@ inductive Expr : Ty → Type where
   | pi : Expr .real
   | e : Expr .real
 
+  | divN : Expr .natural → Expr .natural → Expr .natural
+  | logN : Expr .natural → Expr .natural → Expr .natural
+
 namespace Expr
 noncomputable def eval (ρ : Env) : {s : Ty} → Expr s → Option s.denote
   | _, .nat n => some n
@@ -182,6 +185,8 @@ noncomputable def eval (ρ : Env) : {s : Ty} → Expr s → Option s.denote
   | _, .castQR a => Functions.castQR.apply (eval ρ a)
   | _, .castRC a => Functions.castRC.apply (eval ρ a)
   | _, .subN a b => Functions.subN.apply (eval ρ a) (eval ρ b)
+  | _, .divN a b => Functions.divN.apply (eval ρ a) (eval ρ b)
+  | _, .logN a b => Functions.logN.apply (eval ρ a) (eval ρ b)
   | _, .addN a b => Functions.addN.apply (eval ρ a) (eval ρ b)
   | _, .mulN a b => Functions.mulN.apply (eval ρ a) (eval ρ b)
   | _, .ltN a b => Functions.ltN.apply (eval ρ a) (eval ρ b)

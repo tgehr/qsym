@@ -1741,3 +1741,5 @@ equation sum_add_power_RN(x:ℝ,m:ℕ,n:ℕ):powRN(x,m+n)≡powRN(x,m)*powRN(x,n
 equation sum_mul_power_RN(x:ℝ,m:ℕ,n:ℕ):powRN(x,m*n)≡powRN(powRN(x,m),n);
 equation sum_add_power_CN(x:ℂ,m:ℕ,n:ℕ):powCN(x,m+n)≡powCN(x,m)*powCN(x,n);
 equation sum_mul_power_CN(x:ℂ,m:ℕ,n:ℕ):powCN(x,m*n)≡powCN(powCN(x,m),n);
+
+fact natural_indexed_nonzero(x:ℕ,n:ℕ):nonzeroN(powNN(x,n)) when x≠0,defined(n);

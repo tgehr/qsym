@@ -48,6 +48,23 @@ def power {α : Type} [One α] [Mul α] : ℕ → α → ℕ → α
     let y := power fuel (x*x) (n/2)
     if n%2=0 then y else y*x
 
+-- Structural fuel makes exact logarithm certificates inexpensive to reduce.
+def logarithm : ℕ → ℕ → ℕ → ℕ
+  | 0, _, _ => 0
+  | fuel+1, b, n => if b ≤ n ∧ 1 < b then logarithm fuel b (n/b)+1 else 0
+
+theorem logarithm_sound (fuel b n : ℕ) (h : n ≤ fuel) : logarithm fuel b n = Nat.log b n := by
+  induction fuel generalizing n with
+  | zero =>
+    have hn : n=0 := by omega
+    subst n
+    simp [logarithm]
+  | succ fuel ih =>
+    rw [logarithm, Nat.log]
+    split
+    · next hc => rw [ih (n/b) (by have := Nat.div_lt_self (by omega : 0<n) hc.2; omega)]
+    · rfl
+
 def calculate : {s : Ty} → Expr s → Option (Data s)
   | _, .nat v => some v
   | _, .int v => some v
@@ -55,6 +72,12 @@ def calculate : {s : Ty} → Expr s → Option (Data s)
   | _, .subN a b => do
     let x ← calculate a; let y ← calculate b
     if y ≤ x then some (x - y) else none
+  | _, .divN a b => do
+    let x ← calculate a; let y ← calculate b
+    if y ≠ 0 then some (x/y) else none
+  | _, .logN a b => do
+    let x ← calculate a; let y ← calculate b
+    if 1 < x then some (logarithm y x y) else none
   | _, .addN a b => binary (· + ·) (calculate a) (calculate b)
   | _, .mulN a b => binary (· * ·) (calculate a) (calculate b)
   | _, .ltN a b => binary (fun x y => decide (x < y)) (calculate a) (calculate b)
@@ -162,6 +185,23 @@ theorem calculate_sound (ρ : Env) {s : Ty} (term : Expr s) (v : Data s)
       subst v
       simp [Expr.eval, ha x hx, hb y hy, Functions.subN, Function2.apply, denote, hle]
     · simp [hle] at hv
+  | divN a b ha hb =>
+    obtain ⟨x, hx, hv⟩ := Option.bind_eq_some_iff.mp h
+    obtain ⟨y, hy, hv⟩ := Option.bind_eq_some_iff.mp hv
+    by_cases hn : y ≠ 0
+    · have he : x/y=v := by simpa [hn] using hv
+      subst v
+      simp [Expr.eval, ha x hx, hb y hy, Functions.divN, Function2.apply, denote, hn]
+      rfl
+    · simp [hn] at hv
+  | logN a b ha hb =>
+    obtain ⟨x, hx, hv⟩ := Option.bind_eq_some_iff.mp h
+    obtain ⟨y, hy, hv⟩ := Option.bind_eq_some_iff.mp hv
+    by_cases hn : 1<x
+    · have he : logarithm y x y=v := by simpa [hn] using hv
+      subst v
+      simp [Expr.eval, ha x hx, hb y hy, Functions.logN, Function2.apply, denote, hn, logarithm_sound y x y le_rfl]
+    · simp [hn] at hv
   | addN a b ha hb =>
     obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
     simp [Expr.eval, ha x hx, hb y hy, Functions.addN, Function2.apply, denote, complex]

@@ -1671,6 +1671,7 @@ enum Law{
 	sum_mul_power_RN,
 	sum_add_power_CN,
 	sum_mul_power_CN,
+	natural_indexed_nonzero,
 }
 Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 	switch(law){
@@ -14722,6 +14723,14 @@ Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 			enforce(a.sort(bindings[2])==Sort.natural,"rule binding type mismatch");
 			auto v_n=bindings[2];
 			return Instance(a.call(Builtin.powCN,[v_x,a.call(Builtin.mulN,[v_m,v_n])]),a.call(Builtin.powCN,[a.call(Builtin.powCN,[v_x,v_m]),v_n]),"r_sum_mul_power_CN",bindings,[],[false,false,false],true,false,law,raw);
+		}
+		case Law.natural_indexed_nonzero:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.natural,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.natural,"rule binding type mismatch");
+			auto v_n=bindings[1];
+			return Instance(a.call(Builtin.nonzeroN,[a.call(Builtin.powNN,[v_x,v_n])]),a.boolean(true),"r_natural_indexed_nonzero",bindings,[Condition(a.call(Builtin.nonzeroZ,[a.call(Builtin.castNZ,[v_x])]),false,false),Condition(v_n,true,false)],[false,false],false,false,law,raw);
 		}
 		default:assert(0);
 	}
@@ -51510,6 +51519,34 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					return true;
 				default:return false;
 			}
+		case Law.natural_indexed_nonzero:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroN) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.natural) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.powNN) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),1))!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=a.viewChild(a.viewChild(input,0),1); else if(bindings[1]!=a.viewChild(a.viewChild(input,0),1)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(input).value!=cast(long)Builtin.nonzeroZ) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.builtin||a.sort(a.viewChild(input,0))!=Sort.integer) return false;
+					if(a.view(a.viewChild(input,0)).value!=cast(long)Builtin.castNZ) return false;
+					if(a.sort(a.viewChild(a.viewChild(input,0),0))!=Sort.natural) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(a.viewChild(input,0),0); else if(bindings[0]!=a.viewChild(a.viewChild(input,0),0)) return false;
+					return true;
+				case 1:
+					if(a.sort(input)!=Sort.natural) return false;
+					if(bindings[1].id==uint.max) bindings[1]=input; else if(bindings[1]!=input) return false;
+					return true;
+				default:return false;
+			}
 		default:return false;
 	}
 }
@@ -52917,6 +52954,7 @@ bool candidate(Arena a,Law law,Term input){
 		case Law.complex_norm_cosh:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.absC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.coshC;
 		case Law.complex_norm_tan:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.absC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.tanC;
 		case Law.complex_norm_tanh:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.absC&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.tanhC;
+		case Law.natural_indexed_nonzero:return a.view(input).op==Op.builtin&&a.view(input).value==Builtin.nonzeroN&&a.view(a.viewChild(input,0)).op==Op.builtin&&a.view(a.viewChild(input,0)).value==Builtin.powNN;
 		default:return false;
 	}
 }
@@ -53067,6 +53105,7 @@ const(Law)[] inferences(Node n){
 		case (cast(uint)Op.lt|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_positive_add_left,Law.real_positive_add_right,Law.real_positive_inverse,Law.real_lt_upper,Law.real_lt_upper_closed,Law.real_lt_lower,Law.real_lt_lower_closed,Law.real_positive_exp,Law.real_positive_sqrt,Law.real_positive_general_power,Law.real_positive_pi,Law.real_positive_e,Law.complex_arg_positive_upper,Law.complex_arg_positive_cut,Law.complex_arg_positive_negative_real]; return laws; }
 		case (cast(uint)Op.nonzero|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.real_positive_nonzero,Law.real_negative_nonzero,Law.complex_nonzero_real,Law.complex_nonzero_imag,Law.complex_arg_off_cut_nonnegative,Law.complex_arg_off_cut_nonreal]; return laws; }
 		case (cast(uint)Op.not_|(cast(uint)Sort.boolean<<8)):{ static immutable Law[] laws=[Law.complex_arg_on_cut_negative_real]; return laws; }
+		case (cast(uint)Op.builtin|(cast(uint)Sort.boolean<<8)|(cast(uint)Builtin.nonzeroN<<16)):{ static immutable Law[] laws=[Law.natural_indexed_nonzero]; return laws; }
 		default:return null;
 	}
 }
@@ -53076,6 +53115,7 @@ const(Law)[] inferences(Op op){
 		case Op.lt:{ static immutable Law[] laws=[Law.real_positive_add_left,Law.real_positive_add_right,Law.real_positive_inverse,Law.real_lt_upper,Law.real_lt_upper_closed,Law.real_lt_lower,Law.real_lt_lower_closed,Law.real_positive_exp,Law.real_positive_sqrt,Law.real_positive_general_power,Law.real_positive_pi,Law.real_positive_e,Law.complex_arg_positive_upper,Law.complex_arg_positive_cut,Law.complex_arg_positive_negative_real]; return laws; }
 		case Op.nonzero:{ static immutable Law[] laws=[Law.real_positive_nonzero,Law.real_negative_nonzero,Law.complex_nonzero_real,Law.complex_nonzero_imag,Law.complex_arg_off_cut_nonnegative,Law.complex_arg_off_cut_nonreal]; return laws; }
 		case Op.not_:{ static immutable Law[] laws=[Law.complex_arg_on_cut_negative_real]; return laws; }
+		case Op.builtin:{ static immutable Law[] laws=[Law.natural_indexed_nonzero]; return laws; }
 		default:return null;
 	}
 }
@@ -55961,6 +56001,7 @@ size_t conditionCount(Law law){
 		case Law.sum_mul_power_RN:return 0;
 		case Law.sum_add_power_CN:return 0;
 		case Law.sum_mul_power_CN:return 0;
+		case Law.natural_indexed_nonzero:return 2;
 		default:assert(0);
 	}
 }

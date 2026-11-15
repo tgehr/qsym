@@ -44,3 +44,5 @@ import QSym.SqrtBranches
 import QSym.SqrtProducts
 
 import QSym.CFiniteRecurrence
+
+import QSym.DivideConquer

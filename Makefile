@@ -149,6 +149,7 @@ $(eval $(call test_binary,conditional-consumer-tests,conditional_consumers,))
 $(eval $(call test_binary,coupled-recurrence-tests,coupled_recurrences,))
 $(eval $(call test_binary,indexed-recurrence-tests,indexed_recurrences,))
 $(eval $(call test_binary,cfinite-recurrence-tests,cfinite_recurrences,))
+$(eval $(call test_binary,divide-recurrence-tests,divide_recurrences,))
 $(eval $(call test_binary,ranked-domain-tests,ranked_domains,))
 $(eval $(call test_binary,real-countdown-tests,real_countdown,-unittest))
 $(eval $(call test_binary,argument-branch-tests,argument_branches,))
@@ -240,6 +241,7 @@ test: build-tests build/qsym
 	./build/coupled-recurrence-tests build/coupled-recurrences
 	./build/indexed-recurrence-tests build/indexed-recurrences
 	./build/cfinite-recurrence-tests build/cfinite-recurrences
+	./build/divide-recurrence-tests build/divide-recurrences
 	./build/ranked-domain-tests build/ranked-domains
 	./build/real-countdown-tests --DRT-testmode=run-main build/real-countdown
 	./build/argument-branch-tests build/argument-branches

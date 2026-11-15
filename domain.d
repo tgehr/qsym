@@ -34,6 +34,8 @@ package Term domainPredicate(Arena a,Term t){
 		case Builtin.atan2R:return a.or_(nz(y),nz(x));
 		case Builtin.makeQ:return nz(y);
 		case Builtin.subN:return a.le(y,x);
+		case Builtin.divN:return nz(y);
+		case Builtin.logN:return a.lt(a.natural_(1),x);
 		case Builtin.gammaR:return poles(x);
 		case Builtin.lgammaR:return a.and_(poles(x),nz(call(Builtin.gammaR,x)));
 		case Builtin.gammaC:return a.or_(nz(call(Builtin.imC,x)),poles(call(Builtin.reC,x)));

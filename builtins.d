@@ -19,7 +19,7 @@ enum Builtin{
 	polarC,atan2R,floorR,ceilR,roundR,signR,
 	isIntR,minR,maxR,hypotR,gcdZ,makeQ,
 	numQ,denQ,erfR,erfcR,gammaR,lgammaR,
-	gammaC,pi,e,subN,floorN,invalid,
+	gammaC,pi,e,subN,floorN,divN,logN,invalid,
 }
 struct BuiltinInfo{ string code,name; Sort result; immutable(Sort)[] args; bool total; }
 private immutable BuiltinInfo[] definitions=[
@@ -118,6 +118,8 @@ private immutable BuiltinInfo[] definitions=[
 	BuiltinInfo("e","e",Sort.real_,[],true),
 	BuiltinInfo("subN","sub",Sort.natural,[Sort.natural,Sort.natural],false),
 	BuiltinInfo("floorN","floorN",Sort.natural,[Sort.real_],true),
+	BuiltinInfo("divN","divN",Sort.natural,[Sort.natural,Sort.natural],false),
+	BuiltinInfo("logN","logN",Sort.natural,[Sort.natural,Sort.natural],false),
 ];
 const(BuiltinInfo) builtinInfo(Builtin f){
 	enforce(cast(uint)f<cast(uint)Builtin.invalid,"invalid built-in function"); return definitions[f];

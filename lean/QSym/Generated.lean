@@ -12388,4 +12388,13 @@ theorem r_sum_mul_power_CN (v_x : Option (Ty.denote .complex)) (v_m : Option (Ty
 
 #qsym_check_axioms r_sum_mul_power_CN
 
+theorem r_natural_indexed_nonzero (v_x : Option (Ty.denote .natural)) (v_n : Option (Ty.denote .natural))
+    (hp0 : Value.Refines (Functions.nonzeroZ.apply (Functions.castNZ.apply v_x)) (some true))
+    (hp1 : Value.Defined v_n) :
+    Value.Refines (Functions.nonzeroN.apply (Functions.powNN.apply v_x v_n)) (some true) := qsym_cached% by
+  cases v_x <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_natural_indexed_nonzero
+
 end QSym.Generated

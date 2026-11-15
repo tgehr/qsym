@@ -43,11 +43,12 @@ private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=u
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
-private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; }
+private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
 private struct CFiniteSequence{ CFiniteKind kind; Sort sort; uint source=uint.max,a,b,size,coordinate; Term value; Term[] matrix,initial,output; }
 private enum CFiniteExprKind:ubyte{ force,previous,add,left,right }
 private struct CFiniteExpression{ CFiniteExprKind kind; uint source,a,b,offset; Term coefficient,value; }
+private struct DivideExpression{ CFiniteExprKind kind; uint source,a,b,offset; Term coefficient,value; }
 private struct DomainLeaf{ uint node; Term value; Result domain; }
 private struct DomainRank{ uint source,variable; Result result,lower,upper; DomainLeaf[] leaves; Result[] iterations; Sort sort; Term slope,bound,step; }
 private struct SpectralFact{ Term input; Result domain,value; }
@@ -775,6 +776,79 @@ final class Bindings{
 		auto matrix=tuple(inner,[row0,row1,row2],mat),initial=tuple(inner,[scalar(inner,arena.at(nodes[yes.b].data)),scalar(inner,zero),scalar(inner,one)],vec);
 		auto output=inheritHint(at(n.a),lambda(get(tensor(TensorOp.matvec,tensor(TensorOp.power,matrix,variable(inner,0)),initial),scalar(inner,arena.natural_(0)))));
 		solution=RecurrenceSolution(t.id,output.id,yes.b,no.b); solution.indexed=true; return output;
+	}
+
+	// Exact integer subdivision. Every recursion-free leaf is certified total;
+	// nonlinear feedback and changing recursive coefficients remain unsupported.
+	private BoundTerm solveDivideRecurrence(BoundTerm t,out RecurrenceSolution solution){
+		auto n=node(t),ty=pool.view(type(t));
+		if(ty.fields[0]!=scalarType(Sort.natural)||ty.fields[1]!=scalarType(Sort.natural)||nodes[n.a].op!=BoundOp.lambda) return BoundTerm.init;
+		bool call(uint id,Builtin f){ auto q=nodes[id]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f; }
+		bool variableAt(uint id,uint k){ auto q=nodes[id]; return q.op==BoundOp.variable&&q.data==k; }
+		bool literal(uint id,out uint value){
+			auto q=nodes[id]; if(q.op!=BoundOp.scalar||!arena.isNumber(arena.at(q.data)))return false;
+			auto x=arena.number(arena.at(q.data)).re; if(!x.small||x.integer<0||x.integer>=uint.max)return false;value=cast(uint)x.integer;return true;
+		}
+		uint test,base,tail; bool reverse;
+		if(!recurrenceBranches(nodes[n.a].a,test,base,tail,reverse)||depends(at(base),1)||!depends(at(tail),1))return BoundTerm.init;
+		auto predicate=nodes[test]; uint threshold;
+		bool inclusive=call(test,Builtin.leN);
+		if(!(inclusive||call(test,Builtin.ltN))||!variableAt(predicate.a,0)||!literal(predicate.b,threshold))return BoundTerm.init;
+		auto radix=threshold+(inclusive?1:0);if(radix<2)return BoundTerm.init;
+		uint variableIndex;
+		foreach(id;0..arena.length){ auto q=arena.view(arena.at(cast(uint)id)); if(q.op==Op.variable){enforce(q.value<uint.max-1,"scalar variable limit exceeded");if(q.value>=variableIndex)variableIndex=cast(uint)q.value+1;} }
+		auto argument=arena.variable(Sort.natural,variableIndex);
+		RecurrenceFact[] facts; Table!(uint,bool) checked;
+		bool totalLeaf(uint id){
+			if(checked.get(id,false))return true;
+			auto input=scalarBody(at(id),argument);if(input==Term.init)return false;
+			auto options=Options(DensityMode.preserve,true),d=simplifyDomain(arena,input,[],options);
+			if(d.exhausted||d.output!=arena.boolean(true))return false;
+			auto v=simplify(arena,input,options);if(v.exhausted)return false;
+			facts~=RecurrenceFact(id,uint.max,input,d,v);checked.set(id,true);return true;
+		}
+		if(!totalLeaf(base))return BoundTerm.init;
+		bool constant(uint id){return nodes[id].op==BoundOp.scalar&&recurrenceConstant(arena.at(nodes[id].data));}
+		DivideExpression[] expressions;bool recursive;
+		uint collect(uint id,uint level=0){
+			if(level>64||expressions.length>=256)return uint.max;
+			auto q=nodes[id];DivideExpression e;e.source=id;
+			if(!depends(at(id),1)){
+				if(!totalLeaf(id))return uint.max;
+				e.kind=CFiniteExprKind.force;e.coefficient=arena.natural_(0);e.offset=id;
+			}else if(q.op==BoundOp.apply&&variableAt(q.a,1)&&call(q.b,Builtin.divN)&&variableAt(nodes[q.b].a,0)){
+				uint divisor;if(!literal(nodes[q.b].b,divisor)||divisor!=radix)return uint.max;
+				e.kind=CFiniteExprKind.previous;e.coefficient=arena.natural_(1);e.offset=scalar(context(at(id)),arena.natural_(0)).id;recursive=true;
+			}else if(call(id,Builtin.addN)){
+				e.kind=CFiniteExprKind.add;e.a=collect(q.a,level+1);e.b=collect(q.b,level+1);if(e.a==uint.max||e.b==uint.max)return uint.max;
+				e.coefficient=arena.add(expressions[e.a].coefficient,expressions[e.b].coefficient,true);
+				e.offset=primitive(arena.at(q.data),[at(expressions[e.a].offset),at(expressions[e.b].offset)]).id;
+			}else if(call(id,Builtin.mulN)){
+				bool left=constant(q.a);auto c=left?q.a:q.b;if(!constant(c))return uint.max;
+				e.kind=left?CFiniteExprKind.left:CFiniteExprKind.right;e.a=collect(left?q.b:q.a,level+1);if(e.a==uint.max)return uint.max;
+				e.value=arena.at(nodes[c].data);auto child=expressions[e.a];
+				e.coefficient=left?arena.mul(e.value,child.coefficient,true):arena.mul(child.coefficient,e.value,true);
+				e.offset=primitive(arena.at(q.data),left?[at(c),at(child.offset)]:[at(child.offset),at(c)]).id;
+			}else return uint.max;
+			expressions~=e;return cast(uint)expressions.length-1;
+		}
+		auto root=collect(tail);if(root==uint.max||!recursive)return BoundTerm.init;
+		auto outer=context(t),inner=push(outer,scalarType(Sort.natural)),sumScope=push(inner,scalarType(Sort.natural));
+		BoundTerm functionAt(uint id){
+			BoundTerm[] values=[variable(inner,0),bottom(inner,type(t))];foreach(i;0..depth(outer))values~=variable(inner,i+1);
+			return lambda(substitute(at(id),inner,values));
+		}
+		auto seedFn=functionAt(base),tollFn=functionAt(expressions[root].offset);
+		BoundTerm lifted(BoundTerm f,Scope ctx,uint amount){BoundTerm[] values;foreach(i;0..depth(outer))values~=variable(ctx,i+amount);return substitute(f,ctx,values);}
+		BoundTerm bin(Builtin f,BoundTerm x,BoundTerm y){return primitive(arena.call(f,[arena.natural_(0),arena.natural_(0)]),[x,y]);}
+		auto l=bin(Builtin.logN,scalar(inner,arena.natural_(radix)),variable(inner,0));
+		auto terminal=bin(Builtin.divN,variable(inner,0),bin(Builtin.powNN,scalar(inner,arena.natural_(radix)),l));
+		auto initial=bin(Builtin.mulN,bin(Builtin.powNN,scalar(inner,expressions[root].coefficient),l),apply(lifted(seedFn,inner,1),terminal));
+		auto reduced=bin(Builtin.divN,variable(sumScope,1),bin(Builtin.powNN,scalar(sumScope,arena.natural_(radix)),variable(sumScope,0)));
+		auto summand=bin(Builtin.mulN,bin(Builtin.powNN,scalar(sumScope,expressions[root].coefficient),variable(sumScope,0)),apply(lifted(tollFn,sumScope,2),reduced));
+		auto output=inheritHint(at(n.a),lambda(bin(Builtin.addN,initial,finiteSum(lambda(summand),l))));
+		solution=RecurrenceSolution(t.id,output.id,base,tail);solution.divide=true;solution.radix=radix;solution.inclusive=inclusive;solution.left=reverse;
+		solution.variable=variableIndex;solution.facts=facts;solution.divideExpressions=expressions;solution.cfRoot=root;solution.seedFunction=seedFn.id;solution.tollFunction=tollFn.id;return output;
 	}
 
 	// Compile total C-finite forcing compositionally. The state cap bounds
@@ -1978,6 +2052,7 @@ final class Bindings{
 					if(solved==BoundTerm.init) solved=solveCoupledRecurrence(function_,solution);
 					if(solved==BoundTerm.init) solved=solveIndexedRecurrence(function_,solution);
 					if(solved==BoundTerm.init) solved=solveCFiniteRecurrence(function_,solution);
+					if(solved==BoundTerm.init) solved=solveDivideRecurrence(function_,solution);
 					if(solved!=BoundTerm.init){
 						auto extra=cast(uint)solutions.length; solutions~=solution; ++steps;
 						x=Result(solved.id,emit(BindingRule.fixedRecurrence,n.a,solved.id,uint.max,uint.max,extra));
@@ -2237,6 +2312,23 @@ final class Bindings{
 				}
 				if(next==BoundTerm.init){ next=solveFinite(at(result.output),extra,true); rule=BindingRule.rangeSolution; }
 			}else if(current.op==BoundOp.finiteSum&&nodes[current.a].op==BoundOp.lambda){
+				// Reduce applications introduced by recurrence solutions before
+				// lifting the summand to another numeric type.
+				Table!(uint,bool) inspected;
+				bool betaRedex(uint id){
+					if(inspected.get(id,false))return false;inspected.set(id,true);auto q=nodes[id];
+					return q.op==BoundOp.apply&&nodes[q.a].op==BoundOp.lambda||q.a!=uint.max&&betaRedex(q.a)||q.b!=uint.max&&betaRedex(q.b)||q.c!=uint.max&&betaRedex(q.c);
+				}
+				if(steps<budget&&betaRedex(nodes[current.a].a)){
+					auto f=visit(at(current.a),depth+1);
+					if(f.output!=current.a){
+						auto out_=finiteSum(at(f.output),at(current.b));++steps;
+						auto proof=emit(BindingRule.congr,result.output,out_.id,f.proof,emit(BindingRule.refl,current.b,current.b));
+						auto tail=visit(out_,depth+1),rest=emit(BindingRule.trans,result.output,tail.output,proof,tail.proof);
+						result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,result.proof,rest));
+						active.set(t.id,false);memo.set(t.id,result);return result;
+					}
+				}
 				auto summand=nodes[nodes[current.a].a];
 				if(steps<budget){
 					auto rounded=roundSumBounds(at(nodes[current.a].a),true);
@@ -2416,6 +2508,7 @@ final class Bindings{
 						if(next==BoundTerm.init) next=solveCoupledRecurrence(at(result.output),solution);
 						if(next==BoundTerm.init) next=solveIndexedRecurrence(at(result.output),solution);
 						if(next==BoundTerm.init) next=solveCFiniteRecurrence(at(result.output),solution);
+						if(next==BoundTerm.init) next=solveDivideRecurrence(at(result.output),solution);
 						if(next!=BoundTerm.init){ extra=cast(uint)solutions.length; solutions~=solution; rule=BindingRule.fixedRecurrence; }
 					}
 				}else if(current.op==BoundOp.guard&&isTrue(current.a,false)){
@@ -2831,6 +2924,7 @@ final class Bindings{
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
+		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd) stack~=p.extra;
 		while(stack.length){
 			auto id=stack[$-1]; --stack.length; if(used[id]) continue;
@@ -3033,7 +3127,7 @@ final class Bindings{
 					code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (Summation.solve_prefix "~add~" "~ha~" (rec"~id~dimArg~" γ ξ ρ) "~(s.left?"true":"false")~" "~base~" "~forcing~" "~hp~"))\n";
 					continue;
 				}
-				if(s.affine||s.order||s.width||s.indexed||s.cfinite){
+				if(s.affine||s.order||s.width||s.indexed||s.cfinite||s.divide){
 					auto leaf=pool.view(type(at(s.source))).fields[1]; if(s.width) leaf=pool.view(leaf).fields[0];
 					struct Total{ string value,proof; }
 					Table!(uint,uint) totalIds; Total[] totals;
@@ -3091,6 +3185,44 @@ final class Bindings{
 						return "rfl";
 					}
 					string raw(uint q){ auto z=nodes[q]; return z.op==BoundOp.scalar?"(n"~to!string(z.data)~".eval ξ)":z.op==BoundOp.vectorNil?"Tensor.nilValue":"(Tensor.consValue "~raw(z.a)~" "~raw(z.b)~")"; }
+					if(s.divide){
+						auto eta="({ ξ with natural := fun i => if i = "~to!string(s.variable)~" then x else ξ.natural i })";
+						string specialized(uint q){auto z=nodes[q];if(z.op==BoundOp.scalar||z.op==BoundOp.variable)return "rfl";
+							auto op=valueOperation(z);return z.b==uint.max?"(congrArg "~op~" "~specialized(z.a)~")":"(congrArg₂ "~op~" "~specialized(z.a)~" "~specialized(z.b)~")";}
+						string forceValue(uint q){foreach(f;s.facts)if(f.node==q)return "((n"~to!string(f.input.id)~".eval "~eta~").getD 0)";assert(0,"missing divide leaf");}
+						string forceProof(uint q){foreach(j,f;s.facts)if(f.node==q){
+							auto domain="(QSym.Linear"~to!string(si)~"_"~to!string(j)~".DomainCertificate.domain_correct "~eta~")";
+							auto bridge="(show "~name(q)~".eval ξ "~env~" = n"~to!string(f.input.id)~".eval "~eta~" from "~specialized(q)~")";
+							return "(Eq.trans "~bridge~" (DivideConquer.some_of_domain "~domain~"))";
+						}assert(0,"missing divide proof");}
+						string divideExpression(uint k){auto e=s.divideExpressions[k];final switch(e.kind){
+							case CFiniteExprKind.force:return "(.constant "~forceValue(e.source)~")";
+							case CFiniteExprKind.previous:return ".previous";
+							case CFiniteExprKind.add:return "(.add "~divideExpression(e.a)~" "~divideExpression(e.b)~")";
+							case CFiniteExprKind.left:return "(.left "~total(e.value).value~" "~divideExpression(e.a)~")";
+							case CFiniteExprKind.right:return "(.right "~divideExpression(e.a)~" "~total(e.value).value~")";
+						}}
+						string expressionProof(uint k){auto e=s.divideExpressions[k];final switch(e.kind){
+							case CFiniteExprKind.force:return forceProof(e.source);
+							case CFiniteExprKind.previous:return "rfl";
+							case CFiniteExprKind.add:return "(congrArg₂ Functions.addN.apply "~expressionProof(e.a)~" "~expressionProof(e.b)~")";
+							case CFiniteExprKind.left:return "(congrArg₂ Functions.mulN.apply "~total(e.value).proof~" "~expressionProof(e.a)~")";
+							case CFiniteExprKind.right:return "(congrArg₂ Functions.mulN.apply "~expressionProof(e.a)~" "~total(e.value).proof~")";
+						}}
+						auto e="divideExpr"~id,seed="divideSeed"~id;
+						code~="noncomputable def "~e~args~" (x : ℕ) : AffineRecurrence.Expr ℕ := "~divideExpression(s.cfRoot)~"\n";
+						code~="noncomputable def "~seed~args~" (x : ℕ) : ℕ := "~forceValue(s.base)~"\n";
+						e="("~e~dimArg~" γ ξ ρ)";seed="("~seed~dimArg~" γ ξ ρ)";
+						string bridge(uint q){if(q==s.base)return forceProof(q);if(q==s.delta)return expressionProof(s.cfRoot);
+							auto z=nodes[q];if(z.op==BoundOp.primitive&&z.b!=uint.max)return "(congrArg₂ "~valueOperation(z)~" "~bridge(z.a)~" "~bridge(z.b)~")";return "rfl";}
+						auto body=nodes[n.a].a,co=total(s.divideExpressions[s.cfRoot].coefficient),radix=to!string(s.radix);
+						auto hp="(fun g x => Eq.trans ("~programProof(body)~").symm "~bridge(body)~")";
+						auto sfn="(fun x : Option ℕ => "~name(nodes[s.seedFunction].a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) x ρ))";
+						auto tfn="(fun x : Option ℕ => "~name(nodes[s.tollFunction].a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) x ρ))";
+						auto hs="(fun x => "~forceProof(s.base)~")",ht="(fun x => Eq.trans "~expressionProof(s.cfRoot)~" (DivideConquer.offset_eq ("~e~" x)))";
+						code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (DivideConquer.solve_sum (rec"~id~dimArg~" γ ξ ρ) "~radix~" "~co.value~" (of_decide_eq_true rfl) "~(s.inclusive?"true":"false")~" "~(s.left?"true":"false")~" "~seed~" "~e~" (fun _ => rfl) "~hp~" (n"~to!string(s.divideExpressions[s.cfRoot].coefficient.id)~".eval ξ) "~co.proof~" "~sfn~" "~tfn~" "~hs~" "~ht~"))\n";
+						continue;
+					}
 					auto add=tensorOperation(leaf,TensorOp.add),mul=tensorOperation(leaf,TensorOp.mul),sort=elementSort(leaf);
 					auto suffix=sort==Sort.natural?"N":sort==Sort.integer?"Z":sort==Sort.rational?"Q":"";
 					auto ha=suffix.length?"AffineRecurrence.add"~suffix:"rfl",hm=suffix.length?"AffineRecurrence.mul"~suffix:"rfl";

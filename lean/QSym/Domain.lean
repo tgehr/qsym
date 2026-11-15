@@ -156,6 +156,16 @@ macro "domain_test" : tactic => `(tactic| (
   all_goals try simp [← sub_eq_add_neg, sub_eq_zero, add_eq_zero_iff_eq_neg]
 ))
 
+theorem test_divN (x y : Option ℕ) : Test2 Functions.divN x y (Functions.nonzeroN.apply y) := by
+  classical
+  intro a b hx hy
+  simp [hx, hy, Function2.apply, Function1.apply, Functions.divN, Functions.nonzeroN]
+
+theorem test_logN (x y : Option ℕ) : Test2 Functions.logN x y (Functions.ltN.apply (some 1) x) := by
+  classical
+  intro a b hx hy
+  simp [hx, hy, Function2.apply, Functions.logN, Functions.ltN]
+
 theorem test_subN (x y : Option ℕ) : Test2 Functions.subN x y (Functions.leN.apply y x) := by
   classical
   intro a b hx hy

@@ -1,4 +1,5 @@
 import QSym.Value
+import Mathlib.Data.Nat.Log
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Analysis.SpecialFunctions.Pow.Complex
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Inverse
@@ -205,6 +206,10 @@ def polarC : Function2 ℝ ℝ ℂ :=
   ⟨fun r θ => r * Complex.exp (θ * Complex.I), fun _ _ => True⟩
 def atan2R : Function2 ℝ ℝ ℝ :=
   ⟨fun y x => Complex.arg ((x : ℂ) + y * Complex.I), fun y x => x ≠ 0 ∨ y ≠ 0⟩
+-- Exact integer operations. logN b 0 = 0; bases below two are undefined.
+def divN : Function2 ℕ ℕ ℕ := ⟨Nat.div, fun _ b => b ≠ 0⟩
+def logN : Function2 ℕ ℕ ℕ := ⟨Nat.log, fun b _ => 1 < b⟩
+
 def floorN : Function1 ℝ ℕ :=
   ⟨Nat.floor, fun _ => True⟩
 def floorR : Function1 ℝ ℤ :=
