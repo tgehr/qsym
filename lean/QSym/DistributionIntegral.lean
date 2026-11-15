@@ -136,3 +136,27 @@ macro_rules
       refine Eq.trans (QSym.Distribution.DensityProgram.mass_bridge $p) ?_
       refine Eq.trans ?_ (QSym.Distribution.DensityProgram.mass_bridge $q).symm
       qsym_rule)
+
+syntax "qsym_density_factor% " "[" ident,* "]" term:max term:max term:max term:max term:max term:max term:max : term
+macro_rules
+  | `(qsym_density_factor% [$ids:ident,*] $p $q $factor $a $b $c $points) => do
+      let lemmas ← ids.getElems.mapM fun id => `(Lean.Parser.Tactic.simpLemma| $id:ident)
+      let defs := lemmas.map fun item => (⟨item.raw⟩ : Lean.TSyntax [`Lean.Parser.Tactic.simpErase, `Lean.Parser.Tactic.simpLemma])
+      `(by
+      have h : QSym.Distribution.IntervalCertificate
+          (QSym.Distribution.DensityProgram.density $q) $a $b $c $points :=
+        qsym_interval_certificate% [$ids,*] (QSym.Distribution.DensityProgram.density $q) $a $b $c $points
+      have hq : QSym.Distribution.DensityProgram.mass $q = some ($c * ($b - $a)) := by qsym_rule
+      have hd : QSym.Value.Defined (QSym.Distribution.DensityProgram.mass $q) := ⟨_, hq⟩
+      have hf : ∀ x, QSym.Distribution.DensityProgram.density $p x =
+          QSym.Value.mul $factor (QSym.Distribution.DensityProgram.density $q x) := by
+        intro x
+        try dsimp only [QSym.Distribution.DensityProgram.density, $defs,*]
+        try dsimp only [QSym.Binding.Expr.eval, QSym.Binding.Env.cons, QSym.Expr.eval]
+        simp only [QSym.Value.mul_one_left, QSym.Value.mul_one_right,
+          QSym.Value.mul_assoc, QSym.Value.mul_comm, QSym.Value.mul_left_comm]
+      refine Eq.trans (QSym.Distribution.DensityProgram.mass_bridge $p) ?_
+      refine Eq.trans (show QSym.Distribution.DensityProgram.mass $p =
+        QSym.Value.mul $factor (QSym.Distribution.DensityProgram.mass $q) from by qsym_rule) ?_
+      rw [hq]
+      qsym_integral_finish [$ids,*])

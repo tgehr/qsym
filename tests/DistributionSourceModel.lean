@@ -1,4 +1,5 @@
 import QSym.DistributionIntegral
+import QSym.DistributionModelBridge
 import QSym.AxiomCheck
 
 noncomputable section
@@ -118,6 +119,72 @@ theorem dependent_source_mass : partialIntegral (twoAtoms ⊗ₘ ProbabilityTheo
   simp_rw [(rowCertificate _).integrate]
   norm_num [partialIntegral, Value.Defined, twoAtoms, upper, coefficient, integral_add_measure]
 
+def interval : DensityProgram :=
+  .weight (fun x => some (if 0 ≤ x ∧ x ≤ 2 then (1 : ℝ) else 0)) .lebesgue
+
+def parameter (c : Option ℝ) : DensityProgram := .weight (fun _ => c) interval
+
+theorem parameter_mass (c : Option ℝ) :
+    massValue (parameter c).presentation = Value.mul c (some 2) :=
+  qsym_density_factor% [parameter, interval] (parameter c) interval c 0 2 1 []
+
+theorem parameter_point (c : Option ℝ) : (parameter c).observeAt 1 = c := by
+  simp [DensityProgram.observeAt_eq, parameter, interval, DensityProgram.density,
+    Value.mul_one_left]
+
+theorem ordered_bind (p : DensityProgram) (k : ℝ → Option (D (ℕ → ℕ))) :
+    massValue (bindValue p.presentation (some k)) =
+      massValue (weightValue (some (fun x => massValue (k x))) p.presentation) :=
+  model_mass_bind_density p k
+
+theorem ordered_integral (k : ℝ → Option (D (D ℝ))) :
+    massValue (integralValue (some k)) =
+      massValue (weightValue (some (fun x => massValue (k x))) lebesgueValue) :=
+  model_mass_integralValue k
+
+theorem unbounded_inner : DensityProgram.lebesgue.mass = none := by
+  simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
+    partialIntegral, Value.Defined, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+
+def zeroDensity : DensityProgram := .weight (fun _ => some 0) .lebesgue
+
+theorem zero_density_mass : zeroDensity.mass = some 0 := by
+  simp [DensityProgram.mass, Model.densityMassValue_eq, zeroDensity,
+    DensityProgram.density, Value.mul, partialIntegral_zero]
+
+theorem factoring_requires_finiteness :
+    zeroDensity.mass ≠ Value.mul (some 0) DensityProgram.lebesgue.mass := by
+  rw [zero_density_mass, unbounded_inner]
+  simp [Value.mul]
+
+-- Ordered composition must not use the flattened zero integrand to hide an
+-- infinite row, even though the outer density is everywhere zero.
+theorem zero_does_not_hide_infinite_row :
+    massValue (bindValue zeroDensity.presentation (some (fun _ => DensityProgram.lebesgue.presentation))) = none := by
+  rw [DensityProgram.bind_mass_bridge]
+  simp only [DensityProgram.mass_bridge, unbounded_inner, DensityProgram.observe,
+    Model.densityMassValue_eq, zeroDensity, DensityProgram.density, Value.mul]
+  simp [partialIntegral, Value.Defined]
+
+-- Failure of one row at a null point also remains visible to the outer
+-- integral; the pointwise requirement is stronger than almost-everywhere L1.
+theorem null_row_is_not_erased :
+    interval.observe (fun x => if x = 0 then none else some 1) = none := by
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  change partialIntegral volume _ = none
+  apply if_neg
+  intro h
+  have hd := h.1 0
+  simp [Value.mul, Value.Defined] at hd
+
+-- The rule prover may use a supplied finite-observation capability, but must
+-- not invent one just because a factor is zero.
+example (p : DensityProgram) : p.mass = p.mass := by
+  fail_if_success
+    have bad : (DensityProgram.weight (fun _ => some 0) p).mass = Value.mul (some 0) p.mass := by
+      qsym_distribution
+  rfl
+
 #qsym_check_axioms IntervalCertificate.integrate
 #qsym_check_axioms IntervalCertificate.integrable
 #qsym_check_axioms IntervalCertificate.integral_value
@@ -149,5 +216,23 @@ theorem dependent_source_mass : partialIntegral (twoAtoms ⊗ₘ ProbabilityTheo
 #qsym_check_axioms rows_measurable
 #qsym_check_axioms joint_capability
 #qsym_check_axioms dependent_source_mass
+#qsym_check_axioms Value.mul_assoc
+#qsym_check_axioms Value.mul_comm
+#qsym_check_axioms Value.mul_left_comm
+#qsym_check_axioms DensityProgram.mass_factor
+#qsym_check_axioms DensityProgram.observe_weight
+#qsym_check_axioms DensityProgram.bind_mass_bridge
+#qsym_check_axioms DensityProgram.integral_mass_bridge
+#qsym_check_axioms model_mass_bind_density
+#qsym_check_axioms model_mass_integralValue
+#qsym_check_axioms parameter_mass
+#qsym_check_axioms parameter_point
+#qsym_check_axioms ordered_bind
+#qsym_check_axioms ordered_integral
+#qsym_check_axioms unbounded_inner
+#qsym_check_axioms zero_density_mass
+#qsym_check_axioms factoring_requires_finiteness
+#qsym_check_axioms zero_does_not_hide_infinite_row
+#qsym_check_axioms null_row_is_not_erased
 
 end QSym.DistributionSourceTests

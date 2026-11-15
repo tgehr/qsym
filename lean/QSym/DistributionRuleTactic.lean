@@ -1,6 +1,7 @@
 import QSym.DistributionModelLaws
 import QSym.WeightedFibreTower
-import QSym.DistributionDensityModel
+import QSym.DistributionSequentialModel
+import QSym.DistributionFactorModel
 
 /-! Checked distribution and integral laws used by the ordinary `qsym_rule`
 prover. The tactic constructs proofs from laws/instances; it never introduces
@@ -19,13 +20,16 @@ elab "qsym_distribution_goal" : tactic => do
     ``Distribution.Model.densityTestValue, ``Distribution.Model.densityMassValue,
     ``WeightedParameter.Fibre.Hom.observePartial,
     ``DependentIntegralTheory.joint, ``WeightedParameter.Fibre.Tower.observe,
-    ``Distribution.DensityProgram.mass, ``Distribution.DensityIntegralTheory.mass]
+    ``Distribution.DensityProgram.mass, ``Distribution.DensityIntegralTheory.mass,
+    ``Distribution.DensityProgram.observe]
   unless (target.find? fun e => match e with
       | .const name _ => heads.contains name
       | _ => false).isSome do
     throwError "not a distribution-model rule goal"
 
 macro "qsym_distribution_eq" : tactic => `(tactic| first
+  | exact Distribution.DensityProgram.observe_weight _ _
+  | solve | apply Distribution.DensityProgram.mass_factor <;> assumption
   | solve | apply Distribution.DensityProgram.mass_interval <;> assumption
   | solve | apply Distribution.DensityProgram.mass_null_edit <;> assumption
   | exact Distribution.DensityIntegralTheory.interval _ _ _ _ _ _ (by assumption)

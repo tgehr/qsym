@@ -10,6 +10,23 @@ instance. This is not a representation theorem for arbitrary presentations.
 -/
 namespace QSym.Distribution
 
+theorem model_mass_bind_density (p : DensityProgram) (k : ℝ → Option (D α)) :
+    massValue (bindValue p.presentation (some k)) =
+      massValue (weightValue (some (fun x => massValue (k x))) p.presentation) := by
+  rw [p.bind_mass_bridge]
+  change p.observe _ = massValue (DensityProgram.presentation (.weight _ p))
+  rw [DensityProgram.mass_bridge]
+  qsym_rule
+
+theorem model_mass_integralValue (k : ℝ → Option (D α)) :
+    massValue (integralValue (some k)) =
+      massValue (weightValue (some (fun x => massValue (k x))) lebesgueValue) := by
+  rw [DensityProgram.integral_mass_bridge]
+  change DensityProgram.lebesgue.observe _ =
+    massValue (DensityProgram.presentation (.weight _ .lebesgue))
+  rw [DensityProgram.mass_bridge]
+  qsym_rule
+
 theorem atom_observation_bridge {A : Type} (f : Option (A → Option ℝ)) (a : Option A) :
     massValue (weightValue f (diracValue a)) = Model.atomTestValue f a := by
   rw [Model.atomTestValue_eq]
