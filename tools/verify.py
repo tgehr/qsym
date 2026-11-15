@@ -84,6 +84,8 @@ def main():
 	check(ROOT/"tests/FixedPoint.lean")
 	check(ROOT/"tests/Distributions.lean")
 	check(ROOT/"tests/WeightedParameters.lean")
+	check(ROOT/"tests/WeightedMarginals.lean")
+	check(ROOT/"tests/WeightedFibreReferences.lean")
 	check(ROOT/"tests/LinearRecurrences.lean")
 	check(ROOT/"tests/Spectral.lean")
 	check(ROOT/"tests/ZeroPowers.lean")

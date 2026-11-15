@@ -6,7 +6,11 @@ This supplies actual equality for identity and associative composition, rather
 than just equality after a scalar observer. It is a category of fixed-fibre
 kernels. It is not yet a monad accepting arbitrary functions into the quotient:
 such functions need a jointly admissible, uniform (or dependent) presentation.
-The quotient does not integrate out latent variables or discard null points.
+No quotient directly by almost-everywhere weight equality is taken. However,
+global measure-preserving isomorphisms can distort conditional fibres at null
+output coordinates. `WeightedFibreObstruction` proves this quotient cannot be
+extended with unrestricted pointwise coordinate marginalization. The finer
+reference structure under development is in `WeightedFibreReference`.
 -/
 noncomputable section
 namespace QSym.WeightedParameter

@@ -5,6 +5,9 @@ import QSym.Integration
 import QSym.Distribution
 import QSym.DistributionIntegral
 import QSym.WeightedParameterSpace
+import QSym.WeightedMarginal
+import QSym.WeightedFibreObstruction
+import QSym.WeightedFibreReference
 import QSym.PositiveIntegral
 import QSym.Quantum
 import QSym.Generated
