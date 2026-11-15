@@ -4,6 +4,7 @@ import QSym.FixedPoint
 import QSym.Integration
 import QSym.Distribution
 import QSym.DistributionIntegral
+import QSym.WeightedParameterSpace
 import QSym.PositiveIntegral
 import QSym.Quantum
 import QSym.Generated

@@ -10,7 +10,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: test-weighted-parameters test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 .DELETE_ON_ERROR:
 all: build/qsym
 
@@ -333,3 +333,8 @@ test-distributions: build/distribution-tests
 	./build/distribution-tests build/distributions
 	cd lean && $(LAKE) build QSym.DistributionIntegral QSym.PositiveIntegral
 	python3 tools/check_distributions.py --lake $(LAKE)
+
+# Standalone semantic model and closed law/counterexample audits.
+test-weighted-parameters:
+	cd lean && $(LAKE) build QSym.WeightedParameterSpace
+	cd lean && $(LAKE) env lean ../tests/WeightedParameters.lean
