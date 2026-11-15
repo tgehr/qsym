@@ -5,7 +5,9 @@ import Mathlib.Probability.Kernel.Composition.IntegralCompProd
 
 Unlike a joint measure, a Mathlib kernel retains its value at every base point.
 This is a building block for replacing the old global-measure-only quotient,
-not a claim that the replacement quotient or full disintegration is complete.
+not a claim that full disintegration is complete. `WeightedFibreModel` builds
+a quotient for a fixed retained coordinate, and `WeightedFibreReindex` proves
+that measurable substitution of that coordinate preserves composition.
 The reference kernels are unnormalized measures; weights may still be signed.
 -/
 noncomputable section

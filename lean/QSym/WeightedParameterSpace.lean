@@ -10,7 +10,8 @@ No quotient directly by almost-everywhere weight equality is taken. However,
 global measure-preserving isomorphisms can distort conditional fibres at null
 output coordinates. `WeightedFibreObstruction` proves this quotient cannot be
 extended with unrestricted pointwise coordinate marginalization. The finer
-reference structure under development is in `WeightedFibreReference`.
+reference structure is in `WeightedFibreReference`; `WeightedFibreModel`
+implements a finer quotient for explicitly retained conditioning coordinates.
 -/
 noncomputable section
 namespace QSym.WeightedParameter

@@ -10,7 +10,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: test-weighted-marginals test-weighted-parameters test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: test-weighted-fibres test-weighted-marginals test-weighted-parameters test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 .DELETE_ON_ERROR:
 all: build/qsym
 
@@ -337,7 +337,7 @@ test-distributions: build/distribution-tests
 	python3 tools/check_distributions.py --lake $(LAKE)
 
 # Standalone semantic model and closed law/counterexample audits.
-test-weighted-parameters: test-weighted-marginals
+test-weighted-parameters: test-weighted-marginals test-weighted-fibres
 	cd lean && $(LAKE) build QSym.WeightedParameterSpace
 	cd lean && $(LAKE) env lean ../tests/WeightedParameters.lean
 
@@ -346,3 +346,8 @@ test-weighted-marginals:
 	cd lean && $(LAKE) build QSym.WeightedFibreObstruction QSym.WeightedFibreReference
 	cd lean && $(LAKE) env lean ../tests/WeightedMarginals.lean
 	cd lean && $(LAKE) env lean ../tests/WeightedFibreReferences.lean
+
+# Reference-aware quotient, pointwise observations, and coordinate substitution.
+test-weighted-fibres:
+	cd lean && $(LAKE) build QSym.WeightedFibreReindex QSym.WeightedFibreObstruction
+	cd lean && $(LAKE) env lean ../tests/WeightedFibreModel.lean
