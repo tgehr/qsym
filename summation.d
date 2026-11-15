@@ -13,7 +13,8 @@ Term sumAntidifference(Arena a,Term input,Term index){ SumPrimitive[] tail; retu
 Term sumAntidifference(Arena a,Term input,Term index,ref SumPrimitive[] tail){
  auto sort=a.sort(input); if(sort!=Sort.rational&&sort!=Sort.real_&&sort!=Sort.complex) return Term.init;
  auto zero=a.number(Number(0),sort),one=a.number(Number(1),sort);
- Term clean(Term t){ auto r=simplify(a,t); return r.exhausted?t:a.isNumber(r.output)?a.number(a.number(r.output),sort):a.castTo(r.output,sort); }
+ auto search=Options.init; search.maxRewrites=256; search.maxAlgebraWork=8192;
+ Term clean(Term t){ auto r=simplify(a,t,search); return r.exhausted?t:a.isNumber(r.output)?a.number(a.number(r.output),sort):a.castTo(r.output,sort); }
  bool dependent(Term t){ foreach(id;a.viewPostorder(t)) if(id==index.id) return true; return false; }
  struct Part { Term ratio; Term[] p; }
  Part[] plus(Part[] x,Part[] y){

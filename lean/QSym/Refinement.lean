@@ -393,9 +393,18 @@ theorem rational_shift (x : Option ℚ) (n k : Option ℤ)
     simp_all [Value.Refines,Function1.apply,Function2.apply,Functions.nonzeroQ,
       Functions.powQZ,Functions.addZ,Functions.mulQ,zpow_add₀]
 
+theorem rational_multiple (x : Option ℚ) (k n : Option ℤ)
+    (hx : Value.Refines (Functions.nonzeroQ.apply x) (some true)) :
+    Value.Refines (Functions.powQZ.apply x (Functions.mulZ.apply k n))
+      (Functions.powQZ.apply (Functions.powQZ.apply x k) n) := by
+  cases x <;> cases k <;> cases n <;>
+    simp_all [Value.Refines,Function1.apply,Function2.apply,Functions.nonzeroQ,
+      Functions.powQZ,Functions.mulZ,zpow_mul,zpow_ne_zero]
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
   | solve | (apply rational_shift; assumption)
+  | solve | (apply rational_multiple; assumption)
   | solve | qsym_partition
   | solve | qsym_branch
   | solve | (apply Value.refines_integer_literal_affine_nonzero; assumption)

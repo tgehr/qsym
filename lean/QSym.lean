@@ -35,6 +35,7 @@ import QSym.MaskFunctions
 import QSym.Summation
 import QSym.SummationBounds
 import QSym.SummationAlgebra
+import QSym.SummationLinearity
 import QSym.SummationAffine
 import QSym.SummationPowers
 import QSym.SummationPrefix

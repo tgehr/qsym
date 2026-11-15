@@ -12568,4 +12568,28 @@ theorem r_sum_negative_exponent_CZ (v_x : Option (Ty.denote .complex)) (v_n : Op
 
 #qsym_check_axioms r_sum_negative_exponent_CZ
 
+theorem r_sum_multiple_exponent_QZ (v_x : Option (Ty.denote .rational)) (v_k : Option (Ty.denote .integer)) (v_n : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Functions.nonzeroQ.apply v_x) (some true)) :
+    Value.Refines (Functions.powQZ.apply v_x (Functions.mulZ.apply v_k v_n)) (Functions.powQZ.apply (Functions.powQZ.apply v_x v_k) v_n) := qsym_cached% by
+  cases v_x <;> cases v_k <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_sum_multiple_exponent_QZ
+
+theorem r_sum_multiple_exponent_RZ (v_x : Option (Ty.denote .real)) (v_k : Option (Ty.denote .integer)) (v_n : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Value.nonzero v_x) (some true)) :
+    Value.Refines (Functions.powRZ.apply v_x (Functions.mulZ.apply v_k v_n)) (Functions.powRZ.apply (Functions.powRZ.apply v_x v_k) v_n) := qsym_cached% by
+  cases v_x <;> cases v_k <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_sum_multiple_exponent_RZ
+
+theorem r_sum_multiple_exponent_CZ (v_x : Option (Ty.denote .complex)) (v_k : Option (Ty.denote .integer)) (v_n : Option (Ty.denote .integer))
+    (hp0 : Value.Refines (Value.nonzero v_x) (some true)) :
+    Value.Refines (Functions.powCZ.apply v_x (Functions.mulZ.apply v_k v_n)) (Functions.powCZ.apply (Functions.powCZ.apply v_x v_k) v_n) := qsym_cached% by
+  cases v_x <;> cases v_k <;> cases v_n
+  all_goals qsym_rule
+
+#qsym_check_axioms r_sum_multiple_exponent_CZ
+
 end QSym.Generated
