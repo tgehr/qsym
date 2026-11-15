@@ -6,9 +6,9 @@ import qsym.budget:Budget,Limit;
 import std.algorithm:sort;
 @safe:
 
-private alias Powers=immutable(uint)[]; // sorted (scalar variable term id, exponent) pairs
-private alias Polynomial=Number[Powers];
-private class Arithmetic {
+package alias Powers=immutable(uint)[]; // sorted (scalar variable term id, exponent) pairs
+package alias Polynomial=Number[Powers];
+package class Arithmetic {
  Arena arena;
  Budget budget;
  this(Arena a){arena=a;budget=new Budget(2_000_000,4096,512);}
@@ -122,7 +122,15 @@ Term polynomialAntidifference(Arena a,Term input,Term index){
   }
   // Preserve the established compact forms and cheaper proofs of small sums.
   if(degree<4)return Term.init;
-  auto answer=a.number(Number(0),type),x=a.castTo(index,type);
+  // Keep exact rational polynomials in their smallest scalar field.
+  // Widening every monomial separately makes the general normalizer prove
+  // the same embedding contractions again after applying the primitive.
+  auto representation=Sort.rational;
+  foreach(key,cs;groups){
+   foreach(c;cs)if(!c.im.zero)representation=Sort.complex;
+   for(size_t j;j<key.length;j+=2)if(rank(a.sort(a.at(key[j])))>rank(representation))representation=a.sort(a.at(key[j]));
+  }
+  auto answer=a.number(Number(0),representation),x=a.castTo(index,representation);
   auto keys=groups.keys;
   sort!((x,y)=>x<y)(keys);
   foreach(key;keys){
@@ -136,14 +144,14 @@ Term polynomialAntidifference(Arena a,Term input,Term index){
      choose=arithmetic.budget.calc!"/"(arithmetic.budget.calc!"*"(choose,Number(cast(long)k+1-cast(long)j)),Number(cast(long)j+1));
     }
    }
-   auto factor=a.number(Number(1),type);
-   for(size_t j;j<key.length;j+=2)factor=a.mul(factor,a.pow(a.castTo(a.at(key[j]),type),key[j+1]),true);
+   auto factor=a.number(Number(1),representation);
+   for(size_t j;j<key.length;j+=2)factor=a.mul(factor,a.pow(a.castTo(a.at(key[j]),representation),key[j+1]),true);
    foreach(k,c;primitive)if(!c.zero){
-    auto term=a.mul(a.number(c,type),a.pow(x,cast(uint)k),true);
+    auto term=a.mul(a.number(c,representation),a.pow(x,cast(uint)k),true);
     if(key.length)term=a.mul(factor,term,true);
     answer=a.add(answer,term,true);
    }
   }
-  return answer;
+  return a.castTo(answer,type);
  }catch(Limit e){return Term.init;}
 }

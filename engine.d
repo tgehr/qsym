@@ -250,6 +250,21 @@ package final class Engine{
 		failedProofs.set(failureKey,true);
 		return false;
 	}
+	// Pure disequalities cannot establish a new zero equation. Avoid a
+	// recursive search for one at every factor of a guarded closed form.
+	// Equalities (including disjunctions) and order facts retain that search.
+	private bool zeroSearchRelevant(uint ctx){
+		bool relevant(Term t,bool value){
+			auto n=a.view(t);
+			if(n.op==Op.boolLit)return false;
+			if(n.op==Op.nonzero||n.op==Op.builtin&&(n.value==Builtin.nonzeroN||n.value==Builtin.nonzeroZ||n.value==Builtin.nonzeroQ))return !value;
+			if(n.op==Op.not_)return relevant(a.at(n.a),!value);
+			if(n.op==Op.and_||n.op==Op.or_)return relevant(a.at(n.a),value)||relevant(a.at(n.b),value);
+			return true;
+		}
+		foreach(f;known(ctx))if(relevant(f.before,f.known))return true;
+		return false;
+	}
 	private Proof pairs(Term t,uint ctx){
 		auto n=a.view(t);
 		if((n.op!=Op.add&&n.op!=Op.mul)||(n.sort!=Sort.real_&&n.sort!=Sort.complex)) return d.refl(t,ctx);
@@ -568,7 +583,7 @@ package final class Engine{
 				Proof q;
 				if(substitute(current,ctx,q)){ p=d.trans(p,q,ctx); memoize(k,p); return p; }
 			}
-			if(ctx&&!probe&&n.sort==Sort.real_&&!a.isNumber(current)){
+			if(ctx&&!probe&&n.sort==Sort.real_&&!a.isNumber(current)&&zeroSearchRelevant(ctx)){
 				auto i=instantiate(a,Law.real_known_zero,[current]); Proof q;
 				if(instanceProof(i,ctx,q)){ p=d.trans(p,q,ctx); memoize(k,p); return p; }
 			}

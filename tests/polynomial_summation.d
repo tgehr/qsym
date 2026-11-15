@@ -17,6 +17,7 @@ int main(string[] args){
  Case[] cases=[
   Case("Natural6","∑(i:ℕ). [i<n]·i^6",6),
   Case("Fresh6","∑(i:ℕ). [i<n]·i^6",6,5),
+  Case("Fresh10","∑(i:ℕ). [i<n]·i^10",10,5),
   Case("Natural10","∑(i:ℕ). [i<n]·i^10",10),
   Case("Natural40","∑(i:ℕ). [i<n]·i^40",40),
   Case("Natural64","∑(i:ℕ). [i<n]·i^64",64),
@@ -51,7 +52,7 @@ int main(string[] args){
    auto bounds=["-1","-1/2","1/2","3/2","5/2","11/2"];
    foreach(k,count;[0,0,1,2,3,6]){
     auto r=s.run(a,"(λ(n:ℝ). "~formula~")("~bounds[k]~")");Number expected;
-    foreach(i;0..count)expected=expected+power(i,6);
+    foreach(i;0..count)expected=expected+power(i,c.degree);
     enforce(!r.exhausted&&(r.scalarOnly||r.lowered)&&a.isNumber(r.scalar.output)&&a.number(r.scalar.output)==expected,"fresh real bound "~bounds[k]);++checks;
    }
   }

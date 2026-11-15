@@ -69,7 +69,7 @@ private Case[] cases(){ return [
  Case("Cubes","∑(i:ℕ). [i<n]·(i:ℝ)^3","n^2*(n-1)^2/4"),
  Case("PolynomialGeometric","∑(i:ℕ). [i<n]·(i:ℝ)*(1/2)^i","2-(2*n+2)*(1/2)^n"),
  Case("FiniteGeometric","∑(i:ℕ). [i<n]·(2:ℝ)^i","2^n-1"),
- Case("SymbolicFinite","∑(i:ℕ). [i<n]·q^i","[n≠0]·([q≠1]·((q^n-1)/(q-1))+[q=1]·n)","Summation.range_geometric_value"),
+ Case("SymbolicFinite","∑(i:ℕ). [i<n]·q^i","[q≠1]·(q^n/(q-1)-1/(q-1))+[q=1]·n","Summation.range_solution_partial"),
  Case("FiniteRatioOne","∑(i:ℕ). [i<n]·(1:ℝ)^i","(n:ℝ)"),
  Case("FiniteRatioZero","∑(i:ℕ). [i<n]·(0:ℝ)^i","[0<n]·(1:ℝ)"),
  Case("NaturalInterval","∑(i:ℕ). [2≤i∧i<5]·i","9","Summation.interval_convertN"),

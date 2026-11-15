@@ -85,11 +85,11 @@ int main(string[] args){
   value=x%4==0?Rational(x/4+1):Rational(0);
   numeric("∑(i:ℤ). [2*i="~to!string(x)~"/2]*(i+1)",value);
  }
- // Unsupported symbolic-ratio candidates must return without accepting an
- // unchecked division at q=1 or an unchecked convergence hypothesis.
- foreach(source;["∑(i:ℕ). [i<n]*(i:ℝ)*q^i","∑(i:ℕ). (i:ℝ)*q^i","∑(i:ℤ). [-3≤i]*[i^2+1<n]*i"]){
+ // Infinite symbolic ratios still require a convergence proof. Finite
+ // weighted symbolic ratios are covered by weighted_summation.d.
+ foreach(source;["∑(i:ℕ). (i:ℝ)*q^i","∑(i:ℤ). [-3≤i]*[i^2+1<n]*i"]){
   auto o=Session.open();FunctionSyntax s;s.declare("n:ℕ,q:ℝ");auto r=s.run(o.arena,source);
   enforce(!r.exhausted&&s.format(o.arena,r).indexOf("∑(")>=0,"unchecked symbolic ratio");
  }
- writeln(cases().length," exact cases; ",symbolic," symbolic families; 3 partial linearity certificates; ",checks," independent numeric checks; 2 unsupported-ratio checks; 1 nonlinear-bound check");return 0;
+ writeln(cases().length," exact cases; ",symbolic," symbolic families; 3 partial linearity certificates; ",checks," independent numeric checks; 1 unsupported-ratio check; 1 nonlinear-bound check");return 0;
 }

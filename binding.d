@@ -1,15 +1,16 @@
 module qsym.binding;
 import qsym.ir;
 import qsym.summation:sumAntidifference,sumAbelAntidifference,SumPrimitive;
+import qsym.rational_identity:rationalIdentityZero;
 import qsym.polynomial:polynomialAntidifference,polynomialZero;
 import qsym.types:TypeId,TypeKind,TypePool,Dimension;
 import qsym.number:Number;
 import qsym.table:Table;
 import qsym.generated.rules:Law,instantiate;
-import qsym.proof:leanSyntaxCode,leanValueOperation,exportDomainLean,exportPolynomialZeroLean,scalarExport=exportLean;
+import qsym.proof:leanSyntaxCode,leanValueOperation,exportDomainLean,exportPolynomialZeroLean,exportRationalZeroLean,scalarExport=exportLean;
 import qsym.domain:simplifyDomain;
 import qsym.simplify:Result,ScalarResult=Result,Options,DensityMode,simplify;
-import std.string:replace;
+import std.string:replace,join;
 import qsym.spec:leanSort;
 import std.exception:enforce;
 import std.conv:to;
@@ -42,7 +43,7 @@ private enum BindingRule:ubyte{
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
-private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial; }
+private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
@@ -2055,6 +2056,7 @@ final class Bindings{
 			bool usedAbel;
 			if(candidate==Term.init&&!infinite){ candidate=sumAbelAntidifference(arena,body,variable); usedAbel=true; }
 			if(candidate==Term.init)return BoundTerm.init;
+			bool symbolicRatio;foreach(p;tail)symbolicRatio|=!arena.isNumber(p.ratio);
 			if(!infinite) tail=null;
 			auto zero=arena.number(Number(0),sort);
 			if(infinite){
@@ -2080,6 +2082,11 @@ final class Bindings{
 					auto check=ScalarDomain.init;check.input=input;check.variable=index;check.sort=Sort.natural;check.polynomial=true;
 					checks~=check;continue;
 				}
+				Term[] cases;
+				if(!infinite&&symbolicRatio&&rationalIdentityZero(arena,rawInput,cases)){
+					auto check=ScalarDomain.init;check.input=rawInput;check.variable=index;check.sort=Sort.natural;check.rational=true;check.rationalConditions=cases;
+					checks~=check;continue;
+				}
 				auto domain=simplifyDomain(arena,input,[],opts),value=simplify(arena,input,[],opts);
 				if(domain.exhausted||value.exhausted||domain.output!=arena.boolean(true)||!arena.isNumber(value.output)||!arena.number(value.output).zero)
 					return !infinite&&!usedAbel?solveFinite(t,extra,false,true):BoundTerm.init;
@@ -2087,6 +2094,20 @@ final class Bindings{
 			}
 			auto g=inheritHint(at(n.a),lambda(restoreBody(candidate,context(at(fn.a)),variable)));
 			auto output=infinite?scalar(context(t),arena.mul(arena.number(Number(-1),sort),initial,true)):apply(g,at(n.b));
+			// Strict total scalar expressions, including rounded endpoints,
+			// evaluate to some value. Polynomial primitives can substitute them
+			// directly; the exporter replays the total-function reductions.
+			bool totalEndpoint(BoundTerm endpoint){
+				auto e=node(endpoint);if(e.op!=BoundOp.scalar)return false;
+				foreach(id;arena.viewPostorder(arena.at(e.data))){
+					auto v=arena.at(id),m=arena.view(v);
+					if(arena.isNumber(v)||m.op==Op.variable||m.op==Op.add||m.op==Op.mul||m.op==Op.pow||m.op==Op.conj||m.op==Op.abs)continue;
+					if(m.op==Op.builtin&&builtinInfo(cast(Builtin)m.value).total)continue;
+					return false;
+				}
+				return true;
+			}
+			if(!infinite&&(totalScalar(at(n.b))||exactPolynomial&&totalEndpoint(at(n.b))))output=scalar(context(t),subst(candidate,arena.at(nodes[n.b].data)));
 			auto start=cast(uint)scalarDomains.length;
 			uint[] totals,convergence;
 			if(infinite) foreach(p;tail) foreach(input;[p.coefficient,p.ratio]){
@@ -2231,7 +2252,9 @@ final class Bindings{
 						x=Result(solved.id,emit(BindingRule.fixedRecurrence,n.a,solved.id,uint.max,uint.max,extra));
 					}
 				}
-				if(x.output==uint.max) x=n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.fixed||applied&&nodes[n.a].op==BoundOp.lambda?Result(n.a,emit(BindingRule.refl,n.a,n.a)):visit(at(n.a),depth+1);
+				// Beta reduction already preserves the argument domain; normalize
+				// an applied lambda after substitution, not once on each side of it.
+				if(x.output==uint.max) x=n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.fixed||n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.lambda?Result(n.a,emit(BindingRule.refl,n.a,n.a)):visit(at(n.a),depth+1);
 				BoundTerm[] args=[at(x.output)]; uint y=uint.max,z=uint.max;
 				if(n.b!=uint.max){
 					bool skip; auto left=nodes[x.output];
@@ -3096,6 +3119,10 @@ final class Bindings{
 		auto lowered=lowerResult?lower(result.output):Term.init;
 		string code="import QSym\n",dimDecl=dependent_?" (δ : ℕ → ℕ)":"",dimArg=dependent_?" δ":"";
 		foreach(i,d;result.domains){
+			if(d.rational){
+				auto part=replace(exportRationalZeroLean(arena,d.input,d.rationalConditions),"import QSym\n","");
+				code~=replace(part,"QSym.RationalCertificate","QSym.BindingScalar"~to!string(i));continue;
+			}
 			if(d.polynomial){
 				auto part=replace(exportPolynomialZeroLean(arena,d.input),"import QSym\n","");
 				code~=replace(part,"QSym.PolynomialCertificate","QSym.BindingScalar"~to!string(i));continue;
@@ -3886,7 +3913,7 @@ final class Bindings{
 			string known(uint id,string en){
 				auto prefix="QSym.BindingScalar"~to!string(id),actual=arena.sort(result.domains[id].input);
 				auto hz=actual==Sort.rational?"(congrArg some (div_one (0 : ℚ)))":actual==Sort.real_?"AffineRecurrence.zeroR":"AffineRecurrence.zeroC";
-				auto proof=result.domains[id].polynomial?"("~prefix~".zero "~en~")":"(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct "~en~") ("~prefix~".ValueCertificate.refinement "~en~")) "~hz~")";
+				auto proof=(result.domains[id].polynomial||result.domains[id].rational)?"("~prefix~".zero "~en~")":"(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct "~en~") ("~prefix~".ValueCertificate.refinement "~en~")) "~hz~")";
 				return sort==Sort.rational&&actual==Sort.real_?"(Summation.rational_zero_of_real _ "~proof~")":proof;
 			}
 			auto initial=s.zero==uint.max?"":known(s.zero,"ξ"),step=known(s.step,env),minus="(n"~to!string(arena.number(Number(-1),sort).id)~".eval ξ)",hn=sort==Sort.rational?"(congrArg some (div_one (-1 : ℚ)))":"Spectral.minus"~suffix;
@@ -3914,7 +3941,19 @@ final class Bindings{
 				code~="theorem summation"~to!string(j)~dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(n.context)~") : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := Summation.tail_solution "~f~" "~g~" "~tree~" ("~converges~") (fun x => "~ht~") "~add~" "~mul~" "~(sort==Sort.rational?"Summation.addQ":"Summation.add")~" (Summation.mul_eq "~mul~" "~hm~") "~minus~" "~hn~" "~hs~"\n";
 				continue;
 			}
-			code~="theorem summation"~to!string(j)~dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(n.context)~") : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := Summation.range_solution_partial "~f~" "~g~" "~add~" "~(sort==Sort.rational?"Summation.addQ":"Summation.add")~" "~initial~" "~hs~" ("~name(n.b)~".eval ξ ρ)\n";
+			auto proof="Summation.range_solution_partial "~f~" "~g~" "~add~" "~(sort==Sort.rational?"Summation.addQ":"Summation.add")~" "~initial~" "~hs~" ("~name(n.b)~".eval ξ ρ)";
+			if(nodes[s.target].op==BoundOp.scalar&&!totalScalar(at(n.b))){
+				string[] defs;bool[string] included;
+				void include(string value){if(!(value in included)){included[value]=true;defs~=value;}}
+				foreach(i,yes;used)if(yes)include("t"~to!string(i));
+				foreach(i,yes;needed)if(yes){
+					auto v=arena.at(cast(uint)i),m=arena.view(v);include("n"~to!string(i));
+					if(arena.node(v).region)include("b"~to!string(i));
+					if(m.op==Op.builtin&&m.arity)include("Functions."~builtinInfo(cast(Builtin)m.value).code);
+				}
+				proof="by\n  classical\n  convert ("~proof~") using 1 <;> simp ["~defs.join(",")~", Binding.Expr.eval, Binding.Env.cons, Expr.eval, Expr.sumR, Expr.productR, Expr.sumC, Expr.productC, Region.fold, Positive.repeat, Function1.apply, Function2.apply, Value.add, Value.mul, Value.inv] <;> ring";
+			}
+			code~="theorem summation"~to!string(j)~dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(n.context)~") : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := "~proof~"\n";
 		}
 		string proofName(uint id){ return "(p"~to!string(id)~dimArg~" γ)"; }
 		foreach(i,p;result.proofs){

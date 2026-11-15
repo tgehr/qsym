@@ -110,7 +110,6 @@ int main(string[] args){
  enforce(sumAbelAntidifference(a,scalar.parse(a,"n^32",Sort.real_),n,budget)==Term.init&&budget.exhausted,"Abel work budget");
  enforce(sumAbelAntidifference(a,scalar.parse(a,"n^2",Sort.real_),n)!=Term.init,"exhausted memo escaped");
  foreach(source;[
-  "∑(i:ℕ). [i<n]*(i:ℝ)*q^i",
   "∑(i:ℕ). [i<n]*(i:ℝ)*powerR(-2,i/2)",
   "∑(i:ℕ). [i<n]*(i:ℝ)*exp(a*i)",
   "∑(i:ℕ). (i:ℝ)*powerR(4,-i/2)"
@@ -118,6 +117,6 @@ int main(string[] args){
   auto o=Session.open();FunctionSyntax s;s.declare("n:ℕ,q:ℝ,a:ℝ");auto r=s.run(o.arena,source);
   enforce(!r.exhausted&&s.format(o.arena,r).indexOf("∑(")>=0,"unchecked candidate: "~source);
  }
- writeln(certificates," certificates; ",numeric," independent prefix checks; ",cycles," closed cycles; 7 rejection checks; 1 budget check");
+ writeln(certificates," certificates; ",numeric," independent prefix checks; ",cycles," closed cycles; 6 rejection checks; 1 budget check");
  return 0;
 }
