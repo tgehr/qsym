@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -2898,6 +2898,39 @@ final class Bindings{
 					}
 				}
 				bool elementaryGeometric=summand.op==BoundOp.primitive&&bop.op==Op.builtin&&bop.value>=Builtin.powQN&&bop.value<=Builtin.powCN&&nodes[summand.b].op==BoundOp.variable&&nodes[summand.b].data==0&&!depends(at(summand.a),0)&&elementary(summand.a);
+				if(next==BoundTerm.init&&elementaryGeometric&&sort==Sort.complex){
+					auto q=dropIndex(at(summand.a)),count=at(current.b);
+					uint fresh;foreach(id;0..arena.length){auto v=arena.view(arena.at(cast(uint)id));if(v.op==Op.variable&&v.value>=fresh){enforce(v.value<uint.max-1,"scalar variable limit exceeded");fresh=cast(uint)v.value+1;}}
+					auto marker=arena.variable(Sort.natural,fresh),raw=scalarBody(q,marker),rawCount=scalarBody(count,marker);
+					// Structural recognition is only a candidate search. The exported
+					// theorem checks the actual ratio and count, including undefined n.
+					Term unpack(Term t){auto v=arena.view(t);Term[] cs;foreach(i;0..v.arity)cs~=unpack(arena.viewChild(t,i));return cs.length?arena.viewRebuild(t,cs,true):t;}
+					if(raw!=Term.init&&rawCount!=Term.init){
+						auto ids=arena.viewPostorder(raw);bool phase;foreach(id;ids){auto v=arena.view(arena.at(id));if(v.op==Op.builtin&&v.value==Builtin.pi)phase=true;}
+						auto v=arena.view(raw);
+						if(phase&&ids.length<=128&&v.op==Op.builtin&&(v.value==Builtin.cisR||v.value==Builtin.expC)){
+							raw=unpack(raw);
+							bool exponential=v.value==Builtin.expC;
+							foreach(rational;[true,false]){
+								auto inv=rational?arena.castTo(arena.inv(arena.castTo(rawCount,Sort.rational)),Sort.real_):arena.inv(arena.castTo(rawCount,Sort.real_));
+								auto target=exponential?Sort.complex:Sort.real_;
+								Term[3] factors=[arena.castTo(inv,target),exponential?arena.complex(0,2):arena.real_(2),arena.castTo(arena.call(Builtin.pi,[]),target)];
+								uint[3][6] orders=[[0u,1,2],[0u,2,1],[1u,0,2],[1u,2,0],[2u,0,1],[2u,1,0]];
+								foreach(order,perm;orders)foreach(left;[false,true]){
+									auto x=factors[perm[0]],y=factors[perm[1]],z=factors[perm[2]];
+									auto angle=left?arena.mul(arena.mul(x,y,true),z,true):arena.mul(x,arena.mul(y,z,true),true);
+									if(unpack(arena.call(cast(Builtin)v.value,[angle]))!=raw)continue;
+									auto integer=primitive(arena.call(Builtin.castNZ,[arena.natural_(0)]),[count]);
+									auto delta=primitive(arena.call(Builtin.addZ,[arena.integer(0),arena.integer(0)]),[integer,scalar(ctx,arena.integer(-1))]);
+									auto pred=primitive(arena.not_(arena.boolean(false)),[primitive(arena.nonzero(arena.integer(0)),[delta])]);
+									next=primitive(arena.mask(arena.boolean(false),arena.complex(1)),[pred,scalar(ctx,arena.complex(1))]);
+									extra=cast(uint)(order*8+(rational?4:0)+(exponential?2:0)+(left?1:0));rule=BindingRule.rangeRootsUnity;break;
+								}
+								if(next!=BoundTerm.init)break;
+							}
+						}
+					}
+				}
 				if(next==BoundTerm.init&&!elementaryGeometric&&(sort==Sort.rational||sort==Sort.real_||sort==Sort.complex)){ next=solveFinite(at(result.output),extra); rule=BindingRule.rangeSolution; }
 				if(next==BoundTerm.init&&(sort==Sort.rational||sort==Sort.real_||sort==Sort.complex)){
 					auto body=nodes[nodes[current.a].a];
@@ -4420,6 +4453,8 @@ final class Bindings{
 					auto suffix=["lt","le","gt","ge"][p.extra&3];
 					proof=".ofEq (fun ξ ρ => SummationBounds.round"~(natural?"N":"Z")~"_"~suffix~" ("~name(index)~".eval ξ ρ) ("~name(bound)~".eval ξ ρ))"; break;
 				case BindingRule.rangeSolution:proof=".ofEq (summation"~to!string(p.extra)~dimArg~" γ)"; break;
+				case BindingRule.rangeRootsUnity:
+					proof=".ofEq (fun ξ ρ => SummationRoots.range_value ("~name(n.b)~".eval ξ ρ) "~(p.extra&4?"true":"false")~" "~(p.extra&2?"true":"false")~" ⟨"~to!string(p.extra/8)~", of_decide_eq_true rfl⟩ "~(p.extra&1?"true":"false")~")";break;
 				case BindingRule.rangeGeometric:
 					auto sort=elementSort(types[n.type]),suffix=sort==Sort.rational?"Q":sort==Sort.real_?"R":"C",leaf=types[n.type];
 					auto add=tensorOperation(leaf,TensorOp.add),mul=tensorOperation(leaf,TensorOp.mul),inv=sort==Sort.rational?"Functions.invQ.apply":"Value.inv";

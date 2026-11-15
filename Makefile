@@ -77,6 +77,7 @@ $(eval $(call test_binary,summation-abel-tests,summation_abel,))
 $(eval $(call test_binary,polynomial-summation-tests,polynomial_summation,))
 $(eval $(call test_binary,weighted-summation-tests,weighted_summation,))
 $(eval $(call test_binary,elementary-summation-tests,elementary_summation,))
+$(eval $(call test_binary,roots-unity-tests,roots_unity,))
 $(eval $(call test_binary,scalar-tests,scalar,-unittest))
 $(eval $(call test_binary,language-tests,language,-unittest))
 $(eval $(call test_binary,elementary-tests,elementary,-unittest))
@@ -173,6 +174,7 @@ test: build-tests build/qsym
 	./build/polynomial-summation-tests build/polynomial-summation
 	./build/weighted-summation-tests build/weighted-summation
 	./build/elementary-summation-tests build/elementary-summation
+	./build/roots-unity-tests build/roots-unity
 	./build/edit-motion-tests
 	./build/tests
 	./build/syntax-tests

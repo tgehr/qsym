@@ -55,3 +55,5 @@ import QSym.DivideConquer
 import QSym.MixedDivide
 
 import QSym.SummationElementary
+
+import QSym.SummationRoots
