@@ -17,6 +17,22 @@ private string dc(uint i){ return "(d"~to!string(i)~" ρ)"; }
 private string ds(uint i){ return "(domain_"~to!string(i)~" ρ)"; }
 private string rat(Rational q){ return "(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)"; }
 
+// A compact independently checked proof for exact polynomial identities.
+// No D coefficient table or assertion is trusted by this certificate.
+string exportPolynomialZeroLean(Arena a,Term input){
+	import std.string:join;
+	string code="import QSym\nnamespace QSym.PolynomialCertificate\nset_option maxRecDepth 32768\nset_option maxHeartbeats 8000000\n";
+	string[] names;
+	foreach(id;a.postorder(input)){
+		auto t=a.at(id);code~=leanSyntaxCode(a,t);names~="n"~to!string(id);
+		if(a.node(t).region)names~="b"~to!string(id);
+	}
+	code~="theorem zero (ρ : Env) : n"~to!string(input.id)~".eval ρ = some 0 := by\n";
+	code~="  norm_num ["~names.join(",")~", Expr.eval, Expr.sumR, Expr.productR, Expr.sumC, Expr.productC, Region.fold, Positive.repeat, Value.add, Value.mul, Value.inv, Function1.apply, Function2.apply, Functions.castNZ, Functions.castZQ, Functions.castQR, Functions.castRC, Functions.addN, Functions.mulN, Functions.addZ, Functions.mulZ, Functions.addQ, Functions.mulQ, Functions.invQ, Functions.powNN, Functions.powZN, Functions.powQN, Functions.powRN, Functions.powCN]\n";
+	code~="  <;> push_cast\n  <;> ring_nf\n  <;> norm_num [Complex.I_pow_eq_pow_mod]\n  <;> norm_num [Complex.I_sq, Complex.I_pow_three]\n  <;> ring\n#qsym_check_axioms zero\nend QSym.PolynomialCertificate\n";
+	return code;
+}
+
 private string positive(uint n){
 	enforce(n>0,"positive multiplicity expected");
 	return n==1?".one":"(."~(n&1?"twicePlusOne":"twice")~" "~positive(n/2)~")";

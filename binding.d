@@ -1,11 +1,12 @@
 module qsym.binding;
 import qsym.ir;
 import qsym.summation:sumAntidifference,sumAbelAntidifference,SumPrimitive;
+import qsym.polynomial:polynomialAntidifference,polynomialZero;
 import qsym.types:TypeId,TypeKind,TypePool,Dimension;
 import qsym.number:Number;
 import qsym.table:Table;
 import qsym.generated.rules:Law,instantiate;
-import qsym.proof:leanSyntaxCode,leanValueOperation,exportDomainLean,scalarExport=exportLean;
+import qsym.proof:leanSyntaxCode,leanValueOperation,exportDomainLean,exportPolynomialZeroLean,scalarExport=exportLean;
 import qsym.domain:simplifyDomain;
 import qsym.simplify:Result,ScalarResult=Result,Options,DensityMode,simplify;
 import std.string:replace;
@@ -41,7 +42,7 @@ private enum BindingRule:ubyte{
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
-private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
+private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
@@ -2042,9 +2043,11 @@ final class Bindings{
 			auto search=Options(DensityMode.preserve,false); search.expandScalarEmbeddings=true;
 			search.maxRewrites=512; search.maxAlgebraWork=16384;
 			SumPrimitive[] tail;
-			// Keep coefficient matching as the cheap path, preserving its
-			// compact polynomial output and checked infinite-tail metadata.
-			auto candidate=abelOnly?Term.init:sumAntidifference(arena,body,variable,tail);
+			// Use exact polynomial arithmetic for higher-degree finite sums;
+			// retain coefficient matching for small sums and infinite tails.
+			auto candidate=!infinite&&!abelOnly?polynomialAntidifference(arena,body,variable):Term.init;
+			auto exactPolynomial=candidate!=Term.init;
+			if(candidate==Term.init&&!abelOnly)candidate=sumAntidifference(arena,body,variable,tail);
 			if(candidate==Term.init&&!abelOnly){
 				auto normalized=simplify(arena,body,[],search);tail=null;
 				if(!normalized.exhausted)candidate=sumAntidifference(arena,arena.castTo(normalized.output,sort),variable,tail);
@@ -2073,6 +2076,10 @@ final class Bindings{
 			ScalarDomain[] checks;
 			foreach(rawInput;infinite?[step]:[initial,step]){
 				auto input=sort==Sort.rational?arena.castTo(rawInput,Sort.real_):rawInput;
+				if(exactPolynomial&&polynomialZero(arena,input)){
+					auto check=ScalarDomain.init;check.input=input;check.variable=index;check.sort=Sort.natural;check.polynomial=true;
+					checks~=check;continue;
+				}
 				auto domain=simplifyDomain(arena,input,[],opts),value=simplify(arena,input,[],opts);
 				if(domain.exhausted||value.exhausted||domain.output!=arena.boolean(true)||!arena.isNumber(value.output)||!arena.number(value.output).zero)
 					return !infinite&&!usedAbel?solveFinite(t,extra,false,true):BoundTerm.init;
@@ -3089,6 +3096,10 @@ final class Bindings{
 		auto lowered=lowerResult?lower(result.output):Term.init;
 		string code="import QSym\n",dimDecl=dependent_?" (δ : ℕ → ℕ)":"",dimArg=dependent_?" δ":"";
 		foreach(i,d;result.domains){
+			if(d.polynomial){
+				auto part=replace(exportPolynomialZeroLean(arena,d.input),"import QSym\n","");
+				code~=replace(part,"QSym.PolynomialCertificate","QSym.BindingScalar"~to!string(i));continue;
+			}
 			auto prefix="QSym.BindingScalar"~to!string(i),part=exportDomainLean(arena,d.input,d.result);
 			part=replace(part,"import QSym\n","");
 			part=replace(part,"QSym.Certificate",prefix~".Certificate");
@@ -3141,7 +3152,7 @@ final class Bindings{
 		uint[] scalarNodes;
 		foreach(i,n;nodes) if(used[i]&&n.op==BoundOp.scalar) scalarNodes~=arena.viewPostorder(arena.at(n.data));
 		foreach(d;result.domains){
-			scalarNodes~=arena.viewPostorder(d.input); scalarNodes~=arena.viewPostorder(d.result.output);
+			scalarNodes~=arena.viewPostorder(d.input); if(d.result.output!=Term.init)scalarNodes~=arena.viewPostorder(d.result.output);
 			if(d.value.traced) scalarNodes~=arena.viewPostorder(arena.castTo(d.value.output,arena.sort(d.input)));
 		}
 		foreach(r;result.ranks) foreach(step;r.iterations) scalarNodes~=arena.viewPostorder(step.output);
@@ -3875,7 +3886,7 @@ final class Bindings{
 			string known(uint id,string en){
 				auto prefix="QSym.BindingScalar"~to!string(id),actual=arena.sort(result.domains[id].input);
 				auto hz=actual==Sort.rational?"(congrArg some (div_one (0 : ℚ)))":actual==Sort.real_?"AffineRecurrence.zeroR":"AffineRecurrence.zeroC";
-				auto proof="(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct "~en~") ("~prefix~".ValueCertificate.refinement "~en~")) "~hz~")";
+				auto proof=result.domains[id].polynomial?"("~prefix~".zero "~en~")":"(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct "~en~") ("~prefix~".ValueCertificate.refinement "~en~")) "~hz~")";
 				return sort==Sort.rational&&actual==Sort.real_?"(Summation.rational_zero_of_real _ "~proof~")":proof;
 			}
 			auto initial=s.zero==uint.max?"":known(s.zero,"ξ"),step=known(s.step,env),minus="(n"~to!string(arena.number(Number(-1),sort).id)~".eval ξ)",hn=sort==Sort.rational?"(congrArg some (div_one (-1 : ℚ)))":"Spectral.minus"~suffix;
