@@ -10,7 +10,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: test-weighted-fibres test-weighted-marginals test-weighted-parameters test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: test-distribution-model-rules test-weighted-fibres test-weighted-marginals test-weighted-parameters test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 .DELETE_ON_ERROR:
 all: build/qsym
 
@@ -331,23 +331,28 @@ clean:
 	rm -rf build
 
 # Focused, source-checked distribution prototype regression suite.
-test-distributions: build/distribution-tests
+test-distributions: build/distribution-tests test-distribution-model-rules
 	./build/distribution-tests build/distributions
-	cd lean && $(LAKE) build QSym.DistributionIntegral QSym.PositiveIntegral
+	cd lean && $(LAKE) build QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.Tensor QSym.AC QSym.Bag
 	python3 tools/check_distributions.py --lake $(LAKE)
 
 # Standalone semantic model and closed law/counterexample audits.
-test-weighted-parameters: test-weighted-marginals test-weighted-fibres
-	cd lean && $(LAKE) build QSym.WeightedParameterSpace
+test-weighted-parameters: test-weighted-marginals test-weighted-fibres test-distribution-model-rules
+	cd lean && $(LAKE) build QSym.WeightedParameterSpace QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/WeightedParameters.lean
 
 # Coordinate marginalization and obstructions to extending the current quotient.
 test-weighted-marginals:
-	cd lean && $(LAKE) build QSym.WeightedFibreObstruction QSym.WeightedFibreReference
+	cd lean && $(LAKE) build QSym.WeightedFibreObstruction QSym.WeightedFibreReference QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/WeightedMarginals.lean
 	cd lean && $(LAKE) env lean ../tests/WeightedFibreReferences.lean
 
 # Reference-aware quotient, pointwise observations, and coordinate substitution.
 test-weighted-fibres:
-	cd lean && $(LAKE) build QSym.WeightedFibreReindex QSym.WeightedFibreObstruction
+	cd lean && $(LAKE) build QSym.WeightedFibreReindex QSym.WeightedFibreObstruction QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/WeightedFibreModel.lean
+
+# Model law instances, ordinary rule proving, and extraction compatibility.
+test-distribution-model-rules:
+	cd lean && $(LAKE) build QSym.DistributionModelBridge QSym.AxiomCheck
+	cd lean && $(LAKE) env lean ../tests/DistributionModelRules.lean

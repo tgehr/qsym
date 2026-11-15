@@ -30,6 +30,7 @@ import QSym.ZeroPowers
 import QSym.SqrtBranches
 import QSym.SqrtProducts
 import QSym.AbelPowers
+import QSym.DistributionRuleTactic
 
 namespace QSym
 
@@ -816,6 +817,7 @@ macro "qsym_sqrt_product" : tactic => `(tactic| (
 
 macro "qsym_rule" : tactic => `(tactic| (
   first
+  | solve | qsym_distribution
   | solve | apply Value.refines_of_eq; apply Value.powerR_add_pos; assumption
   | solve | apply Value.refines_of_eq; symm; apply Value.powerR_add_pos; assumption
   | solve | qsym_sqrt_product

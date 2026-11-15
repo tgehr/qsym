@@ -4701,13 +4701,13 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => "~(s.ae?"qsym_integral_ae%":"qsym_integral%")~" ["~defs~"] "~integral(s.from)~" "~args~")"; break;
 				}
 				case BindingRule.distributionMassWeightedDirac:
-					proof=".ofEq (fun ξ ρ => Distribution.mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => Distribution.model_mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionMassDirac:
-					proof=".ofEq (fun ξ ρ => Distribution.mass_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => Distribution.model_mass_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionDensityLebesgue:
-					proof=".ofEq (fun ξ ρ => Distribution.density_lebesgueValue ("~name(n.b)~".eval ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => Distribution.model_density_lebesgueValue ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionDensityWeight:
-					proof=".ofEq (fun ξ ρ => Distribution.density_weight_lebesgueValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => Distribution.model_density_weight_lebesgueValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.congr:
 					if(n.op==BoundOp.conditional){ proof=".conditional "~proofName(p.left)~" "~proofName(p.right)~" "~proofName(p.extra); break; }
 					if(n.op==BoundOp.fixed){ auto ty=leanType(types[n.type]); proof=".unary (a := .arrow "~ty~" "~ty~") (b := "~ty~") Recursion.fixedValue (.lam "~proofName(p.left)~")"; break; }

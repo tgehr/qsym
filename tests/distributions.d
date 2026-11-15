@@ -40,6 +40,7 @@ private Case[] cases(){ return [
 	Case("Signed","Λ(x:ℝ).-δ(0)[x]","Distribution(ℝ)"),
 	Case("Integral","∫(x:ℝ).x*δ(2)[x]","ℝ"),
 	Case("DensityRecovery","([x≠0]*λ[x])//λ[x]","ℝ"),
+	Case("DensityOne","λ[x]//λ[x]","ℝ","1"),
 	Case("Capture","(λ(a:ℝ).Λ(x:ℝ).(a+x)*λ[x])(2)","Distribution(ℝ)"),
 	Case("Shadow","λ(x:ℝ).Λ(x:ℝ).x*λ[x]","ℝ→Distribution(ℝ)"),
 	Case("FormalIntegral","integralD(λ(x:ℝ).δ(x))","Distribution(ℝ)"),
@@ -63,7 +64,16 @@ private void run(string directory){
 		if(c.name=="RecursiveAtom") enforce(text=="1",c.name~": "~text);
 		auto again=s.run(a,text,[],Options(DensityMode.preserve,true));
 		enforce(s.format(a,again)==text,c.name~" round trip: "~text);
-		write(buildPath(directory,c.name~".lean"),s.exportCertificate(a,r));
+		auto certificate=s.exportCertificate(a,r);
+		// These existing rules now cross a proved bridge to the reference-aware
+		// model. Keep their proof dependencies from silently reverting to the
+		// presentation-only lemmas while the remaining backend is migrated.
+		import std.string:indexOf;
+		if(c.name=="DensityRecovery") enforce(certificate.indexOf("Distribution.model_density_weight_lebesgueValue")>=0);
+		if(c.name=="DensityOne") enforce(certificate.indexOf("Distribution.model_density_lebesgueValue")>=0);
+		if(c.name=="Integral") enforce(certificate.indexOf("Distribution.model_mass_weight_diracValue")>=0);
+		if(c.name=="RecursiveAtom") enforce(certificate.indexOf("Distribution.model_mass_diracValue")>=0);
+		write(buildPath(directory,c.name~".lean"),certificate);
 	}
 	auto owner=Session.open(),a=owner.arena; FunctionSyntax s;
 	foreach(source;[
