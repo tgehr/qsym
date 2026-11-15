@@ -1,6 +1,6 @@
 module qsym.binding;
 import qsym.ir;
-import qsym.summation:sumAntidifference,SumPrimitive;
+import qsym.summation:sumAntidifference,sumAbelAntidifference,SumPrimitive;
 import qsym.types:TypeId,TypeKind,TypePool,Dimension;
 import qsym.number:Number;
 import qsym.table:Table;
@@ -2032,7 +2032,7 @@ final class Bindings{
 			}
 			return Result(out_.id,proof);
 		}
-		BoundTerm solveFinite(BoundTerm t,out uint extra,bool infinite=false){
+		BoundTerm solveFinite(BoundTerm t,out uint extra,bool infinite=false,bool abelOnly=false){
 			auto n=node(t),fn=nodes[n.a]; if(fn.op!=BoundOp.lambda||pool.view(type(at(n.a))).fields[0]!=scalarType(Sort.natural)) return BoundTerm.init;
 			auto sort=elementSort(types[n.type]); if(sort!=Sort.rational&&sort!=Sort.real_&&sort!=Sort.complex) return BoundTerm.init;
 			uint index; foreach(id;0..arena.length){ auto v=arena.node(arena.at(cast(uint)id)); if(v.op==Op.variable&&v.value>=index) index=cast(uint)v.value+1; }
@@ -2042,11 +2042,15 @@ final class Bindings{
 			auto search=Options(DensityMode.preserve,false); search.expandScalarEmbeddings=true;
 			search.maxRewrites=512; search.maxAlgebraWork=16384;
 			SumPrimitive[] tail;
-			auto candidate=sumAntidifference(arena,body,variable,tail);
-			if(candidate==Term.init){
+			// Keep coefficient matching as the cheap path, preserving its
+			// compact polynomial output and checked infinite-tail metadata.
+			auto candidate=abelOnly?Term.init:sumAntidifference(arena,body,variable,tail);
+			if(candidate==Term.init&&!abelOnly){
 				auto normalized=simplify(arena,body,[],search);tail=null;
 				if(!normalized.exhausted)candidate=sumAntidifference(arena,arena.castTo(normalized.output,sort),variable,tail);
 			}
+			bool usedAbel;
+			if(candidate==Term.init&&!infinite){ candidate=sumAbelAntidifference(arena,body,variable); usedAbel=true; }
 			if(candidate==Term.init)return BoundTerm.init;
 			if(!infinite) tail=null;
 			auto zero=arena.number(Number(0),sort);
@@ -2070,7 +2074,8 @@ final class Bindings{
 			foreach(rawInput;infinite?[step]:[initial,step]){
 				auto input=sort==Sort.rational?arena.castTo(rawInput,Sort.real_):rawInput;
 				auto domain=simplifyDomain(arena,input,[],opts),value=simplify(arena,input,[],opts);
-				if(domain.exhausted||value.exhausted||domain.output!=arena.boolean(true)||!arena.isNumber(value.output)||!arena.number(value.output).zero) return BoundTerm.init;
+				if(domain.exhausted||value.exhausted||domain.output!=arena.boolean(true)||!arena.isNumber(value.output)||!arena.number(value.output).zero)
+					return !infinite&&!usedAbel?solveFinite(t,extra,false,true):BoundTerm.init;
 				checks~=ScalarDomain(input,domain,value,index,Sort.natural);
 			}
 			auto g=inheritHint(at(n.a),lambda(restoreBody(candidate,context(at(fn.a)),variable)));

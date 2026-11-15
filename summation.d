@@ -9,6 +9,175 @@ import qsym.number;
 import qsym.simplify;
 @safe:
 struct SumPrimitive { Term coefficient,ratio; uint degree; }
+
+// Diagnostics for the bounded, untrusted search (not proof evidence).
+struct AbelSearchStats { uint calls, parts, cycles, hits; bool exhausted; }
+
+Term sumAbelAntidifference(Arena a,Term input,Term index){
+ AbelSearchStats stats; return sumAbelAntidifference(a,input,index,stats);
+}
+
+// Discrete integration by parts:
+//   Δ(P G) = P ΔG + (ΔP) G(n+1).
+// Memoized unknown primitives close affine cycles such as
+//   S(n) = n*n - S(n) - n.
+// The table belongs to this invocation, so neither failures nor placeholders
+// escape into another arena or another summation. As with the coefficient
+// solver below, binding.d must check the ORIGINAL summand and its domain.
+Term sumAbelAntidifference(Arena a,Term input,Term index,ref AbelSearchStats stats){
+ stats=AbelSearchStats.init;
+ auto sort=a.sort(input);
+ if(sort!=Sort.rational&&sort!=Sort.real_&&sort!=Sort.complex||a.sort(index)!=Sort.natural) return Term.init;
+ if(sort==Sort.rational){
+  // Perform polynomial expansion in the scalar field representation, then
+  // retain a rational candidate only if exact embedding contraction finds it.
+  auto result=sumAbelAntidifference(a,a.castTo(input,Sort.real_),index,stats);
+  if(result==Term.init) return result;
+  auto options=Options.init; options.maxRewrites=256; options.maxAlgebraWork=8192;
+  auto narrowed=simplify(a,result,options);
+  if(narrowed.exhausted){ stats.exhausted=true; return Term.init; }
+  if(a.sort(narrowed.output)>Sort.rational) return Term.init;
+  return a.castTo(narrowed.output,Sort.rational);
+ }
+ auto zero=a.number(Number(0),sort),one=a.number(Number(1),sort),x=a.castTo(index,sort);
+ auto options=Options.init; options.expandPowers=true; options.expandScalarEmbeddings=true;
+ options.maxRewrites=256; options.maxAlgebraWork=8192;
+ uint fresh; foreach(id;0..a.length){ auto n=a.node(a.at(cast(uint)id));
+  if(n.op==Op.variable){ if(n.value>=uint.max-512) return Term.init; if(n.value>=fresh) fresh=cast(uint)n.value+1; }
+ }
+ struct Entry { Term input,token,result; bool active; }
+ Entry[] memo;
+ bool failed;
+ bool contains(Term t,Term v){ foreach(id;a.viewPostorder(t)) if(id==v.id) return true; return false; }
+ Term replace(Term t,Term v,Term value){
+  Term[uint] seen;
+  Term visit(Term t){
+   if(t==v) return value;
+   if(auto found=t.id in seen) return *found;
+   auto n=a.view(t); Term[] args; foreach(i;0..n.arity) args~=visit(a.viewChild(t,i));
+   return seen[t.id]=args.length?a.viewRebuild(t,args,true):t;
+  }
+  return visit(t);
+ }
+ Term clean(Term t){
+  if(failed||t==Term.init) return Term.init;
+  if(a.viewPostorder(t).length>4096){ failed=true; stats.exhausted=true; return Term.init; }
+  auto r=simplify(a,t,options);
+  if(r.exhausted){ failed=true; stats.exhausted=true; return Term.init; }
+  return a.isNumber(r.output)?a.number(a.number(r.output),sort):a.castTo(r.output,sort);
+ }
+ bool operation(Term t,Op op,Builtin q){ auto n=a.view(t); return n.op==op||n.op==Op.builtin&&n.value==q; }
+ bool plus(Term t){ return operation(t,Op.add,Builtin.addQ); }
+ bool times(Term t){ return operation(t,Op.mul,Builtin.mulQ); }
+ bool unknown(Term t){ foreach(e;memo) if(contains(t,e.token)) return true; return false; }
+ Term shift(Term t){ return replace(t,index,a.add(index,a.natural_(1),true)); }
+ uint polynomial(Term t){
+  if(t==x) return 1;
+  auto n=a.view(t);
+  if(n.op==Op.pow&&a.viewChild(t,0)==x&&n.value>0&&n.value<=32) return cast(uint)n.value;
+  if(n.op==Op.builtin&&n.value>=Builtin.powQN&&n.value<=Builtin.powCN&&a.viewChild(t,0)==x){
+   auto e=a.viewChild(t,1);
+   if(a.isNumber(e)&&a.number(e).re.small&&a.number(e).re.integer>0&&a.number(e).re.integer<=32) return cast(uint)a.number(e).re.integer;
+  }
+  return 0;
+ }
+ // Structural affine extraction rejects nonlinear or shifted unknowns; it
+ // does not infer linearity merely by evaluating a token at zero and one.
+ bool affine(Term t,Term token,out Term coefficient,out Term constant){
+  if(t==token){ coefficient=one; constant=zero; return true; }
+  if(!contains(t,token)){ coefficient=zero; constant=t; return true; }
+  if(!plus(t)&&!times(t)) return false;
+  Term c,d,e,f;
+  auto l=a.viewChild(t,0),r=a.viewChild(t,1);
+  if(!affine(l,token,c,d)||!affine(r,token,e,f)) return false;
+  if(plus(t)){ coefficient=clean(a.add(c,e)); constant=clean(a.add(d,f)); }
+  else{
+   if(contains(l,token)&&contains(r,token)) return false;
+   coefficient=clean(a.add(a.mul(c,f),a.mul(d,e))); constant=clean(a.mul(d,f));
+  }
+  return !failed;
+ }
+ Term integrate(Term raw,uint depth){
+  if(failed) return Term.init;
+  if(++stats.calls>384||depth>64){ failed=true; stats.exhausted=true; return Term.init; }
+  auto t=clean(raw); if(failed) return Term.init;
+  if(!contains(t,index)) return clean(a.mul(t,x));
+  auto view=a.view(t);
+  if(view.op==Op.builtin&&view.value==Builtin.castRC&&!unknown(t)){
+   // The scalar simplifier may keep a real-valued polynomial inside its
+   // complex embedding. Integrate that real expression without losing the
+   // recursive search, then embed the candidate back into the target field.
+   AbelSearchStats inner;
+   auto result=sumAbelAntidifference(a,a.viewChild(t,0),index,inner);
+   stats.calls+=inner.calls;stats.parts+=inner.parts;stats.cycles+=inner.cycles;stats.hits+=inner.hits;
+   if(inner.exhausted||stats.calls>384){ failed=true; stats.exhausted=true; return Term.init; }
+   return result==Term.init?result:a.castTo(result,sort);
+  }
+  if(plus(t)){
+   auto l=integrate(a.viewChild(t,0),depth+1); if(l==Term.init) return Term.init;
+   auto r=integrate(a.viewChild(t,1),depth+1); return r==Term.init?r:clean(a.add(l,r));
+  }
+  Term[] factors;
+  void flatten(Term f){ if(times(f)){ flatten(a.viewChild(f,0)); flatten(a.viewChild(f,1)); }else factors~=f; }
+  flatten(t);
+  auto coefficient=one,rest=one; bool extracted;
+  foreach(f;factors){ if(!contains(f,index)){ coefficient=a.mul(coefficient,f); extracted=true; }else rest=a.mul(rest,f); }
+  if(extracted){
+   auto g=integrate(rest,depth+1); return g==Term.init?g:clean(a.mul(coefficient,g));
+  }
+  foreach(e;memo) if(e.input==t){ ++stats.hits; return e.active?e.token:e.result; }
+  size_t choice=factors.length;
+  foreach(i,f;factors) if(polynomial(f)){ choice=i; break; }
+  if(choice==factors.length){
+   auto node=a.view(t);
+   if(node.op==Op.builtin&&(node.value==Builtin.expR||node.value==Builtin.expC||node.value==Builtin.powerR||node.value==Builtin.powerC)){
+    bool power=node.value==Builtin.powerR||node.value==Builtin.powerC;
+    auto exponent=a.viewChild(t,power?1:0);
+    if(power&&contains(a.viewChild(t,0),index)) return Term.init;
+    auto delta=clean(a.sub(shift(exponent),exponent)); if(failed) return Term.init;
+    if(!contains(delta,index)){
+     auto ratio=clean(power?a.call(cast(Builtin)node.value,[a.viewChild(t,0),delta]):a.call(cast(Builtin)node.value,[delta]));
+     if(failed) return Term.init;
+     if(ratio==one) return clean(a.mul(t,x));
+     return clean(a.div(t,a.sub(ratio,one)));
+    }
+   }
+   // Base primitives are deliberately independent of Abel's recurrence.
+   // The existing polynomial-geometric solver also handles ratio=0 and 1.
+   return sumAntidifference(a,t,index);
+  }
+  auto slot=memo.length,token=a.variable(sort,fresh++);
+  memo~=Entry(t,token,Term.init,true); ++stats.parts;
+  auto p=factors[choice]; rest=one;
+  foreach(i,f;factors) if(i!=choice) rest=a.mul(rest,f);
+  auto g=integrate(rest,depth+1);
+  // A scalar token stands for a primitive at n, not at n+1. Never shift an
+  // unresolved primitive as though it were an index-independent constant.
+  if(g==Term.init||unknown(g)){ failed=true; return Term.init; }
+  auto difference=clean(a.sub(shift(p),p)); if(failed) return Term.init;
+  auto residual=clean(a.mul(difference,shift(g))); if(failed) return Term.init;
+  auto h=integrate(residual,depth+1); if(h==Term.init){ failed=true; return Term.init; }
+  auto result=clean(a.sub(a.mul(p,g),h)); if(failed) return Term.init;
+  if(contains(result,token)){
+   Term c,d;
+   if(!affine(result,token,c,d)){ failed=true; return Term.init; }
+   auto divisor=clean(a.sub(one,c)); if(failed) return Term.init;
+   // Do not turn a singular or index-dependent recurrence into a formula.
+   if(contains(divisor,index)||unknown(divisor)||a.isNumber(divisor)&&a.number(divisor).zero){ failed=true; return Term.init; }
+   result=clean(a.div(d,divisor)); if(failed||contains(result,token)) return Term.init;
+   ++stats.cycles;
+  }
+  memo[slot].active=false; memo[slot].result=result;
+  foreach(ref e;memo) if(e.result!=Term.init&&contains(e.result,token)){
+   e.result=clean(replace(e.result,token,result)); if(failed) return Term.init;
+  }
+  return result;
+ }
+ auto result=integrate(input,0);
+ if(failed||result==Term.init||unknown(result)) return Term.init;
+ return clean(a.sub(result,replace(result,index,a.natural_(0))));
+}
+
 Term sumAntidifference(Arena a,Term input,Term index){ SumPrimitive[] tail; return sumAntidifference(a,input,index,tail); }
 Term sumAntidifference(Arena a,Term input,Term index,ref SumPrimitive[] tail){
  auto sort=a.sort(input); if(sort!=Sort.rational&&sort!=Sort.real_&&sort!=Sort.complex) return Term.init;

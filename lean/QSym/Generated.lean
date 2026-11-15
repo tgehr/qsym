@@ -12008,6 +12008,31 @@ theorem r_complex_atan_negative_imaginary_literal (v_z : Option (Ty.denote .comp
 
 #qsym_check_axioms r_complex_atan_negative_imaginary_literal
 
+theorem r_sum_expand_expR (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
+    (Functions.expR.apply (Value.add v_x v_y)) = (Value.mul (Functions.expR.apply v_x) (Functions.expR.apply v_y)) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_sum_expand_expR
+
+theorem r_sum_expand_expC (v_x : Option (Ty.denote .complex)) (v_y : Option (Ty.denote .complex)) :
+    (Functions.expC.apply (Value.add v_x v_y)) = (Value.mul (Functions.expC.apply v_x) (Functions.expC.apply v_y)) := qsym_cached% by
+  cases v_x <;> cases v_y
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_sum_expand_expC
+
+theorem r_sum_expand_powerR (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_x) (some true)) :
+    (Functions.powerR.apply v_x (Value.add v_y v_z)) = (Value.mul (Functions.powerR.apply v_x v_y) (Functions.powerR.apply v_x v_z)) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_z
+  all_goals apply Value.Refines.antisymm
+  all_goals qsym_rule
+
+#qsym_check_axioms r_sum_expand_powerR
+
 theorem r_sum_expand_NZ_add (v_x : Option (Ty.denote .natural)) (v_y : Option (Ty.denote .natural)) :
     (Functions.castNZ.apply (Functions.addN.apply v_x v_y)) = (Functions.addZ.apply (Functions.castNZ.apply v_x) (Functions.castNZ.apply v_y)) := qsym_cached% by
   cases v_x <;> cases v_y

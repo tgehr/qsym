@@ -1623,6 +1623,9 @@ enum Law{
 	complex_atan_negative_real_literal,
 	complex_atanh_negative_imaginary_literal,
 	complex_atan_negative_imaginary_literal,
+	sum_expand_expR,
+	sum_expand_expC,
+	sum_expand_powerR,
 	sum_expand_NZ_add,
 	sum_expand_NZ_mul,
 	sum_expand_NZ_pow,
@@ -14353,6 +14356,32 @@ Instance instantiate(Arena a,Law law,Term[] bindings,bool raw=false){
 			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
 			auto v_z=bindings[0];
 			return Instance(a.call(Builtin.atanC,[v_z]),a.mul(a.complex((-1L),(0L)),a.call(Builtin.atanC,[a.mul(a.complex((-1L),(0L)),v_z,raw)]),raw),"r_complex_atan_negative_imaginary_literal",bindings,[Condition(v_z,false,true),Condition(a.not_(a.nonzero(a.call(Builtin.reC,[v_z]))),false,false),Condition(a.lt(a.call(Builtin.imC,[v_z]),a.real_((0L))),false,false)],[false],false,false,law,raw);
+		}
+		case Law.sum_expand_expR:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.expR,[a.add(v_x,v_y,raw)]),a.mul(a.call(Builtin.expR,[v_x]),a.call(Builtin.expR,[v_y]),raw),"r_sum_expand_expR",bindings,[],[false,false],true,false,law,raw);
+		}
+		case Law.sum_expand_expC:{
+			enforce(bindings.length==2,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.complex,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.complex,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			return Instance(a.call(Builtin.expC,[a.add(v_x,v_y,raw)]),a.mul(a.call(Builtin.expC,[v_x]),a.call(Builtin.expC,[v_y]),raw),"r_sum_expand_expC",bindings,[],[false,false],true,false,law,raw);
+		}
+		case Law.sum_expand_powerR:{
+			enforce(bindings.length==3,"rule arity mismatch");
+			enforce(a.sort(bindings[0])==Sort.real_,"rule binding type mismatch");
+			auto v_x=bindings[0];
+			enforce(a.sort(bindings[1])==Sort.real_,"rule binding type mismatch");
+			auto v_y=bindings[1];
+			enforce(a.sort(bindings[2])==Sort.real_,"rule binding type mismatch");
+			auto v_z=bindings[2];
+			return Instance(a.call(Builtin.powerR,[v_x,a.add(v_y,v_z,raw)]),a.mul(a.call(Builtin.powerR,[v_x,v_y]),a.call(Builtin.powerR,[v_x,v_z]),raw),"r_sum_expand_powerR",bindings,[Condition(a.lt(a.real_((0L)),v_x),false,false)],[false,false,false],true,false,law,raw);
 		}
 		case Law.sum_expand_NZ_add:{
 			enforce(bindings.length==2,"rule arity mismatch");
@@ -50554,6 +50583,51 @@ bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){
 					return true;
 				default:return false;
 			}
+		case Law.sum_expand_expR:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
+					if(a.view(input).value!=cast(long)Builtin.expR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.sum_expand_expC:
+			if(!bindings.length) bindings.length=2;
+			enforce(bindings.length==2,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.complex) return false;
+					if(a.view(input).value!=cast(long)Builtin.expC) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.complex) return false;
+					if(!matchRegion(a,a.viewChild(input,0),Op.add,[MatchOperand(null,0,uint.max,false,false),MatchOperand(null,1,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				default:return false;
+			}
+		case Law.sum_expand_powerR:
+			if(!bindings.length) bindings.length=3;
+			enforce(bindings.length==3,"binding count mismatch");
+			switch(part){
+				case -1:
+					if(a.view(input).op!=Op.builtin||a.sort(input)!=Sort.real_) return false;
+					if(a.view(input).value!=cast(long)Builtin.powerR) return false;
+					if(a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,0); else if(bindings[0]!=a.viewChild(input,0)) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(!matchRegion(a,a.viewChild(input,1),Op.add,[MatchOperand(null,1,uint.max,false,false),MatchOperand(null,2,uint.max,false,false)],bindings,work)) return false;
+					return true;
+				case 0:
+					if(a.view(input).op!=Op.lt||a.sort(input)!=Sort.boolean) return false;
+					if(a.view(a.viewChild(input,0)).op!=Op.realLit||a.sort(a.viewChild(input,0))!=Sort.real_) return false;
+					if(a.view(a.viewChild(input,0)).value!=0L) return false;
+					if(a.sort(a.viewChild(input,1))!=Sort.real_) return false;
+					if(bindings[0].id==uint.max) bindings[0]=a.viewChild(input,1); else if(bindings[0]!=a.viewChild(input,1)) return false;
+					return true;
+				default:return false;
+			}
 		case Law.sum_expand_NZ_add:
 			if(!bindings.length) bindings.length=2;
 			enforce(bindings.length==2,"binding count mismatch");
@@ -56754,6 +56828,9 @@ size_t conditionCount(Law law){
 		case Law.complex_atan_negative_real_literal:return 2;
 		case Law.complex_atanh_negative_imaginary_literal:return 3;
 		case Law.complex_atan_negative_imaginary_literal:return 3;
+		case Law.sum_expand_expR:return 0;
+		case Law.sum_expand_expC:return 0;
+		case Law.sum_expand_powerR:return 1;
 		case Law.sum_expand_NZ_add:return 0;
 		case Law.sum_expand_NZ_mul:return 0;
 		case Law.sum_expand_NZ_pow:return 0;

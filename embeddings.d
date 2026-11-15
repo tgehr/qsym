@@ -3,6 +3,7 @@ import qsym.ir;
 import qsym.derive;
 import qsym.budget;
 import qsym.generated.rules;
+import qsym.field:Field;
 @safe:
 
 // Pull exact embeddings out of arithmetic, then compare in the source type.
@@ -77,6 +78,46 @@ package final class Embeddings{
 		budget.spend(); auto n=a.view(t); Proof[] children;
 		foreach(i;0..n.arity) children~=expand(a.viewChild(t,i),ctx,depth+1);
 		auto p=d.congr(t,children,ctx),u=a.view(p.after);
+		if(u.op==Op.builtin&&(u.value==Builtin.expR||u.value==Builtin.expC||u.value==Builtin.powerR)){
+			bool power=u.value==Builtin.powerR;
+			// Embed and distribute the exponent before looking for an offset;
+			// a successor often arrives as a*(n+1), rather than a*n+a.
+			Field field;
+			Proof algebra(Term term,uint context){
+				auto v=a.view(term); Proof[] cs;
+				foreach(i;0..v.arity) cs~=algebra(a.viewChild(term,i),context);
+				auto q=d.congr(term,cs,context); return d.trans(q,field.run(q.after,context),context);
+			}
+			field=new Field(a,d,budget,&algebra); field.expandPowers=true;
+			Proof[] exponentProofs;
+			if(power) exponentProofs~=d.refl(a.viewChild(p.after,0),ctx);
+			exponentProofs~=algebra(a.viewChild(p.after,power?1:0),ctx);
+			p=d.trans(p,d.congr(p.after,exponentProofs,ctx),ctx);
+			auto exponent=a.viewChild(p.after,power?1:0);
+			if(power&&a.isNumber(exponent)){
+				auto q=a.number(exponent).re;
+				if(!q.integral&&(q>Rational(1)||q<Rational(-1))){
+					auto whole=Rational(q.numerator/q.denominator,BigInt(1));
+					auto split=a.add(a.real_(whole),a.real_(q-whole),true);
+					p=d.trans(p,d.congr(p.after,[d.refl(a.viewChild(p.after,0),ctx),d.numeric(exponent,split,ctx)],ctx),ctx);
+					exponent=split;
+				}
+			}
+			if(a.view(exponent).op==Op.add){
+				Term[] args; Proof[] facts;
+				if(power){
+					auto base=a.viewChild(p.after,0);
+					// Expansion has a positivity premise. Here it is discharged
+					// only by exact numeric replay, never by candidate heuristics.
+					if(!a.isNumber(base)||a.number(base).re<=Rational(0)) return p;
+					args~=base; facts~=d.numeric(a.lt(a.real_(0),base),a.boolean(true),ctx);
+				}
+				args~=[a.viewChild(exponent,0),a.viewChild(exponent,1)];
+				auto law=power?Law.sum_expand_powerR:u.value==Builtin.expR?Law.sum_expand_expR:Law.sum_expand_expC;
+				auto step=d.rule(instantiate(a,law,args),facts,ctx);
+				return d.trans(d.trans(p,step,ctx),expand(step.after,ctx,depth+1),ctx);
+			}
+		}
 		if(u.op==Op.builtin&&u.value>=Builtin.powNN&&u.value<=Builtin.powCN){
 			auto exponent=a.viewChild(p.after,1),e=a.view(exponent);
 			if(e.op==Op.builtin&&(e.value==Builtin.addN||e.value==Builtin.mulN)){

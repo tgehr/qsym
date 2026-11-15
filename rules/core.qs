@@ -1692,6 +1692,9 @@ rewrite complex_atanh_negative_imaginary_literal(z:ℂ):catanh(z)⇒-catanh(-z) 
 rewrite complex_atan_negative_imaginary_literal(z:ℂ):catan(z)⇒-catan(-z) when literal(z),creal(z)=0,cimag(z)<0;
 
 # Exact embedding expansion for certified summation identities.
+equation sum_expand_expR(x:ℝ,y:ℝ):exp(x+y)≡exp(x)*exp(y);
+equation sum_expand_expC(x:ℂ,y:ℂ):cexp(x+y)≡cexp(x)*cexp(y);
+equation sum_expand_powerR(x:ℝ,y:ℝ,z:ℝ):powerR(x,y+z)≡powerR(x,y)*powerR(x,z) when 0<x;
 equation sum_expand_NZ_add(x:ℕ,y:ℕ):castNZ(x+y)≡castNZ(x)+castNZ(y);
 equation sum_expand_NZ_mul(x:ℕ,y:ℕ):castNZ(x*y)≡castNZ(x)*castNZ(y);
 equation sum_expand_NZ_pow(x:ℕ,n:NatParam):castNZ(x^n)≡castNZ(x)^n;
