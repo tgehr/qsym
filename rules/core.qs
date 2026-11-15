@@ -1743,3 +1743,30 @@ equation sum_add_power_CN(x:ℂ,m:ℕ,n:ℕ):powCN(x,m+n)≡powCN(x,m)*powCN(x,n
 equation sum_mul_power_CN(x:ℂ,m:ℕ,n:ℕ):powCN(x,m*n)≡powCN(powCN(x,m),n);
 
 fact natural_indexed_nonzero(x:ℕ,n:ℕ):nonzeroN(powNN(x,n)) when x≠0,defined(n);
+
+fact sum_nonzero_QZ(x:ℚ,k:ℤ):nonzeroQ(powQZ(x,k)) when x≠0,defined(k);
+rewrite sum_inverse_QZ(x:ℚ,k:ℤ):(powQZ(x,k))⁻¹⇒powQZ(x⁻¹,k) when x≠0;
+rewrite sum_cast_exponent_QZ(x:ℚ,n:ℕ):powQZ(x,castNZ(n))⇒powQN(x,n);
+rewrite sum_offset_exponent_QZ(x:ℚ,n:ℤ,k:ℤ):powQZ(x,n+k)⇒powQZ(x,n)*powQZ(x,k) when x≠0,literal(k);
+
+fact sum_nonzero_RZ(x:ℝ,k:ℤ):nonzero(powRZ(x,k)) when x≠0,defined(k);
+rewrite sum_inverse_RZ(x:ℝ,k:ℤ):(powRZ(x,k))⁻¹⇒powRZ(x⁻¹,k) when x≠0;
+rewrite sum_cast_exponent_RZ(x:ℝ,n:ℕ):powRZ(x,castNZ(n))⇒powRN(x,n);
+rewrite sum_offset_exponent_RZ(x:ℝ,n:ℤ,k:ℤ):powRZ(x,n+k)⇒powRZ(x,n)*powRZ(x,k) when x≠0,literal(k);
+
+fact sum_nonzero_CZ(x:ℂ,k:ℤ):nonzero(powCZ(x,k)) when x≠0,defined(k);
+rewrite sum_inverse_CZ(x:ℂ,k:ℤ):(powCZ(x,k))⁻¹⇒powCZ(x⁻¹,k) when x≠0;
+rewrite sum_cast_exponent_CZ(x:ℂ,n:ℕ):powCZ(x,castNZ(n))⇒powCN(x,n);
+rewrite sum_offset_exponent_CZ(x:ℂ,n:ℤ,k:ℤ):powCZ(x,n+k)⇒powCZ(x,n)*powCZ(x,k) when x≠0,literal(k);
+
+fact sum_nonzero_QN(x:ℚ,n:ℕ):nonzeroQ(powQN(x,n)) when x≠0,defined(n);
+rewrite sum_inverse_QN(x:ℚ,n:ℕ):(powQN(x,n))⁻¹⇒powQN(x⁻¹,n) when x≠0;
+rewrite sum_negative_exponent_QZ(x:ℚ,n:ℕ):powQZ(x,-castNZ(n))⇒powQN(x⁻¹,n) when x≠0;
+
+fact sum_nonzero_RN(x:ℝ,n:ℕ):nonzero(powRN(x,n)) when x≠0,defined(n);
+rewrite sum_inverse_RN(x:ℝ,n:ℕ):(powRN(x,n))⁻¹⇒powRN(x⁻¹,n) when x≠0;
+rewrite sum_negative_exponent_RZ(x:ℝ,n:ℕ):powRZ(x,-castNZ(n))⇒powRN(x⁻¹,n) when x≠0;
+
+fact sum_nonzero_CN(x:ℂ,n:ℕ):nonzero(powCN(x,n)) when x≠0,defined(n);
+rewrite sum_inverse_CN(x:ℂ,n:ℕ):(powCN(x,n))⁻¹⇒powCN(x⁻¹,n) when x≠0;
+rewrite sum_negative_exponent_CZ(x:ℂ,n:ℕ):powCZ(x,-castNZ(n))⇒powCN(x⁻¹,n) when x≠0;

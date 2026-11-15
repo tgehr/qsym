@@ -385,8 +385,17 @@ elab "qsym_rational_goal" : tactic => withMainContext do
     if (← whnf decl.type).isConstOf ``Rat then return
   throwError "no rational scalar"
 
+theorem rational_shift (x : Option ℚ) (n k : Option ℤ)
+    (hx : Value.Refines (Functions.nonzeroQ.apply x) (some true)) :
+    Value.Refines (Functions.powQZ.apply x (Functions.addZ.apply n k))
+      (Functions.mulQ.apply (Functions.powQZ.apply x n) (Functions.powQZ.apply x k)) := by
+  cases x <;> cases n <;> cases k <;>
+    simp_all [Value.Refines,Function1.apply,Function2.apply,Functions.nonzeroQ,
+      Functions.powQZ,Functions.addZ,Functions.mulQ,zpow_add₀]
+
 macro "qsym_scalar" : tactic => `(tactic| (
   first
+  | solve | (apply rational_shift; assumption)
   | solve | qsym_partition
   | solve | qsym_branch
   | solve | (apply Value.refines_integer_literal_affine_nonzero; assumption)
@@ -533,7 +542,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
         Complex.ofReal_zpow, ← mul_assoc]))
     all_goals try (qsym_integer_power_goal; solve | simp_all [Trigonometry.parity_even, Trigonometry.parity_odd,
       Trigonometry.parity_neg, Trigonometry.parity_square, Trigonometry.parity_inverse])
-    all_goals try (qsym_integer_power_goal; solve | simp_all [zpow_mul, zpow_ne_zero, mul_assoc])
+    all_goals try (qsym_integer_power_goal; solve | simp_all [zpow_mul, zpow_add₀, zpow_ne_zero, mul_assoc])
     all_goals try (qsym_new_trig_goal; solve | (simp_all [Real.sin_sub, Complex.sin_sub, Real.cos_add, Complex.cos_add,
       Real.sinh_add, Complex.sinh_add, Real.sinh_sub, Complex.sinh_sub,
       Real.cosh_add, Complex.cosh_add, Real.cosh_sub, Complex.cosh_sub,

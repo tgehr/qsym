@@ -82,4 +82,25 @@ theorem upperZ (weight : α → ℝ) (hw : weight 0 = 0)
     have h (j : ℕ) : k-1-(j:ℤ)<k := by omega
     simp [e,Function1.apply,Function2.apply,Functions.ltZ,Functions.castNZ,Functions.addZ,Functions.mulZ,Value.mask,h,sub_eq_add_neg,show ∀ j : ℕ, (-1:ℤ)<j by intro j; omega]
 
+theorem upperZLe (weight : α → ℝ) (hw : weight 0 = 0)
+    (f : Option ℤ → Option α) (k : Option ℤ) :
+    value weight (some (fun i : ℤ => Value.mask (Functions.leZ.apply (some i) k) (f (some i)))) =
+      k.bind (fun _ => value weight (some (fun j : ℕ => f
+        (Functions.addZ.apply k (Functions.mulZ.apply (some (-1)) (Functions.castNZ.apply (some j))))))) := by
+  classical
+  cases k with
+  | none => exact undefined_term weight _ 0 (by simp [Function2.apply,Functions.leZ,Value.mask])
+  | some k =>
+    let e : ℕ ↪ ℤ := ⟨fun j => k-(j:ℤ), by
+      intro a b h
+      change k-(a:ℤ)=k-(b:ℤ) at h
+      exact_mod_cast (sub_right_inj.mp h)⟩
+    rw [reindex weight hw e _ (by
+      intro i hi
+      have h : ¬ i ≤ k := by
+        intro h; apply hi; refine ⟨(k-i).toNat, ?_⟩; dsimp [e]; omega
+      simp [Function2.apply,Functions.leZ,Value.mask,h])]
+    have h (j : ℕ) : k-(j:ℤ)≤k := by omega
+    simp [e,Function1.apply,Function2.apply,Functions.leZ,Functions.castNZ,Functions.addZ,Functions.mulZ,Value.mask,h,sub_eq_add_neg]
+
 end QSym.SummationTails

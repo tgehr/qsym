@@ -40,9 +40,41 @@ the natural sum through `floorN` of a real sum and retain guards inside the
 summand. These expressions remain exactly evaluable. The generated Lean
 certificate proves equality with the original least fixed point.
 
-Mixed floor/ceiling subproblems, unequal split ratios, coefficients depending
-on `n`, nonlinear feedback, and asymptotic bounds are not handled by this
-solver. Unsupported recurrences retain their fixed-point expression.
+Unequal split ratios, coefficients depending on `n`, nonlinear feedback, and
+asymptotic bounds are not handled by this solver. Unsupported recurrences
+retain their fixed-point expression.
+
+## Balanced mixed floor/ceiling splits
+
+The solver also handles one call to each rounded half:
+
+```text
+μ(f:ℕ→ℕ). λ(n:ℕ).
+  if n<2 then n else f(divN(n,2))+f(divN(n+1,2))+n
+```
+
+For natural `n`, `divN(n+1,2)` is exactly `ceil(n/2)`. Use one unweighted call to each half. Additions may be regrouped or reordered, and the
+base condition may be `n≤1`. Seed and toll expressions may contain symbolic
+natural parameters, and must be certifiably total. The values at zero and one
+are preserved separately. As with the floor-only solver, use the `divN`
+spelling for the recursive arguments.
+
+The exact answer groups each recursion level into two subproblem sizes. For
+`n>0`, let `L=logN(2,n)+1`; for each `j<L`, put `d=2^j`, `q=divN(n,d)`, and
+`r=n-d*q`. With `charge(k)=[2≤k]*toll(k)`, the answer is
+
+```text
+n*seed(1) + Σ(j<L) ((d-r)*charge(q) + r*charge(q+1))
+```
+
+At zero, the answer is `seed(0)`. The masks suppress cost at terminal
+subproblems. This handles odd inputs exactly, and uses logarithmically many
+summands. It does not assume that `n` is a power of two. Output may retain
+casts and guards while remaining exactly evaluable.
+
+The new `mixed-recurrence-tests` suite checks polynomial and logarithmic
+tolls, distinct seeds, symbolic parameters, reordered calls, and conservative
+rejection of unsupported feedback.
 
 ## Verification
 

@@ -9,6 +9,16 @@ import std.conv:to;
 @safe:
 private struct Case{string name,input,expected,proof;}
 private Case[] cases(){return [
+ Case("NaturalReciprocal","∑(i:ℕ). i/2^i","2"),
+ Case("NegativeLowerSquare","∑(i:ℤ). [-3≤i]*i^2/2^i","96"),
+ Case("NegativeLowerAlternating","∑(i:ℤ). [-3≤i]*i*(-1/2)^i","160/9"),
+ Case("UpperLinear","∑(i:ℤ). [i≤3]*i*2^i","32"),
+ Case("NegativeLowerRational","∑(i:ℤ). [-3≤i]*(i:ℚ)*(1/2:ℚ)^i","(-32:ℚ)"),
+ Case("NegativeLowerComplex","∑(i:ℤ). [-3≤i]*(i:ℂ)*(1/2:ℂ)^i","(-32:ℂ)"),
+ Case("NegativeLowerReciprocalFinite","∑(i:ℤ). [-3≤i]*[i≤10]*i/2^i","-8195/256"),
+ Case("NegativeLowerPowerFinite","∑(i:ℤ). [-3≤i]*[i≤10]*i*(1/2)^i","-8195/256"),
+ Case("NegativeLowerReciprocalTail","∑(i:ℤ). [-3≤i]*i/2^i","-32"),
+ Case("NegativeLowerPowerTail","∑(i:ℤ). [-3≤i]*i*(1/2)^i","-32"),
 	Case("SymbolicRatio","∑(i:ℕ). [3≤i]*q^i","guard(-1<q∧q<1,q^3/(1-q))","Summation.geometric_shift_guard"),
 	Case("DivergentTail","defined(∑(i:ℕ). [3≤i]*(2:ℝ)^i)","false"),
 	Case("AlternatingTail","defined(∑(i:ℕ). [3≤i]*(-1:ℝ)^i)","false"),
@@ -62,7 +72,7 @@ int main(string[] args){
 		write(buildPath(args[1],c.name~".lean"),code);writeln(c.name,": ",out_);
 	}catch(Exception e){++failed;writeln("FAILED ",c.name,": ",e.msg);}
 	enforce(failed==0,to!string(failed)~" tail cases failed");
-	foreach(source;["∑(i:ℕ). [3≤i]/(i+1)","∑(i:ℕ). [3≤i]*(-1:ℝ)^i/(i+1)"]){
+	foreach(source;["∑(i:ℤ). [-3≤i]*i*(0:ℝ)^i","∑(i:ℕ). [3≤i]/(i+1)","∑(i:ℕ). [3≤i]*(-1:ℝ)^i/(i+1)"]){
 		auto o=Session.open();FunctionSyntax s;s.declare("q:ℝ");auto r=s.run(o.arena,source);enforce(!r.exhausted&&s.format(o.arena,r).indexOf("∑(")>=0,"unchecked convergence");
 	}
 	uint checks;
@@ -73,5 +83,5 @@ int main(string[] args){
 		auto o=Session.open();FunctionSyntax s;auto source="∑(i:ℕ). ["~to!string(k)~"≤i]*(i:ℝ)^"~to!string(d)~"*("~to!string(q)~")^i";auto r=s.run(o.arena,source);
 		enforce(!r.exhausted&&(r.scalarOnly||r.lowered)&&o.arena.isNumber(r.scalar.output)&&o.arena.number(r.scalar.output)==Number(total),"numeric tail: "~source~" -> "~s.format(o.arena,r));++checks;
 	}
-	writeln(cases().length," tail cases; ",checks," exact numeric checks; 2 unresolved convergence checks");return 0;
+	writeln(cases().length," tail cases; ",checks," exact numeric checks; 3 unresolved convergence/domain checks");return 0;
 }

@@ -37,13 +37,13 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
-private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
+private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
 private struct CFiniteSequence{ CFiniteKind kind; Sort sort; uint source=uint.max,a,b,size,coordinate; Term value; Term[] matrix,initial,output; }
 private enum CFiniteExprKind:ubyte{ force,previous,add,left,right }
@@ -809,22 +809,27 @@ final class Bindings{
 		}
 		if(!totalLeaf(base))return BoundTerm.init;
 		bool constant(uint id){return nodes[id].op==BoundOp.scalar&&recurrenceConstant(arena.at(nodes[id].data));}
-		DivideExpression[] expressions;bool recursive;
+		DivideExpression[] expressions;bool recursive,weighted;uint lowerCalls,upperCalls;
 		uint collect(uint id,uint level=0){
 			if(level>64||expressions.length>=256)return uint.max;
 			auto q=nodes[id];DivideExpression e;e.source=id;
 			if(!depends(at(id),1)){
 				if(!totalLeaf(id))return uint.max;
 				e.kind=CFiniteExprKind.force;e.coefficient=arena.natural_(0);e.offset=id;
-			}else if(q.op==BoundOp.apply&&variableAt(q.a,1)&&call(q.b,Builtin.divN)&&variableAt(nodes[q.b].a,0)){
+			}else if(q.op==BoundOp.apply&&variableAt(q.a,1)&&call(q.b,Builtin.divN)){
 				uint divisor;if(!literal(nodes[q.b].b,divisor)||divisor!=radix)return uint.max;
-				e.kind=CFiniteExprKind.previous;e.coefficient=arena.natural_(1);e.offset=scalar(context(at(id)),arena.natural_(0)).id;recursive=true;
+				auto arg=nodes[q.b].a;bool upper;
+				if(variableAt(arg,0))++lowerCalls;
+				else if(radix==2&&call(arg,Builtin.addN)&&variableAt(nodes[arg].a,0)){
+					uint shift;if(!literal(nodes[arg].b,shift)||shift!=1)return uint.max;upper=true;++upperCalls;
+				}else return uint.max;
+				e.kind=CFiniteExprKind.previous;e.b=upper?1:0;e.coefficient=arena.natural_(1);e.offset=scalar(context(at(id)),arena.natural_(0)).id;recursive=true;
 			}else if(call(id,Builtin.addN)){
 				e.kind=CFiniteExprKind.add;e.a=collect(q.a,level+1);e.b=collect(q.b,level+1);if(e.a==uint.max||e.b==uint.max)return uint.max;
 				e.coefficient=arena.add(expressions[e.a].coefficient,expressions[e.b].coefficient,true);
 				e.offset=primitive(arena.at(q.data),[at(expressions[e.a].offset),at(expressions[e.b].offset)]).id;
 			}else if(call(id,Builtin.mulN)){
-				bool left=constant(q.a);auto c=left?q.a:q.b;if(!constant(c))return uint.max;
+				weighted=true;bool left=constant(q.a);auto c=left?q.a:q.b;if(!constant(c))return uint.max;
 				e.kind=left?CFiniteExprKind.left:CFiniteExprKind.right;e.a=collect(left?q.b:q.a,level+1);if(e.a==uint.max)return uint.max;
 				e.value=arena.at(nodes[c].data);auto child=expressions[e.a];
 				e.coefficient=left?arena.mul(e.value,child.coefficient,true):arena.mul(child.coefficient,e.value,true);
@@ -833,6 +838,8 @@ final class Bindings{
 			expressions~=e;return cast(uint)expressions.length-1;
 		}
 		auto root=collect(tail);if(root==uint.max||!recursive)return BoundTerm.init;
+		bool mixed=upperCalls!=0;
+		if(mixed&&(lowerCalls!=1||upperCalls!=1||weighted))return BoundTerm.init;
 		auto outer=context(t),inner=push(outer,scalarType(Sort.natural)),sumScope=push(inner,scalarType(Sort.natural));
 		BoundTerm functionAt(uint id){
 			BoundTerm[] values=[variable(inner,0),bottom(inner,type(t))];foreach(i;0..depth(outer))values~=variable(inner,i+1);
@@ -846,8 +853,27 @@ final class Bindings{
 		auto initial=bin(Builtin.mulN,bin(Builtin.powNN,scalar(inner,expressions[root].coefficient),l),apply(lifted(seedFn,inner,1),terminal));
 		auto reduced=bin(Builtin.divN,variable(sumScope,1),bin(Builtin.powNN,scalar(sumScope,arena.natural_(radix)),variable(sumScope,0)));
 		auto summand=bin(Builtin.mulN,bin(Builtin.powNN,scalar(sumScope,expressions[root].coefficient),variable(sumScope,0)),apply(lifted(tollFn,sumScope,2),reduced));
-		auto output=inheritHint(at(n.a),lambda(bin(Builtin.addN,initial,finiteSum(lambda(summand),l))));
-		solution=RecurrenceSolution(t.id,output.id,base,tail);solution.divide=true;solution.radix=radix;solution.inclusive=inclusive;solution.left=reverse;
+		BoundTerm output;
+		if(mixed){
+			auto d=bin(Builtin.powNN,scalar(sumScope,arena.natural_(2)),variable(sumScope,0));
+			auto q=bin(Builtin.divN,variable(sumScope,1),d);
+			auto r=bin(Builtin.subN,variable(sumScope,1),bin(Builtin.mulN,q,d));
+			BoundTerm charge(BoundTerm v){
+				auto pred=bin(Builtin.leN,scalar(sumScope,arena.natural_(2)),v);
+				return primitive(arena.mask(arena.boolean(true),arena.natural_(0)),[pred,apply(lifted(tollFn,sumScope,2),v)]);
+			}
+			auto level=bin(Builtin.addN,bin(Builtin.mulN,bin(Builtin.subN,d,r),charge(q)),
+				bin(Builtin.mulN,r,charge(bin(Builtin.addN,q,scalar(sumScope,arena.natural_(1))))));
+			auto costs=finiteSum(lambda(level),bin(Builtin.addN,l,scalar(inner,arena.natural_(1))));
+			auto seed=apply(lifted(seedFn,inner,1),scalar(inner,arena.natural_(1)));
+			auto body=bin(Builtin.addN,bin(Builtin.mulN,variable(inner,0),seed),costs);
+			auto atZero=bin(Builtin.leN,variable(inner,0),scalar(inner,arena.natural_(0)));
+			auto zero=apply(lifted(seedFn,inner,1),scalar(inner,arena.natural_(0)));
+			auto yes=primitive(arena.mask(arena.boolean(true),arena.natural_(0)),[atZero,zero]);
+			auto no=primitive(arena.mask(arena.boolean(true),arena.natural_(0)),[primitive(arena.not_(arena.boolean(true)),[atZero]),body]);
+			output=inheritHint(at(n.a),lambda(bin(Builtin.addN,yes,no)));
+		}else output=inheritHint(at(n.a),lambda(bin(Builtin.addN,initial,finiteSum(lambda(summand),l))));
+		solution=RecurrenceSolution(t.id,output.id,base,tail);solution.divide=true;solution.mixed=mixed;solution.radix=radix;solution.inclusive=inclusive;solution.left=reverse;
 		solution.variable=variableIndex;solution.facts=facts;solution.divideExpressions=expressions;solution.cfRoot=root;solution.seedFunction=seedFn.id;solution.tollFunction=tollFn.id;return output;
 	}
 
@@ -2225,7 +2251,8 @@ final class Bindings{
 					if(next==BoundTerm.init&&pred.op==BoundOp.primitive){
 						auto indexType=type(variable(context(at(body.a)),0)),ns=indexType==scalarType(Sort.natural);
 						auto pop=arena.view(arena.at(pred.data));
-						bool lower=pop.op==Op.builtin&&pop.value==(ns?Builtin.leN:Builtin.leZ),upper=!ns&&pop.op==Op.builtin&&pop.value==Builtin.ltZ;
+						bool inclusive=!ns&&pop.op==Op.builtin&&pop.value==Builtin.leZ&&nodes[pred.a].op==BoundOp.variable&&nodes[pred.a].data==0;
+						bool lower=!inclusive&&pop.op==Op.builtin&&pop.value==(ns?Builtin.leN:Builtin.leZ),upper=!ns&&pop.op==Op.builtin&&(pop.value==Builtin.ltZ||inclusive);
 						auto iv=lower?pred.b:pred.a,k=lower?pred.a:pred.b;
 						if((lower||upper)&&nodes[iv].op==BoundOp.variable&&nodes[iv].data==0&&!depends(at(k),0)){
 							auto endpoint=dropIndex(at(k)); extra=endpoint.id;
@@ -2237,8 +2264,8 @@ final class Bindings{
 							auto shiftedK=substitute(at(k),inner,values);
 							if(ns) values[0]=add(j,shiftedK);
 							else if(lower) values[0]=add(unary(Builtin.castNZ,j),shiftedK);
-							else values[0]=add(add(shiftedK,scalar(inner,arena.integer(-1))),primitive(arena.mul(zero,zero,true),[scalar(inner,arena.integer(-1)),unary(Builtin.castNZ,j)]));
-							next=sequence(endpoint,summation(inheritHint(at(current.a),lambda(substitute(at(body.b),inner,values)))));rule=BindingRule.sumTail;
+							else values[0]=add(inclusive?shiftedK:add(shiftedK,scalar(inner,arena.integer(-1))),primitive(arena.mul(zero,zero,true),[scalar(inner,arena.integer(-1)),unary(Builtin.castNZ,j)]));
+							next=sequence(endpoint,summation(inheritHint(at(current.a),lambda(substitute(at(body.b),inner,values)))));rule=inclusive?BindingRule.sumTailInclusive:BindingRule.sumTail;
 						}
 					}
 					if(next==BoundTerm.init&&pred.op==BoundOp.primitive&&arena.view(arena.at(pred.data)).op==Op.builtin&&arena.view(arena.at(pred.data)).value==Builtin.nonzeroZ){
@@ -3197,7 +3224,7 @@ final class Bindings{
 						}assert(0,"missing divide proof");}
 						string divideExpression(uint k){auto e=s.divideExpressions[k];final switch(e.kind){
 							case CFiniteExprKind.force:return "(.constant "~forceValue(e.source)~")";
-							case CFiniteExprKind.previous:return ".previous";
+							case CFiniteExprKind.previous:return s.mixed?(e.b?".upper":".lower") : ".previous";
 							case CFiniteExprKind.add:return "(.add "~divideExpression(e.a)~" "~divideExpression(e.b)~")";
 							case CFiniteExprKind.left:return "(.left "~total(e.value).value~" "~divideExpression(e.a)~")";
 							case CFiniteExprKind.right:return "(.right "~divideExpression(e.a)~" "~total(e.value).value~")";
@@ -3210,16 +3237,20 @@ final class Bindings{
 							case CFiniteExprKind.right:return "(congrArg₂ Functions.mulN.apply "~expressionProof(e.a)~" "~total(e.value).proof~")";
 						}}
 						auto e="divideExpr"~id,seed="divideSeed"~id;
-						code~="noncomputable def "~e~args~" (x : ℕ) : AffineRecurrence.Expr ℕ := "~divideExpression(s.cfRoot)~"\n";
+						code~="noncomputable def "~e~args~" (x : ℕ) : "~(s.mixed?"MixedDivide.Expr":"AffineRecurrence.Expr ℕ")~" := "~divideExpression(s.cfRoot)~"\n";
 						code~="noncomputable def "~seed~args~" (x : ℕ) : ℕ := "~forceValue(s.base)~"\n";
 						e="("~e~dimArg~" γ ξ ρ)";seed="("~seed~dimArg~" γ ξ ρ)";
 						string bridge(uint q){if(q==s.base)return forceProof(q);if(q==s.delta)return expressionProof(s.cfRoot);
 							auto z=nodes[q];if(z.op==BoundOp.primitive&&z.b!=uint.max)return "(congrArg₂ "~valueOperation(z)~" "~bridge(z.a)~" "~bridge(z.b)~")";return "rfl";}
-						auto body=nodes[n.a].a,co=total(s.divideExpressions[s.cfRoot].coefficient),radix=to!string(s.radix);
+						auto body=nodes[n.a].a;Total co;if(!s.mixed)co=total(s.divideExpressions[s.cfRoot].coefficient);auto radix=to!string(s.radix);
 						auto hp="(fun g x => Eq.trans ("~programProof(body)~").symm "~bridge(body)~")";
 						auto sfn="(fun x : Option ℕ => "~name(nodes[s.seedFunction].a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) x ρ))";
 						auto tfn="(fun x : Option ℕ => "~name(nodes[s.tollFunction].a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) x ρ))";
-						auto hs="(fun x => "~forceProof(s.base)~")",ht="(fun x => Eq.trans "~expressionProof(s.cfRoot)~" (DivideConquer.offset_eq ("~e~" x)))";
+						auto hs="(fun x => "~forceProof(s.base)~")",ht="(fun x => Eq.trans "~expressionProof(s.cfRoot)~" ("~(s.mixed?"MixedDivide":"DivideConquer")~".offset_eq ("~e~" x)))";
+						if(s.mixed){
+							code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (MixedDivide.solve_sum (rec"~id~dimArg~" γ ξ ρ) "~(s.inclusive?"true":"false")~" "~(s.left?"true":"false")~" "~seed~" "~e~" (fun _ => rfl) (fun _ => rfl) "~hp~" "~sfn~" "~tfn~" "~hs~" "~ht~"))\n";
+							continue;
+						}
 						code~="theorem solve"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ :=\n  Eq.trans (fixed"~id~dimArg~" γ ξ ρ) (congrArg some (DivideConquer.solve_sum (rec"~id~dimArg~" γ ξ ρ) "~radix~" "~co.value~" (of_decide_eq_true rfl) "~(s.inclusive?"true":"false")~" "~(s.left?"true":"false")~" "~seed~" "~e~" (fun _ => rfl) "~hp~" (n"~to!string(s.divideExpressions[s.cfRoot].coefficient.id)~".eval ξ) "~co.proof~" "~sfn~" "~tfn~" "~hs~" "~ht~"))\n";
 						continue;
 					}
@@ -3759,12 +3790,12 @@ final class Bindings{
 					auto equal=p.rule==BindingRule.sumMaskEqOffset,sort=elementSort(types[n.type]);
 					auto iv=variable(context(at(n.a)),0),add=tensorOperation(types[n.type],TensorOp.add),ha=sort==Sort.natural?"Summation.addN":sort==Sort.integer?"Summation.addZ":sort==Sort.rational?"Summation.addQ":"Summation.add";
 					proof=".ofEq (fun ξ ρ => SummationAlgebra.mask_"~(equal?"eq_offset":"ne_offset_op "~add~" "~ha)~" ("~name(iv.id)~".eval ξ ρ) ("~name(p.extra)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))";break;
-				case BindingRule.sumTail:
+				case BindingRule.sumTail,BindingRule.sumTailInclusive:
 					auto body=nodes[nodes[n.a].a],pred=nodes[body.a],index=pool.view(type(at(n.a))).fields[0],sort=elementSort(types[n.type]);
 					auto ns=index==scalarType(Sort.natural),lower=arena.view(arena.at(pred.data)).value==(ns?Builtin.leN:Builtin.leZ);
 					auto w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
 					auto f="(fun (i : Option "~(ns?"ℕ":"ℤ")~") => "~name(body.b)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") i ρ))";
-					proof=".ofEq (fun ξ ρ => SummationTails."~(ns?"lowerN":lower?"lowerZ":"upperZ")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(p.extra)~".eval ξ ρ))";break;
+					proof=".ofEq (fun ξ ρ => SummationTails."~(p.rule==BindingRule.sumTailInclusive?"upperZLe":ns?"lowerN":lower?"lowerZ":"upperZ")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(p.extra)~".eval ξ ρ))";break;
 				case BindingRule.sumRationalBound:
 					proof=".ofEq (fun ξ ρ => SummationBounds.rational_"~(arena.view(arena.at(n.data)).value==Builtin.ltQ?"lt":"le")~" ("~name(n.a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))";break;
 				case BindingRule.sumRound:
