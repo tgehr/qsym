@@ -1,4 +1,5 @@
 import QSym.DistributionModelLaws
+import QSym.WeightedFibreTower
 
 /-! Checked distribution and integral laws used by the ordinary `qsym_rule`
 prover. The tactic constructs proofs from laws/instances; it never introduces
@@ -15,13 +16,17 @@ elab "qsym_distribution_goal" : tactic => do
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
     ``Distribution.Model.densityTestValue, ``Distribution.Model.densityMassValue,
-    ``WeightedParameter.Fibre.Hom.observePartial]
+    ``WeightedParameter.Fibre.Hom.observePartial,
+    ``DependentIntegralTheory.joint, ``WeightedParameter.Fibre.Tower.observe]
   unless (target.find? fun e => match e with
       | .const name _ => heads.contains name
       | _ => false).isSome do
     throwError "not a distribution-model rule goal"
 
 macro "qsym_distribution_eq" : tactic => `(tactic| first
+  | solve | apply DependentIntegralTheory.fubini <;> assumption
+  | solve | apply WeightedParameter.Fibre.Tower.observe_fubini <;> assumption
+  | solve | apply partialIntegral_compProd_of_integrable <;> assumption
   | exact Distribution.Model.atomTestValue_eq _ _
   | exact Distribution.Model.densityTestValue_eq _ _
   | exact Distribution.Model.densityMassValue_eq _
@@ -48,6 +53,9 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
 macro "qsym_distribution" : tactic => `(tactic| (qsym_distribution_goal; first
   | solve | qsym_distribution_eq
   | solve | apply Value.refines_of_eq; qsym_distribution_eq
+  | solve | apply DependentIntegralTheory.fubini_refines <;> assumption
+  | solve | apply WeightedParameter.Fibre.Tower.observe_fubini_refines <;> assumption
+  | solve | apply partialIntegral_compProd_refines <;> assumption
   | exact partialIntegral_scale_refines _ _ _
   | exact partialIntegral_add_refines _ _ _
   | exact FiniteIntegralTheory.scale_refines _ _ _
