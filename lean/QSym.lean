@@ -51,3 +51,5 @@ import QSym.CFiniteRecurrence
 import QSym.DivideConquer
 
 import QSym.MixedDivide
+
+import QSym.SummationElementary

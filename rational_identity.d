@@ -89,8 +89,8 @@ private class Checker {
    if(n.op!=Op.nonzero&&!(n.op==Op.builtin&&(n.value==Builtin.nonzeroN||n.value==Builtin.nonzeroZ||n.value==Builtin.nonzeroQ)))continue;
    auto condition=a.viewChild(v,0);bool found;foreach(c;conditions)if(c==condition)found=true;
    if(found)continue;
-   Polynomial p;if(!ring.parse(condition,p)||conditions.length>=6)return false;
-   conditions~=condition;predicates~=p;
+   Fraction p;if(conditions.length>=6||!parse(condition,p)||p.denominator.length)return false;
+   conditions~=condition;predicates~=p.numerator;
   }return true;
  }
  bool truth(Term t,out bool value){
@@ -125,6 +125,16 @@ private class Checker {
   }
   return true;
  }
+ // Treat a strictly total scalar function as an opaque field element.
+ // Its internal identities are not assumed; partial arguments are rejected.
+ bool total(Term t,uint depth=0){
+  ring.budget.spend();if(depth>128)throw new Limit;
+  auto n=a.view(t);if(a.isNumber(t)||n.op==Op.variable)return true;
+  if(n.op!=Op.add&&n.op!=Op.mul&&n.op!=Op.pow&&n.op!=Op.conj&&n.op!=Op.abs&&
+     !(n.op==Op.builtin&&builtinInfo(cast(Builtin)n.value).total))return false;
+  foreach(i;0..n.arity)if(!total(a.viewChild(t,i),depth+1))return false;
+  return true;
+ }
  bool parse(Term t,out Fraction result,uint depth=0,bool invert=false){
   ring.budget.spend();if(depth>128)throw new Limit;
   if(!invert)if(auto found=t.id in memo){result=*found;return true;}
@@ -150,7 +160,7 @@ private class Checker {
    Fraction base;if(!parse(a.viewChild(t,0),base,depth+1,invert))return false;
    if(!naturalPower(base,a.viewChild(t,1),result,depth+1))return false;
   }else{
-   Polynomial p;if(!ring.parse(t,p))return false;result=clean(Fraction(p));if(invert)return inverse(result,result);
+   Polynomial p;if(!ring.parse(t,p)){if(!total(t))return false;ring.put(p,[t.id,1].idup,Number(1));}result=clean(Fraction(p));if(invert)return inverse(result,result);
   }
   if(!invert)memo[t.id]=result;return true;
  }

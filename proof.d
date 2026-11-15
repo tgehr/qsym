@@ -780,7 +780,14 @@ string exportRationalZeroLean(Arena a,Term input,Term[] conditions){
   seen[id]=true;auto v=a.at(id);code~=leanSyntaxCode(a,v);names~="n"~to!string(id);
   if(a.node(v).region)names~="b"~to!string(id);
  }
- auto defs="-sq_eq_one_iff, -Nat.cast_eq_one, "~names.join(",")~", Expr.eval, Expr.sumR, Expr.productR, Expr.sumC, Expr.productC, Region.fold, Positive.repeat, Value.add, Value.mul, Value.inv, Value.mask, Value.nonzero, Value.not, Value.and, Value.or, Function1.apply, Function2.apply, Functions.castNZ, Functions.castZQ, Functions.castQR, Functions.castRC, Functions.addN, Functions.mulN, Functions.addZ, Functions.mulZ, Functions.addQ, Functions.mulQ, Functions.invQ, Functions.nonzeroN, Functions.nonzeroZ, Functions.nonzeroQ, Functions.powNN, Functions.powZN, Functions.powQN, Functions.powRN, Functions.powCN";
+ auto defs="-sq_eq_one_iff, -Nat.cast_eq_one, -Real.exp_eq_one_iff, "~names.join(",")~", Expr.eval, Expr.sumR, Expr.productR, Expr.sumC, Expr.productC, Region.fold, Positive.repeat, Value.add, Value.mul, Value.inv, Value.mask, Value.nonzero, Value.not, Value.and, Value.or, Function1.apply, Function2.apply, Functions.castNZ, Functions.castZQ, Functions.castQR, Functions.castRC, Functions.addN, Functions.mulN, Functions.addZ, Functions.mulZ, Functions.addQ, Functions.mulQ, Functions.invQ, Functions.nonzeroN, Functions.nonzeroZ, Functions.nonzeroQ, Functions.powNN, Functions.powZN, Functions.powQN, Functions.powRN, Functions.powCN";
+ // Unfold the total-function wrappers used as opaque field atoms.
+ // The Lean ring proof still verifies the identity on their actual values.
+ bool[uint] functions;
+ foreach(id;a.viewPostorder(input)){
+  auto n=a.view(a.at(id));if(n.op!=Op.builtin||!builtinInfo(cast(Builtin)n.value).total||cast(uint)n.value in functions)continue;
+  functions[cast(uint)n.value]=true;defs~=", Functions."~builtinInfo(cast(Builtin)n.value).code;
+ }
  if(common>1)foreach(k;1..common+1){
   auto j=to!string(k),d=to!string(common),rest=to!string(common-k);
   code~="theorem clear"~j~" {K : Type} [Field K] {x : K} (h : x ≠ 0) : "~(k==1?"x⁻¹":"x⁻¹ ^ "~j)~" = x ^ "~rest~" / x ^ "~d~"  := by field_simp <;> ring\n";

@@ -57,7 +57,7 @@ int main(string[] args){
   writeln(c.name,": ",ms," ms; exact ratio and endpoint checks passed");
  }
  auto owner=Session.open(),a=owner.arena;Syntax s;s.declare("q:ℝ,n:ℕ");Term[] conditions;
- foreach(source;["0*(1/q)","1/q-1/q","(1/q)^0-1","[q=1]*(n^2-n)","[q≠1]*(q/q-1)"])
+ foreach(source;["0*(1/q)","1/q-1/q","(1/q)^0-1","[q=1]*(n^2-n)","[q≠1]*(q/q-1)","exp(1/q)-exp(1/q)","creal(cis(1/q))-creal(cis(1/q))"])
   enforce(!rationalIdentityZero(a,s.parse(a,source,Sort.real_),conditions),"unsafe field identity: "~source);
  auto safe=s.parse(a,"[q≠0]*(q/q-1)",Sort.real_);
  enforce(rationalIdentityZero(a,safe,conditions),"masked cancellation");
@@ -69,5 +69,5 @@ int main(string[] args){
   enforce(!result.exhausted&&a.isNumber(result.output)&&a.number(result.output).zero,"guarded zero: "~source);
   write(buildPath(args[1],"GuardZero"~to!string(i)~".lean"),exportLean(a,result));++certificates;
  }
- writeln(certificates," certificates; ",checks," exact checks; 5 invalid-identity rejections");return 0;
+ writeln(certificates," certificates; ",checks," exact checks; 7 invalid-identity rejections");return 0;
 }
