@@ -117,6 +117,24 @@ theorem integrate_dirac (a : α) (f : α → Option ℝ) : integrate (.dirac a) 
 
 theorem mass_dirac (a : α) : massValue (diracValue (some a)) = some 1 := rfl
 
+theorem mass_zeroValue : massValue (zeroValue (α := α)) = some ((0 : ℤ) : ℝ) := by
+  simp [massValue, zeroValue, integrate]
+
+theorem mass_addValue (a b : Option (D α)) :
+    massValue (addValue a b) = Value.add (massValue a) (massValue b) := by
+  cases a with
+  | none => rfl
+  | some a =>
+    cases b with
+    | some b => rfl
+    | none =>
+      change none = Value.add (integrate a (fun _ => some 1)) none
+      cases integrate a (fun _ => some 1) <;> rfl
+
+theorem mass_scaleValue (r : Option ℝ) (a : Option (D α)) :
+    massValue (scaleValue r a) = Value.mul r (massValue a) := by
+  cases r <;> cases a <;> rfl
+
 theorem mass_diracValue (a : Option α) :
     massValue (diracValue a) = a.bind (fun _ => some ((1 : ℤ) : ℝ)) := by
   cases a <;> simp [massValue, diracValue, integrate]

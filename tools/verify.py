@@ -132,8 +132,8 @@ def main():
 	for file in types:
 		certificate(file)
 	distributions=sorted((ROOT/"build/distributions").glob("*.lean"))
-	if len(distributions)!=23:
-		raise RuntimeError("expected 23 distribution certificates")
+	if len(distributions)!=37:
+		raise RuntimeError("expected 37 distribution certificates")
 	for file in distributions:
 		certificate(file)
 	recursion=sorted((ROOT/"build/recursion").glob("*.lean"))

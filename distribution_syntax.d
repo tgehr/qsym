@@ -5,6 +5,19 @@ import std.exception:enforce;
 
 // Distribution application is a scoped form, not a scalar density or function
 // application. Lower its single output axis before ordinary elaboration.
+string distributionOutputAxis(Pattern root){
+	string axis;
+	void visit(Pattern p) @safe {
+		if(p.binder.length||p.name=="$disintegrate") return;
+		if(p.name=="$distributionApply"){
+			if(!axis.length) axis=p.args[1].name;
+			enforce(axis==p.args[1].name,"multiple free output axes require explicit distribution binders"); return;
+		}
+		foreach(a;p.args) visit(a);
+	}
+	visit(root); return axis;
+}
+
 Pattern distributionSyntax(Pattern root){
 	bool occurs(Pattern p,string name) @safe {
 		bool inType(TypePattern t) @safe {
@@ -37,6 +50,7 @@ Pattern distributionSyntax(Pattern root){
 	Pattern delegate(Pattern) @safe expand;
 	Pattern lower(Pattern p,string axis,TypePattern ty) @safe {
 		auto dt=new TypePattern("Distribution",[ty]);
+		if(p.name=="#"&&p.number==0){ auto t=pattern("$type",[]); t.annotation=ty; return pattern("zeroD",[t]); }
 		if(p.name=="$integral"){
 			enforce(p.binder!=axis,"an integral shadows the distribution output axis");
 			Pattern[] factors;
@@ -45,7 +59,7 @@ Pattern distributionSyntax(Pattern root){
 			foreach(i,f;factors) if(f.name=="$distributionApply"&&f.args[1].name==p.binder){
 				enforce(selected==size_t.max,"multiple distributions for one integration axis are unsupported"); selected=i;
 			}
-			enforce(selected!=size_t.max,"a nested integral requires an explicit distribution factor d[y]");
+			if(selected==size_t.max) return pattern("integralD",[lambda(p.binder,p.annotation,lower(p.args[0],axis,ty))]);
 			enforce(!occurs(factors[selected].args[0],axis),"integration source depending on the output axis is unsupported");
 			auto measure=lower(factors[selected],p.binder,p.annotation); Pattern rest;
 			foreach(i,f;factors) if(i!=selected) rest=rest is null?f:pattern("$mul",[rest,f]);
@@ -86,5 +100,9 @@ Pattern distributionSyntax(Pattern root){
 		foreach(a;p.args) q.args~=expand(a);
 		return q;
 	};
+	auto axis=distributionOutputAxis(root);
+	if(axis.length){
+		auto wrapper=pattern("$distribution",[root]); wrapper.binder=axis; wrapper.annotation=new TypePattern("Real"); root=wrapper;
+	}
 	return expand(root);
 }

@@ -6,7 +6,7 @@ import std.path:buildPath;
 import std.stdio:writeln;
 @safe:
 
-private struct Case{ string name,source,type; }
+private struct Case{ string name,source,type,expected; }
 private Case[] cases(){ return [
 	Case("Dirac","δ(2)","Distribution(ℕ)"),
 	Case("NaturalDirac","(δ(2):Distribution(ℕ))","Distribution(ℕ)"),
@@ -20,6 +20,20 @@ private Case[] cases(){ return [
 	Case("UntypedLebesgue","Λx.λ[x]","Distribution(ℝ)"),
 	Case("UntypedIntegral","∫dx x*δ(2)[x]","ℝ"),
 	Case("Marginal","Λ(x:ℝ).∫(y:ℝ).δ(y)[x]*λ[y]","Distribution(ℝ)"),
+	Case("BarePuncture","[x≠0]·λ[x]","Distribution(ℝ)"),
+	Case("BareLebesgue","λ[x]","Distribution(ℝ)"),
+	Case("Interval","∫dx [-1≤x≤1]·λ[x]","ℝ"),
+	Case("PuncturedInterval","∫dx [x≠0]·λ[x]·[-1≤x≤1]","ℝ"),
+	Case("UnboundedPuncture","∫dx [x≠0]·λ[x]","ℝ"),
+	Case("ZeroIntegral","∫dx 0","ℝ","0"),
+	Case("StrictInterval","∫dx [-1<x<1]·λ[x]","ℝ","2"),
+	Case("EmptyInterval","∫dx [2≤x≤1]·λ[x]","ℝ","0"),
+	Case("SingletonIntegral","∫dx [x=0]·λ[x]","ℝ","0"),
+	Case("ShiftedPuncture","∫dx [2*x≠1]·[-1≤x≤1]·λ[x]","ℝ","2"),
+	Case("IntersectedIntervals","∫dx [0≤x≤3]·λ[x]·[-1≤x≤1]","ℝ","1"),
+	Case("SignedInterval","∫dx (-3)*[-1≤x≤1]·λ[x]","ℝ","-6"),
+	Case("LinearInterval","∫dx [0≤2*x+1]·[3*x≤6]·λ[x]","ℝ","5/2"),
+	Case("MixedIntegral","∫dx δ(0)[x]+[-1≤x≤1]·λ[x]","ℝ","3"),
 	Case("Puncture","Λ(x:ℝ).[x≠0]*λ[x]","Distribution(ℝ)"),
 	Case("WeightedDirac","Λ(x:ℝ).x*δ(2)[x]","Distribution(ℝ)"),
 	Case("Mixture","Λ(x:ℝ).δ(0)[x]+[x≠0]*λ[x]","Distribution(ℝ)"),
@@ -35,12 +49,16 @@ private Case[] cases(){ return [
 
 private void run(string directory){
 	foreach(c;cases()){
+		scope(failure) writeln("Failed distribution case: ",c.name);
 		auto owner=Session.open(),a=owner.arena; FunctionSyntax s;
 		enforce(s.inspectType(a,c.source)==c.type,c.name~" type: "~s.inspectType(a,c.source));
 		auto r=s.run(a,c.source,[],Options(DensityMode.preserve,true));
 		enforce(!r.exhausted,c.name~" exhausted");
 		auto text=s.format(a,r);
+		if(c.expected.length) enforce(text==c.expected,c.name~": "~text);
 		if(c.name=="DensityRecovery") enforce(text=="[x≠0]",c.name~": "~text);
+		if(c.name=="Interval"||c.name=="PuncturedInterval") enforce(text=="2",c.name~": "~text);
+		if(c.name=="UnboundedPuncture") enforce(text=="∫dx λ[x]",c.name~": "~text);
 		if(c.name=="Integral") enforce(text=="2",c.name~": "~text);
 		if(c.name=="RecursiveAtom") enforce(text=="1",c.name~": "~text);
 		auto again=s.run(a,text,[],Options(DensityMode.preserve,true));
@@ -49,7 +67,7 @@ private void run(string directory){
 	}
 	auto owner=Session.open(),a=owner.arena; FunctionSyntax s;
 	foreach(source;[
-		"Λ(x:ℕ).λ[x]", "Λ(x:ℝ).δ(x)[x]", "Λ(x:ℝ).λ[x]*λ[x]", "λ[x]",
+		"Λ(x:ℕ).λ[x]", "Λ(x:ℝ).δ(x)[x]", "Λ(x:ℝ).λ[x]*λ[x]",
 		"Λ(x:ℝ).δ(2)[y]", "δ(2)=δ(2)", "(δ(2):Distribution(𝔹))",
 		"μ(f:ℕ→ℝ).λ(n:ℕ).massD(Λ(x:ℝ).f(n)*λ[x])",
 		"μ(f:ℕ→ℝ).λ(n:ℕ).densityAtD(Λ(x:ℝ).f(n)*λ[x],0)"

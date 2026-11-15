@@ -10,7 +10,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 .DELETE_ON_ERROR:
 all: build/qsym
 
@@ -327,3 +327,9 @@ verify: test build/qsym
 
 clean:
 	rm -rf build
+
+# Focused, source-checked distribution prototype regression suite.
+test-distributions: build/distribution-tests
+	./build/distribution-tests build/distributions
+	cd lean && $(LAKE) build QSym.DistributionIntegral QSym.PositiveIntegral
+	python3 tools/check_distributions.py --lake $(LAKE)

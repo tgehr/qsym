@@ -3,6 +3,7 @@ import QSym.Expr
 import QSym.FixedPoint
 import QSym.Integration
 import QSym.Distribution
+import QSym.DistributionIntegral
 import QSym.PositiveIntegral
 import QSym.Quantum
 import QSym.Generated

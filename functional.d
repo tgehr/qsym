@@ -1,7 +1,7 @@
 module qsym.functional;
 import qsym.ir;
 import qsym.binding;
-import qsym.distribution_syntax:distributionSyntax;
+import qsym.distribution_syntax:distributionSyntax,distributionOutputAxis;
 import qsym.types:TypeId,TypeView,TypeKind,TypePool,Dimension;
 import qsym.text:Syntax;
 import qsym.spec:Parser,Pattern,TypePattern,Parameter,parseSort,isConstructor,elaborate,pattern;
@@ -22,6 +22,7 @@ struct FunctionResult{
 	Result scalar;
 	Term scalarInput;
 	bool scalarOnly,lowered,domainQuery;
+	string outputAxis;
 	@property bool exhausted(){ return reduction.exhausted||scalar.exhausted; }
 }
 struct FunctionAssumption{ FunctionResult origin; Term term; }
@@ -476,7 +477,8 @@ struct FunctionSyntax{
 		auto b=new Bindings(a,pool); return typeName(b.type(parseBound(a,b,raw)));
 	}
 	FunctionResult run(Arena a,string source,Term[] facts=[],Options options=Options.init,bool domainQuery=false){
-		init(); auto raw=distributionSyntax(Parser(source).parseRawExpression()); FunctionResult result; result.domainQuery=domainQuery;
+		init(); auto parsed=Parser(source).parseRawExpression(); FunctionResult result; result.outputAxis=distributionOutputAxis(parsed);
+		auto raw=distributionSyntax(parsed); result.domainQuery=domainQuery;
 		if(!special(raw)){
 			result.scalarOnly=true; result.scalarInput=scalar.parse(a,source);
 			result.scalar=domainQuery?simplifyDomain(a,result.scalarInput,facts,options):simplify(a,result.scalarInput,facts,options);
@@ -522,16 +524,60 @@ struct FunctionSyntax{
 			enforce(depth<256,"function formatting depth exceeded");
 			auto n=b.node(t);
 			string child(uint id){ return render(b.at(id),locals,depth+1); }
+			string axisHint(uint id) @safe {
+				auto d=b.node(b.at(id));
+				if(d.op==BoundOp.distributionWeight) return b.binderHint(b.at(d.a)).name;
+				if(d.op==BoundOp.distributionAdd||d.op==BoundOp.distributionScale) return axisHint(d.op==BoundOp.distributionScale?d.b:d.a);
+				return "x";
+			}
+			string form(BoundTerm d,string axis,string[] names,uint level=0) @safe {
+				enforce(level<128,"distribution formatting depth exceeded"); auto q=b.node(d);
+				string value(uint id){ return render(b.at(id),names,depth+level+1); }
+				string nested(uint id){ return form(b.at(id),axis,names,level+1); }
+				switch(q.op){
+					case BoundOp.distributionZero:return "0";
+					case BoundOp.distributionLebesgue:return "λ["~axis~"]";
+					case BoundOp.distributionDirac:return "δ("~value(q.a)~")["~axis~"]";
+					case BoundOp.distributionAdd:return "("~nested(q.a)~"+"~nested(q.b)~")";
+					case BoundOp.distributionScale:{
+						auto r=b.node(b.at(q.a));
+						if(r.op==BoundOp.scalar&&a.isNumber(a.at(r.data))&&a.number(a.at(r.data))==Number(-1)) return "-("~nested(q.b)~")";
+						return "(scaleD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
+					}
+					case BoundOp.distributionWeight:{
+						auto f=b.node(b.at(q.a));
+						if(f.op!=BoundOp.lambda) return "(weightD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
+						auto weight=f.op==BoundOp.lambda?render(b.at(f.a),[axis]~names,depth+level+1):"("~value(q.a)~")("~axis~")";
+						return (weight.length&&weight[0]=='['&&weight[$-1]==']'?weight:"("~weight~")")~"·"~nested(q.b);
+					}
+					case BoundOp.distributionBind,BoundOp.distributionIntegral:{
+						auto fn=b.at(q.op==BoundOp.distributionBind?q.b:q.a),f=b.node(fn);
+						if(f.op!=BoundOp.lambda) return (q.op==BoundOp.distributionBind?"(bindD("~value(q.a)~","~value(q.b)~"))":"(integralD("~value(q.a)~"))")~"["~axis~"]";
+						auto y=fresh([axis]~names,b.binderHint(fn).name),param=pool.view(b.type(fn)).fields[0];
+						auto body=f.op==BoundOp.lambda?form(b.at(f.a),axis,[y]~names,level+1):"("~render(fn,names,depth+1)~"("~y~"))["~axis~"]";
+						auto measure=q.op==BoundOp.distributionBind?"·("~form(b.at(q.a),y,names,level+1)~")":"";
+						return "(∫("~y~":"~typeName(param,names)~"). ("~body~")"~measure~")";
+					}
+					default:return "("~render(d,names,depth+level+1)~")["~axis~"]";
+				}
+			}
 			string projection(uint base,ulong index){
 				while(b.node(b.at(base)).op==BoundOp.rest){ base=b.node(b.at(base)).a; ++index; }
 				return "get("~child(base)~","~to!string(index)~")";
 			}
 			switch(n.op){
-				case BoundOp.distributionZero:return "zeroD("~typeName(pool.view(b.type(t)).fields[0],locals)~")";
-				case BoundOp.distributionLebesgue:return "lebesgueD()";
-				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind:
-					auto name=n.op==BoundOp.distributionDirac?"dirac":n.op==BoundOp.distributionAdd?"addD":n.op==BoundOp.distributionScale?"scaleD":n.op==BoundOp.distributionWeight?"weightD":n.op==BoundOp.distributionIntegral?"integralD":n.op==BoundOp.distributionMass?"massD":n.op==BoundOp.distributionBind?"bindD":"densityAtD";
-					return name~"("~child(n.a)~(n.b==uint.max?"":","~child(n.b))~")";
+				case BoundOp.distributionDirac:return "δ("~child(n.a)~")";
+				case BoundOp.distributionMass:{
+					auto axis=fresh(locals,axisHint(n.a)),ty=pool.view(b.type(b.at(n.a))).fields[0];
+					return (ty==scalarType(Sort.real_)?"∫d"~axis~" ":"∫("~axis~":"~typeName(ty,locals)~"). ")~form(b.at(n.a),axis,locals);
+				}
+				case BoundOp.distributionDensityAt:{
+					auto axis=fresh(locals,"x"); return "(λ("~axis~":ℝ). ("~form(b.at(n.a),axis,locals)~")//λ["~axis~"])("~child(n.b)~")";
+				}
+				case BoundOp.distributionZero,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionBind:{
+					auto axis=fresh(locals,t==result.reduction.output&&result.outputAxis.length?result.outputAxis:axisHint(t.id));
+					return "Λ("~axis~":"~typeName(pool.view(b.type(t)).fields[0],locals)~"). "~form(t,axis,locals);
+				}
 				case BoundOp.conditional:return "(if "~child(n.a)~" then "~child(n.b)~" else "~child(n.c)~")";
 				case BoundOp.unit:return "()";
 				case BoundOp.vectorNil:return "(():"~typeName(b.type(t),locals)~")";
@@ -616,6 +662,15 @@ struct FunctionSyntax{
 			auto flat=flatten(t),text=printer.format(a,flat); bool same;
 			try{ auto check=printer; same=a.sort(check.parse(a,text))==a.sort(flat); }catch(Exception){}
 			return same?text:"("~text~":"~typeName(scalarType(a.sort(flat)))~")";
+		}
+		if(result.outputAxis.length&&pool.view(b.type(result.reduction.output)).kind==TypeKind.distribution){
+			auto closed=render(result.reduction.output,[]);
+			// Render the same scoped form without the implicit root abstraction.
+			auto prefix="Λ("; if(closed.length>=prefix.length&&closed[0..prefix.length]==prefix){
+				import std.string:indexOf;
+				auto end=closed.indexOf("). "); if(end>=0) return closed[cast(size_t)end+3..$];
+			}
+			return "("~closed~")["~result.outputAxis~"]";
 		}
 		return render(result.reduction.output,[]);
 	}

@@ -1,4 +1,4 @@
-import QSym.Binding
+import QSym.DistributionIntegral
 import QSym.PositiveIntegral
 import QSym.AxiomCheck
 
@@ -21,6 +21,8 @@ example : massValue (diracValue (some (fun n : ℕ => n + 1))) = some 1 := rfl
 example : massValue (scaleValue (some (-2)) (diracValue (some Unit.unit))) = some (-2) := by
   norm_num [massValue, scaleValue, diracValue, integrate, Value.mul]
 
+#qsym_check_axioms partialIntegral_interval
+#qsym_check_axioms partialIntegral_congr_away
 #qsym_check_axioms weighted_lebesgue_density
 #qsym_check_axioms punctured_at_zero
 #qsym_check_axioms mass_dirac

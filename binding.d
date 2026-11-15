@@ -1,5 +1,6 @@
 module qsym.binding;
 import qsym.ir;
+import qsym.integration:IntegralBounds,integralBounds,removeIntegralNullGuards;
 import qsym.summation:sumAntidifference,sumAbelAntidifference,SumPrimitive;
 import qsym.rational_identity:rationalIdentityZero;
 import qsym.polynomial:polynomialAntidifference,polynomialZero;
@@ -39,10 +40,11 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
+private struct IntegralSolution{ uint[] from,to; Rational lower,upper,coefficient; Rational[] exceptions; bool ae; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
@@ -66,6 +68,7 @@ struct BindingResult{
 	private DomainRank[] ranks;
 	private SpectralSolution[] spectra;
 	private SummationSolution[] sums;
+	private IntegralSolution[] integrals;
 }
 
 final class Bindings{
@@ -1783,7 +1786,7 @@ final class Bindings{
 	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
 		if(telescope_) return normalizeDependent(term,budget);
-		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums;
+		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
@@ -1804,6 +1807,37 @@ final class Bindings{
 			auto first=emit(BindingRule.congr,from.id,middle.id,value.proof);
 			auto second=emit(BindingRule.scalarDomain,middle.id,out_.id,uint.max,uint.max,extra);
 			return Result(out_.id,emit(BindingRule.trans,from.id,out_.id,first,second));
+		}
+		BoundTerm integrateLebesgue(BoundTerm t,out IntegralSolution solution){
+			auto n=node(t); if(n.op!=BoundOp.distributionMass) return BoundTerm.init;
+			auto arg=arena.variable(Sort.real_,cast(uint)arena.length+1); uint[] weights;
+			Term gather(uint id) @safe {
+				auto d=nodes[id];
+				if(d.op==BoundOp.distributionLebesgue) return arena.real_(1);
+				if(d.op!=BoundOp.distributionWeight||nodes[d.a].op!=BoundOp.lambda) return Term.init;
+				auto tail=gather(d.b); if(tail==Term.init) return Term.init;
+				auto body=nodes[d.a].a,head=scalarBody(at(body),arg); if(head==Term.init) return Term.init;
+				weights~=body; return arena.mul(tail,head,true);
+			}
+			auto expression=gather(n.a); if(expression==Term.init) return BoundTerm.init;
+			IntegralBounds bounds; if(!integralBounds(arena,expression,arg,bounds)) return BoundTerm.init;
+			solution.from=weights; solution.exceptions=bounds.exceptions; solution.coefficient=bounds.coefficient;
+			if(bounds.zero||bounds.hasLower&&bounds.hasUpper){
+				solution.lower=bounds.zero?Rational(0):bounds.lower;
+				solution.upper=bounds.zero?Rational(0):bounds.upper;
+				if(bounds.zero) solution.coefficient=Rational(0);
+				return scalar(context(t),arena.real_(solution.coefficient*(solution.upper-solution.lower)));
+			}
+			if(!bounds.nulls.length) return BoundTerm.init;
+			auto clean=arena.castTo(simplify(arena,removeIntegralNullGuards(arena,expression,arg)).output,Sort.real_);
+			if(clean==expression) return BoundTerm.init;
+			auto ctx=context(t),d=distribution(ctx,BoundOp.distributionLebesgue);
+			Number constant;
+			if(!literalNumber(clean,constant)||!constant.one){
+				auto body=restoreBody(clean,push(ctx,scalarType(Sort.real_)),arg);
+				solution.to=[body.id]; d=distribution(ctx,BoundOp.distributionWeight,[lambda(body),d]);
+			}
+			solution.ae=true; return distribution(ctx,BoundOp.distributionMass,[d]);
 		}
 		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
 			bool call(BoundNode q,Builtin f){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f;}
@@ -2477,6 +2511,19 @@ final class Bindings{
 				return (g.a==uint.max||guardReady(g.a))&&(g.b==uint.max||guardReady(g.b))&&(g.c==uint.max||guardReady(g.c));
 			}
 
+			if(current.op==BoundOp.distributionMass){
+				auto d=nodes[current.a];
+				if(d.op==BoundOp.distributionZero){ next=scalar(ctx,arena.real_(0)); rule=BindingRule.distributionMassZero; }
+				else if(d.op==BoundOp.distributionAdd){
+					next=primitive(arena.add(arena.real_(0),arena.real_(0),true),[distribution(ctx,BoundOp.distributionMass,[at(d.a)]),distribution(ctx,BoundOp.distributionMass,[at(d.b)])]); rule=BindingRule.distributionMassAdd;
+				}else if(d.op==BoundOp.distributionScale){
+					next=primitive(arena.mul(arena.real_(1),arena.real_(1),true),[at(d.a),distribution(ctx,BoundOp.distributionMass,[at(d.b)])]); rule=BindingRule.distributionMassScale;
+				}
+			}
+			if(current.op==BoundOp.distributionMass){
+				IntegralSolution solution; auto evaluated=integrateLebesgue(at(result.output),solution);
+				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
+			}
 			if(current.op==BoundOp.distributionMass&&nodes[current.a].op==BoundOp.distributionDirac){
 				next=sequence(at(nodes[current.a].a),scalar(ctx,arena.real_(1))); rule=BindingRule.distributionMassDirac;
 			}
@@ -3123,7 +3170,7 @@ final class Bindings{
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
 		normalizeClosed=&visit;
-		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums);
+		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals);
 	}
 
 	Term lower(BoundTerm term){
@@ -4587,6 +4634,26 @@ final class Bindings{
 					proof~="n"~to!string(d.input.id)~" n"~to!string(d.result.output.id)~" QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct"; break;
 
 
+				case BindingRule.distributionMassZero:
+					proof=".ofEq (fun ξ ρ => Distribution.mass_zeroValue)"; break;
+				case BindingRule.distributionMassAdd:
+					proof=".ofEq (fun ξ ρ => Distribution.mass_addValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[n.a].b)~".eval ξ ρ))"; break;
+				case BindingRule.distributionMassScale:
+					proof=".ofEq (fun ξ ρ => Distribution.mass_scaleValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[n.a].b)~".eval ξ ρ))"; break;
+				case BindingRule.distributionInterval,BindingRule.distributionIntegralAE:{
+					auto s=result.integrals[p.extra]; string defs;
+					foreach(j,yes;used) if(yes){ if(defs.length) defs~=","; defs~="t"~to!string(j); }
+					foreach(id;scalarNodes){ if(defs.length) defs~=","; defs~="n"~to!string(id); if(arena.node(arena.at(id)).region) defs~=",b"~to!string(id); }
+					string integral(uint[] bodies){
+						string value="(some (1 : ℝ))";
+						foreach(id;bodies) value="(Value.mul "~value~" ("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ)))";
+						return "(fun x : ℝ => Value.mul "~value~" (some (1 : ℝ)))";
+					}
+					string realQ(Rational q){ return "(((("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ) : ℝ))"; }
+					string holes="["; foreach(k,q;s.exceptions){ if(k) holes~=","; holes~=realQ(q); } holes~="]";
+					auto args=s.ae?integral(s.to)~" "~holes:realQ(s.lower)~" "~realQ(s.upper)~" "~realQ(s.coefficient)~" "~holes;
+					proof=".ofEq (fun ξ ρ => "~(s.ae?"qsym_integral_ae%":"qsym_integral%")~" ["~defs~"] "~integral(s.from)~" "~args~")"; break;
+				}
 				case BindingRule.distributionMassWeightedDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionMassDirac:
