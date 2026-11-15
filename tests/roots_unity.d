@@ -13,6 +13,10 @@ int main(string[] args){
  struct Case{string name,source,want="([n=1]:ℂ)";}
  foreach(c;[
   Case("Cis","∑(i:ℕ). cis(2*π*i/n)*[i<n]"),
+  Case("EPower","∑(i:ℕ). e^(2*π*ⅈ*i/n)*[i<n]"),
+  Case("Guard","∑(i:ℕ). [i<n]*guard(n≠0,cis(2*i*n⁻¹*π))"),
+  Case("GuardLambda","λ(n:ℕ). ∑(i:ℕ). [i<n]*guard(n≠0,cis(2*i*n⁻¹*π))","λ(n:ℕ). ([n=1]:ℂ)"),
+  Case("GuardSuccessor","∑(i:ℕ). [i<n+1]*guard(n+1≠0,cis(2*π*i/(n+1)))","([n+1=1]:ℂ)"),
   Case("Exp","∑(i:ℕ). exp(2*π*ⅈ*i/n)*[i<n]"),
   Case("Reordered","∑(i:ℕ). cis((i/n)*(2*π))*[i<n]"),
   Case("RealDenominator","∑(i:ℕ). cis(2*π*i/(n:ℝ))*[i<n]"),
@@ -31,7 +35,7 @@ int main(string[] args){
   auto fast=s.run(a,c.source);enforce(!fast.exhausted&&s.format(a,fast)==text,c.name~" tracing");
   write(buildPath(args[1],c.name~".lean"),s.exportCertificate(a,r));++certificates;
   foreach(n;[0,1,2,3,7,64,100]){
-   string apply(string t){return c.name=="Lambda"?"("~t~")("~to!string(n)~")":"(λ(n:ℕ). ("~t~"))("~to!string(n)~")";}
+   string apply(string t){return (c.name=="Lambda"||c.name=="GuardLambda")?"("~t~")("~to!string(n)~")":"(λ(n:ℕ). ("~t~"))("~to!string(n)~")";}
    auto x=s.run(a,apply(text)),y=s.run(a,apply(c.want));
    enforce(!x.exhausted&&!y.exhausted&&s.format(a,x)==s.format(a,y),c.name~" n="~to!string(n));++checks;
   }
@@ -45,6 +49,13 @@ int main(string[] args){
  // A real bound does not mean a whole number of phase periods. Nor may
  // cancellation erase a pole in a coefficient of a nonempty sum.
  foreach(c;[
+  ["GuardEmpty","∑(i:ℕ). [i<0]*guard(false,cis(i))","(0:ℂ)"],
+  ["GuardFalse","defined(∑(i:ℕ). [i<2]*guard(false,cis(i)))","false"],
+  ["GuardUndefinedEmpty","∑(i:ℕ). [i<0]*guard(1/0=0,cis(i))","(0:ℂ)"],
+  ["GuardUndefined","defined(∑(i:ℕ). [i<2]*guard(1/0=0,cis(i)))","false"],
+  ["GuardDependent","defined(∑(i:ℕ). [i<2]*guard(i≠0,cis(i)))","false"],
+  ["GuardNonredundant","defined((λ(n:ℕ). ∑(i:ℕ). [i<n]*guard(n≠1,cis(2*π*i/n)))(1))","false"],
+  ["GuardNonredundantEmpty","(λ(n:ℕ). ∑(i:ℕ). [i<n]*guard(n≠1,cis(2*π*i/n)))(0)","(0:ℂ)"],
   ["RealBound","∑(i:ℕ). cis(2*π*i/(3/2))*[i<3/2]","1+cis(4*π/3)"],
   ["DifferentCount","∑(i:ℕ). cis(2*π*i/4)*[i<2]","1+ⅈ"],
   ["PartialCoefficient","defined(∑(i:ℕ). cis(2*π*i/2)*(1/0)*[i<2])","false"],

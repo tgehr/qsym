@@ -410,6 +410,27 @@ theorem finite_map {A B : Type} [AddCommMonoid A] [AddCommMonoid B]
     rw [Summation.range_succ, Summation.range_succ, ih]
     cases Summation.finite (Finset.range n) f <;> cases f n <;> simp [ha]
 
+-- A condition independent of the index is required only on nonempty ranges.
+-- Put the empty-range test first: it must also bypass an undefined condition.
+theorem range_guard {A : Type} [AddCommMonoid A] [TopologicalSpace A] [T2Space A]
+    (p : Option Bool) (f : ℕ → Option A) (n : Option ℕ) :
+    Summation.rangeValue (some (fun i => Binding.guardValue p (f i))) n =
+      Binding.guardValue (Value.or (Value.not (Functions.nonzeroN.apply n)) p)
+        (Summation.rangeValue (some f) n) := by
+  cases n with
+  | none => rfl
+  | some n =>
+    cases n with
+    | zero => simp [Summation.rangeValue, Summation.finite, Binding.guardValue,
+        Value.or, Value.not, Function1.apply, Functions.nonzeroN]
+    | succ n =>
+      cases p with
+      | none => simp [Summation.rangeValue, Binding.guardValue, Value.or, Value.not,
+          Function1.apply, Functions.nonzeroN, SummationAlgebra.finite_none_succ]
+      | some b => cases b <;> simp [Summation.rangeValue, Binding.guardValue,
+          Value.or, Value.not, Function1.apply, Functions.nonzeroN,
+          SummationAlgebra.finite_none_succ]
+
 theorem range_re (f : ℕ → Option ℂ) (n : Option ℕ) :
     Summation.rangeValue (some (fun i => Functions.reC.apply (f i))) n =
       Functions.reC.apply (Summation.rangeValue (some f) n) := by

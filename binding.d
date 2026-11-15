@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -2835,7 +2835,14 @@ final class Bindings{
 					}return true;
 				}
 
-				if((hasMask(nodes[current.a].a)||elementary(nodes[current.a].a))&&summand.op==BoundOp.primitive&&(bop.op==Op.add||bop.op==Op.builtin&&(bop.value==Builtin.addN||bop.value==Builtin.addZ||bop.value==Builtin.addQ))){
+				// Empty sums do not evaluate even an undefined guard condition.
+				if(summand.op==BoundOp.guard&&!depends(at(summand.a),0)){
+					auto condition=dropIndex(at(summand.a)),fn=inheritHint(at(current.a),lambda(at(summand.b)));
+					auto nz=primitive(arena.nonzero(arena.natural_(0)),[at(current.b)]);
+					auto empty=primitive(arena.not_(arena.boolean(false)),[nz]);
+					auto allowed=primitive(arena.or_(arena.boolean(false),arena.boolean(false)),[empty,condition]);
+					next=guard(allowed,finiteSum(fn,at(current.b)));rule=BindingRule.rangeGuard;extra=condition.id;
+				}else if((hasMask(nodes[current.a].a)||elementary(nodes[current.a].a))&&summand.op==BoundOp.primitive&&(bop.op==Op.add||bop.op==Op.builtin&&(bop.value==Builtin.addN||bop.value==Builtin.addZ||bop.value==Builtin.addQ))){
 					auto f=inheritHint(at(current.a),lambda(at(summand.a))),g=inheritHint(at(current.a),lambda(at(summand.b)));
 					next=primitive(arena.at(summand.data),[finiteSum(f,at(current.b)),finiteSum(g,at(current.b))]);rule=BindingRule.rangeAdd;
 				}else if(summand.op==BoundOp.primitive&&bop.op==Op.mask){
@@ -4377,6 +4384,10 @@ final class Bindings{
 				case BindingRule.sumHyperbolic:
 					auto op=arena.view(arena.at(n.data)).value,suffix=op==Builtin.sinhR?"sinhR":op==Builtin.coshR?"coshR":op==Builtin.sinhC?"sinhC":op==Builtin.coshC?"coshC":op==Builtin.sinC?"sinC":"cosC";
 					proof=".ofEq (fun ξ ρ => SummationElementary."~suffix~"_exp ("~name(n.a)~".eval ξ ρ))";break;
+				case BindingRule.rangeGuard:
+					auto body=nodes[nodes[n.a].a];
+					auto f="(fun (i : ℕ) => "~name(body.b)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some i) ρ))";
+					proof=".ofEq (fun ξ ρ => SummationElementary.range_guard ("~name(p.extra)~".eval ξ ρ) "~f~" ("~name(n.b)~".eval ξ ρ))";break;
 				case BindingRule.rangeProjection:
 					auto body=nodes[nodes[n.a].a],imaginary=arena.view(arena.at(body.data)).value==Builtin.imC;
 					auto f="(fun (i : ℕ) => "~name(body.a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some i) ρ))";
