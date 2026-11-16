@@ -354,9 +354,9 @@ test-weighted-fibres: test-partial-fibres
 	cd lean && $(LAKE) build QSym.WeightedFibreReindex QSym.WeightedFibreObstruction QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/WeightedFibreModel.lean
 
-# Strict partial bodies, total-model embedding, and direct density semantics.
+# Strict partial bodies, dependent towers, rooting, and direct density semantics.
 test-partial-fibres:
-	cd lean && $(LAKE) build QSym.DistributionPartialModel QSym.AxiomCheck
+	cd lean && $(LAKE) build QSym.DistributionPartialSequential QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/WeightedFibrePartialModel.lean
 
 # Model law instances, ordinary rule proving, and extraction compatibility.

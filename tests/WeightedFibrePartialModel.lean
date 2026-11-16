@@ -1,4 +1,4 @@
-import QSym.DistributionPartialModel
+import QSym.DistributionPartialSequential
 import QSym.AxiomCheck
 
 noncomputable section
@@ -98,6 +98,58 @@ theorem hole_zeroRoot_mass :
   have hd := h.1 (0, PUnit.unit)
   simp [hole, DensityProgram.density, Value.mul, Value.Defined] at hd
 
+/-- A successful dependent continuation can both reweight and change the value. -/
+def weightedBind : DensityBind ℝ := ⟨unitInterval, fun x => some (2, x)⟩
+
+/-- A zero source density must not erase a failing dependent continuation. -/
+def failingBind : DensityBind ℝ :=
+  ⟨.weight (fun _ => some (0 : ℝ)) .lebesgue, fun _ => none⟩
+
+theorem weightedBind_row (x : ℝ) :
+    weightedBind.tower.observeRow x (PUnit.unit : PUnit.{1})
+      (PUnit.unit : PUnit.{1}) (fun _ => some 1) =
+      Value.mul (unitInterval.density x) (some 2) := by
+  rw [DensityBind.observeRow_eq]
+  simp [weightedBind, Value.mul]
+
+theorem failingBind_row :
+    failingBind.tower.observeRow 0 (PUnit.unit : PUnit.{1})
+      (PUnit.unit : PUnit.{1}) (fun _ => some 1) = none := by
+  rw [DensityBind.observeRow_eq]
+  simp [failingBind, DensityProgram.density, Value.mul]
+
+theorem weightedBind_semanticMass : weightedBind.semanticMass = some 2 := by
+  rw [DensityBind.semanticMass_eq]
+  simp only [weightedBind, Option.map_some]
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  change partialIntegral volume
+    (fun x => Value.mul (unitInterval.density x) (some (2 : ℝ))) = some 2
+  have hcomm : (fun x => Value.mul (unitInterval.density x) (some (2 : ℝ))) =
+      (fun x => Value.mul (some (2 : ℝ)) (unitInterval.density x)) := by
+    funext x
+    cases unitInterval.density x <;> simp [Value.mul, mul_comm]
+  rw [hcomm, partialIntegral_scale_nonzero volume 2 (by norm_num) unitInterval.density]
+  have hm := unitInterval.mass_interval unitIntervalCertificate
+  rw [DensityProgram.mass, Model.densityMassValue_eq] at hm
+  simp only [Option.some_bind] at hm
+  rw [hm]
+  simp [Value.mul]
+
+theorem failingBind_semanticMass : failingBind.semanticMass = none := by
+  rw [DensityBind.semanticMass_eq, DensityProgram.observe, Model.densityMassValue_eq]
+  apply if_neg
+  intro h
+  have hd := h.1 0
+  simp [failingBind, DensityProgram.density, Value.mul, Value.Defined] at hd
+
+theorem weightedBind_presentationMass : massValue weightedBind.presentation = some 2 := by
+  rw [← DensityBind.semanticMass_bridge]
+  exact weightedBind_semanticMass
+
+theorem failingBind_presentationMass : massValue failingBind.presentation = none := by
+  rw [← DensityBind.semanticMass_bridge]
+  exact failingBind_semanticMass
+
 #qsym_check_axioms PartialFamily.Iso.observe_eq
 #qsym_check_axioms PartialFamily.Iso.observeJoint_eq
 #qsym_check_axioms PartialHom.observe_pure
@@ -132,5 +184,26 @@ theorem hole_zeroRoot_mass :
 #qsym_check_axioms hole_semanticMass
 #qsym_check_axioms hole_rootedMass
 #qsym_check_axioms hole_zeroRoot_mass
+
+#qsym_check_axioms PartialFamily.observe_depCompUniform
+#qsym_check_axioms PartialFamily.Iso.depComp
+#qsym_check_axioms PartialFamily.ofFamily_depComp_observe
+#qsym_check_axioms PartialTower.observe_hom
+#qsym_check_axioms PartialTower.eraseRoot_rootedFlatten
+#qsym_check_axioms PartialTower.Iso.observe_eq
+#qsym_check_axioms PartialTower.Iso.observeRow_eq
+#qsym_check_axioms PartialTower.observe_fubini
+#qsym_check_axioms PartialTower.observe_fubini_refines
+#qsym_check_axioms DensityBind.observeRow_eq
+#qsym_check_axioms DensityBind.eraseRoot_rootedSemantic
+#qsym_check_axioms DensityBind.mass_continuationPresentation
+#qsym_check_axioms DensityBind.semanticMass_eq
+#qsym_check_axioms DensityBind.semanticMass_bridge
+#qsym_check_axioms weightedBind_row
+#qsym_check_axioms failingBind_row
+#qsym_check_axioms weightedBind_semanticMass
+#qsym_check_axioms failingBind_semanticMass
+#qsym_check_axioms weightedBind_presentationMass
+#qsym_check_axioms failingBind_presentationMass
 
 end QSym.PartialFibreTests

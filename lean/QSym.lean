@@ -6,6 +6,7 @@ import QSym.Distribution
 import QSym.DistributionIntegral
 import QSym.DistributionModelBridge
 import QSym.DistributionPartialModel
+import QSym.DistributionPartialSequential
 import QSym.WeightedParameterSpace
 import QSym.WeightedMarginal
 import QSym.WeightedFibreObstruction
