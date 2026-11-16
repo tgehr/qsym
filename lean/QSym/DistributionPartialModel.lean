@@ -1,5 +1,5 @@
 import QSym.DistributionDensityModel
-import QSym.WeightedFibrePartialModel
+import QSym.WeightedFibreRooted
 
 /-! Direct interpretation of density programs by partial weighted fibres.
 
@@ -31,18 +31,34 @@ def semanticFamily (p : DensityProgram) : PartialFamily ℝ PUnit.{1} ℝ :=
 def semantic (p : DensityProgram) : PartialHom ℝ PUnit.{1} ℝ :=
   PartialHom.ofFamily p.semanticFamily
 
+/-- The direct partial-fibre semantics with its intrinsic Lebesgue root. -/
+def rootedSemantic (p : DensityProgram) : RootedPartialTrace ℝ volume ℝ :=
+  RootedPartialHom.ofPartialHom p.semantic
+
 /-- Pointwise density is observation of the fibre at the retained coordinate. -/
 def semanticDensityAt (p : DensityProgram) (x : ℝ) : Option ℝ :=
-  PartialHom.observe p.semantic x (PUnit.unit : PUnit.{1}) (fun _ => some 1)
+  p.rootedSemantic.observe x (PUnit.unit : PUnit.{1}) (fun _ => some 1)
 
-/-- Mass is joint observation against the explicitly supplied Lebesgue base. -/
-def semanticMass (p : DensityProgram) : Option ℝ :=
-  PartialHom.observeJoint p.semantic volume (PUnit.unit : PUnit.{1}) (fun _ _ => some 1)
+/-- Mass is joint observation at the intrinsic Lebesgue root. -/
+def semanticMass (p : DensityProgram) : Option ℝ := p.rootedSemantic.mass
 
 /-- A source weight is semantic reweighting of the retained returned value. -/
 theorem semantic_weight (f : ℝ → Option ℝ) (p : DensityProgram) :
     semantic (.weight f p) =
       PartialHom.reweight (fun _ _ x => f x) p.semantic := rfl
+
+/-- Forgetting the intrinsic root recovers the original direct semantics. -/
+theorem eraseRoot_rootedSemantic (p : DensityProgram) :
+    p.rootedSemantic.eraseRoot = p.semantic := rfl
+
+/-- Source weighting preserves the Lebesgue root. -/
+theorem rootedSemantic_weight (f : ℝ → Option ℝ) (p : DensityProgram) :
+    rootedSemantic (.weight f p) =
+      RootedPartialHom.reweight (fun _ _ x => f x) p.rootedSemantic := rfl
+
+/-- The rooted observer is the previous explicitly based mass observer. -/
+theorem semanticMass_rooted (p : DensityProgram) :
+    p.semanticMass = p.rootedSemantic.mass := rfl
 
 @[simp] theorem semanticDensityAt_eq (p : DensityProgram) (x : ℝ) :
     p.semanticDensityAt x = p.density x := by

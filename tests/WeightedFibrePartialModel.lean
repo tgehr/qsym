@@ -40,6 +40,18 @@ theorem unitInterval_semanticMass : unitInterval.semanticMass = some 1 := by
   rw [DensityProgram.semanticMass_eq]
   simpa using unitInterval.mass_interval unitIntervalCertificate
 
+theorem unitInterval_rootedMass : unitInterval.rootedSemantic.mass = some 1 := by
+  rw [← unitInterval.semanticMass_rooted]
+  exact unitInterval_semanticMass
+
+/-- The same unrooted semantics has zero mass at the zero-measure root. -/
+theorem unitInterval_zeroRoot_mass :
+    (RootedPartialHom.ofPartialHom (μ := (0 : Measure ℝ)) unitInterval.semantic).mass = some 0 := by
+  change partialIntegral ((0 : Measure ℝ) ⊗ₘ
+    ProbabilityTheory.Kernel.const ℝ (Measure.dirac (PUnit.unit : PUnit.{1})))
+    (fun z : ℝ × PUnit.{1} => Value.mul (unitInterval.density z.1) (some 1)) = some 0
+  simp [partialIntegral, Value.Defined, unitInterval, DensityProgram.density, Value.mul]
+
 theorem unitInterval_semanticDensityAt :
     unitInterval.semanticDensityAt (1 / 2 : ℝ) = some 1 := by
   rw [DensityProgram.semanticDensityAt_eq]
@@ -70,6 +82,22 @@ theorem hole_semanticMass : hole.semanticMass = none := by
   have hd := h.1 0
   simp [hole, DensityProgram.density, Value.mul, Value.Defined] at hd
 
+theorem hole_rootedMass : hole.rootedSemantic.mass = none := by
+  rw [← hole.semanticMass_rooted]
+  exact hole_semanticMass
+
+/-- Even a zero root does not erase an undefined point from strict mass. -/
+theorem hole_zeroRoot_mass :
+    (RootedPartialHom.ofPartialHom (μ := (0 : Measure ℝ)) hole.semantic).mass = none := by
+  change partialIntegral ((0 : Measure ℝ) ⊗ₘ
+    ProbabilityTheory.Kernel.const ℝ (Measure.dirac (PUnit.unit : PUnit.{1})))
+    (fun z : ℝ × PUnit.{1} => Value.mul (hole.density z.1) (some 1)) = none
+  simp only [Measure.compProd_zero_left]
+  apply if_neg
+  intro h
+  have hd := h.1 (0, PUnit.unit)
+  simp [hole, DensityProgram.density, Value.mul, Value.Defined] at hd
+
 #qsym_check_axioms PartialFamily.Iso.observe_eq
 #qsym_check_axioms PartialFamily.Iso.observeJoint_eq
 #qsym_check_axioms PartialHom.observe_pure
@@ -79,16 +107,30 @@ theorem hole_semanticMass : hole.semanticMass = none := by
 #qsym_check_axioms PartialHom.ofHom_reweight
 #qsym_check_axioms PartialHom.ofHom_observePartial
 #qsym_check_axioms PartialHom.ofHom_observeJointPartial
+#qsym_check_axioms PartialHom.observeJoint_reweight
+#qsym_check_axioms RootedPartialHom.observe_pure
+#qsym_check_axioms RootedPartialHom.observe_reweight
+#qsym_check_axioms RootedPartialHom.observeJoint_reweight
+#qsym_check_axioms RootedPartialHom.ofTotalHom_observeJoint
+#qsym_check_axioms RootedPartialHom.eraseRoot_comp
+#qsym_check_axioms RootedPartialHom.mass_eraseRoot
 #qsym_check_axioms DensityProgram.semantic_weight
+#qsym_check_axioms DensityProgram.rootedSemantic_weight
+#qsym_check_axioms DensityProgram.eraseRoot_rootedSemantic
+#qsym_check_axioms DensityProgram.semanticMass_rooted
 #qsym_check_axioms DensityProgram.semanticDensityAt_eq
 #qsym_check_axioms DensityProgram.semanticMass_eq
 #qsym_check_axioms DensityProgram.semanticDensityAt_bridge
 #qsym_check_axioms DensityProgram.semanticMass_bridge
 #qsym_check_axioms zero_weight_preserves_undefined
 #qsym_check_axioms unitInterval_semanticMass
+#qsym_check_axioms unitInterval_rootedMass
+#qsym_check_axioms unitInterval_zeroRoot_mass
 #qsym_check_axioms unitInterval_semanticDensityAt
 #qsym_check_axioms hole_totalization_integrable
 #qsym_check_axioms hole_semanticDensityAt
 #qsym_check_axioms hole_semanticMass
+#qsym_check_axioms hole_rootedMass
+#qsym_check_axioms hole_zeroRoot_mass
 
 end QSym.PartialFibreTests
