@@ -165,16 +165,22 @@ string emitD(Rule[] rules){
 		"\t\tif(i.result==root) continue;\n"~
 		"\t\treturn Rewrite(true,i.result,i.rule,trace?bindings:null);\n"~
 		"\t}\n\treturn Rewrite(false,root);\n}\n";
-	d~="bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){\n\tauto work=new MatchWork;\n\tswitch(law){\n";
+	// LDC debug builds otherwise reserve stack space for every law's local
+	// temporaries in one monolithic matcher, overflowing deep normalization.
+	d~="bool match(Arena a,Law law,int part,Term input,ref Term[] bindings){\n\tswitch(law){\n";
+	string matchers;
 	foreach(r;rules){
+		auto name=symbolCode(r.name);
+		d~="\t\tcase Law."~name~":return match_"~name~"(a,part,input,bindings);\n";
+		matchers~="private bool match_"~name~"(Arena a,int part,Term input,ref Term[] bindings){\n\tauto work=new MatchWork;\n";
 		literalParameters=null;
 		foreach(p;r.premises) if(p.literal&&p.term.variable) literalParameters~=p.term.name;
-		d~="\t\tcase Law."~symbolCode(r.name)~":\n\t\t\tif(!bindings.length) bindings.length="~to!string(r.parameters.length)~";\n\t\t\tenforce(bindings.length=="~to!string(r.parameters.length)~",\"binding count mismatch\");\n\t\t\tswitch(part){\n";
-		d~="\t\t\t\tcase -1:\n"~matchCode(r.lhs,"input",r.parameters,"\t\t\t\t\t",r.automatic)~"\t\t\t\t\treturn true;\n";
-		foreach(i,p;r.premises) d~="\t\t\t\tcase "~to!string(i)~":\n"~matchCode(p.term,"input",r.parameters,"\t\t\t\t\t")~"\t\t\t\t\treturn true;\n";
-		d~="\t\t\t\tdefault:return false;\n\t\t\t}\n";
+		matchers~="\tif(!bindings.length) bindings.length="~to!string(r.parameters.length)~";\n\tenforce(bindings.length=="~to!string(r.parameters.length)~",\"binding count mismatch\");\n\tswitch(part){\n";
+		matchers~="\t\tcase -1:\n"~matchCode(r.lhs,"input",r.parameters,"\t\t\t",r.automatic)~"\t\t\treturn true;\n";
+		foreach(i,p;r.premises) matchers~="\t\tcase "~to!string(i)~":\n"~matchCode(p.term,"input",r.parameters,"\t\t\t")~"\t\t\treturn true;\n";
+		matchers~="\t\tdefault:return false;\n\t}\n}\n";
 	}
-	d~="\t\tdefault:return false;\n\t}\n}\n";
+	d~="\t\tdefault:return false;\n\t}\n}\n"~matchers;
 	d~="bool candidate(Arena a,Law law,Term input){\n\tswitch(law){\n";
 	foreach(r;rules) if(r.automatic||r.inference)
 		d~="\t\tcase Law."~symbolCode(r.name)~":return "~shapeTest(r.lhs,"input")~";\n";
