@@ -94,9 +94,9 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==[
-	"j=0∨x=1∨x=-1∧denominator(1/2·j)=1",
-	"j=0∨x=1∨x=-1∧denominator(1/2·j)=1",
-	"j=0∨x=1∨x=-1∧denominator(1/2·j)=1",
+	"j=0∨(x=1∨x=-1∧denominator(1/2·j)=1)",
+	"j=0∨(x=1∨x=-1∧denominator(1/2·j)=1)",
+	"j=0∨(x=1∨x=-1∧denominator(1/2·j)=1)",
 	"j·(1/2)=floor(j·(1/2))","q=r","512","3/10","x","1/80","3/2","-3/2"],result.stdout
 print("REPL checks passed.")
 
@@ -193,7 +193,7 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["({x:ℕ | p(x)}={x:ℕ | q(x)})",f"Wrote {equality_certificate}","true","true","false",
-	"μ(f:ℕ→ℕ). λ(n:ℕ). ([n≤1]·n+[¬(n≤1)]·(f(n sub 1)+f(n sub 2)):ℕ)",
+	"λ(n:ℕ). floorN(-1/5·(-1/2·sqrt(5)+1/2)^n·sqrt(5)+1/5·(1/2·sqrt(5)+1/2)^n·sqrt(5))",
 	"λ(y1:ℝ). y","λ(t:{t:ℝ | t≠1/2}). (0:ℝ)"],result.stdout
 assert "Binding.equalValue" in equality_certificate.read_text()
 print("Higher-order equality and binder-name REPL checks passed.")
