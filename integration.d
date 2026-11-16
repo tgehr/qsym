@@ -10,6 +10,35 @@ struct IntegralBounds{
 	Rational[] exceptions,nulls;
 }
 
+// Candidate cell boundaries for arbitrary Boolean combinations of affine
+// comparisons. This does not assert bounded support or an integral value.
+bool integralCutPoints(Arena a,Term predicate,Term x,out Rational[] points){
+	Rational[] cuts;
+	bool visit(Term t,uint depth=0){
+		if(depth>64||cuts.length>64) return false;
+		auto n=a.view(t);
+		if(n.op==Op.boolLit) return true;
+		if(n.op==Op.not_) return visit(a.viewChild(t,0),depth+1);
+		if(n.op==Op.and_||n.op==Op.or_) return visit(a.viewChild(t,0),depth+1)&&visit(a.viewChild(t,1),depth+1);
+		if(n.op!=Op.nonzero&&n.op!=Op.lt&&n.op!=Op.le) return false;
+		Rational sa,oa,sb,ob;
+		if(!affine(a,a.viewChild(t,0),x,sa,oa)) return false;
+		if(n.op!=Op.nonzero&&!affine(a,a.viewChild(t,1),x,sb,ob)) return false;
+		auto slope=sa-sb;
+		if(!slope.zero){
+			auto cut=-(oa-ob)/slope; if(cut.words>128) return false;
+			cuts~=cut;
+		}
+		return true;
+	}
+	if(!visit(predicate)) return false;
+	points=cuts; return true;
+}
+
+bool integralAffine(Arena a,Term t,Term x,out Rational slope,out Rational offset){
+	return affine(a,t,x,slope,offset);
+}
+
 private bool affine(Arena a,Term t,Term x,out Rational slope,out Rational offset,uint depth=0){
 	if(depth>64) return false;
 	if(t==x){ slope=Rational(1); return true; }

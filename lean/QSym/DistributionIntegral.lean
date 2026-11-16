@@ -19,10 +19,10 @@ theorem mask_option {α : Type} [Zero α] (b : Bool) (x : Option α) :
 
 end QSym.Distribution
 
-/-! Native integration chooses a candidate and exclusions. This elaborator
-constructs proofs of totality, almost-everywhere equality, and the interval
-integral. It does not trust the native choice of bounds or exceptional points.
-The exported term and all its dependencies are checked by Lean's kernel. -/
+/-! Compatibility elaborators for older certificates and handwritten library
+proofs. New frontend exports use explicit applications of the precompiled
+`Distribution.StepSource` lemmas instead of invoking these tactics. The legacy
+elaborators remain available so previously exported certificates still check. -/
 syntax "qsym_interval_certificate% " "[" ident,* "]" term:max term:max term:max term:max term:max : term
 macro_rules
   | `(qsym_interval_certificate% [$ids:ident,*] $f $a $b $c $points) => do

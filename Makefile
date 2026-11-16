@@ -368,3 +368,4 @@ test-dependent-references:
 test-distribution-source-model:
 	cd lean && $(LAKE) build QSym.DistributionIntegral QSym.DistributionModelBridge QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/DistributionSourceModel.lean
+	cd lean && $(LAKE) env lean ../tests/DistributionSteps.lean

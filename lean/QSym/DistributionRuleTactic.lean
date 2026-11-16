@@ -4,6 +4,7 @@ import QSym.DistributionSequentialModel
 import QSym.DistributionFactorModel
 import QSym.DistributionParametricModel
 import QSym.DistributionNullSupportModel
+import QSym.DistributionStepGrid
 
 /-! Checked distribution and integral laws used by the ordinary `qsym_rule`
 prover. The tactic constructs proofs from laws/instances; it never introduces
@@ -34,6 +35,7 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.DensityProgram.mass_factor <;> assumption
   | solve | apply Distribution.DensityProgram.mass_parametric <;> assumption
   | solve | apply Distribution.DensityProgram.mass_null_support <;> assumption
+  | solve | apply Distribution.DensityProgram.mass_step <;> assumption
   | solve | apply Distribution.DensityProgram.mass_interval <;> assumption
   | solve | apply Distribution.DensityProgram.mass_null_edit <;> assumption
   | exact Distribution.DensityIntegralTheory.interval _ _ _ _ _ _ (by assumption)

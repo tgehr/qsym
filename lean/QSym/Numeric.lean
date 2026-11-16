@@ -117,6 +117,14 @@ def calculate : {s : Ty} → Expr s → Option (Data s)
   | _, .ratR q => some q
   | _, .ratC r i => some (r, i)
   | _, .bool b => some b
+  | _, .maskN p a => (calculate p).bind (fun b => if b then calculate a else some 0)
+  | _, .maskZ p a => (calculate p).bind (fun b => if b then calculate a else some 0)
+  | _, .maskQ p a => (calculate p).bind (fun b => if b then calculate a else some 0)
+  | _, .maskR p a => (calculate p).bind (fun b => if b then calculate a else some 0)
+  | _, .maskC p a => (calculate p).bind (fun b => if b then calculate a else some (0, 0))
+  | _, .not a => (calculate a).map Bool.not
+  | _, .and a b => binary (· && ·) (calculate a) (calculate b)
+  | _, .or a b => binary (· || ·) (calculate a) (calculate b)
   | _, .addR a b => binary (· + ·) (calculate a) (calculate b)
   | _, .addC a b => binary addC (calculate a) (calculate b)
   | _, .mulR a b => binary (· * ·) (calculate a) (calculate b)
@@ -324,6 +332,55 @@ theorem calculate_sound (ρ : Env) {s : Ty} (term : Expr s) (v : Data s)
     subst v
     rfl
   | bool b => exact h
+  | maskN p a hp ha =>
+    obtain ⟨b, hb, hv⟩ := Option.bind_eq_some_iff.mp h
+    cases b with
+    | false =>
+      have hv' := Option.some.inj hv
+      subst v
+      simp [Expr.eval, hp false hb, Value.mask, denote, complex]
+    | true => simp [Expr.eval, hp true hb, ha v hv, Value.mask, denote]
+  | maskZ p a hp ha =>
+    obtain ⟨b, hb, hv⟩ := Option.bind_eq_some_iff.mp h
+    cases b with
+    | false =>
+      have hv' := Option.some.inj hv
+      subst v
+      simp [Expr.eval, hp false hb, Value.mask, denote, complex]
+    | true => simp [Expr.eval, hp true hb, ha v hv, Value.mask, denote]
+  | maskQ p a hp ha =>
+    obtain ⟨b, hb, hv⟩ := Option.bind_eq_some_iff.mp h
+    cases b with
+    | false =>
+      have hv' := Option.some.inj hv
+      subst v
+      simp [Expr.eval, hp false hb, Value.mask, denote, complex]
+    | true => simp [Expr.eval, hp true hb, ha v hv, Value.mask, denote]
+  | maskR p a hp ha =>
+    obtain ⟨b, hb, hv⟩ := Option.bind_eq_some_iff.mp h
+    cases b with
+    | false =>
+      have hv' := Option.some.inj hv
+      subst v
+      simp [Expr.eval, hp false hb, Value.mask, denote, complex]
+    | true => simp [Expr.eval, hp true hb, ha v hv, Value.mask, denote]
+  | maskC p a hp ha =>
+    obtain ⟨b, hb, hv⟩ := Option.bind_eq_some_iff.mp h
+    cases b with
+    | false =>
+      have hv' := Option.some.inj hv
+      subst v
+      simp [Expr.eval, hp false hb, Value.mask, denote, complex]
+    | true => simp [Expr.eval, hp true hb, ha v hv, Value.mask, denote]
+  | not a ha =>
+    obtain ⟨x, hx, rfl⟩ := map_some h
+    simp [Expr.eval, ha x hx, Value.not, denote]
+  | and a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    cases x <;> simp [Expr.eval, ha _ hx, hb y hy, Value.and, denote]
+  | or a b ha hb =>
+    obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
+    cases x <;> simp [Expr.eval, ha _ hx, hb y hy, Value.or, denote]
   | addR a b ha hb =>
     obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
     simp [Expr.eval, ha x hx, hb y hy, Value.add, denote, Rat.cast_add]
@@ -369,6 +426,12 @@ theorem calculate_sound (ρ : Env) {s : Ty} (term : Expr s) (v : Data s)
     obtain ⟨x, y, hx, hy, rfl⟩ := binary_some h
     simp [Expr.eval, ha x hx, hb y hy, Value.le, denote]
   | _ => cases h
+
+theorem calculate_real_zero (ρ : Env) (t : Expr .real) (h : calculate t = some 0) :
+    t.eval ρ = some 0 := by simpa [denote] using calculate_sound ρ t 0 h
+
+theorem calculate_real_one (ρ : Env) (t : Expr .real) (h : calculate t = some 1) :
+    t.eval ρ = some 1 := by simpa [denote] using calculate_sound ρ t 1 h
 
 def check {s : Ty} (a b : Expr s) : Bool :=
   match calculate a, calculate b with
