@@ -157,6 +157,70 @@ theorem factoring_requires_finiteness :
   rw [zero_density_mass, unbounded_inner]
   simp [Value.mul]
 
+def maskedParameter (c : Option ℝ) : DensityProgram :=
+  .weight (fun x => Value.mask (some (decide (0 ≤ x ∧ x ≤ 2))) c) .lebesgue
+
+def maskedCertificate (c : Option ℝ) :
+    ParametricIntervalCertificate (maskedParameter c).density c 0 2 1 [] :=
+  qsym_parametric_certificate% [maskedParameter] (maskedParameter c).density c 0 2 1 [] [c]
+
+theorem masked_parameter_mass (c : Option ℝ) :
+    massValue (maskedParameter c).presentation = Value.mul c (some 2) :=
+  qsym_density_parametric% [maskedParameter] (maskedParameter c) c 0 2 1 [] [c]
+
+def booleanMask (p : Option Bool) : DensityProgram :=
+  .weight (fun x => Value.mask (some (decide (0 ≤ x ∧ x ≤ 2)))
+    (Value.mask p (some (-3)))) .lebesgue
+
+theorem boolean_mask_mass (p : Option Bool) :
+    massValue (booleanMask p).presentation = Value.mul (Value.mask p (some (-3))) (some 2) :=
+  qsym_density_parametric% [booleanMask] (booleanMask p) (Value.mask p (some (-3))) 0 2 1 [] [p]
+
+def outerBooleanMask (p : Option Bool) : DensityProgram :=
+  .weight (fun x => Value.mask p
+    (Value.mask (some (decide (0 ≤ x ∧ x ≤ 2))) (some (-3)))) .lebesgue
+
+theorem outer_boolean_mask_mass (p : Option Bool) :
+    massValue (outerBooleanMask p).presentation = Value.mul (Value.mask p (some (-3))) (some 2) :=
+  qsym_density_parametric% [outerBooleanMask] (outerBooleanMask p) (Value.mask p (some (-3))) 0 2 1 [] [p]
+
+theorem masked_parameter_domain (c : Option ℝ) :
+    (∀ x, Value.Defined ((maskedParameter c).density x)) ↔ Value.Defined c :=
+  (maskedCertificate c).defined_iff
+
+theorem masked_parameter_not_strict_density :
+    (maskedParameter none).observeAt 3 ≠ Value.mul none (interval.observeAt 3) := by
+  norm_num [DensityProgram.observeAt_eq, maskedParameter, DensityProgram.density, Value.mask, Value.mul]
+  exact fun h => Option.noConfusion h
+
+theorem empty_support_cannot_expose_failure (w : ℝ) (points : List ℝ) :
+    ¬ ParametricIntervalCertificate (fun _ => some 0) none 0 0 w points := by
+  intro h
+  have := h.at_witness
+  cases this
+
+theorem masked_parameter_variation (r : ℝ) :
+    (∫ x, |((maskedParameter (some r)).density x).getD 0|) = |r| * 2 := by
+  simpa using ((maskedCertificate (some r)).specialize rfl).variation
+
+def maskedBranch (p : Option Bool) (c : Option ℝ) : DensityProgram :=
+  .weight (fun x => Value.mask p (Value.mask (some (decide (0 ≤ x ∧ x ≤ 2))) c)) .lebesgue
+
+theorem masked_partial_branch (p : Option Bool) (c : Option ℝ) :
+    massValue (maskedBranch p c).presentation = Value.mul (Value.mask p c) (some 2) :=
+  qsym_density_parametric% [maskedBranch] (maskedBranch p c) (Value.mask p c) 0 2 1 [] [p, c]
+
+theorem false_mask_hides_partial_branch : massValue (maskedBranch (some false) none).presentation = some 0 := by
+  rw [masked_partial_branch]
+  simp [Value.mask, Value.mul]
+
+theorem null_hole_not_certified (w : ℝ) (points : List ℝ) :
+    ¬ ParametricIntervalCertificate (fun x => if x = 0 then none else some 1)
+      (some 1) (-1) 1 w points := by
+  intro h
+  have := h.total ⟨1, rfl⟩ 0
+  simp [Value.Defined] at this
+
 -- Ordered composition must not use the flattened zero integrand to hide an
 -- infinite row, even though the outer density is everywhere zero.
 theorem zero_does_not_hide_infinite_row :
@@ -232,6 +296,21 @@ example (p : DensityProgram) : p.mass = p.mass := by
 #qsym_check_axioms unbounded_inner
 #qsym_check_axioms zero_density_mass
 #qsym_check_axioms factoring_requires_finiteness
+#qsym_check_axioms ParametricIntervalCertificate.defined_iff
+#qsym_check_axioms ParametricIntervalCertificate.specialize
+#qsym_check_axioms ParametricIntervalCertificate.integrate
+#qsym_check_axioms DensityProgram.mass_parametric
+#qsym_check_axioms maskedCertificate
+#qsym_check_axioms masked_parameter_mass
+#qsym_check_axioms boolean_mask_mass
+#qsym_check_axioms outer_boolean_mask_mass
+#qsym_check_axioms masked_parameter_domain
+#qsym_check_axioms masked_parameter_not_strict_density
+#qsym_check_axioms empty_support_cannot_expose_failure
+#qsym_check_axioms masked_parameter_variation
+#qsym_check_axioms masked_partial_branch
+#qsym_check_axioms false_mask_hides_partial_branch
+#qsym_check_axioms null_hole_not_certified
 #qsym_check_axioms zero_does_not_hide_infinite_row
 #qsym_check_axioms null_row_is_not_erased
 

@@ -2,6 +2,7 @@ import QSym.DistributionModelLaws
 import QSym.WeightedFibreTower
 import QSym.DistributionSequentialModel
 import QSym.DistributionFactorModel
+import QSym.DistributionParametricModel
 
 /-! Checked distribution and integral laws used by the ordinary `qsym_rule`
 prover. The tactic constructs proofs from laws/instances; it never introduces
@@ -30,6 +31,7 @@ elab "qsym_distribution_goal" : tactic => do
 macro "qsym_distribution_eq" : tactic => `(tactic| first
   | exact Distribution.DensityProgram.observe_weight _ _
   | solve | apply Distribution.DensityProgram.mass_factor <;> assumption
+  | solve | apply Distribution.DensityProgram.mass_parametric <;> assumption
   | solve | apply Distribution.DensityProgram.mass_interval <;> assumption
   | solve | apply Distribution.DensityProgram.mass_null_edit <;> assumption
   | exact Distribution.DensityIntegralTheory.interval _ _ _ _ _ _ (by assumption)

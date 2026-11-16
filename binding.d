@@ -44,7 +44,7 @@ private enum BindingRule:ubyte{
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
-private struct IntegralSolution{ uint[] from,to; Rational lower,upper,coefficient; Rational[] exceptions; bool ae; uint factor=uint.max; }
+private struct IntegralSolution{ uint[] from,to,parameters; Rational lower,upper,coefficient,witness; Rational[] exceptions; bool ae,parametric; uint factor=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
@@ -1865,6 +1865,60 @@ final class Bindings{
 			}
 			solution.ae=true; return distribution(ctx,BoundOp.distributionMass,[d]);
 		}
+		BoundTerm integrateParametric(BoundTerm t,out IntegralSolution solution){
+			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)) return BoundTerm.init;
+			auto ctx=context(t),arg=arena.variable(Sort.real_,cast(uint)arena.length+1),support=arena.real_(1);
+			BoundTerm parameter(BoundTerm body){
+				auto value=dropIndex(body);
+				if(!closedScalar(value)){
+					bool known; foreach(id;solution.parameters) known|=id==value.id;
+					if(!known) solution.parameters~=value.id;
+				}
+				return value;
+			}
+			BoundTerm peel(uint id){
+				auto body=at(id),q=nodes[id];
+				if(!depends(body,0)) return parameter(body);
+				if(q.op!=BoundOp.primitive) return BoundTerm.init;
+				auto op=arena.view(arena.at(q.data));
+				if(op.op==Op.mask){
+					auto value=peel(q.b); if(value==BoundTerm.init) return value;
+					if(!depends(at(q.a),0)) return primitive(arena.at(q.data),[parameter(at(q.a)),value]);
+					auto predicate=scalarBody(at(q.a),arg); if(predicate==Term.init) return BoundTerm.init;
+					auto guard=arena.mask(predicate,arena.real_(1)); IntegralBounds bounds;
+					if(!integralBounds(arena,guard,arg,bounds)) return BoundTerm.init;
+					support=arena.mul(support,guard,true); return value;
+				}
+				if(op.op==Op.mul){
+					auto a=peel(q.a),b=peel(q.b); if(a==BoundTerm.init||b==BoundTerm.init) return BoundTerm.init;
+					return primitive(arena.at(q.data),[a,b]);
+				}
+				if(op.op==Op.builtin&&op.value>=Builtin.castNZ&&op.value<=Builtin.castQR){
+					auto value=peel(q.a); return value==BoundTerm.init?value:primitive(arena.at(q.data),[value]);
+				}
+				return BoundTerm.init;
+			}
+			auto coefficient=scalar(ctx,arena.real_(1));
+			foreach(id;solution.from){
+				auto value=peel(id); if(value==BoundTerm.init) return BoundTerm.init;
+				coefficient=primitive(arena.mul(arena.real_(1),arena.real_(1),true),[coefficient,value]);
+			}
+			// Bound case splitting, and require an interval containing a point
+			// where every local guard holds. Empty/singleton supports need a
+			// different domain certificate, not a guessed zero integral.
+			IntegralBounds bounds;
+			if(!solution.parameters.length||solution.parameters.length>4||!integralBounds(arena,support,arg,bounds)||
+				bounds.zero||!bounds.hasLower||!bounds.hasUpper||bounds.lower>=bounds.upper) return BoundTerm.init;
+			foreach(k;0..bounds.exceptions.length+1){
+				auto point=bounds.lower+(bounds.upper-bounds.lower)/Rational(cast(long)k+2);
+				bool excluded; foreach(p;bounds.exceptions) excluded|=p==point;
+				if(!excluded){ solution.witness=point; break; }
+			}
+			solution.parametric=true; solution.factor=coefficient.id;
+			solution.lower=bounds.lower; solution.upper=bounds.upper; solution.exceptions=bounds.exceptions;
+			return primitive(arena.mul(arena.real_(1),arena.real_(1),true),
+				[coefficient,scalar(ctx,arena.real_(bounds.upper-bounds.lower))]);
+		}
 		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
 			bool call(BoundNode q,Builtin f){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f;}
 			auto n=node(t);if(!call(n,Builtin.addN)||depends(at(n.b),0))return false;
@@ -2560,6 +2614,7 @@ final class Bindings{
 			}
 			if(current.op==BoundOp.distributionMass){
 				IntegralSolution solution; auto evaluated=integrateLebesgue(at(result.output),solution);
+				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateParametric(at(result.output),solution); }
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
 			}
 			if(current.op==BoundOp.distributionMass&&nodes[current.a].op==BoundOp.distributionDirac){
@@ -3549,7 +3604,7 @@ final class Bindings{
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
-		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; if(s.factor!=uint.max) stack~=s.factor; }
+		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; stack~=s.parameters; if(s.factor!=uint.max) stack~=s.factor; }
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd) stack~=p.extra;
 		while(stack.length){
@@ -4745,6 +4800,10 @@ final class Bindings{
 					foreach(id;scalarNodes){ if(defs.length) defs~=","; defs~="n"~to!string(id); if(arena.node(arena.at(id)).region) defs~=",b"~to!string(id); }
 					string realQ(Rational q){ return "(((("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ) : ℝ))"; }
 					string holes="["; foreach(k,q;s.exceptions){ if(k) holes~=","; holes~=realQ(q); } holes~="]";
+					if(s.parametric){
+						string parameters="["; foreach(k,id;s.parameters){ if(k) parameters~=","; parameters~="("~name(id)~".eval ξ ρ)"; } parameters~="]";
+						proof=".ofEq (fun ξ ρ => qsym_density_parametric% ["~defs~"] "~densityProgram(s.from)~" ("~name(s.factor)~".eval ξ ρ) "~realQ(s.lower)~" "~realQ(s.upper)~" "~realQ(s.witness)~" "~holes~" "~parameters~")"; break;
+					}
 					auto args=s.ae?densityProgram(s.to)~" "~holes:realQ(s.lower)~" "~realQ(s.upper)~" "~realQ(s.coefficient)~" "~holes;
 					if(s.factor!=uint.max) args=densityProgram(s.to)~" ("~name(s.factor)~".eval ξ ρ) "~args;
 					proof=".ofEq (fun ξ ρ => "~(s.ae?"qsym_density_integral_ae%":s.factor!=uint.max?"qsym_density_factor%":"qsym_density_integral%")~" ["~defs~"] "~densityProgram(s.from)~" "~args~")"; break;

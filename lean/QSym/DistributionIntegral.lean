@@ -8,6 +8,8 @@ open MeasureTheory Set
 
 @[simp] theorem mask_some {α : Type} [Zero α] (b : Bool) (x : α) :
     Value.mask (some b) (some x) = some (cond b x 0) := by cases b <;> rfl
+@[simp] theorem mask_none {α : Type} [Zero α] (x : Option α) :
+    Value.mask none x = none := rfl
 @[simp] theorem and_some (p q : Bool) :
     Value.and (some p) (some q) = some (p && q) := by cases p <;> rfl
 @[simp] theorem or_some (p q : Bool) :
@@ -102,6 +104,59 @@ macro_rules
       have h : QSym.Distribution.IntervalCertificate $f $a $b $c $points :=
         qsym_interval_certificate% [$ids,*] $f $a $b $c $points
       refine Eq.trans h.integrate ?_
+      qsym_integral_finish [$ids,*])
+
+/-! Unlike strict factoring, this path proves the observation's domain as
+well as its value. Splits are on a bounded list of source parameter values;
+native bounds, parameters, and the witness are all checked by the kernel. -/
+syntax "qsym_parametric_certificate% " "[" ident,* "]" term:max term:max term:max term:max term:max term:max "[" term,* "]" : term
+macro_rules
+  | `(qsym_parametric_certificate% [$ids:ident,*] $f $c $a $b $w $points [$parameters,*]) => do
+      let lemmas ← ids.getElems.mapM fun id => `(Lean.Parser.Tactic.simpLemma| $id:ident)
+      let defs := lemmas.map fun item => (⟨item.raw⟩ : Lean.TSyntax [`Lean.Parser.Tactic.simpErase, `Lean.Parser.Tactic.simpLemma])
+      let splits ← parameters.getElems.mapM fun p => `(tactic| all_goals cases hp : $p)
+      `(by
+      classical
+      show QSym.Distribution.ParametricIntervalCertificate $f $c $a $b $w $points
+      try dsimp only [QSym.Distribution.DensityProgram.density, $defs,*]
+      try dsimp only [QSym.Binding.Expr.eval, QSym.Binding.Env.cons, QSym.Expr.eval]
+      $[$splits:tactic]*
+      all_goals (try dsimp only [$defs,*, QSym.Binding.Expr.eval, QSym.Binding.Env.cons,
+        QSym.Expr.eval, QSym.Binding.Ty.denote, QSym.Ty.denote] at *)
+      all_goals (try casesm* Bool, QSym.Binding.Ty.denote (.scalar .bool))
+      all_goals (try simp only [*])
+      all_goals (
+        refine ⟨by norm_num, ?_, ?_, ?_⟩
+        · intro hc x
+          simp_all [QSym.Function1.apply, QSym.Functions.castNZ, QSym.Functions.castZQ,
+            QSym.Functions.castQR, QSym.Value.Defined, QSym.Value.mul,
+            QSym.Value.le, QSym.Value.lt, QSym.Value.nonzero, QSym.Value.not,
+            QSym.Distribution.mask_some, QSym.Distribution.mask_none, QSym.Value.mask_true,
+            QSym.Value.mask_false, QSym.Distribution.and_some, QSym.Distribution.or_some]
+        · intro r hc x hx
+          simp_all [QSym.Function1.apply, QSym.Functions.castNZ, QSym.Functions.castZQ,
+            QSym.Functions.castQR, QSym.Value.mul, QSym.Value.le, QSym.Value.lt,
+            QSym.Value.nonzero, QSym.Value.not, QSym.Distribution.mask_some,
+            QSym.Distribution.mask_none, QSym.Value.mask_true, QSym.Value.mask_false,
+            QSym.Distribution.and_some, QSym.Distribution.or_some, Bool.cond_eq_ite]
+          all_goals (try split_ifs) <;> norm_num at * <;>
+            (try simp_all [Bool.cond_eq_ite]) <;>
+            (try simp_all only [imp_iff_not_or, not_and_or, not_or, ne_iff_lt_or_gt, not_le, not_lt, not_not]) <;>
+            (try casesm* _ ∧ _, _ ∨ _) <;> (first | rfl | contradiction | nlinarith)
+        · norm_num [QSym.Function1.apply, QSym.Functions.castNZ, QSym.Functions.castZQ,
+            QSym.Functions.castQR, QSym.Value.mul, QSym.Value.le, QSym.Value.lt,
+            QSym.Value.nonzero, QSym.Value.not, QSym.Value.mask, QSym.Value.and, QSym.Value.or] at *))
+
+syntax "qsym_density_parametric% " "[" ident,* "]" term:max term:max term:max term:max term:max term:max "[" term,* "]" : term
+macro_rules
+  | `(qsym_density_parametric% [$ids:ident,*] $p $c $a $b $w $points [$parameters,*]) => `(by
+      have h : QSym.Distribution.ParametricIntervalCertificate
+          (QSym.Distribution.DensityProgram.density $p) $c $a $b $w $points :=
+        qsym_parametric_certificate% [$ids,*] (QSym.Distribution.DensityProgram.density $p)
+          $c $a $b $w $points [$parameters,*]
+      refine Eq.trans (QSym.Distribution.DensityProgram.mass_bridge $p) ?_
+      refine Eq.trans (show QSym.Distribution.DensityProgram.mass $p =
+          QSym.Value.mul $c (some ($b - $a)) from by qsym_rule) ?_
       qsym_integral_finish [$ids,*])
 
 syntax "qsym_integral_ae% " "[" ident,* "]" term:max term:max term:max : term
