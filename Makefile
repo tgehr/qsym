@@ -10,7 +10,7 @@ GENERATED_D := generated/rules.d
 GENERATED_LEAN := lean/QSym/Generated.lean
 IMPORTS := -I.. -I$(UTIL_PARENT)
 
-.PHONY: test-distribution-model-rules test-weighted-fibres test-weighted-marginals test-weighted-parameters test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
+.PHONY: test-distribution-model-rules test-partial-fibres test-weighted-fibres test-weighted-marginals test-weighted-parameters test-distributions all generate build-tests test test-edit-motion test-progress demo verify verify-full bench bench-certificates bench-associative bench-sums bench-counted bench-joins clean
 .DELETE_ON_ERROR:
 all: build/qsym
 
@@ -350,9 +350,14 @@ test-weighted-marginals:
 	cd lean && $(LAKE) env lean ../tests/WeightedFibreReferences.lean
 
 # Reference-aware quotient, pointwise observations, and coordinate substitution.
-test-weighted-fibres:
+test-weighted-fibres: test-partial-fibres
 	cd lean && $(LAKE) build QSym.WeightedFibreReindex QSym.WeightedFibreObstruction QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/WeightedFibreModel.lean
+
+# Strict partial bodies, total-model embedding, and direct density semantics.
+test-partial-fibres:
+	cd lean && $(LAKE) build QSym.DistributionPartialModel QSym.AxiomCheck
+	cd lean && $(LAKE) env lean ../tests/WeightedFibrePartialModel.lean
 
 # Model law instances, ordinary rule proving, and extraction compatibility.
 test-distribution-model-rules:
