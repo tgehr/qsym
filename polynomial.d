@@ -1,5 +1,5 @@
 // Untrusted exact polynomial arithmetic. Accepted identities are replayed by
-// Lean's ring tactic against the original typed expression, including casts.
+// explicit kernel-checked arithmetic certificates against the typed expression.
 module qsym.polynomial;
 import qsym.ir;
 import qsym.budget:Budget,Limit;

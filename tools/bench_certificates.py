@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 from verify import ROOT,audit
+from export_audit import audit_export
 
 def run(command,cwd):
 	start=time.perf_counter()
@@ -41,6 +42,8 @@ def main():
 				raise RuntimeError("exporter produced no certificates")
 			bundle=root/"Certificates.lean"
 			contents=[p.read_text() for p in files]
+			for path, source in zip(files, contents):
+				audit_export(source, str(path))
 			bundle.write_text("import QSym\n"+"\n".join(s.replace("import QSym\n","") for s in contents))
 			check=run(lean+[str(bundle)],ROOT/"lean")
 			print(f"{'warmup' if i==0 else 'round '+str(i)}: export {export:.3f}s, Lean {check:.3f}s",file=sys.stderr,flush=True)

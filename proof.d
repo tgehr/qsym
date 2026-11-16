@@ -17,20 +17,10 @@ private string dc(uint i){ return "(d"~to!string(i)~" ρ)"; }
 private string ds(uint i){ return "(domain_"~to!string(i)~" ρ)"; }
 private string rat(Rational q){ return "(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)"; }
 
-// A compact independently checked proof for exact polynomial identities.
-// No D coefficient table or assertion is trusted by this certificate.
+// Export an explicit native certificate, never a Lean tactic program.
 string exportPolynomialZeroLean(Arena a,Term input){
-	import std.string:join;
-	string code="import QSym\nnamespace QSym.PolynomialCertificate\nset_option maxRecDepth 32768\nset_option maxHeartbeats 8000000\n";
-	string[] names;
-	foreach(id;a.viewPostorder(input)){
-		auto t=a.at(id);code~=leanSyntaxCode(a,t);names~="n"~to!string(id);
-		if(a.node(t).region)names~="b"~to!string(id);
-	}
-	code~="theorem zero (ρ : Env) : n"~to!string(input.id)~".eval ρ = some 0 := by\n";
-	code~="  norm_num ["~names.join(",")~", Expr.eval, Expr.sumR, Expr.productR, Expr.sumC, Expr.productC, Region.fold, Positive.repeat, Value.add, Value.mul, Value.inv, Function1.apply, Function2.apply, Functions.castNZ, Functions.castZQ, Functions.castQR, Functions.castRC, Functions.addN, Functions.mulN, Functions.addZ, Functions.mulZ, Functions.addQ, Functions.mulQ, Functions.invQ, Functions.powNN, Functions.powZN, Functions.powQN, Functions.powRN, Functions.powCN]\n";
-	code~="  <;> push_cast\n  <;> ring_nf\n  <;> norm_num [Complex.I_pow_eq_pow_mod]\n  <;> norm_num [Complex.I_sq, Complex.I_pow_three]\n  <;> ring\n#qsym_check_axioms zero\nend QSym.PolynomialCertificate\n";
-	return code;
+	import qsym.algebra_proof:AlgebraExporter;
+	return (new AlgebraExporter(a,input,"QSym.PolynomialCertificate")).zero(input);
 }
 
 private string positive(uint n){
@@ -721,100 +711,9 @@ string exportDomainLean(Arena a,Term source,Result result){
 	return code;
 }
 
-// Field identities are split at their removable poles before simplification.
-// The native checker supplies candidate case splits, never trusted equations.
+// Branches and denominator witnesses are constructed natively, then checked
+// by applications of the compiled rational certificate lemmas.
 string exportRationalZeroLean(Arena a,Term input,Term[] conditions){
- import std.string:join;
- string code="import QSym\nnamespace QSym.RationalCertificate\nset_option maxRecDepth 32768\nset_option maxHeartbeats 8000000\n";
- // Bound inverse multiplicity along each product path. A common power
- // avoids the old field_simp tactic multiplying all term denominators.
- uint[ulong] denominatorMemo;
- uint denominatorBound(Term t,bool polynomial=false) @safe {
-  auto key=(cast(ulong)t.id<<1)|cast(uint)polynomial;
-  if(auto found=key in denominatorMemo)return *found;
-  uint compute() @safe {
-  auto n=a.view(t);if(a.isNumber(t))return 0;
-  if(n.op==Op.variable)return polynomial?1:0;
-  auto inv=n.op==Op.inv||n.op==Op.builtin&&n.value==Builtin.invQ;
-  if(inv){auto v=denominatorBound(a.viewChild(t,0),true);return v?v:1;}
-  auto add=n.op==Op.add||n.op==Op.builtin&&(n.value==Builtin.addN||n.value==Builtin.addZ||n.value==Builtin.addQ);
-  auto mul=n.op==Op.mul||n.op==Op.builtin&&(n.value==Builtin.mulN||n.value==Builtin.mulZ||n.value==Builtin.mulQ);
-  if(add||mul){auto x=denominatorBound(a.viewChild(t,0),polynomial),y=denominatorBound(a.viewChild(t,1),polynomial);auto v=mul?x+y:(x>y?x:y);return v>64?64:v;}
-  if(n.op==Op.mask)return denominatorBound(a.viewChild(t,1),polynomial);
-  if(n.op==Op.pow){auto v=cast(ulong)denominatorBound(a.viewChild(t,0),polynomial)*n.value;return v>64?64:cast(uint)v;}
-  if(n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castRC)return denominatorBound(a.viewChild(t,0),polynomial);
-  return 0;
-  }
-  auto result=compute();denominatorMemo[key]=result;return result;
- }
- auto common=denominatorBound(input);
- Term[] ratios;
- foreach(c;conditions){
-  auto sort=a.sort(c),one=a.number(Number(1),sort);
-  auto r=simplify(a,a.add(c,one));ratios~=a.castTo(r.output,sort);
- }
- // Masks can live below the field of an inverse (e.g. integer guards
- // inside a rational-valued sum). Replay the same zero test in every
- // intervening field so Lean can eliminate each partial inverse branch.
- auto original=conditions.dup;
- foreach(i,c;original)foreach(field;[Sort.rational,Sort.real_,Sort.complex])
-  if(rank(field)>rank(a.sort(c))&&rank(field)<=rank(a.sort(input))){conditions~=a.castTo(c,field);ratios~=ratios[i];}
- uint[] branches;uint[uint] ratioBranches;
- foreach(r;ratios){auto found=r.id in ratioBranches;if(found)branches~=*found;else{auto k=cast(uint)ratioBranches.length;ratioBranches[r.id]=k;branches~=k;}}
- string[] names;bool[uint] seen;bool[uint] multipliers;
- // Orient both k*n and n*k as (q^k)^n. Unrestricted pow_mul and
- // pow_mul' disagree on that orientation when the source is AC-normalized.
- import qsym.polynomial:Arithmetic,Polynomial;
- auto arithmetic=new Arithmetic(a);
- foreach(id;a.viewPostorder(input)){
-  auto t=a.at(id),n=a.view(t);
-  if(n.op==Op.builtin&&n.value>=Builtin.powNN&&n.value<=Builtin.powCN){
-   Polynomial exponents;
-   if(arithmetic.parse(a.viewChild(t,1),exponents))foreach(key,c;exponents)
-    if(key.length&&c.im.zero&&c.re.small&&c.re.integer>1&&c.re.integer<=uint.max)multipliers[cast(uint)c.re.integer]=true;
-  }
- }
- string[] powers=["pow_add","pow_one"];
- foreach(k; multipliers.keys){auto v=to!string(k);powers~="pow_mul (m := "~v~")";powers~="pow_mul' (n := "~v~")";}
- foreach(t;[input]~ratios~conditions)foreach(id;a.viewPostorder(t))if(!(id in seen)){
-  seen[id]=true;auto v=a.at(id);code~=leanSyntaxCode(a,v);names~="n"~to!string(id);
-  if(a.node(v).region)names~="b"~to!string(id);
- }
- auto defs="-sq_eq_one_iff, -Nat.cast_eq_one, -Real.exp_eq_one_iff, "~names.join(",")~", Expr.eval, Expr.sumR, Expr.productR, Expr.sumC, Expr.productC, Region.fold, Positive.repeat, Value.add, Value.mul, Value.inv, Value.mask, Value.nonzero, Value.not, Value.and, Value.or, Function1.apply, Function2.apply, Functions.castNZ, Functions.castZQ, Functions.castQR, Functions.castRC, Functions.addN, Functions.mulN, Functions.addZ, Functions.mulZ, Functions.addQ, Functions.mulQ, Functions.invQ, Functions.nonzeroN, Functions.nonzeroZ, Functions.nonzeroQ, Functions.powNN, Functions.powZN, Functions.powQN, Functions.powRN, Functions.powCN";
- // Unfold the total-function wrappers used as opaque field atoms.
- // The Lean ring proof still verifies the identity on their actual values.
- bool[uint] functions;
- foreach(id;a.viewPostorder(input)){
-  auto n=a.view(a.at(id));if(n.op!=Op.builtin||!builtinInfo(cast(Builtin)n.value).total||cast(uint)n.value in functions)continue;
-  functions[cast(uint)n.value]=true;defs~=", Functions."~builtinInfo(cast(Builtin)n.value).code;
- }
- if(common>1)foreach(k;1..common+1){
-  auto j=to!string(k),d=to!string(common),rest=to!string(common-k);
-  code~="theorem clear"~j~" {K : Type} [Field K] {x : K} (h : x ≠ 0) : "~(k==1?"x⁻¹":"x⁻¹ ^ "~j)~" = x ^ "~rest~" / x ^ "~d~"  := by field_simp <;> ring\n";
- }
- code~="theorem zero (ρ : Env) : n"~to!string(input.id)~".eval ρ = some 0 := by\n  classical\n";
- string[] facts;
- foreach(i,c;conditions){
-  auto k=to!string(i);facts~="hq"~k;facts~="h"~to!string(branches[i]);
-  code~="  have hq"~k~" : n"~to!string(c.id)~".eval ρ = some 0 ↔ n"~to!string(ratios[i].id)~".eval ρ = some 1 := by\n";
-  code~="    norm_num ["~defs~"]\n    <;> push_cast\n    <;> (first | (constructor <;> intro he <;> linear_combination he) | (norm_cast; omega))\n";
- }
- foreach(i,r;ratios)if(ratioBranches[r.id]==branches[i]){
-  auto k=branches[i];code~="  "~(k?"all_goals ":"")~"by_cases h"~to!string(k)~" : n"~to!string(r.id)~".eval ρ = some 1\n";
-  ratioBranches[r.id]=uint.max;
- }
- code~="  all_goals\n";
- if(facts.length)code~="    norm_num ["~defs~"] at "~facts.join(" ")~"\n";
- foreach(i,c;conditions){
-  auto k=to!string(i);
-  code~="    try\n      have hn"~k~" : (n"~to!string(c.id)~".eval ρ).getD 0 ≠ 0 := by\n        norm_num ["~defs~"]\n        exact (not_congr hq"~k~").mpr h"~to!string(branches[i])~"\n      norm_num ["~defs~"] at hn"~k~"\n";
- }
- auto known=facts.length?", "~facts.join(","):"";
- code~="    norm_num ["~defs~known~"]\n    <;> push_cast\n    <;> (try simp only ["~powers.join(", ")~"])\n    <;> (try simp only [← inv_pow])\n    <;> ring_nf (config := { recursive := false }) at *";
- if(common>1)for(auto k=common;k;k--)foreach(i,c;conditions)if(rank(a.sort(c))>=rank(Sort.rational))
-  code~="\n    <;> (try simp only [clear"~to!string(k)~" hn"~to!string(i)~"])";
- code~="\n    <;> (try simp only [← mul_div_assoc, div_mul_eq_mul_div, ← add_div, ← sub_div, ← neg_div])\n    <;> (try field_simp [-sq_eq_one_iff, *])\n    <;> ring_nf\n";
- if(multipliers.length)code~="    <;> (try simp only ["~(powers~facts~["one_pow"]).join(", ")~"])\n";
- code~="    <;> norm_num [Complex.I_pow_eq_pow_mod]\n    <;> norm_num [Complex.I_sq, Complex.I_pow_three]\n    <;> ring\n#qsym_check_axioms zero\nend QSym.RationalCertificate\n";
- return code;
+ import qsym.rational_proof:exportRationalCertificate;
+ return exportRationalCertificate(a,input,conditions);
 }

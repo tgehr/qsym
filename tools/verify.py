@@ -8,6 +8,7 @@ import subprocess
 import sys
 from kernel_cache import KernelCache,compiled_rules
 from certificate_batches import make_batches
+from export_audit import audit_export
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ALLOWED_AXIOMS={"propext","Classical.choice","Quot.sound"}
@@ -68,9 +69,14 @@ def main():
 
 	certificates=[]
 	def certificate(path):
-		if re.search(r"\b(by|decreasing_by|sorry|admit|native_decide)\b",path.read_text()):
-			raise RuntimeError("tactic or unchecked proof in certificate: "+path.name)
+		audit_export(path.read_text(), path.name)
 		certificates.append(path)
+
+	algebra=sorted((ROOT/"build/algebra-certificates").glob("*.lean"))
+	if len(algebra)!=13:
+		raise RuntimeError("expected 13 algebra certificates")
+	for file in algebra:
+		certificate(file)
 
 	if args.fast:
 		current=ROOT/"build/CurrentRules.lean"

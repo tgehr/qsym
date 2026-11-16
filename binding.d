@@ -2432,20 +2432,9 @@ final class Bindings{
 			}
 			auto g=inheritHint(at(n.a),lambda(restoreBody(candidate,context(at(fn.a)),variable)));
 			auto output=infinite?scalar(context(t),arena.mul(arena.number(Number(-1),sort),initial,true)):apply(g,at(n.b));
-			// Strict total scalar expressions, including rounded endpoints,
-			// evaluate to some value. Polynomial primitives can substitute them
-			// directly; the exporter replays the total-function reductions.
-			bool totalEndpoint(BoundTerm endpoint){
-				auto e=node(endpoint);if(e.op!=BoundOp.scalar)return false;
-				foreach(id;arena.viewPostorder(arena.at(e.data))){
-					auto v=arena.at(id),m=arena.view(v);
-					if(arena.isNumber(v)||m.op==Op.variable||m.op==Op.add||m.op==Op.mul||m.op==Op.pow||m.op==Op.conj||m.op==Op.abs)continue;
-					if(m.op==Op.builtin&&builtinInfo(cast(Builtin)m.value).total)continue;
-					return false;
-				}
-				return true;
-			}
-			if(!infinite&&(totalScalar(at(n.b))||exactPolynomial&&totalEndpoint(at(n.b))))output=scalar(context(t),subst(candidate,arena.at(nodes[n.b].data)));
+			// Preserve application for endpoints whose totality requires a proof.
+			// Ordinary beta/scalar rules then justify substitution and normalization.
+			if(!infinite&&totalScalar(at(n.b)))output=scalar(context(t),subst(candidate,arena.at(nodes[n.b].data)));
 			auto start=cast(uint)scalarDomains.length;
 			uint[] totals,convergence;
 			if(infinite) foreach(p;tail) foreach(input;[p.coefficient,p.ratio]){
@@ -4668,17 +4657,6 @@ final class Bindings{
 				continue;
 			}
 			auto proof="Summation.range_solution_partial "~f~" "~g~" "~add~" "~(sort==Sort.rational?"Summation.addQ":"Summation.add")~" "~initial~" "~hs~" ("~name(n.b)~".eval ξ ρ)";
-			if(nodes[s.target].op==BoundOp.scalar&&!totalScalar(at(n.b))){
-				string[] defs;bool[string] included;
-				void include(string value){if(!(value in included)){included[value]=true;defs~=value;}}
-				foreach(i,yes;used)if(yes)include("t"~to!string(i));
-				foreach(i,yes;needed)if(yes){
-					auto v=arena.at(cast(uint)i),m=arena.view(v);include("n"~to!string(i));
-					if(arena.node(v).region)include("b"~to!string(i));
-					if(m.op==Op.builtin&&m.arity)include("Functions."~builtinInfo(cast(Builtin)m.value).code);
-				}
-				proof="by\n  classical\n  convert ("~proof~") using 1 <;> simp ["~defs.join(",")~", Binding.Expr.eval, Binding.Env.cons, Expr.eval, Expr.sumR, Expr.productR, Expr.sumC, Expr.productC, Region.fold, Positive.repeat, Function1.apply, Function2.apply, Value.add, Value.mul, Value.inv] <;> ring";
-			}
 			code~="theorem summation"~to!string(j)~dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(n.context)~") : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := "~proof~"\n";
 		}
 		string proofName(uint id){ return "(p"~to!string(id)~dimArg~" γ)"; }
@@ -4975,10 +4953,11 @@ final class Bindings{
 					auto strict="rfl";
 					if(n.b!=uint.max){
 						auto other="("~name(right?n.a:n.b)~".eval ξ ρ)";
+						auto binary=operation;
 						operation=right?"(fun v => "~operation~" "~other~" v)":"(fun v => "~operation~" v "~other~")";
 						// Case splitting also covers operations represented by a strict
 						// two-argument match, rather than nested Option.bind calls.
-						strict=n.op==BoundOp.tensor?"("~tensorDomainProof(n)~(right?".right ":".left ")~other~")":"(by cases "~other~" <;> rfl)";
+						strict=n.op==BoundOp.tensor?"("~tensorDomainProof(n)~(right?".right ":".left ")~other~")":"(Option.rec (motive := fun other => "~binary~(right?" other none":" none other")~" = none) rfl (fun _ => rfl) "~other~")";
 					}
 					proof=".ofEq (fun ξ ρ => Binding.conditional_map "~operation~" "~strict~" ("~name(q.a)~".eval ξ ρ) ("~name(q.b)~".eval ξ ρ) ("~name(q.c)~".eval ξ ρ))"; break;
 				case BindingRule.conditionalDefined:

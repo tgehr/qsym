@@ -76,6 +76,7 @@ $(eval $(call test_binary,summation-parity-tests,summation_parity,))
 $(eval $(call test_binary,summation-abel-tests,summation_abel,))
 $(eval $(call test_binary,polynomial-summation-tests,polynomial_summation,))
 $(eval $(call test_binary,weighted-summation-tests,weighted_summation,))
+$(eval $(call test_binary,algebra-certificate-tests,algebra_certificates,))
 $(eval $(call test_binary,elementary-summation-tests,elementary_summation,))
 $(eval $(call test_binary,roots-unity-tests,roots_unity,))
 $(eval $(call test_binary,scalar-tests,scalar,-unittest))
@@ -173,6 +174,7 @@ test: build-tests build/qsym
 	./build/summation-abel-tests build/summation-abel
 	./build/polynomial-summation-tests build/polynomial-summation
 	./build/weighted-summation-tests build/weighted-summation
+	./build/algebra-certificate-tests build/algebra-certificates
 	./build/elementary-summation-tests build/elementary-summation
 	./build/roots-unity-tests build/roots-unity
 	./build/edit-motion-tests
@@ -369,3 +371,13 @@ test-distribution-source-model:
 	cd lean && $(LAKE) build QSym.DistributionIntegral QSym.DistributionModelBridge QSym.AxiomCheck
 	cd lean && $(LAKE) env lean ../tests/DistributionSourceModel.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionSteps.lean
+
+.PHONY: test-algebra-exports
+test-algebra-exports: build/polynomial-summation-tests build/weighted-summation-tests build/elementary-summation-tests build/algebra-certificate-tests build/conditional-consumer-tests
+	./build/polynomial-summation-tests build/polynomial-summation
+	./build/weighted-summation-tests build/weighted-summation
+	./build/elementary-summation-tests build/elementary-summation
+	./build/algebra-certificate-tests build/algebra-certificates
+	./build/conditional-consumer-tests build/conditional-consumers
+	python3 tools/check_exports.py --lake $(LAKE)
+	python3 tools/check_algebra_rejections.py --lake $(LAKE)

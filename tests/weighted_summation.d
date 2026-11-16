@@ -33,7 +33,7 @@ int main(string[] args){
   auto ms=watch.peek.total!"msecs",formula=s.format(a,result);
   enforce(!result.exhausted&&formula.indexOf("∑(")<0,c.name~": "~formula);
   auto fast=s.run(a,c.source);auto fastFormula=s.format(a,fast);enforce(!fast.exhausted&&fastFormula.indexOf("∑(")<0,c.name~" untraced");
-  auto code=s.exportCertificate(a,result);enforce(code.indexOf("field_simp")>=0,c.name~" missing field certificate");
+  auto code=s.exportCertificate(a,result);enforce(code.indexOf("Fractional.zero")>=0,c.name~" missing field certificate");
   write(buildPath(args[1],c.name~".lean"),code);++certificates;
   string[] qs=c.type=="ℕ"?["0","1","2","3"]:c.type=="ℂ"?["0","1","-1","ⅈ","(1+ⅈ)/2","2"]:["-2","-1","0","1/2","1","2"];
   Syntax numeric;numeric.declare("q:"~c.type);

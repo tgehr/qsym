@@ -35,7 +35,7 @@ int main(string[] args){
   enforce(!result.exhausted&&formula.indexOf("∑(")<0,c.name~": unresolved "~formula);
   auto fast=s.run(a,c.source);enforce(!fast.exhausted&&s.format(a,fast)==formula,c.name~" tracing");
   auto code=s.exportCertificate(a,result);
-  enforce(code.indexOf("ring_nf")>=0&&code.indexOf("Summation.range_solution_partial")>=0,c.name~" missing polynomial certificate");
+  enforce(code.indexOf("Normalized.zero")>=0&&code.indexOf("Summation.range_solution_partial")>=0,c.name~" missing polynomial certificate");
   write(buildPath(args[1],c.name~".lean"),code);++certificates;
   foreach(n;[0,1,2,5,10]){
    auto expression="(λ(a:ℝ). (λ(b:ℝ). (λ(n:"~(c.kind==5?"ℝ":"ℕ")~"). "~formula~")("~to!string(n)~"))(-2))(3)";

@@ -20,6 +20,8 @@ import QSym.Replay
 import QSym.Sum
 import QSym.Bag
 import QSym.Numeric
+import QSym.AlgebraCertificate
+import QSym.RationalCertificate
 import QSym.Region
 import QSym.Domain
 import QSym.Conditionals

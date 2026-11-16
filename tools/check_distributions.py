@@ -13,6 +13,7 @@ import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor
+from export_audit import audit_export
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,8 +36,7 @@ def batch(files):
     for source in (replay, region):
         parts.append(re.sub(r"^import [^\n]*\n", "", source, flags=re.M))
     for i, (file, source) in enumerate(zip(files, texts)):
-        if re.search(r"\b(sorry|admit|native_decide|by)\b|qsym_\w+%", source):
-            raise RuntimeError("tactic or unchecked proof in " + str(file))
+        audit_export(source, str(file))
         source = source.replace("import QSym\n", "")
         namespaces = set(re.findall(r"^namespace (QSym\.[^\n]+)", source, re.M))
         for name in sorted(namespaces, key=len, reverse=True):

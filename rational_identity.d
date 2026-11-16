@@ -6,9 +6,9 @@ import qsym.polynomial:Arithmetic,Polynomial,Powers;
 import qsym.budget:Limit;
 @safe:
 
-private struct Fraction { Polynomial numerator; uint[uint] denominator; }
-private struct PowerAtom { Fraction base; Term exponent; uint id; }
-private class Checker {
+package struct Fraction { Polynomial numerator; uint[uint] denominator; }
+package struct PowerAtom { Fraction base; Term exponent; uint id; }
+package class Checker {
  Arena a; Arithmetic ring; Term[] conditions; Polynomial[] predicates,equalities,nonzeros,factors;
  PowerAtom[] atoms; uint branch; Fraction[uint] memo;
  this(Arena arena){a=arena;ring=new Arithmetic(a);}
