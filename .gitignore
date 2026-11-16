@@ -7,3 +7,4 @@
 *.trace
 __pycache__/
 /.toolchains/
+/generated
