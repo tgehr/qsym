@@ -44,7 +44,7 @@ private enum BindingRule:ubyte{
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
-private struct IntegralSolution{ uint[] from,to,parameters; Rational lower,upper,coefficient,witness; Rational[] exceptions; bool ae,parametric; uint factor=uint.max; }
+private struct IntegralSolution{ uint[] from,to,parameters; Rational lower,upper,coefficient,witness; Rational[] exceptions,probes; bool ae,parametric,nullSupport; uint factor=uint.max; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
@@ -1903,12 +1903,34 @@ final class Bindings{
 				auto value=peel(id); if(value==BoundTerm.init) return BoundTerm.init;
 				coefficient=primitive(arena.mul(arena.real_(1),arena.real_(1),true),[coefficient,value]);
 			}
-			// Bound case splitting, and require an interval containing a point
-			// where every local guard holds. Empty/singleton supports need a
-			// different domain certificate, not a guessed zero integral.
 			IntegralBounds bounds;
-			if(!solution.parameters.length||solution.parameters.length>4||!integralBounds(arena,support,arg,bounds)||
-				bounds.zero||!bounds.hasLower||!bounds.hasUpper||bounds.lower>=bounds.upper) return BoundTerm.init;
+			if(!solution.parameters.length||solution.parameters.length>4||!integralBounds(arena,support,arg,bounds)) return BoundTerm.init;
+			solution.exceptions=bounds.exceptions;
+			if(bounds.zero||bounds.hasLower&&bounds.hasUpper&&bounds.lower==bounds.upper){
+				// Guard truth is constant between its affine cut points. Probe
+				// those open cells AND their boundaries: a null point can still
+				// contain an undefined value, even when supports are disjoint.
+				import std.algorithm:sort;
+				auto sorted=bounds.exceptions.dup; sort(sorted); Rational[] cuts;
+				foreach(q;sorted) if(!cuts.length||cuts[$-1]!=q) cuts~=q;
+				if(cuts.length>16) return BoundTerm.init;
+				if(!cuts.length) solution.probes=[Rational(0)];
+				else{
+					solution.probes~=(cuts[0]-Rational(1));
+					foreach(i,q;cuts){
+						solution.probes~=q;
+						if(i+1<cuts.length) solution.probes~=(q+cuts[i+1])/Rational(2);
+					}
+					solution.probes~=(cuts[$-1]+Rational(1));
+				}
+				auto result=scalar(ctx,arena.real_(0));
+				foreach_reverse(q;solution.probes){
+					auto point=scalar(ctx,arena.real_(q));
+					foreach_reverse(id;solution.from) result=sequence(beta(at(id),point),result);
+				}
+				solution.nullSupport=true; return result;
+			}
+			if(!bounds.hasLower||!bounds.hasUpper||bounds.lower>=bounds.upper) return BoundTerm.init;
 			foreach(k;0..bounds.exceptions.length+1){
 				auto point=bounds.lower+(bounds.upper-bounds.lower)/Rational(cast(long)k+2);
 				bool excluded; foreach(p;bounds.exceptions) excluded|=p==point;
@@ -4800,6 +4822,11 @@ final class Bindings{
 					foreach(id;scalarNodes){ if(defs.length) defs~=","; defs~="n"~to!string(id); if(arena.node(arena.at(id)).region) defs~=",b"~to!string(id); }
 					string realQ(Rational q){ return "(((("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ) : ℝ))"; }
 					string holes="["; foreach(k,q;s.exceptions){ if(k) holes~=","; holes~=realQ(q); } holes~="]";
+					if(s.nullSupport){
+						string probes="["; foreach(k,q;s.probes){ if(k) probes~=","; probes~=realQ(q); } probes~="]";
+						string parameters="["; foreach(k,id;s.parameters){ if(k) parameters~=","; parameters~="("~name(id)~".eval ξ ρ)"; } parameters~="]";
+						proof=".ofEq (fun ξ ρ => qsym_density_null_support% ["~defs~"] "~densityProgram(s.from)~" "~probes~" "~holes~" "~parameters~")"; break;
+					}
 					if(s.parametric){
 						string parameters="["; foreach(k,id;s.parameters){ if(k) parameters~=","; parameters~="("~name(id)~".eval ξ ρ)"; } parameters~="]";
 						proof=".ofEq (fun ξ ρ => qsym_density_parametric% ["~defs~"] "~densityProgram(s.from)~" ("~name(s.factor)~".eval ξ ρ) "~realQ(s.lower)~" "~realQ(s.upper)~" "~realQ(s.witness)~" "~holes~" "~parameters~")"; break;

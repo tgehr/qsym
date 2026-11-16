@@ -221,6 +221,82 @@ theorem null_hole_not_certified (w : ℝ) (points : List ℝ) :
   have := h.total ⟨1, rfl⟩ 0
   simp [Value.Defined] at this
 
+def singletonParameter (c : Option ℝ) : DensityProgram :=
+  .weight (fun x => Value.mask (some (decide (x = 0))) c) .lebesgue
+
+def singletonCertificate (c : Option ℝ) :
+    NullSupportCertificate (singletonParameter c).density [-1, 0, 1] [0] :=
+  qsym_null_support_certificate% [singletonParameter] (singletonParameter c).density [-1, 0, 1] [0] [c]
+
+theorem singleton_mass (c : Option ℝ) : massValue (singletonParameter c).presentation =
+    zeroOnProbes (singletonParameter c).density [-1, 0, 1] :=
+  qsym_density_null_support% [singletonParameter] (singletonParameter c) [-1, 0, 1] [0] [c]
+
+theorem singleton_defined_mass (r : ℝ) : massValue (singletonParameter (some r)).presentation = some 0 := by
+  rw [singleton_mass]
+  norm_num [zeroOnProbes, singletonParameter, DensityProgram.density, Value.mask, Value.mul]
+
+theorem singleton_undefined_mass : massValue (singletonParameter none).presentation = none := by
+  rw [singleton_mass]
+  norm_num [zeroOnProbes, singletonParameter, DensityProgram.density, Value.mask, Value.mul]
+
+theorem singleton_retains_density (c : Option ℝ) : (singletonParameter c).observeAt 0 = c := by
+  simp [DensityProgram.observeAt_eq, singletonParameter, DensityProgram.density,
+    Value.mask, Value.mul_one_left]
+
+def disjointParameters (c d : Option ℝ) : DensityProgram :=
+  .weight (fun x => Value.mask (some (decide (x = 1))) d) (singletonParameter c)
+
+def disjointCertificate (c d : Option ℝ) :
+    NullSupportCertificate (disjointParameters c d).density [-1, 0, 1/2, 1, 2] [0, 1] :=
+  qsym_null_support_certificate% [disjointParameters, singletonParameter]
+    (disjointParameters c d).density [-1, 0, 1/2, 1, 2] [0, 1] [c, d]
+
+theorem disjoint_defined_iff (c d : Option ℝ) :
+    (∀ x, Value.Defined ((disjointParameters c d).density x)) ↔
+      Value.Defined c ∧ Value.Defined d := by
+  rw [(disjointCertificate c d).defined_iff]
+  simp only [List.forall_mem_cons, List.forall_mem_nil]
+  cases c <;> cases d <;>
+    norm_num [disjointParameters, singletonParameter, DensityProgram.density, Value.mask, Value.mul, Value.Defined]
+
+theorem disjoint_undefined_mass : (disjointParameters (some 0) none).mass = none := by
+  have h := disjointCertificate (some 0) none
+  have he : (disjointParameters (some 0) none).mass =
+      zeroOnProbes (disjointParameters (some 0) none).density [-1, 0, 1/2, 1, 2] := by qsym_rule
+  rw [he]
+  norm_num [zeroOnProbes, disjointParameters, singletonParameter, DensityProgram.density, Value.mask, Value.mul]
+
+def emptyParameter (c : Option ℝ) : DensityProgram :=
+  .weight (fun x => Value.mask (some (decide (x < 0)))
+    (Value.mask (some (decide (1 < x))) c)) .lebesgue
+
+theorem empty_parameter_mass (c : Option ℝ) : massValue (emptyParameter c).presentation = some 0 :=
+  qsym_density_null_support% [emptyParameter] (emptyParameter c) [-1, 0, 1/2, 1, 2] [0, 1] [c]
+
+theorem missing_null_probe_rejected :
+    ¬ NullSupportCertificate (singletonParameter none).density [-1, 1] [0] := by
+  intro h
+  have hd : ∀ x ∈ ([-1, 1] : List ℝ), Value.Defined ((singletonParameter none).density x) := by
+    norm_num [singletonParameter, DensityProgram.density, Value.mask, Value.mul, Value.Defined]
+  have := h.total hd 0
+  simp [singletonParameter, DensityProgram.density, Value.mask, Value.mul, Value.Defined] at this
+
+-- Boundary probes alone miss a failure throughout an open cell.
+theorem missing_cell_probe_rejected :
+    ¬ NullSupportCertificate
+      (fun x : ℝ => Value.mask (some (decide (0 < x ∧ x < 1))) (none : Option ℝ))
+      [0, 1] [0, 1] := by
+  intro h
+  have hd : ∀ x ∈ ([0, 1] : List ℝ),
+      Value.Defined (Value.mask (some (decide (0 < x ∧ x < 1))) (none : Option ℝ)) := by
+    simp only [List.forall_mem_cons, List.forall_mem_nil]
+    norm_num [Value.mask, Value.Defined]
+  have := h.total hd (1/2)
+  norm_num [Value.mask, Value.Defined] at this
+  obtain ⟨v, hv⟩ := this
+  cases hv
+
 -- Ordered composition must not use the flattened zero integrand to hide an
 -- infinite row, even though the outer density is everywhere zero.
 theorem zero_does_not_hide_infinite_row :
@@ -311,6 +387,23 @@ example (p : DensityProgram) : p.mass = p.mass := by
 #qsym_check_axioms masked_partial_branch
 #qsym_check_axioms false_mask_hides_partial_branch
 #qsym_check_axioms null_hole_not_certified
+#qsym_check_axioms zeroOnProbes_eq
+#qsym_check_axioms Value.mul_bind_const
+#qsym_check_axioms NullSupportCertificate.defined_iff
+#qsym_check_axioms NullSupportCertificate.specialize
+#qsym_check_axioms NullSupportCertificate.integrate
+#qsym_check_axioms DensityProgram.mass_null_support
+#qsym_check_axioms singletonCertificate
+#qsym_check_axioms singleton_mass
+#qsym_check_axioms singleton_defined_mass
+#qsym_check_axioms singleton_undefined_mass
+#qsym_check_axioms singleton_retains_density
+#qsym_check_axioms disjointCertificate
+#qsym_check_axioms disjoint_defined_iff
+#qsym_check_axioms disjoint_undefined_mass
+#qsym_check_axioms empty_parameter_mass
+#qsym_check_axioms missing_null_probe_rejected
+#qsym_check_axioms missing_cell_probe_rejected
 #qsym_check_axioms zero_does_not_hide_infinite_row
 #qsym_check_axioms null_row_is_not_erased
 

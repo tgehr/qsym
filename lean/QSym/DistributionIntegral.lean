@@ -10,6 +10,8 @@ open MeasureTheory Set
     Value.mask (some b) (some x) = some (cond b x 0) := by cases b <;> rfl
 @[simp] theorem mask_none {α : Type} [Zero α] (x : Option α) :
     Value.mask none x = none := rfl
+theorem mask_option {α : Type} [Zero α] (b : Bool) (x : Option α) :
+    Value.mask (some b) x = cond b x (some 0) := by cases b <;> rfl
 @[simp] theorem and_some (p q : Bool) :
     Value.and (some p) (some q) = some (p && q) := by cases p <;> rfl
 @[simp] theorem or_some (p q : Bool) :
@@ -105,6 +107,80 @@ macro_rules
         qsym_interval_certificate% [$ids,*] $f $a $b $c $points
       refine Eq.trans h.integrate ?_
       qsym_integral_finish [$ids,*])
+
+syntax "qsym_null_support_certificate% " "[" ident,* "]" term:max term:max term:max "[" term,* "]" : term
+macro_rules
+  | `(qsym_null_support_certificate% [$ids:ident,*] $f $probes $points [$parameters,*]) => do
+      let lemmas ← ids.getElems.mapM fun id => `(Lean.Parser.Tactic.simpLemma| $id:ident)
+      let defs := lemmas.map fun item => (⟨item.raw⟩ : Lean.TSyntax [`Lean.Parser.Tactic.simpErase, `Lean.Parser.Tactic.simpLemma])
+      let splits ← parameters.getElems.mapM fun p => `(tactic| all_goals cases hp : $p)
+      let reduce ← `(tactic|
+        simp only [QSym.Function1.apply, QSym.Functions.castNZ, QSym.Functions.castZQ,
+          QSym.Functions.castQR, QSym.Value.Defined, QSym.Value.mul, QSym.Value.add, QSym.Value.le,
+          QSym.Value.lt, QSym.Value.nonzero, QSym.Value.not, QSym.Distribution.mask_option,
+          QSym.Distribution.mask_some, QSym.Distribution.mask_none, QSym.Distribution.and_some, QSym.Distribution.or_some,
+          Option.bind_eq_bind, Option.some_bind, Option.none_bind, Option.map_eq_map,
+          Option.map_some', Option.map_none', Option.pure_def,
+          Function.comp_apply, Bool.cond_eq_ite, Bool.decide_iff] at *)
+      let finish ← `(tactic| (
+        $reduce:tactic
+        all_goals norm_num only at *
+        all_goals (try $reduce:tactic)
+        all_goals (try split_ifs) <;> norm_num at * <;>
+          (try simp_all [QSym.Value.Defined, QSym.Value.mul, Bool.cond_eq_ite]) <;>
+          (try simp_all only [imp_iff_not_or, not_and_or, not_or, ne_iff_lt_or_gt, not_le, not_lt, not_not]) <;>
+          (try casesm* _ ∧ _, _ ∨ _) <;>
+          (first | rfl | contradiction | nlinarith | (by_contra h; push_neg at h; nlinarith))))
+      `(by
+      classical
+      show QSym.Distribution.NullSupportCertificate $f $probes $points
+      try dsimp only [QSym.Distribution.DensityProgram.density, $defs,*]
+      try dsimp only [QSym.Binding.Expr.eval, QSym.Binding.Env.cons, QSym.Expr.eval]
+      $[$splits:tactic]*
+      all_goals (try dsimp only [$defs,*, QSym.Binding.Expr.eval, QSym.Binding.Env.cons,
+        QSym.Expr.eval, QSym.Binding.Ty.denote, QSym.Ty.denote] at *)
+      all_goals (try casesm* Bool, QSym.Binding.Ty.denote (.scalar .bool))
+      all_goals (try simp only [*])
+      all_goals (
+        refine ⟨?_, ?_⟩
+        · intro hd x
+          simp only [List.forall_mem_cons, List.forall_mem_nil] at hd
+          norm_num [QSym.Function1.apply, QSym.Functions.castNZ, QSym.Functions.castZQ,
+            QSym.Functions.castQR, QSym.Value.Defined, QSym.Value.mul, QSym.Value.add,
+            QSym.Value.le, QSym.Value.lt, QSym.Value.nonzero, QSym.Value.not,
+            QSym.Distribution.mask_option, QSym.Distribution.mask_none,
+            QSym.Distribution.and_some, QSym.Distribution.or_some, Bool.cond_eq_ite] at hd
+          all_goals (first | solve | obtain ⟨v, hv⟩ := hd; cases hv | $finish:tactic)
+        · intro hd x hx
+          simp only [List.forall_mem_cons, List.forall_mem_nil] at hd
+          norm_num [QSym.Function1.apply, QSym.Functions.castNZ, QSym.Functions.castZQ,
+            QSym.Functions.castQR, QSym.Value.Defined, QSym.Value.mul, QSym.Value.add,
+            QSym.Value.le, QSym.Value.lt, QSym.Value.nonzero, QSym.Value.not,
+            QSym.Distribution.mask_option, QSym.Distribution.mask_none,
+            QSym.Distribution.and_some, QSym.Distribution.or_some, Bool.cond_eq_ite] at hd
+          all_goals (first | solve | obtain ⟨v, hv⟩ := hd; cases hv | $finish:tactic)))
+
+syntax "qsym_density_null_support% " "[" ident,* "]" term:max term:max term:max "[" term,* "]" : term
+macro_rules
+  | `(qsym_density_null_support% [$ids:ident,*] $p $probes $points [$parameters,*]) => do
+      let lemmas ← ids.getElems.mapM fun id => `(Lean.Parser.Tactic.simpLemma| $id:ident)
+      let defs := lemmas.map fun item => (⟨item.raw⟩ : Lean.TSyntax [`Lean.Parser.Tactic.simpErase, `Lean.Parser.Tactic.simpLemma])
+      `(by
+      have h : QSym.Distribution.NullSupportCertificate
+          (QSym.Distribution.DensityProgram.density $p) $probes $points :=
+        qsym_null_support_certificate% [$ids,*] (QSym.Distribution.DensityProgram.density $p)
+          $probes $points [$parameters,*]
+      refine Eq.trans (QSym.Distribution.DensityProgram.mass_bridge $p) ?_
+      refine Eq.trans (show QSym.Distribution.DensityProgram.mass $p =
+          QSym.Distribution.zeroOnProbes (QSym.Distribution.DensityProgram.density $p) $probes from by qsym_rule) ?_
+      try dsimp only [$defs,*]
+      all_goals (try dsimp only [QSym.Binding.Expr.eval, QSym.Binding.Env.cons, QSym.Expr.eval])
+      all_goals simp only [QSym.Distribution.zeroOnProbes, QSym.Distribution.DensityProgram.density,
+        QSym.Value.mul_bind_const, Option.bind_some]
+      all_goals (
+        qsym_integral_finish [$ids,*]
+        all_goals norm_num [QSym.Distribution.DensityProgram.density,
+          QSym.Value.mul_bind_const, QSym.Value.mask, QSym.Value.mul]))
 
 /-! Unlike strict factoring, this path proves the observation's domain as
 well as its value. Splits are on a bounded list of source parameter values;
