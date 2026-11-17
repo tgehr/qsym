@@ -661,6 +661,127 @@ theorem addition_respects_quotient :
   unfold totalDiracTwoComp totalDiracTwo
   rw [Hom.comp_pure]
 
+/-- Recursive assembly reuses, rather than reinterprets, the direct fragments. -/
+def coveredAddedDiracs : CoveredProgram .point ℝ :=
+  .add (.primitive primitiveDiracTwo) (.primitive primitiveDiracThree)
+
+def coveredScaledAddedDiracs : CoveredProgram .point ℝ :=
+  .scale 2 coveredAddedDiracs
+
+def coveredInvalidPlusDirac : CoveredProgram .point ℝ :=
+  .add (.primitive primitiveInvalid) (.primitive primitiveDiracTwo)
+
+def coveredAddedZeros : CoveredProgram .point ℝ :=
+  .add (.primitive primitiveZero) (.primitive primitiveZero)
+
+def coveredRealMix : CoveredProgram .real ℝ :=
+  .add (.scale 3 (.density unitInterval)) (.bind weightedBind)
+
+def coveredContinuousPair : CoveredProgram .real ℝ :=
+  .add (.continuousBind continuousUnit) (.integral continuousIntegralUnit)
+
+def coveredHolePlusZero : CoveredProgram .real ℝ :=
+  .add (.density hole) (.density zeroDensity)
+
+def coveredZeroScaledLebesgue : CoveredProgram .real ℝ :=
+  .scale 0 (.density .lebesgue)
+
+theorem coveredAddedDiracs_semanticMass : coveredAddedDiracs.semanticMass = some 2 :=
+  addedDiracs_semanticMass
+
+theorem coveredAddedDiracs_observeSucc :
+    coveredAddedDiracs.observe (fun x => some (x + 1)) = some 7 :=
+  addedDiracs_observeSucc
+
+theorem coveredScaledAddedDiracs_observeSucc :
+    coveredScaledAddedDiracs.observe (fun x => some (x + 1)) = some 14 := by
+  change (RootedPartialHom.scale 2 addedDiracs).observeJoint PUnit.unit
+    (fun _ x => some (x + 1)) = some 14
+  rw [RootedPartialHom.observeJoint_scale_defined _ _ _ _
+    ⟨7, addedDiracs_observeSucc⟩, addedDiracs_observeSucc]
+  norm_num [Value.mul]
+
+/-- The unified observer bridge recurses through both scaling and addition. -/
+theorem coveredScaledAddedDiracs_presentationObserveSucc :
+    coveredScaledAddedDiracs.presentation.bind
+      (fun d => integrate d (fun x => some (x + 1))) = some 14 := by
+  have h : coveredScaledAddedDiracs.ObservationCompatible (fun x => some (x + 1)) := by
+    refine ⟨⟨trivial, trivial⟩, ?_⟩
+    exact ⟨7, coveredAddedDiracs_observeSucc⟩
+  rw [← coveredScaledAddedDiracs.observe_bridge _ h]
+  exact coveredScaledAddedDiracs_observeSucc
+
+/-- Recursive addition does not acquire a definedness side condition. -/
+theorem coveredInvalidPlusDirac_semanticMass : coveredInvalidPlusDirac.semanticMass = none :=
+  invalidPlusDirac_semanticMass
+
+theorem coveredInvalidPlusDirac_presentationMass :
+    massValue coveredInvalidPlusDirac.presentation = none := by
+  rw [← coveredInvalidPlusDirac.semanticMass_bridge ⟨trivial, trivial⟩]
+  exact coveredInvalidPlusDirac_semanticMass
+
+theorem coveredAddedZeros_observeUndefined :
+    coveredAddedZeros.observe (fun _ => none) = some 0 :=
+  addedZeros_observeUndefined
+
+/-- A nested real-root program combines density, scaling, and weighted bind. -/
+theorem coveredRealMix_semanticMass : coveredRealMix.semanticMass = some 5 := by
+  change (RootedPartialHom.add (RootedPartialHom.scale 3 unitInterval.rootedSemantic)
+    weightedBind.rootedSemantic).mass = some 5
+  rw [RootedPartialHom.mass_add, RootedPartialHom.mass_scale_defined _ _
+    ⟨1, unitInterval_rootedMass⟩, unitInterval_rootedMass]
+  norm_num [Value.mul]
+  change Value.add (some 3) weightedBind.semanticMass = some 5
+  rw [weightedBind_semanticMass]
+  norm_num [Value.add]
+
+theorem coveredRealMix_massCompatible : coveredRealMix.MassCompatible := by
+  refine ⟨⟨trivial, ?_⟩, trivial⟩
+  exact ⟨1, unitInterval_rootedMass⟩
+
+theorem coveredRealMix_presentationMass : massValue coveredRealMix.presentation = some 5 := by
+  rw [← coveredRealMix.semanticMass_bridge coveredRealMix_massCompatible]
+  exact coveredRealMix_semanticMass
+
+/-- Both continuous leaf kinds use the same unified mass theorem, with their
+row-definedness and joint-integrability capabilities made explicit. -/
+theorem coveredContinuousPair_massCompatible : coveredContinuousPair.MassCompatible :=
+  ⟨⟨continuousUnit_rowDefined, continuousUnit_jointL1⟩,
+    ⟨continuousIntegralUnit_rowDefined, continuousIntegralUnit_jointL1⟩⟩
+
+theorem coveredContinuousPair_semanticMass : coveredContinuousPair.semanticMass = some 2 := by
+  change (RootedPartialHom.add continuousUnit.rootedSemantic
+    continuousIntegralUnit.rootedSemantic).mass = some 2
+  rw [RootedPartialHom.mass_add]
+  change Value.add continuousUnit.semanticMass continuousIntegralUnit.semanticMass = some 2
+  rw [continuousUnit_semanticMass, continuousIntegralUnit_semanticMass]
+  norm_num [Value.add]
+
+theorem coveredContinuousPair_presentationMass :
+    massValue coveredContinuousPair.presentation = some 2 := by
+  rw [← coveredContinuousPair.semanticMass_bridge coveredContinuousPair_massCompatible]
+  exact coveredContinuousPair_semanticMass
+
+theorem coveredHolePlusZero_semanticMass : coveredHolePlusZero.semanticMass = none :=
+  holePlusZero_semanticMass
+
+/-- Zero scaling remains direct, but the legacy bridge keeps its source guard. -/
+theorem coveredZeroScaledLebesgue_semanticMass :
+    coveredZeroScaledLebesgue.semanticMass = some 0 :=
+  zeroScaledLebesgue_semanticMass
+
+theorem coveredZeroScaledLebesgue_not_massCompatible :
+    ¬coveredZeroScaledLebesgue.MassCompatible := by
+  intro h
+  have hd := h.2
+  have hunbounded : DensityProgram.lebesgue.rootedSemantic.mass = none := by
+    rw [← DensityProgram.lebesgue.semanticMass_rooted, DensityProgram.semanticMass_eq]
+    simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
+      partialIntegral, Value.Defined, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+  change Value.Defined DensityProgram.lebesgue.rootedSemantic.mass at hd
+  rw [hunbounded] at hd
+  simpa [Value.Defined] using hd
+
 #qsym_check_axioms partialIntegral_sum
 #qsym_check_axioms PartialFamily.observe_sum
 #qsym_check_axioms PartialFamily.observeJoint_sum
@@ -830,5 +951,25 @@ theorem addition_respects_quotient :
 #qsym_check_axioms zeroRootHolePlusZero_mass
 #qsym_check_axioms lebesguePlusZero_semanticMass
 #qsym_check_axioms addition_respects_quotient
+#qsym_check_axioms DensityProgram.observeJoint_eq
+#qsym_check_axioms CoveredProgram.observe_bridge
+#qsym_check_axioms CoveredProgram.semanticMass_eq
+#qsym_check_axioms CoveredProgram.semanticMass_bridge
+#qsym_check_axioms coveredAddedDiracs_semanticMass
+#qsym_check_axioms coveredAddedDiracs_observeSucc
+#qsym_check_axioms coveredScaledAddedDiracs_observeSucc
+#qsym_check_axioms coveredScaledAddedDiracs_presentationObserveSucc
+#qsym_check_axioms coveredInvalidPlusDirac_semanticMass
+#qsym_check_axioms coveredInvalidPlusDirac_presentationMass
+#qsym_check_axioms coveredAddedZeros_observeUndefined
+#qsym_check_axioms coveredRealMix_semanticMass
+#qsym_check_axioms coveredRealMix_massCompatible
+#qsym_check_axioms coveredRealMix_presentationMass
+#qsym_check_axioms coveredContinuousPair_massCompatible
+#qsym_check_axioms coveredContinuousPair_semanticMass
+#qsym_check_axioms coveredContinuousPair_presentationMass
+#qsym_check_axioms coveredHolePlusZero_semanticMass
+#qsym_check_axioms coveredZeroScaledLebesgue_semanticMass
+#qsym_check_axioms coveredZeroScaledLebesgue_not_massCompatible
 
 end QSym.PartialFibreTests

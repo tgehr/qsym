@@ -548,4 +548,146 @@ theorem semanticMass_bridge (p : ContinuousDensityIntegral)
   exact observeJoint_bridge p _ hr hi
 
 end ContinuousDensityIntegral
+
+namespace DensityProgram
+
+/-- Arbitrary strict observation of the direct rooted density semantics. -/
+def observeJoint (p : DensityProgram) (f : ℝ → Option ℝ) : Option ℝ :=
+  p.rootedSemantic.observeJoint PUnit.unit (fun _ x => f x)
+
+/-- Removing the trivial latent coordinate recovers the source observer. -/
+theorem observeJoint_eq (p : DensityProgram) (f : ℝ → Option ℝ) :
+    p.observeJoint f = p.observe f := by
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  change partialIntegral
+      (volume ⊗ₘ ProbabilityTheory.Kernel.const ℝ (Measure.dirac (PUnit.unit : PUnit.{1})))
+      (fun z : ℝ × PUnit.{1} => Value.mul (p.density z.1) (f z.1)) =
+    partialIntegral volume (fun x => Value.mul (p.density x) (f x))
+  simp only [Measure.compProd_const]
+  exact partialIntegral_comp MeasurableEquiv.prodPUnit
+    (WeightedParameter.measurePreserving_prodPUnit volume)
+    (fun x => Value.mul (p.density x) (f x))
+
+end DensityProgram
+
+/-- Intrinsic roots supported by the currently covered direct source fragments. -/
+inductive CoveredRoot where
+  | point
+  | real
+
+namespace CoveredRoot
+
+def Carrier : CoveredRoot → Type
+  | .point => PUnit.{1}
+  | .real => ℝ
+
+instance measurable : (r : CoveredRoot) → MeasurableSpace r.Carrier
+  | .point => (inferInstance : MeasurableSpace PUnit.{1})
+  | .real => (inferInstance : MeasurableSpace ℝ)
+
+def measure : (r : CoveredRoot) → @Measure r.Carrier (measurable r)
+  | .point => (Measure.dirac (PUnit.unit : PUnit.{1}) : Measure PUnit.{1})
+  | .real => (volume : Measure ℝ)
+
+instance sfinite : (r : CoveredRoot) → SFinite (r.measure)
+  | .point => (inferInstance : SFinite (Measure.dirac (PUnit.unit : PUnit.{1})))
+  | .real => (inferInstance : SFinite (volume : Measure ℝ))
+
+end CoveredRoot
+
+/-- The covered direct fragment, indexed by its intrinsic root and output type.
+Continuous leaves retain their existing restricted continuation types; this is
+not an interpreter for arbitrary `Presentation` values or mixed-root addition. -/
+inductive CoveredProgram : CoveredRoot → Type → Type 1 where
+  | primitive {α : Type} (p : PrimitiveProgram α) : CoveredProgram .point α
+  | density (p : DensityProgram) : CoveredProgram .real ℝ
+  | bind {α : Type} (b : DensityBind α) : CoveredProgram .real α
+  | continuousBind (b : ContinuousDensityBind) : CoveredProgram .real ℝ
+  | integral (p : ContinuousDensityIntegral) : CoveredProgram .real ℝ
+  | scale {root : CoveredRoot} {α : Type} (r : ℝ)
+      (p : CoveredProgram root α) : CoveredProgram root α
+  | add {root : CoveredRoot} {α : Type}
+      (p q : CoveredProgram root α) : CoveredProgram root α
+
+namespace CoveredProgram
+variable {root : CoveredRoot} {α : Type}
+
+/-- One recursive direct semantics; each base case is an existing fragment. -/
+def semantic (p : CoveredProgram root α) :
+    RootedPartialTrace root.Carrier root.measure α :=
+  CoveredProgram.rec
+    (motive := fun {r} {a} _ => RootedPartialTrace r.Carrier r.measure a)
+    (fun p => p.rootedSemantic)
+    (fun p => p.rootedSemantic)
+    (fun b => b.rootedSemantic)
+    (fun b => b.rootedSemantic)
+    (fun p => p.rootedSemantic)
+    (fun r _ ih => RootedPartialHom.scale r ih)
+    (fun _ _ ihp ihq => RootedPartialHom.add ihp ihq)
+    p
+
+/-- Legacy syntax is reconstructed only at the compatibility boundary. -/
+def presentation (p : CoveredProgram root α) : Option (D α) :=
+  CoveredProgram.rec
+    (motive := fun {_} {a} _ => Option (D a))
+    (fun p => p.presentation)
+    (fun p => p.presentation)
+    (fun b => b.presentation)
+    (fun b => b.presentation)
+    (fun p => p.presentation)
+    (fun r _ ih => scaleValue (some r) ih)
+    (fun _ _ ihp ihq => addValue ihp ihq)
+    p
+
+/-- Arbitrary strict observation of the one direct semantic object. -/
+def observe (p : CoveredProgram root α) (f : α → Option ℝ) : Option ℝ :=
+  p.semantic.observeJoint PUnit.unit (fun _ a => f a)
+
+def semanticMass (p : CoveredProgram root α) : Option ℝ := p.semantic.mass
+
+/-- Capabilities needed by the existing ordered-observer compatibility proofs.
+Addition adds no definedness requirement; scaling retains its source guard. -/
+def ObservationCompatible (p : CoveredProgram root α) : (α → Option ℝ) → Prop :=
+  CoveredProgram.rec
+    (motive := fun {_} {a} _ => (a → Option ℝ) → Prop)
+    (fun _ _ => True)
+    (fun _ _ => True)
+    (fun _ _ => True)
+    (fun b f => b.RowDefined f ∧ b.JointL1 f)
+    (fun p f => p.RowDefined f ∧ p.JointL1 f)
+    (fun _ p ih f => ih f ∧ Value.Defined (p.observe f))
+    (fun _ _ ihp ihq f => ihp f ∧ ihq f)
+    p
+
+/-- A single compatibility theorem for every covered constructor. -/
+theorem observe_bridge (p : CoveredProgram root α) (f : α → Option ℝ)
+    (h : p.ObservationCompatible f) :
+    p.observe f = p.presentation.bind (fun d => integrate d f) := by
+  induction p with
+  | primitive p => exact p.observe_bridge f
+  | density p => exact (p.observeJoint_eq f).trans (p.observe_bridge f)
+  | bind b => exact b.observeJoint_bridge f
+  | continuousBind b => exact b.observeJoint_bridge f h.1 h.2
+  | integral p => exact p.observeJoint_bridge f h.1 h.2
+  | scale r p ih =>
+      exact RootedScale.observeJoint_bridge p.semantic r p.presentation f
+        (ih f h.1) h.2
+  | add p q ihp ihq =>
+      exact RootedAdd.observeJoint_bridge p.semantic q.semantic
+        p.presentation q.presentation f (ihp f h.1) (ihq f h.2)
+
+/-- Mass compatibility is the unit-test instance of the unified theorem. -/
+def MassCompatible (p : CoveredProgram root α) : Prop :=
+  p.ObservationCompatible (fun _ => some 1)
+
+theorem semanticMass_eq (p : CoveredProgram root α) :
+    p.semanticMass = p.observe (fun _ => some 1) := rfl
+
+theorem semanticMass_bridge (p : CoveredProgram root α) (h : p.MassCompatible) :
+    p.semanticMass = massValue p.presentation := by
+  change p.observe (fun _ => some 1) =
+    p.presentation.bind (fun d => integrate d (fun _ => some 1))
+  exact p.observe_bridge _ h
+
+end CoveredProgram
 end QSym.Distribution
