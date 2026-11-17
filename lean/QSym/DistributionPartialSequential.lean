@@ -2,15 +2,16 @@ import QSym.DistributionPartialModel
 import QSym.DistributionSequentialModel
 import QSym.WeightedFibrePartialDependent
 
-/-! Direct partial-fibre semantics for density binds with weighted Dirac
-continuations.
+/-! Direct partial-fibre semantics for sequential density programs.
 
-A continuation may fail and returns both a real weight and an arbitrary output
-value. Its source and continuation fibres remain available in `tower`; only
-`semantic` and `rootedSemantic` flatten them. Compatibility with the old
-presentation interpreter is a proved observer equation, not the semantic route.
-Continuous continuations still require their own references and integration
-capabilities.
+Weighted Dirac continuations may fail and return both a real weight and an
+arbitrary output value. Continuous continuations instead return a real density
+program and retain their own Lebesgue reference. Both source and continuation
+fibres remain available in `tower`; flattened families are observation
+representatives. Compatibility with the old presentation interpreter is a
+proved observer equation, not the semantic route. For continuous programs the
+joint observer is primary and iterated presentation compatibility requires
+explicit row-definedness and joint-L1 capabilities.
 -/
 noncomputable section
 namespace QSym.Distribution
@@ -163,4 +164,228 @@ theorem semanticMass_bridge (b : DensityBind α) :
   exact (b.mass_continuationPresentation x).symm
 
 end DensityBind
+
+/-- A density source followed by a value-dependent continuous real density. -/
+structure ContinuousDensityBind where
+  source : DensityProgram
+  continuation : ℝ → DensityProgram
+
+namespace ContinuousDensityBind
+
+/-- The continuation has its own real latent sample and Lebesgue reference. -/
+def next (b : ContinuousDensityBind) : PartialFamily (ℝ × PUnit.{1}) ℝ ℝ where
+  space := Space.ofMeasure ℝ volume
+  body := fun _ =>
+    { weight := fun x y => (b.continuation x).density y
+      value := fun _ y => some y }
+
+/-- The direct two-stage semantics, retaining the source and continuation fibres. -/
+def tower (b : ContinuousDensityBind) : PartialTower ℝ PUnit.{1} ℝ ℝ where
+  first := b.source.semanticFamily
+  next := b.next
+
+/-- The strict integrand on a retained source row. -/
+def rowIntegrand (b : ContinuousDensityBind) (x : ℝ) (f : ℝ → Option ℝ) (y : ℝ) : Option ℝ :=
+  Value.mul (Value.mul (b.source.density x) ((b.continuation x).density y)) (f y)
+
+/-- A flattened representative without the tower's trivial first latent point. -/
+def flat (b : ContinuousDensityBind) : PartialFamily ℝ PUnit.{1} ℝ where
+  space := Space.ofMeasure ℝ volume
+  body := fun x =>
+    { weight := fun _ y => Value.mul (b.source.density x) ((b.continuation x).density y)
+      value := fun _ y => some y }
+
+/-- Removing the trivial source latent coordinate preserves the dependent reference. -/
+def towerFlattenIso (b : ContinuousDensityBind) : PartialFamily.Iso b.tower.flatten b.flat where
+  coordinates := Coordinates.const MeasurableEquiv.punitProd
+  preserving := by
+    intro x
+    have hκ : ((ProbabilityTheory.Kernel.const ℝ
+          (Measure.dirac (PUnit.unit : PUnit.{1}))) ⊗ₖ
+        (ProbabilityTheory.Kernel.const (ℝ × PUnit.{1}) (volume : Measure ℝ))) =
+        ProbabilityTheory.Kernel.const ℝ
+          ((Measure.dirac (PUnit.unit : PUnit.{1})).prod (volume : Measure ℝ)) := by
+      ext z s hs
+      rw [ProbabilityTheory.Kernel.compProd_apply hs]
+      simp only [ProbabilityTheory.Kernel.const_apply]
+      rw [Measure.prod_apply hs]
+    change MeasurePreserving MeasurableEquiv.punitProd
+      (((ProbabilityTheory.Kernel.const ℝ
+        (Measure.dirac (PUnit.unit : PUnit.{1}))) ⊗ₖ
+       (ProbabilityTheory.Kernel.const (ℝ × PUnit.{1}) (volume : Measure ℝ))) x) volume
+    rw [hκ, ProbabilityTheory.Kernel.const_apply]
+    exact WeightedParameter.measurePreserving_punitProd volume
+  weight := by
+    rintro x _ ⟨u, y⟩
+    cases u
+    rfl
+  value := by
+    rintro x _ ⟨u, y⟩
+    cases u
+    rfl
+
+def semanticFamily (b : ContinuousDensityBind) : PartialFamily ℝ PUnit.{1} ℝ := b.flat
+
+def semantic (b : ContinuousDensityBind) : PartialHom ℝ PUnit.{1} ℝ :=
+  PartialHom.ofFamily b.flat
+
+def rootedSemantic (b : ContinuousDensityBind) : RootedPartialTrace ℝ volume ℝ :=
+  RootedPartialHom.ofFamily b.flat
+
+/-- Joint observation at the intrinsic root. -/
+def observeJoint (b : ContinuousDensityBind) (f : ℝ → Option ℝ) : Option ℝ :=
+  b.rootedSemantic.observeJoint PUnit.unit (fun _ y => f y)
+
+def semanticMass (b : ContinuousDensityBind) : Option ℝ := b.rootedSemantic.mass
+
+/-- The old nested presentation is used only at the compatibility boundary. -/
+def presentation (b : ContinuousDensityBind) : Option (D ℝ) :=
+  bindValue b.source.presentation (some fun x => (b.continuation x).presentation)
+
+@[simp] theorem eraseRoot_rootedSemantic (b : ContinuousDensityBind) :
+    b.rootedSemantic.eraseRoot = b.semantic := rfl
+
+/-- Flattening the retained tower gives the same quotient-level semantics. -/
+theorem tower_hom (b : ContinuousDensityBind) : b.tower.hom = b.semantic :=
+  Quotient.sound ⟨b.towerFlattenIso⟩
+
+@[simp] theorem observe_tower (b : ContinuousDensityBind) (x : ℝ) (f : ℝ → Option ℝ) :
+    b.tower.observe x (PUnit.unit : PUnit.{1}) f = b.flat.observe x PUnit.unit f :=
+  b.towerFlattenIso.observe_eq x PUnit.unit f
+
+/-- A retained source row is exactly its strict continuous integral. -/
+theorem observeRow_eq (b : ContinuousDensityBind) (x : ℝ) (f : ℝ → Option ℝ) :
+    b.tower.observeRow x (PUnit.unit : PUnit.{1}) (PUnit.unit : PUnit.{1}) f =
+      partialIntegral volume (b.rowIntegrand x f) := by
+  unfold PartialTower.observeRow
+  change partialIntegral ((ProbabilityTheory.Kernel.const (ℝ × PUnit.{1})
+    (volume : Measure ℝ)) (x, PUnit.unit)) _ = _
+  rw [ProbabilityTheory.Kernel.const_apply]
+  rfl
+
+/-- Every-row L1 and joint L1 remain separate capabilities. -/
+def Rows (b : ContinuousDensityBind) (f : ℝ → Option ℝ) : Prop :=
+  ∀ x, Integrable (fun y => (b.rowIntegrand x f y).getD 0) volume
+
+def JointL1 (b : ContinuousDensityBind) (f : ℝ → Option ℝ) : Prop :=
+  Integrable (fun p : ℝ × ℝ => (b.rowIntegrand p.1 f p.2).getD 0) (volume.prod volume)
+
+/-- Joint observation is a strict integral over the two real coordinates. -/
+theorem observeJoint_eq (b : ContinuousDensityBind) (f : ℝ → Option ℝ) :
+    b.observeJoint f = partialIntegral (volume.prod volume)
+      (fun p => b.rowIntegrand p.1 f p.2) := by
+  unfold observeJoint rootedSemantic RootedPartialHom.observeJoint PartialHom.observeJoint
+    RootedPartialHom.ofFamily RootedPartialHom.ofPartialHom PartialHom.ofFamily
+  rw [Quotient.liftOn_mk]
+  unfold PartialFamily.observeJoint flat
+  change partialIntegral (volume ⊗ₘ ProbabilityTheory.Kernel.const ℝ (volume : Measure ℝ))
+    (fun p : ℝ × ℝ => b.rowIntegrand p.1 f p.2) = _
+  rw [Measure.compProd_const]
+
+/-- Guarded Fubini for a flattened continuous observation. -/
+theorem observeJoint_iterated (b : ContinuousDensityBind) (f : ℝ → Option ℝ)
+    (hr : b.Rows f) (hi : b.JointL1 f) :
+    b.observeJoint f = partialIntegral volume
+      (fun x => partialIntegral volume (b.rowIntegrand x f)) := by
+  unfold observeJoint rootedSemantic RootedPartialHom.observeJoint PartialHom.observeJoint
+    RootedPartialHom.ofFamily RootedPartialHom.ofPartialHom PartialHom.ofFamily
+  rw [Quotient.liftOn_mk]
+  unfold PartialFamily.observeJoint flat
+  change partialIntegral (volume ⊗ₘ ProbabilityTheory.Kernel.const ℝ (volume : Measure ℝ))
+    (fun p : ℝ × ℝ => b.rowIntegrand p.1 f p.2) = _
+  apply partialIntegral_compProd_of_integrable _ _ _
+  · exact hr
+  · simpa only [Measure.compProd_const] using hi
+
+/-- The continuation observation must be defined on every source row before its
+integral can be pulled outside the source weight. -/
+def RowDefined (b : ContinuousDensityBind) (f : ℝ → Option ℝ) : Prop :=
+  ∀ x, Value.Defined ((b.continuation x).observe f)
+
+/-- Pulling out a source weight is exact when the continuation observation is
+defined. This includes zero source weights, but not nonintegrable continuations. -/
+theorem rowIntegral_eq (b : ContinuousDensityBind) (x : ℝ) (f : ℝ → Option ℝ)
+    (hd : Value.Defined ((b.continuation x).observe f)) :
+    partialIntegral volume (b.rowIntegrand x f) =
+      Value.mul (b.source.density x) ((b.continuation x).observe f) := by
+  rw [DensityProgram.observe, Model.densityMassValue_eq] at hd ⊢
+  simp only [Option.some_bind] at hd ⊢
+  cases hs : b.source.density x with
+  | none =>
+    have hrow : b.rowIntegrand x f = fun _ : ℝ => none := by
+      funext y
+      simp [rowIntegrand, hs, Value.mul]
+    rw [hrow]
+    simp [partialIntegral, Value.Defined, Value.mul]
+  | some d =>
+    have hrow : b.rowIntegrand x f = fun y =>
+        Value.mul (some d) (Value.mul ((b.continuation x).density y) (f y)) := by
+      funext y
+      cases hc : (b.continuation x).density y <;> cases hf : f y <;>
+        simp [rowIntegrand, hs, hc, hf, Value.mul, mul_assoc]
+    rw [hrow]
+    exact partialIntegral_scale_defined volume d
+      (fun y => Value.mul ((b.continuation x).density y) (f y)) hd
+
+theorem observeRow_eq_observe (b : ContinuousDensityBind) (x : ℝ) (f : ℝ → Option ℝ)
+    (hd : Value.Defined ((b.continuation x).observe f)) :
+    b.tower.observeRow x (PUnit.unit : PUnit.{1}) (PUnit.unit : PUnit.{1}) f =
+      Value.mul (b.source.density x) ((b.continuation x).observe f) := by
+  rw [observeRow_eq, rowIntegral_eq b x f hd]
+
+/-- Defined continuation observations supply the every-row L1 capability for
+the source-weighted integrand. -/
+theorem rows_of_rowDefined (b : ContinuousDensityBind) (f : ℝ → Option ℝ)
+    (hd : b.RowDefined f) : b.Rows f := by
+  intro x
+  have hdi : Integrable
+      (fun y => (Value.mul ((b.continuation x).density y) (f y)).getD 0) volume := by
+    apply ((partialIntegral_defined_iff volume
+      (fun y => Value.mul ((b.continuation x).density y) (f y))).mp ?_).2
+    simpa only [DensityProgram.observe, Model.densityMassValue_eq, Option.some_bind] using hd x
+  cases hs : b.source.density x with
+  | none =>
+    have hget : (fun y => (b.rowIntegrand x f y).getD 0) = fun _ : ℝ => (0 : ℝ) := by
+      funext y
+      simp [rowIntegrand, hs, Value.mul]
+    rw [hget]
+    exact integrable_zero _ _ _
+  | some d =>
+    have hget : (fun y => (b.rowIntegrand x f y).getD 0) = fun y =>
+        d * (Value.mul ((b.continuation x).density y) (f y)).getD 0 := by
+      funext y
+      cases hc : (b.continuation x).density y <;> cases hf : f y <;>
+        simp [rowIntegrand, hs, hc, hf, Value.mul, mul_assoc]
+    rw [hget]
+    exact hdi.const_mul d
+
+private theorem observe_one (p : DensityProgram) : p.observe (fun _ => some 1) = p.mass := by
+  rw [DensityProgram.observe, DensityProgram.mass, Model.densityMassValue_eq,
+    Model.densityMassValue_eq]
+  simp only [Option.some_bind, Value.mul_one_right]
+
+/-- Under explicit row and joint capabilities, intrinsic joint mass agrees with
+the old ordered source-then-continuation observer. -/
+theorem semanticMass_eq (b : ContinuousDensityBind)
+    (hr : b.RowDefined (fun _ => some 1)) (hi : b.JointL1 (fun _ => some 1)) :
+    b.semanticMass = b.source.observe (fun x => (b.continuation x).mass) := by
+  change b.observeJoint (fun _ => some 1) = _
+  rw [observeJoint_iterated b _ (b.rows_of_rowDefined _ hr) hi]
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  simp only [Option.some_bind]
+  congr 1
+  funext x
+  rw [rowIntegral_eq b x _ (hr x), observe_one]
+
+/-- Exact compatibility with the old presentation mass observer, guarded by
+the same domain capabilities. -/
+theorem semanticMass_bridge (b : ContinuousDensityBind)
+    (hr : b.RowDefined (fun _ => some 1)) (hi : b.JointL1 (fun _ => some 1)) :
+    b.semanticMass = massValue b.presentation := by
+  rw [presentation, DensityProgram.bind_mass_bridge, semanticMass_eq b hr hi]
+  congr 1
+  funext x
+  rw [DensityProgram.mass_bridge]
+
+end ContinuousDensityBind
 end QSym.Distribution

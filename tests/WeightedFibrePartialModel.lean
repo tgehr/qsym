@@ -150,6 +150,122 @@ theorem failingBind_presentationMass : massValue failingBind.presentation = none
   rw [← DensityBind.semanticMass_bridge]
   exact failingBind_semanticMass
 
+/-- A continuous unit-square bind with a defined observation on every row. -/
+def continuousUnit : ContinuousDensityBind := ⟨unitInterval, fun _ => unitInterval⟩
+
+/-- A zero source weight must not erase an undefined continuous density point. -/
+def failingContinuous : ContinuousDensityBind :=
+  ⟨.weight (fun _ => some (0 : ℝ)) .lebesgue, fun _ => hole⟩
+
+/-- A zero source followed by a nonintegrable but total continuous density. -/
+def zeroContinuous : ContinuousDensityBind :=
+  ⟨.weight (fun _ => some (0 : ℝ)) .lebesgue, fun _ => .lebesgue⟩
+
+theorem unitInterval_observe_one : unitInterval.observe (fun _ => some 1) = some 1 := by
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  simp only [Option.some_bind, Value.mul_one_right]
+  have hm := unitInterval.mass_interval unitIntervalCertificate
+  rw [DensityProgram.mass, Model.densityMassValue_eq] at hm
+  norm_num at hm
+  simpa only [Option.some_bind] using hm
+
+theorem continuousUnit_rowDefined : continuousUnit.RowDefined (fun _ => some 1) := by
+  intro x
+  change Value.Defined (unitInterval.observe (fun _ => some 1))
+  rw [unitInterval_observe_one]
+  exact ⟨1, rfl⟩
+
+theorem continuousUnit_jointL1 : continuousUnit.JointL1 (fun _ => some 1) := by
+  unfold ContinuousDensityBind.JointL1
+  have hfun : (fun p : ℝ × ℝ =>
+      (continuousUnit.rowIntegrand p.1 (fun _ => some 1) p.2).getD 0) =
+      (Set.Icc (0 : ℝ) (1 : ℝ) ×ˢ Set.Icc (0 : ℝ) (1 : ℝ)).indicator
+        (fun _ => (1 : ℝ)) := by
+    funext p
+    rcases p with ⟨x, y⟩
+    by_cases hx0 : (0 : ℝ) ≤ x <;> by_cases hx1 : x ≤ (1 : ℝ) <;>
+      by_cases hy0 : (0 : ℝ) ≤ y <;> by_cases hy1 : y ≤ (1 : ℝ) <;>
+      simp [ContinuousDensityBind.rowIntegrand, continuousUnit, unitInterval,
+        DensityProgram.density, Value.mul, hx0, hx1, hy0, hy1, Set.indicator,
+        Set.mem_Icc, Prod.le_def]
+  rw [hfun]
+  apply (integrable_indicator_iff (measurableSet_Icc.prod measurableSet_Icc)).mpr
+  have hmeasure : (volume.prod volume)
+      (Set.Icc (0 : ℝ) (1 : ℝ) ×ˢ Set.Icc (0 : ℝ) (1 : ℝ)) < ⊤ := by
+    rw [Measure.prod_prod]
+    simp [Real.volume_Icc]
+  exact integrableOn_const.mpr (Or.inr hmeasure)
+
+theorem continuousUnit_row (x : ℝ) :
+    continuousUnit.tower.observeRow x (PUnit.unit : PUnit.{1})
+      (PUnit.unit : PUnit.{1}) (fun _ => some 1) = unitInterval.density x := by
+  rw [ContinuousDensityBind.observeRow_eq_observe _ _ _ (continuousUnit_rowDefined x)]
+  change Value.mul (unitInterval.density x) (unitInterval.observe (fun _ => some 1)) = _
+  rw [unitInterval_observe_one, Value.mul_one_right]
+
+theorem continuousUnit_semanticMass : continuousUnit.semanticMass = some 1 := by
+  rw [ContinuousDensityBind.semanticMass_eq _ continuousUnit_rowDefined continuousUnit_jointL1]
+  have hm : unitInterval.mass = some 1 := by
+    simpa using unitInterval.mass_interval unitIntervalCertificate
+  simpa only [continuousUnit, hm] using unitInterval_observe_one
+
+theorem continuousUnit_presentationMass : massValue continuousUnit.presentation = some 1 := by
+  rw [← ContinuousDensityBind.semanticMass_bridge _ continuousUnit_rowDefined continuousUnit_jointL1]
+  exact continuousUnit_semanticMass
+
+theorem failingContinuous_row :
+    failingContinuous.tower.observeRow 0 (PUnit.unit : PUnit.{1})
+      (PUnit.unit : PUnit.{1}) (fun _ => some 1) = none := by
+  rw [ContinuousDensityBind.observeRow_eq]
+  apply if_neg
+  intro h
+  have hd := h.1 0
+  simp [ContinuousDensityBind.rowIntegrand, failingContinuous, hole,
+    DensityProgram.density, Value.mul, Value.Defined] at hd
+
+theorem failingContinuous_semanticMass : failingContinuous.semanticMass = none := by
+  change failingContinuous.observeJoint (fun _ => some 1) = none
+  rw [ContinuousDensityBind.observeJoint_eq]
+  apply if_neg
+  intro h
+  have hd := h.1 (0, 0)
+  simp [ContinuousDensityBind.rowIntegrand, failingContinuous, hole,
+    DensityProgram.density, Value.mul, Value.Defined] at hd
+
+/-- Joint integration can turn a zero-weighted divergent row into zero. -/
+theorem zeroContinuous_semanticMass : zeroContinuous.semanticMass = some 0 := by
+  change zeroContinuous.observeJoint (fun _ => some 1) = some 0
+  rw [ContinuousDensityBind.observeJoint_eq]
+  have hfun : (fun p : ℝ × ℝ => zeroContinuous.rowIntegrand p.1 (fun _ => some 1) p.2) =
+      fun _ => some (0 : ℝ) := by
+    funext p
+    rcases p with ⟨x, y⟩
+    simp [ContinuousDensityBind.rowIntegrand, zeroContinuous,
+      DensityProgram.density, Value.mul]
+  rw [hfun]
+  exact partialIntegral_zero _
+
+/-- The old ordered observer still rejects that nonintegrable row. -/
+theorem zeroContinuous_presentationMass : massValue zeroContinuous.presentation = none := by
+  rw [ContinuousDensityBind.presentation, DensityProgram.bind_mass_bridge]
+  have hunbounded : DensityProgram.lebesgue.mass = none := by
+    simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
+      partialIntegral, Value.Defined, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+  have hm : massValue DensityProgram.lebesgue.presentation = none :=
+    DensityProgram.lebesgue.mass_bridge.trans hunbounded
+  simp only [zeroContinuous, hm]
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  simp only [Option.some_bind]
+  apply if_neg
+  intro h
+  have hd := h.1 0
+  simp [DensityProgram.density, Value.mul, Value.Defined] at hd
+
+theorem zeroContinuous_observers_differ :
+    zeroContinuous.semanticMass ≠ massValue zeroContinuous.presentation := by
+  rw [zeroContinuous_semanticMass, zeroContinuous_presentationMass]
+  simp
+
 #qsym_check_axioms PartialFamily.Iso.observe_eq
 #qsym_check_axioms PartialFamily.Iso.observeJoint_eq
 #qsym_check_axioms PartialHom.observe_pure
@@ -187,6 +303,8 @@ theorem failingBind_presentationMass : massValue failingBind.presentation = none
 
 #qsym_check_axioms PartialFamily.observe_depCompUniform
 #qsym_check_axioms PartialFamily.Iso.depComp
+#qsym_check_axioms PartialFamily.depAssocIso
+#qsym_check_axioms PartialFamily.observe_depAssoc
 #qsym_check_axioms PartialFamily.ofFamily_depComp_observe
 #qsym_check_axioms PartialTower.observe_hom
 #qsym_check_axioms PartialTower.eraseRoot_rootedFlatten
@@ -205,5 +323,29 @@ theorem failingBind_presentationMass : massValue failingBind.presentation = none
 #qsym_check_axioms failingBind_semanticMass
 #qsym_check_axioms weightedBind_presentationMass
 #qsym_check_axioms failingBind_presentationMass
+
+#qsym_check_axioms ContinuousDensityBind.towerFlattenIso
+#qsym_check_axioms ContinuousDensityBind.tower_hom
+#qsym_check_axioms ContinuousDensityBind.eraseRoot_rootedSemantic
+#qsym_check_axioms ContinuousDensityBind.observe_tower
+#qsym_check_axioms ContinuousDensityBind.observeRow_eq
+#qsym_check_axioms ContinuousDensityBind.observeJoint_eq
+#qsym_check_axioms ContinuousDensityBind.observeJoint_iterated
+#qsym_check_axioms ContinuousDensityBind.rowIntegral_eq
+#qsym_check_axioms ContinuousDensityBind.observeRow_eq_observe
+#qsym_check_axioms ContinuousDensityBind.rows_of_rowDefined
+#qsym_check_axioms ContinuousDensityBind.semanticMass_eq
+#qsym_check_axioms ContinuousDensityBind.semanticMass_bridge
+#qsym_check_axioms unitInterval_observe_one
+#qsym_check_axioms continuousUnit_rowDefined
+#qsym_check_axioms continuousUnit_jointL1
+#qsym_check_axioms continuousUnit_row
+#qsym_check_axioms continuousUnit_semanticMass
+#qsym_check_axioms continuousUnit_presentationMass
+#qsym_check_axioms failingContinuous_row
+#qsym_check_axioms failingContinuous_semanticMass
+#qsym_check_axioms zeroContinuous_semanticMass
+#qsym_check_axioms zeroContinuous_presentationMass
+#qsym_check_axioms zeroContinuous_observers_differ
 
 end QSym.PartialFibreTests

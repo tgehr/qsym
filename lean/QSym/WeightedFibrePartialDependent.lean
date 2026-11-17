@@ -109,6 +109,59 @@ def Iso.depComp {p p' : PartialFamily X A B}
     | none => rfl
     | some b => simp only [Option.some_bind]; rw [k.value]; rfl
 
+/-- Reassociation of strict dependent composition preserves both the dependent
+reference and the stored partial bodies. No integrability hypothesis is needed:
+this is pointwise algebra, not an interchange of integrals. -/
+def depAssocIso {D : Type*} (p : PartialFamily X A B)
+    (q : PartialFamily (X × p.space.Carrier) B C)
+    (r : PartialFamily ((X × p.space.Carrier) × q.space.Carrier) C D) :
+    Iso ((p.depComp q).depComp
+      (r.reindex MeasurableEquiv.prodAssoc.symm MeasurableEquiv.prodAssoc.symm.measurable))
+      (p.depComp (q.depComp r)) where
+  coordinates := Coordinates.const MeasurableEquiv.prodAssoc
+  preserving := preserving_depAssoc p.space.reference q.space.reference r.space.reference
+  weight := by
+    rintro x a ⟨⟨u, v⟩, w⟩
+    change r.space.Carrier at w
+    simp only [depComp, reindex, Coordinates.const]
+    change ((((p.body x).value a u).bind fun b => (q.body (x, u)).value b v).bind fun c =>
+      Value.mul (((p.body x).value a u).bind fun b =>
+        Value.mul ((p.body x).weight a u) ((q.body (x, u)).weight b v))
+        ((r.body ((x, u), v)).weight c w)) =
+      ((p.body x).value a u).bind fun b => Value.mul ((p.body x).weight a u)
+        (((q.body (x, u)).value b v).bind fun c => Value.mul ((q.body (x, u)).weight b v)
+          ((r.body ((x, u), v)).weight c w))
+    cases hp : (p.body x).value a u with
+    | none => rfl
+    | some b =>
+      simp only [hp, Option.some_bind]
+      cases hq : (q.body (x, u)).value b v with
+      | none => cases (p.body x).weight a u <;> rfl
+      | some c =>
+        simp only [hq, Option.some_bind]
+        cases (p.body x).weight a u <;> cases (q.body (x, u)).weight b v <;>
+          cases (r.body ((x, u), v)).weight c w <;> simp [Value.mul, mul_assoc]
+  value := by
+    rintro x a ⟨⟨u, v⟩, w⟩
+    change r.space.Carrier at w
+    simp only [depComp, reindex, Coordinates.const]
+    change ((((p.body x).value a u).bind fun b => (q.body (x, u)).value b v).bind fun c =>
+      (r.body ((x, u), v)).value c w) =
+      ((p.body x).value a u).bind fun b => (((q.body (x, u)).value b v).bind fun c =>
+        (r.body ((x, u), v)).value c w)
+    cases hp : (p.body x).value a u with
+    | none => rfl
+    | some b => simp only [hp, Option.some_bind]
+
+@[simp] theorem observe_depAssoc {D : Type*} (p : PartialFamily X A B)
+    (q : PartialFamily (X × p.space.Carrier) B C)
+    (r : PartialFamily ((X × p.space.Carrier) × q.space.Carrier) C D)
+    (x : X) (a : A) (f : D → Option ℝ) :
+    ((p.depComp q).depComp
+      (r.reindex MeasurableEquiv.prodAssoc.symm MeasurableEquiv.prodAssoc.symm.measurable)).observe x a f =
+      (p.depComp (q.depComp r)).observe x a f :=
+  (depAssocIso p q r).observe_eq x a f
+
 /-- The strict dependent layer conservatively embeds total dependent
 composition, including its stored bodies. -/
 def ofFamily_depComp (p : Family X A B)
