@@ -1,12 +1,12 @@
 import QSym.DistributionDensityModel
 import QSym.WeightedFibreRooted
 
-/-! Direct interpretation of density programs by partial weighted fibres.
+/-! Direct interpretation of primitive and density programs by partial fibres.
 
-The retained coordinate is the returned real value, and the partial density is
-stored in the body. The latent reference is a Dirac point. Density and mass are
-therefore observations of the same semantic object; `Presentation` is used only
-in compatibility theorems for the existing frontend.
+Density programs retain their real sample as the returned value and store the
+partial density in the body. Primitive programs use point or empty latent fibres.
+Observation and mass therefore share one semantic object; `Presentation` is used
+only in compatibility theorems for the existing frontend.
 -/
 noncomputable section
 namespace QSym.Distribution
@@ -20,6 +20,133 @@ def densityFamily (w : ℝ → Option ℝ) : PartialFamily ℝ PUnit.{1} ℝ whe
   body := fun x =>
     { weight := fun _ _ => w x
       value := fun _ _ => some x }
+
+/-- The three non-recursive primitive presentation constructors. -/
+inductive PrimitiveProgram (α : Type) where
+  | invalid
+  | zero
+  | dirac (value : α)
+
+namespace PrimitiveProgram
+variable {α : Type}
+
+/-- Invalidity is retained at a latent point rather than identified with zero. -/
+def invalidFamily (α : Type) : PartialFamily PUnit.{1} PUnit.{1} α where
+  space := Space.point
+  body := fun _ =>
+    { weight := fun _ _ => none
+      value := fun _ _ => none }
+
+/-- The zero program has an empty latent fibre. A zero weight on a point with an
+undefined value would instead be invalid under strict pointwise observation. -/
+def zeroFamily (α : Type) : PartialFamily PUnit.{1} PUnit.{1} α where
+  space := Space.ofMeasure Empty 0
+  body := fun _ =>
+    { weight := fun _ ω => nomatch ω
+      value := fun _ ω => nomatch ω }
+
+/-- A point mass uses the deterministic partial introduction. -/
+def diracFamily (a : α) : PartialFamily PUnit.{1} PUnit.{1} α :=
+  PartialFamily.pure (fun _ _ => some a)
+
+/-- The direct primitive representative; its latent space may be empty. -/
+def semanticFamily (p : PrimitiveProgram α) : PartialFamily PUnit.{1} PUnit.{1} α :=
+  match p with
+  | .invalid => invalidFamily α
+  | .zero => zeroFamily α
+  | .dirac a => diracFamily a
+
+def semantic (p : PrimitiveProgram α) : PartialHom PUnit.{1} PUnit.{1} α :=
+  PartialHom.ofFamily p.semanticFamily
+
+/-- Primitive programs have an intrinsic Dirac root at the unit point. -/
+def rootedSemantic (p : PrimitiveProgram α) :
+    RootedPartialTrace PUnit.{1} (Measure.dirac (PUnit.unit : PUnit.{1})) α :=
+  RootedPartialHom.ofFamily p.semanticFamily
+
+/-- Joint observation at the intrinsic root for an arbitrary strict test. -/
+def observe (p : PrimitiveProgram α) (f : α → Option ℝ) : Option ℝ :=
+  p.rootedSemantic.observeJoint PUnit.unit (fun _ a => f a)
+
+def semanticMass (p : PrimitiveProgram α) : Option ℝ := p.rootedSemantic.mass
+
+/-- The old primitive presentation is used only at the compatibility boundary. -/
+def presentation (p : PrimitiveProgram α) : Option (D α) :=
+  some <| match p with
+    | .invalid => .invalid
+    | .zero => .zero
+    | .dirac a => .dirac a
+
+@[simp] theorem eraseRoot_rootedSemantic (p : PrimitiveProgram α) :
+    p.rootedSemantic.eraseRoot = p.semantic := rfl
+
+@[simp] theorem observe_invalid (f : α → Option ℝ) :
+    observe (invalid : PrimitiveProgram α) f = none := by
+  unfold observe rootedSemantic RootedPartialHom.observeJoint PartialHom.observeJoint
+    RootedPartialHom.ofFamily RootedPartialHom.ofPartialHom PartialHom.ofFamily
+  rw [Quotient.liftOn_mk]
+  unfold semanticFamily invalidFamily PartialFamily.observeJoint
+  apply if_neg
+  intro h
+  have hd := h.1 (PUnit.unit, PUnit.unit)
+  simp [Value.Defined, Value.mul] at hd
+
+@[simp] theorem observe_zero (f : α → Option ℝ) :
+    observe (zero : PrimitiveProgram α) f = some 0 := by
+  unfold observe rootedSemantic RootedPartialHom.observeJoint PartialHom.observeJoint
+    RootedPartialHom.ofFamily RootedPartialHom.ofPartialHom PartialHom.ofFamily
+  rw [Quotient.liftOn_mk]
+  unfold PartialFamily.observeJoint
+  change partialIntegral ((Measure.dirac (PUnit.unit : PUnit.{1})) ⊗ₘ
+    ProbabilityTheory.Kernel.const PUnit.{1} (0 : Measure Empty)) _ = some 0
+  rw [partialIntegral_valid _ _ (fun z => isEmptyElim z.2) Integrable.of_isEmpty,
+    integral_of_isEmpty]
+
+@[simp] theorem observe_dirac (a : α) (f : α → Option ℝ) :
+    observe (dirac a) f = f a := by
+  unfold observe rootedSemantic RootedPartialHom.observeJoint PartialHom.observeJoint
+    RootedPartialHom.ofFamily RootedPartialHom.ofPartialHom PartialHom.ofFamily
+  rw [Quotient.liftOn_mk]
+  unfold semanticFamily diracFamily PartialFamily.observeJoint PartialFamily.pure
+    PartialKernel.pure Space.point
+  simp only [ProbabilityTheory.Kernel.const_apply, Measure.compProd_const,
+    Option.some_bind, Value.mul_one_left]
+  exact (partialIntegral_comp MeasurableEquiv.punitProd
+    (WeightedParameter.measurePreserving_punitProd
+      (Measure.dirac (PUnit.unit : PUnit.{1}))) (fun _ => f a)).trans
+    (partialIntegral_point (f a))
+
+/-- Primitive observation computes exactly by constructor. -/
+theorem observe_eq (p : PrimitiveProgram α) (f : α → Option ℝ) :
+    p.observe f = match p with
+      | .invalid => none
+      | .zero => some 0
+      | .dirac a => f a := by
+  cases p with
+  | invalid => exact observe_invalid f
+  | zero => exact observe_zero f
+  | dirac a => exact observe_dirac a f
+
+/-- Exact compatibility with the old primitive presentation observer. -/
+theorem observe_bridge (p : PrimitiveProgram α) (f : α → Option ℝ) :
+    p.observe f = p.presentation.bind (fun d => integrate d f) := by
+  cases p with
+  | invalid => exact observe_invalid f
+  | zero => exact observe_zero f
+  | dirac a => exact observe_dirac a f
+
+/-- Intrinsic rooted mass is the unit-test special case of observation. -/
+theorem semanticMass_eq (p : PrimitiveProgram α) :
+    p.semanticMass = p.observe (fun _ => some 1) := rfl
+
+/-- Exact compatibility with the old primitive presentation mass observer. -/
+theorem semanticMass_bridge (p : PrimitiveProgram α) :
+    p.semanticMass = massValue p.presentation := by
+  change p.observe (fun _ => some 1) =
+    p.presentation.bind (fun d => integrate d (fun _ => some 1))
+  exact observe_bridge p _
+
+end PrimitiveProgram
 
 namespace DensityProgram
 

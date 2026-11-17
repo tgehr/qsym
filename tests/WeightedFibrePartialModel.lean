@@ -25,6 +25,44 @@ theorem zero_weight_preserves_undefined :
   rw [partialIntegral_point]
   rfl
 
+def primitiveInvalid : PrimitiveProgram ℝ := .invalid
+def primitiveZero : PrimitiveProgram ℝ := .zero
+def primitiveDiracTwo : PrimitiveProgram ℝ := .dirac 2
+
+theorem primitiveInvalid_semanticMass : primitiveInvalid.semanticMass = none := by
+  rw [PrimitiveProgram.semanticMass_eq]
+  exact PrimitiveProgram.observe_invalid _
+
+/-- The empty fibre makes zero defined even for an everywhere-undefined test. -/
+theorem primitiveZero_observeUndefined :
+    primitiveZero.observe (fun _ => none) = some 0 :=
+  PrimitiveProgram.observe_zero _
+
+theorem primitiveZero_semanticMass : primitiveZero.semanticMass = some 0 := by
+  rw [PrimitiveProgram.semanticMass_eq]
+  exact PrimitiveProgram.observe_zero _
+
+theorem primitiveDiracTwo_observeThree :
+    primitiveDiracTwo.observe (fun _ => some 3) = some 3 :=
+  PrimitiveProgram.observe_dirac 2 _
+
+theorem primitiveDiracTwo_semanticMass : primitiveDiracTwo.semanticMass = some 1 := by
+  rw [PrimitiveProgram.semanticMass_eq]
+  exact PrimitiveProgram.observe_dirac 2 _
+
+theorem primitiveInvalid_presentationMass : massValue primitiveInvalid.presentation = none := by
+  rw [← PrimitiveProgram.semanticMass_bridge]
+  exact primitiveInvalid_semanticMass
+
+theorem primitiveZero_presentationObserveUndefined :
+    primitiveZero.presentation.bind (fun d => integrate d (fun _ => none)) = some 0 := by
+  rw [← PrimitiveProgram.observe_bridge]
+  exact primitiveZero_observeUndefined
+
+theorem primitiveDiracTwo_presentationMass : massValue primitiveDiracTwo.presentation = some 1 := by
+  rw [← PrimitiveProgram.semanticMass_bridge]
+  exact primitiveDiracTwo_semanticMass
+
 /-- A finite-mass program whose direct semantics is checked by an interval proof. -/
 def unitInterval : DensityProgram :=
   .weight (fun x => some (if 0 ≤ x ∧ x ≤ 1 then (1 : ℝ) else 0)) .lebesgue
@@ -417,6 +455,14 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms RootedPartialHom.ofTotalHom_observeJoint
 #qsym_check_axioms RootedPartialHom.eraseRoot_comp
 #qsym_check_axioms RootedPartialHom.mass_eraseRoot
+#qsym_check_axioms PrimitiveProgram.eraseRoot_rootedSemantic
+#qsym_check_axioms PrimitiveProgram.observe_invalid
+#qsym_check_axioms PrimitiveProgram.observe_zero
+#qsym_check_axioms PrimitiveProgram.observe_dirac
+#qsym_check_axioms PrimitiveProgram.observe_eq
+#qsym_check_axioms PrimitiveProgram.observe_bridge
+#qsym_check_axioms PrimitiveProgram.semanticMass_eq
+#qsym_check_axioms PrimitiveProgram.semanticMass_bridge
 #qsym_check_axioms DensityProgram.semantic_weight
 #qsym_check_axioms DensityProgram.rootedSemantic_weight
 #qsym_check_axioms DensityProgram.eraseRoot_rootedSemantic
@@ -432,6 +478,14 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms DensityProgram.bind_mass_bridge
 #qsym_check_axioms DensityProgram.integral_mass_bridge
 #qsym_check_axioms zero_weight_preserves_undefined
+#qsym_check_axioms primitiveInvalid_semanticMass
+#qsym_check_axioms primitiveZero_observeUndefined
+#qsym_check_axioms primitiveZero_semanticMass
+#qsym_check_axioms primitiveDiracTwo_observeThree
+#qsym_check_axioms primitiveDiracTwo_semanticMass
+#qsym_check_axioms primitiveInvalid_presentationMass
+#qsym_check_axioms primitiveZero_presentationObserveUndefined
+#qsym_check_axioms primitiveDiracTwo_presentationMass
 #qsym_check_axioms unitInterval_semanticMass
 #qsym_check_axioms unitInterval_rootedMass
 #qsym_check_axioms unitInterval_zeroRoot_mass
