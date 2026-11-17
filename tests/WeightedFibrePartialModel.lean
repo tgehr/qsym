@@ -213,6 +213,55 @@ theorem continuousUnit_presentationMass : massValue continuousUnit.presentation 
   rw [← ContinuousDensityBind.semanticMass_bridge _ continuousUnit_rowDefined continuousUnit_jointL1]
   exact continuousUnit_semanticMass
 
+/-- A non-mass observation of the same finite continuous source. -/
+theorem unitInterval_observe_two : unitInterval.observe (fun _ => some 2) = some 2 := by
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  simp only [Option.some_bind]
+  have hm : partialIntegral volume unitInterval.density = some 1 := by
+    have hm := unitInterval.mass_interval unitIntervalCertificate
+    rw [DensityProgram.mass, Model.densityMassValue_eq] at hm
+    norm_num at hm
+    simpa only [Option.some_bind] using hm
+  have hcomm : (fun x => Value.mul (unitInterval.density x) (some (2 : ℝ))) =
+      (fun x => Value.mul (some (2 : ℝ)) (unitInterval.density x)) := by
+    funext x
+    cases unitInterval.density x <;> simp [Value.mul, mul_comm]
+  rw [hcomm, partialIntegral_scale_defined volume 2 unitInterval.density ⟨1, hm⟩, hm]
+  simp [Value.mul]
+
+theorem continuousUnit_rowDefined_two : continuousUnit.RowDefined (fun _ => some 2) := by
+  intro x
+  change Value.Defined (unitInterval.observe (fun _ => some 2))
+  rw [unitInterval_observe_two]
+  exact ⟨2, rfl⟩
+
+theorem continuousUnit_jointL1_two : continuousUnit.JointL1 (fun _ => some 2) := by
+  unfold ContinuousDensityBind.JointL1
+  have hscale : (fun p : ℝ × ℝ =>
+      (continuousUnit.rowIntegrand p.1 (fun _ => some 2) p.2).getD 0) =
+      (fun p => (2 : ℝ) *
+        (continuousUnit.rowIntegrand p.1 (fun _ => some 1) p.2).getD 0) := by
+    funext p
+    rcases p with ⟨x, y⟩
+    cases hs : continuousUnit.source.density x <;>
+      cases hc : (continuousUnit.continuation x).density y <;>
+      simp [ContinuousDensityBind.rowIntegrand, hs, hc, Value.mul, mul_comm,
+        mul_left_comm, mul_assoc]
+  rw [hscale]
+  exact continuousUnit_jointL1.const_mul 2
+
+theorem continuousUnit_observeTwo :
+    continuousUnit.observeJoint (fun _ => some 2) = some 2 := by
+  rw [ContinuousDensityBind.observeJoint_source _ _
+    continuousUnit_rowDefined_two continuousUnit_jointL1_two]
+  simp only [continuousUnit, unitInterval_observe_two]
+
+theorem continuousUnit_presentationObserveTwo :
+    continuousUnit.presentation.bind (fun d => integrate d (fun _ => some 2)) = some 2 := by
+  rw [← ContinuousDensityBind.observeJoint_bridge _ _
+    continuousUnit_rowDefined_two continuousUnit_jointL1_two]
+  exact continuousUnit_observeTwo
+
 theorem failingContinuous_row :
     failingContinuous.tower.observeRow 0 (PUnit.unit : PUnit.{1})
       (PUnit.unit : PUnit.{1}) (fun _ => some 1) = none := by
@@ -290,6 +339,11 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms DensityProgram.semanticMass_eq
 #qsym_check_axioms DensityProgram.semanticDensityAt_bridge
 #qsym_check_axioms DensityProgram.semanticMass_bridge
+#qsym_check_axioms DensityProgram.observe_bridge
+#qsym_check_axioms DensityProgram.bind_observe_bridge
+#qsym_check_axioms DensityProgram.integral_observe_bridge
+#qsym_check_axioms DensityProgram.bind_mass_bridge
+#qsym_check_axioms DensityProgram.integral_mass_bridge
 #qsym_check_axioms zero_weight_preserves_undefined
 #qsym_check_axioms unitInterval_semanticMass
 #qsym_check_axioms unitInterval_rootedMass
@@ -334,6 +388,8 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms ContinuousDensityBind.rowIntegral_eq
 #qsym_check_axioms ContinuousDensityBind.observeRow_eq_observe
 #qsym_check_axioms ContinuousDensityBind.rows_of_rowDefined
+#qsym_check_axioms ContinuousDensityBind.observeJoint_source
+#qsym_check_axioms ContinuousDensityBind.observeJoint_bridge
 #qsym_check_axioms ContinuousDensityBind.semanticMass_eq
 #qsym_check_axioms ContinuousDensityBind.semanticMass_bridge
 #qsym_check_axioms unitInterval_observe_one
@@ -342,6 +398,11 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms continuousUnit_row
 #qsym_check_axioms continuousUnit_semanticMass
 #qsym_check_axioms continuousUnit_presentationMass
+#qsym_check_axioms unitInterval_observe_two
+#qsym_check_axioms continuousUnit_rowDefined_two
+#qsym_check_axioms continuousUnit_jointL1_two
+#qsym_check_axioms continuousUnit_observeTwo
+#qsym_check_axioms continuousUnit_presentationObserveTwo
 #qsym_check_axioms failingContinuous_row
 #qsym_check_axioms failingContinuous_semanticMass
 #qsym_check_axioms zeroContinuous_semanticMass

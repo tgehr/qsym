@@ -359,33 +359,51 @@ theorem rows_of_rowDefined (b : ContinuousDensityBind) (f : ℝ → Option ℝ)
     rw [hget]
     exact hdi.const_mul d
 
-private theorem observe_one (p : DensityProgram) : p.observe (fun _ => some 1) = p.mass := by
-  rw [DensityProgram.observe, DensityProgram.mass, Model.densityMassValue_eq,
-    Model.densityMassValue_eq]
-  simp only [Option.some_bind, Value.mul_one_right]
-
-/-- Under explicit row and joint capabilities, intrinsic joint mass agrees with
-the old ordered source-then-continuation observer. -/
-theorem semanticMass_eq (b : ContinuousDensityBind)
-    (hr : b.RowDefined (fun _ => some 1)) (hi : b.JointL1 (fun _ => some 1)) :
-    b.semanticMass = b.source.observe (fun x => (b.continuation x).mass) := by
-  change b.observeJoint (fun _ => some 1) = _
+/-- Under explicit row and joint capabilities, every strict joint observation
+agrees with the old ordered source-then-continuation observer. -/
+theorem observeJoint_source (b : ContinuousDensityBind) (f : ℝ → Option ℝ)
+    (hr : b.RowDefined f) (hi : b.JointL1 f) :
+    b.observeJoint f = b.source.observe (fun x => (b.continuation x).observe f) := by
   rw [observeJoint_iterated b _ (b.rows_of_rowDefined _ hr) hi]
   rw [DensityProgram.observe, Model.densityMassValue_eq]
   simp only [Option.some_bind]
   congr 1
   funext x
-  rw [rowIntegral_eq b x _ (hr x), observe_one]
+  rw [rowIntegral_eq b x _ (hr x)]
 
-/-- Exact compatibility with the old presentation mass observer, guarded by
-the same domain capabilities. -/
+/-- Exact compatibility with the old presentation observer for an arbitrary
+strict partial test, guarded by the same domain capabilities. -/
+theorem observeJoint_bridge (b : ContinuousDensityBind) (f : ℝ → Option ℝ)
+    (hr : b.RowDefined f) (hi : b.JointL1 f) :
+    b.observeJoint f = b.presentation.bind (fun d => integrate d f) := by
+  rw [presentation, DensityProgram.bind_observe_bridge,
+    observeJoint_source b f hr hi]
+  congr 1
+  funext x
+  rw [DensityProgram.observe_bridge]
+
+private theorem observe_one (p : DensityProgram) : p.observe (fun _ => some 1) = p.mass := by
+  rw [DensityProgram.observe, DensityProgram.mass, Model.densityMassValue_eq,
+    Model.densityMassValue_eq]
+  simp only [Option.some_bind, Value.mul_one_right]
+
+/-- Intrinsic joint mass is the mass special case of ordered observation. -/
+theorem semanticMass_eq (b : ContinuousDensityBind)
+    (hr : b.RowDefined (fun _ => some 1)) (hi : b.JointL1 (fun _ => some 1)) :
+    b.semanticMass = b.source.observe (fun x => (b.continuation x).mass) := by
+  change b.observeJoint (fun _ => some 1) = _
+  rw [observeJoint_source b _ hr hi]
+  congr 1
+  funext x
+  rw [observe_one]
+
+/-- Exact compatibility with the old presentation mass observer. -/
 theorem semanticMass_bridge (b : ContinuousDensityBind)
     (hr : b.RowDefined (fun _ => some 1)) (hi : b.JointL1 (fun _ => some 1)) :
     b.semanticMass = massValue b.presentation := by
-  rw [presentation, DensityProgram.bind_mass_bridge, semanticMass_eq b hr hi]
-  congr 1
-  funext x
-  rw [DensityProgram.mass_bridge]
+  change b.observeJoint (fun _ => some 1) =
+    b.presentation.bind (fun d => integrate d (fun _ => some 1))
+  exact observeJoint_bridge b _ hr hi
 
 end ContinuousDensityBind
 end QSym.Distribution
