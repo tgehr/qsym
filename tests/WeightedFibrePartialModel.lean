@@ -525,9 +525,150 @@ theorem zeroScaledLebesgue_observers_differ :
   rw [zeroScaledLebesgue_semanticMass, zeroScaledLebesgue_presentationMass]
   simp
 
+/-- Direct addition of rooted traces by disjoint latent sums. -/
+def primitiveDiracThree : PrimitiveProgram ℝ := .dirac 3
+
+def addedDiracs : RootedPartialTrace PUnit.{1}
+    (Measure.dirac (PUnit.unit : PUnit.{1})) ℝ :=
+  RootedPartialHom.add primitiveDiracTwo.rootedSemantic primitiveDiracThree.rootedSemantic
+
+def invalidPlusDirac : RootedPartialTrace PUnit.{1}
+    (Measure.dirac (PUnit.unit : PUnit.{1})) ℝ :=
+  RootedPartialHom.add primitiveInvalid.rootedSemantic primitiveDiracTwo.rootedSemantic
+
+def diracPlusInvalid : RootedPartialTrace PUnit.{1}
+    (Measure.dirac (PUnit.unit : PUnit.{1})) ℝ :=
+  RootedPartialHom.add primitiveDiracTwo.rootedSemantic primitiveInvalid.rootedSemantic
+
+def addedZeros : RootedPartialTrace PUnit.{1}
+    (Measure.dirac (PUnit.unit : PUnit.{1})) ℝ :=
+  RootedPartialHom.add primitiveZero.rootedSemantic primitiveZero.rootedSemantic
+
+def zeroDensity : DensityProgram := .weight (fun _ => some (0 : ℝ)) .lebesgue
+
+def holePlusZero : RootedPartialTrace ℝ volume ℝ :=
+  RootedPartialHom.add hole.rootedSemantic zeroDensity.rootedSemantic
+
+/-- A zero-measure root is shared by both branches in this example. -/
+def zeroRootHolePlusZero : RootedPartialTrace ℝ (0 : Measure ℝ) ℝ :=
+  RootedPartialHom.add
+    (RootedPartialHom.ofPartialHom hole.semantic)
+    (RootedPartialHom.ofPartialHom zeroDensity.semantic)
+
+def lebesguePlusZero : RootedPartialTrace ℝ volume ℝ :=
+  RootedPartialHom.add DensityProgram.lebesgue.rootedSemantic zeroDensity.rootedSemantic
+
+theorem zeroDensity_semanticMass : zeroDensity.semanticMass = some 0 := by
+  rw [DensityProgram.semanticMass_eq, DensityProgram.mass, Model.densityMassValue_eq]
+  change partialIntegral volume zeroDensity.density = some 0
+  have hfun : zeroDensity.density = fun _ => some (0 : ℝ) := by
+    funext x
+    simp [zeroDensity, DensityProgram.density, Value.mul]
+  rw [hfun]
+  exact partialIntegral_zero _
+
+theorem primitiveDiracThree_semanticMass : primitiveDiracThree.semanticMass = some 1 := by
+  rw [PrimitiveProgram.semanticMass_eq]
+  exact PrimitiveProgram.observe_dirac 3 _
+
+theorem addedDiracs_semanticMass : addedDiracs.mass = some 2 := by
+  rw [addedDiracs, RootedPartialHom.mass_add]
+  change Value.add primitiveDiracTwo.semanticMass primitiveDiracThree.semanticMass = some 2
+  rw [primitiveDiracTwo_semanticMass, primitiveDiracThree_semanticMass]
+  norm_num [Value.add]
+
+theorem addedDiracs_observeSucc :
+    addedDiracs.observeJoint PUnit.unit (fun _ x => some (x + 1)) = some 7 := by
+  rw [addedDiracs, RootedPartialHom.observeJoint_add]
+  change Value.add (primitiveDiracTwo.observe (fun x => some (x + 1)))
+    (primitiveDiracThree.observe (fun x => some (x + 1))) = some 7
+  norm_num [primitiveDiracTwo, primitiveDiracThree, PrimitiveProgram.observe_dirac, Value.add]
+
+theorem addedDiracs_presentationMass :
+    massValue (addValue primitiveDiracTwo.presentation primitiveDiracThree.presentation) = some 2 := by
+  rw [← RootedAdd.mass_bridge primitiveDiracTwo.rootedSemantic primitiveDiracThree.rootedSemantic
+    _ _ primitiveDiracTwo.semanticMass_bridge primitiveDiracThree.semanticMass_bridge]
+  exact addedDiracs_semanticMass
+
+theorem addedDiracs_presentationObserveSucc :
+    (addValue primitiveDiracTwo.presentation primitiveDiracThree.presentation).bind
+      (fun d => integrate d (fun x => some (x + 1))) = some 7 := by
+  rw [← RootedAdd.observeJoint_bridge primitiveDiracTwo.rootedSemantic
+    primitiveDiracThree.rootedSemantic _ _ _ (primitiveDiracTwo.observe_bridge _)
+    (primitiveDiracThree.observe_bridge _)]
+  exact addedDiracs_observeSucc
+
+/-- Failure in either branch is retained by direct addition. -/
+theorem invalidPlusDirac_semanticMass : invalidPlusDirac.mass = none := by
+  rw [invalidPlusDirac, RootedPartialHom.mass_add]
+  change Value.add primitiveInvalid.semanticMass primitiveDiracTwo.semanticMass = none
+  rw [primitiveInvalid_semanticMass]
+  rfl
+
+theorem diracPlusInvalid_semanticMass : diracPlusInvalid.mass = none := by
+  rw [diracPlusInvalid, RootedPartialHom.mass_add]
+  change Value.add primitiveDiracTwo.semanticMass primitiveInvalid.semanticMass = none
+  rw [primitiveInvalid_semanticMass]
+  simp [Value.add]
+
+/-- Two empty latent sums remain defined even for an everywhere-undefined test. -/
+theorem addedZeros_observeUndefined :
+    addedZeros.observeJoint PUnit.unit (fun _ _ => none) = some 0 := by
+  rw [addedZeros, RootedPartialHom.observeJoint_add]
+  change Value.add (primitiveZero.observe (fun _ => none))
+    (primitiveZero.observe (fun _ => none)) = some 0
+  rw [primitiveZero_observeUndefined]
+  norm_num [Value.add]
+
+/-- A pointwise hole is not hidden by adding an empty zero program. -/
+theorem holePlusZero_semanticMass : holePlusZero.mass = none := by
+  rw [holePlusZero, RootedPartialHom.mass_add]
+  change Value.add hole.semanticMass zeroDensity.semanticMass = none
+  rw [hole_semanticMass]
+  rfl
+
+theorem holePlusZero_presentationMass :
+    massValue (addValue hole.presentation zeroDensity.presentation) = none := by
+  rw [← RootedAdd.mass_bridge hole.rootedSemantic zeroDensity.rootedSemantic _ _
+    hole.semanticMass_bridge zeroDensity.semanticMass_bridge]
+  exact holePlusZero_semanticMass
+
+/-- Strict addition also retains failure at a zero root. -/
+theorem zeroRootHolePlusZero_mass : zeroRootHolePlusZero.mass = none := by
+  rw [zeroRootHolePlusZero, RootedPartialHom.mass_add, hole_zeroRoot_mass]
+  rfl
+
+/-- Nonintegrability in one branch is not hidden by a zero branch. -/
+theorem lebesguePlusZero_semanticMass : lebesguePlusZero.mass = none := by
+  have hunbounded : DensityProgram.lebesgue.rootedSemantic.mass = none := by
+    rw [← DensityProgram.lebesgue.semanticMass_rooted, DensityProgram.semanticMass_eq]
+    simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
+      partialIntegral, Value.Defined, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+  rw [lebesguePlusZero, RootedPartialHom.mass_add, hunbounded]
+  rfl
+
+/-- Quotient-equal total representatives can be substituted inside addition. -/
+def totalDiracTwo : PartialHom PUnit.{1} PUnit.{1} ℝ :=
+  PartialHom.ofHom (Hom.pure (fun _ _ => (2 : ℝ)))
+
+def totalDiracTwoComp : PartialHom PUnit.{1} PUnit.{1} ℝ :=
+  PartialHom.ofHom (Hom.comp (Hom.pure (fun _ _ => (2 : ℝ)))
+    (Hom.pure (fun _ => id)))
+
+theorem addition_respects_quotient :
+    PartialHom.add totalDiracTwoComp primitiveZero.semantic =
+      PartialHom.add totalDiracTwo primitiveZero.semantic := by
+  unfold totalDiracTwoComp totalDiracTwo
+  rw [Hom.comp_pure]
+
+#qsym_check_axioms partialIntegral_sum
+#qsym_check_axioms PartialFamily.observe_sum
+#qsym_check_axioms PartialFamily.observeJoint_sum
 #qsym_check_axioms PartialFamily.Iso.observe_eq
 #qsym_check_axioms PartialFamily.Iso.observeJoint_eq
 #qsym_check_axioms PartialHom.observe_pure
+#qsym_check_axioms PartialHom.observe_add
+#qsym_check_axioms PartialHom.observeJoint_add
 #qsym_check_axioms PartialHom.observe_reweight
 #qsym_check_axioms PartialHom.ofHom_pure
 #qsym_check_axioms PartialHom.ofHom_comp
@@ -538,15 +679,21 @@ theorem zeroScaledLebesgue_observers_differ :
 #qsym_check_axioms RootedPartialHom.observe_pure
 #qsym_check_axioms RootedPartialHom.observe_reweight
 #qsym_check_axioms RootedPartialHom.observeJoint_reweight
+#qsym_check_axioms RootedPartialHom.observe_add
+#qsym_check_axioms RootedPartialHom.observeJoint_add
 #qsym_check_axioms RootedPartialHom.observeJoint_scale
 #qsym_check_axioms RootedPartialHom.observeJoint_scale_defined
 #qsym_check_axioms RootedPartialHom.ofTotalHom_observeJoint
 #qsym_check_axioms RootedPartialHom.eraseRoot_comp
 #qsym_check_axioms RootedPartialHom.eraseRoot_scale
+#qsym_check_axioms RootedPartialHom.eraseRoot_add
 #qsym_check_axioms RootedPartialHom.mass_eraseRoot
 #qsym_check_axioms RootedPartialHom.mass_scale_defined
+#qsym_check_axioms RootedPartialHom.mass_add
 #qsym_check_axioms RootedScale.observeJoint_bridge
 #qsym_check_axioms RootedScale.mass_bridge
+#qsym_check_axioms RootedAdd.observeJoint_bridge
+#qsym_check_axioms RootedAdd.mass_bridge
 #qsym_check_axioms PrimitiveProgram.eraseRoot_rootedSemantic
 #qsym_check_axioms PrimitiveProgram.observe_invalid
 #qsym_check_axioms PrimitiveProgram.observe_zero
@@ -669,5 +816,19 @@ theorem zeroScaledLebesgue_observers_differ :
 #qsym_check_axioms zeroScaledLebesgue_semanticMass
 #qsym_check_axioms zeroScaledLebesgue_presentationMass
 #qsym_check_axioms zeroScaledLebesgue_observers_differ
+#qsym_check_axioms zeroDensity_semanticMass
+#qsym_check_axioms primitiveDiracThree_semanticMass
+#qsym_check_axioms addedDiracs_semanticMass
+#qsym_check_axioms addedDiracs_observeSucc
+#qsym_check_axioms addedDiracs_presentationMass
+#qsym_check_axioms addedDiracs_presentationObserveSucc
+#qsym_check_axioms invalidPlusDirac_semanticMass
+#qsym_check_axioms diracPlusInvalid_semanticMass
+#qsym_check_axioms addedZeros_observeUndefined
+#qsym_check_axioms holePlusZero_semanticMass
+#qsym_check_axioms holePlusZero_presentationMass
+#qsym_check_axioms zeroRootHolePlusZero_mass
+#qsym_check_axioms lebesguePlusZero_semanticMass
+#qsym_check_axioms addition_respects_quotient
 
 end QSym.PartialFibreTests

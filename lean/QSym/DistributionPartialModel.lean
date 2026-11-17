@@ -237,4 +237,28 @@ theorem mass_bridge (p : RootedPartialTrace X μ α) (r : ℝ) (d : Option (D α
   rw [RootedPartialHom.mass_scale_defined p r hd, hs, mass_scaleValue]
 
 end RootedScale
+
+/-! Compatibility boundary for strict addition of rooted direct traces.
+The old observer already adds its branch observations strictly, so no source
+definedness or integrability hypothesis is needed. -/
+namespace RootedAdd
+variable {X α : Type} [MeasurableSpace X] {μ : Measure X} [SFinite μ]
+
+theorem observeJoint_bridge (p q : RootedPartialTrace X μ α)
+    (d e : Option (D α)) (f : α → Option ℝ)
+    (hp : p.observeJoint PUnit.unit (fun _ a => f a) =
+      d.bind (fun a => integrate a f))
+    (hq : q.observeJoint PUnit.unit (fun _ a => f a) =
+      e.bind (fun a => integrate a f)) :
+    (RootedPartialHom.add p q).observeJoint PUnit.unit (fun _ a => f a) =
+      (addValue d e).bind (fun a => integrate a f) := by
+  rw [RootedPartialHom.observeJoint_add, hp, hq]
+  cases d <;> cases e <;> simp [addValue, Value.add, integrate]
+
+theorem mass_bridge (p q : RootedPartialTrace X μ α) (d e : Option (D α))
+    (hp : p.mass = massValue d) (hq : q.mass = massValue e) :
+    (RootedPartialHom.add p q).mass = massValue (addValue d e) := by
+  rw [RootedPartialHom.mass_add, hp, hq, mass_addValue]
+
+end RootedAdd
 end QSym.Distribution

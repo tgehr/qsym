@@ -80,6 +80,10 @@ def reweight (g : X → A → B → Option ℝ) (p : RootedPartialHom X μ A B) 
 def scale (r : ℝ) (p : RootedPartialHom X μ A B) : RootedPartialHom X μ A B :=
   reweight (fun _ _ _ => some r) p
 
+/-- Strict addition uses disjoint latent sums and preserves the intrinsic root. -/
+def add (p q : RootedPartialHom X μ A B) : RootedPartialHom X μ A B :=
+  ofPartialHom (PartialHom.add p.underlying q.underlying)
+
 /-- A pointwise fibre observation is independent of the root. -/
 def observe (p : RootedPartialHom X μ A B) (x : X) (a : A)
     (f : B → Option ℝ) : Option ℝ :=
@@ -114,6 +118,19 @@ theorem observeJoint_reweight (p : RootedPartialHom X μ A B)
     observeJoint (reweight g p) a f =
       observeJoint p a (fun x b => Value.mul (g x a b) (f x b)) :=
   PartialHom.observeJoint_reweight p.underlying μ g a f
+
+/-- Addition is branch-strict for pointwise observations. -/
+theorem observe_add (p q : RootedPartialHom X μ A B)
+    (x : X) (a : A) (f : B → Option ℝ) :
+    observe (add p q) x a f = Value.add (observe p x a f) (observe q x a f) :=
+  PartialHom.observe_add p.underlying q.underlying x a f
+
+/-- Addition is branch-strict for rooted joint observations, with no domain guard. -/
+theorem observeJoint_add (p q : RootedPartialHom X μ A B)
+    (a : A) (f : X → B → Option ℝ) :
+    observeJoint (add p q) a f =
+      Value.add (observeJoint p a f) (observeJoint q a f) :=
+  PartialHom.observeJoint_add p.underlying q.underlying μ a f
 
 /-- Scaling can be moved into the strict test without any domain hypothesis. -/
 theorem observeJoint_scale (p : RootedPartialHom X μ A B)
@@ -175,6 +192,9 @@ theorem observeJoint_scale_defined (p : RootedPartialHom X μ A B)
 @[simp] theorem eraseRoot_scale (r : ℝ) (p : RootedPartialHom X μ A B) :
     eraseRoot (scale r p) = PartialHom.reweight (fun _ _ _ => some r) p.underlying := rfl
 
+@[simp] theorem eraseRoot_add (p q : RootedPartialHom X μ A B) :
+    eraseRoot (add p q) = PartialHom.add p.underlying q.underlying := rfl
+
 end RootedPartialHom
 
 /-- A rooted pointwise family of traces. -/
@@ -198,6 +218,11 @@ theorem mass_scale_defined (p : RootedPartialTrace X μ B) (r : ℝ)
     (hd : Value.Defined p.mass) :
     (scale r p).mass = Value.mul (some r) p.mass :=
   observeJoint_scale_defined p r PUnit.unit (fun _ _ => some 1) hd
+
+/-- Mass addition is exact and remains undefined if either branch is undefined. -/
+theorem mass_add (p q : RootedPartialTrace X μ B) :
+    (add p q).mass = Value.add p.mass q.mass :=
+  observeJoint_add p q PUnit.unit (fun _ _ => some 1)
 
 end RootedPartialHom
 end QSym.WeightedParameter.Fibre

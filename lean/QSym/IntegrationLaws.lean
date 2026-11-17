@@ -29,6 +29,91 @@ theorem partialIntegral_point (v : Option ℝ) :
     partialIntegral (Measure.dirac PUnit.unit) (fun _ : PUnit => v) = v := by
   cases v <;> simp [partialIntegral, Value.Defined]
 
+/-- Strict integration over a disjoint sum is the strict sum of its branches.
+In particular, failure or nonintegrability in either branch is retained. -/
+theorem partialIntegral_sum {Ω Ψ : Type} [MeasurableSpace Ω] [MeasurableSpace Ψ]
+    (μ : Measure Ω) (ν : Measure Ψ) (f : Ω → Option ℝ) (g : Ψ → Option ℝ) :
+    partialIntegral (μ.map Sum.inl + ν.map Sum.inr) (Sum.elim f g) =
+      Value.add (partialIntegral μ f) (partialIntegral ν g) := by
+  have hinl : MeasurableEmbedding (@Sum.inl Ω Ψ) :=
+    { injective := Sum.inl_injective
+      measurable := measurable_inl
+      measurableSet_image' := by
+        intro s hs
+        exact MeasurableSet.inl_image hs }
+  have hinr : MeasurableEmbedding (@Sum.inr Ω Ψ) :=
+    { injective := Sum.inr_injective
+      measurable := measurable_inr
+      measurableSet_image' := by
+        intro s hs
+        exact MeasurableSet.inr_image hs }
+  have hd : (∀ z, Value.Defined (Sum.elim f g z)) ↔
+      (∀ x, Value.Defined (f x)) ∧ (∀ y, Value.Defined (g y)) := by
+    constructor
+    · intro h
+      exact ⟨fun x => h (Sum.inl x), fun y => h (Sum.inr y)⟩
+    · rintro ⟨hf, hg⟩ (x | y)
+      · exact hf x
+      · exact hg y
+  have hi : Integrable (fun z => (Sum.elim f g z).getD 0)
+      (μ.map Sum.inl + ν.map Sum.inr) ↔
+      Integrable (fun x => (f x).getD 0) μ ∧ Integrable (fun y => (g y).getD 0) ν := by
+    rw [integrable_add_measure, hinl.integrable_map_iff, hinr.integrable_map_iff]
+    rfl
+  have hdefined : Value.Defined
+      (partialIntegral (μ.map Sum.inl + ν.map Sum.inr) (Sum.elim f g)) ↔
+      Value.Defined (partialIntegral μ f) ∧ Value.Defined (partialIntegral ν g) := by
+    rw [partialIntegral_defined_iff, partialIntegral_defined_iff, partialIntegral_defined_iff]
+    constructor
+    · intro h
+      exact ⟨⟨(hd.mp h.1).1, (hi.mp h.2).1⟩, ⟨(hd.mp h.1).2, (hi.mp h.2).2⟩⟩
+    · rintro ⟨⟨hfd, hfi⟩, ⟨hgd, hgi⟩⟩
+      exact ⟨hd.mpr ⟨hfd, hgd⟩, hi.mpr ⟨hfi, hgi⟩⟩
+  cases hf : partialIntegral μ f with
+  | none =>
+    have hs : partialIntegral (μ.map Sum.inl + ν.map Sum.inr) (Sum.elim f g) = none := by
+      cases hs : partialIntegral (μ.map Sum.inl + ν.map Sum.inr) (Sum.elim f g) with
+      | none => rfl
+      | some c =>
+        have hfd := (hdefined.mp ⟨c, hs⟩).1
+        rw [hf] at hfd
+        simp [Value.Defined] at hfd
+    rw [hs]
+    cases partialIntegral ν g <;> rfl
+  | some a =>
+    cases hg : partialIntegral ν g with
+    | none =>
+      have hs : partialIntegral (μ.map Sum.inl + ν.map Sum.inr) (Sum.elim f g) = none := by
+        cases hs : partialIntegral (μ.map Sum.inl + ν.map Sum.inr) (Sum.elim f g) with
+        | none => rfl
+        | some c =>
+          have hgd := (hdefined.mp ⟨c, hs⟩).2
+          rw [hg] at hgd
+          simp [Value.Defined] at hgd
+      rw [hs]
+      rfl
+    | some b =>
+      obtain ⟨hfd, hfi⟩ := (partialIntegral_defined_iff μ f).mp ⟨a, hf⟩
+      obtain ⟨hgd, hgi⟩ := (partialIntegral_defined_iff ν g).mp ⟨b, hg⟩
+      have hfi' : Integrable (fun z => (Sum.elim f g z).getD 0) (μ.map Sum.inl) :=
+        hinl.integrable_map_iff.mpr hfi
+      have hgi' : Integrable (fun z => (Sum.elim f g z).getD 0) (ν.map Sum.inr) :=
+        hinr.integrable_map_iff.mpr hgi
+      rw [partialIntegral_valid _ _ (hd.mpr ⟨hfd, hgd⟩) (hi.mpr ⟨hfi, hgi⟩)]
+      simp only [Value.add]
+      congr 1
+      rw [integral_add_measure hfi' hgi', hinl.integral_map, hinr.integral_map]
+      have ha : (∫ x, (f x).getD 0 ∂μ) = a := by
+        have h := partialIntegral_valid μ f hfd hfi
+        rw [hf] at h
+        exact (Option.some.inj h).symm
+      have hb : (∫ y, (g y).getD 0 ∂ν) = b := by
+        have h := partialIntegral_valid ν g hgd hgi
+        rw [hg] at h
+        exact (Option.some.inj h).symm
+      change (∫ x, (f x).getD 0 ∂μ) + (∫ y, (g y).getD 0 ∂ν) = a + b
+      rw [ha, hb]
+
 private theorem mul_getD (c : ℝ) (v : Option ℝ) :
     (Value.mul (some c) v).getD 0 = c * v.getD 0 := by
   cases v <;> simp [Value.mul]
