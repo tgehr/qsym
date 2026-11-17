@@ -441,4 +441,111 @@ theorem semanticMass_bridge (b : ContinuousDensityBind)
   exact observeJoint_bridge b _ hr hi
 
 end ContinuousDensityBind
+
+/-- A Lebesgue integral of a value-dependent continuous real density. -/
+structure ContinuousDensityIntegral where
+  continuation : ℝ → DensityProgram
+
+namespace ContinuousDensityIntegral
+
+/-- The integral is the continuous bind whose source is the Lebesgue density. -/
+def toBind (p : ContinuousDensityIntegral) : ContinuousDensityBind :=
+  ⟨.lebesgue, p.continuation⟩
+
+/-- The direct two-stage semantics retains the integral and continuation fibres. -/
+def tower (p : ContinuousDensityIntegral) : PartialTower ℝ PUnit.{1} ℝ ℝ :=
+  p.toBind.tower
+
+/-- The strict integrand on a retained integral row. -/
+def rowIntegrand (p : ContinuousDensityIntegral) (x : ℝ)
+    (f : ℝ → Option ℝ) (y : ℝ) : Option ℝ :=
+  p.toBind.rowIntegrand x f y
+
+def semanticFamily (p : ContinuousDensityIntegral) : PartialFamily ℝ PUnit.{1} ℝ :=
+  p.toBind.semanticFamily
+
+def semantic (p : ContinuousDensityIntegral) : PartialHom ℝ PUnit.{1} ℝ :=
+  p.toBind.semantic
+
+def rootedSemantic (p : ContinuousDensityIntegral) : RootedPartialTrace ℝ volume ℝ :=
+  p.toBind.rootedSemantic
+
+/-- Joint observation at the intrinsic Lebesgue root. -/
+def observeJoint (p : ContinuousDensityIntegral) (f : ℝ → Option ℝ) : Option ℝ :=
+  p.toBind.observeJoint f
+
+def semanticMass (p : ContinuousDensityIntegral) : Option ℝ := p.toBind.semanticMass
+
+/-- The old integral presentation is used only at the compatibility boundary. -/
+def presentation (p : ContinuousDensityIntegral) : Option (D ℝ) :=
+  integralValue (some fun x => (p.continuation x).presentation)
+
+/-- Joint L1 remains separate from continuation row-definedness. -/
+def JointL1 (p : ContinuousDensityIntegral) (f : ℝ → Option ℝ) : Prop :=
+  p.toBind.JointL1 f
+
+/-- Ordered observation additionally requires every continuation observation to
+be defined, including on zero-weight and null rows. -/
+def RowDefined (p : ContinuousDensityIntegral) (f : ℝ → Option ℝ) : Prop :=
+  p.toBind.RowDefined f
+
+@[simp] theorem eraseRoot_rootedSemantic (p : ContinuousDensityIntegral) :
+    p.rootedSemantic.eraseRoot = p.semantic := rfl
+
+/-- Flattening the retained tower gives the same quotient-level semantics. -/
+theorem tower_hom (p : ContinuousDensityIntegral) : p.tower.hom = p.semantic :=
+  p.toBind.tower_hom
+
+@[simp] theorem observe_tower (p : ContinuousDensityIntegral) (x : ℝ)
+    (f : ℝ → Option ℝ) :
+    p.tower.observe x (PUnit.unit : PUnit.{1}) f =
+      p.semanticFamily.observe x PUnit.unit f :=
+  p.toBind.observe_tower x f
+
+/-- A retained integral row is exactly its strict continuous integral. -/
+theorem observeRow_eq (p : ContinuousDensityIntegral) (x : ℝ) (f : ℝ → Option ℝ) :
+    p.tower.observeRow x (PUnit.unit : PUnit.{1}) (PUnit.unit : PUnit.{1}) f =
+      partialIntegral volume (p.rowIntegrand x f) :=
+  p.toBind.observeRow_eq x f
+
+/-- Joint observation is a strict integral over the two real coordinates. -/
+theorem observeJoint_eq (p : ContinuousDensityIntegral) (f : ℝ → Option ℝ) :
+    p.observeJoint f = partialIntegral (volume.prod volume)
+      (fun z => p.rowIntegrand z.1 f z.2) :=
+  p.toBind.observeJoint_eq f
+
+/-- Under explicit row and joint capabilities, direct observation agrees with
+the ordered Lebesgue-then-continuation observer. -/
+theorem observeJoint_source (p : ContinuousDensityIntegral) (f : ℝ → Option ℝ)
+    (hr : p.RowDefined f) (hi : p.JointL1 f) :
+    p.observeJoint f = DensityProgram.lebesgue.observe
+      (fun x => (p.continuation x).observe f) :=
+  p.toBind.observeJoint_source f hr hi
+
+/-- Guarded compatibility with `integralValue` for every strict partial test. -/
+theorem observeJoint_bridge (p : ContinuousDensityIntegral) (f : ℝ → Option ℝ)
+    (hr : p.RowDefined f) (hi : p.JointL1 f) :
+    p.observeJoint f = p.presentation.bind (fun d => integrate d f) := by
+  rw [presentation, DensityProgram.integral_observe_bridge,
+    observeJoint_source p f hr hi]
+  congr 1
+  funext x
+  rw [DensityProgram.observe_bridge]
+
+/-- Intrinsic joint mass is the mass special case of ordered observation. -/
+theorem semanticMass_eq (p : ContinuousDensityIntegral)
+    (hr : p.RowDefined (fun _ => some 1)) (hi : p.JointL1 (fun _ => some 1)) :
+    p.semanticMass = DensityProgram.lebesgue.observe
+      (fun x => (p.continuation x).mass) :=
+  p.toBind.semanticMass_eq hr hi
+
+/-- Guarded compatibility with the old `integralValue` mass observer. -/
+theorem semanticMass_bridge (p : ContinuousDensityIntegral)
+    (hr : p.RowDefined (fun _ => some 1)) (hi : p.JointL1 (fun _ => some 1)) :
+    p.semanticMass = massValue p.presentation := by
+  change p.observeJoint (fun _ => some 1) =
+    p.presentation.bind (fun d => integrate d (fun _ => some 1))
+  exact observeJoint_bridge p _ hr hi
+
+end ContinuousDensityIntegral
 end QSym.Distribution

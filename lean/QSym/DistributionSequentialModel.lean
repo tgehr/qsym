@@ -18,6 +18,31 @@ def observe (p : DensityProgram) (f : ℝ → Option ℝ) : Option ℝ :=
 theorem observe_weight (p : DensityProgram) (f : ℝ → Option ℝ) :
     p.observe f = (weight f p).mass := rfl
 
+/-- A constant weight can be pulled out of a defined strict observation.
+The hypothesis keeps nonintegrable observations and undefined points visible,
+including when the constant weight is zero. -/
+theorem observe_weight_const (p : DensityProgram) (c : Option ℝ)
+    (f : ℝ → Option ℝ) (hd : Value.Defined (p.observe f)) :
+    (weight (fun _ => c) p).observe f = Value.mul c (p.observe f) := by
+  simp only [observe, Model.densityMassValue_eq, Option.some_bind] at hd ⊢
+  cases c with
+  | none =>
+    have hrow : (fun x => Value.mul ((weight (fun _ => none) p).density x) (f x)) =
+        fun _ : ℝ => none := by
+      funext x
+      simp [DensityProgram.density, Value.mul]
+    rw [hrow]
+    simp [partialIntegral, Value.Defined, Value.mul]
+  | some r =>
+    have hrow : (fun x => Value.mul ((weight (fun _ => some r) p).density x) (f x)) =
+        fun x => Value.mul (some r) (Value.mul (p.density x) (f x)) := by
+      funext x
+      cases hp : p.density x <;> cases hf : f x <;>
+        simp [DensityProgram.density, hp, hf, Value.mul, mul_assoc, mul_left_comm]
+    rw [hrow]
+    exact partialIntegral_scale_defined MeasureTheory.volume r
+      (fun x => Value.mul (p.density x) (f x)) hd
+
 private theorem integrate_getD (d : Option (D α)) (f : α → Option ℝ) :
     integrate (d.getD .invalid) f = d.bind (fun a => integrate a f) := by
   cases d <;> rfl

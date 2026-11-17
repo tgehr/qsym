@@ -283,6 +283,71 @@ theorem continuousUnit_presentationObserveTwo :
     continuousUnit_rowDefined_two continuousUnit_jointL1_two]
   exact continuousUnit_observeTwo
 
+/-- A finite dependent integral: the continuation at `x` is the unit interval
+reweighted by the source density at `x`. Its joint law is the unit square. -/
+def continuousIntegralUnit : ContinuousDensityIntegral :=
+  ⟨fun x => .weight (fun _ => unitInterval.density x) unitInterval⟩
+
+theorem continuousIntegralUnit_rowIntegrand (x : ℝ) (f : ℝ → Option ℝ) (y : ℝ) :
+    continuousIntegralUnit.rowIntegrand x f y = continuousUnit.rowIntegrand x f y := by
+  cases hx : unitInterval.density x <;> cases hy : unitInterval.density y <;>
+    cases hf : f y <;>
+    simp [ContinuousDensityIntegral.rowIntegrand, ContinuousDensityBind.rowIntegrand,
+      continuousIntegralUnit, ContinuousDensityIntegral.toBind, continuousUnit,
+      DensityProgram.density, hx, hy, hf, Value.mul, mul_comm, mul_left_comm, mul_assoc]
+
+theorem continuousIntegralUnit_rowDefined :
+    continuousIntegralUnit.RowDefined (fun _ => some 1) := by
+  intro x
+  change Value.Defined ((DensityProgram.weight (fun _ => unitInterval.density x)
+    unitInterval).observe (fun _ => some 1))
+  rw [DensityProgram.observe_weight_const _ _ _ ⟨1, unitInterval_observe_one⟩,
+    unitInterval_observe_one, Value.mul_one_right]
+  exact unitIntervalCertificate.total x
+
+theorem continuousIntegralUnit_jointL1 :
+    continuousIntegralUnit.JointL1 (fun _ => some 1) := by
+  change Integrable (fun p : ℝ × ℝ =>
+    (continuousIntegralUnit.rowIntegrand p.1 (fun _ => some 1) p.2).getD 0)
+    (volume.prod volume)
+  have hfun : (fun p : ℝ × ℝ =>
+      (continuousIntegralUnit.rowIntegrand p.1 (fun _ => some 1) p.2).getD 0) =
+      (fun p : ℝ × ℝ =>
+        (continuousUnit.rowIntegrand p.1 (fun _ => some 1) p.2).getD 0) := by
+    funext p
+    rcases p with ⟨x, y⟩
+    rw [continuousIntegralUnit_rowIntegrand]
+  rw [hfun]
+  exact continuousUnit_jointL1
+
+/-- The direct joint observer needs no compatibility hypothesis. -/
+theorem continuousIntegralUnit_observeJoint (f : ℝ → Option ℝ) :
+    continuousIntegralUnit.observeJoint f = continuousUnit.observeJoint f := by
+  calc
+    continuousIntegralUnit.observeJoint f = partialIntegral (volume.prod volume)
+        (fun p => continuousIntegralUnit.rowIntegrand p.1 f p.2) :=
+      ContinuousDensityIntegral.observeJoint_eq _ _
+    _ = partialIntegral (volume.prod volume)
+        (fun p => continuousUnit.rowIntegrand p.1 f p.2) := by
+      congr 1
+      funext p
+      rcases p with ⟨x, y⟩
+      exact continuousIntegralUnit_rowIntegrand x f y
+    _ = continuousUnit.observeJoint f :=
+      (ContinuousDensityBind.observeJoint_eq _ _).symm
+
+theorem continuousIntegralUnit_semanticMass :
+    continuousIntegralUnit.semanticMass = some 1 := by
+  change continuousIntegralUnit.observeJoint (fun _ => some 1) = some 1
+  rw [continuousIntegralUnit_observeJoint]
+  exact continuousUnit_semanticMass
+
+theorem continuousIntegralUnit_presentationMass :
+    massValue continuousIntegralUnit.presentation = some 1 := by
+  rw [← ContinuousDensityIntegral.semanticMass_bridge _
+    continuousIntegralUnit_rowDefined continuousIntegralUnit_jointL1]
+  exact continuousIntegralUnit_semanticMass
+
 theorem failingContinuous_row :
     failingContinuous.tower.observeRow 0 (PUnit.unit : PUnit.{1})
       (PUnit.unit : PUnit.{1}) (fun _ => some 1) = none := by
@@ -361,6 +426,7 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms DensityProgram.semanticDensityAt_bridge
 #qsym_check_axioms DensityProgram.semanticMass_bridge
 #qsym_check_axioms DensityProgram.observe_bridge
+#qsym_check_axioms DensityProgram.observe_weight_const
 #qsym_check_axioms DensityProgram.bind_observe_bridge
 #qsym_check_axioms DensityProgram.integral_observe_bridge
 #qsym_check_axioms DensityProgram.bind_mass_bridge
@@ -430,6 +496,21 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms continuousUnit_jointL1_two
 #qsym_check_axioms continuousUnit_observeTwo
 #qsym_check_axioms continuousUnit_presentationObserveTwo
+#qsym_check_axioms ContinuousDensityIntegral.eraseRoot_rootedSemantic
+#qsym_check_axioms ContinuousDensityIntegral.tower_hom
+#qsym_check_axioms ContinuousDensityIntegral.observe_tower
+#qsym_check_axioms ContinuousDensityIntegral.observeRow_eq
+#qsym_check_axioms ContinuousDensityIntegral.observeJoint_eq
+#qsym_check_axioms ContinuousDensityIntegral.observeJoint_source
+#qsym_check_axioms ContinuousDensityIntegral.observeJoint_bridge
+#qsym_check_axioms ContinuousDensityIntegral.semanticMass_eq
+#qsym_check_axioms ContinuousDensityIntegral.semanticMass_bridge
+#qsym_check_axioms continuousIntegralUnit_rowIntegrand
+#qsym_check_axioms continuousIntegralUnit_rowDefined
+#qsym_check_axioms continuousIntegralUnit_jointL1
+#qsym_check_axioms continuousIntegralUnit_observeJoint
+#qsym_check_axioms continuousIntegralUnit_semanticMass
+#qsym_check_axioms continuousIntegralUnit_presentationMass
 #qsym_check_axioms failingContinuous_row
 #qsym_check_axioms failingContinuous_semanticMass
 #qsym_check_axioms zeroContinuous_semanticMass
