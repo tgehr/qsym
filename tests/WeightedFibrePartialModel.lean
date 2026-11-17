@@ -213,8 +213,9 @@ theorem continuousUnit_presentationMass : massValue continuousUnit.presentation 
   rw [← ContinuousDensityBind.semanticMass_bridge _ continuousUnit_rowDefined continuousUnit_jointL1]
   exact continuousUnit_semanticMass
 
-/-- A non-mass observation of the same finite continuous source. -/
-theorem unitInterval_observe_two : unitInterval.observe (fun _ => some 2) = some 2 := by
+/-- Constant observations of the unit interval, including zero, are exact. -/
+theorem unitInterval_observe_const (c : ℝ) :
+    unitInterval.observe (fun _ => some c) = some c := by
   rw [DensityProgram.observe, Model.densityMassValue_eq]
   simp only [Option.some_bind]
   have hm : partialIntegral volume unitInterval.density = some 1 := by
@@ -222,12 +223,32 @@ theorem unitInterval_observe_two : unitInterval.observe (fun _ => some 2) = some
     rw [DensityProgram.mass, Model.densityMassValue_eq] at hm
     norm_num at hm
     simpa only [Option.some_bind] using hm
-  have hcomm : (fun x => Value.mul (unitInterval.density x) (some (2 : ℝ))) =
-      (fun x => Value.mul (some (2 : ℝ)) (unitInterval.density x)) := by
+  have hcomm : (fun x => Value.mul (unitInterval.density x) (some c)) =
+      (fun x => Value.mul (some c) (unitInterval.density x)) := by
     funext x
     cases unitInterval.density x <;> simp [Value.mul, mul_comm]
-  rw [hcomm, partialIntegral_scale_defined volume 2 unitInterval.density ⟨1, hm⟩, hm]
+  rw [hcomm, partialIntegral_scale_defined volume c unitInterval.density ⟨1, hm⟩, hm]
   simp [Value.mul]
+
+theorem unitInterval_observe_two : unitInterval.observe (fun _ => some 2) = some 2 :=
+  unitInterval_observe_const 2
+
+/-- A non-mass observation of a weighted-Dirac continuation. -/
+theorem weightedBind_observeTwo :
+    weightedBind.observeJoint (fun _ => some 2) = some 4 := by
+  rw [DensityBind.observeJoint_eq]
+  have hrow : (fun x => (weightedBind.continuation x).bind fun wx =>
+      Value.mul (some wx.1) ((fun _ : ℝ => some (2 : ℝ)) wx.2)) =
+      fun _ : ℝ => some (4 : ℝ) := by
+    funext x
+    norm_num [weightedBind, Value.mul]
+  rw [hrow]
+  exact unitInterval_observe_const 4
+
+theorem weightedBind_presentationObserveTwo :
+    weightedBind.presentation.bind (fun d => integrate d (fun _ => some 2)) = some 4 := by
+  rw [← DensityBind.observeJoint_bridge]
+  exact weightedBind_observeTwo
 
 theorem continuousUnit_rowDefined_two : continuousUnit.RowDefined (fun _ => some 2) := by
   intro x
@@ -369,6 +390,9 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms DensityBind.observeRow_eq
 #qsym_check_axioms DensityBind.eraseRoot_rootedSemantic
 #qsym_check_axioms DensityBind.mass_continuationPresentation
+#qsym_check_axioms DensityBind.observe_continuationPresentation
+#qsym_check_axioms DensityBind.observeJoint_eq
+#qsym_check_axioms DensityBind.observeJoint_bridge
 #qsym_check_axioms DensityBind.semanticMass_eq
 #qsym_check_axioms DensityBind.semanticMass_bridge
 #qsym_check_axioms weightedBind_row
@@ -377,6 +401,8 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms failingBind_semanticMass
 #qsym_check_axioms weightedBind_presentationMass
 #qsym_check_axioms failingBind_presentationMass
+#qsym_check_axioms weightedBind_observeTwo
+#qsym_check_axioms weightedBind_presentationObserveTwo
 
 #qsym_check_axioms ContinuousDensityBind.towerFlattenIso
 #qsym_check_axioms ContinuousDensityBind.tower_hom
@@ -398,6 +424,7 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms continuousUnit_row
 #qsym_check_axioms continuousUnit_semanticMass
 #qsym_check_axioms continuousUnit_presentationMass
+#qsym_check_axioms unitInterval_observe_const
 #qsym_check_axioms unitInterval_observe_two
 #qsym_check_axioms continuousUnit_rowDefined_two
 #qsym_check_axioms continuousUnit_jointL1_two

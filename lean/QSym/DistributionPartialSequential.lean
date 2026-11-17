@@ -50,6 +50,10 @@ def semantic (b : DensityBind α) : PartialHom ℝ PUnit.{1} α := b.tower.hom
 def rootedSemantic (b : DensityBind α) : RootedPartialTrace ℝ volume α :=
   b.tower.rootedFlatten volume
 
+/-- Joint observation at the intrinsic root for an arbitrary strict test. -/
+def observeJoint (b : DensityBind α) (f : α → Option ℝ) : Option ℝ :=
+  b.rootedSemantic.observeJoint PUnit.unit (fun _ a => f a)
+
 def semanticMass (b : DensityBind α) : Option ℝ := b.rootedSemantic.mass
 
 /-- The weighted-Dirac continuation in the old presentation language. This is
@@ -97,6 +101,13 @@ theorem observeRow_eq (b : DensityBind α) (x : ℝ) (f : α → Option ℝ) :
   cases hk : b.continuation x <;>
     simp [continuationPresentation, hk, massValue, integrate, Value.mul]
 
+@[simp] theorem observe_continuationPresentation (b : DensityBind α) (x : ℝ)
+    (f : α → Option ℝ) :
+    (b.continuationPresentation x).bind (fun d => integrate d f) =
+      (b.continuation x).bind fun wx => Value.mul (some wx.1) (f wx.2) := by
+  cases hk : b.continuation x <;>
+    simp [continuationPresentation, hk, integrate, Value.mul]
+
 /-- Collapse the two trivial latent coordinates in a rooted mass observation. -/
 private def realProdPoints : ℝ × (PUnit.{1} × PUnit.{1}) ≃ᵐ ℝ where
   toEquiv :=
@@ -122,11 +133,13 @@ private theorem partialIntegral_realProdPoints (f : ℝ → Option ℝ) :
       (fun z => f z.1) = partialIntegral volume f :=
   partialIntegral_comp realProdPoints measurePreserving_realProdPoints f
 
-/-- Rooted mass is the source density observed against continuation mass.
-No Fubini or integrability assumption is needed: both sides are the same strict
-integral after removing the two Dirac latent coordinates. -/
-theorem semanticMass_eq (b : DensityBind α) :
-    b.semanticMass = b.source.observe (fun x => (b.continuation x).map Prod.fst) := by
+/-- Joint observation is the source density observed against the strict
+weighted-Dirac continuation observation. No Fubini or integrability assumption
+is needed: both sides are the same integral after removing the two Dirac latent
+coordinates. -/
+theorem observeJoint_eq (b : DensityBind α) (f : α → Option ℝ) :
+    b.observeJoint f = b.source.observe (fun x =>
+      (b.continuation x).bind fun wx => Value.mul (some wx.1) (f wx.2)) := by
   rw [DensityProgram.observe, Model.densityMassValue_eq]
   change partialIntegral
       (volume ⊗ₘ ((ProbabilityTheory.Kernel.const ℝ
@@ -150,18 +163,40 @@ theorem semanticMass_eq (b : DensityBind α) :
   congr 1
   funext z
   rcases z with ⟨x, ⟨⟩, ⟨⟩⟩
-  cases hk : b.continuation x <;>
+  cases hk : b.continuation x with
+  | none =>
     cases hd : b.source.density x <;>
       simp [tower, next, DensityProgram.semanticFamily, densityFamily,
         PartialTower.flatten, PartialFamily.depComp, hk, hd, Value.mul]
+  | some wx =>
+    cases hd : b.source.density x <;> cases hf : f wx.2 <;>
+      simp [tower, next, DensityProgram.semanticFamily, densityFamily,
+        PartialTower.flatten, PartialFamily.depComp, hk, hd, hf, Value.mul, mul_assoc]
 
-/-- Exact compatibility with the old ordered presentation observer. -/
-theorem semanticMass_bridge (b : DensityBind α) :
-    b.semanticMass = massValue b.presentation := by
-  rw [presentation, DensityProgram.bind_mass_bridge, semanticMass_eq]
+/-- Rooted mass is the mass special case of joint observation. -/
+theorem semanticMass_eq (b : DensityBind α) :
+    b.semanticMass = b.source.observe (fun x => (b.continuation x).map Prod.fst) := by
+  change b.observeJoint (fun _ => some 1) = _
+  rw [observeJoint_eq]
   congr 1
   funext x
-  exact (b.mass_continuationPresentation x).symm
+  cases hk : b.continuation x <;> simp [hk, Value.mul]
+
+/-- Exact compatibility with the old ordered presentation observer for every
+strict partial test. -/
+theorem observeJoint_bridge (b : DensityBind α) (f : α → Option ℝ) :
+    b.observeJoint f = b.presentation.bind (fun d => integrate d f) := by
+  rw [presentation, DensityProgram.bind_observe_bridge, observeJoint_eq]
+  congr 1
+  funext x
+  rw [observe_continuationPresentation]
+
+/-- Exact compatibility with the old ordered presentation mass observer. -/
+theorem semanticMass_bridge (b : DensityBind α) :
+    b.semanticMass = massValue b.presentation := by
+  change b.observeJoint (fun _ => some 1) =
+    b.presentation.bind (fun d => integrate d (fun _ => some 1))
+  exact observeJoint_bridge b _
 
 end DensityBind
 
