@@ -76,6 +76,10 @@ def reweight (g : X → A → B → Option ℝ) (p : RootedPartialHom X μ A B) 
     RootedPartialHom X μ A B :=
   ofPartialHom (PartialHom.reweight g p.underlying)
 
+/-- Constant scaling is semantic reweighting at the same intrinsic root. -/
+def scale (r : ℝ) (p : RootedPartialHom X μ A B) : RootedPartialHom X μ A B :=
+  reweight (fun _ _ _ => some r) p
+
 /-- A pointwise fibre observation is independent of the root. -/
 def observe (p : RootedPartialHom X μ A B) (x : X) (a : A)
     (f : B → Option ℝ) : Option ℝ :=
@@ -111,6 +115,52 @@ theorem observeJoint_reweight (p : RootedPartialHom X μ A B)
       observeJoint p a (fun x b => Value.mul (g x a b) (f x b)) :=
   PartialHom.observeJoint_reweight p.underlying μ g a f
 
+/-- Scaling can be moved into the strict test without any domain hypothesis. -/
+theorem observeJoint_scale (p : RootedPartialHom X μ A B)
+    (r : ℝ) (a : A) (f : X → B → Option ℝ) :
+    observeJoint (scale r p) a f =
+      observeJoint p a (fun x b => Value.mul (some r) (f x b)) :=
+  observeJoint_reweight p (fun _ _ _ => some r) a f
+
+/-- A constant factor can be pulled out of a defined joint observation.
+When identifying the result with scaling the source observation, the guard is
+necessary: direct zero scaling can differ at undefined or nonintegrable sources. -/
+theorem observeJoint_scale_defined (p : RootedPartialHom X μ A B)
+    (r : ℝ) (a : A) (f : X → B → Option ℝ)
+    (hd : Value.Defined (observeJoint p a f)) :
+    observeJoint (scale r p) a f = Value.mul (some r) (observeJoint p a f) := by
+  rw [observeJoint_scale]
+  rcases p with ⟨p⟩
+  induction p using Quotient.inductionOn with | _ p =>
+    unfold observeJoint PartialHom.observeJoint at hd ⊢
+    rw [Quotient.liftOn_mk] at hd ⊢
+    change partialIntegral (μ ⊗ₘ p.space.reference) (fun z =>
+      Value.mul ((p.body z.1).weight a z.2)
+        (((p.body z.1).value a z.2).bind (fun b => Value.mul (some r) (f z.1 b)))) =
+      Value.mul (some r) (partialIntegral (μ ⊗ₘ p.space.reference) (fun z =>
+        Value.mul ((p.body z.1).weight a z.2)
+          (((p.body z.1).value a z.2).bind (f z.1))))
+    change Value.Defined (partialIntegral (μ ⊗ₘ p.space.reference) (fun z =>
+      Value.mul ((p.body z.1).weight a z.2)
+        (((p.body z.1).value a z.2).bind (f z.1)))) at hd
+    have hrow : (fun z : X × p.space.Carrier =>
+        Value.mul ((p.body z.1).weight a z.2)
+          (((p.body z.1).value a z.2).bind (fun b => Value.mul (some r) (f z.1 b)))) =
+        fun z => Value.mul (some r) (Value.mul ((p.body z.1).weight a z.2)
+          (((p.body z.1).value a z.2).bind (f z.1))) := by
+      funext z
+      cases hw : (p.body z.1).weight a z.2 with
+      | none =>
+        cases hv : (p.body z.1).value a z.2 <;> simp [hw, hv, Value.mul]
+      | some w =>
+        cases hv : (p.body z.1).value a z.2 with
+        | none => simp [hw, hv, Value.mul]
+        | some b =>
+          cases hf : f z.1 b <;>
+            simp [hw, hv, hf, Value.mul, mul_assoc, mul_left_comm]
+    rw [hrow]
+    exact partialIntegral_scale_defined (μ ⊗ₘ p.space.reference) r _ hd
+
 @[simp] theorem eraseRoot_pure (f : X → A → Option B) :
     eraseRoot (pure (μ := μ) f) = PartialHom.pure f := rfl
 
@@ -121,6 +171,9 @@ theorem observeJoint_reweight (p : RootedPartialHom X μ A B)
 @[simp] theorem eraseRoot_reweight (g : X → A → B → Option ℝ)
     (p : RootedPartialHom X μ A B) :
     eraseRoot (reweight g p) = PartialHom.reweight g p.underlying := rfl
+
+@[simp] theorem eraseRoot_scale (r : ℝ) (p : RootedPartialHom X μ A B) :
+    eraseRoot (scale r p) = PartialHom.reweight (fun _ _ _ => some r) p.underlying := rfl
 
 end RootedPartialHom
 
@@ -139,6 +192,12 @@ def mass (p : RootedPartialTrace X μ B) : Option ℝ :=
 /-- Erasing the root recovers exactly the previous explicitly based observer. -/
 theorem mass_eraseRoot (p : RootedPartialTrace X μ B) :
     p.mass = PartialHom.observeJoint p.underlying μ PUnit.unit (fun _ _ => some 1) := rfl
+
+/-- Defined source mass scales exactly, including by a negative or zero factor. -/
+theorem mass_scale_defined (p : RootedPartialTrace X μ B) (r : ℝ)
+    (hd : Value.Defined p.mass) :
+    (scale r p).mass = Value.mul (some r) p.mass :=
+  observeJoint_scale_defined p r PUnit.unit (fun _ _ => some 1) hd
 
 end RootedPartialHom
 end QSym.WeightedParameter.Fibre

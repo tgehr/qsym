@@ -439,6 +439,92 @@ theorem zeroContinuous_observers_differ :
   rw [zeroContinuous_semanticMass, zeroContinuous_presentationMass]
   simp
 
+/-- Constant scaling acts directly on rooted traces of any source fragment. -/
+def scaledUnitInterval : RootedPartialTrace ℝ volume ℝ :=
+  RootedPartialHom.scale 2 unitInterval.rootedSemantic
+
+def scaledDiracTwo : RootedPartialTrace PUnit.{1}
+    (Measure.dirac (PUnit.unit : PUnit.{1})) ℝ :=
+  RootedPartialHom.scale 3 primitiveDiracTwo.rootedSemantic
+
+def zeroScaledHole : RootedPartialTrace ℝ volume ℝ :=
+  RootedPartialHom.scale 0 hole.rootedSemantic
+
+def zeroScaledLebesgue : RootedPartialTrace ℝ volume ℝ :=
+  RootedPartialHom.scale 0 DensityProgram.lebesgue.rootedSemantic
+
+theorem scaledUnitInterval_semanticMass : scaledUnitInterval.mass = some 2 := by
+  rw [scaledUnitInterval, RootedPartialHom.mass_scale_defined _
+    _ ⟨1, unitInterval_rootedMass⟩, unitInterval_rootedMass]
+  norm_num [Value.mul]
+
+theorem scaledUnitInterval_presentationMass :
+    massValue (scaleValue (some 2) unitInterval.presentation) = some 2 := by
+  rw [← RootedScale.mass_bridge unitInterval.rootedSemantic 2 unitInterval.presentation
+    unitInterval.semanticMass_bridge ⟨1, unitInterval_rootedMass⟩]
+  exact scaledUnitInterval_semanticMass
+
+theorem scaledDiracTwo_observeSucc :
+    scaledDiracTwo.observeJoint PUnit.unit (fun _ x => some (x + 1)) = some 9 := by
+  have hd : Value.Defined (primitiveDiracTwo.rootedSemantic.observeJoint PUnit.unit
+      (fun _ x => some (x + 1))) := by
+    change Value.Defined (primitiveDiracTwo.observe (fun x => some (x + 1)))
+    rw [show primitiveDiracTwo.observe (fun x => some (x + 1)) = some 3 by
+      norm_num [primitiveDiracTwo, PrimitiveProgram.observe_dirac]]
+    exact ⟨3, rfl⟩
+  change (RootedPartialHom.scale 3 primitiveDiracTwo.rootedSemantic).observeJoint
+    PUnit.unit (fun _ x => some (x + 1)) = some 9
+  rw [RootedPartialHom.observeJoint_scale_defined _ _ _ _ hd]
+  change Value.mul (some (3 : ℝ)) (primitiveDiracTwo.observe (fun x => some (x + 1))) = some 9
+  norm_num [primitiveDiracTwo, PrimitiveProgram.observe_dirac, Value.mul]
+
+/-- Zero does not erase the source's undefined point under strict scaling. -/
+theorem zeroScaledHole_semanticMass : zeroScaledHole.mass = none := by
+  change (RootedPartialHom.scale 0 hole.rootedSemantic).observeJoint
+    PUnit.unit (fun _ _ => some 1) = none
+  rw [RootedPartialHom.observeJoint_scale]
+  change partialIntegral (volume ⊗ₘ
+    ProbabilityTheory.Kernel.const ℝ (Measure.dirac (PUnit.unit : PUnit.{1})))
+    (fun z : ℝ × PUnit.{1} => Value.mul (hole.density z.1)
+      (Value.mul (some (0 : ℝ)) (some 1))) = none
+  apply if_neg
+  intro h
+  have hd := h.1 (0, PUnit.unit)
+  simp [hole, DensityProgram.density, Value.mul, Value.Defined] at hd
+
+/-- A total source needs no source integrability for direct zero scaling. -/
+theorem zeroScaledLebesgue_semanticMass : zeroScaledLebesgue.mass = some 0 := by
+  change (RootedPartialHom.scale 0 DensityProgram.lebesgue.rootedSemantic).observeJoint
+    PUnit.unit (fun _ _ => some 1) = some 0
+  rw [RootedPartialHom.observeJoint_scale]
+  change partialIntegral (volume ⊗ₘ
+    ProbabilityTheory.Kernel.const ℝ (Measure.dirac (PUnit.unit : PUnit.{1})))
+    (fun z : ℝ × PUnit.{1} => Value.mul (DensityProgram.lebesgue.density z.1)
+      (Value.mul (some (0 : ℝ)) (some 1))) = some 0
+  have hfun : (fun z : ℝ × PUnit.{1} => Value.mul (DensityProgram.lebesgue.density z.1)
+      (Value.mul (some (0 : ℝ)) (some 1))) = fun _ => some (0 : ℝ) := by
+    funext z
+    simp [DensityProgram.density, Value.mul]
+  rw [hfun]
+  exact partialIntegral_zero _
+
+/-- The old ordered observer rejects the nonintegrable source before scaling. -/
+theorem zeroScaledLebesgue_presentationMass :
+    massValue (scaleValue (some 0) DensityProgram.lebesgue.presentation) = none := by
+  have hunbounded : DensityProgram.lebesgue.mass = none := by
+    simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
+      partialIntegral, Value.Defined, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+  have hm : massValue DensityProgram.lebesgue.presentation = none :=
+    DensityProgram.lebesgue.mass_bridge.trans hunbounded
+  rw [mass_scaleValue, hm]
+  rfl
+
+theorem zeroScaledLebesgue_observers_differ :
+    zeroScaledLebesgue.mass ≠
+      massValue (scaleValue (some 0) DensityProgram.lebesgue.presentation) := by
+  rw [zeroScaledLebesgue_semanticMass, zeroScaledLebesgue_presentationMass]
+  simp
+
 #qsym_check_axioms PartialFamily.Iso.observe_eq
 #qsym_check_axioms PartialFamily.Iso.observeJoint_eq
 #qsym_check_axioms PartialHom.observe_pure
@@ -452,9 +538,15 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms RootedPartialHom.observe_pure
 #qsym_check_axioms RootedPartialHom.observe_reweight
 #qsym_check_axioms RootedPartialHom.observeJoint_reweight
+#qsym_check_axioms RootedPartialHom.observeJoint_scale
+#qsym_check_axioms RootedPartialHom.observeJoint_scale_defined
 #qsym_check_axioms RootedPartialHom.ofTotalHom_observeJoint
 #qsym_check_axioms RootedPartialHom.eraseRoot_comp
+#qsym_check_axioms RootedPartialHom.eraseRoot_scale
 #qsym_check_axioms RootedPartialHom.mass_eraseRoot
+#qsym_check_axioms RootedPartialHom.mass_scale_defined
+#qsym_check_axioms RootedScale.observeJoint_bridge
+#qsym_check_axioms RootedScale.mass_bridge
 #qsym_check_axioms PrimitiveProgram.eraseRoot_rootedSemantic
 #qsym_check_axioms PrimitiveProgram.observe_invalid
 #qsym_check_axioms PrimitiveProgram.observe_zero
@@ -570,5 +662,12 @@ theorem zeroContinuous_observers_differ :
 #qsym_check_axioms zeroContinuous_semanticMass
 #qsym_check_axioms zeroContinuous_presentationMass
 #qsym_check_axioms zeroContinuous_observers_differ
+#qsym_check_axioms scaledUnitInterval_semanticMass
+#qsym_check_axioms scaledUnitInterval_presentationMass
+#qsym_check_axioms scaledDiracTwo_observeSucc
+#qsym_check_axioms zeroScaledHole_semanticMass
+#qsym_check_axioms zeroScaledLebesgue_semanticMass
+#qsym_check_axioms zeroScaledLebesgue_presentationMass
+#qsym_check_axioms zeroScaledLebesgue_observers_differ
 
 end QSym.PartialFibreTests

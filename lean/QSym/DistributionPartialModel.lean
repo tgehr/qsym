@@ -214,4 +214,27 @@ theorem semanticMass_bridge (p : DensityProgram) :
   rw [semanticMass_eq, p.mass_bridge]
 
 end DensityProgram
+
+/-! Compatibility boundary for constant scaling of any rooted direct trace.
+The source bridge and its definedness are explicit capabilities; neither the
+semantic operation nor its direct observer is routed through `Presentation`. -/
+namespace RootedScale
+variable {X α : Type} [MeasurableSpace X] {μ : Measure X} [SFinite μ]
+
+theorem observeJoint_bridge (p : RootedPartialTrace X μ α) (r : ℝ)
+    (d : Option (D α)) (f : α → Option ℝ)
+    (hs : p.observeJoint PUnit.unit (fun _ a => f a) =
+      d.bind (fun a => integrate a f))
+    (hd : Value.Defined (p.observeJoint PUnit.unit (fun _ a => f a))) :
+    (RootedPartialHom.scale r p).observeJoint PUnit.unit (fun _ a => f a) =
+      (scaleValue (some r) d).bind (fun a => integrate a f) := by
+  rw [RootedPartialHom.observeJoint_scale_defined p r PUnit.unit _ hd, hs]
+  cases d <;> rfl
+
+theorem mass_bridge (p : RootedPartialTrace X μ α) (r : ℝ) (d : Option (D α))
+    (hs : p.mass = massValue d) (hd : Value.Defined p.mass) :
+    (RootedPartialHom.scale r p).mass = massValue (scaleValue (some r) d) := by
+  rw [RootedPartialHom.mass_scale_defined p r hd, hs, mass_scaleValue]
+
+end RootedScale
 end QSym.Distribution
