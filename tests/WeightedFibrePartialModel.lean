@@ -782,6 +782,227 @@ theorem coveredZeroScaledLebesgue_not_massCompatible :
   rw [hunbounded] at hd
   simpa [Value.Defined] using hd
 
+/-- Finite weighted-Dirac continuations reuse the direct weighted-bind leaf. -/
+def unitPointContinuation (w : ℝ) : PointContinuation ℝ ℝ :=
+  .weighted fun x => some (w, x)
+
+def unitPointBind (w : ℝ) : DensityPointBind ℝ :=
+  ⟨unitInterval, unitPointContinuation w⟩
+
+def scaledUnitPointBind (r w : ℝ) : DensityPointBind ℝ :=
+  ⟨unitInterval, .scale r (unitPointContinuation w)⟩
+
+def mixedPointBind : DensityPointBind ℝ :=
+  ⟨unitInterval, .add (unitPointContinuation 2) (.scale 3 (unitPointContinuation 1))⟩
+
+def failingPointBind : DensityPointBind ℝ :=
+  ⟨failingBind.source, .weighted failingBind.continuation⟩
+
+theorem unitPointBind_semanticMass (w : ℝ) : (unitPointBind w).semanticMass = some w := by
+  rw [DensityPointBind.semanticMass_eq,
+    DensityPointBind.observeJoint_eq (unitPointBind w) _ trivial]
+  change unitInterval.observe
+    (fun x => (unitPointContinuation w).eval x (fun _ => some 1)) = some w
+  have hrow : (fun x => (unitPointContinuation w).eval x (fun _ => some 1)) =
+      fun _ : ℝ => some w := by
+    funext x
+    simp [unitPointContinuation, PointContinuation.eval, Value.mul]
+  rw [hrow]
+  exact unitInterval_observe_const w
+
+theorem scaledUnitPointBind_semanticMass (r w : ℝ) :
+    (scaledUnitPointBind r w).semanticMass = some (r * w) := by
+  rw [DensityPointBind.semanticMass_eq,
+    DensityPointBind.observeJoint_eq (scaledUnitPointBind r w) _ trivial]
+  change unitInterval.observe (fun x =>
+    (PointContinuation.scale r (unitPointContinuation w)).eval x (fun _ => some 1)) =
+      some (r * w)
+  have hrow : (fun x =>
+      (PointContinuation.scale r (unitPointContinuation w)).eval x (fun _ => some 1)) =
+      fun _ : ℝ => some (r * w) := by
+    funext x
+    simp [unitPointContinuation, PointContinuation.eval, Value.mul]
+  rw [hrow]
+  exact unitInterval_observe_const (r * w)
+
+theorem unitPointBind_two_semanticMass :
+    (unitPointBind 2).semanticMass = weightedBind.semanticMass := by
+  rw [unitPointBind_semanticMass, weightedBind_semanticMass]
+
+/-- Continuation addition requires exactly the two direct branch capabilities. -/
+theorem mixedPointBind_massCompatible :
+    mixedPointBind.ObservationCompatible (fun _ => some 1) := by
+  refine ⟨trivial, trivial, ?_, ?_⟩
+  · exact ⟨2, (DensityPointBind.semanticMass_eq (unitPointBind 2)).symm.trans
+      (unitPointBind_semanticMass 2)⟩
+  · have hm : (scaledUnitPointBind 3 1).semanticMass = some 3 := by
+      simpa using scaledUnitPointBind_semanticMass 3 1
+    exact ⟨3, (DensityPointBind.semanticMass_eq _).symm.trans hm⟩
+
+theorem mixedPointBind_semanticMass : mixedPointBind.semanticMass = some 5 := by
+  rw [DensityPointBind.semanticMass_eq,
+    DensityPointBind.observeJoint_eq _ _ mixedPointBind_massCompatible]
+  change unitInterval.observe (fun x =>
+    (PointContinuation.add (unitPointContinuation 2)
+      (.scale 3 (unitPointContinuation 1))).eval x (fun _ => some 1)) = some 5
+  have hrow : (fun x =>
+      (PointContinuation.add (unitPointContinuation 2)
+        (.scale 3 (unitPointContinuation 1))).eval x (fun _ => some 1)) =
+      fun _ : ℝ => some (5 : ℝ) := by
+    funext x
+    norm_num [unitPointContinuation, PointContinuation.eval, Value.mul, Value.add]
+  rw [hrow]
+  exact unitInterval_observe_const 5
+
+theorem mixedPointBind_presentationMass : massValue mixedPointBind.presentation = some 5 := by
+  rw [← DensityPointBind.semanticMass_bridge _ mixedPointBind_massCompatible]
+  exact mixedPointBind_semanticMass
+
+/-- A failing weighted leaf retains failure even when the source density is zero. -/
+theorem failingPointBind_semanticMass : failingPointBind.semanticMass = none :=
+  failingBind_semanticMass
+
+theorem failingPointBind_presentationMass : massValue failingPointBind.presentation = none := by
+  rw [← DensityPointBind.semanticMass_bridge failingPointBind trivial]
+  exact failingPointBind_semanticMass
+
+/-- A zero constant observation is integrable even over Lebesgue measure. -/
+theorem lebesgue_observe_zero :
+    DensityProgram.lebesgue.observe (fun _ => some 0) = some 0 := by
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  simp only [Option.some_bind]
+  have hfun : (fun x => Value.mul (DensityProgram.lebesgue.density x) (some 0)) =
+      fun _ : ℝ => some (0 : ℝ) := by
+    funext x
+    simp [DensityProgram.density, Value.mul]
+  rw [hfun]
+  exact partialIntegral_zero _
+
+/-- Continuation scaling needs no source-integrability guard. -/
+def zeroScaledLebesguePointBind : DensityPointBind ℝ :=
+  ⟨.lebesgue, .scale 0 (unitPointContinuation 1)⟩
+
+theorem zeroScaledLebesguePointBind_massCompatible :
+    zeroScaledLebesguePointBind.ObservationCompatible (fun _ => some 1) := trivial
+
+theorem zeroScaledLebesguePointBind_semanticMass :
+    zeroScaledLebesguePointBind.semanticMass = some 0 := by
+  rw [DensityPointBind.semanticMass_eq,
+    DensityPointBind.observeJoint_eq zeroScaledLebesguePointBind _ trivial]
+  change DensityProgram.lebesgue.observe (fun x =>
+    (PointContinuation.scale 0 (unitPointContinuation 1)).eval x (fun _ => some 1)) = some 0
+  have hrow : (fun x =>
+      (PointContinuation.scale 0 (unitPointContinuation 1)).eval x (fun _ => some 1)) =
+      fun _ : ℝ => some (0 : ℝ) := by
+    funext x
+    norm_num [unitPointContinuation, PointContinuation.eval, Value.mul]
+  rw [hrow]
+  exact lebesgue_observe_zero
+
+theorem zeroScaledLebesguePointBind_presentationMass :
+    massValue zeroScaledLebesguePointBind.presentation = some 0 := by
+  rw [← DensityPointBind.semanticMass_bridge zeroScaledLebesguePointBind trivial]
+  exact zeroScaledLebesguePointBind_semanticMass
+
+/-- Nonzero constant observations of the Lebesgue source are nonintegrable. -/
+theorem lebesgue_observe_const_nonzero (c : ℝ) (hc : c ≠ 0) :
+    DensityProgram.lebesgue.observe (fun _ => some c) = none := by
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  simp only [Option.some_bind]
+  have hcomm : (fun x => Value.mul (DensityProgram.lebesgue.density x) (some c)) =
+      (fun x => Value.mul (some c) (DensityProgram.lebesgue.density x)) := by
+    funext x
+    cases DensityProgram.lebesgue.density x <;> simp [Value.mul, mul_comm]
+  rw [hcomm, partialIntegral_scale_nonzero volume c hc DensityProgram.lebesgue.density]
+  have hm : partialIntegral volume DensityProgram.lebesgue.density = none := by
+    simp [DensityProgram.density, partialIntegral, Value.Defined,
+      integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+  rw [hm]
+  rfl
+
+def lebesguePointBind (w : ℝ) : DensityPointBind ℝ :=
+  ⟨.lebesgue, unitPointContinuation w⟩
+
+theorem lebesguePointBind_semanticMass (w : ℝ) (hw : w ≠ 0) :
+    (lebesguePointBind w).semanticMass = none := by
+  rw [DensityPointBind.semanticMass_eq,
+    DensityPointBind.observeJoint_eq (lebesguePointBind w) _ trivial]
+  change DensityProgram.lebesgue.observe
+    (fun x => (unitPointContinuation w).eval x (fun _ => some 1)) = none
+  have hrow : (fun x => (unitPointContinuation w).eval x (fun _ => some 1)) =
+      fun _ : ℝ => some w := by
+    funext x
+    simp [unitPointContinuation, PointContinuation.eval, Value.mul]
+  rw [hrow]
+  exact lebesgue_observe_const_nonzero w hw
+
+/-- Legacy rowwise cancellation cannot hide either nonintegrable direct branch. -/
+def cancellingPointBind : DensityPointBind ℝ :=
+  ⟨.lebesgue, .add (unitPointContinuation 1) (unitPointContinuation (-1))⟩
+
+theorem cancellingPointBind_semanticMass : cancellingPointBind.semanticMass = none := by
+  change (RootedPartialHom.add (lebesguePointBind 1).rootedSemantic
+    (lebesguePointBind (-1)).rootedSemantic).mass = none
+  rw [RootedPartialHom.mass_add]
+  change Value.add (lebesguePointBind 1).semanticMass
+    (lebesguePointBind (-1)).semanticMass = none
+  rw [lebesguePointBind_semanticMass 1 (by norm_num),
+    lebesguePointBind_semanticMass (-1) (by norm_num)]
+  rfl
+
+theorem cancellingPointBind_presentationMass :
+    massValue cancellingPointBind.presentation = some 0 := by
+  change massValue (bindValue DensityProgram.lebesgue.presentation
+    (some fun x => cancellingPointBind.continuation.presentation x)) = some 0
+  rw [DensityProgram.bind_mass_bridge]
+  have hrow : (fun x => massValue (cancellingPointBind.continuation.presentation x)) =
+      fun _ : ℝ => some (0 : ℝ) := by
+    funext x
+    norm_num [cancellingPointBind, unitPointContinuation, PointContinuation.presentation,
+      massValue, integrate, addValue, scaleValue, Value.add, Value.mul]
+  rw [hrow]
+  exact lebesgue_observe_zero
+
+theorem cancellingPointBind_not_massCompatible :
+    ¬cancellingPointBind.ObservationCompatible (fun _ => some 1) := by
+  intro h
+  have hd := h.2.2.1
+  change Value.Defined (lebesguePointBind 1).semanticMass at hd
+  rw [lebesguePointBind_semanticMass 1 (by norm_num)] at hd
+  simpa [Value.Defined] using hd
+
+theorem cancellingPointBind_observers_differ :
+    cancellingPointBind.semanticMass ≠ massValue cancellingPointBind.presentation := by
+  rw [cancellingPointBind_semanticMass, cancellingPointBind_presentationMass]
+  simp
+
+/-- The new fragment is handled by the same recursive interpreter and bridge. -/
+def coveredMixedPointBind : CoveredProgram .real ℝ := .pointBind mixedPointBind
+
+def coveredZeroScaledLebesguePointBind : CoveredProgram .real ℝ :=
+  .pointBind zeroScaledLebesguePointBind
+
+def coveredCancellingPointBind : CoveredProgram .real ℝ := .pointBind cancellingPointBind
+
+theorem coveredMixedPointBind_semanticMass : coveredMixedPointBind.semanticMass = some 5 :=
+  mixedPointBind_semanticMass
+
+theorem coveredMixedPointBind_presentationMass :
+    massValue coveredMixedPointBind.presentation = some 5 := by
+  rw [← coveredMixedPointBind.semanticMass_bridge mixedPointBind_massCompatible]
+  exact coveredMixedPointBind_semanticMass
+
+theorem coveredZeroScaledLebesguePointBind_presentationMass :
+    massValue coveredZeroScaledLebesguePointBind.presentation = some 0 := by
+  rw [← coveredZeroScaledLebesguePointBind.semanticMass_bridge trivial]
+  exact zeroScaledLebesguePointBind_semanticMass
+
+theorem coveredCancellingPointBind_semanticMass :
+    coveredCancellingPointBind.semanticMass = none := cancellingPointBind_semanticMass
+
+theorem coveredCancellingPointBind_not_massCompatible :
+    ¬coveredCancellingPointBind.MassCompatible := cancellingPointBind_not_massCompatible
+
 #qsym_check_axioms partialIntegral_sum
 #qsym_check_axioms PartialFamily.observe_sum
 #qsym_check_axioms PartialFamily.observeJoint_sum
@@ -971,5 +1192,38 @@ theorem coveredZeroScaledLebesgue_not_massCompatible :
 #qsym_check_axioms coveredHolePlusZero_semanticMass
 #qsym_check_axioms coveredZeroScaledLebesgue_semanticMass
 #qsym_check_axioms coveredZeroScaledLebesgue_not_massCompatible
+#qsym_check_axioms PointContinuation.eval_scale_test
+#qsym_check_axioms PointContinuation.eval_bridge
+#qsym_check_axioms DensityProgram.observe_add
+#qsym_check_axioms DensityPointBind.observeJoint_scale_test_defined
+#qsym_check_axioms DensityPointBind.compatibleAux_scale_test
+#qsym_check_axioms DensityPointBind.observeJoint_aux
+#qsym_check_axioms DensityPointBind.observeJoint_eq
+#qsym_check_axioms DensityPointBind.observeJoint_bridge
+#qsym_check_axioms DensityPointBind.semanticMass_eq
+#qsym_check_axioms DensityPointBind.semanticMass_bridge
+#qsym_check_axioms unitPointBind_semanticMass
+#qsym_check_axioms scaledUnitPointBind_semanticMass
+#qsym_check_axioms unitPointBind_two_semanticMass
+#qsym_check_axioms mixedPointBind_massCompatible
+#qsym_check_axioms mixedPointBind_semanticMass
+#qsym_check_axioms mixedPointBind_presentationMass
+#qsym_check_axioms failingPointBind_semanticMass
+#qsym_check_axioms failingPointBind_presentationMass
+#qsym_check_axioms lebesgue_observe_zero
+#qsym_check_axioms zeroScaledLebesguePointBind_massCompatible
+#qsym_check_axioms zeroScaledLebesguePointBind_semanticMass
+#qsym_check_axioms zeroScaledLebesguePointBind_presentationMass
+#qsym_check_axioms lebesgue_observe_const_nonzero
+#qsym_check_axioms lebesguePointBind_semanticMass
+#qsym_check_axioms cancellingPointBind_semanticMass
+#qsym_check_axioms cancellingPointBind_presentationMass
+#qsym_check_axioms cancellingPointBind_not_massCompatible
+#qsym_check_axioms cancellingPointBind_observers_differ
+#qsym_check_axioms coveredMixedPointBind_semanticMass
+#qsym_check_axioms coveredMixedPointBind_presentationMass
+#qsym_check_axioms coveredZeroScaledLebesguePointBind_presentationMass
+#qsym_check_axioms coveredCancellingPointBind_semanticMass
+#qsym_check_axioms coveredCancellingPointBind_not_massCompatible
 
 end QSym.PartialFibreTests
