@@ -788,6 +788,274 @@ theorem semanticMass_bridge (b : DensityPointBind α)
 
 end DensityPointBind
 
+/-- A defined source observation can be scaled in the strict test. -/
+theorem DensityProgram.observe_scale_test_defined (p : DensityProgram) (r : ℝ)
+    (f : ℝ → Option ℝ) (h : Value.Defined (p.observe f)) :
+    p.observe (fun x => Value.mul (some r) (f x)) =
+      Value.mul (some r) (p.observe f) := by
+  simp only [DensityProgram.observe, Model.densityMassValue_eq, Option.some_bind] at h ⊢
+  have hrow : (fun x => Value.mul (p.density x) (Value.mul (some r) (f x))) =
+      fun x => Value.mul (some r) (Value.mul (p.density x) (f x)) := by
+    funext x
+    cases p.density x <;> cases f x <;>
+      simp [Value.mul, mul_assoc, mul_left_comm]
+  rw [hrow]
+  exact partialIntegral_scale_defined volume r _ h
+
+namespace ContinuousDensityBind
+
+/-- Scaling a strict test preserves defined continuation rows. -/
+theorem rowDefined_scale_test (b : ContinuousDensityBind) (f : ℝ → Option ℝ) (r : ℝ)
+    (h : b.RowDefined f) : b.RowDefined (fun y => Value.mul (some r) (f y)) := by
+  intro x
+  rw [DensityProgram.observe_scale_test_defined _ r f (h x)]
+  exact (Value.defined_mul _ _).2 ⟨⟨r, rfl⟩, h x⟩
+
+/-- Scaling a strict test also preserves joint integrability. -/
+theorem jointL1_scale_test (b : ContinuousDensityBind) (f : ℝ → Option ℝ) (r : ℝ)
+    (h : b.JointL1 f) : b.JointL1 (fun y => Value.mul (some r) (f y)) := by
+  unfold JointL1 at h ⊢
+  have hrow : (fun p : ℝ × ℝ =>
+      (b.rowIntegrand p.1 (fun y => Value.mul (some r) (f y)) p.2).getD 0) =
+      fun p => r * (b.rowIntegrand p.1 f p.2).getD 0 := by
+    funext p
+    rcases p with ⟨x, y⟩
+    cases hs : b.source.density x <;> cases hc : (b.continuation x).density y <;>
+      cases hf : f y <;>
+      simp [rowIntegrand, hs, hc, hf, Value.mul, mul_assoc, mul_left_comm]
+  rw [hrow]
+  exact h.const_mul r
+
+end ContinuousDensityBind
+
+/-- A finite continuation tree with both weighted-Dirac and continuous-density
+leaves. Continuous leaves return real values; weighted leaves remain polymorphic. -/
+inductive DensityContinuation : Type → Type 1 where
+  | weighted {α : Type} (run : ℝ → Option (ℝ × α)) : DensityContinuation α
+  | continuous (run : ℝ → DensityProgram) : DensityContinuation ℝ
+  | scale {α : Type} (r : ℝ) (rest : DensityContinuation α) : DensityContinuation α
+  | add {α : Type} (left right : DensityContinuation α) : DensityContinuation α
+
+namespace DensityContinuation
+variable {α : Type}
+
+/-- Ordered strict observation before integration over the shared source. -/
+def eval (c : DensityContinuation α) (x : ℝ) (f : α → Option ℝ) : Option ℝ :=
+  DensityContinuation.rec
+    (motive := fun {α} _ => ℝ → (α → Option ℝ) → Option ℝ)
+    (fun k x f => (k x).bind fun wx => Value.mul (some wx.1) (f wx.2))
+    (fun k x f => (k x).observe f)
+    (fun r _ ih x f => Value.mul (some r) (ih x f))
+    (fun _ _ ihc ihd x f => Value.add (ihc x f) (ihd x f))
+    c x f
+
+/-- Legacy continuation syntax is reconstructed only for compatibility. -/
+def presentation (c : DensityContinuation α) (x : ℝ) : Option (D α) :=
+  DensityContinuation.rec
+    (motive := fun {α} _ => ℝ → Option (D α))
+    (fun k x => (k x).map fun wx => .scale wx.1 (.dirac wx.2))
+    (fun k x => (k x).presentation)
+    (fun r _ ih x => scaleValue (some r) (ih x))
+    (fun _ _ ihc ihd x => addValue (ihc x) (ihd x))
+    c x
+
+private theorem integrate_scaleValue (r : ℝ) (d : Option (D α))
+    (f : α → Option ℝ) :
+    (scaleValue (some r) d).bind (fun a => integrate a f) =
+      Value.mul (some r) (d.bind (fun a => integrate a f)) := by
+  cases d <;> rfl
+
+private theorem integrate_addValue (a b : Option (D α)) (f : α → Option ℝ) :
+    (addValue a b).bind (fun d => integrate d f) =
+      Value.add (a.bind (fun d => integrate d f)) (b.bind (fun d => integrate d f)) := by
+  cases a <;> cases b <;> simp [addValue, integrate, Value.add]
+
+/-- Ordered row observation agrees with the legacy observer for every leaf. -/
+theorem eval_bridge (c : DensityContinuation α) (x : ℝ) (f : α → Option ℝ) :
+    c.eval x f = (c.presentation x).bind (fun d => integrate d f) := by
+  induction c generalizing x with
+  | weighted k =>
+      cases hk : k x <;> simp [eval, presentation, hk, integrate, Value.mul]
+  | continuous k => exact DensityProgram.observe_bridge (k x) f
+  | scale r c ih =>
+      change Value.mul (some r) (c.eval x f) =
+        (scaleValue (some r) (c.presentation x)).bind (fun d => integrate d f)
+      rw [integrate_scaleValue, ← ih]
+  | add c d ihc ihd =>
+      change Value.add (c.eval x f) (d.eval x f) =
+        (addValue (c.presentation x) (d.presentation x)).bind (fun d => integrate d f)
+      rw [integrate_addValue, ← ihc, ← ihd]
+
+end DensityContinuation
+
+/-- A density source followed by a finite mixed continuation tree. -/
+structure DensityContinuationBind (α : Type) where
+  source : DensityProgram
+  continuation : DensityContinuation α
+
+namespace DensityContinuationBind
+variable {α : Type}
+
+/-- Direct recursive semantics; no compatibility observer is used here. -/
+def semanticAux (source : DensityProgram) (c : DensityContinuation α) :
+    RootedPartialTrace ℝ volume α :=
+  DensityContinuation.rec
+    (motive := fun {α} _ => RootedPartialTrace ℝ volume α)
+    (fun k => (DensityBind.mk source k).rootedSemantic)
+    (fun k => (ContinuousDensityBind.mk source k).rootedSemantic)
+    (fun r _ ih => RootedPartialHom.scale r ih)
+    (fun _ _ ihc ihd => RootedPartialHom.add ihc ihd)
+    c
+
+def rootedSemantic (b : DensityContinuationBind α) : RootedPartialTrace ℝ volume α :=
+  semanticAux b.source b.continuation
+
+def observeJoint (b : DensityContinuationBind α) (f : α → Option ℝ) : Option ℝ :=
+  b.rootedSemantic.observeJoint PUnit.unit (fun _ a => f a)
+
+def semanticMass (b : DensityContinuationBind α) : Option ℝ := b.rootedSemantic.mass
+
+def presentation (b : DensityContinuationBind α) : Option (D α) :=
+  bindValue b.source.presentation (some fun x => b.continuation.presentation x)
+
+/-- Scaling a strict test preserves a defined direct mixed observation. -/
+theorem observeJoint_scale_test_defined (source : DensityProgram)
+    (c : DensityContinuation α) (f : α → Option ℝ) (r : ℝ)
+    (h : Value.Defined (observeJoint ⟨source, c⟩ f)) :
+    Value.Defined (observeJoint ⟨source, c⟩
+      (fun a => Value.mul (some r) (f a))) := by
+  have heq := RootedPartialHom.observeJoint_scale_defined
+    (semanticAux source c) r PUnit.unit (fun _ a => f a) h
+  rw [RootedPartialHom.observeJoint_scale] at heq
+  change Value.Defined (RootedPartialHom.observeJoint (semanticAux source c)
+    PUnit.unit (fun _ a => Value.mul (some r) (f a)))
+  rw [heq]
+  exact (Value.defined_mul _ _).2 ⟨⟨r, rfl⟩, h⟩
+
+/-- Continuous leaves retain their row and joint capabilities. Addition adds
+exactly the two direct branch-definedness capabilities needed to split the source. -/
+def CompatibleAux (source : DensityProgram) (c : DensityContinuation α)
+    (f : α → Option ℝ) : Prop :=
+  DensityContinuation.rec
+    (motive := fun {α} _ => (α → Option ℝ) → Prop)
+    (fun _ _ => True)
+    (fun k f => (ContinuousDensityBind.mk source k).RowDefined f ∧
+      (ContinuousDensityBind.mk source k).JointL1 f)
+    (fun _ _ ih f => ih f)
+    (fun c d ihc ihd f => ihc f ∧ ihd f ∧
+      Value.Defined (observeJoint ⟨source, c⟩ f) ∧
+      Value.Defined (observeJoint ⟨source, d⟩ f))
+    c f
+
+/-- All leaf and addition capabilities survive scaling of the strict test. -/
+theorem compatibleAux_scale_test (source : DensityProgram)
+    (c : DensityContinuation α) (f : α → Option ℝ) (r : ℝ)
+    (h : CompatibleAux source c f) :
+    CompatibleAux source c (fun a => Value.mul (some r) (f a)) := by
+  induction c with
+  | weighted k => trivial
+  | continuous k =>
+      exact ⟨(ContinuousDensityBind.mk source k).rowDefined_scale_test f r h.1,
+        (ContinuousDensityBind.mk source k).jointL1_scale_test f r h.2⟩
+  | scale s c ih => exact ih f h
+  | add c d ihc ihd =>
+      rcases h with ⟨hc, hd, hcdef, hddef⟩
+      exact ⟨ihc f hc, ihd f hd,
+        observeJoint_scale_test_defined source c f r hcdef,
+        observeJoint_scale_test_defined source d f r hddef⟩
+
+/-- Under the row capabilities, scaling commutes with ordered continuation
+observation. The weighted and finite-addition cases need no integrability guard. -/
+theorem eval_scale_test (source : DensityProgram) (c : DensityContinuation α)
+    (x : ℝ) (f : α → Option ℝ) (r : ℝ) (h : CompatibleAux source c f) :
+    c.eval x (fun a => Value.mul (some r) (f a)) =
+      Value.mul (some r) (c.eval x f) := by
+  induction c generalizing x with
+  | weighted k =>
+      cases hk : k x with
+      | none => simp [DensityContinuation.eval, hk, Value.mul]
+      | some wx =>
+          cases hf : f wx.2 <;>
+            simp [DensityContinuation.eval, hk, hf, Value.mul, mul_assoc, mul_left_comm]
+  | continuous k =>
+      exact DensityProgram.observe_scale_test_defined (k x) r f (h.1 x)
+  | scale s c ih =>
+      change Value.mul (some s)
+        (c.eval x (fun a => Value.mul (some r) (f a))) =
+        Value.mul (some r) (Value.mul (some s) (c.eval x f))
+      rw [ih x f h]
+      cases hc : c.eval x f <;>
+        simp [hc, Value.mul, mul_assoc, mul_left_comm]
+  | add c d ihc ihd =>
+      change Value.add (c.eval x (fun a => Value.mul (some r) (f a)))
+        (d.eval x (fun a => Value.mul (some r) (f a))) =
+        Value.mul (some r) (Value.add (c.eval x f) (d.eval x f))
+      rw [ihc x f h.1, ihd x f h.2.1]
+      cases c.eval x f <;> cases d.eval x f <;>
+        simp [Value.mul, Value.add, mul_add]
+
+def ObservationCompatible (b : DensityContinuationBind α) (f : α → Option ℝ) : Prop :=
+  CompatibleAux b.source b.continuation f
+
+/-- Direct mixed observation is ordered source integration under the explicit
+leaf and continuation-addition capabilities. -/
+theorem observeJoint_aux (source : DensityProgram) (c : DensityContinuation α)
+    (f : α → Option ℝ) (h : CompatibleAux source c f) :
+    observeJoint ⟨source, c⟩ f = source.observe (fun x => c.eval x f) := by
+  induction c generalizing source with
+  | weighted k => exact DensityBind.observeJoint_eq ⟨source, k⟩ f
+  | continuous k => exact ContinuousDensityBind.observeJoint_source ⟨source, k⟩ f h.1 h.2
+  | scale r c ih =>
+      change (RootedPartialHom.scale r (semanticAux source c)).observeJoint
+        PUnit.unit (fun _ a => f a) = _
+      rw [RootedPartialHom.observeJoint_scale]
+      change observeJoint ⟨source, c⟩ (fun a => Value.mul (some r) (f a)) = _
+      have h' := compatibleAux_scale_test source c f r h
+      rw [ih source _ h']
+      congr 1
+      funext x
+      exact eval_scale_test source c x f r h
+  | add c d ihc ihd =>
+      rcases h with ⟨hc, hd, hcdef, hddef⟩
+      change (RootedPartialHom.add (semanticAux source c) (semanticAux source d)).observeJoint
+        PUnit.unit (fun _ a => f a) = _
+      rw [RootedPartialHom.observeJoint_add]
+      change Value.add (observeJoint ⟨source, c⟩ f) (observeJoint ⟨source, d⟩ f) = _
+      have hc' : Value.Defined (source.observe fun x => c.eval x f) := by
+        rw [← ihc source f hc]
+        exact hcdef
+      have hd' : Value.Defined (source.observe fun x => d.eval x f) := by
+        rw [← ihd source f hd]
+        exact hddef
+      rw [ihc source f hc, ihd source f hd]
+      exact (source.observe_add _ _ hc' hd').symm
+
+theorem observeJoint_eq (b : DensityContinuationBind α) (f : α → Option ℝ)
+    (h : b.ObservationCompatible f) :
+    b.observeJoint f = b.source.observe (fun x => b.continuation.eval x f) :=
+  observeJoint_aux b.source b.continuation f h
+
+/-- Exact compatibility with the ordered legacy observer. -/
+theorem observeJoint_bridge (b : DensityContinuationBind α) (f : α → Option ℝ)
+    (h : b.ObservationCompatible f) :
+    b.observeJoint f = b.presentation.bind (fun d => integrate d f) := by
+  rw [presentation, DensityProgram.bind_observe_bridge, observeJoint_eq b f h]
+  congr 1
+  funext x
+  exact DensityContinuation.eval_bridge b.continuation x f
+
+theorem semanticMass_eq (b : DensityContinuationBind α) :
+    b.semanticMass = b.observeJoint (fun _ => some 1) := rfl
+
+theorem semanticMass_bridge (b : DensityContinuationBind α)
+    (h : b.ObservationCompatible (fun _ => some 1)) :
+    b.semanticMass = massValue b.presentation := by
+  change b.observeJoint (fun _ => some 1) =
+    b.presentation.bind (fun d => integrate d (fun _ => some 1))
+  exact b.observeJoint_bridge _ h
+
+end DensityContinuationBind
+
 /-- Intrinsic roots supported by the currently covered direct source fragments. -/
 inductive CoveredRoot where
   | point
@@ -821,6 +1089,7 @@ inductive CoveredProgram : CoveredRoot → Type → Type 1 where
   | density (p : DensityProgram) : CoveredProgram .real ℝ
   | bind {α : Type} (b : DensityBind α) : CoveredProgram .real α
   | pointBind {α : Type} (b : DensityPointBind α) : CoveredProgram .real α
+  | continuationBind {α : Type} (b : DensityContinuationBind α) : CoveredProgram .real α
   | continuousBind (b : ContinuousDensityBind) : CoveredProgram .real ℝ
   | integral (p : ContinuousDensityIntegral) : CoveredProgram .real ℝ
   | scale {root : CoveredRoot} {α : Type} (r : ℝ)
@@ -841,6 +1110,7 @@ def semantic (p : CoveredProgram root α) :
     (fun b => b.rootedSemantic)
     (fun b => b.rootedSemantic)
     (fun b => b.rootedSemantic)
+    (fun b => b.rootedSemantic)
     (fun p => p.rootedSemantic)
     (fun r _ ih => RootedPartialHom.scale r ih)
     (fun _ _ ihp ihq => RootedPartialHom.add ihp ihq)
@@ -852,6 +1122,7 @@ def presentation (p : CoveredProgram root α) : Option (D α) :=
     (motive := fun {_} {a} _ => Option (D a))
     (fun p => p.presentation)
     (fun p => p.presentation)
+    (fun b => b.presentation)
     (fun b => b.presentation)
     (fun b => b.presentation)
     (fun b => b.presentation)
@@ -875,6 +1146,7 @@ def ObservationCompatible (p : CoveredProgram root α) : (α → Option ℝ) →
     (fun _ _ => True)
     (fun _ _ => True)
     (fun b f => b.ObservationCompatible f)
+    (fun b f => b.ObservationCompatible f)
     (fun b f => b.RowDefined f ∧ b.JointL1 f)
     (fun p f => p.RowDefined f ∧ p.JointL1 f)
     (fun _ p ih f => ih f ∧ Value.Defined (p.observe f))
@@ -890,6 +1162,7 @@ theorem observe_bridge (p : CoveredProgram root α) (f : α → Option ℝ)
   | density p => exact (p.observeJoint_eq f).trans (p.observe_bridge f)
   | bind b => exact b.observeJoint_bridge f
   | pointBind b => exact b.observeJoint_bridge f h
+  | continuationBind b => exact b.observeJoint_bridge f h
   | continuousBind b => exact b.observeJoint_bridge f h.1 h.2
   | integral p => exact p.observeJoint_bridge f h.1 h.2
   | scale r p ih =>

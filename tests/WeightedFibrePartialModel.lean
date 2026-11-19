@@ -1003,6 +1003,97 @@ theorem coveredCancellingPointBind_semanticMass :
 theorem coveredCancellingPointBind_not_massCompatible :
     ¬coveredCancellingPointBind.MassCompatible := cancellingPointBind_not_massCompatible
 
+/-- A continuous leaf reuses the existing continuous-bind semantics exactly. -/
+def continuousLeafBind : DensityContinuationBind ℝ :=
+  ⟨unitInterval, .continuous fun _ => unitInterval⟩
+
+theorem continuousLeafBind_semanticMass : continuousLeafBind.semanticMass = some 1 :=
+  continuousUnit_semanticMass
+
+theorem continuousLeafBind_massCompatible :
+    continuousLeafBind.ObservationCompatible (fun _ => some 1) :=
+  ⟨continuousUnit_rowDefined, continuousUnit_jointL1⟩
+
+theorem continuousLeafBind_presentationMass :
+    massValue continuousLeafBind.presentation = some 1 := by
+  rw [← DensityContinuationBind.semanticMass_bridge _ continuousLeafBind_massCompatible]
+  exact continuousLeafBind_semanticMass
+
+/-- A finite tree can mix weighted, continuous, scaling, and addition nodes. -/
+def mixedDensityContinuationBind : DensityContinuationBind ℝ :=
+  ⟨unitInterval, .add (.weighted fun x => some (2, x))
+    (.scale 2 (.continuous fun _ => unitInterval))⟩
+
+theorem scaledContinuousUnit_semanticMass :
+    (RootedPartialHom.scale 2 continuousUnit.rootedSemantic).mass = some 2 := by
+  have hm : continuousUnit.rootedSemantic.mass = some 1 := continuousUnit_semanticMass
+  rw [RootedPartialHom.mass_scale_defined _ _ ⟨1, hm⟩, hm]
+  norm_num [Value.mul]
+
+theorem mixedDensityContinuationBind_massCompatible :
+    mixedDensityContinuationBind.ObservationCompatible (fun _ => some 1) := by
+  refine ⟨trivial, ⟨continuousUnit_rowDefined, continuousUnit_jointL1⟩, ?_, ?_⟩
+  · exact ⟨2, weightedBind_semanticMass⟩
+  · exact ⟨2, scaledContinuousUnit_semanticMass⟩
+
+theorem mixedDensityContinuationBind_semanticMass :
+    mixedDensityContinuationBind.semanticMass = some 4 := by
+  rw [DensityContinuationBind.semanticMass_eq,
+    DensityContinuationBind.observeJoint_eq _ _ mixedDensityContinuationBind_massCompatible]
+  change unitInterval.observe (fun x =>
+    (DensityContinuation.add (DensityContinuation.weighted fun x => some (2, x))
+      (.scale 2 (.continuous fun _ => unitInterval))).eval x (fun _ => some 1)) = some 4
+  have hrow : (fun x =>
+      (DensityContinuation.add (DensityContinuation.weighted fun x => some (2, x))
+        (.scale 2 (.continuous fun _ => unitInterval))).eval x (fun _ => some 1)) =
+      fun _ : ℝ => some (4 : ℝ) := by
+    funext x
+    norm_num [DensityContinuation.eval, unitInterval_observe_one, Value.mul, Value.add]
+  rw [hrow]
+  exact unitInterval_observe_const 4
+
+theorem mixedDensityContinuationBind_presentationMass :
+    massValue mixedDensityContinuationBind.presentation = some 4 := by
+  rw [← DensityContinuationBind.semanticMass_bridge _
+    mixedDensityContinuationBind_massCompatible]
+  exact mixedDensityContinuationBind_semanticMass
+
+/-- A continuous branch cannot hide failure of a strict weighted branch. -/
+def failingMixedContinuationBind : DensityContinuationBind ℝ :=
+  ⟨failingBind.source, .add (.weighted failingBind.continuation)
+    (.continuous fun _ => unitInterval)⟩
+
+theorem failingMixedContinuationBind_semanticMass :
+    failingMixedContinuationBind.semanticMass = none := by
+  change (RootedPartialHom.add failingBind.rootedSemantic
+    (ContinuousDensityBind.mk failingBind.source (fun _ => unitInterval)).rootedSemantic).mass = none
+  rw [RootedPartialHom.mass_add]
+  change Value.add failingBind.semanticMass _ = none
+  rw [failingBind_semanticMass]
+  rfl
+
+theorem failingMixedContinuationBind_not_massCompatible :
+    ¬failingMixedContinuationBind.ObservationCompatible (fun _ => some 1) := by
+  intro h
+  have hd := h.2.2.1
+  change Value.Defined failingBind.semanticMass at hd
+  rw [failingBind_semanticMass] at hd
+  simpa [Value.Defined] using hd
+
+/-- The unified recursive interpreter accepts the mixed continuation fragment. -/
+def coveredMixedDensityContinuationBind : CoveredProgram .real ℝ :=
+  .continuationBind mixedDensityContinuationBind
+
+theorem coveredMixedDensityContinuationBind_semanticMass :
+    coveredMixedDensityContinuationBind.semanticMass = some 4 :=
+  mixedDensityContinuationBind_semanticMass
+
+theorem coveredMixedDensityContinuationBind_presentationMass :
+    massValue coveredMixedDensityContinuationBind.presentation = some 4 := by
+  rw [← coveredMixedDensityContinuationBind.semanticMass_bridge
+    mixedDensityContinuationBind_massCompatible]
+  exact coveredMixedDensityContinuationBind_semanticMass
+
 #qsym_check_axioms partialIntegral_sum
 #qsym_check_axioms PartialFamily.observe_sum
 #qsym_check_axioms PartialFamily.observeJoint_sum
@@ -1225,5 +1316,28 @@ theorem coveredCancellingPointBind_not_massCompatible :
 #qsym_check_axioms coveredZeroScaledLebesguePointBind_presentationMass
 #qsym_check_axioms coveredCancellingPointBind_semanticMass
 #qsym_check_axioms coveredCancellingPointBind_not_massCompatible
+#qsym_check_axioms DensityProgram.observe_scale_test_defined
+#qsym_check_axioms ContinuousDensityBind.rowDefined_scale_test
+#qsym_check_axioms ContinuousDensityBind.jointL1_scale_test
+#qsym_check_axioms DensityContinuation.eval_bridge
+#qsym_check_axioms DensityContinuationBind.observeJoint_scale_test_defined
+#qsym_check_axioms DensityContinuationBind.compatibleAux_scale_test
+#qsym_check_axioms DensityContinuationBind.eval_scale_test
+#qsym_check_axioms DensityContinuationBind.observeJoint_aux
+#qsym_check_axioms DensityContinuationBind.observeJoint_eq
+#qsym_check_axioms DensityContinuationBind.observeJoint_bridge
+#qsym_check_axioms DensityContinuationBind.semanticMass_eq
+#qsym_check_axioms DensityContinuationBind.semanticMass_bridge
+#qsym_check_axioms continuousLeafBind_semanticMass
+#qsym_check_axioms continuousLeafBind_massCompatible
+#qsym_check_axioms continuousLeafBind_presentationMass
+#qsym_check_axioms scaledContinuousUnit_semanticMass
+#qsym_check_axioms mixedDensityContinuationBind_massCompatible
+#qsym_check_axioms mixedDensityContinuationBind_semanticMass
+#qsym_check_axioms mixedDensityContinuationBind_presentationMass
+#qsym_check_axioms failingMixedContinuationBind_semanticMass
+#qsym_check_axioms failingMixedContinuationBind_not_massCompatible
+#qsym_check_axioms coveredMixedDensityContinuationBind_semanticMass
+#qsym_check_axioms coveredMixedDensityContinuationBind_presentationMass
 
 end QSym.PartialFibreTests
