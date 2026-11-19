@@ -1094,6 +1094,123 @@ theorem coveredMixedDensityContinuationBind_presentationMass :
     mixedDensityContinuationBind_massCompatible]
   exact coveredMixedDensityContinuationBind_semanticMass
 
+/-- Weighted continuation trees over primitive sources need no compatibility
+capabilities, including when a continuation fails or a test is undefined. -/
+def primitiveInvalidPointBind : PrimitivePointBind ℝ :=
+  ⟨primitiveInvalid, unitPointContinuation 2⟩
+
+def primitiveZeroFailingPointBind : PrimitivePointBind ℝ :=
+  ⟨primitiveZero, .add (.weighted fun _ => none)
+    (.scale 0 (.weighted fun _ => none))⟩
+
+def primitiveDiracTree : PrimitivePointBind ℝ :=
+  ⟨primitiveDiracTwo, .add (unitPointContinuation 2)
+    (.scale 3 (.weighted fun x => some (1, x + 1)))⟩
+
+def primitiveDiracScaledFailure : PrimitivePointBind ℝ :=
+  ⟨primitiveDiracTwo, .scale 0 (.weighted fun _ => none)⟩
+
+def primitiveDiracWeighted : PrimitiveBind ℝ :=
+  ⟨primitiveDiracTwo, fun x => some (2, x)⟩
+
+theorem primitiveInvalidPointBind_semanticMass :
+    primitiveInvalidPointBind.semanticMass = none := by
+  rw [PrimitivePointBind.semanticMass_eq, PrimitivePointBind.observeJoint_eq]
+  exact PrimitiveProgram.observe_invalid _
+
+theorem primitiveInvalidPointBind_presentationMass :
+    massValue primitiveInvalidPointBind.presentation = none := by
+  rw [← PrimitivePointBind.semanticMass_bridge]
+  exact primitiveInvalidPointBind_semanticMass
+
+/-- A zero source skips both failing branches, even under an undefined test. -/
+theorem primitiveZeroFailingPointBind_observeUndefined :
+    primitiveZeroFailingPointBind.observeJoint (fun _ => none) = some 0 := by
+  rw [PrimitivePointBind.observeJoint_eq]
+  exact PrimitiveProgram.observe_zero _
+
+theorem primitiveZeroFailingPointBind_semanticMass :
+    primitiveZeroFailingPointBind.semanticMass = some 0 := by
+  rw [PrimitivePointBind.semanticMass_eq, PrimitivePointBind.observeJoint_eq]
+  exact PrimitiveProgram.observe_zero _
+
+theorem primitiveZeroFailingPointBind_presentationObserveUndefined :
+    primitiveZeroFailingPointBind.presentation.bind
+      (fun d => integrate d (fun _ => none)) = some 0 := by
+  rw [← PrimitivePointBind.observeJoint_bridge]
+  exact primitiveZeroFailingPointBind_observeUndefined
+
+theorem primitiveDiracWeighted_semanticMass :
+    primitiveDiracWeighted.semanticMass = some 2 := by
+  rw [PrimitiveBind.semanticMass_eq]
+  norm_num [primitiveDiracWeighted, primitiveDiracTwo, PrimitiveProgram.observe_dirac]
+
+/-- Direct addition and scaling compute before the single dirac observation. -/
+theorem primitiveDiracTree_semanticMass : primitiveDiracTree.semanticMass = some 5 := by
+  rw [PrimitivePointBind.semanticMass_eq, PrimitivePointBind.observeJoint_eq]
+  norm_num [primitiveDiracTree, primitiveDiracTwo, PrimitiveProgram.observe_dirac,
+    unitPointContinuation, PointContinuation.eval, Value.mul, Value.add]
+
+theorem primitiveDiracTree_observeSucc :
+    primitiveDiracTree.observeJoint (fun x => some (x + 1)) = some 18 := by
+  rw [PrimitivePointBind.observeJoint_eq]
+  norm_num [primitiveDiracTree, primitiveDiracTwo, PrimitiveProgram.observe_dirac,
+    unitPointContinuation, PointContinuation.eval, Value.mul, Value.add]
+
+theorem primitiveDiracTree_presentationMass :
+    massValue primitiveDiracTree.presentation = some 5 := by
+  rw [← PrimitivePointBind.semanticMass_bridge]
+  exact primitiveDiracTree_semanticMass
+
+theorem primitiveDiracTree_presentationObserveSucc :
+    primitiveDiracTree.presentation.bind
+      (fun d => integrate d (fun x => some (x + 1))) = some 18 := by
+  rw [← PrimitivePointBind.observeJoint_bridge]
+  exact primitiveDiracTree_observeSucc
+
+/-- Strict zero scaling cannot erase continuation failure at a dirac source. -/
+theorem primitiveDiracScaledFailure_semanticMass :
+    primitiveDiracScaledFailure.semanticMass = none := by
+  rw [PrimitivePointBind.semanticMass_eq, PrimitivePointBind.observeJoint_eq]
+  norm_num [primitiveDiracScaledFailure, primitiveDiracTwo, PrimitiveProgram.observe_dirac,
+    PointContinuation.eval, Value.mul]
+
+theorem primitiveDiracScaledFailure_presentationMass :
+    massValue primitiveDiracScaledFailure.presentation = none := by
+  rw [← PrimitivePointBind.semanticMass_bridge]
+  exact primitiveDiracScaledFailure_semanticMass
+
+/-- The unified point-root interpreter accepts primitive continuation trees. -/
+def coveredPrimitiveDiracTree : CoveredProgram .point ℝ :=
+  .primitiveBind primitiveDiracTree
+
+def coveredPrimitiveZeroFailingPointBind : CoveredProgram .point ℝ :=
+  .primitiveBind primitiveZeroFailingPointBind
+
+theorem coveredPrimitiveDiracTree_semanticMass :
+    coveredPrimitiveDiracTree.semanticMass = some 5 :=
+  primitiveDiracTree_semanticMass
+
+theorem coveredPrimitiveDiracTree_observeSucc :
+    coveredPrimitiveDiracTree.observe (fun x => some (x + 1)) = some 18 :=
+  primitiveDiracTree_observeSucc
+
+theorem coveredPrimitiveDiracTree_presentationObserveSucc :
+    coveredPrimitiveDiracTree.presentation.bind
+      (fun d => integrate d (fun x => some (x + 1))) = some 18 := by
+  rw [← coveredPrimitiveDiracTree.observe_bridge _ trivial]
+  exact coveredPrimitiveDiracTree_observeSucc
+
+theorem coveredPrimitiveZeroFailingPointBind_observeUndefined :
+    coveredPrimitiveZeroFailingPointBind.observe (fun _ => none) = some 0 :=
+  primitiveZeroFailingPointBind_observeUndefined
+
+theorem coveredPrimitiveZeroFailingPointBind_presentationObserveUndefined :
+    coveredPrimitiveZeroFailingPointBind.presentation.bind
+      (fun d => integrate d (fun _ => none)) = some 0 := by
+  rw [← coveredPrimitiveZeroFailingPointBind.observe_bridge _ trivial]
+  exact coveredPrimitiveZeroFailingPointBind_observeUndefined
+
 #qsym_check_axioms partialIntegral_sum
 #qsym_check_axioms PartialFamily.observe_sum
 #qsym_check_axioms PartialFamily.observeJoint_sum
@@ -1339,5 +1456,33 @@ theorem coveredMixedDensityContinuationBind_presentationMass :
 #qsym_check_axioms failingMixedContinuationBind_not_massCompatible
 #qsym_check_axioms coveredMixedDensityContinuationBind_semanticMass
 #qsym_check_axioms coveredMixedDensityContinuationBind_presentationMass
+#qsym_check_axioms PrimitiveProgram.observe_add
+#qsym_check_axioms PrimitiveProgram.bind_observe_bridge
+#qsym_check_axioms PrimitiveBind.eraseRoot_rootedSemantic
+#qsym_check_axioms PrimitiveBind.semanticFamily_eq
+#qsym_check_axioms PrimitiveBind.observeJoint_eq
+#qsym_check_axioms PrimitiveBind.semanticMass_eq
+#qsym_check_axioms PrimitivePointBind.observeJoint_aux
+#qsym_check_axioms PrimitivePointBind.observeJoint_eq
+#qsym_check_axioms PrimitivePointBind.observeJoint_bridge
+#qsym_check_axioms PrimitivePointBind.semanticMass_eq
+#qsym_check_axioms PrimitivePointBind.semanticMass_bridge
+#qsym_check_axioms primitiveInvalidPointBind_semanticMass
+#qsym_check_axioms primitiveInvalidPointBind_presentationMass
+#qsym_check_axioms primitiveZeroFailingPointBind_observeUndefined
+#qsym_check_axioms primitiveZeroFailingPointBind_semanticMass
+#qsym_check_axioms primitiveZeroFailingPointBind_presentationObserveUndefined
+#qsym_check_axioms primitiveDiracWeighted_semanticMass
+#qsym_check_axioms primitiveDiracTree_semanticMass
+#qsym_check_axioms primitiveDiracTree_observeSucc
+#qsym_check_axioms primitiveDiracTree_presentationMass
+#qsym_check_axioms primitiveDiracTree_presentationObserveSucc
+#qsym_check_axioms primitiveDiracScaledFailure_semanticMass
+#qsym_check_axioms primitiveDiracScaledFailure_presentationMass
+#qsym_check_axioms coveredPrimitiveDiracTree_semanticMass
+#qsym_check_axioms coveredPrimitiveDiracTree_observeSucc
+#qsym_check_axioms coveredPrimitiveDiracTree_presentationObserveSucc
+#qsym_check_axioms coveredPrimitiveZeroFailingPointBind_observeUndefined
+#qsym_check_axioms coveredPrimitiveZeroFailingPointBind_presentationObserveUndefined
 
 end QSym.PartialFibreTests

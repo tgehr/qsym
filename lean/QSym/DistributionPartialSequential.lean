@@ -645,6 +645,253 @@ theorem eval_bridge (c : PointContinuation A α) (a : A) (f : α → Option ℝ)
 
 end PointContinuation
 
+/-- Primitive sources observe strict addition pointwise, without an
+integrability or branch-definedness hypothesis. -/
+theorem PrimitiveProgram.observe_add (p : PrimitiveProgram ℝ) (u v : ℝ → Option ℝ) :
+    p.observe (fun x => Value.add (u x) (v x)) =
+      Value.add (p.observe u) (p.observe v) := by
+  cases p <;> simp [Value.add]
+
+/-- Ordered legacy bind over a primitive source agrees with source observation. -/
+theorem PrimitiveProgram.bind_observe_bridge (p : PrimitiveProgram ℝ)
+    (k : ℝ → Option (D α)) (f : α → Option ℝ) :
+    (bindValue p.presentation (some k)).bind (fun d => integrate d f) =
+      p.observe (fun x => (k x).bind (fun d => integrate d f)) := by
+  cases p <;> simp [PrimitiveProgram.presentation, bindValue, bind, integrate]
+
+/-- A primitive real source followed by a partial weighted deterministic kernel. -/
+structure PrimitiveBind (α : Type) where
+  source : PrimitiveProgram ℝ
+  continuation : ℝ → Option (ℝ × α)
+
+namespace PrimitiveBind
+variable {α : Type}
+
+/-- The continuation uses a trivial latent point over each retained source row. -/
+def next (b : PrimitiveBind α) : PartialFamily
+    (PUnit.{1} × b.source.semanticFamily.space.Carrier) ℝ α where
+  space := Space.point
+  body := fun _ =>
+    { weight := fun x _ => (b.continuation x).map Prod.fst
+      value := fun x _ => (b.continuation x).map Prod.snd }
+
+/-- The direct two-stage semantics retains the primitive source fibre. -/
+def tower (b : PrimitiveBind α) : PartialTower PUnit.{1} PUnit.{1} ℝ α where
+  first := b.source.semanticFamily
+  next := b.next
+
+def semanticFamily (b : PrimitiveBind α) : PartialFamily PUnit.{1} PUnit.{1} α :=
+  b.tower.flatten
+
+def semantic (b : PrimitiveBind α) : PartialHom PUnit.{1} PUnit.{1} α := b.tower.hom
+
+def rootedSemantic (b : PrimitiveBind α) : RootedPartialTrace PUnit.{1}
+    (Measure.dirac (PUnit.unit : PUnit.{1})) α :=
+  b.tower.rootedFlatten _
+
+def observeJoint (b : PrimitiveBind α) (f : α → Option ℝ) : Option ℝ :=
+  b.rootedSemantic.observeJoint PUnit.unit (fun _ a => f a)
+
+def semanticMass (b : PrimitiveBind α) : Option ℝ := b.rootedSemantic.mass
+
+@[simp] theorem eraseRoot_rootedSemantic (b : PrimitiveBind α) :
+    b.rootedSemantic.eraseRoot = b.semantic := rfl
+
+@[simp] theorem semanticFamily_eq (b : PrimitiveBind α) :
+    b.semantic = PartialHom.ofFamily b.semanticFamily := rfl
+
+private def pointProdPoints : PUnit.{1} × (PUnit.{1} × PUnit.{1}) ≃ᵐ PUnit.{1} where
+  toEquiv :=
+    { toFun := fun _ => PUnit.unit
+      invFun := fun _ => (PUnit.unit, (PUnit.unit, PUnit.unit))
+      left_inv := by rintro ⟨⟨⟩, ⟨⟩, ⟨⟩⟩; rfl
+      right_inv := by intro x; cases x; rfl }
+  measurable_toFun := measurable_const
+  measurable_invFun := measurable_const
+
+private theorem measurePreserving_pointProdPoints :
+    MeasurePreserving pointProdPoints
+      (Measure.dirac (PUnit.unit, (PUnit.unit, PUnit.unit)))
+      (Measure.dirac (PUnit.unit : PUnit.{1})) where
+  measurable := pointProdPoints.measurable
+  map_eq := by
+    change Measure.map (fun _ : PUnit.{1} × (PUnit.{1} × PUnit.{1}) =>
+      (PUnit.unit : PUnit.{1}))
+      (Measure.dirac (PUnit.unit, (PUnit.unit, PUnit.unit))) = _
+    rw [Measure.map_dirac measurable_const]
+
+private theorem partialIntegral_pointProdPoints
+    (g : PUnit.{1} × (PUnit.{1} × PUnit.{1}) → Option ℝ) :
+    partialIntegral (Measure.dirac (PUnit.unit, (PUnit.unit, PUnit.unit))) g =
+      g (PUnit.unit, (PUnit.unit, PUnit.unit)) := by
+  have hpoint : g = fun z => (fun _ : PUnit.{1} =>
+      g (PUnit.unit, (PUnit.unit, PUnit.unit))) (pointProdPoints z) := by
+    funext z
+    rcases z with ⟨⟨⟩, ⟨⟩, ⟨⟩⟩
+    rfl
+  rw [hpoint]
+  exact (partialIntegral_comp pointProdPoints measurePreserving_pointProdPoints
+    (fun _ : PUnit.{1} => g (PUnit.unit, (PUnit.unit, PUnit.unit)))).trans
+    (partialIntegral_point _)
+
+/-- Joint observation is ordered primitive-source observation of the strict
+weighted-Dirac continuation. Zero never enters its continuation. -/
+theorem observeJoint_eq (b : PrimitiveBind α) (f : α → Option ℝ) :
+    b.observeJoint f = b.source.observe (fun x =>
+      (b.continuation x).bind fun wx => Value.mul (some wx.1) (f wx.2)) := by
+  cases b with
+  | mk source k =>
+    cases source with
+    | invalid =>
+      rw [PrimitiveProgram.observe_invalid]
+      unfold observeJoint rootedSemantic PartialTower.rootedFlatten
+        RootedPartialHom.observeJoint PartialHom.observeJoint RootedPartialHom.ofFamily
+        RootedPartialHom.ofPartialHom PartialHom.ofFamily
+      rw [Quotient.liftOn_mk]
+      unfold PartialFamily.observeJoint
+      apply if_neg
+      intro h
+      have hd := h.1 (PUnit.unit, (PUnit.unit, PUnit.unit))
+      simp [tower, next, PrimitiveProgram.semanticFamily, PrimitiveProgram.invalidFamily,
+        PartialTower.flatten, PartialFamily.depComp, Value.mul, Value.Defined] at hd
+    | zero =>
+      rw [PrimitiveProgram.observe_zero]
+      unfold observeJoint rootedSemantic PartialTower.rootedFlatten
+        RootedPartialHom.observeJoint PartialHom.observeJoint RootedPartialHom.ofFamily
+        RootedPartialHom.ofPartialHom PartialHom.ofFamily
+      rw [Quotient.liftOn_mk]
+      unfold PartialFamily.observeJoint
+      change partialIntegral
+        ((Measure.dirac (PUnit.unit : PUnit.{1})) ⊗ₘ
+          ((ProbabilityTheory.Kernel.const PUnit.{1} (0 : Measure Empty)) ⊗ₖ
+           (ProbabilityTheory.Kernel.const (PUnit.{1} × Empty)
+            (Measure.dirac (PUnit.unit : PUnit.{1}))))) _ = some 0
+      rw [partialIntegral_valid _ _ (fun z => isEmptyElim z.2.1) Integrable.of_isEmpty,
+        integral_of_isEmpty]
+    | dirac a =>
+      rw [PrimitiveProgram.observe_dirac]
+      unfold observeJoint rootedSemantic PartialTower.rootedFlatten
+        RootedPartialHom.observeJoint PartialHom.observeJoint RootedPartialHom.ofFamily
+        RootedPartialHom.ofPartialHom PartialHom.ofFamily
+      rw [Quotient.liftOn_mk]
+      unfold PartialFamily.observeJoint
+      change partialIntegral
+        ((Measure.dirac (PUnit.unit : PUnit.{1})) ⊗ₘ
+          ((ProbabilityTheory.Kernel.const PUnit.{1}
+            (Measure.dirac (PUnit.unit : PUnit.{1}))) ⊗ₖ
+           (ProbabilityTheory.Kernel.const (PUnit.{1} × PUnit.{1})
+            (Measure.dirac (PUnit.unit : PUnit.{1}))))) _ = _
+      have hκ : ((ProbabilityTheory.Kernel.const PUnit.{1}
+            (Measure.dirac (PUnit.unit : PUnit.{1}))) ⊗ₖ
+          (ProbabilityTheory.Kernel.const (PUnit.{1} × PUnit.{1})
+            (Measure.dirac (PUnit.unit : PUnit.{1})))) =
+          ProbabilityTheory.Kernel.const PUnit.{1}
+            (Measure.dirac ((PUnit.unit : PUnit.{1}), (PUnit.unit : PUnit.{1}))) := by
+        classical
+        ext x s hs
+        rw [ProbabilityTheory.Kernel.compProd_apply hs]
+        simp [Measure.compProd_const, Measure.dirac_prod]
+        by_cases hmem : ((PUnit.unit : PUnit.{1}), (PUnit.unit : PUnit.{1})) ∈ s <;>
+          simp [Set.indicator, hmem]
+      rw [hκ, Measure.compProd_const, Measure.dirac_prod_dirac,
+        partialIntegral_pointProdPoints]
+      cases hk : k a with
+      | none =>
+        simp [tower, next, PrimitiveProgram.semanticFamily, PrimitiveProgram.diracFamily,
+          PartialFamily.pure, PartialKernel.pure, PartialTower.flatten, PartialFamily.depComp,
+          hk, Value.mul]
+      | some wx =>
+        cases hf : f wx.2 <;>
+          simp [tower, next, PrimitiveProgram.semanticFamily, PrimitiveProgram.diracFamily,
+            PartialFamily.pure, PartialKernel.pure, PartialTower.flatten, PartialFamily.depComp,
+            hk, hf, Value.mul]
+
+/-- Rooted mass is the unit-test special case of joint observation. -/
+theorem semanticMass_eq (b : PrimitiveBind α) :
+    b.semanticMass = b.source.observe (fun x => (b.continuation x).map Prod.fst) := by
+  change b.observeJoint (fun _ => some 1) = _
+  rw [observeJoint_eq]
+  congr 1
+  funext x
+  cases hk : b.continuation x <;> simp [hk, Value.mul]
+
+end PrimitiveBind
+
+/-- A primitive real source followed by a finite weighted continuation tree. -/
+structure PrimitivePointBind (α : Type) where
+  source : PrimitiveProgram ℝ
+  continuation : PointContinuation ℝ α
+
+namespace PrimitivePointBind
+variable {α : Type}
+
+/-- Composite continuations reuse direct rooted scaling and strict addition. -/
+def semanticAux (source : PrimitiveProgram ℝ) : PointContinuation ℝ α →
+    RootedPartialTrace PUnit.{1} (Measure.dirac (PUnit.unit : PUnit.{1})) α
+  | .weighted k => (PrimitiveBind.mk source k).rootedSemantic
+  | .scale r c => RootedPartialHom.scale r (semanticAux source c)
+  | .add c d => RootedPartialHom.add (semanticAux source c) (semanticAux source d)
+
+def rootedSemantic (b : PrimitivePointBind α) : RootedPartialTrace PUnit.{1}
+    (Measure.dirac (PUnit.unit : PUnit.{1})) α :=
+  semanticAux b.source b.continuation
+
+def observeJoint (b : PrimitivePointBind α) (f : α → Option ℝ) : Option ℝ :=
+  b.rootedSemantic.observeJoint PUnit.unit (fun _ a => f a)
+
+def semanticMass (b : PrimitivePointBind α) : Option ℝ := b.rootedSemantic.mass
+
+/-- Legacy syntax occurs only in this compatibility representation. -/
+def presentation (b : PrimitivePointBind α) : Option (D α) :=
+  bindValue b.source.presentation (some fun x => b.continuation.presentation x)
+
+/-- Every primitive-source continuation tree has exact ordered observation.
+There are no continuous row, integrability, or branch-definedness guards. -/
+theorem observeJoint_aux (source : PrimitiveProgram ℝ) (c : PointContinuation ℝ α)
+    (f : α → Option ℝ) :
+    observeJoint ⟨source, c⟩ f = source.observe (fun x => c.eval x f) := by
+  induction c generalizing source f with
+  | weighted k => exact PrimitiveBind.observeJoint_eq ⟨source, k⟩ f
+  | scale r c ih =>
+      change (RootedPartialHom.scale r (semanticAux source c)).observeJoint
+        PUnit.unit (fun _ a => f a) = _
+      rw [RootedPartialHom.observeJoint_scale]
+      change observeJoint ⟨source, c⟩ (fun a => Value.mul (some r) (f a)) = _
+      rw [ih source _]
+      congr 1
+      funext x
+      exact PointContinuation.eval_scale_test c x f r
+  | add c d ihc ihd =>
+      change (RootedPartialHom.add (semanticAux source c) (semanticAux source d)).observeJoint
+        PUnit.unit (fun _ a => f a) = _
+      rw [RootedPartialHom.observeJoint_add]
+      change Value.add (observeJoint ⟨source, c⟩ f) (observeJoint ⟨source, d⟩ f) = _
+      rw [ihc source f, ihd source f]
+      exact (PrimitiveProgram.observe_add source _ _).symm
+
+theorem observeJoint_eq (b : PrimitivePointBind α) (f : α → Option ℝ) :
+    b.observeJoint f = b.source.observe (fun x => b.continuation.eval x f) :=
+  observeJoint_aux b.source b.continuation f
+
+/-- Exact compatibility with the ordered legacy observer for every strict test. -/
+theorem observeJoint_bridge (b : PrimitivePointBind α) (f : α → Option ℝ) :
+    b.observeJoint f = b.presentation.bind (fun d => integrate d f) := by
+  rw [presentation, PrimitiveProgram.bind_observe_bridge, observeJoint_eq]
+  congr 1
+  funext x
+  exact PointContinuation.eval_bridge b.continuation x f
+
+theorem semanticMass_eq (b : PrimitivePointBind α) :
+    b.semanticMass = b.observeJoint (fun _ => some 1) := rfl
+
+theorem semanticMass_bridge (b : PrimitivePointBind α) :
+    b.semanticMass = massValue b.presentation := by
+  change b.observeJoint (fun _ => some 1) =
+    b.presentation.bind (fun d => integrate d (fun _ => some 1))
+  exact b.observeJoint_bridge _
+
+end PrimitivePointBind
+
 /-- Splitting a density observation requires both branch observations to be
 defined; otherwise cancellation inside a row could erase nonintegrability. -/
 theorem DensityProgram.observe_add (p : DensityProgram) (u v : ℝ → Option ℝ)
@@ -1086,6 +1333,7 @@ Continuous leaves retain their existing restricted continuation types; this is
 not an interpreter for arbitrary `Presentation` values or mixed-root addition. -/
 inductive CoveredProgram : CoveredRoot → Type → Type 1 where
   | primitive {α : Type} (p : PrimitiveProgram α) : CoveredProgram .point α
+  | primitiveBind {α : Type} (b : PrimitivePointBind α) : CoveredProgram .point α
   | density (p : DensityProgram) : CoveredProgram .real ℝ
   | bind {α : Type} (b : DensityBind α) : CoveredProgram .real α
   | pointBind {α : Type} (b : DensityPointBind α) : CoveredProgram .real α
@@ -1106,6 +1354,7 @@ def semantic (p : CoveredProgram root α) :
   CoveredProgram.rec
     (motive := fun {r} {a} _ => RootedPartialTrace r.Carrier r.measure a)
     (fun p => p.rootedSemantic)
+    (fun b => b.rootedSemantic)
     (fun p => p.rootedSemantic)
     (fun b => b.rootedSemantic)
     (fun b => b.rootedSemantic)
@@ -1121,6 +1370,7 @@ def presentation (p : CoveredProgram root α) : Option (D α) :=
   CoveredProgram.rec
     (motive := fun {_} {a} _ => Option (D a))
     (fun p => p.presentation)
+    (fun b => b.presentation)
     (fun p => p.presentation)
     (fun b => b.presentation)
     (fun b => b.presentation)
@@ -1145,6 +1395,7 @@ def ObservationCompatible (p : CoveredProgram root α) : (α → Option ℝ) →
     (fun _ _ => True)
     (fun _ _ => True)
     (fun _ _ => True)
+    (fun _ _ => True)
     (fun b f => b.ObservationCompatible f)
     (fun b f => b.ObservationCompatible f)
     (fun b f => b.RowDefined f ∧ b.JointL1 f)
@@ -1159,6 +1410,7 @@ theorem observe_bridge (p : CoveredProgram root α) (f : α → Option ℝ)
     p.observe f = p.presentation.bind (fun d => integrate d f) := by
   induction p with
   | primitive p => exact p.observe_bridge f
+  | primitiveBind b => exact b.observeJoint_bridge f
   | density p => exact (p.observeJoint_eq f).trans (p.observe_bridge f)
   | bind b => exact b.observeJoint_bridge f
   | pointBind b => exact b.observeJoint_bridge f h
