@@ -568,7 +568,95 @@ theorem observeJoint_eq (p : DensityProgram) (f : ℝ → Option ℝ) :
     (WeightedParameter.measurePreserving_prodPUnit volume)
     (fun x => Value.mul (p.density x) (f x))
 
+/-- Source-first success of a zero continuation, before any output fibre is
+observed. -/
+def zeroGuard (p : DensityProgram) : Option PUnit.{1} := by
+  classical
+  exact if (∀ x, Value.Defined (p.density x)) then some PUnit.unit else none
+
+/-- A zero continuation observes exactly the source's pointwise definedness.
+Source integrability is irrelevant because no nonzero output weight is formed. -/
+theorem observe_zero (p : DensityProgram) :
+    p.observe (fun _ => some 0) = p.zeroGuard.bind fun _ => some 0 := by
+  classical
+  rw [DensityProgram.observe, Model.densityMassValue_eq]
+  simp only [Option.some_bind]
+  by_cases hd : ∀ x, Value.Defined (p.density x)
+  · have hzero : (fun x => Value.mul (p.density x) (some 0)) =
+        fun _ => some (0 : ℝ) := by
+      funext x
+      have hx := hd x
+      cases hp : p.density x <;>
+        simp [hp, Value.mul, Value.Defined] at hx ⊢
+    rw [hzero, partialIntegral_zero]
+    simp [zeroGuard, hd]
+  · have hg : p.zeroGuard = none := by simp [zeroGuard, hd]
+    rw [hg]
+    simp only [Option.none_bind]
+    apply if_neg
+    intro h
+    apply hd
+    intro x
+    have hx := h.1 x
+    cases hp : p.density x <;>
+      simp [hp, Value.mul, Value.Defined] at hx ⊢
+
 end DensityProgram
+
+/-- A density source followed by the empty `zero` continuation.  The semantic
+output fibre is empty, while `sourceGuard` retains the source-first observation
+that legacy `bind` performs before it can return that zero. -/
+structure DensityZeroBind (α : Type) where
+  source : DensityProgram
+
+namespace DensityZeroBind
+variable {α : Type}
+
+/-- Source-first success of the ordered zero continuation. -/
+def sourceGuard (b : DensityZeroBind α) : Option PUnit.{1} := b.source.zeroGuard
+
+/-- Empty output fibres plus an explicit source-first strictness guard. -/
+def rootedSemantic (b : DensityZeroBind α) :
+    GuardedRootedPartialTrace ℝ volume α :=
+  GuardedRootedPartialTrace.zero b.sourceGuard
+
+/-- Direct observation is independent of the final test after the guard. -/
+def observeJoint (b : DensityZeroBind α) (f : α → Option ℝ) : Option ℝ :=
+  b.rootedSemantic.observeJoint (fun _ a => f a)
+
+def semanticMass (b : DensityZeroBind α) : Option ℝ := b.rootedSemantic.mass
+
+/-- The empty output cannot erase failure in the source density. -/
+theorem observeJoint_eq (b : DensityZeroBind α) (f : α → Option ℝ) :
+    b.observeJoint f = b.source.observe (fun _ => some 0) := by
+  change (GuardedRootedPartialTrace.zero b.sourceGuard).observeJoint
+    (fun _ a => f a) = _
+  rw [GuardedRootedPartialTrace.observeJoint_zero, DensityProgram.observe_zero]
+  rfl
+
+theorem semanticMass_eq (b : DensityZeroBind α) :
+    b.semanticMass = b.observeJoint (fun _ => some 1) := rfl
+
+/-- Legacy syntax is reconstructed only at the compatibility boundary. -/
+def zeroValue : Option (D α) := some .zero
+
+def presentation (b : DensityZeroBind α) : Option (D α) :=
+  bindValue b.source.presentation (some fun _ => zeroValue)
+
+/-- Exact arbitrary-test compatibility, with no source mass or integrability
+side condition: the old bind likewise observes the source before `zero`. -/
+theorem observeJoint_bridge (b : DensityZeroBind α) (f : α → Option ℝ) :
+    b.observeJoint f = b.presentation.bind (fun d => integrate d f) := by
+  rw [observeJoint_eq, presentation, DensityProgram.bind_observe_bridge]
+  rfl
+
+theorem semanticMass_bridge (b : DensityZeroBind α) :
+    b.semanticMass = massValue b.presentation := by
+  change b.observeJoint (fun _ => some 1) =
+    b.presentation.bind (fun d => integrate d (fun _ => some 1))
+  exact b.observeJoint_bridge _
+
+end DensityZeroBind
 
 /-- A fixed finite tree of partial weighted Dirac continuations. There is no
 empty continuation leaf: an empty latent sum could erase a source failure that
@@ -1338,6 +1426,7 @@ inductive CoveredProgram : CoveredRoot → Type → Type 1 where
   | bind {α : Type} (b : DensityBind α) : CoveredProgram .real α
   | pointBind {α : Type} (b : DensityPointBind α) : CoveredProgram .real α
   | continuationBind {α : Type} (b : DensityContinuationBind α) : CoveredProgram .real α
+  | zeroBind {α : Type} (b : DensityZeroBind α) : CoveredProgram .real α
   | continuousBind (b : ContinuousDensityBind) : CoveredProgram .real ℝ
   | integral (p : ContinuousDensityIntegral) : CoveredProgram .real ℝ
   | scale {root : CoveredRoot} {α : Type} (r : ℝ)
@@ -1348,21 +1437,24 @@ inductive CoveredProgram : CoveredRoot → Type → Type 1 where
 namespace CoveredProgram
 variable {root : CoveredRoot} {α : Type}
 
-/-- One recursive direct semantics; each base case is an existing fragment. -/
+/-- One recursive direct semantics; each nonempty base case keeps its previous
+rooted trace under a defined source guard, while zero binds supply their own
+source-first guard. -/
 def semantic (p : CoveredProgram root α) :
-    RootedPartialTrace root.Carrier root.measure α :=
+    GuardedRootedPartialTrace root.Carrier root.measure α :=
   CoveredProgram.rec
-    (motive := fun {r} {a} _ => RootedPartialTrace r.Carrier r.measure a)
-    (fun p => p.rootedSemantic)
+    (motive := fun {r} {a} _ => GuardedRootedPartialTrace r.Carrier r.measure a)
+    (fun p => GuardedRootedPartialTrace.ofTrace p.rootedSemantic)
+    (fun b => GuardedRootedPartialTrace.ofTrace b.rootedSemantic)
+    (fun p => GuardedRootedPartialTrace.ofTrace p.rootedSemantic)
+    (fun b => GuardedRootedPartialTrace.ofTrace b.rootedSemantic)
+    (fun b => GuardedRootedPartialTrace.ofTrace b.rootedSemantic)
+    (fun b => GuardedRootedPartialTrace.ofTrace b.rootedSemantic)
     (fun b => b.rootedSemantic)
-    (fun p => p.rootedSemantic)
-    (fun b => b.rootedSemantic)
-    (fun b => b.rootedSemantic)
-    (fun b => b.rootedSemantic)
-    (fun b => b.rootedSemantic)
-    (fun p => p.rootedSemantic)
-    (fun r _ ih => RootedPartialHom.scale r ih)
-    (fun _ _ ihp ihq => RootedPartialHom.add ihp ihq)
+    (fun b => GuardedRootedPartialTrace.ofTrace b.rootedSemantic)
+    (fun p => GuardedRootedPartialTrace.ofTrace p.rootedSemantic)
+    (fun r _ ih => GuardedRootedPartialTrace.scale r ih)
+    (fun _ _ ihp ihq => GuardedRootedPartialTrace.add ihp ihq)
     p
 
 /-- Legacy syntax is reconstructed only at the compatibility boundary. -/
@@ -1376,6 +1468,7 @@ def presentation (p : CoveredProgram root α) : Option (D α) :=
     (fun b => b.presentation)
     (fun b => b.presentation)
     (fun b => b.presentation)
+    (fun b => b.presentation)
     (fun p => p.presentation)
     (fun r _ ih => scaleValue (some r) ih)
     (fun _ _ ihp ihq => addValue ihp ihq)
@@ -1383,7 +1476,7 @@ def presentation (p : CoveredProgram root α) : Option (D α) :=
 
 /-- Arbitrary strict observation of the one direct semantic object. -/
 def observe (p : CoveredProgram root α) (f : α → Option ℝ) : Option ℝ :=
-  p.semantic.observeJoint PUnit.unit (fun _ a => f a)
+  p.semantic.observeJoint (fun _ a => f a)
 
 def semanticMass (p : CoveredProgram root α) : Option ℝ := p.semantic.mass
 
@@ -1398,6 +1491,7 @@ def ObservationCompatible (p : CoveredProgram root α) : (α → Option ℝ) →
     (fun _ _ => True)
     (fun b f => b.ObservationCompatible f)
     (fun b f => b.ObservationCompatible f)
+    (fun _ _ => True)
     (fun b f => b.RowDefined f ∧ b.JointL1 f)
     (fun p f => p.RowDefined f ∧ p.JointL1 f)
     (fun _ p ih f => ih f ∧ Value.Defined (p.observe f))
@@ -1415,13 +1509,14 @@ theorem observe_bridge (p : CoveredProgram root α) (f : α → Option ℝ)
   | bind b => exact b.observeJoint_bridge f
   | pointBind b => exact b.observeJoint_bridge f h
   | continuationBind b => exact b.observeJoint_bridge f h
+  | zeroBind b => exact b.observeJoint_bridge f
   | continuousBind b => exact b.observeJoint_bridge f h.1 h.2
   | integral p => exact p.observeJoint_bridge f h.1 h.2
   | scale r p ih =>
-      exact RootedScale.observeJoint_bridge p.semantic r p.presentation f
+      exact GuardedScale.observeJoint_bridge p.semantic r p.presentation f
         (ih f h.1) h.2
   | add p q ihp ihq =>
-      exact RootedAdd.observeJoint_bridge p.semantic q.semantic
+      exact GuardedAdd.observeJoint_bridge p.semantic q.semantic
         p.presentation q.presentation f (ihp f h.1) (ihq f h.2)
 
 /-- Mass compatibility is the unit-test instance of the unified theorem. -/

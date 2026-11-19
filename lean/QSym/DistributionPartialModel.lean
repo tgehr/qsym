@@ -261,4 +261,38 @@ theorem mass_bridge (p q : RootedPartialTrace X μ α) (d e : Option (D α))
   rw [RootedPartialHom.mass_add, hp, hq, mass_addValue]
 
 end RootedAdd
+
+/-! Compatibility for guarded rooted traces.  The guard is already included in
+the source observation hypothesis, so these are the same strict boundaries as
+for unguarded scaling and addition. -/
+namespace GuardedScale
+variable {X α : Type} [MeasurableSpace X] {μ : Measure X} [SFinite μ]
+
+theorem observeJoint_bridge (p : GuardedRootedPartialTrace X μ α) (r : ℝ)
+    (d : Option (D α)) (f : α → Option ℝ)
+    (hs : p.observeJoint (fun _ a => f a) =
+      d.bind (fun a => integrate a f))
+    (hd : Value.Defined (p.observeJoint (fun _ a => f a))) :
+    (GuardedRootedPartialTrace.scale r p).observeJoint (fun _ a => f a) =
+      (scaleValue (some r) d).bind (fun a => integrate a f) := by
+  rw [GuardedRootedPartialTrace.observeJoint_scale_defined p r _ hd, hs]
+  cases d <;> rfl
+
+end GuardedScale
+
+namespace GuardedAdd
+variable {X α : Type} [MeasurableSpace X] {μ : Measure X} [SFinite μ]
+
+theorem observeJoint_bridge (p q : GuardedRootedPartialTrace X μ α)
+    (d e : Option (D α)) (f : α → Option ℝ)
+    (hp : p.observeJoint (fun _ a => f a) =
+      d.bind (fun a => integrate a f))
+    (hq : q.observeJoint (fun _ a => f a) =
+      e.bind (fun a => integrate a f)) :
+    (GuardedRootedPartialTrace.add p q).observeJoint (fun _ a => f a) =
+      (addValue d e).bind (fun a => integrate a f) := by
+  rw [GuardedRootedPartialTrace.observeJoint_add, hp, hq]
+  cases d <;> cases e <;> simp [addValue, Value.add, integrate]
+
+end GuardedAdd
 end QSym.Distribution

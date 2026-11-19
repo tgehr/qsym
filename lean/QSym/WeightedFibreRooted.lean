@@ -195,6 +195,28 @@ theorem observeJoint_scale_defined (p : RootedPartialHom X μ A B)
 @[simp] theorem eraseRoot_add (p q : RootedPartialHom X μ A B) :
     eraseRoot (add p q) = PartialHom.add p.underlying q.underlying := rfl
 
+/-- The empty-output trace at an arbitrary intrinsic root.  Its fibres carry no
+source information, so source-first strictness is supplied separately by
+`GuardedRootedPartialTrace` below rather than being inferred from emptiness. -/
+def zero (X : Type) [MeasurableSpace X] (μ : Measure X) [SFinite μ]
+    (B : Type*) : RootedPartialHom X μ PUnit B :=
+  ofFamily
+    { space := Space.ofMeasure Empty 0
+      body := fun _ =>
+        { weight := fun _ ω => nomatch ω
+          value := fun _ ω => nomatch ω } }
+
+@[simp] theorem observeJoint_zero (X : Type) [MeasurableSpace X]
+    (μ : Measure X) [SFinite μ] (B : Type*) (f : X → B → Option ℝ) :
+    (zero X μ B).observeJoint PUnit.unit f = some 0 := by
+  unfold observeJoint PartialHom.observeJoint zero ofFamily ofPartialHom
+    PartialHom.ofFamily
+  rw [Quotient.liftOn_mk]
+  unfold PartialFamily.observeJoint
+  change partialIntegral _ (fun z : X × Empty => _) = some 0
+  rw [partialIntegral_valid _ _ (fun z => isEmptyElim z.2) Integrable.of_isEmpty,
+    integral_of_isEmpty]
+
 end RootedPartialHom
 
 /-- A rooted pointwise family of traces. -/
@@ -224,5 +246,113 @@ theorem mass_add (p q : RootedPartialTrace X μ B) :
     (add p q).mass = Value.add p.mass q.mass :=
   observeJoint_add p q PUnit.unit (fun _ _ => some 1)
 
+@[simp] theorem mass_zero (X : Type) [MeasurableSpace X]
+    (μ : Measure X) [SFinite μ] (B : Type*) :
+    (zero X μ B).mass = some 0 :=
+  observeJoint_zero X μ B (fun _ _ => some 1)
+
 end RootedPartialHom
+
+/-- A rooted trace together with the result of source-first strict evaluation.
+An undefined guard cannot be erased by an empty output fibre, a zero scale, or
+an empty sum.  Existing nonempty fragments use the defined guard and therefore
+retain their previous rooted observations definitionally. -/
+structure GuardedRootedPartialTrace (X : Type) [MeasurableSpace X]
+    (μ : Measure X) [SFinite μ] (B : Type*) where
+  guard : Option PUnit.{1}
+  trace : RootedPartialHom X μ PUnit.{1} B
+
+namespace GuardedRootedPartialTrace
+variable {X : Type} [MeasurableSpace X] {μ : Measure X} [SFinite μ] {B : Type*}
+
+/-- Conservatively embed an existing rooted trace with a defined guard. -/
+def ofTrace (p : RootedPartialHom X μ PUnit.{1} B) : GuardedRootedPartialTrace X μ B where
+  guard := some PUnit.unit
+  trace := p
+
+/-- An empty-output trace whose only observation is its source-first guard. -/
+def zero (guard : Option PUnit.{1}) : GuardedRootedPartialTrace X μ B where
+  guard := guard
+  trace := RootedPartialHom.zero X μ B
+
+/-- Strict ordered observation: inspect the source guard before the output. -/
+def observeJoint (p : GuardedRootedPartialTrace X μ B)
+    (f : X → B → Option ℝ) : Option ℝ :=
+  p.guard.bind fun _ => p.trace.observeJoint PUnit.unit f
+
+/-- Intrinsic mass of a guarded rooted trace. -/
+def mass (p : GuardedRootedPartialTrace X μ B) : Option ℝ :=
+  p.observeJoint (fun _ _ => some 1)
+
+/-- Scaling acts only after the source-first guard has succeeded. -/
+def scale (r : ℝ) (p : GuardedRootedPartialTrace X μ B) :
+    GuardedRootedPartialTrace X μ B where
+  guard := p.guard
+  trace := RootedPartialHom.scale r p.trace
+
+/-- Addition evaluates both source guards strictly before adding the traces. -/
+def add (p q : GuardedRootedPartialTrace X μ B) :
+    GuardedRootedPartialTrace X μ B where
+  guard := p.guard.bind fun _ => q.guard
+  trace := RootedPartialHom.add p.trace q.trace
+
+@[simp] theorem observeJoint_ofTrace (p : RootedPartialHom X μ PUnit.{1} B)
+    (f : X → B → Option ℝ) :
+    (ofTrace p).observeJoint f = p.observeJoint PUnit.unit f := rfl
+
+@[simp] theorem mass_ofTrace (p : RootedPartialHom X μ PUnit.{1} B) :
+    (ofTrace p).mass = p.mass := rfl
+
+@[simp] theorem observeJoint_zero (guard : Option PUnit.{1})
+    (f : X → B → Option ℝ) :
+    (zero (X := X) (μ := μ) (B := B) guard).observeJoint f =
+      guard.bind fun _ => some 0 := by
+  cases guard <;> simp [observeJoint, zero]
+
+@[simp] theorem mass_zero (guard : Option PUnit.{1}) :
+    (zero (X := X) (μ := μ) (B := B) guard).mass =
+      guard.bind fun _ => some 0 :=
+  observeJoint_zero guard (fun _ _ => some 1)
+
+/-- Scaling retains source failure even when the scale factor is zero. -/
+theorem observeJoint_scale (p : GuardedRootedPartialTrace X μ B) (r : ℝ)
+    (f : X → B → Option ℝ) :
+    (scale r p).observeJoint f =
+      p.observeJoint (fun x b => Value.mul (some r) (f x b)) := by
+  rcases p with ⟨guard, trace⟩
+  cases guard <;>
+    simp [observeJoint, scale, RootedPartialHom.observeJoint_scale]
+
+theorem observeJoint_scale_defined (p : GuardedRootedPartialTrace X μ B)
+    (r : ℝ) (f : X → B → Option ℝ) (hd : Value.Defined (p.observeJoint f)) :
+    (scale r p).observeJoint f = Value.mul (some r) (p.observeJoint f) := by
+  rcases p with ⟨guard, trace⟩
+  cases guard with
+  | none => simp [observeJoint, Value.Defined] at hd
+  | some u =>
+      change Value.Defined (trace.observeJoint PUnit.unit f) at hd
+      change (RootedPartialHom.scale r trace).observeJoint PUnit.unit f =
+        Value.mul (some r) (trace.observeJoint PUnit.unit f)
+      exact RootedPartialHom.observeJoint_scale_defined trace r PUnit.unit f hd
+
+/-- Guarded addition has exactly the same strict observation algebra as the
+legacy ordered observer, including failure in either source guard. -/
+theorem observeJoint_add (p q : GuardedRootedPartialTrace X μ B)
+    (f : X → B → Option ℝ) :
+    (add p q).observeJoint f = Value.add (p.observeJoint f) (q.observeJoint f) := by
+  rcases p with ⟨gp, tp⟩
+  rcases q with ⟨gq, tq⟩
+  cases gp <;> cases gq <;>
+    simp [observeJoint, add, RootedPartialHom.observeJoint_add, Value.add]
+
+theorem mass_scale_defined (p : GuardedRootedPartialTrace X μ B) (r : ℝ)
+    (hd : Value.Defined p.mass) :
+    (scale r p).mass = Value.mul (some r) p.mass :=
+  observeJoint_scale_defined p r (fun _ _ => some 1) hd
+
+theorem mass_add (p q : GuardedRootedPartialTrace X μ B) :
+    (add p q).mass = Value.add p.mass q.mass :=
+  observeJoint_add p q (fun _ _ => some 1)
+
+end GuardedRootedPartialTrace
 end QSym.WeightedParameter.Fibre

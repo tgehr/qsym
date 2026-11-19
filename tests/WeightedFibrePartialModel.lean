@@ -1211,6 +1211,111 @@ theorem coveredPrimitiveZeroFailingPointBind_presentationObserveUndefined :
   rw [← coveredPrimitiveZeroFailingPointBind.observe_bridge _ trivial]
   exact coveredPrimitiveZeroFailingPointBind_observeUndefined
 
+/-- Empty output fibres alone have zero mass; a failed source-first guard is
+separate information and cannot be reconstructed from those fibres. -/
+theorem emptyPointTrace_semanticMass :
+    (RootedPartialHom.zero PUnit.{1} (Measure.dirac PUnit.unit) ℝ).mass = some 0 :=
+  RootedPartialHom.mass_zero _ _ _
+
+def failedEmptyPointTrace : GuardedRootedPartialTrace PUnit.{1}
+    (Measure.dirac PUnit.unit) ℝ :=
+  .zero none
+
+def definedEmptyPointTrace : GuardedRootedPartialTrace PUnit.{1}
+    (Measure.dirac PUnit.unit) ℝ :=
+  .zero (some PUnit.unit)
+
+theorem failedEmptyPointTrace_semanticMass : failedEmptyPointTrace.mass = none := rfl
+
+theorem definedEmptyPointTrace_semanticMass : definedEmptyPointTrace.mass = some 0 := by
+  exact GuardedRootedPartialTrace.mass_zero _
+
+/-- Zero scaling and strict addition cannot erase an already failed guard. -/
+theorem failedEmptyPointTrace_zeroScale_semanticMass :
+    (GuardedRootedPartialTrace.scale 0 failedEmptyPointTrace).mass = none := rfl
+
+theorem failedEmptyPointTrace_add_semanticMass :
+    (GuardedRootedPartialTrace.add failedEmptyPointTrace definedEmptyPointTrace).mass =
+      none := rfl
+
+/-- Density-source zero binds preserve source-first observation exactly. -/
+def unitIntervalZeroBind : DensityZeroBind ℝ := ⟨unitInterval⟩
+def holeZeroBind : DensityZeroBind ℝ := ⟨hole⟩
+def lebesgueZeroBind : DensityZeroBind ℝ := ⟨.lebesgue⟩
+
+theorem unitIntervalZeroBind_observeUndefined :
+    unitIntervalZeroBind.observeJoint (fun _ => none) = some 0 := by
+  rw [DensityZeroBind.observeJoint_eq]
+  exact unitInterval_observe_const 0
+
+theorem unitIntervalZeroBind_presentationObserveUndefined :
+    unitIntervalZeroBind.presentation.bind (fun d => integrate d (fun _ => none)) =
+      some 0 := by
+  rw [← DensityZeroBind.observeJoint_bridge]
+  exact unitIntervalZeroBind_observeUndefined
+
+theorem holeZeroBind_semanticMass : holeZeroBind.semanticMass = none := by
+  rw [DensityZeroBind.semanticMass_eq, DensityZeroBind.observeJoint_eq,
+    DensityProgram.observe_zero]
+  have hg : holeZeroBind.source.zeroGuard = none := by
+    change hole.zeroGuard = none
+    unfold DensityProgram.zeroGuard
+    apply if_neg
+    intro h
+    have h0 := h 0
+    simp [hole, DensityProgram.density, Value.mul, Value.Defined] at h0
+  rw [hg]
+  rfl
+
+theorem holeZeroBind_presentationMass : massValue holeZeroBind.presentation = none := by
+  rw [← DensityZeroBind.semanticMass_bridge]
+  exact holeZeroBind_semanticMass
+
+/-- Unlike a nonzero mass observation, a zero continuation does not require the
+Lebesgue source to have integrable total mass. -/
+theorem lebesgueZeroBind_semanticMass : lebesgueZeroBind.semanticMass = some 0 := by
+  rw [DensityZeroBind.semanticMass_eq, DensityZeroBind.observeJoint_eq]
+  exact lebesgue_observe_zero
+
+theorem lebesgueZeroBind_presentationMass :
+    massValue lebesgueZeroBind.presentation = some 0 := by
+  rw [← DensityZeroBind.semanticMass_bridge]
+  exact lebesgueZeroBind_semanticMass
+
+/-- The unified covered interpreter retains the zero-bind guard under addition. -/
+def coveredHoleZeroBind : CoveredProgram .real ℝ := .zeroBind holeZeroBind
+
+def coveredLebesgueZeroBind : CoveredProgram .real ℝ := .zeroBind lebesgueZeroBind
+
+def coveredHoleZeroPlusUnit : CoveredProgram .real ℝ :=
+  .add coveredHoleZeroBind (.density unitInterval)
+
+theorem coveredHoleZeroBind_semanticMass : coveredHoleZeroBind.semanticMass = none :=
+  holeZeroBind_semanticMass
+
+theorem coveredHoleZeroBind_presentationMass :
+    massValue coveredHoleZeroBind.presentation = none := by
+  rw [← coveredHoleZeroBind.semanticMass_bridge trivial]
+  exact coveredHoleZeroBind_semanticMass
+
+theorem coveredLebesgueZeroBind_semanticMass :
+    coveredLebesgueZeroBind.semanticMass = some 0 :=
+  lebesgueZeroBind_semanticMass
+
+theorem coveredLebesgueZeroBind_presentationMass :
+    massValue coveredLebesgueZeroBind.presentation = some 0 := by
+  rw [← coveredLebesgueZeroBind.semanticMass_bridge trivial]
+  exact coveredLebesgueZeroBind_semanticMass
+
+theorem coveredHoleZeroPlusUnit_semanticMass :
+    coveredHoleZeroPlusUnit.semanticMass = none := by
+  change (GuardedRootedPartialTrace.add holeZeroBind.rootedSemantic
+    (GuardedRootedPartialTrace.ofTrace unitInterval.rootedSemantic)).mass = none
+  rw [GuardedRootedPartialTrace.mass_add]
+  change Value.add holeZeroBind.semanticMass unitInterval.rootedSemantic.mass = none
+  rw [holeZeroBind_semanticMass]
+  rfl
+
 #qsym_check_axioms partialIntegral_sum
 #qsym_check_axioms PartialFamily.observe_sum
 #qsym_check_axioms PartialFamily.observeJoint_sum
@@ -1484,5 +1589,40 @@ theorem coveredPrimitiveZeroFailingPointBind_presentationObserveUndefined :
 #qsym_check_axioms coveredPrimitiveDiracTree_presentationObserveSucc
 #qsym_check_axioms coveredPrimitiveZeroFailingPointBind_observeUndefined
 #qsym_check_axioms coveredPrimitiveZeroFailingPointBind_presentationObserveUndefined
+
+#qsym_check_axioms RootedPartialHom.observeJoint_zero
+#qsym_check_axioms RootedPartialHom.mass_zero
+#qsym_check_axioms GuardedRootedPartialTrace.observeJoint_ofTrace
+#qsym_check_axioms GuardedRootedPartialTrace.mass_ofTrace
+#qsym_check_axioms GuardedRootedPartialTrace.observeJoint_zero
+#qsym_check_axioms GuardedRootedPartialTrace.mass_zero
+#qsym_check_axioms GuardedRootedPartialTrace.observeJoint_scale
+#qsym_check_axioms GuardedRootedPartialTrace.observeJoint_scale_defined
+#qsym_check_axioms GuardedRootedPartialTrace.observeJoint_add
+#qsym_check_axioms GuardedRootedPartialTrace.mass_scale_defined
+#qsym_check_axioms GuardedRootedPartialTrace.mass_add
+#qsym_check_axioms GuardedScale.observeJoint_bridge
+#qsym_check_axioms GuardedAdd.observeJoint_bridge
+#qsym_check_axioms DensityProgram.observe_zero
+#qsym_check_axioms DensityZeroBind.observeJoint_eq
+#qsym_check_axioms DensityZeroBind.semanticMass_eq
+#qsym_check_axioms DensityZeroBind.observeJoint_bridge
+#qsym_check_axioms DensityZeroBind.semanticMass_bridge
+#qsym_check_axioms emptyPointTrace_semanticMass
+#qsym_check_axioms failedEmptyPointTrace_semanticMass
+#qsym_check_axioms definedEmptyPointTrace_semanticMass
+#qsym_check_axioms failedEmptyPointTrace_zeroScale_semanticMass
+#qsym_check_axioms failedEmptyPointTrace_add_semanticMass
+#qsym_check_axioms unitIntervalZeroBind_observeUndefined
+#qsym_check_axioms unitIntervalZeroBind_presentationObserveUndefined
+#qsym_check_axioms holeZeroBind_semanticMass
+#qsym_check_axioms holeZeroBind_presentationMass
+#qsym_check_axioms lebesgueZeroBind_semanticMass
+#qsym_check_axioms lebesgueZeroBind_presentationMass
+#qsym_check_axioms coveredHoleZeroBind_semanticMass
+#qsym_check_axioms coveredHoleZeroBind_presentationMass
+#qsym_check_axioms coveredLebesgueZeroBind_semanticMass
+#qsym_check_axioms coveredLebesgueZeroBind_presentationMass
+#qsym_check_axioms coveredHoleZeroPlusUnit_semanticMass
 
 end QSym.PartialFibreTests
