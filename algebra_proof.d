@@ -97,7 +97,7 @@ package class AlgebraExporter {
 
 	string poly(Polynomial p){
 		auto keys=p.keys;sort!((x,y)=>x<y)(keys);string text="[";
-		foreach(i,k;keys){if(i)text~=",";text~="([";for(size_t j;j<k.length;j+=2){if(j)text~=",";text~="("~to!string(k[j])~","~to!string(k[j+1])~")";}text~="],"~coefficient(p[k])~")";}text~="]";
+		foreach(i,k;keys){if(i)text~=",";text~="("~monomial(k)~","~coefficient(p[k])~")";}text~="]";
 		if(auto old=text in polynomials)return *old;
 		auto name="poly"~to!string(polynomials.length);polynomials[text]=name;namedPolynomials[name]=p;
 		code~="noncomputable def "~name~" : AlgebraCertificate.Polynomial := "~text~"\n";return name;
@@ -110,11 +110,21 @@ package class AlgebraExporter {
 		auto name="calc"~to!string(computations.length);computations[claim]=name;
 		code~="theorem "~name~" : "~claim~" := "~proof~"\n";return name;
 	}
+	string[Powers] monomials;
 	string monomial(Powers p){
-		string result="[";for(size_t i;i<p.length;i+=2){if(i)result~=",";result~="("~to!string(p[i])~","~to!string(p[i+1])~")";}return result~"]";
+		if(!p.length)return "[]";
+		if(auto old=p in monomials)return *old;
+		string result="[";
+		for(size_t i;i<p.length;i+=2){if(i)result~=",";result~="("~to!string(p[i])~","~to!string(p[i+1])~")";}
+		auto name="mono"~to!string(monomials.length);
+		monomials[p]=name;
+		code~="noncomputable def "~name~" : Monomial := "~result~"]\n";
+		return name;
 	}
 	string addCalculation(Polynomial p,Polynomial q){
 		auto lhs="AlgebraCertificate.add "~poly(p)~" "~poly(q),rhs=poly(arithmetic.add(p,q));
+		if(!p.length)return compute(lhs,rhs,"ArithmeticEquality.refl "~rhs);
+		if(!q.length)return compute(lhs,rhs,"Raw.add_nil "~rhs);
 		return compute(lhs,rhs,"Raw.addition_check "~poly(p)~" "~poly(q)~" "~rhs~" rfl");
 	}
 	uint rows;
@@ -122,7 +132,8 @@ package class AlgebraExporter {
 		Polynomial term;arithmetic.put(term,m,c);
 		auto lhs="multiplyTerm "~monomial(m)~" "~coefficient(c)~" "~poly(p),rhs=poly(arithmetic.mul(term,p));
 		string h;
-		if(!m.length){
+		if(!m.length && c.one)h="Raw.unitTerm "~poly(p);
+		else if(!m.length){
 			h="Raw.Mapped.sound (m := []) (c := "~coefficient(c)~") (p := "~poly(p)~") (q := "~rhs~") (Raw.mappedSame_sound rfl)";
 		}else{
 			auto keys=p.keys;sort(keys);string text="[";
@@ -133,7 +144,15 @@ package class AlgebraExporter {
 				Polynomial atom;arithmetic.put(atom,k,Number(1));auto outKey=arithmetic.mul(unit,atom).keys[0];
 				if(text.length>1)text~=",";text~="("~monomial(outKey)~","~coefficient(d)~")";
 			}
-			text~="]";auto row="row"~to!string(rows++);
+			text~="]";
+			// Multiplication need not preserve lexicographic order. If it did,
+			// check the target directly and skip the auxiliary row and sorting.
+			if(polynomials.get(text, "")==rhs){
+				if(c.one)h="Raw.shift_check "~monomial(m)~" "~poly(p)~" "~rhs~" rfl";
+				else h="Raw.Mapped.sound (m := "~monomial(m)~") (c := "~coefficient(c)~") (p := "~poly(p)~") (q := "~rhs~") (Raw.mappedSame_sound rfl)";
+				return compute(lhs,rhs,h);
+			}
+			auto row="row"~to!string(rows++);
 			code~="noncomputable def "~row~" : AlgebraCertificate.Polynomial := "~text~"\n";
 			h="Raw.mapped_check "~monomial(m)~" "~coefficient(c)~" "~poly(p)~" "~row~" "~rhs~" (Raw.mappedSame_sound rfl) rfl";
 		}
@@ -143,8 +162,13 @@ package class AlgebraExporter {
 		auto lhs="AlgebraCertificate.mul "~poly(p)~" "~poly(q),rhs=poly(arithmetic.mul(p,q));
 		auto claim="ArithmeticEquality ("~lhs~") "~rhs;if(auto old=claim in computations)return *old;
 		string h;
-		if(p.length>q.length&&q.length&&p.length*q.length>16)h="Raw.mul_swap "~mulCalculation(q,p);
-		else if(p.length&&p.length*q.length>16){
+		if(!p.length)h="ArithmeticEquality.refl "~rhs;
+		else if(!q.length)h="Raw.mul_nil "~poly(p);
+		else if(p.length==1){
+			auto m=p.keys[0],c=p[m];
+			h="Raw.mul_single "~poly(p)~" "~poly(q)~" "~rhs~" (m := "~monomial(m)~") (c := "~coefficient(c)~") rfl "~termCalculation(m,c,q);
+		}else if(p.length>q.length&&(q.length==1||p.length*q.length>16))h="Raw.mul_swap "~mulCalculation(q,p);
+		else if(p.length*q.length>16){
 			auto keys=p.keys;sort(keys);auto m=keys[0],c=p[m],tail=p.dup;tail.remove(m);
 			Polynomial term;arithmetic.put(term,m,c);auto a=arithmetic.mul(term,q),b=arithmetic.mul(tail,q);
 			auto ht=termCalculation(m,c,q),hp=mulCalculation(tail,q),ha=addCalculation(a,b);
@@ -180,18 +204,30 @@ package class AlgebraExporter {
 		return Calculated(r,h);
 	}
 	string[string] powers;
+	// Recognize precisely the checked theorem's base 1 + X_i.
+	private static bool unitBinomial(Polynomial p,out uint variable){
+		Powers empty;
+		if(p.length!=2 || !(empty in p) || !p[empty].one)return false;
+		foreach(k,c;p)if(k.length==2 && k[1]==1 && c.one){variable=k[0];return true;}
+		return false;
+	}
 	string powered(Polynomial p,uint n){
 		auto base=poly(p),key=base~":"~to!string(n);if(auto old=key in powers)return *old;
-		string h;
+		string h,target;
+		uint variable;
 		if(!n)h="Powered.zero σ "~base;
-		else if(n<=128||n&1){
+		else if(n>1 && unitBinomial(p,variable)){
+			target=poly(arithmetic.power(p,n));
+			h="Powered.unitBinomial σ "~to!string(variable)~" "~to!string(n)~" "~base~" "~target~" rfl rfl";
+		}else if(n<=128||n&1){
 			auto previous=powered(p,n-1);
 			h="Powered.succ "~previous~" "~mulCalculation(arithmetic.power(p,n-1),p);
 		}else{
 			auto previous=powered(p,n/2);
 			h="Powered.double "~previous~" "~mulCalculation(arithmetic.power(p,n/2),arithmetic.power(p,n/2));
 		}
-		auto target=poly(arithmetic.power(p,n)),name="power"~to!string(powers.length);
+		if(!target.length)target=poly(arithmetic.power(p,n));
+		auto name="power"~to!string(powers.length);
 		code~="theorem "~name~" (σ : ℕ → ℂ) : Powered σ "~base~" "~to!string(n)~" "~target~" := "~h~"\n";
 		auto result="("~name~" σ)";powers[key]=result;return result;
 	}

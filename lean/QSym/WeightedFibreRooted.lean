@@ -139,12 +139,11 @@ theorem observeJoint_scale (p : RootedPartialHom X μ A B)
       observeJoint p a (fun x b => Value.mul (some r) (f x b)) :=
   observeJoint_reweight p (fun _ _ _ => some r) a f
 
-/-- A constant factor can be pulled out of a defined joint observation.
-When identifying the result with scaling the source observation, the guard is
-necessary: direct zero scaling can differ at undefined or nonintegrable sources. -/
-theorem observeJoint_scale_defined (p : RootedPartialHom X μ A B)
+/-- Nonzero scaling preserves and reflects integrability. Only a zero factor
+needs a domain premise to move it outside the joint observation. -/
+theorem observeJoint_scale_of_zero_defined (p : RootedPartialHom X μ A B)
     (r : ℝ) (a : A) (f : X → B → Option ℝ)
-    (hd : Value.Defined (observeJoint p a f)) :
+    (hd : r = 0 → Value.Defined (observeJoint p a f)) :
     observeJoint (scale r p) a f = Value.mul (some r) (observeJoint p a f) := by
   rw [observeJoint_scale]
   rcases p with ⟨p⟩
@@ -157,9 +156,9 @@ theorem observeJoint_scale_defined (p : RootedPartialHom X μ A B)
       Value.mul (some r) (partialIntegral (μ ⊗ₘ p.space.reference) (fun z =>
         Value.mul ((p.body z.1).weight a z.2)
           (((p.body z.1).value a z.2).bind (f z.1))))
-    change Value.Defined (partialIntegral (μ ⊗ₘ p.space.reference) (fun z =>
+    change (r = 0 → Value.Defined (partialIntegral (μ ⊗ₘ p.space.reference) (fun z =>
       Value.mul ((p.body z.1).weight a z.2)
-        (((p.body z.1).value a z.2).bind (f z.1)))) at hd
+        (((p.body z.1).value a z.2).bind (f z.1))))) at hd
     have hrow : (fun z : X × p.space.Carrier =>
         Value.mul ((p.body z.1).weight a z.2)
           (((p.body z.1).value a z.2).bind (fun b => Value.mul (some r) (f z.1 b)))) =
@@ -176,7 +175,14 @@ theorem observeJoint_scale_defined (p : RootedPartialHom X μ A B)
           cases hf : f z.1 b <;>
             simp [hw, hv, hf, Value.mul, mul_assoc, mul_left_comm]
     rw [hrow]
-    exact partialIntegral_scale_defined (μ ⊗ₘ p.space.reference) r _ hd
+    by_cases hz : r = 0
+    · exact partialIntegral_scale_defined _ _ _ (hd hz)
+    · exact partialIntegral_scale_nonzero _ _ hz _
+
+theorem observeJoint_scale_defined (p : RootedPartialHom X μ A B)
+    (r : ℝ) (a : A) (f : X → B → Option ℝ) (hd : Value.Defined (observeJoint p a f)) :
+    observeJoint (scale r p) a f = Value.mul (some r) (observeJoint p a f) :=
+  observeJoint_scale_of_zero_defined p r a f (fun _ => hd)
 
 @[simp] theorem eraseRoot_pure (f : X → A → Option B) :
     eraseRoot (pure (μ := μ) f) = PartialHom.pure f := rfl
@@ -323,17 +329,22 @@ theorem observeJoint_scale (p : GuardedRootedPartialTrace X μ B) (r : ℝ)
   cases guard <;>
     simp [observeJoint, scale, RootedPartialHom.observeJoint_scale]
 
-theorem observeJoint_scale_defined (p : GuardedRootedPartialTrace X μ B)
-    (r : ℝ) (f : X → B → Option ℝ) (hd : Value.Defined (p.observeJoint f)) :
+theorem observeJoint_scale_of_zero_defined (p : GuardedRootedPartialTrace X μ B)
+    (r : ℝ) (f : X → B → Option ℝ) (hd : r = 0 → Value.Defined (p.observeJoint f)) :
     (scale r p).observeJoint f = Value.mul (some r) (p.observeJoint f) := by
   rcases p with ⟨guard, trace⟩
   cases guard with
-  | none => simp [observeJoint, Value.Defined] at hd
+  | none => rfl
   | some u =>
-      change Value.Defined (trace.observeJoint PUnit.unit f) at hd
+      change r = 0 → Value.Defined (trace.observeJoint PUnit.unit f) at hd
       change (RootedPartialHom.scale r trace).observeJoint PUnit.unit f =
         Value.mul (some r) (trace.observeJoint PUnit.unit f)
-      exact RootedPartialHom.observeJoint_scale_defined trace r PUnit.unit f hd
+      exact RootedPartialHom.observeJoint_scale_of_zero_defined trace r PUnit.unit f hd
+
+theorem observeJoint_scale_defined (p : GuardedRootedPartialTrace X μ B)
+    (r : ℝ) (f : X → B → Option ℝ) (hd : Value.Defined (p.observeJoint f)) :
+    (scale r p).observeJoint f = Value.mul (some r) (p.observeJoint f) :=
+  observeJoint_scale_of_zero_defined p r f (fun _ => hd)
 
 /-- Guarded addition has exactly the same strict observation algebra as the
 legacy ordered observer, including failure in either source guard. -/

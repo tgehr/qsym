@@ -1,4 +1,5 @@
 import QSym.Numeric
+import Mathlib.Data.Nat.Choose.Sum
 
 /-! Kernel-checked sparse arithmetic. The native exporter supplies the result
 of each operation; the kernel only checks its finite arithmetic witness.
@@ -164,6 +165,38 @@ theorem Powered.succ {σ p n q r} (h : Powered σ p n q) (hm : ArithmeticEqualit
 
 theorem Powered.double {σ p n q r} (h : Powered σ p n q) (hm : ArithmeticEquality (mul q q) r) : Powered σ p (n+n) r :=
   ⟨(pow_add _ _ _).trans ((congrArg₂ (· * ·) h.equation h.equation).trans (checked_mul σ hm))⟩
+
+-- Traverse one binomial row, using exact natural division for its next entry.
+-- No intermediate polynomial products are needed for a power of (1 + X).
+def binomialTerms (i n k c : ℕ) : ℕ → Polynomial
+  | 0 => []
+  | len+1 => ((if k = 0 then [] else [(i,k)]), (c,0)) ::
+      binomialTerms i n (k+1) (c*(n-k)/(k+1)) len
+
+private theorem binomialTerms_value (σ : ℕ → ℂ) (i n len k : ℕ) :
+    value σ (binomialTerms i n k (n.choose k) len) =
+      ∑ j ∈ Finset.range len, (n.choose (k+j) : ℂ) * σ i ^ (k+j) := by
+  induction len generalizing k with
+  | zero => simp [binomialTerms, value]
+  | succ len ih =>
+    have hc : n.choose k * (n-k) / (k+1) = n.choose (k+1) := by
+      rw [← Nat.choose_succ_right_eq, Nat.mul_div_cancel _ (Nat.succ_pos _)]
+    rw [binomialTerms, value, hc, ih, Finset.sum_range_succ']
+    have hm : monomialValue σ (if k = 0 then [] else [(i,k)]) = σ i ^ k := by
+      by_cases h : k = 0 <;> simp [h, monomialValue]
+    simp only [hm, Numeric.complex, Rat.cast_natCast, Rat.cast_zero, zero_mul,
+      add_zero, Nat.add_zero, Nat.add_succ, Nat.succ_add]
+    exact add_comm _ _
+
+theorem Powered.unitBinomial (σ : ℕ → ℂ) (i n : ℕ) (p q : Polynomial)
+    (hp : p = [([], (1,0)), ([(i,1)], (1,0))])
+    (hq : binomialTerms i n 0 1 (n+1) = q) : Powered σ p n q := by
+  subst p; subst q; constructor
+  rw [← Nat.choose_zero_right n, binomialTerms_value]
+  simp only [value, Numeric.complex, monomialValue, Rat.cast_one, Rat.cast_zero,
+    zero_mul, add_zero, one_mul, mul_one, pow_one, Nat.zero_add]
+  rw [add_comm (1 : ℂ), add_pow]
+  simp [mul_comm]
 
 noncomputable section
 

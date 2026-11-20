@@ -437,7 +437,8 @@ private ACCode acEvidence(Arena a,Deduction e){
 
 // The exporter replays named laws and their premises. It never asks an
 // algebra tactic to guess why two symbolic endpoints might agree.
-string exportLean(Arena a,Result result){
+enum ScalarClaims { all, refinement }
+string exportLean(Arena a,Result result,ScalarClaims claims=ScalarClaims.all){
 	enforce(result.traced&&result.derivation !is null&&result.derivation.tracing,"proof export requires a recorded derivation");
 	auto d=result.derivation;
 	enforce(d.arena is a,"invalid certificate arena");
@@ -451,11 +452,42 @@ string exportLean(Arena a,Result result){
 	enforce(promotes(a.sort(result.output),a.sort(result.proofInput)),"invalid result subtype");
 	auto embedded=a.castTo(result.output,a.sort(result.proofInput));
 	enforce(result.certificate.before==result.proofInput&&result.certificate.after==embedded,"certificate endpoints changed");
+	// A trace can return to its input after many rewrites. Its embedded
+	// refinement has a direct proof, including when the input is undefined.
+	bool reflexive=claims==ScalarClaims.refinement && result.proofInput==embedded;
 	bool[] needed=new bool[a.length],used=new bool[d.deductions.length],evaluated=new bool[a.length];
 	foreach(t;[result.input,result.proofInput,result.output,embedded]) evaluated[t.id]=true;
 	Term[] pending=[result.input,result.proofInput,result.output,embedded];
 	pending~=result.assumptions;
-	Proof[] proofs=[result.certificate];
+	// Counted and binary syntax sometimes have exactly the same value
+	// definition. Compress those conversions and the congruence/transitivity
+	// steps built solely from them. A selected premise keeps its own context.
+	uint[] replay;
+	uint representative(Proof p){return p.id==uint.max || !replay.length ? p.id : replay[p.id];}
+	if(claims==ScalarClaims.refinement && !reflexive) replay.length=d.deductions.length;
+	foreach(i,ref selected;replay){
+		auto e=d.deductions[i];
+		selected=cast(uint)i;
+		if(e.proof.known)continue;
+		if(e.kind==Evidence.ac && a.view(e.proof.before)==a.view(e.proof.after))selected=uint.max;
+		if(e.kind==Evidence.congr){
+			bool trivial=true;
+			foreach(q;e.premises)if(representative(q)!=uint.max)trivial=false;
+			if(trivial)selected=uint.max;
+		}
+		if(e.kind==Evidence.trans){
+			auto l=representative(e.premises[0]),r=representative(e.premises[1]);
+			if(l==uint.max)selected=r;
+			else if(r==uint.max)selected=l;
+		}
+	}
+	string ref_(Proof p){
+		auto id=representative(p);
+		if(id==p.id)return reference(d,p);
+		if(id==uint.max)return "(Value.refines_refl "~ev(p.before.id)~")";
+		return reference(d,d.deductions[id].proof);
+	}
+	Proof[] proofs=reflexive?null:[result.certificate];
 	void domains(DomainProof p){
 		if(p.fact!=uint.max) proofs~=d.domainFacts[p.fact];
 		foreach(child;p.children) domains(child);
@@ -465,6 +497,9 @@ string exportLean(Arena a,Result result){
 		pending~=[p.before,p.after];
 		if(p.id==uint.max) continue;
 		enforce(p.id<used.length,"invalid proof index");
+		auto id=representative(p);
+		if(id==uint.max)continue;
+		if(id!=p.id){proofs~=d.deductions[id].proof;continue;}
 		if(used[p.id]) continue;
 		used[p.id]=true; auto e=d.deductions[p.id]; proofs~=e.premises;
 		if(e.kind==Evidence.numeric){ evaluated[p.before.id]=true; evaluated[p.after.id]=true; }
@@ -501,6 +536,13 @@ string exportLean(Arena a,Result result){
 	}
 	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nattribute [local irreducible] Value.add Value.mul\nset_option maxRecDepth 8192\n";
 	foreach(i,n;syntax) if(n||bags[i]) s~=leanSyntaxCode(a,a.at(cast(uint)i),n);
+	if(reflexive){
+		string assumptions;
+		foreach(i,f;result.assumptions) assumptions~=" (_g"~to!string(i)~" : "~exprEval(f.id)~" = some true)";
+		auto endpoint=exprEval(embedded.id);
+		return s~"theorem refinement (ρ : Env)"~assumptions~" : Value.Refines "~endpoint~" "~endpoint~
+			" := Value.refines_refl _\n#qsym_check_axioms refinement\nend QSym.Certificate\n";
+	}
 	foreach(i,n;needed) if(n) s~=valueCode(a,a.at(cast(uint)i));
 	foreach(i,n;evaluated) if(n) s~="theorem eval_"~to!string(i)~" (ρ : Env) : "~exprEval(cast(uint)i)~" = "~ev(cast(uint)i)~" := rfl\n";
 	s~="\n";
@@ -510,7 +552,6 @@ string exportLean(Arena a,Result result){
 		s~=ac.declarations;
 		auto claim=p.known?ev(p.before.id)~" = "~ev(p.after.id):"Value.Refines "~ev(p.before.id)~" "~ev(p.after.id);
 		s~="theorem p"~to!string(i)~" (ρ : Env)"~contexts(d,p.context,true)~" : "~claim~" :=\n";
-		string ref_(Proof q){ return reference(d,q); }
 		final switch(e.kind){
 			case Evidence.join:
 				Table!(ulong,uint) leaves;
@@ -594,7 +635,8 @@ string exportLean(Arena a,Result result){
 		}
 		s~="\n";
 	}
-	s~="theorem refinement (ρ : Env)"~contexts(d,context,true)~" : Value.Refines "~exprEval(result.proofInput.id)~" "~exprEval(embedded.id)~" :=\n  Eq.mpr (congrArg₂ Value.Refines "~evalEq(result.proofInput.id)~" "~evalEq(embedded.id)~") "~reference(d,result.certificate)~"\n#qsym_check_axioms refinement\n\n";
+	s~="theorem refinement (ρ : Env)"~contexts(d,context,true)~" : Value.Refines "~exprEval(result.proofInput.id)~" "~exprEval(embedded.id)~" :=\n  Eq.mpr (congrArg₂ Value.Refines "~evalEq(result.proofInput.id)~" "~evalEq(embedded.id)~") "~ref_(result.certificate)~"\n#qsym_check_axioms refinement\n\n";
+	if(claims==ScalarClaims.refinement) return s~"end QSym.Certificate\n";
 	s~="theorem simplification (ρ : Env)"~contexts(d,context,true)~" (h : Expr.Defined ρ "~name(result.proofInput.id)~") : "~
 		exprEval(result.proofInput.id)~" = "~exprEval(embedded.id)~" := (refinement ρ"~contexts(d,context,false)~").eq_of_defined h\n#qsym_check_axioms simplification\n\n";
 	auto inputOrder=a.viewPostorder(result.input);
@@ -652,10 +694,10 @@ string exportEquivalence(Arena a,Result left,Result right){
 		"#qsym_check_axioms equivalence\nend QSym\n";
 }
 
-string exportDomainLean(Arena a,Term source,Result result){
+string exportDomainLean(Arena a,Term source,Result result,ScalarClaims claims=ScalarClaims.all){
 	auto conditions=domainConditions(a,source),condition=conditions[source.id];
 	enforce(result.input==condition&&result.proofInput==condition,"domain certificate input changed");
-	auto code=exportLean(a,result)~"\nnamespace QSym.DomainCertificate\n";
+	auto code=exportLean(a,result,claims)~"\nnamespace QSym.DomainCertificate\n";
 	bool[] needed=new bool[a.length];
 	foreach(root;[source,condition]) foreach(id;a.viewPostorder(root)) needed[id]=true;
 	foreach(id;a.viewPostorder(source)) foreach(j;a.viewPostorder(conditions[id])) needed[j]=true;

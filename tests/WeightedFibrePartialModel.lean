@@ -95,6 +95,25 @@ theorem unitInterval_semanticDensityAt :
   rw [DensityProgram.semanticDensityAt_eq]
   norm_num [unitInterval, DensityProgram.density, Value.mul]
 
+/-- Removing a defined point from an interval changes its density there,
+even though the two partial-fibre semantics have the same finite mass. -/
+def puncturedUnitInterval : DensityProgram :=
+  .weight (fun x => some (if x = 0 then (0 : ℝ) else 1)) unitInterval
+
+theorem puncturedInterval_observations :
+    puncturedUnitInterval.semanticDensityAt 0 = some 0 ∧
+    unitInterval.semanticDensityAt 0 = some 1 ∧
+    puncturedUnitInterval.semanticMass = some 1 := by
+  refine ⟨?_, ?_, ?_⟩
+  · norm_num [DensityProgram.semanticDensityAt_eq, puncturedUnitInterval,
+      unitInterval, DensityProgram.density, Value.mul]
+  · norm_num [DensityProgram.semanticDensityAt_eq, unitInterval, DensityProgram.density, Value.mul]
+  · rw [← unitInterval_semanticMass, DensityProgram.semanticMass_eq, DensityProgram.semanticMass_eq]
+    apply DensityProgram.mass_null_edit (points := [0])
+    refine ⟨fun _ => ⟨_, rfl⟩, fun _ => ⟨_, rfl⟩, ?_⟩
+    intro x hx
+    simp [puncturedUnitInterval, DensityProgram.density, hx 0 (by simp), Value.mul_one_right]
+
 /-- The totalized function is integrable zero, but strict mass retains the hole. -/
 def hole : DensityProgram :=
   .weight (fun x => if x = 0 then none else some (0 : ℝ)) .lebesgue
@@ -707,7 +726,7 @@ theorem coveredScaledAddedDiracs_presentationObserveSucc :
       (fun d => integrate d (fun x => some (x + 1))) = some 14 := by
   have h : coveredScaledAddedDiracs.ObservationCompatible (fun x => some (x + 1)) := by
     refine ⟨⟨trivial, trivial⟩, ?_⟩
-    exact ⟨7, coveredAddedDiracs_observeSucc⟩
+    exact fun _ => ⟨7, coveredAddedDiracs_observeSucc⟩
   rw [← coveredScaledAddedDiracs.observe_bridge _ h]
   exact coveredScaledAddedDiracs_observeSucc
 
@@ -737,7 +756,7 @@ theorem coveredRealMix_semanticMass : coveredRealMix.semanticMass = some 5 := by
 
 theorem coveredRealMix_massCompatible : coveredRealMix.MassCompatible := by
   refine ⟨⟨trivial, ?_⟩, trivial⟩
-  exact ⟨1, unitInterval_rootedMass⟩
+  exact fun _ => ⟨1, unitInterval_rootedMass⟩
 
 theorem coveredRealMix_presentationMass : massValue coveredRealMix.presentation = some 5 := by
   rw [← coveredRealMix.semanticMass_bridge coveredRealMix_massCompatible]
@@ -773,7 +792,7 @@ theorem coveredZeroScaledLebesgue_semanticMass :
 theorem coveredZeroScaledLebesgue_not_massCompatible :
     ¬coveredZeroScaledLebesgue.MassCompatible := by
   intro h
-  have hd := h.2
+  have hd := h.2 rfl
   have hunbounded : DensityProgram.lebesgue.rootedSemantic.mass = none := by
     rw [← DensityProgram.lebesgue.semanticMass_rooted, DensityProgram.semanticMass_eq]
     simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
@@ -781,6 +800,18 @@ theorem coveredZeroScaledLebesgue_not_massCompatible :
   change Value.Defined DensityProgram.lebesgue.rootedSemantic.mass at hd
   rw [hunbounded] at hd
   simpa [Value.Defined] using hd
+
+/-- The ordered and direct masses agree for a negative multiple of Lebesgue,
+although neither mass exists as a finite real number. -/
+theorem coveredNegLebesgue_mass :
+    (CoveredProgram.scale (-1) (.density .lebesgue)).semanticMass = none := by
+  have h : (CoveredProgram.scale (-1) (.density .lebesgue)).MassCompatible :=
+    ⟨trivial, fun hz => (neg_ne_zero.mpr one_ne_zero hz).elim⟩
+  rw [CoveredProgram.semanticMass_bridge _ h]
+  change massValue (scaleValue (some (-1)) DensityProgram.lebesgue.presentation) = none
+  rw [mass_scaleValue, ← DensityProgram.semanticMass_bridge, DensityProgram.semanticMass_eq]
+  simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
+    partialIntegral, Value.Defined, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ, Value.mul]
 
 /-- Finite weighted-Dirac continuations reuse the direct weighted-bind leaf. -/
 def unitPointContinuation (w : ℝ) : PointContinuation ℝ ℝ :=
@@ -1385,6 +1416,7 @@ theorem coveredHoleZeroPlusUnit_semanticMass :
 #qsym_check_axioms unitInterval_zeroRoot_mass
 #qsym_check_axioms unitInterval_semanticDensityAt
 #qsym_check_axioms hole_totalization_integrable
+#qsym_check_axioms puncturedInterval_observations
 #qsym_check_axioms hole_semanticDensityAt
 #qsym_check_axioms hole_semanticMass
 #qsym_check_axioms hole_rootedMass
@@ -1504,6 +1536,7 @@ theorem coveredHoleZeroPlusUnit_semanticMass :
 #qsym_check_axioms coveredContinuousPair_presentationMass
 #qsym_check_axioms coveredHolePlusZero_semanticMass
 #qsym_check_axioms coveredZeroScaledLebesgue_semanticMass
+#qsym_check_axioms coveredNegLebesgue_mass
 #qsym_check_axioms coveredZeroScaledLebesgue_not_massCompatible
 #qsym_check_axioms PointContinuation.eval_scale_test
 #qsym_check_axioms PointContinuation.eval_bridge

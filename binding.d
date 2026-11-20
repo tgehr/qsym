@@ -8,7 +8,7 @@ import qsym.types:TypeId,TypeKind,TypePool,Dimension;
 import qsym.number:Number;
 import qsym.table:Table;
 import qsym.generated.rules:Law,instantiate;
-import qsym.proof:leanSyntaxCode,leanValueOperation,exportDomainLean,exportPolynomialZeroLean,exportRationalZeroLean,scalarExport=exportLean;
+import qsym.proof:ScalarClaims,leanSyntaxCode,leanValueOperation,exportDomainLean,exportPolynomialZeroLean,exportRationalZeroLean,scalarExport=exportLean;
 import qsym.domain:simplifyDomain;
 import qsym.simplify:Result,ScalarResult=Result,Options,DensityMode,simplify;
 import std.string:replace,join;
@@ -3835,12 +3835,12 @@ final class Bindings{
 				auto part=replace(exportPolynomialZeroLean(arena,d.input),"import QSym\n","");
 				code~=replace(part,"QSym.PolynomialCertificate","QSym.BindingScalar"~to!string(i));continue;
 			}
-			auto prefix="QSym.BindingScalar"~to!string(i),part=exportDomainLean(arena,d.input,d.result);
+			auto prefix="QSym.BindingScalar"~to!string(i),part=exportDomainLean(arena,d.input,d.result,ScalarClaims.refinement);
 			part=replace(part,"import QSym\n","");
 			part=replace(part,"QSym.Certificate",prefix~".Certificate");
 			part=replace(part,"QSym.DomainCertificate",prefix~".DomainCertificate"); code~=part;
 			if(d.value.traced){
-				part=replace(scalarExport(arena,d.value),"import QSym\n","");
+				part=replace(scalarExport(arena,d.value,ScalarClaims.refinement),"import QSym\n","");
 				code~=replace(part,"QSym.Certificate",prefix~".ValueCertificate");
 			}
 		}
@@ -3853,23 +3853,23 @@ final class Bindings{
 			}
 			foreach(j,step;r.iterations) code~=replace(replace(scalarExport(arena,step),"import QSym\n",""),"QSym.Certificate",prefix~".Step"~to!string(j));
 			foreach(j,d;r.leaves){
-				auto p=prefix~".Leaf"~to!string(j),part=replace(exportDomainLean(arena,d.value,d.domain),"import QSym\n","");
+				auto p=prefix~".Leaf"~to!string(j),part=replace(exportDomainLean(arena,d.value,d.domain,ScalarClaims.refinement),"import QSym\n","");
 				part=replace(part,"QSym.Certificate",p~".Certificate");
 				code~=replace(part,"QSym.DomainCertificate",p~".DomainCertificate");
 			}
 		}
 		foreach(i,s;result.solutions) foreach(j,f;s.facts){
-			auto prefix="QSym.Linear"~to!string(i)~"_"~to!string(j),part=replace(exportDomainLean(arena,f.input,f.domain),"import QSym\n","");
+			auto prefix="QSym.Linear"~to!string(i)~"_"~to!string(j),part=replace(exportDomainLean(arena,f.input,f.domain,ScalarClaims.refinement),"import QSym\n","");
 			part=replace(part,"QSym.Certificate",prefix~".Certificate");
 			code~=replace(part,"QSym.DomainCertificate",prefix~".DomainCertificate");
-			code~=replace(replace(scalarExport(arena,f.value),"import QSym\n",""),"QSym.Certificate",prefix~".ValueCertificate");
+			code~=replace(replace(scalarExport(arena,f.value,ScalarClaims.refinement),"import QSym\n",""),"QSym.Certificate",prefix~".ValueCertificate");
 		}
 		foreach(i,s;result.spectra){
 			foreach(kind,fs;[s.parameters,s.checks]) foreach(j,f;fs){
 				auto prefix="QSym.Spectral"~to!string(i)~"_"~to!string(kind)~"_"~to!string(j);
-				auto part=replace(exportDomainLean(arena,f.input,f.domain),"import QSym\n","");
+				auto part=replace(exportDomainLean(arena,f.input,f.domain,ScalarClaims.refinement),"import QSym\n","");
 				part=replace(part,"QSym.Certificate",prefix~".Certificate"); code~=replace(part,"QSym.DomainCertificate",prefix~".DomainCertificate");
-				if(f.value.traced) code~=replace(replace(scalarExport(arena,f.value),"import QSym\n",""),"QSym.Certificate",prefix~".ValueCertificate");
+				if(f.value.traced) code~=replace(replace(scalarExport(arena,f.value,ScalarClaims.refinement),"import QSym\n",""),"QSym.Certificate",prefix~".ValueCertificate");
 			}
 		}
 		code~="namespace QSym.BindingCertificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";

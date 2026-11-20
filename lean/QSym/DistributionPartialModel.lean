@@ -268,15 +268,24 @@ for unguarded scaling and addition. -/
 namespace GuardedScale
 variable {X α : Type} [MeasurableSpace X] {μ : Measure X} [SFinite μ]
 
+theorem observeJoint_bridge_of_zero_defined (p : GuardedRootedPartialTrace X μ α) (r : ℝ)
+    (d : Option (D α)) (f : α → Option ℝ)
+    (hs : p.observeJoint (fun _ a => f a) =
+      d.bind (fun a => integrate a f))
+    (hd : r = 0 → Value.Defined (p.observeJoint (fun _ a => f a))) :
+    (GuardedRootedPartialTrace.scale r p).observeJoint (fun _ a => f a) =
+      (scaleValue (some r) d).bind (fun a => integrate a f) := by
+  rw [GuardedRootedPartialTrace.observeJoint_scale_of_zero_defined p r _ hd, hs]
+  cases d <;> rfl
+
 theorem observeJoint_bridge (p : GuardedRootedPartialTrace X μ α) (r : ℝ)
     (d : Option (D α)) (f : α → Option ℝ)
     (hs : p.observeJoint (fun _ a => f a) =
       d.bind (fun a => integrate a f))
     (hd : Value.Defined (p.observeJoint (fun _ a => f a))) :
     (GuardedRootedPartialTrace.scale r p).observeJoint (fun _ a => f a) =
-      (scaleValue (some r) d).bind (fun a => integrate a f) := by
-  rw [GuardedRootedPartialTrace.observeJoint_scale_defined p r _ hd, hs]
-  cases d <;> rfl
+      (scaleValue (some r) d).bind (fun a => integrate a f) :=
+  observeJoint_bridge_of_zero_defined p r d f hs (fun _ => hd)
 
 end GuardedScale
 

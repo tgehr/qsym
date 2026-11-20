@@ -1481,7 +1481,7 @@ def observe (p : CoveredProgram root α) (f : α → Option ℝ) : Option ℝ :=
 def semanticMass (p : CoveredProgram root α) : Option ℝ := p.semantic.mass
 
 /-- Capabilities needed by the existing ordered-observer compatibility proofs.
-Addition adds no definedness requirement; scaling retains its source guard. -/
+Only zero scaling requires a defined source observation. -/
 def ObservationCompatible (p : CoveredProgram root α) : (α → Option ℝ) → Prop :=
   CoveredProgram.rec
     (motive := fun {_} {a} _ => (a → Option ℝ) → Prop)
@@ -1494,7 +1494,7 @@ def ObservationCompatible (p : CoveredProgram root α) : (α → Option ℝ) →
     (fun _ _ => True)
     (fun b f => b.RowDefined f ∧ b.JointL1 f)
     (fun p f => p.RowDefined f ∧ p.JointL1 f)
-    (fun _ p ih f => ih f ∧ Value.Defined (p.observe f))
+    (fun r p ih f => ih f ∧ (r = 0 → Value.Defined (p.observe f)))
     (fun _ _ ihp ihq f => ihp f ∧ ihq f)
     p
 
@@ -1513,7 +1513,7 @@ theorem observe_bridge (p : CoveredProgram root α) (f : α → Option ℝ)
   | continuousBind b => exact b.observeJoint_bridge f h.1 h.2
   | integral p => exact p.observeJoint_bridge f h.1 h.2
   | scale r p ih =>
-      exact GuardedScale.observeJoint_bridge p.semantic r p.presentation f
+      exact GuardedScale.observeJoint_bridge_of_zero_defined p.semantic r p.presentation f
         (ih f h.1) h.2
   | add p q ihp ihq =>
       exact GuardedAdd.observeJoint_bridge p.semantic q.semantic

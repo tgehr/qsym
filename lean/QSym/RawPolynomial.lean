@@ -441,6 +441,42 @@ theorem mapped_check (m c p q r) (h : Mapped m c p q) (hs : arrange q = r) :
   constructor; intro σ
   exact (h.sound.equation σ).trans ((arrange_value σ q).symm.trans (congrArg (AlgebraCertificate.value σ) hs))
 
+-- A unit monomial only shifts exponents. Coefficient terms stay shared, so
+-- kernel conversion checks the output row without any rational arithmetic.
+def shift (m : Monomial) (p : AlgebraCertificate.Polynomial) : AlgebraCertificate.Polynomial :=
+  p.map fun t => (multiplyPowers m t.1, t.2)
+
+private theorem shift_value (σ : ℕ → ℂ) (m : Monomial) (p : AlgebraCertificate.Polynomial) :
+    AlgebraCertificate.value σ (shift m p) = monomialValue σ m * AlgebraCertificate.value σ p := by
+  induction p with
+  | nil => simp [shift, AlgebraCertificate.value]
+  | cons t ps ih =>
+    change Numeric.complex t.2 * monomialValue σ (multiplyPowers m t.1) +
+      AlgebraCertificate.value σ (shift m ps) = _
+    rw [ih, multiplyPowers_value]; simp only [AlgebraCertificate.value]; ring
+
+theorem shift_check (m : Monomial) (p q : AlgebraCertificate.Polynomial) (h : shift m p = q) :
+    ArithmeticEquality (AlgebraCertificate.multiplyTerm m (1, 0) p) q := by
+  subst q; constructor; intro σ
+  simp [AlgebraCertificate.multiplyTerm_value, shift_value, Numeric.complex]
+
+theorem unitTerm (p : AlgebraCertificate.Polynomial) :
+    ArithmeticEquality (AlgebraCertificate.multiplyTerm [] (1, 0) p) p := by
+  constructor; intro σ; simp [AlgebraCertificate.multiplyTerm_value, Numeric.complex, monomialValue]
+
+theorem add_nil (p : AlgebraCertificate.Polynomial) : ArithmeticEquality (AlgebraCertificate.add p []) p := by
+  constructor; intro σ; simp [AlgebraCertificate.add_value, AlgebraCertificate.value]
+
+theorem mul_nil (p : AlgebraCertificate.Polynomial) : ArithmeticEquality (AlgebraCertificate.mul p []) [] := by
+  constructor; intro σ; simp [AlgebraCertificate.mul_value, AlgebraCertificate.value]
+
+theorem mul_single (source q r : AlgebraCertificate.Polynomial) {m c}
+    (hs : source = [(m,c)]) (ht : ArithmeticEquality (AlgebraCertificate.multiplyTerm m c q) r) :
+    ArithmeticEquality (AlgebraCertificate.mul source q) r := by
+  subst source; constructor; intro σ
+  rw [AlgebraCertificate.mul, AlgebraCertificate.add_value, ht.equation]
+  simp [AlgebraCertificate.mul, AlgebraCertificate.value]
+
 theorem mul_swap {p q r} (h : ArithmeticEquality (AlgebraCertificate.mul q p) r) : ArithmeticEquality (AlgebraCertificate.mul p q) r := by
   constructor; intro σ
   rw [AlgebraCertificate.mul_value, mul_comm, ← AlgebraCertificate.mul_value]

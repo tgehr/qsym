@@ -15,6 +15,8 @@ def main():
     parser.add_argument("--lake", default="lake")
     args = parser.parse_args()
     cases = {
+        "BinomialCoefficient": "theorem bad : Powered (fun _ => 0) [([], (1,0)), ([(3,1)], (1,0))] 2 [([], (1,0)), ([(3,1)], (3,0)), ([(3,2)], (1,0))] := Powered.unitBinomial _ 3 2 _ _ rfl rfl",
+        "UnitShift": "theorem bad : ArithmeticEquality (multiplyTerm [(3,1)] (1,0) [([(3,1)], (2,0))]) [([(3,2)], (3,0))] := Raw.shift_check _ _ _ rfl",
         "MergeWitness": "theorem bad : Raw.Added [([], (1,0))] [([], (1,0))] [([], (1,0))] := Raw.Added.both rfl (Raw.Added.nilLeft [])",
         "ScaleWitness": "theorem bad : Raw.Scaled (2,0) [([], (2,0))] [([], (3,0))] := Raw.Scaled.cons rfl Raw.Scaled.nil",
         "MappedCoefficient": "theorem bad : Raw.Mapped [(0,1)] (2,0) [([(1,1)], (2,0))] [([(0,1),(1,1)], (3,0))] := Raw.Mapped.cons rfl rfl Raw.Mapped.nil",

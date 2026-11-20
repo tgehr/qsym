@@ -8,7 +8,7 @@ import qsym.spec:Parser,Pattern,TypePattern,Parameter,parseSort,isConstructor,el
 import qsym.table:Table;
 import qsym.simplify:Result,Options,simplify;
 import qsym.domain:simplifyDomain;
-import qsym.proof:exportLean,exportDomainLean;
+import qsym.proof:ScalarClaims,exportLean,exportDomainLean;
 import std.conv:to;
 import std.exception:enforce;
 import std.string:replace;
@@ -678,7 +678,7 @@ struct FunctionSyntax{
 		if(result.scalarOnly) return result.domainQuery?exportDomainLean(a,result.scalarInput,result.scalar):exportLean(a,result.scalar);
 		auto code=result.bindings.exportLean(result.reduction,result.lowered);
 		if(!result.lowered) return code;
-		auto part=replace(exportLean(a,result.scalar),"import QSym\n","");
+		auto part=replace(exportLean(a,result.scalar,ScalarClaims.refinement),"import QSym\n","");
 		part=replace(part,"QSym.Certificate","QSym.FunctionScalar"); code~=part;
 		auto r=result.scalar,embedded=a.castTo(r.output,a.sort(r.proofInput));
 		string hypotheses,arguments;
