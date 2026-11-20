@@ -1,3 +1,4 @@
+import QSym.DistributionMixedReal
 import QSym.DistributionModelLaws
 import QSym.WeightedFibreTower
 import QSym.DistributionSequentialModel
@@ -20,6 +21,7 @@ elab "qsym_distribution_goal" : tactic => do
   let heads := #[``partialIntegral, ``FiniteIntegralTheory.integrate,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
+    ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
     ``Distribution.Model.densityTestValue, ``Distribution.Model.densityMassValue,
     ``WeightedParameter.Fibre.Hom.observePartial,
     ``DependentIntegralTheory.joint, ``WeightedParameter.Fibre.Tower.observe,
@@ -31,6 +33,8 @@ elab "qsym_distribution_goal" : tactic => do
     throwError "not a distribution-model rule goal"
 
 macro "qsym_distribution_eq" : tactic => `(tactic| first
+  | exact Distribution.AtomPlusDensity.densityAt_eq _ _
+  | exact Distribution.AtomPlusDensity.mass_eq _
   | exact Distribution.DensityProgram.observe_weight _ _
   | solve | apply Distribution.DensityProgram.mass_factor <;> assumption
   | solve | apply Distribution.DensityProgram.mass_parametric <;> assumption

@@ -81,14 +81,14 @@ noncomputable def integrate (d : D α) (f : α → Option ℝ) : Option ℝ :=
 noncomputable def massValue {α : Type} (d : Option (D α)) : Option ℝ :=
   d.bind (fun a => integrate a (fun _ => some 1))
 
-/-- Supported pointwise density extraction. Singular atoms and general
-pushforwards have no supported density rule. Failure is never replaced by zero. -/
+/-- Supported pointwise density extraction. A real atom obstructs the Lebesgue
+density at its location and contributes zero elsewhere. -/
 noncomputable def densityAt (d : D ℝ) (x : ℝ) : Option ℝ := by
   classical
   exact match d with
   | .invalid => none
   | .zero => some 0
-  | .dirac _ => none
+  | .dirac a => if x = a then none else some 0
   | .density w v => if v = some then w x else none
   | .add a b => Value.add (densityAt a x) (densityAt b x)
   | .scale r a => Value.mul (some r) (densityAt a x)
@@ -101,7 +101,8 @@ noncomputable def densityAtValue (d : Option (D ℝ)) (x : Option ℝ) : Option 
 @[simp] theorem densityAt_density (w : ℝ → Option ℝ) (x : ℝ) :
     densityAt (.density w some) x = w x := by simp [densityAt]
 
-@[simp] theorem densityAt_dirac (a x : ℝ) : densityAt (.dirac a) x = none := rfl
+@[simp] theorem densityAt_dirac (a x : ℝ) :
+    densityAt (.dirac a) x = (if x = a then none else some 0) := by simp [densityAt]
 
 theorem weighted_lebesgue_density (f : ℝ → Option ℝ) (x : ℝ) :
     densityAtValue (weightValue (some f) lebesgueValue) (some x) = f x := by

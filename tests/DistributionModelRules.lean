@@ -119,6 +119,26 @@ example (T : FiniteIntegralTheory ℝ) (c : ℝ) (f : ℝ → Option ℝ) :
       qsym_distribution
   qsym_rule
 
+private def atomAndInterval : AtomPlusDensity :=
+  ⟨0, fun x => some (if 0 ≤ x ∧ x ≤ 1 then 1 else 0)⟩
+
+theorem mixed_interval_density (x : ℝ) :
+    atomAndInterval.densityAt x =
+      if x = 0 then none else some (if 0 ≤ x ∧ x ≤ 1 then 1 else 0) := by
+  qsym_rule
+
+theorem mixed_interval_mass : atomAndInterval.mass = some 2 := by
+  have hi := partialIntegral_interval atomAndInterval.weight 0 1 1 [] zero_le_one
+    (fun _ => ⟨_, rfl⟩) (fun _ _ => rfl)
+  rw [AtomPlusDensity.mass_eq, hi]
+  norm_num [Value.add]
+
+#qsym_check_axioms mixed_interval_density
+#qsym_check_axioms mixed_interval_mass
+#qsym_check_axioms mixed_density_bridge
+#qsym_check_axioms mixed_mass_bridge
+#qsym_check_axioms model_density_atom_add
+#qsym_check_axioms model_density_dirac
 #qsym_check_axioms partialIntegral_comp
 #qsym_check_axioms partialIntegral_scale_zero_defined_iff
 #qsym_check_axioms finiteIntegralTheory

@@ -40,7 +40,8 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
+	distributionDensityDirac,distributionDensityAtomAdd
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -2653,9 +2654,36 @@ final class Bindings{
 				auto d=nodes[current.a]; next=apply(at(d.a),at(nodes[d.b].a)); rule=BindingRule.distributionMassWeightedDirac;
 			}
 			if(current.op==BoundOp.distributionDensityAt){
-				auto d=nodes[current.a];
-				if(d.op==BoundOp.distributionLebesgue){ next=sequence(at(current.b),scalar(ctx,arena.real_(1))); rule=BindingRule.distributionDensityLebesgue; }
-				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionLebesgue){ next=apply(at(d.a),at(current.b)); rule=BindingRule.distributionDensityWeight; }
+				auto d=nodes[current.a],query=at(current.b);
+				BoundTerm outsideAtom(uint location,BoundTerm value){
+					auto zero=arena.real_(0);
+					auto neg=primitive(arena.mul(zero,zero,true),[scalar(ctx,arena.real_(-1)),at(location)]);
+					auto diff=primitive(arena.add(zero,zero,true),[query,neg]);
+					return guard(primitive(arena.nonzero(zero),[diff]),value);
+				}
+				if(d.op==BoundOp.distributionLebesgue){ next=sequence(query,scalar(ctx,arena.real_(1))); rule=BindingRule.distributionDensityLebesgue; }
+				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionLebesgue){ next=apply(at(d.a),query); rule=BindingRule.distributionDensityWeight; }
+				else if(d.op==BoundOp.distributionDirac){
+					next=outsideAtom(d.a,scalar(ctx,arena.real_(0)));
+					rule=BindingRule.distributionDensityDirac;
+				}else if(d.op==BoundOp.distributionAdd){
+					bool atomFirst=nodes[d.a].op==BoundOp.distributionDirac;
+					auto atom=nodes[atomFirst?d.a:d.b],branch=atomFirst?d.b:d.a;
+					IntegralSolution source;
+					if(atom.op==BoundOp.distributionDirac&&densityBodies(branch,source.from)){
+						// Read the retained weights in source order, in their shared real binder.
+						auto regular=sequence(query,scalar(ctx,arena.real_(1)));
+						if(source.from.length){
+							auto weight=at(source.from[0]);
+							auto mul=scalarOperator(scalarType(Sort.real_),TensorOp.mul);
+							foreach(body;source.from[1..$]) weight=primitive(mul,[weight,at(body)]);
+							regular=apply(lambda(weight),query);
+						}
+						next=outsideAtom(atom.a,regular);
+						rule=BindingRule.distributionDensityAtomAdd;
+						extra=cast(uint)integrals.length; integrals~=source;
+					}
+				}
 			}
 			if(current.op==BoundOp.conditional){
 				if(isTrue(current.a,true)){ next=at(current.b); rule=BindingRule.conditionalTrue; }
@@ -5071,6 +5099,14 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionMassDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
+				case BindingRule.distributionDensityDirac:
+					proof=".ofEq (fun ξ ρ => Distribution.model_density_dirac ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
+				case BindingRule.distributionDensityAtomAdd:{
+					auto sum=nodes[n.a];
+					bool atomFirst=nodes[sum.a].op==BoundOp.distributionDirac;
+					auto atom=nodes[atomFirst?sum.a:sum.b];
+					proof=".ofEq (fun ξ ρ => Distribution.model_density_atom_add "~(atomFirst?"true":"false")~" "~densityProgram(result.integrals[p.extra].from)~" ("~name(atom.a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
+				}
 				case BindingRule.distributionDensityLebesgue:
 					proof=".ofEq (fun ξ ρ => Distribution.model_density_lebesgueValue ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionDensityWeight:

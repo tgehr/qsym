@@ -8,7 +8,12 @@ open Distribution
 example : densityAtValue lebesgueValue (some 0) = some 1 := by
   simp [densityAtValue, lebesgueValue, densityValue]
 
-example : densityAtValue (diracValue (some (0 : ℝ))) (some 0) = none := rfl
+example (a : ℝ) : densityAtValue (diracValue (some a)) (some a) = none := by
+  simp [densityAtValue, diracValue]
+
+example (a x : ℝ) (h : x ≠ a) :
+    densityAtValue (diracValue (some a)) (some x) = some 0 := by
+  simp [densityAtValue, diracValue, h]
 
 -- Undefined pointwise density data is retained, even at a singleton.
 example : densityAtValue (weightValue (some (fun x => if x = 0 then none else some 1))
