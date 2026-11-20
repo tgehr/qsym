@@ -1,4 +1,6 @@
 import QSym.DistributionIntegral
+import QSym.DistributionSquareIntegral
+import QSym.DistributionGraphBridge
 import QSym.PositiveIntegral
 import QSym.AxiomCheck
 
@@ -26,6 +28,25 @@ example : massValue (diracValue (some (fun n : ℕ => n + 1))) = some 1 := rfl
 example : massValue (scaleValue (some (-2)) (diracValue (some Unit.unit))) = some (-2) := by
   norm_num [massValue, scaleValue, diracValue, integrate, Value.mul]
 
+-- Observing only the negative root distinguishes this fibre from its marginal.
+theorem negative_branch_at_four :
+    (GraphFibre.fibre GraphFibre.square 4).bind (fun atoms =>
+      integrate (GraphFibre.presentation atoms) (fun x => some (if x < 0 then 1 else 0))) =
+      some (1/4 : ℝ) := by
+  rw [GraphFibre.square_test (by norm_num)]
+  norm_num [GraphFibre.jac, Value.add, Value.mul, Real.sqrt_eq_iff_mul_self_eq]
+
+theorem partial_test_at_root :
+    (GraphFibre.fibre GraphFibre.square 4).bind (fun atoms =>
+      integrate (GraphFibre.presentation atoms) (fun x => if x < 0 then none else some 1)) = none := by
+  rw [GraphFibre.square_test (by norm_num)]
+  norm_num [Value.add, Value.mul, Real.sqrt_eq_iff_mul_self_eq]
+
+#qsym_check_axioms GraphFibre.integrate_presentation
+#qsym_check_axioms GraphFibre.square_disintegrates
+#qsym_check_axioms GraphFibre.square_rule
+#qsym_check_axioms negative_branch_at_four
+#qsym_check_axioms partial_test_at_root
 #qsym_check_axioms partialIntegral_interval
 #qsym_check_axioms partialIntegral_congr_away
 #qsym_check_axioms weighted_lebesgue_density

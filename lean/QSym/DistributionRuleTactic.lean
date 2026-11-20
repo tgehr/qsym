@@ -1,3 +1,4 @@
+import QSym.DistributionGraph
 import QSym.DistributionFiniteMixedReal
 import QSym.DistributionModelLaws
 import QSym.WeightedFibreTower
@@ -21,7 +22,7 @@ elab "qsym_distribution_goal" : tactic => do
   let heads := #[``partialIntegral, ``FiniteIntegralTheory.integrate,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
-    ``Distribution.RealDensityFibre.density, ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
+    ``Distribution.GraphFibre.fibre, ``Distribution.RealDensityFibre.density, ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
     ``Distribution.Model.densityTestValue, ``Distribution.Model.densityMassValue,
     ``WeightedParameter.Fibre.Hom.observePartial,
     ``DependentIntegralTheory.joint, ``WeightedParameter.Fibre.Tower.observe,
@@ -33,6 +34,9 @@ elab "qsym_distribution_goal" : tactic => do
     throwError "not a distribution-model rule goal"
 
 macro "qsym_distribution_eq" : tactic => `(tactic| first
+  | solve | apply Distribution.GraphFibre.square_positive; assumption
+  | solve | apply Distribution.GraphFibre.square_negative; assumption
+  | exact Distribution.GraphFibre.square_critical
   | exact Distribution.RealDensityFibre.density_eq _
   | exact Distribution.AtomPlusDensity.densityAt_eq _ _
   | exact Distribution.AtomPlusDensity.mass_eq _

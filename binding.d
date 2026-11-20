@@ -28,7 +28,7 @@ struct BoundTerm{
 	@property uint id()const{ return index; }
 	bool opEquals(BoundTerm rhs)const{ return owner is rhs.owner&&index==rhs.index; }
 }
-enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,conditional,distributionDirac,distributionZero,distributionLebesgue,distributionAdd,distributionScale,distributionWeight,distributionIntegral,distributionMass,distributionDensityAt,distributionBind }
+enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,conditional,distributionDirac,distributionZero,distributionLebesgue,distributionAdd,distributionScale,distributionWeight,distributionIntegral,distributionMass,distributionDensityAt,distributionBind,distributionGraphFibre }
 enum TensorOp:ubyte{ add,mul,dot,matvec,matmul,power }
 struct BoundNode{
 	BoundOp op;
@@ -41,7 +41,7 @@ private enum BindingRule:ubyte{
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
-	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre
+	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -426,6 +426,9 @@ final class Bindings{
 				enforce(v.kind==TypeKind.function_&&v.fields[0]==element&&pool.view(v.fields[1]).kind==TypeKind.distribution,"bindD requires A -> Distribution(B)"); output=v.fields[1]; break;
 			}
 			case BoundOp.distributionMass:enforce(args.length==1,"mass takes one distribution"); distributed(args[0]); output=realType; break;
+			case BoundOp.distributionGraphFibre:
+				enforce(args.length==2&&type(args[0])==pool.function_(realType,realType)&&type(args[1])==realType,"graph disintegration requires a real map and query");
+				output=pool.distribution(realType); break;
 			case BoundOp.distributionDensityAt:enforce(args.length==2&&distributed(args[0])==realType&&type(args[1])==realType,"density extraction requires a real distribution and point"); output=realType; break;
 			default:throw new Exception("not a distribution operation");
 		}
@@ -570,7 +573,7 @@ final class Bindings{
 		TypeId mapped(uint id){ return dimensions is null?types[id]:pool.map(types[id],dimensions); }
 		final switch(n.op){
 			case BoundOp.distributionZero:return distribution(target,n.op,[],pool.view(mapped(n.type)).fields[0]);
-			case BoundOp.distributionLebesgue,BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind:return distribution(target,n.op,args);
+			case BoundOp.distributionLebesgue,BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionGraphFibre:return distribution(target,n.op,args);
 			case BoundOp.unit,BoundOp.vectorNil:return tuple(target,[],mapped(n.type));
 			case BoundOp.vectorCons,BoundOp.pair:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id,args[1].id));
 			case BoundOp.first,BoundOp.rest:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id));
@@ -2712,6 +2715,31 @@ final class Bindings{
 			if(current.op==BoundOp.distributionMass&&nodes[current.a].op==BoundOp.distributionWeight&&nodes[nodes[current.a].b].op==BoundOp.distributionDirac){
 				auto d=nodes[current.a]; next=apply(at(d.a),at(nodes[d.b].a)); rule=BindingRule.distributionMassWeightedDirac;
 			}
+			if(current.op==BoundOp.distributionGraphFibre&&nodes[current.a].op==BoundOp.lambda){
+				auto body=nodes[nodes[current.a].a];
+				if(body.op==BoundOp.primitive&&body.a!=uint.max&&nodes[body.a].op==BoundOp.variable&&nodes[body.a].data==0){
+					auto op=arena.view(arena.at(body.data));
+					bool power=op.op==Op.pow&&op.value==2;
+					bool product=op.op==Op.mul&&body.a==body.b;
+					if(power||product){
+						auto query=at(current.b),zero=scalar(ctx,arena.real_(0));
+						auto root=primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[query]);
+						auto mul=scalarOperator(type(query),TensorOp.mul);
+						auto negative=primitive(mul,[scalar(ctx,arena.real_(-1)),root]);
+						auto twice=primitive(mul,[scalar(ctx,arena.real_(2)),root]);
+						auto weight=primitive(arena.inv(arena.real_(1)),[twice]);
+						BoundTerm branch(BoundTerm x){
+							return distribution(ctx,BoundOp.distributionScale,[weight,distribution(ctx,BoundOp.distributionDirac,[x])]);
+						}
+						auto pair=distribution(ctx,BoundOp.distributionAdd,[branch(negative),branch(root)]);
+						auto lt=arena.lt(arena.real_(0),arena.real_(0));
+						auto empty=distribution(ctx,BoundOp.distributionZero,[],type(query));
+						next=conditional(primitive(lt,[zero,query]),pair,
+							conditional(primitive(lt,[query,zero]),empty,bottom(ctx,type(empty))));
+						rule=BindingRule.distributionSquareGraph; extra=product;
+					}
+				}
+			}
 			if(current.op==BoundOp.distributionDensityAt){
 				auto d=nodes[current.a],query=at(current.b);
 				if(d.op==BoundOp.distributionLebesgue){ next=sequence(query,scalar(ctx,arena.real_(1))); rule=BindingRule.distributionDensityLebesgue; }
@@ -3470,6 +3498,7 @@ final class Bindings{
 	}
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
+			case BoundOp.distributionGraphFibre:return "Distribution.GraphFibre.value";
 			case BoundOp.distributionBind:return "Distribution.bindValue";
 			case BoundOp.distributionDirac:return "Distribution.diracValue";
 			case BoundOp.distributionAdd:return "Distribution.addValue";
@@ -3613,7 +3642,7 @@ final class Bindings{
 			switch(n.op){
 				case BoundOp.distributionZero:return "Distribution.zeroValue";
 				case BoundOp.distributionLebesgue:return "Distribution.lebesgueValue";
-				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind:
+				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionGraphFibre:
 					return "("~valueOperation(n)~" "~child(n.a)~(n.b==uint.max?"":" "~child(n.b))~")";
 				case BoundOp.variable:return "(some "~vars[n.data]~")";
 				case BoundOp.scalar:return "(n"~to!string(n.data)~".eval ξ)";
@@ -4011,7 +4040,7 @@ final class Bindings{
 				case BoundOp.variable:
 					expr=".here"; foreach(j;0..n.data) expr="(.there "~expr~")";
 					expr=".var "~expr; break;
-				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.finiteSum,BoundOp.summation,BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
+				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionGraphFibre,BoundOp.finiteSum,BoundOp.summation,BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
 					expr="."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~name(n.a);
 					if(n.b!=uint.max) expr~=" "~name(n.b); break;
 				case BoundOp.lambda:expr=".lam "~name(n.a); break;
@@ -5153,6 +5182,8 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionMassDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
+				case BindingRule.distributionSquareGraph:
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre."~(p.extra?"square_mul_rule":"square_rule")~" ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionDensityFibre:{
 					string ev(uint id){ return "("~name(id)~".eval ξ ρ)"; }
 					string witness(uint id){ return "h"~to!string(id); }

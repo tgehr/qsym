@@ -335,7 +335,7 @@ clean:
 # Focused, source-checked distribution prototype regression suite.
 test-distributions: build/distribution-tests test-distribution-model-rules test-dependent-references test-distribution-source-model
 	./build/distribution-tests build/distributions
-	cd lean && $(LAKE) build QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
+	cd lean && $(LAKE) build QSym.DistributionSquareIntegral QSym.DistributionGraphBridge QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
 	python3 tools/check_distributions.py --lake $(LAKE)
 
 # Standalone semantic model and closed law/counterexample audits.

@@ -119,7 +119,7 @@ struct FunctionSyntax{
 			name=="∑"||name=="sum"||name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
 	}
 	private bool distributionName(string name){
-		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD"])
+		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD"])
 			if(name==n) return true;
 		return false;
 	}
@@ -281,12 +281,14 @@ struct FunctionSyntax{
 					case "bindD":op=BoundOp.distributionBind; break;
 					case "integralD":op=BoundOp.distributionIntegral; break;
 					case "massD":op=BoundOp.distributionMass; break;
+					case "graphFibreD":op=BoundOp.distributionGraphFibre; break;
 					case "densityAtD":op=BoundOp.distributionDensityAt; break;
 					default:throw new Exception("unsupported distribution constructor: "~p.name);
 				}
 				BoundTerm[] args;
 				foreach(i,arg;p.args){
 					TypeId want;
+					if(p.name=="graphFibreD") want=i==0?pool.function_(scalarType(Sort.real_),scalarType(Sort.real_)):scalarType(Sort.real_);
 					if(p.name=="dirac"&&expected!=TypeId.init&&pool.view(expected).kind==TypeKind.distribution) want=pool.view(expected).fields[0];
 					if(p.name=="scaleD"&&i==0||p.name=="densityAtD"&&i==1) want=scalarType(Sort.real_);
 					if(p.name=="weightD"&&i==0){
@@ -542,6 +544,8 @@ struct FunctionSyntax{
 					case BoundOp.distributionScale:{
 						auto r=b.node(b.at(q.a));
 						if(r.op==BoundOp.scalar&&a.isNumber(a.at(r.data))&&a.number(a.at(r.data))==Number(-1)) return "-("~nested(q.b)~")";
+						if(r.op==BoundOp.scalar&&a.isNumber(a.at(r.data))&&b.node(b.at(q.b)).op==BoundOp.distributionDirac)
+							return "("~value(q.a)~")·"~nested(q.b);
 						return "(scaleD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
 					}
 					case BoundOp.distributionWeight:{
@@ -571,6 +575,7 @@ struct FunctionSyntax{
 					auto axis=fresh(locals,axisHint(n.a)),ty=pool.view(b.type(b.at(n.a))).fields[0];
 					return (ty==scalarType(Sort.real_)?"∫d"~axis~" ":"∫("~axis~":"~typeName(ty,locals)~"). ")~form(b.at(n.a),axis,locals);
 				}
+				case BoundOp.distributionGraphFibre:return "graphFibreD("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.distributionDensityAt:{
 					auto axis=fresh(locals,"x"); return "(λ("~axis~":ℝ). ("~form(b.at(n.a),axis,locals)~")//λ["~axis~"])("~child(n.b)~")";
 				}

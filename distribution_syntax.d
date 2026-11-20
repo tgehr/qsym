@@ -3,19 +3,47 @@ import qsym.spec:Pattern,TypePattern,pattern;
 import std.exception:enforce;
 @safe:
 
+// Recognize a joint Lebesgue/Dirac graph over two distinct real axes.
+private bool graphForm(Pattern p,out Pattern input,out Pattern mapping,out Pattern target){
+	if(p.name!="$disintegrate"||p.args[0].name!="$mul") return false;
+	auto denominator=p.args[1];
+	bool measure(Pattern q){ return q.name=="$distributionApply"&&q.args[0].name=="λ"&&!q.args[0].called; }
+	if(!measure(denominator)) return false;
+	target=denominator.args[1];
+	auto factors=p.args[0].args;
+	foreach(i;0..2){
+		auto base=factors[i],point=factors[1-i];
+		if(!measure(base)||base.args[1].name==target.name||point.name!="$distributionApply"||
+			point.args[1].name!=target.name) continue;
+		auto atom=point.args[0];
+		if((atom.name=="δ"||atom.name=="dirac")&&atom.args.length==1){
+			input=base.args[1]; mapping=atom.args[0]; return true;
+		}
+	}
+	return false;
+}
+
 // Distribution application is a scoped form, not a scalar density or function
 // application. Lower its single output axis before ordinary elaboration.
 string distributionOutputAxis(Pattern root){
 	string axis;
-	void visit(Pattern p) @safe {
-		if(p.binder.length||p.name=="$disintegrate") return;
+	void visit(Pattern p,bool inForm) @safe {
+		if(p.binder.length) return;
+		if(p.name=="$disintegrate"){
+			Pattern input,mapping,target;
+			if(inForm&&graphForm(p,input,mapping,target)){
+				if(!axis.length) axis=input.name;
+				enforce(axis==input.name,"multiple free output axes require explicit distribution binders");
+			}
+			return;
+		}
 		if(p.name=="$distributionApply"){
 			if(!axis.length) axis=p.args[1].name;
 			enforce(axis==p.args[1].name,"multiple free output axes require explicit distribution binders"); return;
 		}
-		foreach(a;p.args) visit(a);
+		foreach(a;p.args) visit(a,inForm&&(p.name=="$mul"||p.name=="$add"||p.name=="$neg"));
 	}
-	visit(root); return axis;
+	visit(root,true); return axis;
 }
 
 Pattern distributionSyntax(Pattern root){
@@ -50,6 +78,11 @@ Pattern distributionSyntax(Pattern root){
 	Pattern delegate(Pattern) @safe expand;
 	Pattern lower(Pattern p,string axis,TypePattern ty) @safe {
 		auto dt=new TypePattern("Distribution",[ty]);
+		if(p.name=="$disintegrate"){
+			Pattern input,mapping,target;
+			enforce(graphForm(p,input,mapping,target)&&input.name==axis,"graph disintegration requires its retained axis");
+			return typed(expand(p),dt);
+		}
 		if(p.name=="#"&&p.number==0){ auto t=pattern("$type",[]); t.annotation=ty; return pattern("zeroD",[t]); }
 		if(p.name=="$integral"){
 			enforce(p.binder!=axis,"an integral shadows the distribution output axis");
@@ -88,6 +121,11 @@ Pattern distributionSyntax(Pattern root){
 		if(p.name=="$distribution") return lower(p.args[0],p.binder,p.annotation);
 		if(p.name=="$integral") return pattern("massD",[lower(p.args[0],p.binder,p.annotation)]);
 		if(p.name=="$disintegrate"){
+			Pattern input,mapping,target;
+			if(graphForm(p,input,mapping,target)){
+				enforce(!occurs(mapping,target.name),"a graph map cannot depend on its output axis");
+				return pattern("graphFibreD",[lambda(input.name,new TypePattern("Real"),expand(mapping)),target]);
+			}
 			auto d=p.args[1];
 			enforce(d.name=="$distributionApply"&&d.args[0].name=="λ","only disintegration with respect to λ[x] is supported");
 			auto x=d.args[1];
