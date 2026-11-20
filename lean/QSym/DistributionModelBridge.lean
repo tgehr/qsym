@@ -89,7 +89,7 @@ theorem mixed_density_bridge (atomFirst : Bool) (p : DensityProgram) (a x : ℝ)
       (AtomPlusDensity.mk a p.density).densityAt x := by
   rw [p.presentation_eq, AtomPlusDensity.densityAt_eq]
   cases atomFirst <;> by_cases h : x = a <;> cases hw : p.density x <;>
-    simp [densityAtValue, diracValue, addValue, densityValue, densityAt, Value.add, h, hw]
+    simp [densityAtValue, diracValue, addValue, densityValue, densityAt, realFibre, RealDensityFibre.add, RealDensityFibre.density, Value.add, h, hw]
 
 /-- Integration against any strict test commutes with denotation, including
 when a weight or test is partial or the integral is non-finite. -/

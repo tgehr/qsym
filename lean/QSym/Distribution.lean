@@ -1,4 +1,5 @@
 import QSym.Integration
+import QSym.RealDensityFibre
 
 /-! Non-recursive, intensional distribution presentations. No quotient by equality
 of measures is taken. Integral nodes retain their integrands; they are requests,
@@ -81,28 +82,34 @@ noncomputable def integrate (d : D α) (f : α → Option ℝ) : Option ℝ :=
 noncomputable def massValue {α : Type} (d : Option (D α)) : Option ℝ :=
   d.bind (fun a => integrate a (fun _ => some 1))
 
-/-- Supported pointwise density extraction. A real atom obstructs the Lebesgue
-density at its location and contributes zero elsewhere. -/
-noncomputable def densityAt (d : D ℝ) (x : ℝ) : Option ℝ := by
+/-- Interpret the supported finite atomic part before deciding whether it
+obstructs the query. General pushforwards and integral nodes retain their
+old partial observer. In particular we never infer a density by integrating
+the singleton charges of a continuum of atoms. -/
+noncomputable def realFibre (d : D ℝ) (x : ℝ) : RealDensityFibre := by
   classical
   exact match d with
-  | .invalid => none
-  | .zero => some 0
-  | .dirac a => if x = a then none else some 0
-  | .density w v => if v = some then w x else none
-  | .add a b => Value.add (densityAt a x) (densityAt b x)
-  | .scale r a => Value.mul (some r) (densityAt a x)
-  | .integral k => partialIntegral MeasureTheory.volume
-      (fun r => densityAt (k r) x)
+  | .invalid => ⟨0, none⟩
+  | .zero => ⟨0, some 0⟩
+  | .dirac a => ⟨if x = a then 1 else 0, some 0⟩
+  | .density w v => ⟨0, if v = some then w x else none⟩
+  | .add a b => (realFibre a x).add (realFibre b x)
+  | .scale r a => (realFibre a x).scale r
+  | .integral k => ⟨0, partialIntegral MeasureTheory.volume
+      (fun r => (realFibre (k r) x).density)⟩
+
+noncomputable def densityAt (d : D ℝ) (x : ℝ) : Option ℝ :=
+  (realFibre d x).density
 
 noncomputable def densityAtValue (d : Option (D ℝ)) (x : Option ℝ) : Option ℝ := do
   densityAt (← d) (← x)
 
 @[simp] theorem densityAt_density (w : ℝ → Option ℝ) (x : ℝ) :
-    densityAt (.density w some) x = w x := by simp [densityAt]
+    densityAt (.density w some) x = w x := by simp [densityAt, realFibre, RealDensityFibre.density]
 
 @[simp] theorem densityAt_dirac (a x : ℝ) :
-    densityAt (.dirac a) x = (if x = a then none else some 0) := by simp [densityAt]
+    densityAt (.dirac a) x = (if x = a then none else some 0) := by
+  by_cases h : x = a <;> simp [densityAt, realFibre, RealDensityFibre.density, h]
 
 theorem weighted_lebesgue_density (f : ℝ → Option ℝ) (x : ℝ) :
     densityAtValue (weightValue (some f) lebesgueValue) (some x) = f x := by

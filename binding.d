@@ -41,12 +41,13 @@ private enum BindingRule:ubyte{
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
-	distributionDensityDirac,distributionDensityAtomAdd
+	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct IntegralCell{ Rational lower,upper,sample; }
 private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed; Rational value; Rational[] values; uint output=uint.max; }
+private struct FibreStep{ uint source,charge,regular; uint[] weights; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
@@ -71,6 +72,7 @@ struct BindingResult{
 	private SpectralSolution[] spectra;
 	private SummationSolution[] sums;
 	private IntegralSolution[] integrals;
+	private FibreStep[][] fibres;
 }
 
 final class Bindings{
@@ -304,6 +306,63 @@ final class Bindings{
 		if(d.op==BoundOp.distributionLebesgue) return true;
 		if(d.op!=BoundOp.distributionWeight||nodes[d.a].op!=BoundOp.lambda||!densityBodies(d.b,bodies)) return false;
 		bodies~=nodes[d.a].a; return true;
+	}
+	private BoundTerm retainedWeight(uint[] bodies,BoundTerm query){
+		if(!bodies.length) return sequence(query,scalar(context(query),arena.real_(1)));
+		auto weight=at(bodies[0]),mul=scalarOperator(scalarType(Sort.real_),TensorOp.mul);
+		foreach(body;bodies[1..$]) weight=primitive(mul,[weight,at(body)]);
+		return apply(lambda(weight),query);
+	}
+	private BoundTerm awayFromAtom(uint location,BoundTerm query){
+		auto zero=arena.real_(0);
+		auto neg=primitive(arena.mul(zero,zero,true),[scalar(context(query),arena.real_(-1)),at(location)]);
+		auto diff=primitive(arena.add(zero,zero,true),[query,neg]);
+		return primitive(arena.nonzero(zero),[diff]);
+	}
+	// Compile the signed singleton charge and regular weight together. Keeping
+	// one witness per source node also shares reused summands in the export.
+	private BoundTerm extractFibre(uint source,BoundTerm query,ref FibreStep[] steps){
+		auto ctx=context(query),zero=scalar(ctx,arena.real_(0)),one=scalar(ctx,arena.real_(1));
+		auto add=scalarOperator(type(zero),TensorOp.add),mul=scalarOperator(type(zero),TensorOp.mul);
+		auto neg=arena.not_(arena.boolean(false));
+		Table!(uint,uint) indices;
+		uint visit(uint id){
+			auto index=indices.get(id,uint.max);
+			if(index!=uint.max) return index;
+			auto d=nodes[id];
+			BoundTerm charge,regular;
+			uint[] weights;
+			if(d.op==BoundOp.distributionAdd){
+				auto left=visit(d.a); if(left==uint.max) return uint.max;
+				auto right=visit(d.b); if(right==uint.max) return uint.max;
+				charge=primitive(add,[at(steps[left].charge),at(steps[right].charge)]);
+				regular=primitive(add,[at(steps[left].regular),at(steps[right].regular)]);
+			}else if(d.op==BoundOp.distributionScale){
+				auto child=visit(d.b); if(child==uint.max) return uint.max;
+				charge=primitive(mul,[at(d.a),at(steps[child].charge)]);
+				regular=primitive(mul,[at(d.a),at(steps[child].regular)]);
+			}else if(d.op==BoundOp.distributionDirac||
+					d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionDirac){
+				auto location=d.op==BoundOp.distributionDirac?d.a:nodes[d.b].a;
+				auto atPoint=primitive(neg,[awayFromAtom(location,query)]);
+				charge=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[atPoint,one]);
+				regular=zero;
+				if(d.op==BoundOp.distributionWeight){
+					auto coefficient=apply(at(d.a),at(location));
+					charge=primitive(mul,[coefficient,charge]);
+					regular=primitive(mul,[coefficient,regular]);
+				}
+			}else if(d.op==BoundOp.distributionZero||densityBodies(id,weights)){
+				charge=sequence(query,zero);
+				regular=d.op==BoundOp.distributionZero?zero:retainedWeight(weights,query);
+			}else return uint.max;
+			index=cast(uint)steps.length;
+			steps~=FibreStep(id,charge.id,regular.id,weights); indices.set(id,index);
+			return index;
+		}
+		auto root=visit(source); if(root==uint.max) return BoundTerm.init;
+		auto nonzero=primitive(arena.nonzero(arena.real_(0)),[at(steps[root].charge)]);
+		return guard(primitive(neg,[nonzero]),at(steps[root].regular));
 	}
 	private bool depends(BoundTerm t,uint index){
 		auto n=node(t); if(n.op==BoundOp.variable) return n.data==index;
@@ -1794,7 +1853,7 @@ final class Bindings{
 	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
 		if(telescope_) return normalizeDependent(term,budget);
-		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals;
+		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals; FibreStep[][] fibres;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
@@ -2655,33 +2714,27 @@ final class Bindings{
 			}
 			if(current.op==BoundOp.distributionDensityAt){
 				auto d=nodes[current.a],query=at(current.b);
-				BoundTerm outsideAtom(uint location,BoundTerm value){
-					auto zero=arena.real_(0);
-					auto neg=primitive(arena.mul(zero,zero,true),[scalar(ctx,arena.real_(-1)),at(location)]);
-					auto diff=primitive(arena.add(zero,zero,true),[query,neg]);
-					return guard(primitive(arena.nonzero(zero),[diff]),value);
-				}
 				if(d.op==BoundOp.distributionLebesgue){ next=sequence(query,scalar(ctx,arena.real_(1))); rule=BindingRule.distributionDensityLebesgue; }
 				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionLebesgue){ next=apply(at(d.a),query); rule=BindingRule.distributionDensityWeight; }
 				else if(d.op==BoundOp.distributionDirac){
-					next=outsideAtom(d.a,scalar(ctx,arena.real_(0)));
+					next=guard(awayFromAtom(d.a,query),scalar(ctx,arena.real_(0)));
 					rule=BindingRule.distributionDensityDirac;
 				}else if(d.op==BoundOp.distributionAdd){
 					bool atomFirst=nodes[d.a].op==BoundOp.distributionDirac;
 					auto atom=nodes[atomFirst?d.a:d.b],branch=atomFirst?d.b:d.a;
 					IntegralSolution source;
 					if(atom.op==BoundOp.distributionDirac&&densityBodies(branch,source.from)){
-						// Read the retained weights in source order, in their shared real binder.
-						auto regular=sequence(query,scalar(ctx,arena.real_(1)));
-						if(source.from.length){
-							auto weight=at(source.from[0]);
-							auto mul=scalarOperator(scalarType(Sort.real_),TensorOp.mul);
-							foreach(body;source.from[1..$]) weight=primitive(mul,[weight,at(body)]);
-							regular=apply(lambda(weight),query);
-						}
-						next=outsideAtom(atom.a,regular);
+						next=guard(awayFromAtom(atom.a,query),retainedWeight(source.from,query));
 						rule=BindingRule.distributionDensityAtomAdd;
 						extra=cast(uint)integrals.length; integrals~=source;
+					}
+				}
+				if(next==BoundTerm.init){
+					FibreStep[] witness;
+					next=extractFibre(current.a,query,witness);
+					if(next!=BoundTerm.init){
+						rule=BindingRule.distributionDensityFibre;
+						extra=cast(uint)fibres.length; fibres~=witness;
 					}
 				}
 			}
@@ -3361,7 +3414,7 @@ final class Bindings{
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
 		normalizeClosed=&visit;
-		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals);
+		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres);
 	}
 
 	Term lower(BoundTerm term){
@@ -3907,6 +3960,7 @@ final class Bindings{
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
+		foreach(witness;result.fibres) foreach(f;witness){ stack~=[f.source,f.charge,f.regular]; stack~=f.weights; }
 		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; }
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd) stack~=p.extra;
@@ -5099,6 +5153,25 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionMassDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
+				case BindingRule.distributionDensityFibre:{
+					string ev(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+					string witness(uint id){ return "h"~to!string(id); }
+					auto q=ev(n.b);
+					proof=".ofEq (fun ξ ρ =>\n";
+					foreach(f;result.fibres[p.extra]){
+						auto d=nodes[f.source]; string lemma;
+						if(d.op==BoundOp.distributionAdd) lemma="add "~witness(d.a)~" "~witness(d.b);
+						else if(d.op==BoundOp.distributionScale) lemma="scale "~ev(d.a)~" "~witness(d.b);
+						else if(d.op==BoundOp.distributionDirac) lemma="dirac "~ev(d.a)~" "~q;
+						else if(d.op==BoundOp.distributionZero) lemma="zero "~q;
+						else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionDirac)
+							lemma="weightDirac "~ev(d.a)~" "~ev(nodes[d.b].a)~" "~q;
+						else lemma="chart "~densityProgram(f.weights)~" "~q;
+						proof~="  let "~witness(f.source)~" : Distribution.FibreCertificate "~ev(f.source)~" "~q~" "~ev(f.charge)~" "~ev(f.regular)~" := Distribution.FibreCertificate."~lemma~"\n";
+					}
+					proof~="  Distribution.FibreCertificate.extract "~witness(n.a)~")";
+					break;
+				}
 				case BindingRule.distributionDensityDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.model_density_dirac ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionDensityAtomAdd:{

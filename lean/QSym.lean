@@ -4,7 +4,7 @@ import QSym.FixedPoint
 import QSym.Integration
 import QSym.Distribution
 import QSym.DistributionIntegral
-import QSym.DistributionModelBridge
+import QSym.DistributionFibreCertificate
 import QSym.DistributionPartialModel
 import QSym.DistributionPartialSequential
 import QSym.WeightedParameterSpace

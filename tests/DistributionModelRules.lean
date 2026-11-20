@@ -133,6 +133,44 @@ theorem mixed_interval_mass : atomAndInterval.mass = some 2 := by
   rw [AtomPlusDensity.mass_eq, hi]
   norm_num [Value.add]
 
+private def cancelling (a : ℝ) : FiniteMixedReal :=
+  ⟨[(a,3), (a,-3)], fun _ => some 1⟩
+
+theorem cancelling_density (a x : ℝ) : densityAt (cancelling a).presentation x = some 1 := by
+  rw [FiniteMixedReal.densityAt_bridge]
+  by_cases h : x = a <;> norm_num [cancelling, FiniteMixedReal.charge, h]
+
+theorem cancelling_test_hole (a : ℝ) (f : ℝ → Option ℝ) (h : f a = none) :
+    FiniteMixedReal.atomicObserve (cancelling a).atoms f (some 0) = none := by
+  simp [cancelling, FiniteMixedReal.atomicObserve, Value.mul, Value.add, h]
+
+theorem undefined_coefficient_away (a x : ℝ) (w : ℝ → Option ℝ) (hw : w a = none) :
+    densityAtValue (addValue (weightValue (some w) (diracValue (some a))) lebesgueValue)
+      (some x) = none := by
+  simp [weightValue, weight, diracValue, addValue, densityAtValue, hw]
+
+-- Integrating the singleton charges of moving atoms would incorrectly give
+-- zero for every x. This constructor still requests a row-wise density proof.
+theorem integral_of_moving_atoms (x : ℝ) :
+    densityAt (.integral (fun a => .dirac a)) x = none := by
+  have hn : ¬ ∀ a : ℝ, Value.Defined (densityAt (.dirac a) x) := by
+    intro h
+    simpa [Value.Defined] using h x
+  change (RealDensityFibre.mk 0 (partialIntegral volume (fun a => densityAt (.dirac a) x))).density = none
+  simp only [RealDensityFibre.density, if_pos rfl, partialIntegral, hn, false_and, if_false, if_true]
+
+#qsym_check_axioms undefined_coefficient_away
+#qsym_check_axioms integral_of_moving_atoms
+#qsym_check_axioms cancelling_density
+#qsym_check_axioms cancelling_test_hole
+#qsym_check_axioms FiniteMixedReal.atomicObserve_singleton
+#qsym_check_axioms AtomPlusDensity.observe_toFinite
+#qsym_check_axioms AtomPlusDensity.density_toFinite
+#qsym_check_axioms FiniteMixedReal.observe_perm
+#qsym_check_axioms FiniteMixedReal.fibre_perm
+#qsym_check_axioms FiniteMixedReal.observe_parameterSpace
+#qsym_check_axioms FiniteMixedReal.observe_bridge
+#qsym_check_axioms FiniteMixedReal.fibre_bridge
 #qsym_check_axioms mixed_interval_density
 #qsym_check_axioms mixed_interval_mass
 #qsym_check_axioms mixed_density_bridge
