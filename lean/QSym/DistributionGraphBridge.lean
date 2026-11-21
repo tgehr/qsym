@@ -82,54 +82,56 @@ private theorem openUnit_coefficient (y : ℝ) :
       Function1.apply, h.1.le, Value.inv, Value.mul, hn, jac]
   · simp [openUnitDensity, openUnitPredicate_some, Set.mem_Ioo, h, Value.mask]
 
-theorem square_openUnit_rule (y : Option ℝ) :
-    densityAtValue (pushforwardOnValue (some (fun x => openUnitPredicate (some x)))
-      (some (fun x => some (x^2)))) y = openUnitDensity y := by
-  cases y with
-  | none => rfl
-  | some y =>
-    change densityAtValue (pushforwardOnValue _ (some (fun x => some (square x)))) (some y) = _
-    simp only [openUnitPredicate_some, pushforwardOn_density _ square (measurable_id.pow_const 2)]
-    exact openUnit_coefficient y
-
-theorem square_mul_openUnit_rule (y : Option ℝ) :
-    densityAtValue (pushforwardOnValue (some (fun x => openUnitPredicate (some x)))
-      (some (fun x => Value.mul (some x) (some x)))) y = openUnitDensity y := by
-  simpa [pow_two, Value.mul] using square_openUnit_rule y
-
-theorem positiveLebesgue_density_rule (y : Option ℝ) :
-    densityAtValue positiveLebesgueValue y =
-      Value.mask (Value.lt (some ((0 : ℤ) : ℝ)) y) (some ((1 : ℤ) : ℝ)) := by
-  cases y with
-  | none => rfl
-  | some y =>
-    rw [positiveLebesgue_density]
-    by_cases hy : 0 < y <;> simp [Value.lt, Value.mask, hy]
-
 theorem square_openUnit_chart :
-    pushforwardOnValue (some (fun x => openUnitPredicate (some x))) (some (fun x => some (x^2))) =
-      weightValue (some (fun y => openUnitDensity (some y))) positiveLebesgueValue := by
+    realPushforwardOnValue (some (fun x => openUnitPredicate (some x))) (some (fun x => some (x^2))) =
+      weightValue (some (fun y => openUnitDensity (some y))) lebesgueValue := by
   have hs : Set.Ioo (0 : ℝ) 1 ⊆ Set.Ioi 0 := fun _ h => h.1
   have changeChart :
-      pushforwardOnValue (some (fun x => some (decide (x ∈ Set.Ioo (0 : ℝ) 1))))
+      realPushforwardOnValue (some (fun x => some (decide (x ∈ Set.Ioo (0 : ℝ) 1))))
         (some (fun x => some (square x))) =
-      weightValue (some (marginalOn (Set.Ioo 0 1) square)) positiveLebesgueValue := by qsym_rule
+      densityValue (some (marginalOn (Set.Ioo 0 1) square)) := by qsym_rule
+  have identityWeight (w : ℝ → Option ℝ) : weightValue (some w) lebesgueValue = densityValue (some w) := by
+    simp [weightValue, lebesgueValue, densityValue, weight, Value.mul_one_left]
+  rw [identityWeight]
   simpa only [openUnitPredicate_some, funext openUnit_coefficient, square] using changeChart
 
 theorem square_mul_openUnit_chart :
-    pushforwardOnValue (some (fun x => openUnitPredicate (some x))) (some (fun x => Value.mul (some x) (some x))) =
-      weightValue (some (fun y => openUnitDensity (some y))) positiveLebesgueValue := by
+    realPushforwardOnValue (some (fun x => openUnitPredicate (some x))) (some (fun x => Value.mul (some x) (some x))) =
+      weightValue (some (fun y => openUnitDensity (some y))) lebesgueValue := by
   simpa [pow_two, Value.mul] using square_openUnit_chart
 
-theorem openUnit_chart_density {w : Option (ℝ → Option ℝ)}
-    (hw : some (fun y => openUnitDensity (some y)) = w) (y : Option ℝ) :
-    densityAtValue (weightValue w positiveLebesgueValue) y = openUnitDensity y := by
-  rw [← hw, ← square_openUnit_chart, square_openUnit_rule]
+theorem square_openUnit_rule (y : Option ℝ) :
+    densityAtValue (realPushforwardOnValue (some (fun x => openUnitPredicate (some x)))
+      (some (fun x => some (x^2)))) y = openUnitDensity y := by
+  rw [square_openUnit_chart, density_weight_lebesgueValue]
+  cases y <;> rfl
+
+theorem square_mul_openUnit_rule (y : Option ℝ) :
+    densityAtValue (realPushforwardOnValue (some (fun x => openUnitPredicate (some x)))
+      (some (fun x => Value.mul (some x) (some x)))) y = openUnitDensity y := by
+  simpa [pow_two, Value.mul] using square_openUnit_rule y
+
+/-- A stronger outer Iverson guard absorbs a repeated inner restriction,
+including for partial tests and predicates. -/
+theorem weight_mask_absorb (p q : ℝ → Option Bool) (f : ℝ → Option ℝ) :
+    let w := some (fun x => Value.mask (Value.and (p x) (q x)) (f x))
+    weightValue w (weightValue (some (fun x => Value.mask (p x) (some ((1 : ℤ) : ℝ)))) lebesgueValue) =
+      weightValue w lebesgueValue := by
+  apply congrArg (fun w => some (Presentation.density w some))
+  funext x
+  simp only [Option.some_bind, Value.mul_one_left, Int.cast_one]
+  cases hp : p x with
+  | none => rfl
+  | some b =>
+    cases b
+    · simp [Value.and, Value.mask, Value.mul]
+    · exact Value.mul_one_left _
 
 theorem openUnit_chart_mass {w : Option (ℝ → Option ℝ)}
     (hw : some (fun y => openUnitDensity (some y)) = w) :
-    massValue (weightValue w positiveLebesgueValue) = some ((1 : ℤ) : ℝ) := by
+    massValue (weightValue w lebesgueValue) = some ((1 : ℤ) : ℝ) := by
   rw [← hw, ← square_openUnit_chart]
+  rw [realPushforward_mass_total, ← mass_pushforwardOn_total]
   simp only [openUnitPredicate_some]
   change (pushforwardOnValue _ (some (fun x => some (square x)))).bind _ = _
   rw [pushforwardOn_test, pushforwardTest_total measurableSet_Ioo square (fun _ => 1)]

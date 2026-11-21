@@ -84,23 +84,25 @@ theorem chart_probe : chart.bind (fun d => integrate d probe) = none := by
     obtain ⟨_, hv⟩ := bad
     cases hv
 
-theorem positive_chart_probe :
-    (weightValue (some (marginalOn (Ioo 0 1) square)) positiveLebesgueValue).bind
-      (fun d => integrate d probe) = some 0 := by
-  rw [← square_positiveSource_chart _ (fun _ hx => hx.1), pushforwardOn_test]
-  exact (bind_masked_dirac_test _ _ _).symm.trans source_probe
+theorem real_graph_partial_probe :
+    (realPushforwardOnValue (some (fun x => some (decide (x ∈ Ioo (0 : ℝ) 1))))
+      (some (fun x => some (square x)))).bind (fun d => integrate d probe) = none := by
+  rw [square_positiveSource_lebesgue _ (fun _ hx => hx.1)]
+  exact chart_probe
 
-theorem positive_reference_sees_zero :
-    positiveLebesgueValue.bind (fun d => integrate d (fun y => if y = 0 then none else some 0)) = none := by
-  rw [positiveLebesgue_test, if_neg]
-  intro h
-  simpa [Value.Defined] using h.1 0 le_rfl
+theorem critical_graph_preserves_hole :
+    densityAtValue (realPushforwardOnValue (some (fun x => some (decide (x ∈ Ico (0 : ℝ) 1))))
+      (some (fun x => some (square x)))) (some 0) = none := by
+  change densityAt (inLebesgueCoordinates _) 0 = none
+  rw [coordinates_density]
+  exact (pushforwardOn_density _ square (measurable_id.pow_const 2) 0).trans included_endpoints.1
 
-#qsym_check_axioms positiveLebesgue_test
-#qsym_check_axioms positiveLebesgue_density
-#qsym_check_axioms square_positiveSource_chart
-#qsym_check_axioms positive_chart_probe
-#qsym_check_axioms positive_reference_sees_zero
+#qsym_check_axioms square_positiveSource_lebesgue
+#qsym_check_axioms coordinates_of_missing_density
+#qsym_check_axioms coordinates_partial
+#qsym_check_axioms coordinates_test
+#qsym_check_axioms real_graph_partial_probe
+#qsym_check_axioms critical_graph_preserves_hole
 #qsym_check_axioms pushforwardOn_density
 #qsym_check_axioms mass_pushforwardOn_total
 #qsym_check_axioms pushforwardOn_test

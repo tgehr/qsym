@@ -13,8 +13,8 @@ open Classical in
 /-- The square chart integrates against Lebesgue measure on the open positive
 half-line. Its strict probes see the whole image of the parameter map,
 including the endpoint of measure zero. -/
-theorem positiveLebesgue_test (t : ℝ → Option ℝ) :
-    positiveLebesgueValue.bind (fun d => integrate d t) =
+theorem squareParameters_test (t : ℝ → Option ℝ) :
+    squareParameters.bind (fun d => integrate d t) =
       (if (∀ y ≥ 0, Value.Defined (t y)) ∧ IntegrableOn (fun y => (t y).getD 0) (Ioi 0)
        then some (∫ y in Ioi 0, (t y).getD 0) else none) := by
   classical
@@ -56,6 +56,53 @@ theorem positiveLebesgue_test (t : ℝ → Option ℝ) :
   simp only [partialIntegral, dom, body, integrable_indicator_iff measurableSet_Ioi,
     integral_indicator measurableSet_Ioi]
   rw [← hi, ← he]
+
+/-- The inverse-branch density reconstructs even the domain of integration,
+for arbitrary total tests. The source set need not be an interval. -/
+theorem square_positiveSource_lebesgue (s : Set ℝ) [DecidablePred (· ∈ s)] (hs : s ⊆ Ioi 0) :
+    realPushforwardOnValue (some (fun x => some (decide (x ∈ s)))) (some (fun x => some (square x))) =
+      densityValue (some (marginalOn s square)) := by
+  classical
+  let w := marginalOn s square
+  let d : D ℝ := .density (fun x => Value.mask (some (decide (x ∈ s))) (some 1)) (fun x => some (square x))
+  change some (inLebesgueCoordinates d) = some (.density w some)
+  apply congrArg some
+  apply inLebesgueCoordinates_of_chart
+  constructor
+  · funext y
+    exact pushforwardOn_density s square (measurable_id.pow_const 2) y
+  · intro y
+    dsimp only [w]
+    rw [square_marginalOn_positiveSource hs]
+    exact ⟨_, rfl⟩
+  · intro t
+    have eqp := square_positiveSource_parameters s hs
+    let k := fun y => Value.mul (w y) (some (t y))
+    have pair : integrate d (fun y => some (t y)) =
+        squareParameters.bind (fun base => integrate base k) := by
+      change (pushforwardOnValue (some (fun x => some (decide (x ∈ s))))
+        (some (fun x => some (square x)))).bind (fun a => integrate a (fun y => some (t y))) = _
+      rw [eqp]
+      apply congrArg (partialIntegral volume)
+      funext x
+      change Value.mul (Value.mul (some _) (w (square x))) (some _) =
+        Value.mul (some _) (Value.mul (w (square x)) (some _))
+      cases w (square x) <;> simp [Value.mul, mul_assoc]
+    rw [pair, squareParameters_test]
+    have total (y : ℝ) : Value.Defined (k y) := by
+      simp [k, w, square_marginalOn_positiveSource hs, Value.mul, Value.Defined]
+    have ind : (Ioi 0).indicator (fun y => (k y).getD 0) = fun y => (k y).getD 0 := by
+      funext y
+      by_cases hy : 0 < y
+      · exact indicator_of_mem hy _
+      · have hn : √y ∉ s := fun h => hy (Real.sqrt_pos.mp (hs h))
+        simp [indicator, mem_Ioi, hy, k, w, square_marginalOn_positiveSource hs, hn, Value.mul]
+    have hi := integrable_indicator_iff (μ := volume) (f := fun y => (k y).getD 0) (measurableSet_Ioi (a := (0 : ℝ)))
+    rw [ind] at hi
+    have he := integral_indicator (μ := volume) (f := fun y => (k y).getD 0) (measurableSet_Ioi (a := (0 : ℝ)))
+    rw [ind] at he
+    change _ = partialIntegral volume k
+    simp only [partialIntegral, total, implies_true, true_and, hi, he]
 
 private theorem sqrt_substitution (g : ℝ → ℝ) (hg : IntegrableOn g (Ioi 0)) :
     IntegrableOn (fun y => jac y * g (√y)) (Ioi 0) ∧

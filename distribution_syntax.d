@@ -144,6 +144,13 @@ Pattern distributionSyntax(Pattern root){
 		return null;
 	}
 	expand = (Pattern p) @safe {
+		// Accept old printed charts as sugar for the ordinary positive mask.
+		if(p.name=="λ₊"||p.name=="positiveLebesgueD"){
+			enforce(!p.args.length,"positive Lebesgue takes no arguments");
+			auto y=new Pattern("y"),zero=new Pattern("#");
+			auto weight=pattern("$iverson",[pattern("$lt",[zero,y])]);
+			return pattern("weightD",[lambda(y.name,new TypePattern("Real"),weight),new Pattern("lebesgueD")]);
+		}
 		if(p.name=="$distribution") return lower(p.args[0],p.binder,p.annotation);
 		if(p.name=="$integral") return pattern("massD",[lower(p.args[0],p.binder,p.annotation)]);
 		if(p.name=="$disintegrate"){

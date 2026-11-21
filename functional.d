@@ -271,7 +271,6 @@ struct FunctionSyntax{
 				BoundOp op; TypeId element;
 				switch(p.name){
 					case "dirac":op=BoundOp.distributionDirac; break;
-					case "λ₊","positiveLebesgueD":op=BoundOp.distributionPositiveLebesgue; break;
 					case "lebesgueD":op=BoundOp.distributionLebesgue; break;
 					case "zeroD":
 						enforce(p.args.length==1,"zeroD requires an element type");
@@ -570,7 +569,6 @@ struct FunctionSyntax{
 				string grouped(string body){ return group?"("~body~")":body; }
 				switch(q.op){
 					case BoundOp.distributionZero:return "0";
-					case BoundOp.distributionPositiveLebesgue:return "λ₊["~axis~"]";
 					case BoundOp.distributionLebesgue:return "λ["~axis~"]";
 					case BoundOp.distributionDirac:return "δ("~render(b.at(q.a),names,depth+level+1,b.type(b.at(q.a)))~")["~axis~"]";
 					case BoundOp.conditional:return grouped("if "~value(q.a)~" then "~nested(q.b,false)~" else "~nested(q.c,false));
@@ -640,7 +638,7 @@ struct FunctionSyntax{
 				case BoundOp.conditional:
 					if(pool.view(b.type(t)).kind!=TypeKind.distribution) return "(if "~child(n.a)~" then "~child(n.b)~" else "~child(n.c)~")";
 					goto case BoundOp.distributionZero;
-				case BoundOp.distributionZero,BoundOp.distributionGraphFibre,BoundOp.distributionPositiveLebesgue,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionPushforwardOn,BoundOp.distributionBind:{
+				case BoundOp.distributionZero,BoundOp.distributionGraphFibre,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionPushforwardOn,BoundOp.distributionBind:{
 					auto axis=fresh(locals,t==result.reduction.output&&result.outputAxis.length?result.outputAxis:axisHint(t.id));
 					return "Λ("~axis~":"~typeName(pool.view(b.type(t)).fields[0],locals)~"). "~form(t,axis,locals);
 				}
