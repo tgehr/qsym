@@ -30,7 +30,7 @@ struct Lexer{
 		}
 	}
 	private static bool identifierChar(dchar c){
-		return isAlpha(c)||c=='_'||c>='₀'&&c<='₉'||c=='₋';
+		return isAlpha(c)||c=='_'||c>='₀'&&c<='₉'||c=='₋'||c=='₊';
 	}
 	Token next(){ auto t=read(); previous=t.text; return t; }
 	private Token read(){

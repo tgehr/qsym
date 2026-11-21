@@ -74,6 +74,58 @@ theorem pushforwardOn_density (s : Set ℝ) [DecidablePred (· ∈ s)] (f : ℝ 
     rw [hi, marginalOn_id, densityAt_density]
   · simp [densityAt, realFibre, hi, RealDensityFibre.density, chartDensity_sourceWeight s f hf]
 
+/-- Open positive Lebesgue chart in square coordinates. The parameter map
+reaches zero, so a strict test must also be defined there. -/
+def positiveJacobian (x : ℝ) : ℝ := if 0 < x then 2 * x else 0
+
+def positiveLebesgueValue : Option (D ℝ) :=
+  some (.density (fun x => some (positiveJacobian x)) (fun x => some (square x)))
+
+theorem positiveLebesgue_density (y : ℝ) :
+    densityAtValue positiveLebesgueValue (some y) = some (if 0 < y then 1 else 0) := by
+  classical
+  have ne : (fun x => some (square x)) ≠ some := by
+    intro h
+    have := congrFun h 2
+    norm_num [square] at this
+  have active : {x | some (positiveJacobian x) ≠ some 0} = Set.Ioi 0 := by
+    ext x
+    by_cases hx : 0 < x
+    · simp [positiveJacobian, hx, hx.ne', Set.mem_Ioi]
+    · simp [positiveJacobian, hx, Set.mem_Ioi]
+  change densityAt (.density _ (fun x => some (square x))) y = _
+  simp only [densityAt, realFibre, if_neg ne, RealDensityFibre.density, if_pos rfl, chartDensity,
+    Value.Defined, Option.some.injEq, exists_eq', implies_true, Option.getD_some, true_and,
+    if_pos (show Measurable (fun x => square x) from measurable_id.pow_const 2), active]
+  rw [square_fibreOn_positiveSource (Set.Subset.refl _)]
+  by_cases hy : 0 < y
+  · have hp := Real.sqrt_pos.mpr hy
+    simp [hy, Set.mem_Ioi, hp, observe, Value.add, Value.mul, jac, positiveJacobian, hp.ne']
+    field_simp
+    ring
+  · simp [Set.mem_Ioi, Real.sqrt_pos, hy, observe]
+
+/-- The target chart recovers the source presentation exactly. This allows the
+change of variables underneath any distribution operation, even a strict bind. -/
+theorem square_positiveSource_chart (s : Set ℝ) [DecidablePred (· ∈ s)]
+    (hs : s ⊆ Set.Ioi 0) :
+    pushforwardOnValue (some (fun x => some (decide (x ∈ s)))) (some (fun x => some (square x))) =
+      weightValue (some (marginalOn s square)) positiveLebesgueValue := by
+  apply congrArg (fun w => some (Presentation.density w (fun x => some (square x))))
+  funext x
+  change Value.mask (some (decide (x ∈ s))) (some 1) =
+    Value.mul (some (positiveJacobian x)) (marginalOn s square (square x))
+  rw [square_marginalOn_positiveSource hs]
+  by_cases hx : 0 < x
+  · rw [show √(square x) = x by exact Real.sqrt_sq hx.le]
+    by_cases h : x ∈ s
+    · simp [h, hx, Value.mask, Value.mul, positiveJacobian, jac, square, Real.sqrt_sq hx.le, hx.ne']
+      field_simp
+      ring
+    · simp [h, Value.mask, Value.mul]
+  · have hn : x ∉ s := fun h => hx (hs h)
+    simp [hn, hx, Value.mask, Value.mul, positiveJacobian]
+
 /-- Embed a weighted fibre in the current frontend distribution type. -/
 def presentation : List (ℝ × ℝ) → D ℝ
   | [] => .zero

@@ -1,4 +1,4 @@
-import QSym.DistributionRestrictedGraph
+import QSym.DistributionGraph
 import Mathlib.Analysis.SpecialFunctions.Sqrt
 import Mathlib.MeasureTheory.Function.Jacobian
 import Mathlib.MeasureTheory.Measure.Lebesgue.Integral
@@ -7,6 +7,55 @@ import Mathlib.MeasureTheory.Integral.IntervalIntegral.Basic
 noncomputable section
 namespace QSym.Distribution.GraphFibre
 open MeasureTheory Set
+
+open Classical in
+
+/-- The square chart integrates against Lebesgue measure on the open positive
+half-line. Its strict probes see the whole image of the parameter map,
+including the endpoint of measure zero. -/
+theorem positiveLebesgue_test (t : ℝ → Option ℝ) :
+    positiveLebesgueValue.bind (fun d => integrate d t) =
+      (if (∀ y ≥ 0, Value.Defined (t y)) ∧ IntegrableOn (fun y => (t y).getD 0) (Ioi 0)
+       then some (∫ y in Ioi 0, (t y).getD 0) else none) := by
+  classical
+  let k := fun y => (t y).getD 0
+  let g := fun x => |2*x| • k (square x)
+  have image : square '' Ioi (0 : ℝ) = Ioi 0 := by
+    ext y
+    constructor
+    · rintro ⟨x, hx, rfl⟩
+      exact sq_pos_of_pos (show 0 < x from hx)
+    · intro (hy : 0 < y)
+      exact ⟨√y, Real.sqrt_pos.mpr hy, Real.sq_sqrt hy.le⟩
+  have inj : InjOn square (Ioi 0) := by
+    intro x (hx : 0 < x) z (hz : 0 < z) h
+    simpa only [square, Real.sqrt_sq hx.le, Real.sqrt_sq hz.le] using congrArg Real.sqrt h
+  have hd : ∀ x ∈ Ioi (0 : ℝ), HasDerivWithinAt square (2*x) (Ioi 0) x := by
+    intro x _
+    simpa [square] using ((hasDerivAt_pow 2 x).hasDerivWithinAt (s := Ioi 0))
+  have hi := integrableOn_image_iff_integrableOn_abs_deriv_smul measurableSet_Ioi hd inj k
+  have he := integral_image_eq_integral_abs_deriv_smul measurableSet_Ioi hd inj k
+  rw [image] at hi he
+  let b := fun x => Value.mul (some (positiveJacobian x)) (t (square x))
+  have body : (fun x => (b x).getD 0) = (Ioi 0).indicator g := by
+    funext x
+    by_cases hx : 0 < x
+    · have hp : 0 < 2*x := by positivity
+      cases h : t (square x) <;> simp [b, g, k, Value.mul, positiveJacobian, indicator,
+        mem_Ioi, hx, h, smul_eq_mul, abs_of_pos hp]
+    · cases h : t (square x) <;> simp [b, positiveJacobian, Value.mul, indicator, mem_Ioi, hx, h]
+  have dom : (∀ x, Value.Defined (b x)) ↔ ∀ y ≥ 0, Value.Defined (t y) := by
+    have atX (x : ℝ) : Value.Defined (b x) ↔ Value.Defined (t (square x)) := by
+      cases h : t (square x) <;> simp [b, Value.Defined, Value.mul, h]
+    constructor
+    · intro h y hy
+      simpa only [square, Real.sq_sqrt hy] using (atX (√y)).mp (h _)
+    · intro h x
+      exact (atX x).mpr (h _ (sq_nonneg x))
+  change partialIntegral volume b = _
+  simp only [partialIntegral, dom, body, integrable_indicator_iff measurableSet_Ioi,
+    integral_indicator measurableSet_Ioi]
+  rw [← hi, ← he]
 
 private theorem sqrt_substitution (g : ℝ → ℝ) (hg : IntegrableOn g (Ioi 0)) :
     IntegrableOn (fun y => jac y * g (√y)) (Ioi 0) ∧

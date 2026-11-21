@@ -39,6 +39,7 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.pushforwardOn_density; assumption
   | exact Distribution.GraphFibre.pushforwardOn_test _ _ _
   | exact Distribution.GraphFibre.mass_pushforwardOn_total _ _
+  | solve | apply Distribution.GraphFibre.square_positiveSource_chart; assumption
   | exact Distribution.GraphFibre.square_marginalOn_openUnit _
   | solve | apply Distribution.GraphFibre.square_marginal_positive; assumption
   | solve | apply Distribution.GraphFibre.square_marginal_negative; assumption
