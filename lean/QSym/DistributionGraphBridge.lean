@@ -67,41 +67,83 @@ private theorem openUnitPredicate_some (y : ℝ) :
     openUnitPredicate (some y) = some (decide (y ∈ Set.Ioo (0 : ℝ) 1)) := by
   by_cases h : 0 < y <;> simp [openUnitPredicate, Value.lt, Value.and, Set.mem_Ioo, h]
 
-private def openUnitWeight (x : ℝ) := if x ∈ Set.Ioo (0 : ℝ) 1 then (1 : ℝ) else 0
+theorem mass_total_graph (p : Option (ℝ → Option Bool)) (f : ℝ → Option ℝ)
+    (hf : ∀ x, Value.Defined (f x)) :
+    massValue (realPushforwardOnValue p (some f)) =
+      massValue (weightValue (p.map (fun pred x => Value.mask (pred x) (some ((1 : ℤ) : ℝ)))) lebesgueValue) := by
+  choose g hg using hf
+  rw [funext hg]
+  qsym_rule
 
-private theorem openUnitMask (x : ℝ) :
-    Value.mask (openUnitPredicate (some x)) (some ((1 : ℤ) : ℝ)) = some (openUnitWeight x) := by
-  rw [openUnitPredicate_some]
-  by_cases h : x ∈ Set.Ioo (0 : ℝ) 1 <;> simp [Value.mask, openUnitWeight, h]
+/-- A pointwise domain proof supplies the weight and output of every row.
+The graph still uses the original functions at every parameter. -/
+private theorem total_masked_chart (p : ℝ → Option Bool) (f : ℝ → Option ℝ)
+    (hp : ∀ x, Value.Defined (p x)) (hf : ∀ x, Value.Defined (f x)) :
+    ∃ (w g : ℝ → ℝ),
+      (∀ x, Value.mask (p x) (some ((1 : ℤ) : ℝ)) = some (w x)) ∧
+      (∀ x, f x = some (g x)) ∧
+      realPushforwardOnValue (some p) (some f) =
+        some (inLebesgueCoordinates (.density (fun x => some (w x)) (fun x => some (g x)))) := by
+  choose b hb using hp
+  choose g hg using hf
+  let w (x : ℝ) : ℝ := if b x then 1 else 0
+  have hw (x : ℝ) : Value.mask (p x) (some ((1 : ℤ) : ℝ)) = some (w x) := by
+    rw [hb x]
+    cases h : b x <;> simp [Value.mask, w, h]
+  refine ⟨w, g, hw, hg, ?_⟩
+  change some (inLebesgueCoordinates (.density (fun x => Value.mask (p x) (some 1)) f)) = _
+  simp only [Int.cast_one] at hw
+  rw [funext hw, funext hg]
 
-private theorem openUnit_graph (f : ℝ → ℝ) :
-    realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) =
-      some (inLebesgueCoordinates (.density (fun x => some (openUnitWeight x)) (fun x => some (f x)))) := by
-  change some (inLebesgueCoordinates (.density _ _)) = _
-  have h (x : ℝ) := openUnitMask x
-  simp only [Int.cast_one] at h
-  simp only [h]
+theorem bind_total_graph (p : ℝ → Option Bool) (f : ℝ → Option ℝ)
+    (hp : ∀ x, Value.Defined (p x)) (hf : ∀ x, Value.Defined (f x)) :
+    realBindValue lebesgueValue (some fun x =>
+      scaleValue (Value.mask (p x) (some ((1 : ℤ) : ℝ))) (diracValue (f x))) =
+      realPushforwardOnValue (some p) (some f) := by
+  obtain ⟨w, g, hw, hg, h⟩ := total_masked_chart p f hp hf
+  rw [h]
+  simp only [hw, hg]
+  qsym_rule
+
+theorem integral_total_graph (p : ℝ → Option Bool) (f : ℝ → Option ℝ)
+    (hp : ∀ x, Value.Defined (p x)) (hf : ∀ x, Value.Defined (f x)) :
+    realIntegralValue (some fun x =>
+      scaleValue (Value.mask (p x) (some ((1 : ℤ) : ℝ))) (diracValue (f x))) =
+      realPushforwardOnValue (some p) (some f) := by
+  obtain ⟨w, g, hw, hg, h⟩ := total_masked_chart p f hp hf
+  rw [h]
+  simp only [hw, hg]
+  qsym_rule
+
+theorem weighted_bind_total_graph (p : ℝ → Option Bool) (f : ℝ → Option ℝ)
+    (hp : ∀ x, Value.Defined (p x)) (hf : ∀ x, Value.Defined (f x)) :
+    realBindValue (weightValue (some fun x => Value.mask (p x) (some ((1 : ℤ) : ℝ))) lebesgueValue)
+      (some fun x => diracValue (f x)) = realPushforwardOnValue (some p) (some f) := by
+  obtain ⟨w, g, hw, hg, h⟩ := total_masked_chart p f hp hf
+  rw [h]
+  simp only [hw, hg]
+  qsym_rule
+
+private theorem openUnit_total (x : ℝ) : Value.Defined (openUnitPredicate (some x)) :=
+  ⟨_, openUnitPredicate_some x⟩
 
 theorem bind_openUnit_graph (f : ℝ → ℝ) :
     realBindValue lebesgueValue (some fun x =>
       scaleValue (Value.mask (openUnitPredicate (some x)) (some ((1 : ℤ) : ℝ))) (diracValue (some (f x)))) =
-      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) := by
-  simp only [openUnitMask, openUnit_graph]
-  qsym_rule
+      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) :=
+  bind_total_graph _ _ openUnit_total (fun x => ⟨f x, rfl⟩)
 
 theorem integral_openUnit_graph (f : ℝ → ℝ) :
     realIntegralValue (some fun x =>
       scaleValue (Value.mask (openUnitPredicate (some x)) (some ((1 : ℤ) : ℝ))) (diracValue (some (f x)))) =
-      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) := by
-  simp only [openUnitMask, openUnit_graph]
-  qsym_rule
+      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) :=
+  integral_total_graph _ _ openUnit_total (fun x => ⟨f x, rfl⟩)
 
 theorem weighted_bind_openUnit_graph (f : ℝ → ℝ) :
     realBindValue (weightValue (some fun x => Value.mask (openUnitPredicate (some x)) (some ((1 : ℤ) : ℝ)))
       lebesgueValue) (some fun x => diracValue (some (f x))) =
-      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) := by
-  simp only [openUnitMask, openUnit_graph]
-  qsym_rule
+      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) :=
+  weighted_bind_total_graph _ _ openUnit_total (fun x => ⟨f x, rfl⟩)
 
 def openUnitDensity (y : Option ℝ) : Option ℝ :=
   Value.mask (openUnitPredicate y)

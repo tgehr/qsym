@@ -90,6 +90,18 @@ private Case[] cases(){ return [
 	Case("ExplicitIdentityRows","densityAtD(integralD(λ(x:ℝ).scaleD([0<x<1],δ(x))),1/2)","ℝ","1"),
 	Case("ExplicitCubicRows","integralD(λ(x:ℝ).scaleD([0<x<1],δ(x³)))","Distribution(ℝ)"),
 	Case("PartialDiracRows","bindD(lebesgueD(),λ(x:ℝ).scaleD([0<x<1],δ(x⁻¹)))","Distribution(ℝ)"),
+	Case("TotalRowsPuncture","densityAtD(bindD(lebesgueD(),λ(x:ℝ).scaleD([x≠2],δ(x))),2)","ℝ","0"),
+	Case("TotalRowsAffine","integralD(λ(x:ℝ).scaleD([-2≤x<3],δ(2*x+1)))","Distribution(ℝ)"),
+	Case("TotalRowsMaskedInverse","bindD(weightD(λ(x:ℝ).[x≠2],lebesgueD()),λ(x:ℝ).δ([x≠0]·x⁻¹))","Distribution(ℝ)"),
+	Case("TotalRowsPositiveDenominator","integralD(λ(x:ℝ).scaleD([x≠0],δ((1+x²)⁻¹)))","Distribution(ℝ)"),
+	Case("TotalRowsFreeParameter","integralD(λ(x:ℝ).scaleD([x≠z],δ(x+z)))","Distribution(ℝ)"),
+	Case("PartialRowPredicate","bindD(lebesgueD(),λ(x:ℝ).scaleD([0<x⁻¹],δ(x)))","Distribution(ℝ)"),
+	Case("TotalRowsGuardedPredicate","densityAtD(integralD(λ(x:ℝ).scaleD([x=0∨0<x⁻¹],δ(x))),0)","ℝ","1"),
+	Case("PartialRowGuardTooLate","integralD(λ(x:ℝ).scaleD([0<x⁻¹∧x≠0],δ(x)))","Distribution(ℝ)"),
+	Case("PartialRowOffSupport","integralD(λ(x:ℝ).scaleD([x≠0],δ(x⁻¹)))","Distribution(ℝ)"),
+	Case("AffineRowMass","massD(integralD(λ(x:ℝ).scaleD([-2≤x<3],δ(2*x+1))))","ℝ","5"),
+	Case("NativeTotalMapMass","massD(Λy. ∫dx λ[x]·δ((1+x²)⁻¹)[y]·[0<x<1])","ℝ","1"),
+	Case("NativePartialMapMass","massD(Λy. ∫dx λ[x]·δ(x⁻¹)[y]·[0<x<1])","ℝ"),
 	Case("CubicMarginal","∫du λ[u]·δ(u^3)[v]//λ[v]","ℝ"),
 	Case("IndirectCubicMarginal","(λ(d:Distribution(ℝ)).massD(d))((λ[x]·δ(x^3)[y])//λ[y])","ℝ"),
 	Case("CapturedGraphQuery","λ(y:ℝ).graphFibreD(λ(x:ℝ).x+y,y)","ℝ→Distribution(ℝ)"),
@@ -206,8 +218,17 @@ private void run(string directory){
 			enforce(certificate.indexOf("GraphFibre.integral_openUnit_graph")>=0,c.name);
 		if(c.name=="ExplicitCubicRows") enforce(certificate.indexOf("GraphFibre.integral_openUnit_graph")>=0&&
 			certificate.indexOf("GraphFibre.square_openUnit_chart")<0,c.name);
-		if(c.name=="PartialDiracRows") enforce(certificate.indexOf("GraphFibre.realBindValue")>=0&&
-			certificate.indexOf("GraphFibre.bind_openUnit_graph")<0,c.name);
+		if(c.name.indexOf("TotalRows")==0){
+			auto kind=c.name=="TotalRowsPuncture"?"bind":c.name=="TotalRowsMaskedInverse"?"weighted_bind":"integral";
+			enforce(certificate.indexOf("GraphFibre."~kind~"_total_graph")>=0&&
+				certificate.indexOf("DomainCertificate.domain_correct")>=0,c.name);
+		}
+		if(c.name=="PartialDiracRows"||c.name=="PartialRowOffSupport"||c.name=="PartialRowPredicate"||c.name=="PartialRowGuardTooLate")
+			enforce(certificate.indexOf(c.name=="PartialDiracRows"||c.name=="PartialRowPredicate"?"GraphFibre.realBindValue":"GraphFibre.realIntegralValue")>=0&&
+				certificate.indexOf("_total_graph")<0&&certificate.indexOf("_openUnit_graph")<0,c.name);
+		if(c.name=="AffineRowMass"||c.name=="NativeTotalMapMass")
+			enforce(certificate.indexOf("GraphFibre.mass_total_graph")>=0,c.name);
+		if(c.name=="NativePartialMapMass") enforce(certificate.indexOf("GraphFibre.mass_total_graph")<0,c.name);
 		if(c.name=="CapturedGraphQuery") enforce(text.indexOf("graphFibreD")>=0,c.name~" would capture the query");
 		if(c.name=="SquareGraphMass"||c.name=="SquareGraphIntegral"||c.name=="CubicMarginal")
 			enforce(certificate.indexOf("Distribution.GraphFibre.marginal")>=0&&certificate.indexOf("Distribution.GraphFibre.value")<0,c.name);
