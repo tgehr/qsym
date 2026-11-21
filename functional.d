@@ -588,8 +588,9 @@ struct FunctionSyntax{
 					case BoundOp.distributionWeight:{
 						auto f=b.node(b.at(q.a));
 						if(f.op!=BoundOp.lambda) return "(weightD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
-						auto weight=f.op==BoundOp.lambda?render(b.at(f.a),[axis]~names,depth+level+1):"("~value(q.a)~")("~axis~")";
-						return (weight.length&&weight[0]=='['&&weight[$-1]==']'?weight:"("~weight~")")~"·"~nested(q.b);
+						auto weight=render(b.at(f.a),[axis]~names,depth+level+1,scalarType(Sort.real_));
+						bool atomic=numericLiteral(weight)||weight.length&&weight[0]=='['&&weight[$-1]==']';
+						return (atomic?weight:"("~weight~")")~"·"~nested(q.b);
 					}
 					case BoundOp.distributionPushforwardOn:{
 						auto pred=b.node(b.at(q.a)),map=b.node(b.at(q.b));

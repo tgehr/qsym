@@ -100,6 +100,17 @@ private Case[] cases(){ return [
 	Case("PartialRowGuardTooLate","integralD(λ(x:ℝ).scaleD([0<x⁻¹∧x≠0],δ(x)))","Distribution(ℝ)"),
 	Case("PartialRowOffSupport","integralD(λ(x:ℝ).scaleD([x≠0],δ(x⁻¹)))","Distribution(ℝ)"),
 	Case("AffineRowMass","massD(integralD(λ(x:ℝ).scaleD([-2≤x<3],δ(2*x+1))))","ℝ","5"),
+	Case("AffineChartUnrestricted","Λy. ∫dx λ[x]·δ(2*x+1)[y]","Distribution(ℝ)","Λ(y:ℝ). 1/2·λ[y]"),
+	Case("AffineChartBareIntegral","densityAtD(integralD(λ(x:ℝ).δ(1-2*x)),3)","ℝ","1/2"),
+	Case("AffineChartIncreasing","Λy. ∫dx λ[x]·δ(2*x+1)[y]·[0<x<1]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<3]·(1/2))·λ[y]"),
+	Case("AffineChartDecreasing","Λy. ∫dx λ[x]·δ(1-2*x)[y]·[0≤x<1]","Distribution(ℝ)","Λ(y:ℝ). ([y≤1∧-1<y]·(1/2))·λ[y]"),
+	Case("AffineChartIncluded","densityAtD(Λy. ∫dx λ[x]·δ(1-2*x)[y]·[0≤x<1],1)","ℝ","1/2"),
+	Case("AffineChartExcluded","densityAtD(Λy. ∫dx λ[x]·δ(1-2*x)[y]·[0≤x<1],-1)","ℝ","0"),
+	Case("AffineChartHole","densityAtD(Λy. ∫dx λ[x]·δ(2*x+1)[y]·[x≠0],1)","ℝ","0"),
+	Case("AffineChartRational","densityAtD(Λy. ∫dx λ[x]·δ((3/2)*x-1)[y]·[0≤x<1],-1)","ℝ","2/3"),
+	Case("AffineChartParameter","Λy. ∫dx λ[x]·δ(1-2*x)[y]·[x≠z]","Distribution(ℝ)"),
+	Case("ConstantGraph","Λy. ∫dx λ[x]·δ((3:ℝ))[y]·[0<x<1]","Distribution(ℝ)"),
+	Case("PartialAffinePredicate","Λy. ∫dx λ[x]·δ(1-2*x)[y]·[0<x⁻¹]","Distribution(ℝ)"),
 	Case("NativeTotalMapMass","massD(Λy. ∫dx λ[x]·δ((1+x²)⁻¹)[y]·[0<x<1])","ℝ","1"),
 	Case("NativePartialMapMass","massD(Λy. ∫dx λ[x]·δ(x⁻¹)[y]·[0<x<1])","ℝ"),
 	Case("CubicMarginal","∫du λ[u]·δ(u^3)[v]//λ[v]","ℝ"),
@@ -226,6 +237,14 @@ private void run(string directory){
 		if(c.name=="PartialDiracRows"||c.name=="PartialRowOffSupport"||c.name=="PartialRowPredicate"||c.name=="PartialRowGuardTooLate")
 			enforce(certificate.indexOf(c.name=="PartialDiracRows"||c.name=="PartialRowPredicate"?"GraphFibre.realBindValue":"GraphFibre.realIntegralValue")>=0&&
 				certificate.indexOf("_total_graph")<0&&certificate.indexOf("_openUnit_graph")<0,c.name);
+		if(c.name=="AffineChartUnrestricted"||c.name=="AffineChartBareIntegral"){
+			auto kind=c.name=="AffineChartUnrestricted"?"bind":"integral";
+			enforce(certificate.indexOf("GraphFibre."~kind~"_dirac_graph")>=0,c.name);
+		}
+		if(c.name.indexOf("AffineChart")==0||c.name=="TotalRowsAffine")
+			enforce(certificate.indexOf("GraphFibre.affine_chart_rule")>=0,c.name);
+		if(c.name=="ConstantGraph"||c.name=="PartialAffinePredicate")
+			enforce(text.indexOf("∫")>=0&&certificate.indexOf("GraphFibre.affine_chart_rule")<0,c.name);
 		if(c.name=="AffineRowMass"||c.name=="NativeTotalMapMass")
 			enforce(certificate.indexOf("GraphFibre.mass_total_graph")>=0,c.name);
 		if(c.name=="NativePartialMapMass") enforce(certificate.indexOf("GraphFibre.mass_total_graph")<0,c.name);

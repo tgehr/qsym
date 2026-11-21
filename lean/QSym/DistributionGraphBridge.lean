@@ -59,6 +59,36 @@ theorem square_mul_mass_rule (y : Option ℝ) :
     marginal (some (fun x => Value.mul (some x) (some x))) y = squareMass y := by
   simpa [Value.mul, pow_two] using square_mass_rule y
 
+/-- The forward and inverse maps carry independently checked rational affine
+certificates. Evaluating the original predicate at the inverse keeps strict
+endpoints and punctures, for either orientation of the map. -/
+theorem affine_chart_rule (p : ℝ → Option Bool) (hp : ∀ x, Value.Defined (p x))
+    (a b j : ℚ) {f i : ℝ → Option ℝ} {v : Option ℝ}
+    (ha : a ≠ 0) (hj : j = |a⁻¹|) (hf : StepSource.Affine f a b)
+    (hi : StepSource.Affine i a⁻¹ (-b/a)) (hv : v = some (j : ℝ)) :
+    realPushforwardOnValue (some p) (some f) =
+      weightValue (some (fun y => Value.mask ((i y).bind p) v)) lebesgueValue := by
+  classical
+  choose pred he using hp
+  let s := {x | pred x = true}
+  have eqp (x : ℝ) : p x = some (decide (x ∈ s)) := by
+    rw [he x]
+    by_cases h : pred x = true <;> simp_all [s]
+  have hn : (a : ℝ) ≠ 0 := by exact_mod_cast ha
+  have chart : realPushforwardOnValue (some (fun x => some (decide (x ∈ s))))
+      (some (fun x => some ((a : ℝ)*x+b))) =
+      densityValue (some (fun y => some (sourceWeight s ((y-b)/a) * |(a : ℝ)|⁻¹))) := by qsym_rule
+  rw [funext hf.equation, funext eqp, chart, hv]
+  simp only [densityValue, weightValue, lebesgueValue, Option.some_bind, weight, Value.mul_one_left]
+  apply congrArg (fun w => some (Presentation.density w some))
+  funext y
+  simp only [Option.some_bind, Value.mul_one_left]
+  rw [hi.equation, hj]
+  simp only [Rat.cast_inv, Rat.cast_div, Rat.cast_neg, Rat.cast_abs, Option.some_bind, abs_inv]
+  have inverse : (a : ℝ)⁻¹*y + -(b : ℝ)/a = (y-b)/a := by ring
+  rw [inverse]
+  by_cases h : (y-(b:ℝ))/a ∈ s <;> simp [sourceWeight, h, Value.mask]
+
 /-- The frontend's strict predicate and its masked Jacobian. -/
 def openUnitPredicate (y : Option ℝ) : Option Bool :=
   Value.and (Value.lt (some ((0 : ℤ) : ℝ)) y) (Value.lt y (some ((1 : ℤ) : ℝ)))
@@ -94,6 +124,28 @@ private theorem total_masked_chart (p : ℝ → Option Bool) (f : ℝ → Option
   change some (inLebesgueCoordinates (.density (fun x => Value.mask (p x) (some 1)) f)) = _
   simp only [Int.cast_one] at hw
   rw [funext hw, funext hg]
+
+/-- An unweighted Dirac row has coefficient one. Its totality certificate
+lets the native integral use the same graph as the explicitly masked form. -/
+theorem integral_dirac_graph (f : ℝ → Option ℝ) (hf : ∀ x, Value.Defined (f x)) :
+    realIntegralValue (some fun x => diracValue (f x)) =
+      realPushforwardOnValue (some fun _ => some true) (some f) := by
+  choose g hg using hf
+  rw [funext hg]
+  apply congrArg some
+  apply realIntegralRows_of_atoms
+  intro x
+  rfl
+
+theorem bind_dirac_graph (f : ℝ → Option ℝ) (hf : ∀ x, Value.Defined (f x)) :
+    realBindValue lebesgueValue (some fun x => diracValue (f x)) =
+      realPushforwardOnValue (some fun _ => some true) (some f) := by
+  choose g hg using hf
+  rw [funext hg]
+  apply congrArg some
+  apply realIntegralRows_of_atoms
+  intro x
+  simp [diracValue, scaleValue, atomRow, Value.mask]
 
 theorem bind_total_graph (p : ℝ → Option Bool) (f : ℝ → Option ℝ)
     (hp : ∀ x, Value.Defined (p x)) (hf : ∀ x, Value.Defined (f x)) :

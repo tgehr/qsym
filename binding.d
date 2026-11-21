@@ -41,12 +41,13 @@ private enum BindingRule:ubyte{
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
-	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass
+	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct IntegralCell{ Rational lower,upper,sample; }
 private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed; Rational value; Rational[] values; uint output=uint.max; }
+private struct AffineChart{ uint map,inverse,jacobian,predicateDomain; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
@@ -73,6 +74,7 @@ struct BindingResult{
 	private SummationSolution[] sums;
 	private IntegralSolution[] integrals;
 	private FibreStep[][] fibres;
+	private AffineChart[] affineCharts;
 }
 
 final class Bindings{
@@ -1863,7 +1865,7 @@ final class Bindings{
 	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
 		if(telescope_) return normalizeDependent(term,budget);
-		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals; FibreStep[][] fibres;
+		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals; FibreStep[][] fibres; AffineChart[] affineCharts;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
@@ -2626,6 +2628,23 @@ final class Bindings{
 			mapDomains.set(body,id);
 			return id;
 		}
+		// Match the same affine grammar as the certificate builder. A product
+		// needs a syntactically constant side so its numeric proof is closed.
+		bool affineMap(uint id,out Rational a,out Rational b){
+			if(nodes[id].op!=BoundOp.lambda||type(at(id))!=pool.function_(scalarType(Sort.real_),scalarType(Sort.real_))) return false;
+			auto body=at(nodes[id].a);
+			bool shape(uint i){
+				auto n=nodes[i];
+				if(!depends(at(i),0)) return true;
+				if(n.op==BoundOp.variable) return n.data==0;
+				if(n.op!=BoundOp.primitive) return false;
+				auto op=arena.view(arena.at(n.data)).op;
+				return (op==Op.add||op==Op.mul&&(!depends(at(n.a),0)||!depends(at(n.b),0)))&&shape(n.a)&&shape(n.b);
+			}
+			if(!shape(body.id)) return false;
+			auto arg=arena.variable(Sort.real_,freshScalarIndex(body.id)),raw=scalarBody(body,arg);
+			return raw!=Term.init&&integralAffine(arena,raw,arg,a,b)&&!a.zero;
+		}
 		BoundTerm atomRowsGraph(BoundTerm t,out uint domainPair,bool directSquare=false){
 			domainPair=uint.max;
 			auto n=node(t);
@@ -2636,6 +2655,13 @@ final class Bindings{
 			if(fn.op!=BoundOp.lambda) return BoundTerm.init;
 			auto row=nodes[fn.a]; uint weight,point;
 			if(integral||nodes[n.a].op==BoundOp.distributionLebesgue){
+				if(row.op==BoundOp.distributionDirac){
+					if(directSquare) return BoundTerm.init;
+					domainPair=totalMapDomain(row.a);
+					if(domainPair==uint.max) return BoundTerm.init;
+					auto pred=lambda(scalar(context(at(row.a)),arena.boolean(true)));
+					return distribution(context(t),BoundOp.distributionPushforwardOn,[pred,lambda(at(row.a))]);
+				}
 				if(row.op!=BoundOp.distributionScale||nodes[row.b].op!=BoundOp.distributionDirac) return BoundTerm.init;
 				weight=row.a; point=nodes[row.b].a;
 			}else{
@@ -2779,10 +2805,13 @@ final class Bindings{
 				bool product;
 				if(n.op==BoundOp.distributionMass||n.op==BoundOp.distributionDensityAt){
 					auto graph=nodes[n.a];
-					if(graph.op==BoundOp.distributionPushforwardOn&&openUnitPredicate(graph.a)&&squareMap(graph.b,product))
+					Rational a,b;
+					if(graph.op==BoundOp.distributionPushforwardOn&&
+						(openUnitPredicate(graph.a)&&squareMap(graph.b,product)||
+						 n.op==BoundOp.distributionMass&&nodes[graph.b].op==BoundOp.lambda&&nodes[nodes[graph.b].a].op!=BoundOp.variable&&affineMap(graph.b,a,b)))
 						x=Result(n.a,emit(BindingRule.refl,n.a,n.a));
 					else if(steps<budget&&(graph.op==BoundOp.distributionBind||graph.op==BoundOp.distributionIntegral)){
-						uint pair; auto chart=atomRowsGraph(at(n.a),pair,true);
+						uint pair; auto chart=atomRowsGraph(at(n.a),pair,n.op!=BoundOp.distributionMass);
 						if(chart!=BoundTerm.init){
 							++steps;
 							x=Result(chart.id,emit(BindingRule.distributionAtomRows,n.a,chart.id,uint.max,uint.max,pair));
@@ -2889,6 +2918,24 @@ final class Bindings{
 					auto weight=lambda(primitive(arena.mask(arena.boolean(false),arena.real_(0)),[pred,one]));
 					next=distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)]);
 					rule=BindingRule.distributionIdentityChart;
+				}else{
+					Rational slope,offset; ScalarDomain predDomain;
+					if(affineMap(current.b,slope,offset)&&totalRowDomain(nodes[current.a].a,predDomain)){
+						auto inner=context(at(nodes[current.b].a)),y=variable(inner,0);
+						auto reciprocal=Rational(1)/slope;
+						auto literal=(Rational r)=>scalar(inner,arena.real_(r));
+						auto inv=primitive(arena.add(arena.real_(0),arena.real_(0),true),[
+							primitive(arena.mul(arena.real_(0),arena.real_(0),true),[literal(reciprocal),y]),literal(-offset*reciprocal)]);
+						auto jac=literal(reciprocal<Rational(0)?-reciprocal:reciprocal);
+						uint[] shift;
+						foreach(i;0..contexts[ctx.index].length) shift~=i+1;
+						auto guard=apply(rename(at(current.a),inner,shift),inv);
+						auto weight=hint(lambda(primitive(arena.mask(arena.boolean(true),arena.real_(1)),[guard,jac])),"y");
+						next=distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)]);
+						extra=cast(uint)affineCharts.length;
+						affineCharts~=AffineChart(nodes[current.b].a,inv.id,jac.id,cast(uint)scalarDomains.length);
+						scalarDomains~=predDomain; rule=BindingRule.distributionAffineChart;
+					}
 				}
 			}
 			if(current.op==BoundOp.distributionPushforwardOn&&openUnitPredicate(current.a)&&squareMap(current.b,squareProduct)){
@@ -3641,7 +3688,7 @@ final class Bindings{
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
 		normalizeClosed=&visit;
-		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres);
+		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres,affineCharts);
 	}
 
 	Term lower(BoundTerm term){
@@ -3892,12 +3939,16 @@ final class Bindings{
 		return code~"#qsym_check_axioms sound\n#qsym_check_axioms domain\nend QSym.DependentCertificate\n";
 	}
 	// The native compiler assembles lemma applications; exported terms run no tactics.
-	private string stepGridProof(IntegralSolution s,string prefix,ref Term[] numericTerms,ref string declarations,ref string outputProof){
+	private final class SourceCertificates{
+		@safe:
+		string prefix,declarations;
+		Term[] numericTerms;
+		uint parent;
+		this(string prefix,uint body){this.prefix=prefix;parent=contexts[nodes[body].context].parent;}
 		string q(Rational v){return v.denominator==1?"("~to!string(v.numerator)~" : ℚ)":"(("~to!string(v.numerator)~") / ("~to!string(v.denominator)~") : ℚ)";}
 		string app(string lemma,string args){return "(Distribution.StepSource."~lemma~" "~args~")";}
 		string atPoint(uint id,Rational point){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some ("~q(point)~" : ℝ)) ρ))";}
 		uint serial;Table!(string,string) proofCache;
-		auto parent=contexts[nodes[s.from[0]].context].parent;
 		string functionAt(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
 		string save(string claim,string proof){
 			auto old=proofCache.get(claim,"");if(old.length)return old;
@@ -3932,6 +3983,11 @@ final class Bindings{
 			auto hc=numericProof(left?n.a:n.b,Rational(0),q(c.offset));
 			r.proof=app("affine_mul_constant_"~(left?"left":"right"),"(a := "~q(f.slope)~") (b := "~q(f.offset)~") "~q(c.offset)~" "~(left?hc~" "~f.proof:f.proof~" "~hc));return seal(r,id);
 		}
+	}
+	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof){
+		auto q=&cert.q,app=&cert.app,atPoint=&cert.atPoint,functionAt=&cert.functionAt;
+		auto save=&cert.save,numericProof=&cert.numericProof,affineProof=&cert.affineProof;
+		alias Linear=SourceCertificates.Linear;
 		string delegate(uint,string,Rational) @safe uniform;
 		string uniformRaw(uint id,string region,Rational sample){
 			auto n=nodes[id];
@@ -3967,7 +4023,7 @@ final class Bindings{
 				if(term!=Term.init){
 					auto v=simplify(arena,term);
 					if(!v.exhausted&&arena.isNumber(v.output)&&arena.number(v.output).zero){
-						auto sort=arena.sort(term);numericTerms~=term;
+						auto sort=arena.sort(term);cert.numericTerms~=term;
 						return app("zero_numeric"~(sort==Sort.natural?"N":sort==Sort.integer?"Z":sort==Sort.rational?"Q":"R"),"ξ n"~to!string(term.id)~" rfl");
 					}
 				}
@@ -4190,11 +4246,25 @@ final class Bindings{
 		code~="namespace QSym.BindingCertificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
 		foreach(s;result.solutions) if(s.cfinite){ code~="attribute [local semireducible] Nat.div Nat.modCore\n"; break; }
 		Term[] stepNumerics;string stepDeclarations;string[] stepProofs=new string[result.integrals.length],stepOutputs=new string[result.integrals.length];
-		foreach(i,s;result.integrals) if(s.piecewise||s.ae) stepProofs[i]=stepGridProof(s,"step"~to!string(i)~"_",stepNumerics,stepDeclarations,stepOutputs[i]);
+		foreach(i,s;result.integrals) if(s.piecewise||s.ae){
+			auto c=new SourceCertificates("step"~to!string(i)~"_",s.from[0]);
+			stepProofs[i]=stepGridProof(s,c,stepOutputs[i]);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
+		}
+		string[] chartProofs;
+		foreach(i,chart;result.affineCharts){
+			auto c=new SourceCertificates("affine"~to!string(i)~"_",chart.map);
+			auto f=c.affineProof(chart.map),inv=c.affineProof(chart.inverse);
+			auto jac=inv.slope<Rational(0)?-inv.slope:inv.slope;
+			auto hj=c.numericProof(chart.jacobian,Rational(0),c.q(jac));
+			chartProofs~=c.q(f.slope)~" "~c.q(f.offset)~" "~c.q(jac)~" (of_decide_eq_true rfl) rfl "~
+				f.proof~" "~inv.proof~" "~hj;
+			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
+		}
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
 		foreach(witness;result.fibres) foreach(f;witness){ stack~=[f.source,f.charge,f.regular]; stack~=f.weights; }
+		foreach(c;result.affineCharts) stack~=[c.map,c.inverse,c.jacobian];
 		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; }
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd) stack~=p.extra;
@@ -5407,6 +5477,11 @@ final class Bindings{
 					auto graph=nodes[p.to],map=nodes[nodes[graph.b].a];
 					auto kind=n.op==BoundOp.distributionIntegral?"integral":
 						nodes[n.a].op==BoundOp.distributionWeight?"weighted_bind":"bind";
+					auto row=nodes[nodes[n.op==BoundOp.distributionIntegral?n.a:n.b].a];
+					if(row.op==BoundOp.distributionDirac&&kind!="weighted_bind"){
+						proof=".ofEq (fun ξ ρ => Distribution.GraphFibre."~kind~"_dirac_graph "~
+							realBody(graph.b)~" "~rowTotalProof(p.extra)~")"; break;
+					}
 					if(p.extra!=uint.max){
 						proof=".ofEq (fun ξ ρ => Distribution.GraphFibre."~kind~"_total_graph "~
 							realBody(graph.a)~" "~realBody(graph.b)~" "~rowTotalProof(p.extra)~" "~rowTotalProof(p.extra+1)~")"; break;
@@ -5422,6 +5497,13 @@ final class Bindings{
 					auto mask=nodes[nodes[n.a].a],pred=nodes[mask.a];
 					string fn(uint id){ return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.weight_mask_absorb "~fn(pred.a)~" "~fn(pred.b)~" "~fn(mask.b)~")"; break;
+				}
+				case BindingRule.distributionAffineChart:{
+					auto chart=result.affineCharts[p.extra];
+					// Infer the chart witnesses before conversion against the full
+					// binding evaluations. This avoids expensive backward unification.
+					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affine_chart_rule "~realBody(n.a)~" "~
+						rowTotalProof(chart.predicateDomain)~" "~chartProofs[p.extra]~"; h)"; break;
 				}
 				case BindingRule.distributionIdentityChart:
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.realPushforward_identity "~
