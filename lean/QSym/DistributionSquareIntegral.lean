@@ -1,4 +1,4 @@
-import QSym.DistributionGraphModel
+import QSym.DistributionRestrictedGraph
 import Mathlib.Analysis.SpecialFunctions.Sqrt
 import Mathlib.MeasureTheory.Function.Jacobian
 import Mathlib.MeasureTheory.Measure.Lebesgue.Integral
@@ -29,6 +29,36 @@ private theorem sqrt_substitution (g : ℝ → ℝ) (hg : IntegrableOn g (Ioi 0)
   rw [image] at ha he
   have hj (y : ℝ) : |jac y| = jac y := abs_of_nonneg (by unfold jac; positivity)
   simpa only [hj, smul_eq_mul] using And.intro (ha.mp hg) he
+
+/-- Change of variables for a measurable part of the positive square branch.
+The test only needs to be integrable along the graph over the selected source. -/
+theorem square_positiveSource_integral {s : Set ℝ} (hs : MeasurableSet s) (hp : s ⊆ Ioi 0)
+    (k : ℝ → ℝ) (hk : IntegrableOn (fun x => k (square x)) s) :
+    (∫ x in s, k (square x)) = ∫ y, (marginalOn s square y).getD 0 * k y := by
+  classical
+  let g := s.indicator (fun x => k (square x))
+  have hg : Integrable g := hk.integrable_indicator hs
+  obtain ⟨_, sub⟩ := sqrt_substitution g hg.integrableOn
+  calc
+    _ = ∫ x in Ioi 0, g x := by
+      simp only [g, setIntegral_indicator hs, inter_eq_right.mpr hp]
+    _ = ∫ y in Ioi 0, jac y * g (√y) := sub
+    _ = _ := by
+      rw [← integral_indicator measurableSet_Ioi]
+      apply integral_congr_ae
+      filter_upwards with y
+      rw [square_marginalOn_positiveSource hp]
+      by_cases hy : 0 < y
+      · by_cases hm : √y ∈ s <;>
+          simp [g, Set.indicator, mem_Ioi, hy, hm, square, Real.sq_sqrt hy.le]
+      · have hm : √y ∉ s := fun h => hy (Real.sqrt_pos.mp (hp h))
+        simp [Set.indicator, mem_Ioi, hy, hm]
+
+theorem square_positiveSource_test {s : Set ℝ} (hs : MeasurableSet s) (hp : s ⊆ Ioi 0)
+    (k : ℝ → ℝ) (hk : IntegrableOn (fun x => k (square x)) s) :
+    pushforwardTest s square (fun y => some (k y)) =
+      some (∫ y, (marginalOn s square y).getD 0 * k y) := by
+  rw [pushforwardTest_total hs square k hk, square_positiveSource_integral hs hp k hk]
 
 /-- Reconstruction of the original joint graph for every integrable real test
 on it. The target integral uses only regular values. -/

@@ -8,24 +8,63 @@ noncomputable section
 namespace QSym.Distribution.GraphFibre
 open Set
 
+/-- The root predicate specifies the active preimage. Regularity is required
+only at the roots it contains. -/
+structure RegularRootList (f : ℝ → ℝ) (root : ℝ → Prop) (xs : List ℝ) : Prop where
+  sorted : xs.Sorted (· < ·)
+  complete : ∀ x, x ∈ xs ↔ root x
+  regular : ∀ x ∈ xs, HasStrictDerivAt f (deriv f x) x ∧ deriv f x ≠ 0
+
+theorem RegularRootList.unique {f root xs zs} (a : RegularRootList f root xs)
+    (b : RegularRootList f root zs) : xs = zs :=
+  a.sorted.eq_of_mem_iff b.sorted (fun x => (a.complete x).trans (b.complete x).symm)
+
 structure RegularRoots (f : ℝ → ℝ) (y : ℝ) (xs : List ℝ) : Prop where
   sorted : xs.Sorted (· < ·)
   complete : ∀ x, x ∈ xs ↔ f x = y
   regular : ∀ x ∈ xs, HasStrictDerivAt f (deriv f x) x ∧ deriv f x ≠ 0
 
-theorem RegularRoots.unique {f y xs zs} (a : RegularRoots f y xs) (b : RegularRoots f y zs) :
-    xs = zs := a.sorted.eq_of_mem_iff b.sorted (fun x => (a.complete x).trans (b.complete x).symm)
+private theorem RegularRoots.toList {f y xs} (h : RegularRoots f y xs) :
+    RegularRootList f (fun x => f x = y) xs := ⟨h.sorted, h.complete, h.regular⟩
 
-def fibre (f : ℝ → ℝ) (y : ℝ) : Option (List (ℝ × ℝ)) := by
+theorem RegularRoots.unique {f y xs zs} (a : RegularRoots f y xs) (b : RegularRoots f y zs) :
+    xs = zs := a.toList.unique b.toList
+
+private def weightedRoots (f : ℝ → ℝ) (root : ℝ → Prop) : Option (List (ℝ × ℝ)) := by
   classical
-  exact if h : ∃ xs, RegularRoots f y xs then
+  exact if h : ∃ xs, RegularRootList f root xs then
     some (h.choose.map (fun x => (x, |deriv f x|⁻¹))) else none
 
-theorem fibre_of_regular {f y xs} (h : RegularRoots f y xs) :
-    fibre f y = some (xs.map (fun x => (x, |deriv f x|⁻¹))) := by
+private theorem weightedRoots_of_regular {f root xs} (h : RegularRootList f root xs) :
+    weightedRoots f root = some (xs.map (fun x => (x, |deriv f x|⁻¹))) := by
   classical
-  have he : ∃ zs, RegularRoots f y zs := ⟨xs, h⟩
-  simp [fibre, he, he.choose_spec.unique h]
+  have he : ∃ zs, RegularRootList f root zs := ⟨xs, h⟩
+  simp [weightedRoots, he, he.choose_spec.unique h]
+
+def fibre (f : ℝ → ℝ) (y : ℝ) := weightedRoots f (fun x => f x = y)
+
+/-- Select the source before computing inverse-Jacobian weights. In particular,
+a critical point outside the source cannot invalidate an empty fibre. -/
+def fibreOn (s : Set ℝ) (f : ℝ → ℝ) (y : ℝ) :=
+  weightedRoots f (fun x => x ∈ s ∧ f x = y)
+
+@[simp] theorem fibreOn_univ (f : ℝ → ℝ) (y : ℝ) : fibreOn univ f y = fibre f y := by
+  simp [fibreOn, fibre]
+
+theorem fibreOn_of_regular {s f y xs} (h : RegularRootList f (fun x => x ∈ s ∧ f x = y) xs) :
+    fibreOn s f y = some (xs.map (fun x => (x, |deriv f x|⁻¹))) :=
+  weightedRoots_of_regular h
+
+theorem fibre_of_regular {f y xs} (h : RegularRoots f y xs) :
+    fibre f y = some (xs.map (fun x => (x, |deriv f x|⁻¹))) :=
+  weightedRoots_of_regular h.toList
+
+theorem fibreOn_of_critical {s : Set ℝ} {f : ℝ → ℝ} {x y : ℝ}
+    (hx : x ∈ s) (hy : f x = y) (hz : deriv f x = 0) : fibreOn s f y = none := by
+  have hn : ¬ ∃ xs, RegularRootList f (fun z => z ∈ s ∧ f z = y) xs := by
+    rintro ⟨xs, h⟩
+    exact (h.regular x ((h.complete x).mpr ⟨hx, hy⟩)).2 hz
+  simp [fibreOn, weightedRoots, hn]
 
 /-- Pair a finite weighted fibre with a partial test, retaining undefined
 values at roots. This observation is independent of the frontend encoding. -/
@@ -34,7 +73,7 @@ def observe (atoms : List (ℝ × ℝ)) (test : ℝ → Option ℝ) : Option ℝ
 
 def square (x : ℝ) := x ^ 2
 
-private theorem deriv_square (x : ℝ) : deriv square x = 2 * x := by
+theorem deriv_square (x : ℝ) : deriv square x = 2 * x := by
   apply HasDerivAt.deriv
   simpa [square] using hasDerivAt_pow 2 x
 
@@ -77,10 +116,8 @@ theorem square_negative {y : ℝ} (hy : y < 0) : fibre square y = some [] := by
   · simp
 
 theorem square_critical : fibre square 0 = none := by
-  have hn : ¬ ∃ xs, RegularRoots square 0 xs := by
-    rintro ⟨xs,h⟩
-    simpa [deriv_square] using (h.regular 0 ((h.complete 0).mpr (by simp [square]))).2
-  simp [fibre, hn]
+  rw [← fibreOn_univ]
+  exact fibreOn_of_critical (x := 0) (mem_univ _) (by simp [square]) (by simp [deriv_square])
 
 /-- Evaluate a strict test of the retained coordinate at a positive target. -/
 theorem square_observe {y : ℝ} (hy : 0 < y) (test : ℝ → Option ℝ) :

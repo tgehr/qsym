@@ -42,6 +42,11 @@ theorem partial_test_at_root :
   rw [GraphFibre.square_observe (by norm_num)]
   norm_num [Value.add, Value.mul, Real.sqrt_eq_iff_mul_self_eq]
 
+theorem restricted_square_density (y : ℝ) :
+    GraphFibre.marginalOn (Set.Ioo 0 1) GraphFibre.square y =
+      some (if 0 < y ∧ y < 1 then GraphFibre.jac y else 0) := by qsym_rule
+
+#qsym_check_axioms restricted_square_density
 #qsym_check_axioms GraphFibre.square_marginal_zero
 #qsym_check_axioms GraphFibre.mass_eq_marginal
 #qsym_check_axioms GraphFibre.square_mass_rule

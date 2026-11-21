@@ -1,9 +1,19 @@
-import QSym.DistributionGraphModel
+import QSym.DistributionRestrictedGraph
 import QSym.Distribution
 
 noncomputable section
 namespace QSym.Distribution.GraphFibre
 open MeasureTheory
+
+theorem bind_masked_dirac_test (s : Set ℝ) (f : ℝ → ℝ) (t : ℝ → Option ℝ) :
+    (bindValue lebesgueValue (some (fun x =>
+      scaleValue (some (sourceWeight s x)) (diracValue (some (f x)))))).bind
+      (fun d => integrate d t) = pushforwardTest s f t := by
+  unfold pushforwardTest
+  apply congrArg (partialIntegral volume)
+  funext x
+  change Value.mul (some 1) (Value.mul _ (t (f x))) = Value.mul _ (t (f x))
+  cases t (f x) <;> simp [Value.mul]
 
 /-- Embed a weighted fibre in the current frontend distribution type. -/
 def presentation : List (ℝ × ℝ) → D ℝ
