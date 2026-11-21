@@ -48,6 +48,17 @@ a critical point outside the source cannot invalidate an empty fibre. -/
 def fibreOn (s : Set ℝ) (f : ℝ → ℝ) (y : ℝ) :=
   weightedRoots f (fun x => x ∈ s ∧ f x = y)
 
+theorem fibreOn_mem {s f y atoms} (h : fibreOn s f y = some atoms) {a : ℝ × ℝ}
+    (ha : a ∈ atoms) : a.1 ∈ s := by
+  classical
+  unfold fibreOn weightedRoots at h
+  split at h
+  · rename_i roots
+    cases h
+    obtain ⟨x, hx, rfl⟩ := List.mem_map.mp ha
+    exact ((roots.choose_spec.complete x).mp hx).1
+  · contradiction
+
 @[simp] theorem fibreOn_univ (f : ℝ → ℝ) (y : ℝ) : fibreOn univ f y = fibre f y := by
   simp [fibreOn, fibre]
 
@@ -70,6 +81,24 @@ theorem fibreOn_of_critical {s : Set ℝ} {f : ℝ → ℝ} {x y : ℝ}
 values at roots. This observation is independent of the frontend encoding. -/
 def observe (atoms : List (ℝ × ℝ)) (test : ℝ → Option ℝ) : Option ℝ :=
   atoms.foldr (fun atom acc => Value.add (Value.mul (some atom.2) (test atom.1)) acc) (some 0)
+
+theorem observe_congr {atoms : List (ℝ × ℝ)} {p q : ℝ → Option ℝ}
+    (h : ∀ a ∈ atoms, p a.1 = q a.1) : observe atoms p = observe atoms q := by
+  induction atoms with
+  | nil => rfl
+  | cons a as ih =>
+    change Value.add (Value.mul _ (p a.1)) (observe as p) =
+      Value.add (Value.mul _ (q a.1)) (observe as q)
+    rw [h a List.mem_cons_self, ih (fun b hb => h b (List.mem_cons_of_mem _ hb))]
+
+/-- Observe the image of a weighted real parameter. A zero coefficient
+removes that parameter before testing regularity. A missing coefficient at
+a regular root propagates through the strict finite sum. -/
+def chartDensity (w v : ℝ → Option ℝ) (y : ℝ) : Option ℝ := by
+  classical
+  exact if (∀ x, Value.Defined (v x)) ∧ Measurable (fun x => (v x).getD 0) then
+    (fibreOn {x | w x ≠ some 0} (fun x => (v x).getD 0) y).bind (fun atoms => observe atoms w)
+  else none
 
 def square (x : ℝ) := x ^ 2
 

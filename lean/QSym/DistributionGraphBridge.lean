@@ -59,4 +59,38 @@ theorem square_mul_mass_rule (y : Option ℝ) :
     marginal (some (fun x => Value.mul (some x) (some x))) y = squareMass y := by
   simpa [Value.mul, pow_two] using square_mass_rule y
 
+/-- The frontend's strict predicate and its masked Jacobian. -/
+def openUnitPredicate (y : Option ℝ) : Option Bool :=
+  Value.and (Value.lt (some ((0 : ℤ) : ℝ)) y) (Value.lt y (some ((1 : ℤ) : ℝ)))
+
+private theorem openUnitPredicate_some (y : ℝ) :
+    openUnitPredicate (some y) = some (decide (y ∈ Set.Ioo (0 : ℝ) 1)) := by
+  by_cases h : 0 < y <;> simp [openUnitPredicate, Value.lt, Value.and, Set.mem_Ioo, h]
+
+def openUnitDensity (y : Option ℝ) : Option ℝ :=
+  Value.mask (openUnitPredicate y)
+    (Value.inv (Value.mul (some ((2 : ℤ) : ℝ)) (Functions.sqrtR.apply y)))
+
+theorem square_openUnit_rule (y : Option ℝ) :
+    densityAtValue (pushforwardOnValue (some (fun x => openUnitPredicate (some x)))
+      (some (fun x => some (x^2)))) y = openUnitDensity y := by
+  cases y with
+  | none => rfl
+  | some y =>
+    change densityAtValue (pushforwardOnValue _ (some (fun x => some (square x)))) (some y) = _
+    simp only [openUnitPredicate_some, pushforwardOn_density _ square (measurable_id.pow_const 2)]
+    have coef : marginalOn (Set.Ioo 0 1) square y = some (if 0 < y ∧ y < 1 then jac y else 0) := by
+      qsym_rule
+    rw [coef]
+    by_cases h : 0 < y ∧ y < 1
+    · have hn : 2 * √y ≠ 0 := by have := h.1; positivity
+      simp [openUnitDensity, openUnitPredicate_some, Set.mem_Ioo, h, Value.mask, Functions.sqrtR,
+        Function1.apply, h.1.le, Value.inv, Value.mul, hn, jac]
+    · simp [openUnitDensity, openUnitPredicate_some, Set.mem_Ioo, h, Value.mask]
+
+theorem square_mul_openUnit_rule (y : Option ℝ) :
+    densityAtValue (pushforwardOnValue (some (fun x => openUnitPredicate (some x)))
+      (some (fun x => Value.mul (some x) (some x)))) y = openUnitDensity y := by
+  simpa [pow_two, Value.mul] using square_openUnit_rule y
+
 end QSym.Distribution.GraphFibre

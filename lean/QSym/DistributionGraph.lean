@@ -15,6 +15,65 @@ theorem bind_masked_dirac_test (s : Set ℝ) (f : ℝ → ℝ) (t : ℝ → Opti
   change Value.mul (some 1) (Value.mul _ (t (f x))) = Value.mul _ (t (f x))
   cases t (f x) <;> simp [Value.mul]
 
+/-- Pairing the native restricted chart with any partial test agrees with
+the source-space integral, including tests undefined outside the image. -/
+theorem pushforwardOn_test (s : Set ℝ) [DecidablePred (· ∈ s)] (f : ℝ → ℝ)
+    (t : ℝ → Option ℝ) :
+    (pushforwardOnValue (some (fun x => some (decide (x ∈ s)))) (some (fun x => some (f x)))).bind
+      (fun d => integrate d t) = pushforwardTest s f t := by
+  apply congrArg (partialIntegral volume)
+  funext x
+  by_cases h : x ∈ s <;> simp [pushforwardOnValue, Value.mask, sourceWeight, h]
+
+theorem mass_pushforwardOn_total (p : Option (ℝ → Option Bool)) (f : ℝ → ℝ) :
+    massValue (pushforwardOnValue p (some (fun x => some (f x)))) =
+      massValue (weightValue (p.map (fun pred x => Value.mask (pred x) (some ((1 : ℤ) : ℝ)))) lebesgueValue) := by
+  rw [Int.cast_one]
+  cases p with
+  | none => rfl
+  | some p =>
+    apply congrArg (partialIntegral volume)
+    funext x
+    change Value.mul _ (some 1) = Value.mul (Value.mul (some 1) _) (some 1)
+    rw [Value.mul_one_left]
+    rfl
+
+theorem chartDensity_sourceWeight (s : Set ℝ) (f : ℝ → ℝ) (hf : Measurable f) (y : ℝ) :
+    chartDensity (fun x => some (sourceWeight s x)) (fun x => some (f x)) y = marginalOn s f y := by
+  classical
+  have active : {x | some (sourceWeight s x) ≠ some 0} = s := by
+    ext x
+    by_cases h : x ∈ s <;> simp [sourceWeight, h]
+  simp only [chartDensity, Value.Defined, Option.some.injEq, exists_eq', implies_true,
+    Option.getD_some, true_and, if_pos hf, active, marginalOn]
+  cases h : fibreOn s f y with
+  | none => rfl
+  | some atoms =>
+    simp only [Option.some_bind]
+    apply observe_congr
+    intro a ha
+    simp [sourceWeight, fibreOn_mem h ha]
+
+/-- Both observations of a restricted graph are determined by its parameters.
+For a total measurable map the pointwise observer uses exactly its active
+finite regular fibre, including when the output chart is the identity. -/
+theorem pushforwardOn_density (s : Set ℝ) [DecidablePred (· ∈ s)] (f : ℝ → ℝ)
+    (hf : Measurable f) (y : ℝ) :
+    densityAtValue (pushforwardOnValue (some (fun x => some (decide (x ∈ s))))
+      (some (fun x => some (f x)))) (some y) = marginalOn s f y := by
+  classical
+  have weight : (fun x => Value.mask (some (decide (x ∈ s))) (some (1 : ℝ))) =
+      fun x => some (sourceWeight s x) := by
+    funext x
+    by_cases hx : x ∈ s <;> simp [Value.mask, sourceWeight, hx]
+  change densityAt (.density _ (fun x => some (f x))) y = _
+  rw [weight]
+  by_cases hi : (fun x => some (f x)) = some
+  · have he : f = id := funext (fun x => Option.some.inj (congrFun hi x))
+    subst f
+    rw [hi, marginalOn_id, densityAt_density]
+  · simp [densityAt, realFibre, hi, RealDensityFibre.density, chartDensity_sourceWeight s f hf]
+
 /-- Embed a weighted fibre in the current frontend distribution type. -/
 def presentation : List (ℝ × ℝ) → D ℝ
   | [] => .zero

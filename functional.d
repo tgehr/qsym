@@ -119,7 +119,7 @@ struct FunctionSyntax{
 			name=="∑"||name=="sum"||name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
 	}
 	private bool distributionName(string name){
-		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD"])
+		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD","pushforwardOnD"])
 			if(name==n) return true;
 		return false;
 	}
@@ -281,6 +281,7 @@ struct FunctionSyntax{
 					case "bindD":op=BoundOp.distributionBind; break;
 					case "integralD":op=BoundOp.distributionIntegral; break;
 					case "massD":op=BoundOp.distributionMass; break;
+					case "pushforwardOnD":op=BoundOp.distributionPushforwardOn; break;
 					case "graphFibreD":op=BoundOp.distributionGraphFibre; break;
 					case "densityAtD":op=BoundOp.distributionDensityAt; break;
 					default:throw new Exception("unsupported distribution constructor: "~p.name);
@@ -288,6 +289,7 @@ struct FunctionSyntax{
 				BoundTerm[] args;
 				foreach(i,arg;p.args){
 					TypeId want;
+					if(op==BoundOp.distributionPushforwardOn&&i==0) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.boolean));
 					if(p.name=="graphFibreD") want=i==0?pool.function_(scalarType(Sort.real_),scalarType(Sort.real_)):scalarType(Sort.real_);
 					if(p.name=="dirac"&&expected!=TypeId.init&&pool.view(expected).kind==TypeKind.distribution) want=pool.view(expected).fields[0];
 					if(p.name=="scaleD"&&i==0||p.name=="densityAtD"&&i==1) want=scalarType(Sort.real_);
@@ -544,6 +546,7 @@ struct FunctionSyntax{
 			string axisHint(uint id) @safe {
 				auto d=b.node(b.at(id));
 				if(d.op==BoundOp.distributionWeight) return b.binderHint(b.at(d.a)).name;
+				if(d.op==BoundOp.distributionPushforwardOn&&b.binderHint(b.at(d.b)).name=="x") return "y";
 				if(d.op==BoundOp.distributionAdd||d.op==BoundOp.distributionScale) return axisHint(d.op==BoundOp.distributionScale?d.b:d.a);
 				return "x";
 			}
@@ -588,9 +591,25 @@ struct FunctionSyntax{
 						auto weight=f.op==BoundOp.lambda?render(b.at(f.a),[axis]~names,depth+level+1):"("~value(q.a)~")("~axis~")";
 						return (weight.length&&weight[0]=='['&&weight[$-1]==']'?weight:"("~weight~")")~"·"~nested(q.b);
 					}
+					case BoundOp.distributionPushforwardOn:{
+						auto pred=b.node(b.at(q.a)),map=b.node(b.at(q.b));
+						if(pred.op!=BoundOp.lambda||map.op!=BoundOp.lambda)
+							return "(pushforwardOnD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
+						auto x=fresh([axis]~names,b.binderHint(b.at(q.b)).name),inner=[x]~names;
+						auto f=render(b.at(map.a),inner,depth+level+1),p=render(b.at(pred.a),inner,depth+level+1);
+						return grouped("∫d"~x~" λ["~x~"]·δ("~f~")["~axis~"]·["~p~"]");
+					}
 					case BoundOp.distributionBind,BoundOp.distributionIntegral:{
 						auto fn=b.at(q.op==BoundOp.distributionBind?q.b:q.a),f=b.node(fn);
-						if(f.op!=BoundOp.lambda) return (q.op==BoundOp.distributionBind?"(bindD("~value(q.a)~","~value(q.b)~"))":"(integralD("~value(q.a)~"))")~"["~axis~"]";
+						// An explicit bind has the legacy row-wise density observer.
+						// Keep it explicit where the integral would reparse as a native chart.
+						bool maskedBind;
+						if(q.op==BoundOp.distributionBind&&b.node(b.at(q.a)).op==BoundOp.distributionLebesgue&&f.op==BoundOp.lambda){
+							auto row=b.node(b.at(f.a));
+							maskedBind=(row.op==BoundOp.distributionScale||row.op==BoundOp.distributionWeight)&&
+								b.node(b.at(row.b)).op==BoundOp.distributionDirac;
+						}
+						if(f.op!=BoundOp.lambda||maskedBind) return (q.op==BoundOp.distributionBind?"(bindD("~value(q.a)~","~value(q.b)~"))":"(integralD("~value(q.a)~"))")~"["~axis~"]";
 						auto y=fresh([axis]~names,b.binderHint(fn).name),param=pool.view(b.type(fn)).fields[0];
 						auto body=f.op==BoundOp.lambda?form(b.at(f.a),axis,[y]~names,level+1):"("~render(fn,names,depth+1)~"("~y~"))["~axis~"]";
 						auto measure=q.op==BoundOp.distributionBind?"·("~form(b.at(q.a),y,names,level+1)~")":"";
@@ -619,7 +638,7 @@ struct FunctionSyntax{
 				case BoundOp.conditional:
 					if(pool.view(b.type(t)).kind!=TypeKind.distribution) return "(if "~child(n.a)~" then "~child(n.b)~" else "~child(n.c)~")";
 					goto case BoundOp.distributionZero;
-				case BoundOp.distributionZero,BoundOp.distributionGraphFibre,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionBind:{
+				case BoundOp.distributionZero,BoundOp.distributionGraphFibre,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionPushforwardOn,BoundOp.distributionBind:{
 					auto axis=fresh(locals,t==result.reduction.output&&result.outputAxis.length?result.outputAxis:axisHint(t.id));
 					return "Λ("~axis~":"~typeName(pool.view(b.type(t)).fields[0],locals)~"). "~form(t,axis,locals);
 				}

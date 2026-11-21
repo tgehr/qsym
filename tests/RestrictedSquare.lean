@@ -8,8 +8,7 @@ open GraphFibre MeasureTheory Set
 
 private def intervalWeight := sourceWeight (Ioo 0 1)
 
-/-- Elaboration of Λy. ∫dx λ[x]·δ(x²)[y]·[0<x<1]: the independent
-coefficient on the Dirac lowers to scaleValue, followed by bindValue. -/
+/-- The legacy explicit bind still has a row-wise density observer. -/
 private def source : Option (D ℝ) :=
   bindValue lebesgueValue (some (fun x =>
     scaleValue (some (intervalWeight x)) (diracValue (some (square x)))))
@@ -85,6 +84,9 @@ theorem chart_probe : chart.bind (fun d => integrate d probe) = none := by
     obtain ⟨_, hv⟩ := bad
     cases hv
 
+#qsym_check_axioms pushforwardOn_density
+#qsym_check_axioms mass_pushforwardOn_total
+#qsym_check_axioms pushforwardOn_test
 #qsym_check_axioms square_marginalOn_openUnit
 #qsym_check_axioms square_positiveSource_test
 #qsym_check_axioms bind_masked_dirac_test

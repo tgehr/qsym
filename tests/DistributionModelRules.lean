@@ -28,6 +28,16 @@ theorem ordinary_density (f : Option (ℝ → Option ℝ)) (x : Option ℝ) :
 theorem ordinary_density_mass (f : Option (ℝ → Option ℝ)) :
     Model.densityMassValue f = f.bind (partialIntegral volume) := by qsym_rule
 
+theorem native_graph_density (s : Set ℝ) [DecidablePred (· ∈ s)] (f : ℝ → ℝ)
+    (hf : Measurable f) (y : ℝ) :
+    densityAtValue (pushforwardOnValue (some (fun x => some (decide (x ∈ s))))
+      (some (fun x => some (f x)))) (some y) = GraphFibre.marginalOn s f y := by qsym_rule
+
+theorem native_graph_test (s : Set ℝ) [DecidablePred (· ∈ s)] (f : ℝ → ℝ)
+    (t : ℝ → Option ℝ) :
+    (pushforwardOnValue (some (fun x => some (decide (x ∈ s)))) (some (fun x => some (f x)))).bind
+      (fun d => integrate d t) = GraphFibre.pushforwardTest s f t := by qsym_rule
+
 theorem ordinary_scale (T : FiniteIntegralTheory ℝ) (c : ℝ) (hc : c ≠ 0)
     (f : ℝ → Option ℝ) :
     Value.Refines (T.integrate (fun x => Value.mul (some c) (f x)))
@@ -159,6 +169,8 @@ theorem integral_of_moving_atoms (x : ℝ) :
   change (RealDensityFibre.mk 0 (partialIntegral volume (fun a => densityAt (.dirac a) x))).density = none
   simp only [RealDensityFibre.density, if_pos rfl, partialIntegral, hn, false_and, if_false, if_true]
 
+#qsym_check_axioms native_graph_density
+#qsym_check_axioms native_graph_test
 #qsym_check_axioms undefined_coefficient_away
 #qsym_check_axioms integral_of_moving_atoms
 #qsym_check_axioms cancelling_density

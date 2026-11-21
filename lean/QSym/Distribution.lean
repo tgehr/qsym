@@ -1,5 +1,6 @@
 import QSym.Integration
 import QSym.RealDensityFibre
+import QSym.DistributionGraphModel
 
 /-! Non-recursive, intensional distribution presentations. No quotient by equality
 of measures is taken. Integral nodes retain their integrands; they are requests,
@@ -30,6 +31,14 @@ def scaleValue {α : Type} (r : Option ℝ) (d : Option (D α)) : Option (D α) 
 
 def densityValue (f : Option (ℝ → Option ℝ)) : Option (D ℝ) :=
   f.map (fun w => .density w some)
+
+/-- Keep the parameter and output map together. Scalar pairing still evaluates
+a partial test on the source, including at parameters with zero weight. -/
+def pushforwardOnValue {α : Type} (p : Option (ℝ → Option Bool))
+    (v : Option (ℝ → Option α)) : Option (D α) := do
+  let predicate ← p
+  let output ← v
+  return .density (fun x => Value.mask (predicate x) (some 1)) output
 
 def lebesgueValue : Option (D ℝ) := densityValue (some (fun _ => some 1))
 
@@ -88,8 +97,8 @@ noncomputable def massValue {α : Type} (d : Option (D α)) : Option ℝ :=
   d.bind (fun a => integrate a (fun _ => some 1))
 
 /-- Interpret the supported finite atomic part before deciding whether it
-obstructs the query. General pushforwards and integral nodes retain their
-old partial observer. In particular we never infer a density by integrating
+obstructs the query. Real parameter charts use their regular weighted preimages.
+Integral nodes retain their partial observer. In particular we never infer a density by integrating
 the singleton charges of a continuum of atoms. -/
 noncomputable def realFibre (d : D ℝ) (x : ℝ) : RealDensityFibre := by
   classical
@@ -97,7 +106,7 @@ noncomputable def realFibre (d : D ℝ) (x : ℝ) : RealDensityFibre := by
   | .invalid => ⟨0, none⟩
   | .zero => ⟨0, some 0⟩
   | .dirac a => ⟨if x = a then 1 else 0, some 0⟩
-  | .density w v => ⟨0, if v = some then w x else none⟩
+  | .density w v => ⟨0, if v = some then w x else GraphFibre.chartDensity w v x⟩
   | .add a b => (realFibre a x).add (realFibre b x)
   | .scale r a => (realFibre a x).scale r
   | .integral k => ⟨0, partialIntegral MeasureTheory.volume

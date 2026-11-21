@@ -104,6 +104,21 @@ Pattern distributionSyntax(Pattern root){
 			auto measure=lower(factors[selected],p.binder,p.annotation); Pattern rest;
 			foreach(i,f;factors) if(i!=selected) rest=rest is null?f:pattern("$mul",[rest,f]);
 			enforce(rest !is null,"a distribution-valued integral needs an output form");
+			// Keep the map of a restricted Lebesgue graph. A row-wise bind
+			// forgets it before a downstream pointwise density query.
+			auto base=factors[selected].args[0];
+			if(base.name=="λ"&&!base.called&&rest.name=="$mul"){
+				foreach(i;0..2){
+					auto mask=rest.args[i],point=rest.args[1-i];
+					if(mask.name!="$iverson"||point.name!="$distributionApply"||point.args[1].name!=axis) continue;
+					auto atom=point.args[0];
+					if((atom.name!="δ"&&atom.name!="dirac")||atom.args.length!=1||
+						distributionOccurs(mask,axis)||distributionOccurs(atom,axis)) continue;
+					auto pred=lambda(p.binder,p.annotation,expand(mask.args[0]));
+					auto map=lambda(p.binder,p.annotation,typed(expand(atom.args[0]),ty));
+					return typed(pattern("pushforwardOnD",[pred,map]),dt);
+				}
+			}
 			return pattern("bindD",[measure,lambda(p.binder,p.annotation,lower(rest,axis,ty))]);
 		}
 		if(p.name=="$distributionApply"){

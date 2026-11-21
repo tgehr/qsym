@@ -67,6 +67,28 @@ theorem square_fibreOn_positiveSource {s : Set ℝ} (hs : s ⊆ Ioi 0) (y : ℝ)
 def marginalOn (s : Set ℝ) (f : ℝ → ℝ) (y : ℝ) : Option ℝ :=
   (fibreOn s f y).bind (fun atoms => observe atoms (fun _ => some 1))
 
+theorem marginalOn_id (s : Set ℝ) (y : ℝ) : marginalOn s id y = some (sourceWeight s y) := by
+  classical
+  by_cases h : y ∈ s
+  · have roots : RegularRootList id (fun x => x ∈ s ∧ id x = y) [y] := by
+      constructor
+      · simp [List.Sorted]
+      · intro x
+        simp only [List.mem_singleton, id_eq, iff_and_self]
+        exact fun e => e ▸ h
+      · intro x _
+        simpa using And.intro (hasStrictDerivAt_id x) (one_ne_zero : (1 : ℝ) ≠ 0)
+    simp [marginalOn, fibreOn_of_regular roots, observe, sourceWeight, h, Value.mul, Value.add]
+  · have roots : RegularRootList id (fun x => x ∈ s ∧ id x = y) [] := by
+      constructor
+      · simp [List.Sorted]
+      · intro x
+        simp only [List.not_mem_nil, id_eq, false_iff]
+        rintro ⟨hx, rfl⟩
+        exact h hx
+      · simp
+    simp [marginalOn, fibreOn_of_regular roots, observe, sourceWeight, h]
+
 theorem square_marginalOn_positiveSource {s : Set ℝ} (hs : s ⊆ Ioi 0) (y : ℝ) :
     marginalOn s square y = some (if √y ∈ s then jac y else 0) := by
   rw [marginalOn, square_fibreOn_positiveSource hs]
