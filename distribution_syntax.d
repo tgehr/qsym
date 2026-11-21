@@ -41,30 +41,32 @@ string distributionOutputAxis(Pattern root){
 			if(!axis.length) axis=p.args[1].name;
 			enforce(axis==p.args[1].name,"multiple free output axes require explicit distribution binders"); return;
 		}
+		if(p.name=="$if"){ visit(p.args[1],inForm); visit(p.args[2],inForm); return; }
 		foreach(a;p.args) visit(a,inForm&&(p.name=="$mul"||p.name=="$add"||p.name=="$neg"));
 	}
 	visit(root,true); return axis;
 }
 
-Pattern distributionSyntax(Pattern root){
-	bool occurs(Pattern p,string name) @safe {
-		bool inType(TypePattern t) @safe {
-			if(t is null) return false;
-			if(t.dimension !is null&&occurs(t.dimension,name)) return true;
-			if(t.binder!=name&&t.predicate !is null&&occurs(t.predicate,name)) return true;
-			foreach(i,a;t.args){
-				if(t.name=="pi"&&i==1&&t.binder==name) continue;
-				if(inType(a)) return true;
-			}
-			return false;
+bool distributionOccurs(Pattern p,string name) @safe {
+	bool inType(TypePattern t) @safe {
+		if(t is null) return false;
+		if(t.dimension !is null&&distributionOccurs(t.dimension,name)) return true;
+		if(t.binder!=name&&t.predicate !is null&&distributionOccurs(t.predicate,name)) return true;
+		foreach(i,a;t.args){
+			if(t.name=="pi"&&i==1&&t.binder==name) continue;
+			if(inType(a)) return true;
 		}
-		// A binder scopes over its body, not its own parameter annotation.
-		if(inType(p.annotation)) return true;
-		if(p.binder==name) return false;
-		if(!p.called&&!p.args.length&&p.name==name) return true;
-		foreach(a;p.args) if(occurs(a,name)) return true;
 		return false;
 	}
+	// A binder scopes over its body, not its own parameter annotation.
+	if(inType(p.annotation)) return true;
+	if(p.binder==name) return false;
+	if(!p.called&&!p.args.length&&p.name==name) return true;
+	foreach(a;p.args) if(distributionOccurs(a,name)) return true;
+	return false;
+}
+
+Pattern distributionSyntax(Pattern root){
 	bool form(Pattern p,string axis) @safe {
 		if(p.binder==axis) return false;
 		if(p.name=="$distributionApply"&&p.args[1].name==axis) return true;
@@ -78,6 +80,11 @@ Pattern distributionSyntax(Pattern root){
 	Pattern delegate(Pattern) @safe expand;
 	Pattern lower(Pattern p,string axis,TypePattern ty) @safe {
 		auto dt=new TypePattern("Distribution",[ty]);
+		if(p.name=="$if"){
+			enforce(!distributionOccurs(p.args[0],axis),"a distribution branch condition must be independent of its output axis");
+			return pattern("$if",[expand(p.args[0]),lower(p.args[1],axis,ty),lower(p.args[2],axis,ty)]);
+		}
+		if(p.name=="$bottom") return typed(p,dt);
 		if(p.name=="$disintegrate"){
 			Pattern input,mapping,target;
 			enforce(graphForm(p,input,mapping,target)&&input.name==axis,"graph disintegration requires its retained axis");
@@ -93,7 +100,7 @@ Pattern distributionSyntax(Pattern root){
 				enforce(selected==size_t.max,"multiple distributions for one integration axis are unsupported"); selected=i;
 			}
 			if(selected==size_t.max) return pattern("integralD",[lambda(p.binder,p.annotation,lower(p.args[0],axis,ty))]);
-			enforce(!occurs(factors[selected].args[0],axis),"integration source depending on the output axis is unsupported");
+			enforce(!distributionOccurs(factors[selected].args[0],axis),"integration source depending on the output axis is unsupported");
 			auto measure=lower(factors[selected],p.binder,p.annotation); Pattern rest;
 			foreach(i,f;factors) if(i!=selected) rest=rest is null?f:pattern("$mul",[rest,f]);
 			enforce(rest !is null,"a distribution-valued integral needs an output form");
@@ -103,7 +110,7 @@ Pattern distributionSyntax(Pattern root){
 			enforce(p.args[1].name==axis,"distribution form has an unbound output axis");
 			auto d=p.args[0];
 			if(d.name=="λ"&&!d.called&&!d.args.length) return typed(new Pattern("lebesgueD"),dt);
-			enforce(!occurs(d,axis),"distribution source must be independent of its output axis");
+			enforce(!distributionOccurs(d,axis),"distribution source must be independent of its output axis");
 			return typed(expand(d),dt);
 		}
 		if(p.name=="$add") return pattern("addD",[lower(p.args[0],axis,ty),lower(p.args[1],axis,ty)]);
@@ -112,6 +119,10 @@ Pattern distributionSyntax(Pattern root){
 			auto l=form(p.args[0],axis),r=form(p.args[1],axis);
 			enforce(l!=r,"a form product must contain exactly one distribution factor for its output axis");
 			auto scalar=p.args[l?1:0],d=p.args[l?0:1];
+			// A weight independent of the axis is exactly strict scaling on a Dirac,
+			// including when the coefficient or atom is undefined.
+			if(d.name=="$distributionApply"&&(d.args[0].name=="δ"||d.args[0].name=="dirac")&&!distributionOccurs(scalar,axis))
+				return pattern("scaleD",[expand(scalar),lower(d,axis,ty)]);
 			return pattern("weightD",[lambda(axis,ty,expand(scalar)),lower(d,axis,ty)]);
 		}
 		enforce(false,"unsupported distribution form; expected d[x], a weighted form, or a sum");
@@ -123,7 +134,7 @@ Pattern distributionSyntax(Pattern root){
 		if(p.name=="$disintegrate"){
 			Pattern input,mapping,target;
 			if(graphForm(p,input,mapping,target)){
-				enforce(!occurs(mapping,target.name),"a graph map cannot depend on its output axis");
+				enforce(!distributionOccurs(mapping,target.name),"a graph map cannot depend on its output axis");
 				return pattern("graphFibreD",[lambda(input.name,new TypePattern("Real"),expand(mapping)),target]);
 			}
 			auto d=p.args[1];

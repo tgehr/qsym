@@ -22,7 +22,7 @@ elab "qsym_distribution_goal" : tactic => do
   let heads := #[``partialIntegral, ``FiniteIntegralTheory.integrate,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
-    ``Distribution.GraphFibre.fibre, ``Distribution.RealDensityFibre.density, ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
+    ``Distribution.GraphFibre.marginal, ``Distribution.GraphFibre.fibre, ``Distribution.RealDensityFibre.density, ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
     ``Distribution.Model.densityTestValue, ``Distribution.Model.densityMassValue,
     ``WeightedParameter.Fibre.Hom.observePartial,
     ``DependentIntegralTheory.joint, ``WeightedParameter.Fibre.Tower.observe,
@@ -36,6 +36,9 @@ elab "qsym_distribution_goal" : tactic => do
 macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.square_positive; assumption
   | solve | apply Distribution.GraphFibre.square_negative; assumption
+  | solve | apply Distribution.GraphFibre.square_marginal_positive; assumption
+  | solve | apply Distribution.GraphFibre.square_marginal_negative; assumption
+  | exact Distribution.GraphFibre.square_marginal_zero
   | exact Distribution.GraphFibre.square_critical
   | exact Distribution.RealDensityFibre.density_eq _
   | exact Distribution.AtomPlusDensity.densityAt_eq _ _

@@ -47,6 +47,11 @@ def weightValue {α : Type} (f : Option (α → Option ℝ))
     (d : Option (D α)) : Option (D α) := do
   weight (← f) (← d)
 
+/-- Plain scalar multiplication on a Dirac agrees with a constant weight, including partial operands. -/
+theorem constant_weight_dirac {α : Type} (r : Option ℝ) (a : Option α) :
+    weightValue (some (fun _ => r)) (diracValue a) = scaleValue r (diracValue a) := by
+  cases a <;> cases r <;> rfl
+
 def integralValue {α : Type} (k : Option (ℝ → Option (D α))) : Option (D α) :=
   k.map (fun f => .integral (fun r => (f r).getD .invalid))
 

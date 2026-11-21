@@ -1,4 +1,4 @@
-import QSym.DistributionGraph
+import QSym.DistributionGraphModel
 import Mathlib.Analysis.SpecialFunctions.Sqrt
 import Mathlib.MeasureTheory.Function.Jacobian
 import Mathlib.MeasureTheory.Measure.Lebesgue.Integral
@@ -51,5 +51,33 @@ theorem square_disintegrates (h : ℝ → ℝ → ℝ) (hi : Integrable (fun x =
       dsimp only
       rw [square_observe hy]
       simp [g, square, Value.add, Value.mul, Real.sq_sqrt (le_of_lt hy)]
+
+/-- Testing only the target recovers the scalar pushforward. The value of the
+pointwise marginal at the critical target is specified separately. -/
+theorem square_marginal_integral (k : ℝ → ℝ) (hi : Integrable (fun x => k (square x))) :
+    (∫ x, k (square x)) = ∫ y in Ioi 0,
+      (marginal (some (fun x => some (square x))) (some y)).getD 0 * k y := by
+  rw [square_disintegrates (fun _ y => k y) hi]
+  apply setIntegral_congr_fun measurableSet_Ioi
+  intro y hy
+  dsimp only
+  rw [square_observe hy, square_marginal_positive hy]
+  simp [Value.add, Value.mul, jac]
+  <;> ring
+
+open Filter Topology in
+/-- Every finite completion of the partial marginal diverges from the right
+at zero. Assigning a value at the critical point cannot make it continuous. -/
+theorem square_marginal_tendsto (fallback : ℝ) :
+    Tendsto (fun y => (marginal (some (fun x => some (square x))) (some y)).getD fallback)
+      (𝓝[>] (0 : ℝ)) atTop := by
+  have hs : Tendsto Real.sqrt (𝓝[>] (0 : ℝ)) (𝓝[>] 0) := by
+    apply tendsto_nhdsWithin_iff.mpr
+    constructor
+    · simpa using (Real.continuous_sqrt.tendsto (0 : ℝ)).mono_left nhdsWithin_le_nhds
+    · filter_upwards [self_mem_nhdsWithin] with y hy using Real.sqrt_pos.mpr hy
+  apply (tendsto_inv_nhdsGT_zero.comp hs).congr'
+  filter_upwards [self_mem_nhdsWithin] with y hy
+  simp [Function.comp_apply, square_marginal_positive hy]
 
 end QSym.Distribution.GraphFibre

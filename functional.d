@@ -1,7 +1,7 @@
 module qsym.functional;
 import qsym.ir;
 import qsym.binding;
-import qsym.distribution_syntax:distributionSyntax,distributionOutputAxis;
+import qsym.distribution_syntax:distributionSyntax,distributionOutputAxis,distributionOccurs;
 import qsym.types:TypeId,TypeView,TypeKind,TypePool,Dimension;
 import qsym.text:Syntax;
 import qsym.spec:Parser,Pattern,TypePattern,Parameter,parseSort,isConstructor,elaborate,pattern;
@@ -298,6 +298,11 @@ struct FunctionSyntax{
 					}
 					args~=build(arg,ctx,locals,want,depth+1);
 				}
+				if(op==BoundOp.distributionMass&&args.length==1){
+					auto graph=b.node(args[0]);
+					if(graph.op==BoundOp.distributionGraphFibre)
+						return finish(b.distribution(ctx,BoundOp.distributionGraphMass,[b.at(graph.a),b.at(graph.b)]));
+				}
 				return finish(b.distribution(ctx,op,args));
 			}
 			if(p.name=="$tuple"){
@@ -522,7 +527,17 @@ struct FunctionSyntax{
 				if(!used) return name; name=preferred~to!string(++index);
 			}
 		}
-		string render(BoundTerm t,string[] locals,uint depth=0) @safe{
+		// The binder supplies the type of an atom and scaleD requires a real
+		// coefficient. Exact integer and fraction literals can omit their cast.
+		bool numericLiteral(string s){
+			import std.ascii:isDigit;
+			size_t i=s.length&&s[0]=='-'?1:0;
+			bool digits(){ auto start=i; while(i<s.length&&isDigit(s[i])) ++i; return i>start; }
+			if(!digits()) return false;
+			if(i==s.length) return true;
+			return s[i++]=='/'&&digits()&&i==s.length;
+		}
+		string render(BoundTerm t,string[] locals,uint depth=0,TypeId expected=TypeId.init) @safe{
 			enforce(depth<256,"function formatting depth exceeded");
 			auto n=b.node(t);
 			string child(uint id){ return render(b.at(id),locals,depth+1); }
@@ -532,20 +547,39 @@ struct FunctionSyntax{
 				if(d.op==BoundOp.distributionAdd||d.op==BoundOp.distributionScale) return axisHint(d.op==BoundOp.distributionScale?d.b:d.a);
 				return "x";
 			}
-			string form(BoundTerm d,string axis,string[] names,uint level=0) @safe {
+			string graphForm(BoundNode q,string axis,string[] names,uint level,bool group){
+				string value(uint id){ return render(b.at(id),names,depth+level+1); }
+				auto fn=b.node(b.at(q.a)),point=b.node(b.at(q.b));
+				if(fn.op==BoundOp.lambda&&(point.op==BoundOp.variable||point.op==BoundOp.scalar&&a.view(a.at(point.data)).op==Op.variable)){
+					auto y=value(q.b),map=render(b.at(fn.a),[axis]~names,depth+level+1);
+					if(y!=axis&&!distributionOccurs(Parser(map).parseRawExpression(),y)){
+						auto graph="λ["~axis~"]·δ("~map~")["~y~"]//λ["~y~"]";
+						return group?"("~graph~")":graph;
+					}
+				}
+				return "(graphFibreD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
+			}
+			string form(BoundTerm d,string axis,string[] names,uint level=0,bool group=false) @safe {
 				enforce(level<128,"distribution formatting depth exceeded"); auto q=b.node(d);
 				string value(uint id){ return render(b.at(id),names,depth+level+1); }
-				string nested(uint id){ return form(b.at(id),axis,names,level+1); }
+				string nested(uint id,bool parentheses=true){ return form(b.at(id),axis,names,level+1,parentheses); }
+				string grouped(string body){ return group?"("~body~")":body; }
 				switch(q.op){
 					case BoundOp.distributionZero:return "0";
 					case BoundOp.distributionLebesgue:return "λ["~axis~"]";
-					case BoundOp.distributionDirac:return "δ("~value(q.a)~")["~axis~"]";
-					case BoundOp.distributionAdd:return "("~nested(q.a)~"+"~nested(q.b)~")";
+					case BoundOp.distributionDirac:return "δ("~render(b.at(q.a),names,depth+level+1,b.type(b.at(q.a)))~")["~axis~"]";
+					case BoundOp.conditional:return grouped("if "~value(q.a)~" then "~nested(q.b,false)~" else "~nested(q.c,false));
+					case BoundOp.bottom:return value(d.id);
+					case BoundOp.distributionGraphFibre:return graphForm(q,axis,names,level,group);
+					case BoundOp.distributionAdd:return grouped(nested(q.a)~"+"~nested(q.b));
 					case BoundOp.distributionScale:{
 						auto r=b.node(b.at(q.a));
 						if(r.op==BoundOp.scalar&&a.isNumber(a.at(r.data))&&a.number(a.at(r.data))==Number(-1)) return "-("~nested(q.b)~")";
-						if(r.op==BoundOp.scalar&&a.isNumber(a.at(r.data))&&b.node(b.at(q.b)).op==BoundOp.distributionDirac)
-							return "("~value(q.a)~")·"~nested(q.b);
+						if(b.node(b.at(q.b)).op==BoundOp.distributionDirac){
+							auto c=render(b.at(q.a),names,depth+level+1,scalarType(Sort.real_));
+							bool inverse=(r.op==BoundOp.primitive||r.op==BoundOp.scalar)&&a.view(a.at(r.data)).op==Op.inv;
+							return (numericLiteral(c)||inverse?c:"("~c~")")~"·"~nested(q.b);
+						}
 						return "(scaleD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
 					}
 					case BoundOp.distributionWeight:{
@@ -575,15 +609,20 @@ struct FunctionSyntax{
 					auto axis=fresh(locals,axisHint(n.a)),ty=pool.view(b.type(b.at(n.a))).fields[0];
 					return (ty==scalarType(Sort.real_)?"∫d"~axis~" ":"∫("~axis~":"~typeName(ty,locals)~"). ")~form(b.at(n.a),axis,locals);
 				}
-				case BoundOp.distributionGraphFibre:return "graphFibreD("~child(n.a)~","~child(n.b)~")";
+				case BoundOp.distributionGraphMass:{
+					auto axis=fresh(locals);
+					return "∫d"~axis~" "~graphForm(n,axis,locals,0,false);
+				}
 				case BoundOp.distributionDensityAt:{
 					auto axis=fresh(locals,"x"); return "(λ("~axis~":ℝ). ("~form(b.at(n.a),axis,locals)~")//λ["~axis~"])("~child(n.b)~")";
 				}
-				case BoundOp.distributionZero,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionBind:{
+				case BoundOp.conditional:
+					if(pool.view(b.type(t)).kind!=TypeKind.distribution) return "(if "~child(n.a)~" then "~child(n.b)~" else "~child(n.c)~")";
+					goto case BoundOp.distributionZero;
+				case BoundOp.distributionZero,BoundOp.distributionGraphFibre,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionBind:{
 					auto axis=fresh(locals,t==result.reduction.output&&result.outputAxis.length?result.outputAxis:axisHint(t.id));
 					return "Λ("~axis~":"~typeName(pool.view(b.type(t)).fields[0],locals)~"). "~form(t,axis,locals);
 				}
-				case BoundOp.conditional:return "(if "~child(n.a)~" then "~child(n.b)~" else "~child(n.c)~")";
 				case BoundOp.unit:return "()";
 				case BoundOp.vectorNil:return "(():"~typeName(b.type(t),locals)~")";
 				case BoundOp.vectorCons,BoundOp.pair:
@@ -664,7 +703,9 @@ struct FunctionSyntax{
 				}
 				memo.set(x.id,r.id); return r;
 			}
-			auto flat=flatten(t),text=printer.format(a,flat); bool same;
+			auto flat=flatten(t),text=printer.format(a,flat);
+			if(expected==b.type(t)&&numericLiteral(text)) return text;
+			bool same;
 			try{ auto check=printer; same=a.sort(check.parse(a,text))==a.sort(flat); }catch(Exception){}
 			return same?text:"("~text~":"~typeName(scalarType(a.sort(flat)))~")";
 		}
@@ -673,7 +714,12 @@ struct FunctionSyntax{
 			// Render the same scoped form without the implicit root abstraction.
 			auto prefix="Λ("; if(closed.length>=prefix.length&&closed[0..prefix.length]==prefix){
 				import std.string:indexOf;
-				auto end=closed.indexOf("). "); if(end>=0) return closed[cast(size_t)end+3..$];
+				auto end=closed.indexOf("). ");
+				if(end>=0){
+					auto body=closed[cast(size_t)end+3..$];
+					if(distributionOutputAxis(Parser(body).parseRawExpression()).length) return body;
+					return closed;
+				}
 			}
 			return "("~closed~")["~result.outputAxis~"]";
 		}

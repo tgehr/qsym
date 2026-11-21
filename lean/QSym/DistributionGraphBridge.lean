@@ -36,4 +36,27 @@ theorem square_mul_rule (y : Option ℝ) :
     value (some (fun x => Value.mul (some x) (some x))) y = squareResult y := by
   simpa [Value.mul, pow_two] using square_rule y
 
+/-- Scalar marginal via a strict test on the source section. -/
+def squareMass (y : Option ℝ) : Option ℝ :=
+  let z := some ((0 : ℤ) : ℝ)
+  Value.mask (Value.le z y) (Value.inv (Functions.sqrtR.apply y))
+
+theorem square_mass_rule (y : Option ℝ) :
+    marginal (some (fun x => some (x^2))) y = squareMass y := by
+  cases y with
+  | none => rfl
+  | some y =>
+    change marginal (some (fun x => some (square x))) (some y) = _
+    rcases lt_trichotomy y 0 with hn|rfl|hp
+    · have h : marginal (some (fun x => some (square x))) (some y) = some 0 := by qsym_rule
+      simp [h, squareMass, Value.le, Value.mask, not_le_of_gt hn]
+    · simpa [squareMass, Value.le, Value.mask, Value.inv, Function1.apply, Functions.sqrtR] using square_marginal_zero
+    · have h : marginal (some (fun x => some (square x))) (some y) = some (√y)⁻¹ := by qsym_rule
+      simp [h, squareMass, Value.le, Value.mask, hp.le, Functions.sqrtR,
+        Function1.apply, Value.inv, (Real.sqrt_pos.mpr hp).ne']
+
+theorem square_mul_mass_rule (y : Option ℝ) :
+    marginal (some (fun x => Value.mul (some x) (some x))) y = squareMass y := by
+  simpa [Value.mul, pow_two] using square_mass_rule y
+
 end QSym.Distribution.GraphFibre
