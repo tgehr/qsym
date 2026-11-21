@@ -1,3 +1,4 @@
+import QSym.DistributionAtomRows
 import QSym.DistributionSquareIntegral
 import QSym.DistributionFiniteMixedReal
 import QSym.DistributionModelLaws
@@ -22,6 +23,7 @@ elab "qsym_distribution_goal" : tactic => do
   let heads := #[``partialIntegral, ``FiniteIntegralTheory.integrate,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
+    ``Distribution.GraphFibre.realBindValue, ``Distribution.GraphFibre.realIntegralValue,
     ``Distribution.GraphFibre.realPushforwardOnValue, ``Distribution.pushforwardOnValue, ``Distribution.GraphFibre.marginalOn, ``Distribution.GraphFibre.marginal, ``Distribution.GraphFibre.fibre, ``Distribution.RealDensityFibre.density, ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
     ``Distribution.Model.densityTestValue, ``Distribution.Model.densityMassValue,
     ``WeightedParameter.Fibre.Hom.observePartial,
@@ -37,6 +39,9 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.square_positive; assumption
   | solve | apply Distribution.GraphFibre.square_negative; assumption
   | solve | apply Distribution.GraphFibre.pushforwardOn_density; assumption
+  | exact Distribution.GraphFibre.realIntegral_dirac _ _
+  | exact Distribution.GraphFibre.realBind_dirac _ _
+  | exact Distribution.GraphFibre.realBind_weight_dirac _ _
   | exact Distribution.GraphFibre.realPushforward_identity _
   | exact Distribution.GraphFibre.realPushforward_mass_total _ _
   | exact Distribution.GraphFibre.pushforwardOn_test _ _ _

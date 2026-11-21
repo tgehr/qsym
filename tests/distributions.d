@@ -84,6 +84,12 @@ private Case[] cases(){ return [
 	Case("RestrictedHigherType","Λ(y:Distribution(ℝ)). ∫dx λ[x]·δ(δ(x))[y]·[x<1]","Distribution(Distribution(ℝ))"),
 	Case("RestrictedCubic","densityAtD(Λy. ∫dx λ[x]·δ(x³)[y]·[0<x<1],1/4)","ℝ"),
 	Case("ExplicitRestrictedBind","bindD(lebesgueD(),λ(x:ℝ).scaleD([0<x<1],δ(x²)))","Distribution(ℝ)"),
+	Case("ExplicitBindQuarter","densityAtD(bindD(lebesgueD(),λ(x:ℝ).scaleD([0<x<1],δ(x²))),1/4)","ℝ","1"),
+	Case("ExplicitWeightedBind","densityAtD(bindD(weightD(λ(x:ℝ).[0<x<1],lebesgueD()),λ(x:ℝ).δ(x*x)),1/4)","ℝ","1"),
+	Case("ExplicitAtomIntegral","densityAtD(integralD(λ(x:ℝ).scaleD([0<x<1],δ(x²))),0)","ℝ","0"),
+	Case("ExplicitIdentityRows","densityAtD(integralD(λ(x:ℝ).scaleD([0<x<1],δ(x))),1/2)","ℝ","1"),
+	Case("ExplicitCubicRows","integralD(λ(x:ℝ).scaleD([0<x<1],δ(x³)))","Distribution(ℝ)"),
+	Case("PartialDiracRows","bindD(lebesgueD(),λ(x:ℝ).scaleD([0<x<1],δ(x⁻¹)))","Distribution(ℝ)"),
 	Case("CubicMarginal","∫du λ[u]·δ(u^3)[v]//λ[v]","ℝ"),
 	Case("IndirectCubicMarginal","(λ(d:Distribution(ℝ)).massD(d))((λ[x]·δ(x^3)[y])//λ[y])","ℝ"),
 	Case("CapturedGraphQuery","λ(y:ℝ).graphFibreD(λ(x:ℝ).x+y,y)","ℝ→Distribution(ℝ)"),
@@ -193,10 +199,15 @@ private void run(string directory){
 		if(c.name=="RestrictedRatio") enforce(certificate.indexOf("square_openUnit_rule")>=0,c.name);
 		if(c.name=="RestrictedCubic"||c.name=="RestrictedHigherType")
 			enforce(certificate.indexOf(c.name=="RestrictedCubic"?"GraphFibre.realPushforwardOnValue":"Distribution.pushforwardOnValue")>=0&&certificate.indexOf("_openUnit_rule")<0,c.name);
-		if(c.name=="ExplicitRestrictedBind"){
-			auto reparsed=s.exportCertificate(a,again);
-			enforce(reparsed.indexOf("Distribution.bindValue")>=0&&reparsed.indexOf("Distribution.pushforwardOnValue")<0,c.name);
-		}
+		if(c.name=="ExplicitRestrictedBind"||c.name=="ExplicitBindQuarter")
+			enforce(certificate.indexOf("GraphFibre.realBindValue")>=0&&certificate.indexOf("GraphFibre.bind_openUnit_graph")>=0,c.name);
+		if(c.name=="ExplicitWeightedBind") enforce(certificate.indexOf("GraphFibre.weighted_bind_openUnit_graph")>=0,c.name);
+		if(c.name=="ExplicitAtomIntegral"||c.name=="ExplicitIdentityRows")
+			enforce(certificate.indexOf("GraphFibre.integral_openUnit_graph")>=0,c.name);
+		if(c.name=="ExplicitCubicRows") enforce(certificate.indexOf("GraphFibre.integral_openUnit_graph")>=0&&
+			certificate.indexOf("GraphFibre.square_openUnit_chart")<0,c.name);
+		if(c.name=="PartialDiracRows") enforce(certificate.indexOf("GraphFibre.realBindValue")>=0&&
+			certificate.indexOf("GraphFibre.bind_openUnit_graph")<0,c.name);
 		if(c.name=="CapturedGraphQuery") enforce(text.indexOf("graphFibreD")>=0,c.name~" would capture the query");
 		if(c.name=="SquareGraphMass"||c.name=="SquareGraphIntegral"||c.name=="CubicMarginal")
 			enforce(certificate.indexOf("Distribution.GraphFibre.marginal")>=0&&certificate.indexOf("Distribution.GraphFibre.value")<0,c.name);

@@ -41,7 +41,7 @@ private enum BindingRule:ubyte{
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
-	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionMaskAbsorb,distributionChartMass
+	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAtomRows,distributionMaskAbsorb,distributionChartMass
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -2600,12 +2600,56 @@ final class Bindings{
 			auto body=at(nodes[id].a);
 			return body==openUnit(variable(context(body),0));
 		}
+		// A total monomial carries a direct Lean witness for the row's output.
+		// Keep partial or captured maps on the general real bind/integral path.
+		BoundTerm atomRowsGraph(BoundTerm t){
+			auto n=node(t);
+			if(n.op!=BoundOp.distributionBind&&n.op!=BoundOp.distributionIntegral||
+				type(t)!=pool.distribution(scalarType(Sort.real_))) return BoundTerm.init;
+			bool integral=n.op==BoundOp.distributionIntegral;
+			auto fn=nodes[integral?n.a:n.b];
+			if(fn.op!=BoundOp.lambda) return BoundTerm.init;
+			auto row=nodes[fn.a]; uint weight,point;
+			if(integral||nodes[n.a].op==BoundOp.distributionLebesgue){
+				if(row.op!=BoundOp.distributionScale||nodes[row.b].op!=BoundOp.distributionDirac) return BoundTerm.init;
+				weight=row.a; point=nodes[row.b].a;
+			}else{
+				auto source=nodes[n.a];
+				if(row.op!=BoundOp.distributionDirac||source.op!=BoundOp.distributionWeight||
+					nodes[source.b].op!=BoundOp.distributionLebesgue||nodes[source.a].op!=BoundOp.lambda)
+					return BoundTerm.init;
+				weight=nodes[source.a].a; point=row.a;
+			}
+			auto mask=nodes[weight];
+			if(mask.op!=BoundOp.primitive||arena.view(arena.at(mask.data)).op!=Op.mask||
+				nodes[mask.b].op!=BoundOp.scalar||arena.at(nodes[mask.b].data)!=arena.real_(1)) return BoundTerm.init;
+			auto x=variable(context(at(point)),0),map=nodes[point];
+			if(at(point)!=x){
+				if(map.op!=BoundOp.primitive||map.a!=x.id) return BoundTerm.init;
+				auto op=arena.view(arena.at(map.data)).op;
+				if(op!=Op.pow&&(op!=Op.mul||map.b!=x.id)) return BoundTerm.init;
+			}
+			auto pred=lambda(at(mask.a));
+			if(!openUnitPredicate(pred.id)) return BoundTerm.init;
+			return distribution(context(t),BoundOp.distributionPushforwardOn,[pred,lambda(at(point))]);
+		}
 		Result visit(BoundTerm t,uint depth){
 			enforce(depth<512,"binding normalization depth exceeded");
 			auto old=memo.get(t.id,Result(uint.max,uint.max)); if(old.output!=uint.max) return old;
 			if(active.get(t.id,false)){ exhausted=true; return Result(t.id,emit(BindingRule.refl,t.id,t.id)); }
 			active.set(t.id,true);
 			auto n=node(t); Result result;
+			// Preserve the original real Iverson before scalar normalization moves
+			// its coercions outside the mask.
+			if(steps<budget&&(n.op==BoundOp.distributionBind||n.op==BoundOp.distributionIntegral)){
+				auto graph=atomRowsGraph(t);
+				if(graph!=BoundTerm.init){
+					++steps;
+					auto proof=emit(BindingRule.distributionAtomRows,t.id,graph.id),tail=visit(graph,depth+1);
+					result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,proof,tail.proof));
+					active.set(t.id,false); memo.set(t.id,result); return result;
+				}
+			}
 			if(steps<budget&&n.op==BoundOp.distributionWeight&&nodes[n.a].op==BoundOp.lambda&&nodes[n.b].op==BoundOp.distributionWeight){
 				auto inner=nodes[n.b];
 				if(nodes[inner.b].op==BoundOp.distributionLebesgue&&nodes[inner.a].op==BoundOp.lambda){
@@ -2699,10 +2743,18 @@ final class Bindings{
 				// The direct scalar observers have shorter proof terms than first
 				// changing the graph coordinates and then observing the result.
 				bool product;
-				auto graph=nodes[n.a];
-				if((n.op==BoundOp.distributionMass||n.op==BoundOp.distributionDensityAt)&&
-					graph.op==BoundOp.distributionPushforwardOn&&openUnitPredicate(graph.a)&&squareMap(graph.b,product))
-					x=Result(n.a,emit(BindingRule.refl,n.a,n.a));
+				if(n.op==BoundOp.distributionMass||n.op==BoundOp.distributionDensityAt){
+					auto graph=nodes[n.a];
+					if(graph.op==BoundOp.distributionPushforwardOn&&openUnitPredicate(graph.a)&&squareMap(graph.b,product))
+						x=Result(n.a,emit(BindingRule.refl,n.a,n.a));
+					else if(steps<budget&&(graph.op==BoundOp.distributionBind||graph.op==BoundOp.distributionIntegral)){
+						auto chart=atomRowsGraph(at(n.a));
+						if(chart!=BoundTerm.init&&squareMap(node(chart).b,product)){
+							++steps;
+							x=Result(chart.id,emit(BindingRule.distributionAtomRows,n.a,chart.id));
+						}
+					}
+				}
 				// Beta reduction already preserves the argument domain; normalize
 				// an applied lambda after substitution, not once on each side of it.
 				if(x.output==uint.max) x=n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.fixed||n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.lambda?Result(n.a,emit(BindingRule.refl,n.a,n.a)):visit(at(n.a),depth+1);
@@ -2743,6 +2795,10 @@ final class Bindings{
 				return (g.a==uint.max||guardReady(g.a))&&(g.b==uint.max||guardReady(g.b))&&(g.c==uint.max||guardReady(g.c));
 			}
 
+			if(current.op==BoundOp.distributionBind||current.op==BoundOp.distributionIntegral){
+				next=atomRowsGraph(at(result.output));
+				if(next!=BoundTerm.init) rule=BindingRule.distributionAtomRows;
+			}
 			if(current.op==BoundOp.distributionMass){
 				auto d=nodes[current.a];
 				if(d.op==BoundOp.distributionZero){ next=scalar(ctx,arena.real_(0)); rule=BindingRule.distributionMassZero; }
@@ -3604,7 +3660,8 @@ final class Bindings{
 		final switch(n.op){
 			case BoundOp.distributionGraphFibre:return "Distribution.GraphFibre.value";
 			case BoundOp.distributionGraphMass:return "Distribution.GraphFibre.marginal";
-			case BoundOp.distributionBind:return "Distribution.bindValue";
+			case BoundOp.distributionBind:return pool.view(type(at(n.b))).fields[1]==pool.distribution(scalarType(Sort.real_))?
+				"Distribution.GraphFibre.realBindValue":"Distribution.bindValue";
 			case BoundOp.distributionPushforwardOn:
 				return pool.view(type(at(n.b))).fields[1]==scalarType(Sort.real_)?
 					"Distribution.GraphFibre.realPushforwardOnValue":"Distribution.pushforwardOnValue";
@@ -3612,7 +3669,8 @@ final class Bindings{
 			case BoundOp.distributionAdd:return "Distribution.addValue";
 			case BoundOp.distributionScale:return "Distribution.scaleValue";
 			case BoundOp.distributionWeight:return "Distribution.weightValue";
-			case BoundOp.distributionIntegral:return "Distribution.integralValue";
+			case BoundOp.distributionIntegral:return pool.view(type(at(n.a))).fields[1]==pool.distribution(scalarType(Sort.real_))?
+				"Distribution.GraphFibre.realIntegralValue":"Distribution.integralValue";
 			case BoundOp.distributionMass:return "Distribution.massValue";
 			case BoundOp.distributionDensityAt:return "Distribution.densityAtValue";
 			case BoundOp.distributionZero,BoundOp.distributionLebesgue:assert(0);
@@ -5278,7 +5336,14 @@ final class Bindings{
 				case BindingRule.distributionMassIntegral,BindingRule.distributionMassBind:{
 					auto d=nodes[n.a],body=nodes[p.rule==BindingRule.distributionMassIntegral?d.a:d.b].a;
 					auto continuation="(fun x : ℝ => "~name(body)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
-					proof=".ofEq (fun ξ ρ => Distribution."~(p.rule==BindingRule.distributionMassIntegral?"model_mass_integralValue ":"model_mass_bind_density "~densityProgram(result.integrals[p.extra].from)~" ")~continuation~")"; break;
+					bool integral=p.rule==BindingRule.distributionMassIntegral;
+					string theorem="Distribution."~(integral?"model_mass_integralValue ":"model_mass_bind_density "~densityProgram(result.integrals[p.extra].from)~" ")~continuation;
+					if(type(at(n.a))==pool.distribution(scalarType(Sort.real_))){
+						auto bridge=integral?"realIntegral_mass":"realBind_mass";
+						auto source=integral?"":" ("~name(d.a)~".eval ξ ρ)";
+						theorem="(Distribution.GraphFibre."~bridge~source~" (some "~continuation~")).trans ("~theorem~")";
+					}
+					proof=".ofEq (fun ξ ρ => "~theorem~")"; break;
 				}
 				case BindingRule.distributionInterval,BindingRule.distributionIntegralAE:{
 					auto s=result.integrals[p.extra];enforce(s.piecewise||s.ae,"missing compositional integral certificate");
@@ -5292,6 +5357,17 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionGraphMass:
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.mass_eq_marginal ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[n.a].b)~".eval ξ ρ))"; break;
+				case BindingRule.distributionAtomRows:{
+					auto graph=nodes[p.to],map=nodes[nodes[graph.b].a];
+					string f="id";
+					if(map.op==BoundOp.primitive){
+						auto op=arena.view(arena.at(map.data));
+						f=op.op==Op.pow?"(fun x : ℝ => x ^ "~to!string(op.value)~")":"(fun x : ℝ => x * x)";
+					}
+					auto lemma=n.op==BoundOp.distributionIntegral?"integral_openUnit_graph":
+						nodes[n.a].op==BoundOp.distributionWeight?"weighted_bind_openUnit_graph":"bind_openUnit_graph";
+					proof=".ofEq (fun _ _ => Distribution.GraphFibre."~lemma~" "~f~")"; break;
+				}
 				case BindingRule.distributionMaskAbsorb:{
 					auto mask=nodes[nodes[n.a].a],pred=nodes[mask.a];
 					string fn(uint id){ return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }

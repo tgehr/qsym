@@ -1,5 +1,5 @@
 import QSym.DistributionSquareIntegral
-import QSym.DistributionGraph
+import QSym.DistributionAtomRows
 import QSym.AxiomCheck
 
 noncomputable section
@@ -9,7 +9,7 @@ open GraphFibre MeasureTheory Set
 private def intervalWeight := sourceWeight (Ioo 0 1)
 
 /-- The legacy explicit bind still has a row-wise density observer. -/
-private def source : Option (D ℝ) :=
+private def legacySource : Option (D ℝ) :=
   bindValue lebesgueValue (some (fun x =>
     scaleValue (some (intervalWeight x)) (diracValue (some (square x)))))
 
@@ -33,10 +33,8 @@ theorem included_endpoints :
   · rw [square_marginalOn_positiveSource (fun _ hx => hx.1)]
     norm_num [jac, mem_Ioc]
 
-/-- Even at an interior regular target the legacy observer integrates an
-undefined Dirac density. A distribution equality in the current exporter
-would have to preserve this observation. -/
-theorem source_at_quarter : densityAtValue source (some (1/4)) = none := by
+/-- The old row-wise interpretation is a regression witness at a regular value. -/
+theorem legacy_at_quarter : densityAtValue legacySource (some (1/4)) = none := by
   let row (x : ℝ) : D ℝ := .scale 1 (.scale (intervalWeight x) (.dirac (square x)))
   change (RealDensityFibre.mk 0 (partialIntegral volume
     (fun x => (realFibre (row x) (1/4)).density))).density = none
@@ -50,9 +48,9 @@ theorem source_at_quarter : densityAtValue source (some (1/4)) = none := by
     obtain ⟨_, hv⟩ := bad
     cases hv
 
-theorem no_presentation_rewrite : source ≠ chart := by
+theorem no_presentation_rewrite : legacySource ≠ chart := by
   intro h
-  have bad := source_at_quarter
+  have bad := legacy_at_quarter
   rw [h, chart_at_quarter] at bad
   contradiction
 
@@ -66,7 +64,7 @@ the graph only evaluates a test at squares, but the current density chart
 evaluates it even at a negative target where its coefficient vanishes. -/
 private def probe (y : ℝ) : Option ℝ := if y < 0 then none else some 0
 
-theorem source_probe : source.bind (fun d => integrate d probe) = some 0 := by
+theorem source_probe : legacySource.bind (fun d => integrate d probe) = some 0 := by
   calc
     _ = pushforwardTest (Ioo 0 1) square probe := bind_masked_dirac_test _ _ _
     _ = _ := by
@@ -97,6 +95,45 @@ theorem critical_graph_preserves_hole :
   rw [coordinates_density]
   exact (pushforwardOn_density _ square (measurable_id.pow_const 2) 0).trans included_endpoints.1
 
+private def explicitBind (s : Set ℝ) :=
+  realBindValue lebesgueValue (some fun x =>
+    scaleValue (some (sourceWeight s x)) (diracValue (some (square x))))
+
+private theorem explicitBind_eq_graph (s : Set ℝ) [DecidablePred (· ∈ s)] :
+    explicitBind s = realPushforwardOnValue (some fun x => some (decide (x ∈ s)))
+      (some fun x => some (square x)) := by
+  rw [explicitBind, realBind_dirac]
+  apply congrArg (fun w => some (inLebesgueCoordinates (.density w (fun x => some (square x)))))
+  funext x
+  by_cases h : x ∈ s <;> simp [sourceWeight, Value.mask, h]
+
+theorem explicitBind_eq_chart : explicitBind (Ioo 0 1) = chart := by
+  rw [explicitBind_eq_graph, square_positiveSource_lebesgue _ (fun _ hx => hx.1)]
+  rfl
+
+theorem explicitBind_at_quarter : densityAtValue (explicitBind (Ioo 0 1)) (some (1/4)) = some 1 :=
+  by rw [explicitBind_eq_chart]; exact chart_at_quarter
+
+theorem explicitBind_probe : (explicitBind (Ioo 0 1)).bind (fun d => integrate d probe) = none :=
+  by rw [explicitBind_eq_chart]; exact chart_probe
+
+theorem explicitBind_critical : densityAtValue (explicitBind (Ico 0 1)) (some 0) = none := by
+  rw [explicitBind_eq_graph]
+  exact critical_graph_preserves_hole
+
+/-- A bad row is visible even when it occurs at just one parameter. -/
+theorem missing_row (f : ℝ → D ℝ) (h : f 0 = .invalid) :
+    realIntegralRows f = .integral f :=
+  realIntegralRows_of_missing (r := 0) (by rw [h]; rfl)
+
+#qsym_check_axioms explicitBind_at_quarter
+#qsym_check_axioms explicitBind_probe
+#qsym_check_axioms explicitBind_critical
+#qsym_check_axioms missing_row
+#qsym_check_axioms realIntegralRows_partial
+#qsym_check_axioms realBind_mass
+#qsym_check_axioms realIntegral_dirac
+#qsym_check_axioms realBind_weight_dirac
 #qsym_check_axioms square_positiveSource_lebesgue
 #qsym_check_axioms coordinates_of_missing_density
 #qsym_check_axioms coordinates_partial
@@ -113,7 +150,7 @@ theorem critical_graph_preserves_hole :
 #qsym_check_axioms chart_at_quarter
 #qsym_check_axioms open_endpoints
 #qsym_check_axioms included_endpoints
-#qsym_check_axioms source_at_quarter
+#qsym_check_axioms legacy_at_quarter
 #qsym_check_axioms no_presentation_rewrite
 #qsym_check_axioms unit_mass
 #qsym_check_axioms source_probe

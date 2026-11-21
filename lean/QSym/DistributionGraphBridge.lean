@@ -67,6 +67,42 @@ private theorem openUnitPredicate_some (y : ℝ) :
     openUnitPredicate (some y) = some (decide (y ∈ Set.Ioo (0 : ℝ) 1)) := by
   by_cases h : 0 < y <;> simp [openUnitPredicate, Value.lt, Value.and, Set.mem_Ioo, h]
 
+private def openUnitWeight (x : ℝ) := if x ∈ Set.Ioo (0 : ℝ) 1 then (1 : ℝ) else 0
+
+private theorem openUnitMask (x : ℝ) :
+    Value.mask (openUnitPredicate (some x)) (some ((1 : ℤ) : ℝ)) = some (openUnitWeight x) := by
+  rw [openUnitPredicate_some]
+  by_cases h : x ∈ Set.Ioo (0 : ℝ) 1 <;> simp [Value.mask, openUnitWeight, h]
+
+private theorem openUnit_graph (f : ℝ → ℝ) :
+    realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) =
+      some (inLebesgueCoordinates (.density (fun x => some (openUnitWeight x)) (fun x => some (f x)))) := by
+  change some (inLebesgueCoordinates (.density _ _)) = _
+  have h (x : ℝ) := openUnitMask x
+  simp only [Int.cast_one] at h
+  simp only [h]
+
+theorem bind_openUnit_graph (f : ℝ → ℝ) :
+    realBindValue lebesgueValue (some fun x =>
+      scaleValue (Value.mask (openUnitPredicate (some x)) (some ((1 : ℤ) : ℝ))) (diracValue (some (f x)))) =
+      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) := by
+  simp only [openUnitMask, openUnit_graph]
+  qsym_rule
+
+theorem integral_openUnit_graph (f : ℝ → ℝ) :
+    realIntegralValue (some fun x =>
+      scaleValue (Value.mask (openUnitPredicate (some x)) (some ((1 : ℤ) : ℝ))) (diracValue (some (f x)))) =
+      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) := by
+  simp only [openUnitMask, openUnit_graph]
+  qsym_rule
+
+theorem weighted_bind_openUnit_graph (f : ℝ → ℝ) :
+    realBindValue (weightValue (some fun x => Value.mask (openUnitPredicate (some x)) (some ((1 : ℤ) : ℝ)))
+      lebesgueValue) (some fun x => diracValue (some (f x))) =
+      realPushforwardOnValue (some fun x => openUnitPredicate (some x)) (some fun x => some (f x)) := by
+  simp only [openUnitMask, openUnit_graph]
+  qsym_rule
+
 def openUnitDensity (y : Option ℝ) : Option ℝ :=
   Value.mask (openUnitPredicate y)
     (Value.inv (Value.mul (some ((2 : ℤ) : ℝ)) (Functions.sqrtR.apply y)))

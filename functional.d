@@ -601,8 +601,8 @@ struct FunctionSyntax{
 					}
 					case BoundOp.distributionBind,BoundOp.distributionIntegral:{
 						auto fn=b.at(q.op==BoundOp.distributionBind?q.b:q.a),f=b.node(fn);
-						// An explicit bind has the legacy row-wise density observer.
-						// Keep it explicit where the integral would reparse as a native chart.
+						// Keep unproved partial rows explicit: a missing coefficient or
+						// output need not determine the native chart on the remaining fibres.
 						bool maskedBind;
 						if(q.op==BoundOp.distributionBind&&b.node(b.at(q.a)).op==BoundOp.distributionLebesgue&&f.op==BoundOp.lambda){
 							auto row=b.node(b.at(f.a));

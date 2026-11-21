@@ -104,8 +104,8 @@ Pattern distributionSyntax(Pattern root){
 			auto measure=lower(factors[selected],p.binder,p.annotation); Pattern rest;
 			foreach(i,f;factors) if(i!=selected) rest=rest is null?f:pattern("$mul",[rest,f]);
 			enforce(rest !is null,"a distribution-valued integral needs an output form");
-			// Keep the map of a restricted Lebesgue graph. A row-wise bind
-			// forgets it before a downstream pointwise density query.
+			// A native restricted graph retains the predicate and map independently,
+			// even when evaluating one of them can fail.
 			auto base=factors[selected].args[0];
 			if(base.name=="λ"&&!base.called&&rest.name=="$mul"){
 				foreach(i;0..2){
