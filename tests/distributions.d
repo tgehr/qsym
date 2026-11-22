@@ -64,7 +64,21 @@ private Case[] cases(){ return [
 	Case("MaskedJointPredicate","λ(p:ℝ→𝔹).maskedGraphD(p,λ(x:ℝ).2*x+1)(3)","(ℝ→𝔹)→Distribution(ℝ)"),
 	Case("MaskedMissingTarget","(λ(y:ℝ). (λ[x]·δ(x+1)[y]·[0<x])//λ[y])(undefined(ℝ))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
 	Case("MaskedCapture","λ(y:ℝ).maskedGraphD(λ(u:ℝ).u<y,λ(u:ℝ).u^3)(y)","ℝ→Distribution(ℝ)"),
-	Case("MaskedSquareResidual","λ[x]·δ(x²)[y]·[0<x]//λ[y]","Distribution(ℝ)","[0<x]·λ[x]·δ(x^2)[y]//λ[y]"),
+	Case("MaskedSquareSymbolic","λ[x]·δ(x²)[y]·[0<x]//λ[y]","Distribution(ℝ)"),
+	Case("MaskedSquareFour","(λ(y:ℝ). [0<x]·λ[x]·δ(x²)[y]//λ[y])(4)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(-2)[x]+1/4·δ(2)[x]"),
+	Case("MaskedSquareProduct","(λ(y:ℝ). ∫dx [0<x]·λ[x]·δ(x*x)[y]//λ[y])(4)","ℝ","1/4"),
+	Case("MaskedSquareBoth","(λ(y:ℝ). ∫dx [0<x²]·λ[x]·δ(x²)[y]//λ[y])(4)","ℝ","1/2"),
+	Case("MaskedSquareExcluded","(λ(y:ℝ). [0<x]·λ[x]·δ(x²)[y]//λ[y])(0)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("MaskedSquareCritical","(λ(y:ℝ). [0≤x]·λ[x]·δ(x²)[y]//λ[y])(0)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("MaskedSquareMissingAtZero","(λ(y:ℝ). [0<x⁻¹]·λ[x]·δ(x²)[y]//λ[y])(0)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("MaskedSquareNegative","(λ(y:ℝ). [0<x⁻¹]·λ[x]·δ(x²)[y]//λ[y])(-1)","Distribution(ℝ)","Λ(x:ℝ). 0"),
+	Case("MaskedSquareMissingNegativeRoot","(λ(y:ℝ). ∫dx [0<(x+2)⁻¹]·λ[x]·δ(x²)[y]//λ[y])(4)","ℝ","undefined(ℝ)"),
+	Case("MaskedSquareMissingPositiveRoot","(λ(y:ℝ). ∫dx [0<(x-2)⁻¹]·λ[x]·δ(x²)[y]//λ[y])(4)","ℝ","undefined(ℝ)"),
+	Case("MaskedSquarePredicate","λ(p:ℝ→𝔹).maskedGraphD(p,λ(x:ℝ).x*x)(-1)","(ℝ→𝔹)→Distribution(ℝ)"),
+	Case("MaskedSquareMissingQuery","(λ(y:ℝ). [0<x]·λ[x]·δ(x²)[y]//λ[y])(undefined(ℝ))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("PartialBracketProduct","defined(([guard(true,false)]·2)·(0:ℝ)⁻¹)","𝔹","true"),
+	Case("TypedBracketProduct","defined(([guard(true,false)]:ℝ)·(0:ℝ)⁻¹)","𝔹","true"),
+	Case("StrictBracketProduct","defined(mulR([guard(true,false)],(0:ℝ)⁻¹))","𝔹","false"),
 	Case("JointAffineSymbolic","λ[x]·δ(2*x+1)[y]//λ[y]","Distribution(ℝ)","1/2·δ(y·(1/2)-1/2)[x]"),
 	Case("JointAffineDecreasing","(λ(y:ℝ). (λ[x]·δ(1-2*x)[y])//λ[y])(5)","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(-2)[x]"),
 	Case("JointAffineFraction","(λ(v:ℝ). (δ((3/2)*u-1)[v]·λ[u])//λ[v])(2)","Distribution(ℝ)","Λ(x:ℝ). 2/3·δ(2)[x]"),
@@ -233,8 +247,10 @@ private void run(string directory){
 		if(c.name.indexOf("MaskedJoint")==0)
 			enforce(certificate.indexOf("GraphFibre.maskedKernel")>=0&&certificate.indexOf("GraphFibre.masked_affine_rule")>=0,c.name);
 		if(c.name=="MaskedCapture") enforce(text.indexOf("maskedGraphD")>=0,c.name);
-		if(c.name=="MaskedSquareResidual")
-			enforce(certificate.indexOf("GraphFibre.maskedKernel")>=0&&certificate.indexOf("GraphFibre.masked_affine_rule")<0,c.name);
+		if(c.name.indexOf("MaskedSquare")==0&&c.name!="MaskedSquareMissingQuery"){
+			enforce(certificate.indexOf("GraphFibre.masked_square")>=0,c.name);
+			enforce(text.indexOf("maskedGraphD")<0&&text.indexOf("//")<0,c.name~": "~text);
+		}
 		if(c.name.indexOf("JointAffine")==0 && c.name.indexOf("Missing")<0){
 			auto lemma=c.name.indexOf("JointAffineMass")==0?"affine_mass_rule":"affine_fibre_rule";
 			enforce(certificate.indexOf("GraphFibre."~lemma)>=0,c.name);

@@ -1,10 +1,39 @@
 import QSym.DistributionSquareIntegral
-import QSym.DistributionAtomRows
+import QSym.DistributionGraphBridge
 import QSym.AxiomCheck
 
 noncomputable section
 namespace QSym.Distribution.RestrictedSquareTests
 open GraphFibre MeasureTheory Set
+
+/-- The zero joint test has source integral zero. An active critical root
+still makes the strict integral of the target fibres undefined. -/
+theorem critical_reconstruction_obstruction :
+    partialIntegral volume (fun _ : ℝ => some (0 : ℝ)) = some 0 ∧
+    partialIntegral volume (fun y =>
+      (maskedKernel (some fun _ => some true) (some fun x => some (square x))).bind
+        (fun k => (k y).bind (fun d => integrate d (fun _ => some 0)))) = none := by
+  refine ⟨partialIntegral_zero _, ?_⟩
+  rw [maskedKernel_total _ square (measurable_id.pow_const 2)]
+  unfold partialIntegral
+  split
+  · rename_i h
+    obtain ⟨_, hv⟩ := h.1 0
+    simp [masked_square_zero] at hv
+  · rfl
+
+/-- A probe may be undefined precisely on the discarded sign branch. -/
+theorem excluded_negative_probe {y : ℝ} (hy : 0 < y) :
+    (maskedAtoms (fun x => some (decide (0 < x))) square y).bind
+      (fun atoms => integrate (presentation atoms) (fun x => if x < 0 then none else some 1)) = none := by
+  rw [masked_square_positive _ hy]
+  have hs := Real.sqrt_pos.mpr hy
+  simp [hs, not_lt_of_ge hs.le, presentation, integrate, Value.add, Value.mul]
+
+#qsym_check_axioms excluded_negative_probe
+#qsym_check_axioms masked_square_rule
+#qsym_check_axioms masked_square_mul_rule
+#qsym_check_axioms critical_reconstruction_obstruction
 
 private def intervalWeight := sourceWeight (Ioo 0 1)
 

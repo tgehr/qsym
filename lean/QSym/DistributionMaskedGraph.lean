@@ -37,6 +37,32 @@ theorem maskedKernel_total (p : ℝ → Option Bool) (f : ℝ → ℝ) (hf : Mea
       some (fun y => (maskedAtoms p f y).map presentation) := by
   simp [maskedKernel, Value.Defined, hf]
 
+theorem masked_square_negative (p : ℝ → Option Bool) {y : ℝ} (hy : y < 0) :
+    maskedAtoms p square y = some [] := by
+  rw [maskedAtoms_of_roots p (xs := []) (by simp [List.Sorted])
+    (fun x => by simp [square, ne_of_gt (lt_of_lt_of_le hy (sq_nonneg x))])]
+  rfl
+
+theorem masked_square_zero (p : ℝ → Option Bool) :
+    maskedAtoms p square 0 = (p 0).bind (fun active => if active then none else some [(0, 0)]) := by
+  rw [maskedAtoms_of_roots p (xs := [0]) (by simp [List.Sorted]) (fun x => by simp [square])]
+  cases hp : p 0 with
+  | none => simp [List.mapM_cons, maskedAtom, hp]
+  | some active => cases active <;> simp [List.mapM_cons, maskedAtom, hp, deriv_square]
+
+theorem masked_square_positive (p : ℝ → Option Bool) {y : ℝ} (hy : 0 < y) :
+    maskedAtoms p square y = (do
+      let neg ← p (-√y)
+      let pos ← p (√y)
+      return [(-√y, if neg then jac y else 0), (√y, if pos then jac y else 0)]) := by
+  have roots := square_positive_roots hy
+  rw [maskedAtoms_of_roots p roots.sorted roots.complete]
+  have neg := roots.regular (-√y) (by simp)
+  have pos := roots.regular (√y) (by simp)
+  simp only [List.mapM_cons, maskedAtom, if_pos neg, if_pos pos]
+  cases hn : p (-√y) <;> cases hs : p (√y) <;> (repeat' casesm Bool) <;>
+    simp [deriv_square, abs_mul, abs_of_pos (Real.sqrt_pos.mpr hy), jac]
+
 theorem masked_affine_atoms (p : ℝ → Option Bool) (a b : ℝ) (ha : a ≠ 0) (y : ℝ) :
     maskedAtoms p (fun x => a*x+b) y =
       (p ((y-b)/a)).map (fun active => [((y-b)/a, if active then |a|⁻¹ else 0)]) := by

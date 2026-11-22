@@ -446,16 +446,23 @@ struct FunctionSyntax{
 				return finish(b.apply(variable,build(p.args[0],ctx,locals,v.fields[0],depth+1)));
 			}
 			BoundTerm[] holes; auto params=scalar.variables.dup;
-			Pattern hoist(Pattern q,bool root=false){
+			bool hasBracketFactor(Pattern q){
+				auto bare=q; while(bare.name=="$ascribe") bare=bare.args[0];
+				if(bare.name=="$iverson") return true;
+				return q.name=="$mul"&&(hasBracketFactor(q.args[0])||hasBracketFactor(q.args[1]));
+			}
+			Pattern hoist(Pattern q,bool root=false,bool factor=false){
 				bool local;
 				foreach(name;locals) if(q.name==name) local=true;
-				if(!root&&(special(q)||local)){
+				// A bracket factor guards the other factors in the scalar product.
+				// Hoist its predicate so scalar elaboration can still see the bracket.
+				if(!root&&(special(q)||local)&&!(factor&&hasBracketFactor(q))){
 					auto term=build(q,ctx,locals,TypeId.init,depth+1); Sort sort;
 					enforce(scalarSort(b.type(term),sort),"scalar operation received a function or set");
 					auto name="$hole"~to!string(holes.length); holes~=term; params~=Parameter(name,sort); return new Pattern(name);
 				}
 				auto copy=new Pattern(q.name); copy.number=q.number; copy.sort=q.sort; copy.annotation=q.annotation; copy.called=q.called;
-				foreach(arg;q.args) copy.args~=hoist(arg); return copy;
+				foreach(arg;q.args) copy.args~=hoist(arg,false,q.name=="$mul"||factor&&q.name=="$ascribe"); return copy;
 			}
 			auto scalarPattern=hoist(p,true);
 			if(expected!=TypeId.init){

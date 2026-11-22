@@ -108,32 +108,35 @@ theorem deriv_square (x : ℝ) : deriv square x = 2 * x := by
 
 def jac (y : ℝ) : ℝ := (2 * √y)⁻¹
 
+theorem square_positive_roots {y : ℝ} (hy : 0 < y) :
+    RegularRoots square y [-√y, √y] := by
+  have hs := Real.sqrt_pos.2 hy
+  have hs2 := Real.sq_sqrt hy.le
+  constructor
+  · simp [List.Sorted, hs]
+  · intro x
+    simp only [List.mem_cons, List.not_mem_nil, or_false, square]
+    constructor
+    · rintro (rfl|rfl) <;> simpa using hs2
+    · intro hx
+      rcases (sq_eq_sq_iff_eq_or_eq_neg).mp (hx.trans hs2.symm) with hp|hn
+      · exact Or.inr hp
+      · exact Or.inl hn
+  · intro x hx
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+    constructor
+    · rw [deriv_square]
+      simpa [square] using hasStrictDerivAt_pow 2 x
+    · rw [deriv_square]
+      apply mul_ne_zero (by norm_num)
+      rcases hx with rfl|rfl
+      · exact neg_ne_zero.mpr hs.ne'
+      · exact hs.ne'
+
 theorem square_positive {y : ℝ} (hy : 0 < y) :
     fibre square y = some [(-√y, jac y), (√y, jac y)] := by
   have hs := Real.sqrt_pos.2 hy
-  have hs2 := Real.sq_sqrt hy.le
-  have h : RegularRoots square y [-√y, √y] := by
-    constructor
-    · simp [List.Sorted, hs]
-    · intro x
-      simp only [List.mem_cons, List.not_mem_nil, or_false, square]
-      constructor
-      · rintro (rfl|rfl) <;> simpa using hs2
-      · intro hx
-        rcases (sq_eq_sq_iff_eq_or_eq_neg).mp (hx.trans hs2.symm) with hp|hn
-        · exact Or.inr hp
-        · exact Or.inl hn
-    · intro x hx
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-      constructor
-      · rw [deriv_square]
-        simpa [square] using hasStrictDerivAt_pow 2 x
-      · rw [deriv_square]
-        apply mul_ne_zero (by norm_num)
-        rcases hx with rfl|rfl
-        · exact neg_ne_zero.mpr hs.ne'
-        · exact hs.ne'
-  rw [fibre_of_regular h]
+  rw [fibre_of_regular (square_positive_roots hy)]
   simp [deriv_square, abs_mul, abs_of_pos hs, jac]
 
 theorem square_negative {y : ℝ} (hy : y < 0) : fibre square y = some [] := by

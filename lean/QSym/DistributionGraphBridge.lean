@@ -36,6 +36,55 @@ theorem square_mul_rule (y : Option ℝ) :
     value (some (fun x => Value.mul (some x) (some x))) y = squareResult y := by
   simpa [Value.mul, pow_two] using square_rule y
 
+/-- The critical fibre tests the mask once. At a positive target each
+regular inverse point has its own mask and shares the same Jacobian. -/
+def maskedSquareResult (p : Option (ℝ → Option Bool)) (y : Option ℝ) : Option (D ℝ) :=
+  let z := some ((0 : ℤ) : ℝ)
+  let s := Functions.sqrtR.apply y
+  let w := Value.inv (Value.mul (some ((2 : ℤ) : ℝ)) s)
+  let active := fun x : Option ℝ => p.bind (fun pred => x.bind pred)
+  let branch := fun x => scaleValue (Value.mask (active x) w) (diracValue x)
+  p.bind fun _ => Binding.conditionalValue (Value.lt z y)
+    (addValue (branch (Value.mul (some ((-1 : ℤ) : ℝ)) s)) (branch s))
+    (Binding.conditionalValue (Value.lt y z) zeroValue
+      (Binding.conditionalValue (active z) none (scaleValue z (diracValue z))))
+
+theorem masked_square_rule (p : Option (ℝ → Option Bool)) (y : Option ℝ) :
+    (maskedKernel p (some fun x => some (x^2))).bind (fun k => y.bind k) =
+      maskedSquareResult p y := by
+  rcases p with _ | p
+  · rfl
+  cases y with
+  | none => rfl
+  | some y =>
+    change ((maskedKernel (some p) (some fun x => some (square x))).bind (fun k => k y)) = _
+    rw [maskedKernel_total p square (measurable_id.pow_const 2)]
+    simp only [Option.some_bind]
+    rcases lt_trichotomy y 0 with hn|rfl|hp
+    · have h : maskedAtoms p square y = some [] := by qsym_rule
+      simp [h, maskedSquareResult, Binding.conditionalValue, Value.lt, hn, not_lt_of_ge hn.le,
+        presentation, zeroValue]
+    · have h : maskedAtoms p square 0 = (p 0).bind (fun active =>
+          if active then none else some [(0, 0)]) := by qsym_rule
+      rw [h]
+      cases h : p 0 <;> (try casesm Bool) <;>
+        simp [h, maskedSquareResult, Binding.conditionalValue, Value.lt, presentation, scaleValue, diracValue]
+    · have h : maskedAtoms p square y = (do
+          let neg ← p (-√y)
+          let pos ← p (√y)
+          return [(-√y, if neg then jac y else 0), (√y, if pos then jac y else 0)]) := by qsym_rule
+      rw [h]
+      have hne : 2 * √y ≠ 0 := by positivity
+      cases hn : p (-√y) <;> cases hs : p (√y) <;> (repeat' casesm Bool) <;>
+        simp [hn, hs, maskedSquareResult, Binding.conditionalValue, Value.lt, hp, hp.le, presentation,
+          Function1.apply, Functions.sqrtR, diracValue, scaleValue, addValue, Value.mask,
+          Value.mul, Value.inv, hne, jac]
+
+theorem masked_square_mul_rule (p : Option (ℝ → Option Bool)) (y : Option ℝ) :
+    (maskedKernel p (some fun x => Value.mul (some x) (some x))).bind (fun k => y.bind k) =
+      maskedSquareResult p y := by
+  simpa [Value.mul, pow_two] using masked_square_rule p y
+
 /-- Scalar marginal via a strict test on the source section. -/
 def squareMass (y : Option ℝ) : Option ℝ :=
   let z := some ((0 : ℤ) : ℝ)
