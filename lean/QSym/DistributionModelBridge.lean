@@ -63,8 +63,18 @@ theorem model_mass_weight_diracValue {A : Type} (f : Option (A → Option ℝ)) 
 
 theorem model_density_weight_lebesgueValue (f : Option (ℝ → Option ℝ)) (x : Option ℝ) :
     densityAtValue (weightValue f lebesgueValue) x = f.bind (fun g => x.bind g) := by
-  rw [density_observation_bridge]
-  qsym_rule
+  cases f with
+  | none => rfl
+  | some g =>
+    cases x with
+    | none => rfl
+    | some x =>
+      let p := DensityProgram.weight g .lebesgue
+      change densityAtValue p.presentation (some x) = g x
+      rw [← p.semanticDensityAt_bridge x]
+      calc
+        p.semanticDensityAt x = p.density x := by qsym_rule
+        _ = g x := Value.mul_one_left _
 
 theorem model_mass_diracValue {A : Type} (a : Option A) :
     massValue (diracValue a) = a.bind (fun _ => some ((1 : ℤ) : ℝ)) := by

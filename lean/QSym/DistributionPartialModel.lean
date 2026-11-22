@@ -1,5 +1,5 @@
 import QSym.DistributionDensityModel
-import QSym.WeightedFibreRooted
+import QSym.DistributionCoordinates
 
 /-! Direct interpretation of primitive and density programs by partial fibres.
 
@@ -162,9 +162,9 @@ def semantic (p : DensityProgram) : PartialHom ℝ PUnit.{1} ℝ :=
 def rootedSemantic (p : DensityProgram) : RootedPartialTrace ℝ volume ℝ :=
   RootedPartialHom.ofPartialHom p.semantic
 
-/-- Pointwise density is observation of the fibre at the retained coordinate. -/
+/-- Cancel the explicit real reference at this point and test its section against one. -/
 def semanticDensityAt (p : DensityProgram) (x : ℝ) : Option ℝ :=
-  p.rootedSemantic.observe x (PUnit.unit : PUnit.{1}) (fun _ => some 1)
+  (p.semantic.sectionAt x).observe PUnit.unit (PUnit.unit : PUnit.{1}) (fun _ => some 1)
 
 /-- Mass is joint observation at the intrinsic Lebesgue root. -/
 def semanticMass (p : DensityProgram) : Option ℝ := p.rootedSemantic.mass
@@ -189,6 +189,7 @@ theorem semanticMass_rooted (p : DensityProgram) :
 
 @[simp] theorem semanticDensityAt_eq (p : DensityProgram) (x : ℝ) :
     p.semanticDensityAt x = p.density x := by
+  rw [semanticDensityAt, PartialHom.observe_sectionAt]
   change partialIntegral (Measure.dirac (PUnit.unit : PUnit.{1}))
     (fun _ : PUnit.{1} => Value.mul (p.density x) (some 1)) = _
   rw [partialIntegral_point, Value.mul_one_right]

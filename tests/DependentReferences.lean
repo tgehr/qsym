@@ -56,6 +56,29 @@ theorem badRow_joint : partialIntegral (ignored ⊗ₘ realRows) badRow = some 0
     Measure.integral_compProd badRow_joint_integrable]
   simp [ignored, realRows, badRow]
 
+/-- The exact reconstruction can integrate past a divergent null row, while a
+query at that row is still undefined. -/
+theorem badRow_sections :
+    integrateSections ignored (∀ p, Value.Defined (badRow p))
+      (fun y => partialIntegral (realRows y) (fun z => badRow (y, z)))
+      (fun y => ∫ z, |(badRow (y, z)).getD 0| ∂realRows y) = some 0 ∧
+    partialIntegral (realRows false) (fun z => badRow (false, z)) = none := by
+  constructor
+  · have hm : Measurable (fun p : Bool × ℝ => (badRow p).getD 0) :=
+      (measurable_of_finite (fun b : Bool => if b then (0 : ℝ) else 1)).comp measurable_fst
+    rw [← partialIntegral_compProd_sections ignored realRows badRow hm.aestronglyMeasurable]
+    exact badRow_joint
+  · simp [partialIntegral, realRows, badRow, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+
+/-- Changing a cell on the same ignored row to undefined invalidates reconstruction. -/
+theorem missing_null_cell (row : Bool → Option ℝ) (variation : Bool → ℝ) :
+    integrateSections ignored (∀ p : Bool × ℝ, Value.Defined (if p.1 then some (0 : ℝ) else none))
+      row variation = none := by
+  apply if_neg
+  intro h
+  obtain ⟨_, impossible⟩ := h.1 (false, 0)
+  cases impossible
+
 theorem badRow_nested : partialIntegral ignored
     (fun y => partialIntegral (realRows y) (fun z => badRow (y, z))) = none := by
   have hrow : partialIntegral (realRows false) (fun z => badRow (false, z)) = none := by
@@ -103,6 +126,16 @@ theorem balanced_not_l1 : ¬ Integrable (fun p => (balanced p).getD 0) (volume �
 
 theorem balanced_joint : partialIntegral (volume ⊗ₘ atomRows) balanced = none :=
   partialIntegral_invalid _ _ balanced_not_l1
+
+/-- Exact reconstruction rejects cancellation even with finite zero row means. -/
+theorem balanced_sections :
+    integrateSections volume (∀ p, Value.Defined (balanced p))
+      (fun y => partialIntegral (atomRows y) (fun z => balanced (y, z)))
+      (fun y => ∫ z, |(balanced (y, z)).getD 0| ∂atomRows y) = none := by
+  have hm : Measurable (fun p : ℝ × Bool => (balanced p).getD 0) :=
+    (measurable_of_finite (fun b : Bool => if b then (1 : ℝ) else -1)).comp measurable_snd
+  exact (partialIntegral_compProd_sections volume atomRows balanced hm.aestronglyMeasurable).symm.trans
+    balanced_joint
 
 theorem balanced_nested : partialIntegral volume
     (fun y => partialIntegral (atomRows y) (fun z => balanced (y, z))) = some 0 := by
@@ -248,6 +281,9 @@ theorem no_intermediate_observer_on_flattening :
 #qsym_check_axioms tower_fubini
 #qsym_check_axioms badRow_joint_integrable
 #qsym_check_axioms badRow_joint
+#qsym_check_axioms badRow_sections
+#qsym_check_axioms missing_null_cell
+#qsym_check_axioms balanced_sections
 #qsym_check_axioms badRow_nested
 #qsym_check_axioms no_fubini_from_joint_l1
 #qsym_check_axioms zero_rows

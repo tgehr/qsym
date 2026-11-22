@@ -1,3 +1,4 @@
+import QSym.DistributionPartialModel
 import QSym.DistributionSquareReconstruction
 import QSym.DistributionAtomRows
 import QSym.DistributionFiniteMixedReal
@@ -27,6 +28,8 @@ elab "qsym_distribution_goal" : tactic => do
     ``Distribution.GraphFibre.realPushforwardOnValue, ``Distribution.pushforwardOnValue, ``Distribution.GraphFibre.marginalOn, ``Distribution.GraphFibre.marginal, ``Distribution.GraphFibre.fibre, ``Distribution.GraphFibre.maskedAtoms, ``Distribution.RealDensityFibre.density, ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
     ``Distribution.Model.densityTestValue, ``Distribution.Model.densityMassValue,
     ``WeightedParameter.Fibre.Hom.observePartial,
+    ``WeightedParameter.Fibre.PartialHom.sectionAt, ``WeightedParameter.Fibre.PartialHom.marginalize,
+    ``WeightedParameter.Fibre.RootedPartialHom.marginalize, ``integrateSections, ``Distribution.DensityProgram.semanticDensityAt,
     ``DependentIntegralTheory.joint, ``WeightedParameter.Fibre.Tower.observe,
     ``Distribution.DensityProgram.mass, ``Distribution.DensityIntegralTheory.mass,
     ``Distribution.DensityProgram.observe]
@@ -96,7 +99,21 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply FiniteIntegralTheory.scale_zero_total <;> assumption
   | solve | apply FiniteIntegralTheory.scale_nonzero <;> assumption
   | solve | apply FiniteIntegralTheory.scale_defined <;> assumption
-  | solve | apply FiniteIntegralTheory.add_defined <;> assumption)
+  | solve | apply FiniteIntegralTheory.add_defined <;> assumption
+  | exact Distribution.DensityProgram.semanticDensityAt_eq _ _
+  | apply WeightedParameter.Fibre.PartialHom.observe_sectionAt_weighted_pure
+  | apply WeightedParameter.Fibre.PartialHom.observe_sectionAt
+  | apply WeightedParameter.Fibre.PartialHom.sectionAt_add
+  | apply WeightedParameter.Fibre.PartialHom.sectionAt_reweight
+  | apply WeightedParameter.Fibre.PartialHom.marginalize_reweight
+  | apply WeightedParameter.Fibre.PartialHom.sectionAt_marginalize
+  | apply WeightedParameter.Fibre.PartialHom.reindex_marginalize
+  | apply WeightedParameter.Fibre.PartialHom.marginalize_marginalize
+  | apply WeightedParameter.Fibre.PartialHom.observe_marginalize
+  | apply WeightedParameter.Fibre.RootedPartialHom.observeJoint_marginalize
+  | apply WeightedParameter.Fibre.PartialHom.observeJoint_marginalize
+  | solve | apply WeightedParameter.Fibre.PartialFamily.observeJoint_sections; assumption
+  | solve | apply partialIntegral_compProd_sections; assumption)
 
 macro "qsym_distribution" : tactic => `(tactic| (qsym_distribution_goal; first
   | solve | qsym_distribution_eq

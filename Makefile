@@ -338,6 +338,7 @@ test-distributions: build/distribution-tests test-distribution-model-rules test-
 	cd lean && $(LAKE) build QSym.DistributionSquareIntegral QSym.DistributionGraphBridge QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
 	cd lean && $(LAKE) env lean ../tests/RestrictedSquare.lean
 	cd lean && $(LAKE) env lean ../tests/SquareReconstruction.lean
+	cd lean && $(LAKE) env lean ../tests/DistributionCoordinates.lean
 	cd lean && $(LAKE) env lean ../tests/AffineGraph.lean
 	python3 tools/check_distributions.py --lake $(LAKE)
 

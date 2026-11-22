@@ -93,6 +93,43 @@ theorem integrable_compProd_iff_variation (f : Y × Z → Option ℝ)
   rw [Measure.integrable_compProd_iff hm]
   simp only [Real.norm_eq_abs, Filter.Eventually.of_forall hr, true_and]
 
+open Classical in
+/-- Integrate pointwise signed sections. A divergent row can be skipped only
+in the outer numerical integral on a null set. The separate cell-domain
+guard still visits every point, even when its reference measure is zero. -/
+def integrateSections (cellsDefined : Prop) (row : Y → Option ℝ) (variation : Y → ℝ) : Option ℝ :=
+  if cellsDefined ∧ (∀ᵐ y ∂μ, Value.Defined (row y)) ∧ Integrable variation μ then
+    some (∫ y, (row y).getD 0 ∂μ)
+  else none
+
+theorem partialIntegral_compProd_sections (f : Y × Z → Option ℝ)
+    (hm : AEStronglyMeasurable (fun z => (f z).getD 0) (μ ⊗ₘ κ)) :
+    partialIntegral (μ ⊗ₘ κ) f =
+      integrateSections μ (∀ z, Value.Defined (f z))
+        (fun y => partialIntegral (κ y) (fun z => f (y,z)))
+        (fun y => ∫ z, |(f (y,z)).getD 0| ∂κ y) := by
+  classical
+  by_cases hd : ∀ z, Value.Defined (f z)
+  · have rowDomain (y : Y) : Value.Defined (partialIntegral (κ y) (fun z => f (y,z))) ↔
+        Integrable (fun z => (f (y,z)).getD 0) (κ y) := by
+      rw [partialIntegral_defined_iff, and_iff_right (fun z => hd (y,z))]
+    have domain := Measure.integrable_compProd_iff hm
+    simp only [Real.norm_eq_abs] at domain
+    by_cases hi : Integrable (fun z => (f z).getD 0) (μ ⊗ₘ κ)
+    · obtain ⟨hr, hv⟩ := domain.mp hi
+      have hrow := hr.mono (fun y hy => (rowDomain y).mpr hy)
+      rw [partialIntegral_valid _ _ hd hi, integrateSections, if_pos ⟨hd, hrow, hv⟩,
+        Measure.integral_compProd hi]
+      congr 1
+      apply integral_congr_ae
+      filter_upwards [hr] with y hy
+      rw [partialIntegral_valid _ _ (fun z => hd (y,z)) hy]
+      rfl
+    · rw [partialIntegral_invalid _ _ hi, integrateSections, if_neg]
+      rintro ⟨_, hr, hv⟩
+      exact hi (domain.mpr ⟨hr.mono (fun y hy => (rowDomain y).mp hy), hv⟩)
+  · simp only [partialIntegral, integrateSections, hd, false_and, if_false]
+
 /-- Backend-independent dependent-integration contract. Capabilities are
 predicates supplied and verified by the model, not global axioms. -/
 structure DependentIntegralTheory (Y Z : Type) where
