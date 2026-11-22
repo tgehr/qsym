@@ -1,4 +1,4 @@
-import QSym.DistributionAffine
+import QSym.DistributionMaskedGraph
 import QSym.DistributionAtomRows
 import QSym.DistributionSquareIntegral
 import QSym.DistributionFiniteMixedReal
@@ -25,7 +25,7 @@ elab "qsym_distribution_goal" : tactic => do
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
     ``Distribution.GraphFibre.realBindValue, ``Distribution.GraphFibre.realIntegralValue,
-    ``Distribution.GraphFibre.realPushforwardOnValue, ``Distribution.pushforwardOnValue, ``Distribution.GraphFibre.marginalOn, ``Distribution.GraphFibre.marginal, ``Distribution.GraphFibre.fibre, ``Distribution.RealDensityFibre.density, ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
+    ``Distribution.GraphFibre.realPushforwardOnValue, ``Distribution.pushforwardOnValue, ``Distribution.GraphFibre.marginalOn, ``Distribution.GraphFibre.marginal, ``Distribution.GraphFibre.fibre, ``Distribution.GraphFibre.maskedAtoms, ``Distribution.RealDensityFibre.density, ``Distribution.AtomPlusDensity.densityAt, ``Distribution.AtomPlusDensity.mass,
     ``Distribution.Model.densityTestValue, ``Distribution.Model.densityMassValue,
     ``WeightedParameter.Fibre.Hom.observePartial,
     ``DependentIntegralTheory.joint, ``WeightedParameter.Fibre.Tower.observe,
@@ -40,6 +40,7 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.square_positive; assumption
   | solve | apply Distribution.GraphFibre.square_negative; assumption
   | solve | apply Distribution.GraphFibre.pushforwardOn_density; assumption
+  | solve | apply Distribution.GraphFibre.masked_affine_atoms; assumption
   | solve | apply Distribution.GraphFibre.affine_fibre; assumption
   | solve | apply Distribution.GraphFibre.affine_lebesgue; assumption
   | exact Distribution.GraphFibre.realIntegral_dirac _ _

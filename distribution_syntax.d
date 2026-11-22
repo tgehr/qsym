@@ -4,23 +4,25 @@ import std.exception:enforce;
 @safe:
 
 // Recognize a joint Lebesgue/Dirac graph over two distinct real axes.
-private bool graphForm(Pattern p,out Pattern input,out Pattern mapping,out Pattern target){
+private bool graphForm(Pattern p,out Pattern input,out Pattern mapping,out Pattern target,out Pattern mask){
 	if(p.name!="$disintegrate"||p.args[0].name!="$mul") return false;
 	auto denominator=p.args[1];
 	bool measure(Pattern q){ return q.name=="$distributionApply"&&q.args[0].name=="λ"&&!q.args[0].called; }
 	if(!measure(denominator)) return false;
 	target=denominator.args[1];
-	auto factors=p.args[0].args;
-	foreach(i;0..2){
-		auto base=factors[i],point=factors[1-i];
-		if(!measure(base)||base.args[1].name==target.name||point.name!="$distributionApply"||
-			point.args[1].name!=target.name) continue;
-		auto atom=point.args[0];
-		if((atom.name=="δ"||atom.name=="dirac")&&atom.args.length==1){
-			input=base.args[1]; mapping=atom.args[0]; return true;
-		}
+	Pattern base,point;
+	bool collect(Pattern q) @safe {
+		if(q.name=="$mul") return collect(q.args[0])&&collect(q.args[1]);
+		if(measure(q)&&base is null){ base=q; return true; }
+		if(q.name=="$iverson"&&mask is null){ mask=q; return true; }
+		if(q.name=="$distributionApply"&&point is null){ point=q; return true; }
+		return false;
 	}
-	return false;
+	if(!collect(p.args[0])||base is null||point is null||base.args[1].name==target.name||
+		point.args[1].name!=target.name) return false;
+	auto atom=point.args[0];
+	if((atom.name!="δ"&&atom.name!="dirac")||atom.args.length!=1) return false;
+	input=base.args[1]; mapping=atom.args[0]; return true;
 }
 
 // Distribution application is a scoped form, not a scalar density or function
@@ -30,8 +32,8 @@ string distributionOutputAxis(Pattern root){
 	void visit(Pattern p,bool inForm) @safe {
 		if(p.binder.length) return;
 		if(p.name=="$disintegrate"){
-			Pattern input,mapping,target;
-			if(inForm&&graphForm(p,input,mapping,target)){
+			Pattern input,mapping,target,mask;
+			if(inForm&&graphForm(p,input,mapping,target,mask)){
 				if(!axis.length) axis=input.name;
 				enforce(axis==input.name,"multiple free output axes require explicit distribution binders");
 			}
@@ -86,8 +88,8 @@ Pattern distributionSyntax(Pattern root){
 		}
 		if(p.name=="$bottom") return typed(p,dt);
 		if(p.name=="$disintegrate"){
-			Pattern input,mapping,target;
-			enforce(graphForm(p,input,mapping,target)&&input.name==axis,"graph disintegration requires its retained axis");
+			Pattern input,mapping,target,mask;
+			enforce(graphForm(p,input,mapping,target,mask)&&input.name==axis,"graph disintegration requires its retained axis");
 			return typed(expand(p),dt);
 		}
 		if(p.name=="#"&&p.number==0){ auto t=pattern("$type",[]); t.annotation=ty; return pattern("zeroD",[t]); }
@@ -154,10 +156,14 @@ Pattern distributionSyntax(Pattern root){
 		if(p.name=="$distribution") return lower(p.args[0],p.binder,p.annotation);
 		if(p.name=="$integral") return pattern("massD",[lower(p.args[0],p.binder,p.annotation)]);
 		if(p.name=="$disintegrate"){
-			Pattern input,mapping,target;
-			if(graphForm(p,input,mapping,target)){
+			Pattern input,mapping,target,mask;
+			if(graphForm(p,input,mapping,target,mask)){
 				enforce(!distributionOccurs(mapping,target.name),"a graph map cannot depend on its output axis");
-				return pattern("graphFibreD",[lambda(input.name,new TypePattern("Real"),expand(mapping)),target]);
+				auto realType=new TypePattern("Real"),map=lambda(input.name,realType,expand(mapping));
+				if(mask is null) return pattern("graphFibreD",[map,target]);
+				enforce(!distributionOccurs(mask,target.name),"a source mask cannot depend on the output axis");
+				auto kernel=pattern("maskedGraphD",[lambda(input.name,realType,expand(mask.args[0])),map]);
+				return pattern("$apply",[kernel,target]);
 			}
 			auto d=p.args[1];
 			enforce(d.name=="$distributionApply"&&d.args[0].name=="λ","only disintegration with respect to λ[x] is supported");

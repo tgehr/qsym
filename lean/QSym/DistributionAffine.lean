@@ -6,7 +6,7 @@ noncomputable section
 namespace QSym.Distribution.GraphFibre
 open Set MeasureTheory
 
-private theorem affine_derivative (a b x : ℝ) :
+theorem affine_derivative (a b x : ℝ) :
     HasStrictDerivAt (fun u : ℝ => a*u+b) a x := by
   simpa using ((hasStrictDerivAt_id x).const_mul a).add_const b
 
@@ -55,7 +55,7 @@ theorem affine_marginalOn (s : Set ℝ) (a b : ℝ) (ha : a ≠ 0) (y : ℝ) :
 
 /-- Transport strict finite integration through the affine bijection. The
 pointwise hypothesis transports missing values as well as signed weights. -/
-private theorem affine_integral (a b : ℝ) (ha : a ≠ 0) (g k : ℝ → Option ℝ)
+theorem affine_integral (a b : ℝ) (ha : a ≠ 0) (g k : ℝ → Option ℝ)
     (hk : ∀ x, k (a*x+b) = Value.mul (some |a|⁻¹) (g x)) :
     partialIntegral volume g = partialIntegral volume k := by
   classical

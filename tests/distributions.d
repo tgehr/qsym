@@ -53,6 +53,18 @@ private Case[] cases(){ return [
 	Case("SignedFibreRegularHole","densityAtD(Λ(x:ℝ).δ(0)[x]+((1/x)*λ[x]+(-δ(0)[x])),0)","ℝ","0⁻¹"),
 	Case("SignedFibreSymbolic","λ(a:ℝ).densityAtD(Λ(x:ℝ).δ(a)[x]+(λ[x]+(-δ(a)[x])),a)","ℝ→ℝ","λ(a:ℝ). (1:ℝ)"),
 	Case("UnsolvedCubicGraph","(λ[x]·δ(x^3)[y])//λ[y]","Distribution(ℝ)","λ[x]·δ(x^3)[y]//λ[y]"),
+	Case("MaskedJointSymbolic","[0≤x<1]·λ[x]·δ(1-2*x)[y]//λ[y]","Distribution(ℝ)","([y≤1∧-1<y]·(1/2))·δ(-y·(1/2)+1/2)[x]"),
+	Case("MaskedJointIncluded","(λ(y:ℝ). (δ(1-2*x)[y]·([0≤x<1]·λ[x]))//λ[y])(1)","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]"),
+	Case("MaskedJointExcluded","(λ(y:ℝ). (λ[x]·δ(1-2*x)[y]·[0≤x<1])//λ[y])(-1)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(1)[x]"),
+	Case("MaskedJointMass","∫dx [x≠0]·λ[x]·δ(2*x+1)[y]//λ[y]","ℝ","[y≠1]·(1/2)"),
+	Case("MaskedJointMissingWeight","(λ(y:ℝ). ∫dx ([0<x⁻¹]·λ[x]·δ(2*x+1)[y])//λ[y])(1)","ℝ","undefined(ℝ)"),
+	Case("MaskedJointPartialElsewhere","(λ(y:ℝ). ∫du ([0<u⁻¹]·λ[u]·δ(2*u+1)[y])//λ[y])(3)","ℝ","1/2"),
+	Case("MaskedJointHoleDensity","(λ(y:ℝ).densityAtD(([0≤x<1]·λ[x]·δ(1-2*x)[y])//λ[y],1))(-1)","ℝ","0"),
+	Case("MaskedJointActiveDensity","(λ(y:ℝ).densityAtD(([0≤x<1]·λ[x]·δ(1-2*x)[y])//λ[y],0))(1)","ℝ","undefined(ℝ)"),
+	Case("MaskedJointPredicate","λ(p:ℝ→𝔹).maskedGraphD(p,λ(x:ℝ).2*x+1)(3)","(ℝ→𝔹)→Distribution(ℝ)"),
+	Case("MaskedMissingTarget","(λ(y:ℝ). (λ[x]·δ(x+1)[y]·[0<x])//λ[y])(undefined(ℝ))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("MaskedCapture","λ(y:ℝ).maskedGraphD(λ(u:ℝ).u<y,λ(u:ℝ).u^3)(y)","ℝ→Distribution(ℝ)"),
+	Case("MaskedSquareResidual","λ[x]·δ(x²)[y]·[0<x]//λ[y]","Distribution(ℝ)","[0<x]·λ[x]·δ(x^2)[y]//λ[y]"),
 	Case("JointAffineSymbolic","λ[x]·δ(2*x+1)[y]//λ[y]","Distribution(ℝ)","1/2·δ(y·(1/2)-1/2)[x]"),
 	Case("JointAffineDecreasing","(λ(y:ℝ). (λ[x]·δ(1-2*x)[y])//λ[y])(5)","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(-2)[x]"),
 	Case("JointAffineFraction","(λ(v:ℝ). (δ((3/2)*u-1)[v]·λ[u])//λ[v])(2)","Distribution(ℝ)","Λ(x:ℝ). 2/3·δ(2)[x]"),
@@ -218,6 +230,11 @@ private void run(string directory){
 			enforce(text.indexOf("scaleD")<0&&text.indexOf("graphFibreD")<0,c.name~": "~text);
 			enforce(s.inspectType(a,text)==c.type,c.name~" printed type");
 		}
+		if(c.name.indexOf("MaskedJoint")==0)
+			enforce(certificate.indexOf("GraphFibre.maskedKernel")>=0&&certificate.indexOf("GraphFibre.masked_affine_rule")>=0,c.name);
+		if(c.name=="MaskedCapture") enforce(text.indexOf("maskedGraphD")>=0,c.name);
+		if(c.name=="MaskedSquareResidual")
+			enforce(certificate.indexOf("GraphFibre.maskedKernel")>=0&&certificate.indexOf("GraphFibre.masked_affine_rule")<0,c.name);
 		if(c.name.indexOf("JointAffine")==0 && c.name.indexOf("Missing")<0){
 			auto lemma=c.name.indexOf("JointAffineMass")==0?"affine_mass_rule":"affine_fibre_rule";
 			enforce(certificate.indexOf("GraphFibre."~lemma)>=0,c.name);
@@ -311,6 +328,8 @@ private void run(string directory){
 	foreach(source;[
 		"if x<0 then δ(0)[x] else λ[x]", "(λ[x]·δ(x+y)[y])//λ[y]", "Λ(z:ℝ).(λ[x]·δ(x²)[y])//λ[y]",
 		"μ(f:ℝ→ℝ).λ(y:ℝ).massD((λ[x]·δ(f(x))[y])//λ[y])",
+		"([x<y]·λ[x]·δ(x)[y])//λ[y]", "([0<x]·λ[x]·δ(x+y)[y])//λ[y]",
+		"maskedGraphD(λ(x:ℝ).x,λ(x:ℝ).x)", "maskedGraphD(λ(x:ℝ).0<x,λ(n:ℕ).n)",
 		"pushforwardOnD(λ(x:ℝ).x,λ(x:ℝ).x)", "pushforwardOnD(λ(x:ℝ).x<1,λ(n:ℕ).n)",
 		"Λ(x:ℕ).λ[x]", "Λ(x:ℝ).δ(x)[x]", "Λ(x:ℝ).λ[x]*λ[x]",
 		"Λ(x:ℝ).δ(2)[y]", "δ(2)=δ(2)", "(δ(2):Distribution(𝔹))",

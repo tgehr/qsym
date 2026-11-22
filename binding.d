@@ -28,7 +28,7 @@ struct BoundTerm{
 	@property uint id()const{ return index; }
 	bool opEquals(BoundTerm rhs)const{ return owner is rhs.owner&&index==rhs.index; }
 }
-enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,conditional,distributionDirac,distributionZero,distributionLebesgue,distributionAdd,distributionScale,distributionWeight,distributionIntegral,distributionMass,distributionDensityAt,distributionBind,distributionGraphFibre,distributionGraphMass,distributionPushforwardOn }
+enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,conditional,distributionDirac,distributionZero,distributionLebesgue,distributionAdd,distributionScale,distributionWeight,distributionIntegral,distributionMass,distributionDensityAt,distributionBind,distributionGraphFibre,distributionGraphMass,distributionPushforwardOn,distributionMaskedGraph }
 enum TensorOp:ubyte{ add,mul,dot,matvec,matmul,power }
 struct BoundNode{
 	BoundOp op;
@@ -41,7 +41,7 @@ private enum BindingRule:ubyte{
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
-	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionAffineFibre,distributionAffineMass,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass
+	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -435,6 +435,10 @@ final class Bindings{
 				enforce(map.kind==TypeKind.function_&&map.fields[0]==realType,"pushforwardOnD requires a map from the reals");
 				output=pool.distribution(map.fields[1]); break;
 			}
+			case BoundOp.distributionMaskedGraph:
+				enforce(args.length==2&&type(args[0])==pool.function_(realType,scalarType(Sort.boolean))&&
+					type(args[1])==pool.function_(realType,realType),"maskedGraphD requires a real predicate and real map");
+				output=pool.function_(realType,pool.distribution(realType)); break;
 			case BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:
 				enforce(args.length==2&&type(args[0])==pool.function_(realType,realType)&&type(args[1])==realType,"graph disintegration requires a real map and query");
 				output=op==BoundOp.distributionGraphMass?realType:pool.distribution(realType); break;
@@ -582,7 +586,7 @@ final class Bindings{
 		TypeId mapped(uint id){ return dimensions is null?types[id]:pool.map(types[id],dimensions); }
 		final switch(n.op){
 			case BoundOp.distributionZero:return distribution(target,n.op,[],pool.view(mapped(n.type)).fields[0]);
-			case BoundOp.distributionLebesgue,BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:return distribution(target,n.op,args);
+			case BoundOp.distributionLebesgue,BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:return distribution(target,n.op,args);
 			case BoundOp.unit,BoundOp.vectorNil:return tuple(target,[],mapped(n.type));
 			case BoundOp.vectorCons,BoundOp.pair:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id,args[1].id));
 			case BoundOp.first,BoundOp.rest:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id));
@@ -2966,6 +2970,7 @@ final class Bindings{
 					}
 				}
 			}
+			bool maskedGraph=current.op==BoundOp.apply&&nodes[current.a].op==BoundOp.distributionMaskedGraph;
 			if((current.op==BoundOp.distributionGraphFibre||current.op==BoundOp.distributionGraphMass)&&squareMap(current.a,squareProduct)){
 				auto query=at(current.b),zero=scalar(ctx,arena.real_(0));
 				auto root=primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[query]);
@@ -2990,16 +2995,21 @@ final class Bindings{
 						conditional(primitive(lt,[query,zero]),empty,bottom(ctx,type(empty))));
 					rule=BindingRule.distributionSquareGraph;
 				}
-			}else if(current.op==BoundOp.distributionGraphFibre||current.op==BoundOp.distributionGraphMass){
+			}else if(maskedGraph||current.op==BoundOp.distributionGraphFibre||current.op==BoundOp.distributionGraphMass){
+				auto map=maskedGraph?nodes[current.a].b:current.a;
 				Rational slope,offset;
-				if(affineMap(current.a,slope,offset)){
-					bool fibre=current.op==BoundOp.distributionGraphFibre;
-					auto chart=affineChart(current.a,slope,offset,fibre);
+				if(affineMap(map,slope,offset)){
+					bool fibre=current.op!=BoundOp.distributionGraphMass;
+					auto chart=affineChart(map,slope,offset,fibre);
 					auto jac=scalar(ctx,arena.at(nodes[chart.jacobian].data)),query=at(current.b);
 					if(fibre){
-						auto point=apply(lambda(at(chart.inverse)),query);
-						next=distribution(ctx,BoundOp.distributionScale,[jac,distribution(ctx,BoundOp.distributionDirac,[point])]);
-						rule=BindingRule.distributionAffineFibre;
+						auto point=apply(lambda(at(chart.inverse)),query),weight=jac;
+						if(maskedGraph){
+							auto active=apply(at(nodes[current.a].a),point);
+							weight=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[active,jac]);
+						}
+						next=distribution(ctx,BoundOp.distributionScale,[weight,distribution(ctx,BoundOp.distributionDirac,[point])]);
+						rule=maskedGraph?BindingRule.distributionMaskedAffine:BindingRule.distributionAffineFibre;
 					}else{
 						next=sequence(query,jac);
 						rule=BindingRule.distributionAffineMass;
@@ -3770,6 +3780,7 @@ final class Bindings{
 	}
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
+			case BoundOp.distributionMaskedGraph:return "Distribution.GraphFibre.maskedKernel";
 			case BoundOp.distributionGraphFibre:return "Distribution.GraphFibre.value";
 			case BoundOp.distributionGraphMass:return "Distribution.GraphFibre.marginal";
 			case BoundOp.distributionBind:return pool.view(type(at(n.b))).fields[1]==pool.distribution(scalarType(Sort.real_))?
@@ -3920,7 +3931,7 @@ final class Bindings{
 			switch(n.op){
 				case BoundOp.distributionZero:return "Distribution.zeroValue";
 				case BoundOp.distributionLebesgue:return "Distribution.lebesgueValue";
-				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:
+				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:
 					return "("~valueOperation(n)~" "~child(n.a)~(n.b==uint.max?"":" "~child(n.b))~")";
 				case BoundOp.variable:return "(some "~vars[n.data]~")";
 				case BoundOp.scalar:return "(n"~to!string(n.data)~".eval ξ)";
@@ -4342,7 +4353,7 @@ final class Bindings{
 				case BoundOp.variable:
 					expr=".here"; foreach(j;0..n.data) expr="(.there "~expr~")";
 					expr=".var "~expr; break;
-				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass,BoundOp.finiteSum,BoundOp.summation,BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
+				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass,BoundOp.finiteSum,BoundOp.summation,BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
 					expr="."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~name(n.a);
 					if(n.b!=uint.max) expr~=" "~name(n.b); break;
 				case BoundOp.lambda:expr=".lam "~name(n.a); break;
@@ -5531,6 +5542,10 @@ final class Bindings{
 					// binding evaluations. This avoids expensive backward unification.
 					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affine_chart_rule "~realBody(n.a)~" "~
 						rowTotalProof(chart.predicateDomain)~" "~chartProofs[p.extra]~"; h)"; break;
+				}
+				case BindingRule.distributionMaskedAffine:{
+					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.masked_affine_rule ("~name(nodes[n.a].a)~
+						".eval ξ ρ) ("~name(n.b)~".eval ξ ρ) "~chartProofs[p.extra]~"; h)"; break;
 				}
 				case BindingRule.distributionAffineFibre,BindingRule.distributionAffineMass:{
 					auto lemma=p.rule==BindingRule.distributionAffineFibre?"affine_fibre_rule":"affine_mass_rule";

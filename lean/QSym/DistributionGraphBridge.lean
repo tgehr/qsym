@@ -78,6 +78,29 @@ theorem affine_fibre_rule (y : Option ℝ) (a b j : ℚ) {f i : ℝ → Option �
     have inv : (a : ℝ)⁻¹ * y + -(b : ℝ) / a = (y-b)/a := by ring
     simp [scaleValue, diracValue, presentation, inv, abs_inv]
 
+theorem masked_affine_rule (p : Option (ℝ → Option Bool)) (y : Option ℝ) (a b j : ℚ)
+    {f i : ℝ → Option ℝ} {v : Option ℝ} (ha : a ≠ 0) (hj : j = |a⁻¹|)
+    (hf : StepSource.Affine f a b) (hi : StepSource.Affine i a⁻¹ (-b/a)) (hv : v = some (j : ℝ)) :
+    (maskedKernel p (some f)).bind (fun k => y.bind k) =
+      scaleValue (Value.mask (p.bind (fun pred => (y.bind i).bind pred)) v) (diracValue (y.bind i)) := by
+  have hn : (a : ℝ) ≠ 0 := by exact_mod_cast ha
+  subst v
+  rcases p with _ | p
+  · rfl
+  cases y with
+  | none => rfl
+  | some y =>
+    have hm : Measurable (fun x : ℝ => (a : ℝ)*x+b) := by fun_prop
+    have atoms : maskedAtoms p (fun x => (a : ℝ)*x+b) y =
+        (p ((y-b)/a)).map (fun active => [((y-b)/a, if active then |(a : ℝ)|⁻¹ else 0)]) := by qsym_rule
+    have inv : (a : ℝ)⁻¹*y + -(b : ℝ)/a = (y-b)/a := by ring
+    rw [funext hf.equation, maskedKernel_total p _ hm]
+    simp only [Option.some_bind, hi.equation, Rat.cast_neg,
+      Rat.cast_div, Rat.cast_inv, inv, atoms, hj, Rat.cast_abs, abs_inv]
+    cases hp : p ((y-b)/a) with
+    | none => rfl
+    | some active => cases active <;> rfl
+
 /-- A scalar observer can discard the inverse point while preserving a
 missing target. No inverse-map certificate is needed for this observation. -/
 theorem affine_mass_rule (y : Option ℝ) (a b j : ℚ) {f : ℝ → Option ℝ} {v : Option ℝ}

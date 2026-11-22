@@ -119,7 +119,7 @@ struct FunctionSyntax{
 			name=="∑"||name=="sum"||name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
 	}
 	private bool distributionName(string name){
-		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","positiveLebesgueD","λ₊","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD","pushforwardOnD"])
+		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","positiveLebesgueD","λ₊","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD","maskedGraphD","pushforwardOnD"])
 			if(name==n) return true;
 		return false;
 	}
@@ -282,6 +282,7 @@ struct FunctionSyntax{
 					case "integralD":op=BoundOp.distributionIntegral; break;
 					case "massD":op=BoundOp.distributionMass; break;
 					case "pushforwardOnD":op=BoundOp.distributionPushforwardOn; break;
+					case "maskedGraphD":op=BoundOp.distributionMaskedGraph; break;
 					case "graphFibreD":op=BoundOp.distributionGraphFibre; break;
 					case "densityAtD":op=BoundOp.distributionDensityAt; break;
 					default:throw new Exception("unsupported distribution constructor: "~p.name);
@@ -289,7 +290,8 @@ struct FunctionSyntax{
 				BoundTerm[] args;
 				foreach(i,arg;p.args){
 					TypeId want;
-					if(op==BoundOp.distributionPushforwardOn&&i==0) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.boolean));
+					if(op==BoundOp.distributionMaskedGraph&&i==1) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.real_));
+					if((op==BoundOp.distributionPushforwardOn||op==BoundOp.distributionMaskedGraph)&&i==0) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.boolean));
 					if(p.name=="graphFibreD") want=i==0?pool.function_(scalarType(Sort.real_),scalarType(Sort.real_)):scalarType(Sort.real_);
 					if(p.name=="dirac"&&expected!=TypeId.init&&pool.view(expected).kind==TypeKind.distribution) want=pool.view(expected).fields[0];
 					if(p.name=="scaleD"&&i==0||p.name=="densityAtD"&&i==1) want=scalarType(Sort.real_);
@@ -552,14 +554,18 @@ struct FunctionSyntax{
 			}
 			string graphForm(BoundNode q,string axis,string[] names,uint level,bool group){
 				string value(uint id){ return render(b.at(id),names,depth+level+1); }
-				auto fn=b.node(b.at(q.a)),point=b.node(b.at(q.b));
-				if(fn.op==BoundOp.lambda&&(point.op==BoundOp.variable||point.op==BoundOp.scalar&&a.view(a.at(point.data)).op==Op.variable)){
+				bool masked=q.op==BoundOp.apply;
+				auto kernel=b.node(b.at(q.a)),fn=masked?b.node(b.at(kernel.b)):kernel,point=b.node(b.at(q.b));
+				if((!masked||b.node(b.at(kernel.a)).op==BoundOp.lambda)&&fn.op==BoundOp.lambda&&(point.op==BoundOp.variable||point.op==BoundOp.scalar&&a.view(a.at(point.data)).op==Op.variable)){
 					auto y=value(q.b),map=render(b.at(fn.a),[axis]~names,depth+level+1);
-					if(y!=axis&&!distributionOccurs(Parser(map).parseRawExpression(),y)){
-						auto graph="λ["~axis~"]·δ("~map~")["~y~"]//λ["~y~"]";
+					auto pred=masked?render(b.at(b.node(b.at(kernel.a)).a),[axis]~names,depth+level+1):"";
+					if(y!=axis&&!distributionOccurs(Parser(map).parseRawExpression(),y)&&
+						(!masked||!distributionOccurs(Parser(pred).parseRawExpression(),y))){
+						auto graph=(masked?"["~pred~"]·":"")~"λ["~axis~"]·δ("~map~")["~y~"]//λ["~y~"]";
 						return group?"("~graph~")":graph;
 					}
 				}
+				if(masked) return "("~value(q.a)~"("~value(q.b)~"))["~axis~"]";
 				return "(graphFibreD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
 			}
 			string form(BoundTerm d,string axis,string[] names,uint level=0,bool group=false) @safe {
@@ -573,6 +579,10 @@ struct FunctionSyntax{
 					case BoundOp.distributionDirac:return "δ("~render(b.at(q.a),names,depth+level+1,b.type(b.at(q.a)))~")["~axis~"]";
 					case BoundOp.conditional:return grouped("if "~value(q.a)~" then "~nested(q.b,false)~" else "~nested(q.c,false));
 					case BoundOp.bottom:return value(d.id);
+					case BoundOp.apply:
+						if(b.node(b.at(q.a)).op!=BoundOp.distributionMaskedGraph)
+							return "("~value(d.id)~")["~axis~"]";
+						goto case BoundOp.distributionGraphFibre;
 					case BoundOp.distributionGraphFibre:return graphForm(q,axis,names,level,group);
 					case BoundOp.distributionAdd:return grouped(nested(q.a)~"+"~nested(q.b));
 					case BoundOp.distributionScale:{
@@ -624,6 +634,7 @@ struct FunctionSyntax{
 				return "get("~child(base)~","~to!string(index)~")";
 			}
 			switch(n.op){
+				case BoundOp.distributionMaskedGraph:return "maskedGraphD("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.distributionDirac:return "δ("~child(n.a)~")";
 				case BoundOp.distributionMass:{
 					auto axis=fresh(locals,axisHint(n.a)),ty=pool.view(b.type(b.at(n.a))).fields[0];
@@ -695,7 +706,9 @@ struct FunctionSyntax{
 					string operand(uint id){ auto op=b.node(b.at(id)).op; return op==BoundOp.lambda||op==BoundOp.fixed?"("~child(id)~")":child(id); }
 					return "("~operand(n.a)~"="~operand(n.b)~")";
 				case BoundOp.apply:
-					auto f=b.node(b.at(n.a)); return (f.op==BoundOp.variable||f.op==BoundOp.global?child(n.a):"("~child(n.a)~")")~"("~child(n.b)~")";
+					auto f=b.node(b.at(n.a));
+					if(f.op==BoundOp.distributionMaskedGraph) goto case BoundOp.distributionGraphFibre;
+					return (f.op==BoundOp.variable||f.op==BoundOp.global?child(n.a):"("~child(n.a)~")")~"("~child(n.b)~")";
 				case BoundOp.sequence:return "seq("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.subset:return "("~child(n.a)~"⊆"~child(n.b)~")";
 				case BoundOp.member:return "("~child(n.b)~"∈"~child(n.a)~")";

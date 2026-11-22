@@ -65,6 +65,31 @@ theorem excluded_missing_point :
     simp only [zero]
     exact partialIntegral_zero _
 
+/-- The frontend kernel preserves the undefined test at a discarded point. -/
+theorem masked_puncture_reconstruction :
+    partialIntegral MeasureTheory.volume (fun y =>
+      (maskedKernel (some fun x => some (decide (x ≠ 0))) (some fun x => some (1*x+0))).bind
+        (fun k => (k y).bind (fun d => integrate d hole))) = none := by
+  rw [← masked_affine_disintegrates _ 1 0 one_ne_zero (fun x _ => hole x)]
+  unfold partialIntegral
+  split
+  · rename_i h
+    obtain ⟨_, hv⟩ := h.1 0
+    simp [hole, Value.mask, Value.mul] at hv
+  · rfl
+
+/-- At a masked critical root no inverse derivative is required. If the
+same root is active, the Lebesgue disintegration is undefined there. -/
+theorem masked_square_at_zero (keep : Bool) :
+    maskedAtoms (fun _ => some keep) square 0 = if keep then none else some [(0, 0)] := by
+  have root (x : ℝ) : x ∈ [(0 : ℝ)] ↔ square x = 0 := by simp [square]
+  rw [maskedAtoms_of_roots _ (by simp [List.Sorted]) root]
+  cases keep <;> simp [List.mapM_cons, maskedAtom, deriv_square]
+
+#qsym_check_axioms masked_affine_rule
+#qsym_check_axioms masked_affine_disintegrates
+#qsym_check_axioms masked_puncture_reconstruction
+#qsym_check_axioms masked_square_at_zero
 #qsym_check_axioms affine_disintegratesOn
 #qsym_check_axioms affine_disintegratesOn_strict
 #qsym_check_axioms excluded_missing_point
