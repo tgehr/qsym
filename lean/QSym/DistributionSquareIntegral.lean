@@ -1,6 +1,6 @@
 import QSym.DistributionGraph
 import Mathlib.Analysis.SpecialFunctions.Sqrt
-import Mathlib.MeasureTheory.Function.Jacobian
+import QSym.DistributionBranch
 import Mathlib.MeasureTheory.Measure.Lebesgue.Integral
 import Mathlib.MeasureTheory.Integral.IntervalIntegral.Basic
 
@@ -27,14 +27,10 @@ theorem squareParameters_test (t : ℝ → Option ℝ) :
       exact sq_pos_of_pos (show 0 < x from hx)
     · intro (hy : 0 < y)
       exact ⟨√y, Real.sqrt_pos.mpr hy, Real.sq_sqrt hy.le⟩
-  have inj : InjOn square (Ioi 0) := by
-    intro x (hx : 0 < x) z (hz : 0 < z) h
-    simpa only [square, Real.sqrt_sq hx.le, Real.sqrt_sq hz.le] using congrArg Real.sqrt h
   have hd : ∀ x ∈ Ioi (0 : ℝ), HasDerivWithinAt square (2*x) (Ioi 0) x := by
     intro x _
     simpa [square] using ((hasDerivAt_pow 2 x).hasDerivWithinAt (s := Ioi 0))
-  have hi := integrableOn_image_iff_integrableOn_abs_deriv_smul measurableSet_Ioi hd inj k
-  have he := integral_image_eq_integral_abs_deriv_smul measurableSet_Ioi hd inj k
+  obtain ⟨hi, he⟩ := branch_changeOfVariables measurableSet_Ioi (square_injOn_positiveSource Subset.rfl) hd k
   rw [image] at hi he
   let b := fun x => Value.mul (some (positiveJacobian x)) (t (square x))
   have body : (fun x => (b x).getD 0) = (Ioi 0).indicator g := by
@@ -121,17 +117,31 @@ theorem sqrt_changeOfVariables (g : ℝ → ℝ) :
   have derivS : ∀ y ∈ Ioi (0 : ℝ), HasDerivWithinAt Real.sqrt (jac y) (Ioi 0) y := by
     intro y hy
     simpa [jac, one_div] using (Real.hasDerivAt_sqrt (ne_of_gt hy)).hasDerivWithinAt (s := Ioi 0)
-  have ha := integrableOn_image_iff_integrableOn_abs_deriv_smul measurableSet_Ioi derivS inj g
-  have he := integral_image_eq_integral_abs_deriv_smul measurableSet_Ioi derivS inj g
-  rw [image] at ha he
+  have transport := branch_changeOfVariables measurableSet_Ioi inj derivS g
+  rw [image] at transport
   have hj (y : ℝ) : |jac y| = jac y := abs_of_nonneg (by unfold jac; positivity)
-  simpa only [hj, smul_eq_mul] using And.intro ha he
+  simpa only [hj, smul_eq_mul] using transport
 
 private theorem sqrt_substitution (g : ℝ → ℝ) (hg : IntegrableOn g (Ioi 0)) :
     IntegrableOn (fun y => jac y * g (√y)) (Ioi 0) ∧
     (∫ x in Ioi 0, g x) = ∫ y in Ioi 0, jac y * g (√y) :=
   let h := sqrt_changeOfVariables g
   ⟨h.1.mp hg, h.2⟩
+
+open Classical in
+/-- Exact square reconstruction on any measurable positive source, with a
+partial signed test on the full graph. An empty target fibre skips the test. -/
+theorem square_positiveSource_disintegrates {s : Set ℝ} (hs : MeasurableSet s) (hp : s ⊆ Ioi 0)
+    (h : ℝ → ℝ → Option ℝ) :
+    branchIntegral s (fun x => h x (square x)) = partialIntegral volume
+      (fun y => if √y ∈ s then Value.mul (some (jac y)) (h (√y) y) else some 0) := by
+  have hd (x : ℝ) : HasStrictDerivAt square (2*x) x := by simpa [square] using hasStrictDerivAt_pow 2 x
+  rw [injectiveBranch_disintegrates hs (square_injOn_positiveSource hp) (fun x _ => hd x)
+    (fun x hx => mul_ne_zero (by norm_num) (ne_of_gt (hp hx)))]
+  apply congrArg (partialIntegral volume)
+  funext y
+  rw [square_fibreOn_positiveSource hp]
+  split <;> simp [observe, Value.add_zero_right]
 
 /-- Change of variables for a measurable part of the positive square branch.
 The test only needs to be integrable along the graph over the selected source. -/

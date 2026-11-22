@@ -340,6 +340,7 @@ test-distributions: build/distribution-tests test-distribution-model-rules test-
 	cd lean && $(LAKE) env lean ../tests/SquareReconstruction.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionCoordinates.lean
 	cd lean && $(LAKE) env lean ../tests/AffineGraph.lean
+	cd lean && $(LAKE) env lean ../tests/DistributionBranch.lean
 	python3 tools/check_distributions.py --lake $(LAKE)
 
 # Standalone semantic model and closed law/counterexample audits.

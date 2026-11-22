@@ -1,5 +1,5 @@
 import QSym.DistributionGraph
-import Mathlib.MeasureTheory.Function.Jacobian
+import QSym.DistributionBranch
 import Mathlib.MeasureTheory.Measure.Lebesgue.Integral
 
 noncomputable section
@@ -21,27 +21,15 @@ theorem affine_fibreOn (s : Set ℝ) (a b : ℝ) (ha : a ≠ 0) (y : ℝ) :
   have root (x : ℝ) : x = z ↔ a*x+b = y := by
     rw [eq_div_iff ha]
     constructor <;> intro h <;> linarith [mul_comm x a]
-  have hd (x : ℝ) : deriv (fun u : ℝ => a*u+b) x = a := (affine_derivative a b x).hasDerivAt.deriv
+  have hi : InjOn (fun x => a*x+b) s := fun _ _ _ _ he => mul_left_cancel₀ ha (add_right_cancel he)
   by_cases hz : z ∈ s
-  · have roots : RegularRootList (fun x => a*x+b) (fun x => x ∈ s ∧ a*x+b = y) [z] := by
-      constructor
-      · simp [List.Sorted]
-      · intro x
-        simp only [List.mem_singleton]
-        exact ⟨fun h => ⟨h ▸ hz, (root x).mp h⟩, fun h => (root x).mpr h.2⟩
-      · intro x _
-        rw [hd]
-        exact ⟨affine_derivative a b x, ha⟩
-    simp [fibreOn_of_regular roots, hd, show (y-b)/a = z from rfl, hz]
-  · have roots : RegularRootList (fun x => a*x+b) (fun x => x ∈ s ∧ a*x+b = y) [] := by
-      constructor
-      · simp [List.Sorted]
-      · intro x
-        simp only [List.not_mem_nil, false_iff]
-        rintro ⟨hx, he⟩
-        exact hz ((root x).mpr he ▸ hx)
-      · simp
-    simp [fibreOn_of_regular roots, show (y-b)/a = z from rfl, hz]
+  · rw [if_pos hz]
+    exact (congrArg (fibreOn s (fun x => a*x+b)) ((root z).mp rfl).symm).trans
+      (fibreOn_of_injOn hi hz (affine_derivative a b z) ha)
+  · rw [if_neg hz]
+    apply fibreOn_of_notMem_image
+    rintro ⟨x, hx, he⟩
+    exact hz ((root x).mpr he ▸ hx)
 
 /-- Disintegration over the whole source retains its unique inverse point. -/
 theorem affine_fibre (a b : ℝ) (ha : a ≠ 0) (y : ℝ) :
@@ -64,22 +52,15 @@ theorem affine_integral (a b : ℝ) (ha : a ≠ 0) (g k : ℝ → Option ℝ)
   have onto : Function.Surjective f := fun y => ⟨(y-b)/a, by dsimp [f]; field_simp [ha]⟩
   have inj : InjOn f univ := fun x _ z _ h =>
     (retract x).symm.trans ((congrArg (fun y => (y-b)/a) h).trans (retract z))
-  have domain : (∀ y, Value.Defined (k y)) ↔ ∀ x, Value.Defined (g x) := by
-    rw [onto.forall (p := fun y => Value.Defined (k y))]
-    apply forall_congr'
-    intro x
-    rw [show k (f x) = _ from hk x]
-    cases g x <;> simp [Value.Defined, Value.mul]
   have hd : ∀ x ∈ (univ : Set ℝ), HasDerivWithinAt f a univ x :=
     fun x _ => (affine_derivative a b x).hasDerivAt.hasDerivWithinAt
-  have hj (x : ℝ) : |a| • (k (f x)).getD 0 = (g x).getD 0 := by
-    rw [show k (f x) = _ from hk x]
-    cases g x <;> simp [Value.mul, smul_eq_mul, ← mul_assoc, abs_ne_zero.mpr ha]
-  let t := fun y => (k y).getD 0
-  have hi := integrableOn_image_iff_integrableOn_abs_deriv_smul MeasurableSet.univ hd inj t
-  have he := integral_image_eq_integral_abs_deriv_smul MeasurableSet.univ hd inj t
-  simp only [t, image_univ, onto.range_eq, integrableOn_univ, setIntegral_univ, hj] at hi he
-  simp only [partialIntegral, domain, hi, he]
+  have transport := branchIntegral_image MeasurableSet.univ inj hd k
+  rw [image_univ, onto.range_eq, branchIntegral_univ, branchIntegral_univ] at transport
+  rw [transport]
+  apply congrArg (partialIntegral volume)
+  funext x
+  rw [show k (f x) = _ from hk x]
+  cases g x <;> simp [Value.mul, smul_eq_mul, ← mul_assoc, abs_ne_zero.mpr ha]
 
 /-- Empty fibres skip the test, whereas multiplication by a zero source
 weight is strict. Definedness at discarded graph points suffices to relate

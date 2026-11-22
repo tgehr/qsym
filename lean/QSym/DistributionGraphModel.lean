@@ -66,6 +66,34 @@ theorem fibreOn_of_regular {s f y xs} (h : RegularRootList f (fun x => x ∈ s �
     fibreOn s f y = some (xs.map (fun x => (x, |deriv f x|⁻¹))) :=
   weightedRoots_of_regular h
 
+/-- Outside the image there are no source points to test. -/
+theorem fibreOn_of_notMem_image {s : Set ℝ} {f : ℝ → ℝ} {y : ℝ} (hy : y ∉ f '' s) :
+    fibreOn s f y = some [] := by
+  apply fibreOn_of_regular (xs := [])
+  constructor
+  · simp [List.Sorted]
+  · intro x
+    simp only [List.not_mem_nil, false_iff]
+    exact fun ⟨hx, he⟩ => hy ⟨x, hx, he⟩
+  · simp
+
+/-- One regular root determines its entire fibre on an injective branch.
+Neither measurability of the source set nor regularity elsewhere is needed. -/
+theorem fibreOn_of_injOn {s : Set ℝ} {f : ℝ → ℝ} (hi : InjOn f s) {x d : ℝ}
+    (hx : x ∈ s) (hd : HasStrictDerivAt f d x) (hn : d ≠ 0) :
+    fibreOn s f (f x) = some [(x, |d|⁻¹)] := by
+  have roots : RegularRootList f (fun z => z ∈ s ∧ f z = f x) [x] := by
+    constructor
+    · simp [List.Sorted]
+    · intro z
+      simp only [List.mem_singleton]
+      exact ⟨fun he => he.symm ▸ ⟨hx, rfl⟩, fun he => hi he.1 hx he.2⟩
+    · intro z hz
+      obtain rfl := List.mem_singleton.mp hz
+      rw [hd.hasDerivAt.deriv]
+      exact ⟨hd, hn⟩
+  simp [fibreOn_of_regular roots, hd.hasDerivAt.deriv]
+
 theorem fibre_of_regular {f y xs} (h : RegularRoots f y xs) :
     fibre f y = some (xs.map (fun x => (x, |deriv f x|⁻¹))) :=
   weightedRoots_of_regular h.toList

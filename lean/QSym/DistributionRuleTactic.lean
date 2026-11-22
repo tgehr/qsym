@@ -21,7 +21,8 @@ namespace QSym
 open Lean Meta Elab Tactic in
 elab "qsym_distribution_goal" : tactic => do
   let target ← instantiateMVars (← getMainTarget)
-  let heads := #[``partialIntegral, ``FiniteIntegralTheory.integrate,
+  let heads := #[``Distribution.GraphFibre.branchIntegral, ``Distribution.GraphFibre.fibreOn,
+    ``partialIntegral, ``FiniteIntegralTheory.integrate,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
     ``Distribution.GraphFibre.realBindValue, ``Distribution.GraphFibre.realIntegralValue,
@@ -113,7 +114,15 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | apply WeightedParameter.Fibre.RootedPartialHom.observeJoint_marginalize
   | apply WeightedParameter.Fibre.PartialHom.observeJoint_marginalize
   | solve | apply WeightedParameter.Fibre.PartialFamily.observeJoint_sections; assumption
-  | solve | apply partialIntegral_compProd_sections; assumption)
+  | solve | apply partialIntegral_compProd_sections; assumption
+  | solve | apply Distribution.GraphFibre.fibreOn_of_injOn <;> assumption
+  | solve | apply Distribution.GraphFibre.fibreOn_of_notMem_image <;> assumption
+  | solve | apply Distribution.GraphFibre.branchIntegral_union <;> assumption
+  | solve | apply Distribution.GraphFibre.branchIntegral_image <;> assumption
+  | solve | apply Distribution.GraphFibre.square_positiveSource_disintegrates <;> assumption
+  | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates <;> assumption
+  | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates_masked <;> assumption
+  | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates_ae <;> assumption)
 
 macro "qsym_distribution" : tactic => `(tactic| (qsym_distribution_goal; first
   | solve | qsym_distribution_eq
