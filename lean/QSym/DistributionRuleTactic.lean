@@ -40,6 +40,7 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.square_positive; assumption
   | solve | apply Distribution.GraphFibre.square_negative; assumption
   | solve | apply Distribution.GraphFibre.pushforwardOn_density; assumption
+  | solve | apply Distribution.GraphFibre.affine_fibre; assumption
   | solve | apply Distribution.GraphFibre.affine_lebesgue; assumption
   | exact Distribution.GraphFibre.realIntegral_dirac _ _
   | exact Distribution.GraphFibre.realBind_dirac _ _

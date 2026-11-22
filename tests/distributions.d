@@ -53,6 +53,16 @@ private Case[] cases(){ return [
 	Case("SignedFibreRegularHole","densityAtD(Λ(x:ℝ).δ(0)[x]+((1/x)*λ[x]+(-δ(0)[x])),0)","ℝ","0⁻¹"),
 	Case("SignedFibreSymbolic","λ(a:ℝ).densityAtD(Λ(x:ℝ).δ(a)[x]+(λ[x]+(-δ(a)[x])),a)","ℝ→ℝ","λ(a:ℝ). (1:ℝ)"),
 	Case("UnsolvedCubicGraph","(λ[x]·δ(x^3)[y])//λ[y]","Distribution(ℝ)","λ[x]·δ(x^3)[y]//λ[y]"),
+	Case("JointAffineSymbolic","λ[x]·δ(2*x+1)[y]//λ[y]","Distribution(ℝ)","1/2·δ(y·(1/2)-1/2)[x]"),
+	Case("JointAffineDecreasing","(λ(y:ℝ). (λ[x]·δ(1-2*x)[y])//λ[y])(5)","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(-2)[x]"),
+	Case("JointAffineFraction","(λ(v:ℝ). (δ((3/2)*u-1)[v]·λ[u])//λ[v])(2)","Distribution(ℝ)","Λ(x:ℝ). 2/3·δ(2)[x]"),
+	Case("JointAffineMass","∫dx λ[x]·δ(1-2*x)[y]//λ[y]","ℝ","1/2"),
+	Case("JointAffineMassDomain","λ(t:ℝ).massD(graphFibreD(λ(x:ℝ).1-2*x,t⁻¹))","ℝ→ℝ","λ(t:{t:ℝ | t≠0}). (1/2:ℝ)"),
+	Case("JointAffineMissing","(λ(y:ℝ). (λ[x]·δ(1-2*x)[y])//λ[y])(undefined(ℝ))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("JointAffineMassMissing","(λ(y:ℝ). ∫dx λ[x]·δ(1-2*x)[y]//λ[y])(undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("JointAffineAtAtom","(λ(y:ℝ).densityAtD((λ[x]·δ(1-2*x)[y])//λ[y],-2))(5)","ℝ","undefined(ℝ)"),
+	Case("JointAffineOffAtom","(λ(y:ℝ).densityAtD((λ[x]·δ(1-2*x)[y])//λ[y],2))(5)","ℝ","0"),
+	Case("JointConstant","λ[x]·δ((3:ℝ))[y]//λ[y]","Distribution(ℝ)","λ[x]·δ((3:ℝ))[y]//λ[y]"),
 	Case("SquareGraph","λ[x]·δ(x²)[y]//λ[y]","Distribution(ℝ)"),
 	Case("SquareGraphMass","massD((λ[x]·δ(x²)[y])//λ[y])","ℝ","[0≤y]·sqrt(y)⁻¹"),
 	Case("SquareGraphIntegral","∫dx λ[x]·δ(x²)[y]//λ[y]","ℝ","[0≤y]·sqrt(y)⁻¹"),
@@ -208,6 +218,11 @@ private void run(string directory){
 			enforce(text.indexOf("scaleD")<0&&text.indexOf("graphFibreD")<0,c.name~": "~text);
 			enforce(s.inspectType(a,text)==c.type,c.name~" printed type");
 		}
+		if(c.name.indexOf("JointAffine")==0 && c.name.indexOf("Missing")<0){
+			auto lemma=c.name.indexOf("JointAffineMass")==0?"affine_mass_rule":"affine_fibre_rule";
+			enforce(certificate.indexOf("GraphFibre."~lemma)>=0,c.name);
+		}
+		if(c.name=="JointConstant") enforce(certificate.indexOf("affine_fibre_rule")<0,c.name);
 		if(c.name.indexOf("RestrictedSquare")==0){
 			enforce(certificate.indexOf("GraphFibre.realPushforwardOnValue")>=0,c.name);
 			if(c.name=="RestrictedSquare") enforce(certificate.indexOf("GraphFibre.square_openUnit_chart")>=0,c.name);

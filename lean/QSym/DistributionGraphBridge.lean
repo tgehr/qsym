@@ -59,6 +59,36 @@ theorem square_mul_mass_rule (y : Option ℝ) :
     marginal (some (fun x => Value.mul (some x) (some x))) y = squareMass y := by
   simpa [Value.mul, pow_two] using square_mass_rule y
 
+private theorem affine_atoms (a b : ℚ) {f : ℝ → Option ℝ} (ha : a ≠ 0)
+    (hf : StepSource.Affine f a b) (y : ℝ) :
+    atomsValue (some f) (some y) = some [((y-b)/(a : ℝ), |(a : ℝ)|⁻¹)] := by
+  have hn : (a : ℝ) ≠ 0 := by exact_mod_cast ha
+  rw [funext hf.equation, atomsValue_total _ (by fun_prop)]
+  qsym_rule
+
+theorem affine_fibre_rule (y : Option ℝ) (a b j : ℚ) {f i : ℝ → Option ℝ} {v : Option ℝ}
+    (ha : a ≠ 0) (hj : j = |a⁻¹|) (hf : StepSource.Affine f a b)
+    (hi : StepSource.Affine i a⁻¹ (-b/a)) (hv : v = some (j : ℝ)) :
+    value (some f) y = scaleValue v (diracValue (y.bind i)) := by
+  subst v
+  cases y with
+  | none => rfl
+  | some y =>
+    rw [value, affine_atoms a b ha hf y, Option.some_bind, hi.equation, hj]
+    have inv : (a : ℝ)⁻¹ * y + -(b : ℝ) / a = (y-b)/a := by ring
+    simp [scaleValue, diracValue, presentation, inv, abs_inv]
+
+/-- A scalar observer can discard the inverse point while preserving a
+missing target. No inverse-map certificate is needed for this observation. -/
+theorem affine_mass_rule (y : Option ℝ) (a b j : ℚ) {f : ℝ → Option ℝ} {v : Option ℝ}
+    (ha : a ≠ 0) (hj : j = |a⁻¹|) (hf : StepSource.Affine f a b) (hv : v = some (j : ℝ)) :
+    marginal (some f) y = y.bind (fun _ => v) := by
+  cases y with
+  | none => rfl
+  | some y =>
+    rw [marginal, affine_atoms a b ha hf y, hv, hj]
+    simp [observe, Value.add, Value.mul, abs_inv]
+
 /-- The forward and inverse maps carry independently checked rational affine
 certificates. Evaluating the original predicate at the inverse keeps strict
 endpoints and punctures, for either orientation of the map. -/
