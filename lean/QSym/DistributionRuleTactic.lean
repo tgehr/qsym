@@ -1,6 +1,5 @@
-import QSym.DistributionMaskedGraph
+import QSym.DistributionSquareReconstruction
 import QSym.DistributionAtomRows
-import QSym.DistributionSquareIntegral
 import QSym.DistributionFiniteMixedReal
 import QSym.DistributionModelLaws
 import QSym.WeightedFibreTower
@@ -37,6 +36,8 @@ elab "qsym_distribution_goal" : tactic => do
     throwError "not a distribution-model rule goal"
 
 macro "qsym_distribution_eq" : tactic => `(tactic| first
+  | exact Distribution.GraphFibre.masked_square_disintegrates _ _
+  | solve | apply Distribution.GraphFibre.masked_square_regular_eq; assumption
   | solve | apply Distribution.GraphFibre.square_positive; assumption
   | solve | apply Distribution.GraphFibre.square_negative; assumption
   | solve | apply Distribution.GraphFibre.pushforwardOn_density; assumption
@@ -99,6 +100,7 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
 
 macro "qsym_distribution" : tactic => `(tactic| (qsym_distribution_goal; first
   | solve | qsym_distribution_eq
+  | exact Distribution.GraphFibre.masked_square_regular_refines _ _
   | solve | apply Value.refines_of_eq; qsym_distribution_eq
   | solve | apply DependentIntegralTheory.fubini_refines <;> assumption
   | solve | apply WeightedParameter.Fibre.Tower.observe_fubini_refines <;> assumption

@@ -104,8 +104,9 @@ theorem square_positiveSource_lebesgue (s : Set ℝ) [DecidablePred (· ∈ s)] 
     change _ = partialIntegral volume k
     simp only [partialIntegral, total, implies_true, true_and, hi, he]
 
-private theorem sqrt_substitution (g : ℝ → ℝ) (hg : IntegrableOn g (Ioi 0)) :
-    IntegrableOn (fun y => jac y * g (√y)) (Ioi 0) ∧
+/-- On the open square-root chart finite integrability transports in both directions. -/
+theorem sqrt_changeOfVariables (g : ℝ → ℝ) :
+    (IntegrableOn g (Ioi 0) ↔ IntegrableOn (fun y => jac y * g (√y)) (Ioi 0)) ∧
     (∫ x in Ioi 0, g x) = ∫ y in Ioi 0, jac y * g (√y) := by
   have image : Real.sqrt '' Ioi (0 : ℝ) = Ioi 0 := by
     ext x
@@ -124,7 +125,13 @@ private theorem sqrt_substitution (g : ℝ → ℝ) (hg : IntegrableOn g (Ioi 0)
   have he := integral_image_eq_integral_abs_deriv_smul measurableSet_Ioi derivS inj g
   rw [image] at ha he
   have hj (y : ℝ) : |jac y| = jac y := abs_of_nonneg (by unfold jac; positivity)
-  simpa only [hj, smul_eq_mul] using And.intro (ha.mp hg) he
+  simpa only [hj, smul_eq_mul] using And.intro ha he
+
+private theorem sqrt_substitution (g : ℝ → ℝ) (hg : IntegrableOn g (Ioi 0)) :
+    IntegrableOn (fun y => jac y * g (√y)) (Ioi 0) ∧
+    (∫ x in Ioi 0, g x) = ∫ y in Ioi 0, jac y * g (√y) :=
+  let h := sqrt_changeOfVariables g
+  ⟨h.1.mp hg, h.2⟩
 
 /-- Change of variables for a measurable part of the positive square branch.
 The test only needs to be integrable along the graph over the selected source. -/
