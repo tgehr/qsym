@@ -1,4 +1,5 @@
 import QSym.DistributionAffineOdd
+import QSym.DistributionAffineSquare
 import QSym.Binding
 import QSym.Refinement
 

@@ -30,6 +30,29 @@ theorem masked_branch_rule {s : Set ℝ} {f d : ℝ → ℝ} (hs : MeasurableSet
         partialIntegral volume (fun y => (fibreOn s f y).bind (fun atoms => observe atoms (fun x => h x y)))
       else none := by qsym_rule
 
+theorem pullback_cover_rule {s : Set ℝ} {f g i d : ℝ → ℝ} {y : ℝ} {xs zs : List ℝ}
+    (outer : RootCover s g y xs) (inner : GlobalInverseBranch f i d)
+    (order : zs.Sorted (· < ·)) (roots : ∀ x, x ∈ zs ↔ x ∈ xs.map i) :
+    RootCover (f ⁻¹' s) (fun x => g (f x)) y zs := by qsym_rule
+
+theorem restrict_cover_rule {s : Set ℝ} {f : ℝ → ℝ} {y : ℝ} {xs : List ℝ}
+    (cover : RootCover s f y xs) (r : Set ℝ) [DecidablePred (· ∈ r)] :
+    RootCover (s ∩ r) f y (xs.filter fun x => decide (x ∈ r)) := by qsym_rule
+
+theorem finite_density_rule {f d : ℝ → ℝ} {y : ℝ} {xs : List ℝ}
+    (cover : RootCover univ f y xs) (p : ℝ → Option Bool) (hm : Measurable f)
+    (hd : ∀ x ∈ xs, p x ≠ some false → HasStrictDerivAt f (d x) x) :
+    densityAtValue (realPushforwardOnValue (some p) (some fun x => some (f x))) (some y) =
+      xs.foldr (fun x acc => Value.add (Value.mask (p x) (Value.inv (some |d x|))) acc) (some 0) := by qsym_rule
+
+/-- The only inverse point is a cusp and is explicitly excluded. -/
+theorem excluded_cusp : densityAtValue (realPushforwardOnValue (some fun _ => some false)
+    (some fun x => some |x|)) (some 0) = some 0 := by
+  have cover : RootCover univ (fun x : ℝ => |x|) 0 [0] :=
+    ⟨by simp [List.Sorted], fun x => by simp⟩
+  simpa [Value.mask, Value.add] using cover.density (fun _ => some false) continuous_abs.measurable
+    (fun _ => 0) (fun _ _ h => (h rfl).elim)
+
 theorem compose_branch_rule {f g i j d e : ℝ → ℝ} (a : GlobalInverseBranch f i d)
     (b : GlobalInverseBranch g j e) :
     GlobalInverseBranch (fun x => g (f x)) (fun y => i (j y)) (fun x => e (f x) * d x) := by qsym_rule
@@ -130,6 +153,11 @@ theorem missing_critical : partialIntegral volume (fun x : ℝ => if x = 0 then 
 #qsym_check_axioms branchIntegral_image
 #qsym_check_axioms injectiveBranch_disintegrates_ae
 #qsym_check_axioms pullback_pair_rule
+#qsym_check_axioms pullback_cover_rule
+#qsym_check_axioms restrict_cover_rule
+#qsym_check_axioms RootCover.observe_weighted
+#qsym_check_axioms finite_density_rule
+#qsym_check_axioms excluded_cusp
 #qsym_check_axioms compose_branch_rule
 #qsym_check_axioms total_density_rule
 #qsym_check_axioms change_coordinates_rule

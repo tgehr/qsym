@@ -666,6 +666,12 @@ private Pattern lower(Pattern p,Sort s){
 				auto bare=q; while(bare.name=="$ascribe") bare=bare.args[0];
 				if(bare.name=="$iverson"){ guards~=lower(bare.args[0],Sort.boolean); return null; }
 				if(q.name!="$mul") return lower(q,s);
+				// Choose the overload first, then keep a literal fraction exact even
+				// inside a partial expression. Division by zero stays partial.
+				auto n=q.args[0],d=q.args[1];
+				if((s==Sort.rational||s==Sort.real_)&&n.name=="#"&&d.name=="$inv"&&
+					d.args[0].name=="#"&&d.args[0].number>0)
+					return pattern(s==Sort.real_?"real":"rat",[n,d.args[0]]);
 				auto l=product(q.args[0]),r=product(q.args[1]);
 				return l is null?r:r is null?l:pattern("mul"~suf,[l,r]);
 			}
@@ -778,6 +784,10 @@ unittest{
 
 unittest{
 	import std.exception:assertThrown;
+	Parameter[] noVars;
+	assert(Parser("(3/2:ℚ)").parseExpression(noVars).name=="rat");
+	assert(Parser("(3/2:ℝ)").parseExpression(noVars).name=="real");
+	assert(Parser("(1/0:ℝ)").parseExpression(noVars).name=="mulR");
 	void same(string surface,string constructors){
 		auto a=Parser(surface).parse()[0],b=Parser(constructors).parse()[0];
 		assert(a.lhs.sort==b.lhs.sort&&a.rhs.sort==b.rhs.sort);
