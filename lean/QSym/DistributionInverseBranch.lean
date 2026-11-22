@@ -15,6 +15,14 @@ namespace GlobalInverseBranch
 variable {f root slope : ℝ → ℝ} (c : GlobalInverseBranch f root slope)
 include c
 
+/-- Compose two global branches. The inverse runs in reverse order and the
+forward derivative retains its sign until the density is observed. -/
+theorem comp {g inv deriv : ℝ → ℝ} (b : GlobalInverseBranch g inv deriv) :
+    GlobalInverseBranch (fun x => g (f x)) (fun y => root (inv y))
+      (fun x => deriv (f x) * slope x) :=
+  ⟨b.injective.comp c.injective, fun y => (congrArg g (c.inverse _)).trans (b.inverse y),
+    fun x => (b.derivative (f x)).comp x (c.derivative x)⟩
+
 theorem fibreOn_eq (s : Set ℝ) [DecidablePred (· ∈ s)] (y : ℝ) :
     fibreOn s f y = if root y ∈ s then
       if slope (root y) = 0 then none else some [(root y, |slope (root y)|⁻¹)]

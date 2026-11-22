@@ -30,6 +30,10 @@ theorem masked_branch_rule {s : Set ℝ} {f d : ℝ → ℝ} (hs : MeasurableSet
         partialIntegral volume (fun y => (fibreOn s f y).bind (fun atoms => observe atoms (fun x => h x y)))
       else none := by qsym_rule
 
+theorem compose_branch_rule {f g i j d e : ℝ → ℝ} (a : GlobalInverseBranch f i d)
+    (b : GlobalInverseBranch g j e) :
+    GlobalInverseBranch (fun x => g (f x)) (fun y => i (j y)) (fun x => e (f x) * d x) := by qsym_rule
+
 theorem total_density_rule {f root slope : ℝ → ℝ} (branch : GlobalInverseBranch f root slope)
     (p : ℝ → Option Bool) :
     (∀ y, Value.Defined (densityAtValue (realPushforwardOnValue (some p) (some fun x => some (f x))) (some y))) ↔
@@ -126,6 +130,7 @@ theorem missing_critical : partialIntegral volume (fun x : ℝ => if x = 0 then 
 #qsym_check_axioms branchIntegral_image
 #qsym_check_axioms injectiveBranch_disintegrates_ae
 #qsym_check_axioms pullback_pair_rule
+#qsym_check_axioms compose_branch_rule
 #qsym_check_axioms total_density_rule
 #qsym_check_axioms change_coordinates_rule
 #qsym_check_axioms regular_root_rule

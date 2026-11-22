@@ -73,6 +73,24 @@ private Case[] cases(){ return [
 	Case("FifthChart","Λy. ∫dx λ[x]·δ(x^5)[y]·[x≠0]","Distribution(ℝ)"),
 	Case("CubicCriticalSource","Λy. ∫dx λ[x]·δ(x³)[y]·[0≤x]","Distribution(ℝ)"),
 	Case("CubicPartialSource","pushforwardOnD(λ(x:ℝ).0<x⁻¹,λ(x:ℝ).x^3)","Distribution(ℝ)"),
+	Case("AffineOddSymbolic","λ[x]·δ((2*x+1)^3)[y]//λ[y]","Distribution(ℝ)"),
+	Case("AffineOddRational","λ[x]·δ((x/2-1)^3)[y]//λ[y]","Distribution(ℝ)","(2·(3·cbrt(y)^2)⁻¹)·δ(2·cbrt(y)+2)[x]"),
+	Case("AffineOddRationalAt","(λ(y:ℝ). (λ[x]·δ((x/2-1)^3)[y])//λ[y])(8)","Distribution(ℝ)","Λ(x:ℝ). 1/6·δ(6)[x]"),
+	Case("AffineOddIncreasing","(λ(y:ℝ). (λ[x]·δ((2*x+1)^3)[y])//λ[y])(8)","Distribution(ℝ)","Λ(x:ℝ). 1/24·δ(1/2)[x]"),
+	Case("AffineOddDecreasing","(λ(y:ℝ). (λ[x]·δ((1-2*x)^3)[y])//λ[y])(-8)","Distribution(ℝ)","Λ(x:ℝ). 1/24·δ(3/2)[x]"),
+	Case("AffineOddFifth","(λ(y:ℝ). (λ[x]·δ((3*x-2)^5)[y])//λ[y])(-32)","Distribution(ℝ)","Λ(x:ℝ). 1/240·δ(0)[x]"),
+	Case("AffineOddMass","(λ(y:ℝ). ∫dx λ[x]·δ((1-2*x)^3)[y]//λ[y])(-8)","ℝ","1/24"),
+	Case("AffineOddCritical","(λ(y:ℝ). (λ[x]·δ((2*x+1)^3)[y])//λ[y])(0)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("AffineOddExcluded","(λ(y:ℝ). [2*x≠-1]·λ[x]·δ((2*x+1)^3)[y]//λ[y])(0)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(-1/2)[x]"),
+	Case("AffineOddCapture","(λ(t:ℝ).maskedGraphD(λ(x:ℝ).x<t,λ(x:ℝ).(2*x+1)^3)(t))(8)","Distribution(ℝ)","Λ(x:ℝ). 1/24·δ(1/2)[x]"),
+	Case("AffineOddHole","densityAtD(pushforwardOnD(λ(x:ℝ).0<(2*x-1)⁻¹,λ(x:ℝ).(2*x+1)^3),8)","ℝ","undefined(ℝ)"),
+	Case("AffineOddMissingDensity","densityAtD(pushforwardOnD(λ(x:ℝ).false,λ(x:ℝ).(2*x+1)^3),undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("AffineOddActiveDensity","densityAtD(pushforwardOnD(λ(x:ℝ).x<0,λ(x:ℝ).(2*x+1)^3),0)","ℝ","0⁻¹"),
+	Case("AffineOddExcludedDensity","densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).(2*x+1)^3),0)","ℝ","0"),
+	Case("AffineOddInterior","densityAtD(Λy. ∫dx λ[x]·δ((2*x+1)^3)[y]·[0<x<1],8)","ℝ","1/24"),
+	Case("AffineOddChart","Λy. ∫dx λ[x]·δ((2*x+1)^3)[y]·[2*x≠-1]","Distribution(ℝ)"),
+	Case("AffineOddCriticalSource","Λy. ∫dx λ[x]·δ((2*x+1)^3)[y]·[x≠0]","Distribution(ℝ)"),
+	Case("OddNonAffineSource","λ[x]·δ((x²+1)^3)[y]//λ[y]","Distribution(ℝ)","λ[x]·δ((x^2+1)^3)[y]//λ[y]"),
 	Case("QuarticGraph","λ[x]·δ(x^4)[y]//λ[y]","Distribution(ℝ)","λ[x]·δ(x^4)[y]//λ[y]"),
 	Case("MaskedJointSymbolic","[0≤x<1]·λ[x]·δ(1-2*x)[y]//λ[y]","Distribution(ℝ)","([y≤1∧-1<y]·(1/2))·δ(-y·(1/2)+1/2)[x]"),
 	Case("MaskedJointIncluded","(λ(y:ℝ). (δ(1-2*x)[y]·([0≤x<1]·λ[x]))//λ[y])(1)","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]"),
@@ -327,6 +345,13 @@ private void run(string directory){
 		if(c.name=="CubicMarginal"||c.name=="SeventhPositiveMass") enforce(certificate.indexOf("GraphFibre.oddPower_mass_rule")>=0,c.name);
 		if(c.name=="RestrictedCubic"||c.name=="CubicPartialDensity"||c.name=="CubicExcludedDensity"||c.name=="CubicCriticalDensity"||c.name=="CubicPredicateParameter")
 			enforce(certificate.indexOf("GraphFibre.oddPower_density_rule")>=0,c.name);
+		if(c.name=="AffineOddChart")
+			enforce(certificate.indexOf("GraphFibre.affineOdd_chart_rule")>=0&&text.indexOf("∫")<0,c.name);
+		else if(c.name=="AffineOddCriticalSource")
+			enforce(certificate.indexOf("affineOdd_chart_rule")<0&&text.indexOf("∫")>=0,c.name);
+		else if(c.name.indexOf("AffineOdd")==0)
+			enforce(certificate.indexOf("GraphFibre.affineOddExpression")>=0,c.name);
+		if(c.name=="OddNonAffineSource") enforce(certificate.indexOf("GraphFibre.affineOddExpression")<0,c.name);
 		if(c.name=="FifthChart") enforce(certificate.indexOf("GraphFibre.oddPower_chart_rule")>=0&&text.indexOf("∫")<0,c.name);
 		if(c.name=="CubicPartialSource"||c.name=="CubicCriticalSource"||c.name=="QuarticGraph")
 			enforce(certificate.indexOf("GraphFibre.oddPower_")<0,c.name);

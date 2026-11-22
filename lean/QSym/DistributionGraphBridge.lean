@@ -1,4 +1,4 @@
-import QSym.DistributionOddPowerBridge
+import QSym.DistributionAffineOdd
 import QSym.Binding
 import QSym.Refinement
 

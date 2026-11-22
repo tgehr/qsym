@@ -22,7 +22,7 @@ namespace QSym
 open Lean Meta Elab Tactic in
 elab "qsym_distribution_goal" : tactic => do
   let target ← instantiateMVars (← getMainTarget)
-  let heads := #[``Distribution.GraphFibre.branchIntegral, ``Distribution.GraphFibre.fibreOn,
+  let heads := #[``Distribution.GraphFibre.GlobalInverseBranch, ``Distribution.GraphFibre.branchIntegral, ``Distribution.GraphFibre.fibreOn,
     ``partialIntegral, ``FiniteIntegralTheory.integrate,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
@@ -124,6 +124,7 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates <;> assumption
   | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates_masked <;> assumption
   | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates_ae <;> assumption
+  | solve | apply Distribution.GraphFibre.GlobalInverseBranch.comp <;> assumption
   | solve | apply Distribution.GraphFibre.GlobalInverseBranch.fibreOn_eq <;> assumption
   | solve | apply Distribution.GraphFibre.GlobalInverseBranch.maskedAtoms_eq <;> assumption
   | solve | apply Distribution.GraphFibre.GlobalInverseBranch.density_defined_iff <;> assumption

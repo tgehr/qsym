@@ -1,3 +1,4 @@
+import QSym.DistributionBranchExpression
 import QSym.Binding
 import QSym.Refinement
 
@@ -16,7 +17,7 @@ def oddWeightValue (k : ℕ) (y : Option ℝ) : Option ℝ :=
   Value.inv (Value.mul (some ((oddDegree k : ℤ) : ℝ))
     ((oddRootValue k y).map (fun x => x ^ (oddDegree k - 1))))
 
-private theorem oddRootValue_eq (k : ℕ) (y : Option ℝ) : oddRootValue k y = y.map (oddRoot k) := by
+theorem oddRootValue_eq (k : ℕ) (y : Option ℝ) : oddRootValue k y = y.map (oddRoot k) := by
   cases y with
   | none => by_cases hk : k = 0 <;> simp [oddRootValue, hk, Function1.apply, Value.mul]
   | some y =>
@@ -42,58 +43,38 @@ private theorem oddRootValue_eq (k : ℕ) (y : Option ℝ) : oddRootValue k y = 
 private theorem oddWeightValue_some (k : ℕ) (y : ℝ) : oddWeightValue k (some y) = oddWeight k y := by
   simp [oddWeightValue, oddRootValue_eq, oddWeight, oddSlope, Value.mul]
 
+def oddPowerExpression (k : ℕ) :
+    BranchExpression (fun y => y.map (fun x => x ^ oddDegree k)) (oddRootValue k) (oddWeightValue k) where
+  f x := x ^ oddDegree k
+  root := oddRoot k
+  slope := oddSlope k
+  branch := oddPowerBranch k
+  forward_eq _ := rfl
+  inverse_eq := oddRootValue_eq k
+  jac_eq y := by
+    cases y with
+    | none => simp [oddWeightValue, oddRootValue_eq, Value.mul, Value.inv]
+    | some y => simp [oddWeightValue_some, oddWeight, abs_of_nonneg (oddSlope_nonneg k _)]
+
 theorem oddPower_fibre_rule (k : ℕ) (y : Option ℝ) :
     value (some fun x => some (x ^ oddDegree k)) y =
-      scaleValue (oddWeightValue k y) (diracValue (oddRootValue k y)) := by
-  cases y with
-  | none => simp [oddWeightValue, oddRootValue_eq, Value.mul, Value.inv, scaleValue, value, atomsValue]
-  | some y =>
-    rw [value_total (fun x : ℝ => x ^ oddDegree k) (measurable_id.pow_const _), oddWeightValue_some, oddRootValue_eq]
-    have fibreEq : fibre (fun x => x ^ oddDegree k) y =
-        (oddWeight k y).map (fun w => [(oddRoot k y, w)]) := by qsym_rule
-    rw [fibreEq]
-    cases oddWeight k y <;> rfl
+      scaleValue (oddWeightValue k y) (diracValue (oddRootValue k y)) :=
+  (oddPowerExpression k).fibre_rule y
 
 theorem oddPower_mass_rule (k : ℕ) (y : Option ℝ) :
-    marginal (some fun x => some (x ^ oddDegree k)) y = oddWeightValue k y := by
-  cases y with
-  | none => simp [oddWeightValue, oddRootValue_eq, Value.mul, Value.inv, marginal, atomsValue]
-  | some y =>
-    rw [marginal, atomsValue_total (fun x : ℝ => x ^ oddDegree k) (measurable_id.pow_const _), oddWeightValue_some]
-    have h : fibre (fun x => x ^ oddDegree k) y =
-        (oddWeight k y).map (fun w => [(oddRoot k y, w)]) := by qsym_rule
-    rw [h]
-    cases oddWeight k y <;> simp [observe, Value.mul, Value.add]
+    marginal (some fun x => some (x ^ oddDegree k)) y = oddWeightValue k y :=
+  (oddPowerExpression k).mass_rule y
 
 theorem oddPower_masked_rule (k : ℕ) (p : Option (ℝ → Option Bool)) (y : Option ℝ) :
     (maskedKernel p (some fun x => some (x ^ oddDegree k))).bind (fun fn => y.bind fn) =
       scaleValue (Value.mask (p.bind fun pred => (oddRootValue k y).bind pred) (oddWeightValue k y))
-        (diracValue (oddRootValue k y)) := by
-  cases p with
-  | none => rfl
-  | some p =>
-    rw [maskedKernel_total p (fun x : ℝ => x ^ oddDegree k) (measurable_id.pow_const _)]
-    cases y with
-    | none => simp [oddRootValue_eq, diracValue, scaleValue, Value.mask]
-    | some y =>
-      have h : maskedAtoms p (fun x => x ^ oddDegree k) y =
-          (Value.mask (p (oddRoot k y)) (oddWeight k y)).map (fun w => [(oddRoot k y,w)]) := by qsym_rule
-      simp only [Option.some_bind, h, oddRootValue_eq, Option.map_some, oddWeightValue_some]
-      change _ = scaleValue (Value.mask (p (oddRoot k y)) (oddWeight k y)) (diracValue (some (oddRoot k y)))
-      cases Value.mask (p (oddRoot k y)) (oddWeight k y) <;> rfl
+        (diracValue (oddRootValue k y)) :=
+  (oddPowerExpression k).masked_rule p y
 
 theorem oddPower_density_rule (k : ℕ) (p : Option (ℝ → Option Bool)) (y : Option ℝ) :
     densityAtValue (realPushforwardOnValue p (some fun x => some (x ^ oddDegree k))) y =
-      Value.mask (p.bind fun pred => (oddRootValue k y).bind pred) (oddWeightValue k y) := by
-  cases p with
-  | none => rfl
-  | some p =>
-    cases y with
-    | none => rw [oddRootValue_eq]; rfl
-    | some y =>
-      rw [oddRootValue_eq, oddWeightValue_some]
-      change _ = Value.mask (p (oddRoot k y)) (oddWeight k y)
-      qsym_rule
+      Value.mask (p.bind fun pred => (oddRootValue k y).bind pred) (oddWeightValue k y) :=
+  (oddPowerExpression k).density_rule p y
 
 theorem oddPower_chart_rule (k : ℕ) (p : ℝ → Option Bool) (hp : ∀ x, Value.Defined (p x))
     (h0 : p ((0 : ℤ) : ℝ) = some false) :

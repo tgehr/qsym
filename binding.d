@@ -5,7 +5,7 @@ import qsym.summation:sumAntidifference,sumAbelAntidifference,SumPrimitive;
 import qsym.rational_identity:rationalIdentityZero;
 import qsym.polynomial:polynomialAntidifference,polynomialZero;
 import qsym.types:TypeId,TypeKind,TypePool,Dimension;
-import qsym.number:Number;
+import qsym.number:Number,BigInt;
 import qsym.table:Table;
 import qsym.generated.rules:Law,instantiate;
 import qsym.proof:ScalarClaims,leanSyntaxCode,leanValueOperation,exportDomainLean,exportPolynomialZeroLean,exportRationalZeroLean,scalarExport=exportLean;
@@ -42,13 +42,13 @@ private enum BindingRule:ubyte{
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
-	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined
+	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct IntegralCell{ Rational lower,upper,sample; }
 private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed; Rational value; Rational[] values; uint output=uint.max; }
-private struct AffineChart{ uint map,inverse,jacobian,predicateDomain; }
+private struct AffineChart{ uint map,inverse,jacobian,predicateDomain; uint oddDegree,derivativeNumerator=uint.max,derivativeDenominator=uint.max; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
@@ -2594,14 +2594,6 @@ final class Bindings{
 			product=op.op==Op.mul&&body.a==body.b;
 			return product||op.op==Op.pow&&op.value==2;
 		}
-		// Only a literal power of this binder has the inverse certified by oddPowerBranch.
-		uint oddMapDegree(uint id){
-			if(nodes[id].op!=BoundOp.lambda) return 0;
-			auto body=nodes[nodes[id].a];
-			if(body.op!=BoundOp.primitive||body.a==uint.max||nodes[body.a].op!=BoundOp.variable||nodes[body.a].data!=0) return 0;
-			auto op=arena.view(arena.at(body.data));
-			return op.op==Op.pow&&op.value>=3&&op.value%2==1?cast(uint)op.value:0;
-		}
 		BoundTerm oddRoot(uint degree,BoundTerm y){
 			auto zero=arena.real_(0),ctx=context(y);
 			if(degree==3) return primitive(arena.call(Builtin.cbrtR,[zero]),[y]);
@@ -2612,9 +2604,9 @@ final class Bindings{
 			auto magnitude=primitive(arena.call(Builtin.powerR,[zero,zero]),[primitive(arena.abs(zero),[y]),exponent]);
 			return primitive(scalarOperator(type(y),TensorOp.mul),[sign,magnitude]);
 		}
-		BoundTerm oddWeight(uint degree,BoundTerm point){
+		BoundTerm oddWeight(uint degree,BoundTerm point,BoundTerm factor){
 			auto derivative=primitive(scalarOperator(type(point),TensorOp.mul),
-				[scalar(context(point),arena.real_(degree)),primitive(arena.pow(arena.real_(1),degree-1),[point])]);
+				[factor,primitive(arena.pow(arena.real_(1),degree-1),[point])]);
 			return primitive(arena.inv(arena.real_(1)),[derivative]);
 		}
 		BoundTerm openUnit(BoundTerm x){
@@ -2686,6 +2678,56 @@ final class Bindings{
 			}
 			return AffineChart(nodes[map].a,inverse,jac.id,predicateDomain);
 		}
+		struct OddMap{ uint degree; BoundTerm affine; Rational slope,offset; }
+		OddMap oddMap(uint id){
+			if(nodes[id].op!=BoundOp.lambda) return OddMap.init;
+			auto body=nodes[nodes[id].a];
+			if(body.op!=BoundOp.primitive||body.a==uint.max) return OddMap.init;
+			auto power=arena.view(arena.at(body.data));
+			if(power.op!=Op.pow||power.value<3||power.value%2!=1) return OddMap.init;
+			auto degree=cast(uint)power.value,base=nodes[body.a];
+			if(base.op==BoundOp.variable&&base.data==0) return OddMap(degree);
+			auto inner=lambda(at(body.a)); Rational slope,offset;
+			if(!affineMap(inner.id,slope,offset)) return OddMap.init;
+			return OddMap(degree,inner,slope,offset);
+		}
+		AffineChart sourceChart(OddMap m){
+			if(m.affine==BoundTerm.init) return AffineChart.init;
+			auto chart=affineChart(m.affine.id,m.slope,m.offset,true);
+			chart.oddDegree=m.degree;
+			auto magnitude=m.slope<Rational(0)?-m.slope:m.slope;
+			auto factor=Rational(m.degree)*magnitude,ctx=context(at(chart.map));
+			chart.derivativeNumerator=scalar(ctx,arena.real_(Rational(factor.numerator,BigInt(1)))).id;
+			chart.derivativeDenominator=scalar(ctx,arena.real_(Rational(factor.denominator,BigInt(1)))).id;
+			return chart;
+		}
+		BoundTerm affineInverseAt(AffineChart chart,BoundTerm y){
+			auto inverse=lambda(at(chart.inverse)),ctx=context(y);
+			if(context(inverse)!=ctx){
+				// A whole chart introduces a fresh target binder.
+				uint[] shift;
+				foreach(i;0..contexts[context(inverse).index].length) shift~=i+1;
+				inverse=rename(inverse,ctx,shift);
+			}
+			return apply(inverse,y);
+		}
+		void oddCoordinates(OddMap m,AffineChart chart,BoundTerm y,out BoundTerm point,out BoundTerm weight){
+			auto root=oddRoot(m.degree,y);
+			point=m.affine==BoundTerm.init?root:affineInverseAt(chart,root);
+			auto factor=m.affine==BoundTerm.init?arena.real_(m.degree):arena.at(nodes[chart.derivativeNumerator].data);
+			weight=oddWeight(m.degree,root,scalar(context(y),factor));
+			if(m.affine!=BoundTerm.init){
+				auto den=arena.at(nodes[chart.derivativeDenominator].data);
+				if(!arena.number(den).re.one) weight=primitive(scalarOperator(type(y),TensorOp.mul),[scalar(context(y),den),weight]);
+			}
+		}
+		uint oddEvidence(OddMap m,AffineChart chart,ref BindingRule rule){
+			if(m.affine==BoundTerm.init) return (m.degree-3)/2;
+			rule=BindingRule.distributionAffineOdd;
+			auto id=cast(uint)affineCharts.length;
+			affineCharts~=chart;
+			return id;
+		}
 		BoundTerm atomRowsGraph(BoundTerm t,out uint domainPair,bool directDensity=false){
 			domainPair=uint.max;
 			auto n=node(t);
@@ -2697,7 +2739,7 @@ final class Bindings{
 			auto row=nodes[fn.a]; uint weight,point;
 			if(integral||nodes[n.a].op==BoundOp.distributionLebesgue){
 				if(row.op==BoundOp.distributionDirac){
-					if(directDensity&&!oddMapDegree(lambda(at(row.a)).id)) return BoundTerm.init;
+					if(directDensity&&!oddMap(lambda(at(row.a)).id).degree) return BoundTerm.init;
 					domainPair=totalMapDomain(row.a);
 					if(domainPair==uint.max) return BoundTerm.init;
 					auto pred=lambda(scalar(context(at(row.a)),arena.boolean(true)));
@@ -2717,7 +2759,7 @@ final class Bindings{
 				nodes[mask.b].op!=BoundOp.scalar||arena.at(nodes[mask.b].data)!=arena.real_(1)) return BoundTerm.init;
 			auto pred=lambda(at(mask.a)),map=lambda(at(point));
 			bool product;
-			if(directDensity&&!oddMapDegree(map.id)&&(!openUnitPredicate(pred.id)||!squareMap(map.id,product))) return BoundTerm.init;
+			if(directDensity&&!oddMap(map.id).degree&&(!openUnitPredicate(pred.id)||!squareMap(map.id,product))) return BoundTerm.init;
 			// Retain the compact proof for the existing open-unit monomials.
 			auto x=variable(context(at(point)),0),body=nodes[point];
 			bool monomial=at(point)==x;
@@ -2860,7 +2902,7 @@ final class Bindings{
 					auto graph=nodes[n.a];
 					Rational a,b;
 					if(graph.op==BoundOp.distributionPushforwardOn&&
-						(oddMapDegree(graph.b)!=0||openUnitPredicate(graph.a)&&squareMap(graph.b,product)||
+						(oddMap(graph.b).degree!=0||openUnitPredicate(graph.a)&&squareMap(graph.b,product)||
 						 n.op==BoundOp.distributionMass&&nodes[graph.b].op==BoundOp.lambda&&nodes[nodes[graph.b].a].op!=BoundOp.variable&&affineMap(graph.b,a,b)))
 						x=Result(n.a,emit(BindingRule.refl,n.a,n.a));
 					else if(steps<budget&&(graph.op==BoundOp.distributionBind||graph.op==BoundOp.distributionIntegral)){
@@ -3003,21 +3045,25 @@ final class Bindings{
 				}
 			}
 			if(current.op==BoundOp.distributionPushforwardOn&&nodes[current.a].op==BoundOp.lambda){
-				auto degree=oddMapDegree(current.b);
+				auto branch=oddMap(current.b);
 				ScalarDomain total;
-				if(degree&&steps<budget&&!isTrue(nodes[current.a].a,true)&&totalRowDomain(nodes[current.a].a,total)){
+				if(branch.degree&&steps<budget&&!isTrue(nodes[current.a].a,true)&&totalRowDomain(nodes[current.a].a,total)){
 					auto predicate=at(current.a);
-					auto critical=visit(apply(predicate,scalar(ctx,arena.real_(0))),depth+1);
+					auto chart=sourceChart(branch),zero=scalar(ctx,arena.real_(0));
+					auto source=branch.affine==BoundTerm.init?zero:affineInverseAt(chart,zero);
+					auto critical=visit(apply(predicate,source),depth+1);
 					if(isTrue(critical.output,false)){
 						auto inner=push(ctx,scalarType(Sort.real_));
-						auto point=oddRoot(degree,variable(inner,0));
+						BoundTerm point,weight;
+						oddCoordinates(branch,chart,variable(inner,0),point,weight);
 						uint[] shift;
 						foreach(i;0..contexts[ctx.index].length) shift~=i+1;
 						auto active=apply(rename(predicate,inner,shift),point);
-						auto mask=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[active,oddWeight(degree,point)]);
+						auto mask=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[active,weight]);
 						next=distribution(ctx,BoundOp.distributionWeight,[hint(lambda(mask),"y"),distribution(ctx,BoundOp.distributionLebesgue)]);
 						predicateDomain=cast(uint)scalarDomains.length; scalarDomains~=total;
-						excludedZero=critical.proof; extra=(degree-3)/2; rule=BindingRule.distributionOddChart;
+						excludedZero=critical.proof; rule=BindingRule.distributionOddChart;
+						extra=oddEvidence(branch,chart,rule);
 					}
 				}
 			}
@@ -3043,10 +3089,10 @@ final class Bindings{
 			bool maskedGraph=current.op==BoundOp.apply&&nodes[current.a].op==BoundOp.distributionMaskedGraph;
 			bool graph=maskedGraph||current.op==BoundOp.distributionGraphFibre||current.op==BoundOp.distributionGraphMass;
 			auto graphMap=maskedGraph?nodes[current.a].b:current.a;
-			auto degree=graph?oddMapDegree(graphMap):0;
-			if(degree){
-				auto point=oddRoot(degree,at(current.b)),weight=oddWeight(degree,point);
-				extra=(degree-3)/2;
+			auto oddGraph=graph?oddMap(graphMap):OddMap.init;
+			if(oddGraph.degree){
+				auto chart=sourceChart(oddGraph); BoundTerm point,weight;
+				oddCoordinates(oddGraph,chart,at(current.b),point,weight);
 				if(current.op==BoundOp.distributionGraphMass){
 					next=weight; rule=BindingRule.distributionOddMass;
 				}else{
@@ -3057,6 +3103,7 @@ final class Bindings{
 					next=distribution(ctx,BoundOp.distributionScale,[weight,distribution(ctx,BoundOp.distributionDirac,[point])]);
 					rule=maskedGraph?BindingRule.distributionMaskedOdd:BindingRule.distributionOddFibre;
 				}
+				extra=oddEvidence(oddGraph,chart,rule);
 			}else if(graph&&squareMap(graphMap,squareProduct)){
 				auto query=at(current.b),zero=scalar(ctx,arena.real_(0));
 				auto root=primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[query]);
@@ -3115,12 +3162,14 @@ final class Bindings{
 			}
 			if(current.op==BoundOp.distributionDensityAt){
 				auto d=nodes[current.a],query=at(current.b);
+				auto densityBranch=d.op==BoundOp.distributionPushforwardOn?oddMap(d.b):OddMap.init;
 				if(d.op==BoundOp.distributionLebesgue){ next=sequence(query,scalar(ctx,arena.real_(1))); rule=BindingRule.distributionDensityLebesgue; }
 				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionLebesgue){ next=apply(at(d.a),query); rule=BindingRule.distributionDensityWeight; }
-				else if(d.op==BoundOp.distributionPushforwardOn&&oddMapDegree(d.b)!=0){
-					auto densityDegree=oddMapDegree(d.b),point=oddRoot(densityDegree,query);
-					next=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[apply(at(d.a),point),oddWeight(densityDegree,point)]);
-					extra=(densityDegree-3)/2; rule=BindingRule.distributionOddDensity;
+				else if(densityBranch.degree){
+					auto chart=sourceChart(densityBranch); BoundTerm point,weight;
+					oddCoordinates(densityBranch,chart,query,point,weight);
+					next=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[apply(at(d.a),point),weight]);
+					rule=BindingRule.distributionOddDensity; extra=oddEvidence(densityBranch,chart,rule);
 				}else if(d.op==BoundOp.distributionPushforwardOn&&openUnitPredicate(d.a)&&squareMap(d.b,squareProduct)){
 					next=openUnitDensity(query);
 					if(node(query).op==BoundOp.bottom) next=bottom(ctx,type(query));
@@ -4435,13 +4484,24 @@ final class Bindings{
 			auto hj=c.numericProof(chart.jacobian,Rational(0),c.q(jac));
 			chartProofs~=c.q(f.slope)~" "~c.q(f.offset)~" "~c.q(jac)~" (of_decide_eq_true rfl) rfl "~
 				f.proof~" "~invProof~hj;
+			if(chart.oddDegree){
+				auto num=arena.number(arena.at(nodes[chart.derivativeNumerator].data)).re;
+				auto den=arena.number(arena.at(nodes[chart.derivativeDenominator].data)).re;
+				chartProofs[$-1]~=" "~to!string((chart.oddDegree-3)/2)~" "~c.q(num)~" "~c.q(den)~" (of_decide_eq_true rfl) rfl "~
+					c.numericProof(chart.derivativeNumerator,Rational(0),c.q(num))~" "~
+					c.numericProof(chart.derivativeDenominator,Rational(0),c.q(den));
+			}
 			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
 		}
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
 		foreach(witness;result.fibres) foreach(f;witness){ stack~=[f.source,f.charge,f.regular]; stack~=f.weights; }
-		foreach(c;result.affineCharts){ stack~=[c.map,c.jacobian]; if(c.inverse!=uint.max) stack~=c.inverse; }
+		foreach(c;result.affineCharts){
+			stack~=[c.map,c.jacobian];
+			if(c.inverse!=uint.max) stack~=c.inverse;
+			if(c.oddDegree) stack~=[c.derivativeNumerator,c.derivativeDenominator];
+		}
 		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; }
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd) stack~=p.extra;
@@ -5694,6 +5754,21 @@ final class Bindings{
 				case BindingRule.distributionScaleUndefined:
 					proof=".ofEq (fun ξ ρ => Distribution.scaleValue_of_undefined ("~name(n.a)~".eval ξ ρ) ("~
 						name(n.b)~".eval ξ ρ) (QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct ξ))"; break;
+				case BindingRule.distributionAffineOdd:{
+					auto args=chartProofs[p.extra];
+					if(n.op==BoundOp.distributionPushforwardOn){
+						proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affineOdd_chart_rule "~args~" "~
+							realBody(n.a)~" "~rowTotalProof(p.left)~" ("~proofName(p.right)~".sound ξ ρ); h)";
+					}else{
+						auto certificate="(Distribution.GraphFibre.affineOddExpression "~args~")";
+						auto observer=n.op==BoundOp.distributionGraphMass?"mass_rule":n.op==BoundOp.distributionGraphFibre?
+							"fibre_rule":n.op==BoundOp.apply?"masked_rule":"density_rule";
+						auto predicate=n.op==BoundOp.apply||n.op==BoundOp.distributionDensityAt?
+							" ("~name(nodes[n.a].a)~".eval ξ ρ)":"";
+						proof=".ofEq (fun ξ ρ => let h := "~certificate~"."~observer~predicate~" ("~name(n.b)~".eval ξ ρ); h)";
+					}
+					break;
+				}
 				case BindingRule.distributionOddChart:
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.oddPower_chart_rule "~to!string(p.extra)~" "~
 						realBody(n.a)~" "~rowTotalProof(p.left)~" ("~proofName(p.right)~".sound ξ ρ))"; break;
