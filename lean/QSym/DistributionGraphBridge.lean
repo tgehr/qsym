@@ -1,7 +1,16 @@
+import QSym.DistributionOddPowerBridge
 import QSym.Binding
 import QSym.Refinement
 
 noncomputable section
+namespace QSym.Distribution
+
+theorem scaleValue_of_undefined {α : Type} (w : Option ℝ) (d : Option (D α))
+    (h : Domain.Correct w (some false)) : scaleValue w d = none := by
+  cases w <;> simp_all [Domain.Correct, scaleValue]
+
+end QSym.Distribution
+
 namespace QSym.Distribution.GraphFibre
 
 /-- The expression emitted by the frontend uses strict comparisons and the

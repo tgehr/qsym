@@ -1,3 +1,4 @@
+import QSym.DistributionOddPower
 import QSym.DistributionPartialModel
 import QSym.DistributionSquareReconstruction
 import QSym.DistributionAtomRows
@@ -122,7 +123,17 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.square_positiveSource_disintegrates <;> assumption
   | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates <;> assumption
   | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates_masked <;> assumption
-  | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates_ae <;> assumption)
+  | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates_ae <;> assumption
+  | solve | apply Distribution.GraphFibre.GlobalInverseBranch.fibreOn_eq <;> assumption
+  | solve | apply Distribution.GraphFibre.GlobalInverseBranch.maskedAtoms_eq <;> assumption
+  | solve | apply Distribution.GraphFibre.GlobalInverseBranch.density_defined_iff <;> assumption
+  | solve | apply Distribution.GraphFibre.GlobalInverseBranch.density_total_iff <;> assumption
+  | solve | apply Distribution.GraphFibre.GlobalInverseBranch.density_eq <;> assumption
+  | solve | apply Distribution.GraphFibre.GlobalInverseBranch.lebesgueChart <;> assumption
+  | exact Distribution.GraphFibre.oddPower_fibre _ _
+  | exact Distribution.GraphFibre.oddPower_masked _ _ _
+  | exact Distribution.GraphFibre.oddPower_density _ _ _
+  | solve | apply Distribution.GraphFibre.oddPower_chart <;> assumption)
 
 macro "qsym_distribution" : tactic => `(tactic| (qsym_distribution_goal; first
   | solve | qsym_distribution_eq

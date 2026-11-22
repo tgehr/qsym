@@ -52,7 +52,28 @@ private Case[] cases(){ return [
 	Case("SignedFibrePartialWeight","densityAtD(Λ(x:ℝ).(1/x)*δ(0)[x]+λ[x],1)","ℝ"),
 	Case("SignedFibreRegularHole","densityAtD(Λ(x:ℝ).δ(0)[x]+((1/x)*λ[x]+(-δ(0)[x])),0)","ℝ","0⁻¹"),
 	Case("SignedFibreSymbolic","λ(a:ℝ).densityAtD(Λ(x:ℝ).δ(a)[x]+(λ[x]+(-δ(a)[x])),a)","ℝ→ℝ","λ(a:ℝ). (1:ℝ)"),
-	Case("UnsolvedCubicGraph","(λ[x]·δ(x^3)[y])//λ[y]","Distribution(ℝ)","λ[x]·δ(x^3)[y]//λ[y]"),
+	Case("CubicGraph","(λ[x]·δ(x^3)[y])//λ[y]","Distribution(ℝ)","(3·cbrt(y)^2)⁻¹·δ(cbrt(y))[x]"),
+	Case("CubicNegativeFibre","(λ(y:ℝ). (λ[x]·δ(x^3)[y])//λ[y])(-8)","Distribution(ℝ)","Λ(x:ℝ). 1/12·δ(-2)[x]"),
+	Case("FifthNegativeFibre","(λ(y:ℝ). (λ[x]·δ(x^5)[y])//λ[y])(-32)","Distribution(ℝ)","Λ(x:ℝ). 1/80·δ(-2)[x]"),
+	Case("SeventhPositiveMass","(λ(y:ℝ). ∫dx λ[x]·δ(x^7)[y]//λ[y])(128)","ℝ","1/448"),
+	Case("FifthSymbolicFibre","λ[x]·δ(x^5)[y]//λ[y]","Distribution(ℝ)"),
+	Case("CubicExcludedFibre","(λ(y:ℝ). [0<x]·λ[x]·δ(x^3)[y]//λ[y])(0)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("CubicCriticalDefined","defined(graphFibreD(λ(x:ℝ).x^3,0))","𝔹","false"),
+	Case("FifthMissingQuery","(λ(y:ℝ). [0<x]·λ[x]·δ(x^5)[y]//λ[y])(undefined(ℝ))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("CubicCriticalDensity","densityAtD(Λy. ∫dx λ[x]·δ(x³)[y],0)","ℝ","0⁻¹"),
+	Case("CubicExcludedDensity","densityAtD(Λy. ∫dx λ[x]·δ(x³)[y]·[x≠0],0)","ℝ","0"),
+	Case("CubicPartialDensity","densityAtD(pushforwardOnD(λ(x:ℝ).0<x⁻¹,λ(x:ℝ).x^3),0)","ℝ","undefined(ℝ)"),
+	Case("CubicSymbolicPartialDensity","densityAtD(pushforwardOnD(λ(x:ℝ).0<(x-2)⁻¹,λ(x:ℝ).x^3),y)","ℝ"),
+	Case("CubicRegularHole","densityAtD(pushforwardOnD(λ(x:ℝ).0<(x-2)⁻¹,λ(x:ℝ).x^3),8)","ℝ","undefined(ℝ)"),
+	Case("CubicPartialComparison","0<densityAtD(pushforwardOnD(λ(x:ℝ).0<(x-2)⁻¹,λ(x:ℝ).x^3),8)","𝔹","undefined(𝔹)"),
+	Case("CubicRegularDensity","densityAtD(pushforwardOnD(λ(x:ℝ).0<x⁻¹,λ(x:ℝ).x^3),8)","ℝ","1/12"),
+	Case("CubicMissingDensity","densityAtD(pushforwardOnD(λ(x:ℝ).false,λ(x:ℝ).x^3),undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("CubicPredicateParameter","λ(p:ℝ→𝔹).densityAtD(pushforwardOnD(p,λ(x:ℝ).x^3),-8)","(ℝ→𝔹)→ℝ"),
+	Case("CubicMissingPredicate","densityAtD(pushforwardOnD(undefined(ℝ→𝔹),λ(x:ℝ).x^3),8)","ℝ","undefined(ℝ)"),
+	Case("FifthChart","Λy. ∫dx λ[x]·δ(x^5)[y]·[x≠0]","Distribution(ℝ)"),
+	Case("CubicCriticalSource","Λy. ∫dx λ[x]·δ(x³)[y]·[0≤x]","Distribution(ℝ)"),
+	Case("CubicPartialSource","pushforwardOnD(λ(x:ℝ).0<x⁻¹,λ(x:ℝ).x^3)","Distribution(ℝ)"),
+	Case("QuarticGraph","λ[x]·δ(x^4)[y]//λ[y]","Distribution(ℝ)","λ[x]·δ(x^4)[y]//λ[y]"),
 	Case("MaskedJointSymbolic","[0≤x<1]·λ[x]·δ(1-2*x)[y]//λ[y]","Distribution(ℝ)","([y≤1∧-1<y]·(1/2))·δ(-y·(1/2)+1/2)[x]"),
 	Case("MaskedJointIncluded","(λ(y:ℝ). (δ(1-2*x)[y]·([0≤x<1]·λ[x]))//λ[y])(1)","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]"),
 	Case("MaskedJointExcluded","(λ(y:ℝ). (λ[x]·δ(1-2*x)[y]·[0≤x<1])//λ[y])(-1)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(1)[x]"),
@@ -240,13 +261,13 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
-		if(c.name=="SquareGraph"||c.name=="SquareGraphFour"||c.name=="UnsolvedCubicGraph"){
+		if(c.name=="SquareGraph"||c.name=="SquareGraphFour"||c.name=="CubicGraph"){
 			enforce(text.indexOf("scaleD")<0&&text.indexOf("graphFibreD")<0,c.name~": "~text);
 			enforce(s.inspectType(a,text)==c.type,c.name~" printed type");
 		}
 		if(c.name.indexOf("MaskedJoint")==0)
 			enforce(certificate.indexOf("GraphFibre.maskedKernel")>=0&&certificate.indexOf("GraphFibre.masked_affine_rule")>=0,c.name);
-		if(c.name=="MaskedCapture") enforce(text.indexOf("maskedGraphD")>=0,c.name);
+		if(c.name=="MaskedCapture"||c.name=="CubicExcludedFibre") enforce(certificate.indexOf("GraphFibre.oddPower_masked_rule")>=0,c.name);
 		if(c.name.indexOf("MaskedSquare")==0&&c.name!="MaskedSquareMissingQuery"){
 			enforce(certificate.indexOf("GraphFibre.masked_square")>=0,c.name);
 			enforce(text.indexOf("maskedGraphD")<0&&text.indexOf("//")<0,c.name~": "~text);
@@ -268,15 +289,14 @@ private void run(string directory){
 		if(c.name=="CriticalSquareSource") enforce(text.indexOf("∫")>=0&&text.indexOf("λ₊")<0,c.name);
 		if(c.name.indexOf("IdentityGraph")==0) enforce(certificate.indexOf("realPushforward_identity")>=0,c.name);
 		if(c.name=="RestrictedRatio") enforce(certificate.indexOf("square_openUnit_rule")>=0,c.name);
-		if(c.name=="RestrictedCubic"||c.name=="RestrictedHigherType")
-			enforce(certificate.indexOf(c.name=="RestrictedCubic"?"GraphFibre.realPushforwardOnValue":"Distribution.pushforwardOnValue")>=0&&certificate.indexOf("_openUnit_rule")<0,c.name);
+		if(c.name=="RestrictedHigherType") enforce(certificate.indexOf("Distribution.pushforwardOnValue")>=0&&certificate.indexOf("_openUnit_rule")<0,c.name);
 		if(c.name=="ExplicitRestrictedBind"||c.name=="ExplicitBindQuarter")
 			enforce(certificate.indexOf("GraphFibre.realBindValue")>=0&&certificate.indexOf("GraphFibre.bind_openUnit_graph")>=0,c.name);
 		if(c.name=="ExplicitWeightedBind") enforce(certificate.indexOf("GraphFibre.weighted_bind_openUnit_graph")>=0,c.name);
 		if(c.name=="ExplicitAtomIntegral"||c.name=="ExplicitIdentityRows")
 			enforce(certificate.indexOf("GraphFibre.integral_openUnit_graph")>=0,c.name);
 		if(c.name=="ExplicitCubicRows") enforce(certificate.indexOf("GraphFibre.integral_openUnit_graph")>=0&&
-			certificate.indexOf("GraphFibre.square_openUnit_chart")<0,c.name);
+			certificate.indexOf("GraphFibre.oddPower_chart_rule")>=0,c.name);
 		if(c.name.indexOf("TotalRows")==0){
 			auto kind=c.name=="TotalRowsPuncture"?"bind":c.name=="TotalRowsMaskedInverse"?"weighted_bind":"integral";
 			enforce(certificate.indexOf("GraphFibre."~kind~"_total_graph")>=0&&
@@ -300,7 +320,16 @@ private void run(string directory){
 		if(c.name=="SquareGraphMass"||c.name=="SquareGraphIntegral"||c.name=="CubicMarginal")
 			enforce(certificate.indexOf("Distribution.GraphFibre.marginal")>=0&&certificate.indexOf("Distribution.GraphFibre.value")<0,c.name);
 		if(c.name=="IndirectCubicMarginal") enforce(certificate.indexOf("Distribution.GraphFibre.mass_eq_marginal")>=0,c.name);
-		if(c.name=="UnsolvedCubicGraph") enforce(certificate.indexOf("Distribution.GraphFibre.value")>=0&&certificate.indexOf("Distribution.GraphFibre.square_")<0,c.name);
+		if(c.name=="CubicGraph"||c.name=="FifthSymbolicFibre"||c.name=="FifthNegativeFibre")
+			enforce(certificate.indexOf("GraphFibre.oddPower_fibre_rule")>=0,c.name);
+		if(c.name=="CubicSymbolicPartialDensity")
+			enforce(text.indexOf("guard(")>=0&&certificate.indexOf("Reduction.sound")>=0,c.name~": "~text);
+		if(c.name=="CubicMarginal"||c.name=="SeventhPositiveMass") enforce(certificate.indexOf("GraphFibre.oddPower_mass_rule")>=0,c.name);
+		if(c.name=="RestrictedCubic"||c.name=="CubicPartialDensity"||c.name=="CubicExcludedDensity"||c.name=="CubicCriticalDensity"||c.name=="CubicPredicateParameter")
+			enforce(certificate.indexOf("GraphFibre.oddPower_density_rule")>=0,c.name);
+		if(c.name=="FifthChart") enforce(certificate.indexOf("GraphFibre.oddPower_chart_rule")>=0&&text.indexOf("∫")<0,c.name);
+		if(c.name=="CubicPartialSource"||c.name=="CubicCriticalSource"||c.name=="QuarticGraph")
+			enforce(certificate.indexOf("GraphFibre.oddPower_")<0,c.name);
 		if(c.name.indexOf("SquareGraph")==0&&c.name!="SquareGraphMassMissing") enforce(certificate.indexOf("Distribution.GraphFibre.square_")>=0,c.name~": "~text);
 		if(c.name.indexOf("SignedFibre")==0) enforce(certificate.indexOf("Distribution.FibreCertificate.extract")>=0,c.name);
 		if(c.name.indexOf("MixedDensity")==0) enforce(certificate.indexOf("Distribution.model_density_atom_add")>=0,c.name);

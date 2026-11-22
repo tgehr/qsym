@@ -30,6 +30,16 @@ theorem masked_branch_rule {s : Set ℝ} {f d : ℝ → ℝ} (hs : MeasurableSet
         partialIntegral volume (fun y => (fibreOn s f y).bind (fun atoms => observe atoms (fun x => h x y)))
       else none := by qsym_rule
 
+theorem total_density_rule {f root slope : ℝ → ℝ} (branch : GlobalInverseBranch f root slope)
+    (p : ℝ → Option Bool) :
+    (∀ y, Value.Defined (densityAtValue (realPushforwardOnValue (some p) (some fun x => some (f x))) (some y))) ↔
+      (∀ x, Value.Defined (p x)) ∧ (∀ x, slope x = 0 → p x = some false) := by qsym_rule
+
+theorem change_coordinates_rule {f root slope : ℝ → ℝ} (branch : GlobalInverseBranch f root slope)
+    (p : ℝ → Option Bool) (hp : ∀ x, Value.Defined (p x)) (hc : ∀ x, slope x = 0 → p x = some false) :
+    realPushforwardOnValue (some p) (some fun x => some (f x)) =
+      densityValue (some fun y => Value.mask (p (root y)) (Value.inv (some |slope (root y)|))) := by qsym_rule
+
 private def cube (x : ℝ) := x ^ 3
 private abbrev regular : Set ℝ := ({0} : Set ℝ)ᶜ
 
@@ -116,6 +126,8 @@ theorem missing_critical : partialIntegral volume (fun x : ℝ => if x = 0 then 
 #qsym_check_axioms branchIntegral_image
 #qsym_check_axioms injectiveBranch_disintegrates_ae
 #qsym_check_axioms pullback_pair_rule
+#qsym_check_axioms total_density_rule
+#qsym_check_axioms change_coordinates_rule
 #qsym_check_axioms regular_root_rule
 #qsym_check_axioms branch_rule
 #qsym_check_axioms masked_branch_rule

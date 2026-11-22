@@ -509,7 +509,8 @@ struct FunctionSyntax{
 		Term lowered;
 		try{ lowered=b.lower(result.reduction.output); }catch(Exception){}
 		if(lowered!=Term.init){
-			result.lowered=true; result.scalarInput=lowered; result.scalar=simplify(a,lowered,facts,options);
+			result.scalarInput=lowered; result.scalar=simplify(a,lowered,facts,options);
+			result.lowered=!b.protectObservationDomain(result.reduction,lowered,result.scalar,options);
 		}
 		return result;
 	}

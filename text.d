@@ -91,6 +91,26 @@ struct Syntax{
 		string arg(uint id,uint precedence=0){ return render(memo[id],precedence); }
 		Piece rational(Rational q){ return Piece((q<Rational(0)?-q:q).toString,q.integral?100:70,q<Rational(0)); }
 		bool conversion(Node n){ return n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castRC; }
+		Term uncast(uint id){
+			auto t=a.at(id);
+			while(conversion(a.view(t))) t=a.at(a.view(t).a);
+			return t;
+		}
+		// Literal fractions reparse as products with a reciprocal. Preserve
+		// their spelling in exponents, including inside partial coefficients.
+		Piece exponent(uint id){
+			auto n=a.view(uncast(id)); Rational numerator=Rational(1);
+			if(n.op==Op.mul||n.op==Op.builtin&&n.value==Builtin.mulQ){
+				auto lit=uncast(n.a),other=uncast(n.b);
+				if(!a.isNumber(lit)){ lit=uncast(n.b); other=uncast(n.a); }
+				if(!a.isNumber(lit)||!a.number(lit).im.zero) return memo[id];
+				numerator=a.number(lit).re; n=a.view(other);
+			}
+			if(n.op!=Op.inv&&!(n.op==Op.builtin&&n.value==Builtin.invQ)) return memo[id];
+			auto den=uncast(n.a);
+			if(!a.isNumber(den)||!a.number(den).im.zero||a.number(den).re.zero) return memo[id];
+			return rational(numerator/a.number(den).re);
+		}
 		void pair(uint x,uint y,out Piece l,out Piece r){ l=memo[x]; r=memo[y]; }
 		Piece sum(uint x,uint y){
 			Piece l,r; pair(x,y,l,r);
@@ -264,7 +284,7 @@ struct Syntax{
 					else if(code=="leN"||code=="leZ"||code=="leQ") p=comparison(n.a,n.b,"≤");
 					else if(f==Builtin.eqB) p=Piece(arg(n.a,51)~"="~arg(n.b,51),50);
 					else if(code=="powerR"||code=="powerC"||code.length==5&&code[0..3]=="pow"){
-						p=Piece(arg(n.a,91)~"^"~arg(n.b,91),90);
+						p=Piece(arg(n.a,91)~"^"~render(exponent(n.b),91),90);
 						// Check the overload selected by the injection-free spelling.
 						// Use the typed operation only if ordinary notation selects another.
 						auto names=variables.dup;
@@ -359,7 +379,7 @@ unittest{
 		["toℂ(x)","x"],
 		["toℂ(sqrt(3))","sqrt(3)"],
 		["toℂ(x)+toℂ(y)","x+y"],
-		["z*toℂ((-1)^(2⁻¹))","z·(-1)^(2⁻¹)"],
+		["z*toℂ((-1)^(2⁻¹))","z·(-1)^(1/2)"],
 		["ⅈ*toℂ([p])","mulC(ⅈ,[p])"]
 	]){
 		auto input=s.parse(a,pair[0]),printed=s.format(a,input),output=s.parse(a,printed);
