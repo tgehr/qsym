@@ -125,6 +125,26 @@ struct Parser{
 			next(); expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
 			expect(")"); expect("."); auto p=pattern("$sum",[expression(depth+1)]); p.binder=name; p.annotation=ty; return p;
 		}
+		// Notation shared with sym: ∑_i f is a sum over ℤ, ⌊x⌋ and ⌈x⌉ round,
+		// and √x, ∛x are real roots of the following factor.
+		lookahead=lexer;
+		if(token.text=="∑"){
+			auto index=lookahead.next();
+			if(index.kind==TokenKind.identifier&&index.text.length>1&&index.text[0]=='_'){
+				next(); next(); auto p=pattern("$sum",[expression(depth+1)]);
+				p.binder=index.text[1..$]; p.annotation=new TypePattern("Int"); return p;
+			}
+		}
+		if(token.text=="⌊"||token.text=="⌈"){
+			auto floor=token.text=="⌊"; next();
+			auto p=new Pattern(floor?"floor":"ceil"); p.called=true; p.args~=expression(depth+1);
+			expect(floor?"⌋":"⌉"); return p;
+		}
+		if(token.text=="√"||token.text=="∛"){
+			auto p=new Pattern(token.text=="√"?"sqrt":"cbrt"); next();
+			p.called=true; p.args~=factor(depth+1); return p;
+		}
+		lookahead=lexer;
 		if((token.text=="μ"||token.text=="mu")&&lookahead.next().text=="("){
 			next(); expect("("); auto name=ident(); expect(":"); auto ty=typeExpression(depth+1);
 			expect(")"); expect("."); auto p=pattern("$fix",[expression(depth+1)]); p.binder=name; p.annotation=ty; return p;

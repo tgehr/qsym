@@ -85,6 +85,19 @@ struct Lexer{
 			case '∨':symbol="||"; break;
 			case '¬':symbol="!"; break;
 			case '±','∫','∑','{','}','.','∈','∉','⊆','⊈','(',')','[',']',',',':',';','+','-','*','×','@','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
+			case '⌊','⌋','⌈','⌉':symbol=source[start..pos]; break;
+			case '√','∛':{
+				// sym prints a radicand under combining overlines: √x̅+̅1̅ is √(x+1).
+				symbol=source[start..pos]; auto end=pos; string radicand;
+				while(end<source.length){
+					auto mark=end; decode(source,mark);
+					if(mark==source.length) break;
+					auto after=mark; if(decode(source,after)!='\u0305') break;
+					radicand~=source[end..mark]; end=after;
+				}
+				if(radicand.length) source=source[0..pos]~"("~radicand~")"~source[end..$];
+				break;
+			}
 			default:throw new Exception("unexpected character '"~source[start..pos]~"' at byte "~to!string(start));
 		}
 		return Token(TokenKind.symbol,symbol,start);
@@ -107,6 +120,11 @@ string symbolCode(string name){
 
 unittest{
 	import std.exception:assertThrown;
+	{
+		auto radical=Lexer("⅟√x̅+̅1̅·⌊y⌋"); string[] texts;
+		for(auto t=radical.next();t.kind!=TokenKind.end;t=radical.next()) texts~=t.text;
+		assert(texts==["⅟","√","(","x","+","1",")","*","⌊","y","⌋"]);
+	}
 	auto l=Lexer("\u2003# comment\nα₁′:ℂ⇒α₁′·ⅈ");
 	assert(l.next().text=="α₁′");
 	assert(l.next().text==":");

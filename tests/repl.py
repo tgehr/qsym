@@ -273,3 +273,14 @@ result=subprocess.run([str(root/"build/qsym")],input="\n".join([
 	":quit",""]),text=True,capture_output=True,timeout=30)
 assert result.returncode==0 and not result.stderr,result.stderr
 assert result.stdout.splitlines()==["4095","107","ℕ→ℤ","{n:ℕ | true}","false"],result.stdout
+
+# Notation shared with sym: ∑_i over ℤ, rounding brackets, and radical signs,
+# including a radicand printed under combining overlines.
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"∑_i [0≤i]·[i≤10]·i",":type ∑_i [i=3]·i","⌊7/2⌋+⌈7/2⌉","⌊x+1⌋-⌊x⌋",
+	"√2·√8","∛27","⅟√x̅+̅1̅","[√x̅≤2]","√(x²)·2","⌊x",":quit",""]),
+	text=True,capture_output=True,timeout=30)
+assert result.returncode==0,result.stderr
+assert result.stdout.splitlines()==["55","ℤ","7","1","4","3","sqrt(x+1)⁻¹","[x≤4]","2·abs(x)"],result.stdout
+assert "expected" in result.stderr,result.stderr
+print("Shared notation REPL checks passed.")
