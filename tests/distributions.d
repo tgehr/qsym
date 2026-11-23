@@ -504,11 +504,27 @@ private Case[] cases(){ return [
 	Case("LimitPiecewiseZero","lim[x→∞] ([x≤0]+[x≤1])*exp(x)","ℝ","0"),
 	Case("LimitPiecewiseGrowing","lim[x→∞] ([x≤0]+[1≤x])*exp(x)","ℝ"),
 	Case("LimitVisibleGrowth","lim[x→∞] [0≤x]*x^2","ℝ"),
+	Case("LimitLogistic","lim[x→∞] 1/(1+exp(-x))","ℝ","1"),
+	Case("LimitReciprocal","lim[x→∞] 3/(2+exp(-x))","ℝ","3/2"),
+	Case("LimitReciprocalStep","lim[x→∞] 1/(2-[0≤x])","ℝ","1"),
+	Case("LimitReciprocalZero","lim[x→∞] 1/(1-[0≤x])","ℝ","0⁻¹"),
+	Case("LimitReciprocalParameter","lim[x→∞] 1/(a+exp(-x))","ℝ"),
+	Case("LimitContinuous","lim[x→∞] cos(exp(-x))+sin(x*exp(-x))","ℝ","1"),
+	Case("LimitContinuousNested","lim[x→∞] exp(exp(-x))","ℝ","1"),
+	Case("LimitContinuousAbsolute","lim[x→∞] |exp(-x)-2|","ℝ","2"),
+	Case("LimitContinuousComplex","lim[x→∞] exp(ⅈ*exp(-x))","ℂ","1"),
+	Case("LimitInterior","lim[x→∞] log(1+exp(-x))","ℝ","0"),
+	Case("LimitInteriorRoot","lim[x→∞] sqrt(4+exp(-x))","ℝ","2"),
+	Case("LimitInteriorArc","lim[x→∞] asin(exp(-x))","ℝ","0"),
+	Case("LimitInteriorBoundary","lim[x→∞] acos(1+exp(-x))","ℝ"),
+	Case("LimitStrictGuard","lim[x→∞] log(2*x)-log(x)","ℝ","log(2)"),
+	Case("LimitStrictGuardUndefined","lim[x→-∞] log(2*x)-log(x)","ℝ","undefined(ℝ)"),
+	Case("LimitStrictGuardDecay","lim[x→∞] exp(-x)*x/x","ℝ","0"),
 	Case("LimitGrowing","lim[x→∞] exp(x)","ℝ"),
 	Case("LimitPolynomial","lim[x→∞] x^2","ℝ"),
 	Case("LimitWrongEnd","lim[x→-∞] exp(-x)","ℝ"),
 	Case("LimitOscillating","lim[x→∞] sin(x)","ℝ"),
-	Case("LimitComplex","lim[x→∞] ⅈ*exp(-x)","ℂ"),
+	Case("LimitComplex","lim[x→∞] ⅈ*exp(-x)","ℂ","0"),
 	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ"),
 	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
@@ -887,8 +903,9 @@ private void run(string directory){
 		// A limit is evaluated by structure with evidence for every term. A
 		// body that has no limit, or one outside the fragment, keeps its binder.
 		if(c.name.indexOf("Limit")==0){
-			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||c.name=="LimitComplex"||
-				c.name=="LimitGuardOscillating"||c.name=="LimitPiecewiseGrowing"||c.name=="LimitVisibleGrowth";
+			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||
+				c.name=="LimitGuardOscillating"||c.name=="LimitPiecewiseGrowing"||c.name=="LimitVisibleGrowth"||
+				c.name=="LimitReciprocalParameter"||c.name=="LimitInteriorBoundary";
 			enforce((certificate.indexOf("Limit.Exact.sound")>=0)!=retained,c.name~" limit certificate");
 			enforce((text.indexOf("lim[")>=0)==retained,c.name~": "~text);
 			// A bracket or a guard is decided beyond its last cut, and a bound
@@ -908,6 +925,16 @@ private void run(string directory){
 				enforce(certificate.indexOf("Limit.EventualExp.of_piece")>=0,c.name);
 			if(c.name=="LimitPiecewiseZero") enforce(certificate.indexOf("Limit.vanishes_zero")>=0,c.name);
 			if(c.name=="LimitAbsoluteBottom"||c.name=="LimitPiecewiseFactor") enforce(certificate.indexOf("Limit.EventualScaled.")>=0,c.name);
+			// Continuous operations keep a limit: builtins that are defined
+			// everywhere, partial ones at a rational limit inside their domain,
+			// and the reciprocal of a rational limit other than zero. A strict
+			// guard that is eventually decided lets its value through.
+			if(c.name=="LimitLogistic"||c.name=="LimitReciprocal") enforce(certificate.indexOf("Limit.Exact.inv")>=0&&certificate.indexOf("Limit.nonzero_literal")>=0,c.name);
+			if(c.name=="LimitReciprocalStep"||c.name=="LimitReciprocalZero") enforce(certificate.indexOf("Limit.Exact.inv")<0&&certificate.indexOf("Limit.Exact.of_eventual")>=0,c.name);
+			if(c.name.indexOf("LimitContinuous")==0||c.name=="LimitComplex") enforce(certificate.indexOf(c.name=="LimitContinuousAbsolute"?"Limit.Exact.abs":"Limit.Exact.regular")>=0,c.name);
+			if(c.name.indexOf("LimitInterior")==0&&!retained) enforce(certificate.indexOf("Limit.Exact.interior")>=0,c.name);
+			if(c.name=="LimitStrictGuard"||c.name=="LimitStrictGuardUndefined") enforce(certificate.indexOf("Limit.Eventual.binary Binding.guardValue")>=0,c.name);
+			if(c.name=="LimitStrictGuardDecay") enforce(certificate.indexOf("Limit.Exact.guard")>=0,c.name);
 			// The limit of an integral between bounds is the limit of its
 			// closed form behind the guard that orders the bounds.
 			if(c.name=="LimitMask"||c.name.indexOf("LimitIntegral")==0) enforce(certificate.indexOf("Limit.Exact.mask")>=0,c.name);

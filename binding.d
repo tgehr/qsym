@@ -1199,6 +1199,37 @@ final class Bindings{
 		if(value.exhausted||arena.view(value.output).op!=Op.boolLit) return false;
 		truth=value.output==arena.boolean(true); return true;
 	}
+	// Builtins that are defined and continuous everywhere keep a limit.
+	private static bool regularBuiltin(ulong value){
+		switch(cast(Builtin)value){
+			case Builtin.castQR,Builtin.castRC,Builtin.expR,Builtin.sinR,Builtin.cosR,Builtin.sinhR,Builtin.coshR,Builtin.tanhR,Builtin.atanR,Builtin.asinhR,Builtin.exp2R,
+				Builtin.expC,Builtin.sinC,Builtin.cosC,Builtin.sinhC,Builtin.coshC,Builtin.reC,Builtin.imC,Builtin.absC,Builtin.cisR,Builtin.expiC:return true;
+			default:return false;
+		}
+	}
+	// A partial builtin keeps a rational limit in the interior of its domain.
+	private static bool interiorBuiltin(ulong value,Rational q){
+		switch(cast(Builtin)value){
+			case Builtin.logR,Builtin.log2R,Builtin.log10R,Builtin.sqrtR:return Rational(0)<q;
+			case Builtin.asinR,Builtin.acosR:return Rational(-1)<q&&q<Rational(1);
+			default:return false;
+		}
+	}
+	// The rational value of a closed term that the numeric calculator of the
+	// certificates evaluates, as a scalar term for it.
+	private bool closedRational(BoundTerm t,out Rational q,out Term term){
+		term=scalarBody(t,Term.init); if(term==Term.init) return false;
+		foreach(id;arena.viewPostorder(term)){
+			auto v=arena.view(arena.at(id));
+			bool calculated=arena.isNumber(arena.at(id))||v.op==Op.boolLit||v.op==Op.add||v.op==Op.mul||v.op==Op.pow||v.op==Op.inv||v.op==Op.abs||v.op==Op.mask||
+				v.op==Op.lt||v.op==Op.le||v.op==Op.nonzero||v.op==Op.and_||v.op==Op.or_||v.op==Op.not_||
+				v.op==Op.builtin&&v.value>=Builtin.castNZ&&v.value<=Builtin.castQR;
+			if(!calculated) return false;
+		}
+		auto value=simplify(arena,term);
+		if(value.exhausted||!arena.isNumber(value.output)||!arena.number(value.output).im.zero) return false;
+		q=arena.number(value.output).re; return q.words<=128;
+	}
 	// A polynomial times the exponential of a rate vanishes at that end when
 	// the exponential decays there, or when the polynomial is zero.
 	private static bool vanishing(Rational[] p,Rational rate,bool bottom){
@@ -1232,7 +1263,13 @@ final class Bindings{
 		if(depth>64) return BoundTerm.init;
 		auto found=at(id);
 		if(!depends(found,0)) return build?dropIndex(found):found;
-		auto n=nodes[id]; if(n.op!=BoundOp.primitive) return BoundTerm.init;
+		auto n=nodes[id];
+		if(n.op==BoundOp.guard){
+			auto holds=eventualTerm(n.a,bottom,build,depth+1); if(holds==BoundTerm.init) return holds;
+			auto value=eventualTerm(n.b,bottom,build,depth+1); if(value==BoundTerm.init) return value;
+			return build?guard(holds,value):found;
+		}
+		if(n.op!=BoundOp.primitive) return BoundTerm.init;
 		BoundTerm literal(Term value){ return scalar(Scope(this,contexts[context(found).index].parent),value); }
 		bool truth; Rational cut; auto decided=decidedGuard(id,bottom,truth,cut);
 		if(decided!=Decided.no){
@@ -1256,10 +1293,13 @@ final class Bindings{
 	// products and powers of convergent terms converge, and an eventually
 	// decided guard masks the limit of its value. A factor of the polynomial
 	// may be piecewise: beyond its last cut it is a polynomial, and where
-	// that is zero the product vanishes whatever the exponential does. The
-	// result is in the context of the binder. Nothing is claimed for a body
-	// outside this fragment: a limit that does not exist has no value.
-	// Without `build` this only recognizes the body.
+	// that is zero the product vanishes whatever the exponential does.
+	// Absolute values and builtins that are defined and continuous everywhere
+	// keep a limit. A reciprocal keeps a limit that is a rational number
+	// other than zero, and a partial builtin one in the interior of its
+	// domain. The result is in the context of the binder.
+	// Nothing is claimed for a body outside this fragment: a limit that does
+	// not exist has no value. Without `build` this only recognizes the body.
 	private BoundTerm limitTerms(uint body,bool bottom,bool build=true,uint depth=0){
 		if(depth>64) return BoundTerm.init;
 		auto found=at(body);
@@ -1271,16 +1311,29 @@ final class Bindings{
 			auto zero=scalar(Scope(this,contexts[context(found).index].parent),arena.real_(0));
 			return scaled?primitive(arena.mul(arena.real_(1),arena.real_(1),true),[tailScale(body,bottom),zero]):zero;
 		}
-		auto n=nodes[body]; if(n.op!=BoundOp.primitive) return BoundTerm.init;
-		auto op=arena.view(arena.at(n.data)).op;
-		if(op==Op.mask){
+		auto n=nodes[body]; if(n.op!=BoundOp.primitive&&n.op!=BoundOp.guard) return BoundTerm.init;
+		auto view=n.op==BoundOp.guard?arena.view(arena.boolean(true)):arena.view(arena.at(n.data)),op=view.op;
+		if(n.op==BoundOp.guard||op==Op.mask){
+			// A guard that is eventually decided: strict, or masking.
 			if(eventualTerm(n.a,bottom,false)==BoundTerm.init) return BoundTerm.init;
 			auto value=limitTerms(n.b,bottom,build,depth+1); if(value==BoundTerm.init) return value;
-			return build?primitive(arena.at(n.data),[eventualTerm(n.a,bottom),value]):found;
+			if(!build) return found;
+			auto decided=eventualTerm(n.a,bottom);
+			return n.op==BoundOp.guard?guard(decided,value):primitive(arena.at(n.data),[decided,value]);
 		}
-		if(op!=Op.add&&op!=Op.mul&&op!=Op.pow) return BoundTerm.init;
+		bool partial=op==Op.builtin&&interiorBuiltin(view.value,Rational(1)/Rational(2));
+		if(op==Op.inv||partial){
+			// The limit inside must be known: not zero under a reciprocal,
+			// and in the interior of the domain of a partial builtin.
+			if(type(found)!=scalarType(Sort.real_)||limitTerms(n.a,bottom,false,depth+1)==BoundTerm.init) return BoundTerm.init;
+			auto inside=limitTerms(n.a,bottom,true,depth+1); Rational q; Term term;
+			if(!closedRational(inside,q,term)||(partial?!interiorBuiltin(view.value,q):q.zero)) return BoundTerm.init;
+			return build?primitive(arena.at(n.data),[inside]):found;
+		}
+		bool continuous=op==Op.pow||op==Op.abs||op==Op.builtin&&regularBuiltin(view.value);
+		if(op!=Op.add&&op!=Op.mul&&!continuous) return BoundTerm.init;
 		auto left=limitTerms(n.a,bottom,build,depth+1); if(left==BoundTerm.init) return left;
-		if(op==Op.pow) return build?primitive(arena.at(n.data),[left]):found;
+		if(continuous) return build?primitive(arena.at(n.data),[left]):found;
 		auto right=limitTerms(n.b,bottom,build,depth+1); if(right==BoundTerm.init) return right;
 		return build?primitive(arena.at(n.data),[left,right]):found;
 	}
@@ -5798,7 +5851,12 @@ final class Bindings{
 		// An eventually constant term and its eventual value.
 		string eventual(uint id,uint output){
 			if(!depends(at(id),0)) return "(Limit.Eventual.const Filter."~end~" ("~name(output)~".eval ξ ρ))";
-			auto n=nodes[id],o=nodes[output],op=arena.view(arena.at(n.data)).op;
+			auto n=nodes[id],o=nodes[output];
+			if(n.op==BoundOp.guard){
+				enforce(o.op==BoundOp.guard,"eventual guard mismatch");
+				return "(Limit.Eventual.binary Binding.guardValue "~eventual(n.a,o.a)~" "~eventual(n.b,o.b)~")";
+			}
+			auto op=arena.view(arena.at(n.data)).op;
 			bool truth; Rational cut; auto decided=decidedGuard(id,s.bottom,truth,cut);
 			if(decided==Decided.cuts){
 				auto sample=s.bottom?cut-Rational(1):cut+Rational(1),value=truth?"true":"false";
@@ -5847,10 +5905,23 @@ final class Bindings{
 				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~tail(body,scaled)~" (Limit."~(decays?"decays_"~end:"vanishes_zero")~" rfl) "~literal(zero,"(0 : ℚ)")~")";
 			}
 			auto n=nodes[body],o=nodes[output];
+			if(n.op==BoundOp.guard){
+				enforce(o.op==BoundOp.guard,"limit guard mismatch");
+				return "(Limit.Exact.guard "~eventual(n.a,o.a)~" "~visit(n.b,o.b)~")";
+			}
 			enforce(n.op==BoundOp.primitive&&o.op==BoundOp.primitive&&n.data==o.data,"limit structure mismatch");
 			auto op=arena.view(arena.at(n.data));
 			if(op.op==Op.mask) return "(Limit.Exact.mask "~eventual(n.a,o.a)~" "~visit(n.b,o.b)~")";
 			if(op.op==Op.pow) return "(Limit.Exact.pow "~to!string(op.value)~" "~visit(n.a,o.a)~")";
+			if(op.op==Op.abs) return "(Limit.Exact.abs "~visit(n.a,o.a)~")";
+			if(op.op==Op.builtin&&regularBuiltin(op.value)) return "(Limit.Exact.regular Limit.regular_"~builtinInfo(cast(Builtin)op.value).code~" "~visit(n.a,o.a)~")";
+			if(op.op==Op.inv||op.op==Op.builtin){
+				Rational q; Term term; enforce(closedRational(at(o.a),q,term),"limit is not a closed number");
+				cert.numericTerms~=term;
+				auto value=cert.q(q)~" (Numeric.calculate_sound ξ n"~to!string(term.id)~" "~cert.q(q)~" rfl)";
+				if(op.op==Op.inv) return "(Limit.Exact.inv "~visit(n.a,o.a)~" (Limit.nonzero_literal "~value~" rfl))";
+				return "(Limit.Exact.interior "~visit(n.a,o.a)~" "~value~" (Limit.interior_"~builtinInfo(cast(Builtin)op.value).code~" rfl))";
+			}
 			enforce(op.op==Op.add||op.op==Op.mul,"unsupported limit operation");
 			return "(Limit.Exact."~(op.op==Op.add?"add":"mul")~" "~visit(n.a,o.a)~" "~visit(n.b,o.b)~")";
 		}

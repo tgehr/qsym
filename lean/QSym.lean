@@ -14,6 +14,7 @@ import QSym.DistributionWeightedAffine
 import QSym.Limit
 import QSym.LimitExponential
 import QSym.LimitStep
+import QSym.LimitContinuous
 import QSym.DistributionFibreCertificate
 import QSym.DistributionPartialModel
 import QSym.DistributionPartialSequential
