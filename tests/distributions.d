@@ -531,6 +531,16 @@ private Case[] cases(){ return [
 	Case("LimitQuotientDecay","lim[x→∞] exp(-x)/(1+x^2)","ℝ","0"),
 	Case("LimitQuotientLarger","lim[x→∞] x^3/(x^2+1)","ℝ"),
 	Case("LimitQuotientParameter","lim[x→∞] (a*x+1)/x","ℝ"),
+	Case("LimitGaussian","lim[x→∞] exp(-x^2/2)/sqrt(2*π)","ℝ","0"),
+	Case("LimitGaussianMoment","lim[x→-∞] x^3*exp(-x^2/2)","ℝ","0"),
+	Case("LimitGaussianShifted","lim[x→∞] a*exp(-(x-1)^2)","ℝ","0"),
+	Case("LimitGaussianTilted","lim[x→∞] exp(-x^2)*exp(3*x)","ℝ","0"),
+	Case("LimitGaussianPiecewise","lim[x→∞] |x|*exp(-x^2)","ℝ","0"),
+	Case("LimitExponentShifted","lim[x→∞] exp(1-x)","ℝ","0"),
+	Case("LimitExponentShiftedBottom","lim[x→-∞] exp(x+5)*x","ℝ","0"),
+	Case("LimitExponentCubic","lim[x→-∞] exp(x^3)","ℝ","0"),
+	Case("LimitExponentCubicGrowing","lim[x→∞] exp(x^3)","ℝ"),
+	Case("LimitGaussianSymbolic","lim[x→∞] exp(-(x-m)^2)","ℝ"),
 	Case("LimitGrowing","lim[x→∞] exp(x)","ℝ"),
 	Case("LimitPolynomial","lim[x→∞] x^2","ℝ"),
 	Case("LimitWrongEnd","lim[x→-∞] exp(-x)","ℝ"),
@@ -916,7 +926,8 @@ private void run(string directory){
 		if(c.name.indexOf("Limit")==0){
 			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||
 				c.name=="LimitGuardOscillating"||c.name=="LimitPiecewiseGrowing"||c.name=="LimitVisibleGrowth"||
-				c.name=="LimitReciprocalParameter"||c.name=="LimitInteriorBoundary"||c.name=="LimitQuotientLarger"||c.name=="LimitQuotientParameter";
+				c.name=="LimitReciprocalParameter"||c.name=="LimitInteriorBoundary"||c.name=="LimitQuotientLarger"||c.name=="LimitQuotientParameter"||
+				c.name=="LimitExponentCubicGrowing"||c.name=="LimitGaussianSymbolic";
 			enforce((certificate.indexOf("Limit.Exact.sound")>=0)!=retained,c.name~" limit certificate");
 			enforce((text.indexOf("lim[")>=0)==retained,c.name~": "~text);
 			// A bracket or a guard is decided beyond its last cut, and a bound
@@ -933,7 +944,7 @@ private void run(string directory){
 				enforce(certificate.indexOf("Limit.Eventual.mask_never")>=0,c.name);
 			if(c.name=="LimitHiddenGrowthBound") enforce(certificate.indexOf("Limit.never_bound")>=0,c.name);
 			if(c.name.indexOf("LimitAbsolute")==0||c.name=="LimitPiecewiseFactor"||c.name=="LimitPiecewiseZero")
-				enforce(certificate.indexOf("Limit.EventualExp.of_piece")>=0,c.name);
+				enforce(certificate.indexOf("Limit.EventualExp.piece ")>=0,c.name);
 			if(c.name=="LimitPiecewiseZero") enforce(certificate.indexOf("Limit.vanishes_zero")>=0,c.name);
 			if(c.name=="LimitAbsoluteBottom"||c.name=="LimitPiecewiseFactor") enforce(certificate.indexOf("Limit.EventualScaled.")>=0,c.name);
 			// Continuous operations keep a limit: builtins that are defined
@@ -951,6 +962,11 @@ private void run(string directory){
 			// numerator has a larger one.
 			if(c.name.indexOf("LimitQuotient")==0&&!retained)
 				enforce(certificate.indexOf("Limit.Exact.quotient Limit.Infinite."~(c.name=="LimitQuotientBottom"||c.name=="LimitQuotientPower"?"bottom":"top"))>=0,c.name);
+			// The exponential of a polynomial that descends dominates every
+			// polynomial: the exponent stays below a decaying linear rate.
+			if((c.name.indexOf("LimitGaussian")==0||c.name.indexOf("LimitExponent")==0)&&!retained)
+				enforce(certificate.indexOf("Limit.EventualExp.exp")>=0&&certificate.indexOf("Limit.decays_at"~(c.name=="LimitGaussianMoment"||
+					c.name=="LimitExponentShiftedBottom"||c.name=="LimitExponentCubic"?"Bot":"Top"))>=0,c.name);
 			// The limit of an integral between bounds is the limit of its
 			// closed form behind the guard that orders the bounds.
 			if(c.name=="LimitMask"||c.name.indexOf("LimitIntegral")==0) enforce(certificate.indexOf("Limit.Exact.mask")>=0,c.name);

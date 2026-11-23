@@ -1161,27 +1161,39 @@ final class Bindings{
 		auto sample=bottom?cut-Rational(1):cut+Rational(1);
 		return sample.words<=128&&gridPolynomial(id,arg,sample,p);
 	}
-	// A product of polynomials, of exponentials of rational multiples of the
-	// innermost variable, of closed piecewise polynomials taken beyond their
-	// last cut, and of factors that do not mention the variable: its scale.
-	private bool tailExponential(uint id,bool bottom,out Rational[] p,out Rational rate,out bool scaled,uint depth=0){
+	// A factor of a polynomial times the exponential of a polynomial, taken
+	// at one end: a polynomial, the exponential of one, or a closed piecewise
+	// polynomial beyond its last cut.
+	private enum TailFactor:ubyte{ none,polynomial,exponential,piece }
+	private TailFactor tailFactor(uint id,bool bottom,out Rational[] p,out Rational[] exponent,out Rational cut){
+		if(axisPolynomial(id,p)) return TailFactor.polynomial;
+		auto n=nodes[id];
+		if(n.op==BoundOp.primitive){
+			auto op=arena.view(arena.at(n.data));
+			if(op.op==Op.builtin&&op.value==Builtin.expR&&axisPolynomial(n.a,exponent)){ p=[Rational(1)]; return TailFactor.exponential; }
+		}
+		return tailPolynomial(id,bottom,cut,p)?TailFactor.piece:TailFactor.none;
+	}
+	// A product of such factors and of factors that do not mention the
+	// variable, which are its scale: the polynomial and the exponent.
+	private bool tailExponential(uint id,bool bottom,out Rational[] p,out Rational[] exponent,out bool scaled,uint depth=0){
 		if(depth>16) return false;
 		Rational cut;
-		if(axisExponential(id,p,rate)||tailPolynomial(id,bottom,cut,p)) return true;
+		if(tailFactor(id,bottom,p,exponent,cut)!=TailFactor.none) return true;
 		if(!depends(at(id),0)){ scaled=true; p=[Rational(1)]; return true; }
 		auto q=nodes[id];
 		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
-		Rational[] a,b; Rational r,t; bool left,right;
+		Rational[] a,b,r,t; bool left,right;
 		if(!tailExponential(q.a,bottom,a,r,left,depth+1)||!tailExponential(q.b,bottom,b,t,right,depth+1)) return false;
-		p=polyProduct(a,b); rate=r+t; scaled=left||right;
-		if(p.length>64||rate.words>128) return false;
-		foreach(c;p) if(c.words>128) return false;
+		p=polyProduct(a,b); exponent=polySum(r,t); scaled=left||right;
+		if(p.length>64||exponent.length>64) return false;
+		foreach(c;p~exponent) if(c.words>128) return false;
 		return true;
 	}
 	// The scale of such a product outside the binder of the variable.
 	private BoundTerm tailScale(uint id,bool bottom){
-		Rational[] p; Rational rate,cut;
-		if(axisExponential(id,p,rate)||tailPolynomial(id,bottom,cut,p)) return BoundTerm.init;
+		Rational[] p,exponent; Rational cut;
+		if(tailFactor(id,bottom,p,exponent,cut)!=TailFactor.none) return BoundTerm.init;
 		if(!depends(at(id),0)) return dropIndex(at(id));
 		auto q=nodes[id],left=tailScale(q.a,bottom),right=tailScale(q.b,bottom);
 		if(left==BoundTerm.init) return right;
@@ -1259,11 +1271,20 @@ final class Bindings{
 		if(value.exhausted||!arena.isNumber(value.output)||!arena.number(value.output).im.zero) return false;
 		q=arena.number(value.output).re; return q.words<=128;
 	}
-	// A polynomial times the exponential of a rate vanishes at that end when
-	// the exponential decays there, or when the polynomial is zero.
-	private static bool vanishing(Rational[] p,Rational rate,bool bottom){
-		bool zero=true; foreach(c;p) zero=zero&&c.zero;
-		return zero||!rate.zero&&(rate<Rational(0))!=bottom;
+	// A polynomial times the exponential of a polynomial vanishes at that
+	// end when the polynomial is zero, or when the exponent descends there:
+	// its coefficient of highest degree is negative, counted with the parity
+	// of that degree at -∞. The exponent then stays below a decaying linear
+	// rate: half its slope when it is linear, and a unit slope otherwise.
+	private static bool vanishing(Rational[] p,Rational[] exponent,bool bottom,out bool zero,out Rational rate,out size_t degree){
+		zero=true; foreach(c;p) zero=zero&&c.zero;
+		if(zero) return true;
+		foreach_reverse(i,c;exponent) if(!c.zero){ degree=i; break; }
+		if(!degree) return false;
+		auto lead=exponent[degree];
+		if((lead<Rational(0))==(bottom&&degree%2==1)) return false;
+		rate=degree==1?lead/Rational(2):Rational(bottom?1:-1);
+		return true;
 	}
 	// The eventual truth of a guard that is decided at that end: beyond the
 	// cuts of its rational affine comparisons, or as the variable against a
@@ -1317,7 +1338,7 @@ final class Bindings{
 	}
 	// The limit of a body in its innermost variable at +∞ or at -∞, by
 	// structure: an eventually constant term tends to its eventual value, a
-	// polynomial times a decaying exponential of rational rate tends to
+	// polynomial times the exponential of a polynomial that descends tends to
 	// zero, also under a scale that does not mention the variable, sums,
 	// products and powers of convergent terms converge, and an eventually
 	// decided guard masks the limit of its value. A factor of the polynomial
@@ -1335,9 +1356,10 @@ final class Bindings{
 		if(depth>64) return BoundTerm.init;
 		auto found=at(body);
 		if(eventualTerm(body,bottom,false)!=BoundTerm.init) return build?eventualTerm(body,bottom):found;
-		Rational[] p; Rational rate; bool scaled;
-		if(tailExponential(body,bottom,p,rate,scaled)){
-			if(!vanishing(p,rate,bottom)) return BoundTerm.init;
+		Rational[] p,exponent; bool scaled;
+		if(tailExponential(body,bottom,p,exponent,scaled)){
+			bool vanishes; Rational rate; size_t order;
+			if(!vanishing(p,exponent,bottom,vanishes,rate,order)) return BoundTerm.init;
 			if(!build) return found;
 			auto zero=scalar(Scope(this,contexts[context(found).index].parent),arena.real_(0));
 			return scaled?primitive(arena.mul(arena.real_(1),arena.real_(1),true),[tailScale(body,bottom),zero]):zero;
@@ -5911,16 +5933,20 @@ final class Bindings{
 			}
 			return "(Limit.Eventual."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~eventual(n.a,o.a)~(n.b==uint.max?"":" "~eventual(n.b,o.b))~")";
 		}
-		// Eventually a polynomial times an exponential: the factors are such
-		// everywhere, piecewise polynomials beyond their last cut, or free of
-		// the variable; these are the scale.
+		// Eventually a polynomial times the exponential of a polynomial: the
+		// factors are polynomials, exponentials of polynomials, piecewise
+		// polynomials beyond their last cut, or free of the variable; these
+		// are the scale.
 		string tail(uint id,out bool scaled){
-			Rational[] p; Rational rate,cut;
-			if(axisExponential(id,p,rate)) return "(Limit.EventualExp.of_global "~cert.exponential(id).proof~")";
-			if(tailPolynomial(id,s.bottom,cut,p)){
-				auto side=s.bottom?"before":"after",region="(."~side~" "~cert.q(cut)~")";
-				auto piece=cert.piece(id,"(Distribution.StepSource.Region.contains "~region~")",region,s.bottom?cut-Rational(1):cut+Rational(1));
-				return "(Limit.EventualExp.of_piece (Limit.tail_"~side~" "~cert.q(cut)~") "~piece.proof~")";
+			Rational[] p,exponent; Rational cut;
+			final switch(tailFactor(id,s.bottom,p,exponent,cut)){
+				case TailFactor.polynomial:return "(Limit.EventualExp.polynomial "~cert.piece(id,cert.everywhere,"",Rational(0)).proof~")";
+				case TailFactor.exponential:return "(Limit.EventualExp.exp "~cert.piece(nodes[id].a,cert.everywhere,"",Rational(0)).proof~")";
+				case TailFactor.piece:
+					auto side=s.bottom?"before":"after",region="(."~side~" "~cert.q(cut)~")";
+					auto piece=cert.piece(id,"(Distribution.StepSource.Region.contains "~region~")",region,s.bottom?cut-Rational(1):cut+Rational(1));
+					return "(Limit.EventualExp.piece (Limit.tail_"~side~" "~cert.q(cut)~") "~piece.proof~")";
+				case TailFactor.none:break;
 			}
 			scaled=true;
 			if(!depends(at(id),0)) return "(Limit.EventualScaled.constant Filter."~end~" ("~name(dropIndex(at(id)).id)~".eval ξ ρ))";
@@ -5940,12 +5966,13 @@ final class Bindings{
 		string visit(uint body,uint output){
 			if(!depends(at(body),0)) return "(Limit.Exact.const Filter."~end~" ("~name(output)~".eval ξ ρ))";
 			if(eventualTerm(body,s.bottom,false)!=BoundTerm.init) return "(Limit.Exact.of_eventual "~eventual(body,output)~")";
-			Rational[] p; Rational rate; bool scaled;
-			if(tailExponential(body,s.bottom,p,rate,scaled)){
-				enforce(vanishing(p,rate,s.bottom),"limit term does not vanish");
-				bool decays=!rate.zero&&(rate<Rational(0))!=s.bottom;
+			Rational[] p,exponent; bool scaled;
+			if(tailExponential(body,s.bottom,p,exponent,scaled)){
+				bool vanishes; Rational rate; size_t order;
+				enforce(vanishing(p,exponent,s.bottom,vanishes,rate,order),"limit term does not vanish");
+				auto decay=vanishes?"(Limit.vanishes_zero rfl)":"(Limit.decays_"~end~" "~cert.q(rate)~" "~to!string(order)~" rfl)";
 				auto zero=scaled?nodes[output].b:output;
-				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~tail(body,scaled)~" (Limit."~(decays?"decays_"~end:"vanishes_zero")~" rfl) "~literal(zero,"(0 : ℚ)")~")";
+				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~tail(body,scaled)~" "~decay~" "~literal(zero,"(0 : ℚ)")~")";
 			}
 			size_t degree; Rational ratio;
 			if(quotientLimit(body,degree,ratio))
