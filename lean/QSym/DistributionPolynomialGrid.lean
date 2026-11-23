@@ -187,6 +187,26 @@ theorem polynomial_mask_false {r : Region} {c : ℝ → Option Bool} (f : ℝ �
     PolynomialOn r.contains (fun x => Value.mask (c x) (f x)) [] :=
   ⟨fun x hx => by subst hr; rw [hc x hx, hs]; rfl⟩
 
+/-- The coefficients of the absolute value of an affine function whose
+sign is fixed. -/
+def absPoly : Sign → ℚ → ℚ → List ℚ
+  | .negative, a, b => [-b, -a]
+  | .zero, _, _ => []
+  | .positive, a, b => [b, a]
+
+/-- An absolute value is affine on a cell that does not contain its kink. -/
+theorem polynomial_abs {r : Region} {f : ℝ → Option ℝ} {a b : ℚ} (s : Sign)
+    (hf : Affine f a b) (hs : signCheck r a b s = true) :
+    PolynomialOn r.contains (fun x => Value.abs (f x)) (absPoly s a b) :=
+  ⟨fun x hx => by
+    have h := signCheck_sound hs hx
+    rw [hf x]
+    cases s <;> simp only [Sign.holds] at h <;>
+      simp only [Value.abs, Option.map_some', absPoly, polyEval, Option.some.injEq]
+    · rw [abs_of_neg h]; push_cast; ring
+    · rw [h, abs_zero]
+    · rw [abs_of_pos h]; push_cast; ring⟩
+
 /-- The cells to the right of a cut, with their accumulated integral. -/
 inductive PolynomialTail (f : ℝ → Option ℝ) : ℚ → List ℚ → ℚ → Prop
   | nil (a : ℚ) {p : List ℚ} (h : PolynomialOn (Region.after a).contains f p) (zero : polyZero p = true) :

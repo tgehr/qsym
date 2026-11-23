@@ -375,6 +375,13 @@ private Case[] cases(){ return [
 	Case("PolynomialTwoIntervals","∫dx ([0≤x≤1]+[2≤x≤3])*x*λ[x]","ℝ","3"),
 	Case("PolynomialMixedMean","∫dx (1/2*δ(0)[x]+1/2*[0≤x≤1]*λ[x])*x","ℝ","1/4"),
 	Case("PolynomialMixedMoment","∫dx (1/3*δ(1)[x]+2/3*[0≤x≤3]*(1/3)*λ[x])*x^2","ℝ","7/3"),
+	Case("PolynomialAbsolute","∫dx [-1≤x≤1]*abs(x)*λ[x]","ℝ","1"),
+	Case("PolynomialAbsoluteShifted","∫dx [-1≤x≤2]*abs(x-1)*x*λ[x]","ℝ","1/6"),
+	Case("PolynomialAbsoluteScaled","∫dx [0≤x≤1]*abs(2*x-1)*λ[x]","ℝ","1/2"),
+	Case("PolynomialAbsoluteCube","∫dx [-1≤x≤1]*abs(x)^3*λ[x]","ℝ","1/2"),
+	Case("PolynomialAbsoluteCoordinate","∫dx [-1≤x≤1]·x²·λ[x²]","ℝ","1"),
+	Case("PolynomialAbsoluteMixture","∫dx (1/2*δ(0)[x]+1/2*[-1≤x≤1]*(1/2)*λ[x])*abs(x)","ℝ","1/4"),
+	Case("PolynomialAbsoluteNested","∫dx [-2≤x≤2]*abs(abs(x)-1)*λ[x]","ℝ"),
 	Case("PolynomialUnbounded","∫dx [0≤x]*x*λ[x]","ℝ"),
 	Case("PolynomialEverywhere","∫dx x^2*λ[x]","ℝ"),
 	Case("SymbolicIntervalLength","∫dx [a≤x]*[x≤b]*λ[x]","ℝ","[a≤b]·(-a+b)"),
@@ -749,7 +756,9 @@ private void run(string directory){
 		// A polynomial on every cell of a rational grid is integrated cell by
 		// cell. Nonzero tails are not.
 		if(c.name=="StepNonconstant"||c.name.indexOf("Polynomial")==0){
-			bool retained=c.name=="PolynomialUnbounded"||c.name=="PolynomialEverywhere";
+			bool retained=c.name=="PolynomialUnbounded"||c.name=="PolynomialEverywhere"||c.name=="PolynomialAbsoluteNested";
+			// The kink of an absolute value of an affine expression is a cut.
+			if(c.name.indexOf("PolynomialAbsolute")==0) enforce((certificate.indexOf("StepSource.polynomial_abs")>=0)!=retained,c.name~" absolute value");
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_polynomial")>=0)!=retained,c.name~" polynomial certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}

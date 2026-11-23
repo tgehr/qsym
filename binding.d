@@ -2314,9 +2314,13 @@ final class Bindings{
 				if(q.op==BoundOp.variable)return q.data==0;
 				if(q.op!=BoundOp.primitive)return false;
 				auto op=arena.view(arena.at(q.data));
-				bool allowed=op.op==Op.add||op.op==Op.mul||op.op==Op.pow||op.op==Op.mask||op.op==Op.lt||op.op==Op.le||op.op==Op.nonzero||op.op==Op.and_||op.op==Op.or_||op.op==Op.not_||
+				bool allowed=op.op==Op.add||op.op==Op.mul||op.op==Op.pow||op.op==Op.abs||op.op==Op.mask||op.op==Op.lt||op.op==Op.le||op.op==Op.nonzero||op.op==Op.and_||op.op==Op.or_||op.op==Op.not_||
 					op.op==Op.builtin&&(op.value>=Builtin.castNZ&&op.value<=Builtin.castQR||op.value==Builtin.addN||op.value==Builtin.addZ||op.value==Builtin.addQ||op.value==Builtin.mulN||op.value==Builtin.mulZ||op.value==Builtin.mulQ);
 				return allowed&&numerical(q.a)&&(q.b==uint.max||numerical(q.b));
+			}
+			bool kink(uint id,out Rational slope,out Rational offset){
+				auto inside=scalarBody(at(id),arg);
+				return inside!=Term.init&&integralAffine(arena,inside,arg,slope,offset)&&slope.words<=128&&offset.words<=128;
 			}
 			// Below a cast the axis occurs only in guards: a step expression.
 			bool steps(uint id,uint depth){
@@ -2353,6 +2357,12 @@ final class Bindings{
 				}
 				if(op.op==Op.add||op.op==Op.mul) return collect(q.a,depth+1)&&collect(q.b,depth+1);
 				if(op.op==Op.builtin) return op.value>=Builtin.castNZ&&op.value<=Builtin.castQR&&steps(q.a,depth+1);
+				if(op.op==Op.abs){
+					// The kink of an absolute value of an affine expression is a cut.
+					Rational slope,offset; if(!kink(q.a,slope,offset)) return false;
+					if(!slope.zero) cuts~=-offset/slope;
+					return true;
+				}
 				return op.op==Op.pow&&op.value<=16&&collect(q.a,depth+1);
 			}
 			foreach(id;solution.from) if(!numerical(id)||!collect(id)) return BoundTerm.init;
@@ -2384,6 +2394,11 @@ final class Bindings{
 					if(!evaluate(q.a,sample,value)||arena.view(value).op!=Op.boolLit) return false;
 					if(value==arena.boolean(false)){ p=[]; return true; }
 					return polynomial(q.b,sample,p);
+				}
+				if(op.op==Op.abs){
+					Rational slope,offset; if(!kink(q.a,slope,offset)) return false;
+					auto inside=slope*sample+offset;
+					p=inside.zero?[]:inside<Rational(0)?[-offset,-slope]:[offset,slope]; return true;
 				}
 				if(!polynomial(q.a,sample,a)) return false;
 				if(op.op==Op.pow){ p=[Rational(1)]; foreach(i;0..op.value){ p=polyProduct(p,a); if(p.length>64) return false; } }
@@ -5341,6 +5356,13 @@ final class Bindings{
 				if(!truth)return Piece(app("polynomial_mask_false",functionAt(n.b)~" "~guard),"[]");
 				auto b=piece(n.b,set,region,sample);
 				return Piece(app("polynomial_mask_true",guard~" "~b.proof),b.poly);
+			}
+			if(op.op==Op.abs){
+				enforce(region.length,"absolute value outside a cell");
+				auto inside=affineProof(n.a);auto at_=inside.slope*sample+inside.offset;
+				auto sign=at_.zero?"zero":at_<Rational(0)?"negative":"positive";
+				return Piece(app("polynomial_abs","(r := "~region~") ."~sign~" "~inside.proof~" rfl"),
+					"(Distribution.StepSource.absPoly ."~sign~" "~q(inside.slope)~" "~q(inside.offset)~")");
 			}
 			auto a=piece(n.a,set,region,sample);
 			if(op.op==Op.pow)return Piece(app("polynomial_pow",to!string(op.value)~" "~a.proof),"(Distribution.StepSource.polyPow "~a.poly~" "~to!string(op.value)~")");
