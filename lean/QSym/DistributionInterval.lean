@@ -97,9 +97,23 @@ theorem bracket_real (g : Option Bool) (one : Option ℕ) (h : one = some 1) :
 
 /-- Two nested masks are the mask of their conjunction, for every
 definedness pattern: neither spelling is strict in what a false guard hides. -/
-theorem mask_mask (p q : Option Bool) (v : Option ℝ) :
+theorem mask_mask {α : Type} [Zero α] (p q : Option Bool) (v : Option α) :
     Value.mask p (Value.mask q v) = Value.mask (Value.and p q) v := by
   rcases p with _ | _ | _ <;> rfl
+
+/-- The casts of an Iverson bracket commute with its mask. -/
+theorem cast_mask (p : Option Bool) (n : Option ℕ) :
+    Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply (Value.mask p n))) =
+      Value.mask p (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply n))) := by
+  rcases p with _ | _ | _ <;>
+    simp [Value.mask, Function1.apply, Functions.castNZ, Functions.castZQ, Functions.castQR]
+
+theorem cast_mask_and (p q : Option Bool) (n : Option ℕ) :
+    Functions.castQR.apply (Functions.castZQ.apply
+        (Functions.castNZ.apply (Value.mask (Value.and p q) n))) =
+      Value.mask p (Functions.castQR.apply (Functions.castZQ.apply
+        (Functions.castNZ.apply (Value.mask q n)))) := by
+  rw [← mask_mask, cast_mask]
 
 /-- The density of a program is a mask of the guard. -/
 structure Masked (f : ℝ → Option ℝ) (g : ℝ → Option Bool) (v : ℝ → Option ℝ) : Prop where
@@ -352,5 +366,32 @@ theorem presentation_mass_interval (p : DensityProgram) (swap sl su : Bool) (a b
     massValue p.presentation = Value.mask (StepSource.compare (sl || su) a b) out := by
   rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
   exact StepSource.interval_integral swap sl su a b m hm hf ht
+
+/-- A guard that does not mention the axis leaves the observation. The mask
+is not strict, so this is an equation even where the inner observation is
+missing: a false guard hides it on both sides. -/
+theorem mass_guard (p : Option Bool) {w r : ℝ → Option ℝ}
+    (h : ∀ x, w x = Value.mask p (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask p (massValue (DensityProgram.weight r .lebesgue).presentation) := by
+  rw [mass_bridge, mass_bridge, DensityProgram.mass, DensityProgram.mass,
+    Model.densityMassValue_eq, Model.densityMassValue_eq]
+  have hw : (DensityProgram.weight w .lebesgue).density = w := by
+    funext x; simp only [density, Value.mul_one_left]
+  have hr : (DensityProgram.weight r .lebesgue).density = r := by
+    funext x; simp only [density, Value.mul_one_left]
+  rw [hw, hr, Option.some_bind, Option.some_bind]
+  rcases p with _ | _ | _
+  · show partialIntegral MeasureTheory.volume w = none
+    apply if_neg
+    intro hd
+    obtain ⟨v, hv⟩ := hd.1 0
+    rw [h 0] at hv
+    cases hv
+  · rw [StepSource.zero_integral w (fun x => h x)]
+    rfl
+  · have he : w = r := funext h
+    rw [he]
+    rfl
 
 end QSym.Distribution.DensityProgram

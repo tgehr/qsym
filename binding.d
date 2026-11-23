@@ -41,7 +41,7 @@ private enum BindingRule:ubyte{
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
-	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
+	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
@@ -882,6 +882,27 @@ final class Bindings{
 		Term[] args=[x];
 		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument); if(y==Term.init) return Term.init; args~=y; }
 		return arena.viewRebuild(arena.at(n.data),args,true);
+	}
+	// A guard that does not mention the axis around the only weight of a
+	// Lebesgue observation: the guard, the weight body without it, and the
+	// lemma that relates the two spellings.
+	private bool axisFreeGuard(uint mass,out uint guard,out BoundTerm rest,out string shape){
+		auto n=nodes[mass]; uint[] bodies;
+		if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,bodies)||bodies.length!=1) return false;
+		bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
+		bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
+		auto body=nodes[bodies[0]]; uint[] casts;
+		if(call(body,Builtin.castQR)&&call(nodes[body.a],Builtin.castZQ)&&call(nodes[nodes[body.a].a],Builtin.castNZ)){
+			casts=[bodies[0],body.a,nodes[body.a].a]; body=nodes[nodes[nodes[body.a].a].a];
+		}
+		if(!isOp(body,Op.mask)) return false;
+		if(!casts.length&&!depends(at(body.a),0)){ guard=body.a; rest=at(body.b); shape="(fun _ => rfl)"; }
+		else if(isOp(nodes[body.a],Op.and_)&&!depends(at(nodes[body.a].a),0)){
+			guard=nodes[body.a].a; rest=primitive(arena.at(body.data),[at(nodes[body.a].b),at(body.b)]);
+			shape=casts.length?"(fun _ => Distribution.StepSource.cast_mask_and _ _ _)":"(fun _ => (Distribution.StepSource.mask_mask _ _ _).symm)";
+		}else return false;
+		foreach_reverse(c;casts) rest=primitive(arena.at(nodes[c].data),[rest]);
+		return true;
 	}
 	// A polynomial in the innermost variable with rational literal coefficients.
 	private bool axisPolynomial(uint id,out Rational[] p,uint depth=0){
@@ -2484,6 +2505,20 @@ final class Bindings{
 			solution.bounds=d; solution.interval=true; solution.piecewise=true; solution.output=result.id;
 			return result;
 		}
+		// A guard that does not mention the axis leaves the observation. The
+		// mask is not strict, so this is an equation even where the inner
+		// observation is missing. Used only if the rest can then be observed.
+		BoundTerm massGuard(BoundTerm t,uint depth){
+			uint guard; BoundTerm rest; string shape;
+			if(depth>8||!axisFreeGuard(t.id,guard,rest,shape)) return BoundTerm.init;
+			auto ctx=context(t),weight=inheritHint(at(nodes[node(t).a].a),lambda(rest));
+			auto inside=distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
+			IntegralSolution trial; bool observed=integrateSteps(inside,trial)!=BoundTerm.init;
+			if(!observed){ trial=IntegralSolution.init; observed=integratePolynomials(inside,trial)!=BoundTerm.init; }
+			if(!observed){ trial=IntegralSolution.init; observed=integrateInterval(inside,trial)!=BoundTerm.init; }
+			if(!observed&&massGuard(inside,depth+1)==BoundTerm.init) return BoundTerm.init;
+			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[dropIndex(at(guard)),inside]);
+		}
 		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
 			bool call(BoundNode q,Builtin f){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f;}
 			auto n=node(t);if(!call(n,Builtin.addN)||depends(at(n.b),0))return false;
@@ -3846,7 +3881,11 @@ final class Bindings{
 				IntegralSolution solution; auto evaluated=integrateSteps(at(result.output),solution);
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePolynomials(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateInterval(at(result.output),solution); }
-				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution); }
+				if(evaluated==BoundTerm.init){
+					auto unguarded=massGuard(at(result.output),0);
+					if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
+					else{ solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution); }
+				}
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
 			}
 			if(current.op==BoundOp.distributionMass&&nodes[current.a].op==BoundOp.distributionDirac){
@@ -6961,6 +7000,13 @@ final class Bindings{
 					// binding evaluations. This avoids expensive backward unification.
 					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affine_chart_rule "~realBody(n.a)~" "~
 						rowTotalProof(chart.predicateDomain)~" "~chartProofs[p.extra]~"; h)"; break;
+				}
+				case BindingRule.distributionMassGuard:{
+					uint guard;BoundTerm rest;string shape;
+					enforce(axisFreeGuard(p.from,guard,rest,shape),"missing guard free of the axis");
+					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					auto outside=nodes[p.to].a;
+					proof=".ofEq (fun ξ ρ => Distribution.DensityProgram.mass_guard ("~name(outside)~".eval ξ ρ) (w := "~fn(nodes[nodes[n.a].a].a)~") (r := "~fn(rest.id)~") "~shape~")"; break;
 				}
 				case BindingRule.distributionWeightedAffine:{
 					auto chart=result.affineCharts[p.extra];uint weight,point;

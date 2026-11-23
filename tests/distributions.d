@@ -395,6 +395,13 @@ private Case[] cases(){ return [
 	Case("SymbolicIntervalNestedSum","∫dx [0≤x≤2]*λ[x]*∫dy [x≤y]*[y≤2]*(x+y)*λ[y]","ℝ","4"),
 	Case("SymbolicIntervalSimplex","∫dx [0≤x≤1]*λ[x]*∫dy [0≤y]*[y≤1-x]*λ[y]","ℝ","1/2"),
 	Case("SymbolicIntervalDensity","Λ(x:ℝ). (∫dy [0≤y]*[y≤x]*λ[y])*[0≤x≤1]*λ[x]","Distribution(ℝ)","Λ(x:ℝ). ([0≤x∧x≤1]·x)·λ[x]"),
+	Case("GuardedIntervalParameter","∫dx [c≤d]*[a≤x]*[x≤b]*x*λ[x]","ℝ","[c≤d∧a≤b]·(-1/2·a^2+1/2·b^2)"),
+	Case("GuardedIntervalBracket","∫dx [c≤d]*[a≤x]*[x≤b]*λ[x]","ℝ","[c≤d∧a≤b]·(-a+b)"),
+	Case("GuardedPolynomial","∫dx [c≤d]*[0≤x≤1]*x*λ[x]","ℝ","[c≤d]·(1/2)"),
+	Case("GuardedBoundVariable","λ(c:ℝ). ∫dx [0≤c]*[0≤x]*[x≤c]*x*λ[x]","ℝ→ℝ","λ(c:ℝ). [0≤c]·(1/2·c^2)"),
+	Case("GuardedJointTriangle","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤x]*λ[x]*λ[y]","ℝ","1/2"),
+	Case("GuardedJointMoment","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤x]*x*y*λ[x]*λ[y]","ℝ","1/8"),
+	Case("GuardedUnobserved","∫dx [c≤d]*exp(x)*[0≤x≤1]*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
 	Case("SymbolicIntervalExponential","∫dx [a≤x≤b]*exp(x)*λ[x]","ℝ"),
@@ -728,6 +735,12 @@ private void run(string directory){
 			bool retained=c.name=="SymbolicIntervalThreeBounds"||c.name=="SymbolicIntervalUnbounded"||c.name=="SymbolicIntervalExponential";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
+		// A guard free of the axis leaves the observation, but only when the
+		// rest can then be observed.
+		if(c.name.indexOf("Guarded")==0){
+			enforce((certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0)==(c.name!="GuardedUnobserved"),c.name~" guard certificate");
+			enforce((text.indexOf("∫")>=0)==(c.name=="GuardedUnobserved"),c.name~": "~text);
 		}
 		// A total weight is evaluated at the inverse point of an affine graph.
 		// A weight that is missing somewhere keeps the ordered rows.
