@@ -177,6 +177,28 @@ theorem Exact.mask [Zero α] {l : Filter ℝ} {p : ℝ → Option Bool} {g : Opt
   · exact ⟨fun _ => 0, hm, tendsto_const_nhds⟩
   · exact hf.congr hm
 
+/-- Behind a guard that is eventually never true nothing is asked of the
+value: the mask is eventually zero where the guard is false and undefined
+where it is. Any value stands for the masked one. -/
+theorem Eventual.mask_never [Zero α] {l : Filter ℝ} {p : ℝ → Option Bool} {g : Option Bool}
+    (hp : Eventual l p g) (hg : g ≠ some true) (w : ℝ → Option α) (out : Option α) :
+    Eventual l (fun x => Value.mask (p x) (w x)) (Value.mask g out) := by
+  refine hp.mono fun x hx => ?_
+  show Value.mask (p x) (w x) = Value.mask g out
+  rw [hx]
+  rcases g with _ | _ | _
+  · rfl
+  · rfl
+  · exact absurd rfl hg
+
+theorem never_false {g : Option Bool} (h : g = some false) : g ≠ some true := by
+  rw [h]; simp
+
+theorem never_bound {β : Type} (a : Option β) {z : Option Bool} (h : z = some false) :
+    (a.bind fun _ => z) ≠ some true := by
+  subst h
+  cases a <;> simp
+
 /-- Which side of every real number the filter ends up on: `true` above. -/
 def Above (l : Filter ℝ) (t : Bool) : Prop :=
   ∀ a : ℝ, ∀ᶠ x in l, decide (a ≤ x) = t ∧ decide (a < x) = t ∧

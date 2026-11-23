@@ -987,6 +987,101 @@ final class Bindings{
 			nodes[x].op==BoundOp.variable&&nodes[x].data==0;
 	}
 	private bool cornerChart(uint id){ Term offset; bool swap; return cornerChart(id,offset,swap); }
+	// The analysis of closed piecewise polynomials on a rational grid: the
+	// expressions it covers, their cut points, and the polynomial of a cell.
+	private bool gridNumerical(uint id){
+		auto q=nodes[id];
+		if(q.op==BoundOp.scalar){auto leaf=arena.at(q.data);return arena.isNumber(leaf)||arena.view(leaf).op==Op.boolLit;}
+		if(q.op==BoundOp.variable)return q.data==0;
+		if(q.op!=BoundOp.primitive)return false;
+		auto op=arena.view(arena.at(q.data));
+		bool allowed=op.op==Op.add||op.op==Op.mul||op.op==Op.pow||op.op==Op.abs||op.op==Op.mask||op.op==Op.lt||op.op==Op.le||op.op==Op.nonzero||op.op==Op.and_||op.op==Op.or_||op.op==Op.not_||
+			op.op==Op.builtin&&(op.value>=Builtin.castNZ&&op.value<=Builtin.castQR||op.value==Builtin.addN||op.value==Builtin.addZ||op.value==Builtin.addQ||op.value==Builtin.mulN||op.value==Builtin.mulZ||op.value==Builtin.mulQ);
+		return allowed&&gridNumerical(q.a)&&(q.b==uint.max||gridNumerical(q.b));
+	}
+	private bool gridKink(uint id,Term arg,out Rational slope,out Rational offset){
+		auto inside=scalarBody(at(id),arg);
+		return inside!=Term.init&&integralAffine(arena,inside,arg,slope,offset)&&slope.words<=128&&offset.words<=128;
+	}
+	// Below a cast the axis occurs only in guards: a step expression.
+	private bool gridSteps(uint id,Term arg,ref Rational[] cuts,uint depth){
+		auto q=nodes[id];
+		if(depth>64) return false;
+		if(!depends(at(id),0)) return true;
+		if(q.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(q.data));
+		if(op.op==Op.mask){
+			if(depends(at(q.a),0)){
+				auto predicate=scalarBody(at(q.a),arg); Rational[] points;
+				if(predicate==Term.init||!integralCutPoints(arena,predicate,arg,points)) return false;
+				cuts~=points;
+			}
+			return gridSteps(q.b,arg,cuts,depth+1);
+		}
+		if(op.op!=Op.builtin) return false;
+		if(op.value>=Builtin.castNZ&&op.value<=Builtin.castQR) return gridSteps(q.a,arg,cuts,depth+1);
+		return (op.value==Builtin.addN||op.value==Builtin.addZ||op.value==Builtin.addQ||op.value==Builtin.mulN||op.value==Builtin.mulZ||op.value==Builtin.mulQ)&&gridSteps(q.a,arg,cuts,depth+1)&&gridSteps(q.b,arg,cuts,depth+1);
+	}
+	private bool gridCuts(uint id,Term arg,ref Rational[] cuts,uint depth=0){
+		auto q=nodes[id];
+		if(depth>64) return false;
+		if(!depends(at(id),0)||q.op==BoundOp.variable) return true;
+		if(q.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(q.data));
+		if(op.op==Op.mask){
+			if(depends(at(q.a),0)){
+				auto predicate=scalarBody(at(q.a),arg); Rational[] points;
+				if(predicate==Term.init||!integralCutPoints(arena,predicate,arg,points)) return false;
+				cuts~=points;
+			}
+			return gridCuts(q.b,arg,cuts,depth+1);
+		}
+		if(op.op==Op.add||op.op==Op.mul) return gridCuts(q.a,arg,cuts,depth+1)&&gridCuts(q.b,arg,cuts,depth+1);
+		if(op.op==Op.builtin) return op.value>=Builtin.castNZ&&op.value<=Builtin.castQR&&gridSteps(q.a,arg,cuts,depth+1);
+		if(op.op==Op.abs){
+			// The kink of an absolute value of an affine expression is a cut.
+			Rational slope,offset; if(!gridKink(q.a,arg,slope,offset)) return false;
+			if(!slope.zero) cuts~=-offset/slope;
+			return true;
+		}
+		return op.op==Op.pow&&op.value<=16&&gridCuts(q.a,arg,cuts,depth+1);
+	}
+	private bool gridValue(uint id,Rational point,out Term value){
+		auto source=scalarBody(at(id),arena.real_(point)); if(source==Term.init) return false;
+		auto r=simplify(arena,source); if(r.exhausted) return false;
+		value=r.output; return true;
+	}
+	// The polynomial of an expression on the cell around a sample. A
+	// false guard needs nothing of the value it masks.
+	private bool gridPolynomial(uint id,Term arg,Rational sample,out Rational[] p){
+		auto q=nodes[id]; Term value;
+		if(!depends(at(id),0)){
+			if(!gridValue(id,Rational(0),value)||!arena.isNumber(value)||!arena.number(value).im.zero) return false;
+			p=[arena.number(value).re]; return true;
+		}
+		if(q.op==BoundOp.variable){ p=[Rational(0),Rational(1)]; return true; }
+		auto op=arena.view(arena.at(q.data)); Rational[] a,b;
+		if(op.op==Op.builtin){
+			if(!gridValue(id,sample,value)||!arena.isNumber(value)||!arena.number(value).im.zero) return false;
+			p=[arena.number(value).re]; return true;
+		}
+		if(op.op==Op.mask){
+			if(!gridValue(q.a,sample,value)||arena.view(value).op!=Op.boolLit) return false;
+			if(value==arena.boolean(false)){ p=[]; return true; }
+			return gridPolynomial(q.b,arg,sample,p);
+		}
+		if(op.op==Op.abs){
+			Rational slope,offset; if(!gridKink(q.a,arg,slope,offset)) return false;
+			auto inside=slope*sample+offset;
+			p=inside.zero?[]:inside<Rational(0)?[-offset,-slope]:[offset,slope]; return true;
+		}
+		if(!gridPolynomial(q.a,arg,sample,a)) return false;
+		if(op.op==Op.pow){ p=[Rational(1)]; foreach(i;0..op.value){ p=polyProduct(p,a); if(p.length>64) return false; } }
+		else{ if(!gridPolynomial(q.b,arg,sample,b)) return false; p=op.op==Op.add?polySum(a,b):polyProduct(a,b); }
+		if(p.length>64) return false;
+		foreach(c;p) if(c.words>128) return false;
+		return true;
+	}
 	// A polynomial in the innermost variable with rational literal coefficients.
 	private bool axisPolynomial(uint id,out Rational[] p,uint depth=0){
 		if(depth>64) return false;
@@ -1056,6 +1151,43 @@ final class Bindings{
 		if(right==BoundTerm.init) return left;
 		return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[left,right]);
 	}
+	// A closed piecewise polynomial of the innermost variable is a polynomial
+	// beyond its last cut: that cut and the coefficients on that side.
+	private bool tailPolynomial(uint id,bool bottom,out Rational cut,out Rational[] p){
+		if(!gridNumerical(id)) return false;
+		auto arg=arena.variable(Sort.real_,freshScalarIndex(id)); Rational[] cuts;
+		if(!gridCuts(id,arg,cuts)||cuts.length>64) return false;
+		foreach(i,point;cuts) if(!i||(point<cut)==bottom) cut=point;
+		auto sample=bottom?cut-Rational(1):cut+Rational(1);
+		return sample.words<=128&&gridPolynomial(id,arg,sample,p);
+	}
+	// A product of polynomials, of exponentials of rational multiples of the
+	// innermost variable, of closed piecewise polynomials taken beyond their
+	// last cut, and of factors that do not mention the variable: its scale.
+	private bool tailExponential(uint id,bool bottom,out Rational[] p,out Rational rate,out bool scaled,uint depth=0){
+		if(depth>16) return false;
+		Rational cut;
+		if(axisExponential(id,p,rate)||tailPolynomial(id,bottom,cut,p)) return true;
+		if(!depends(at(id),0)){ scaled=true; p=[Rational(1)]; return true; }
+		auto q=nodes[id];
+		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
+		Rational[] a,b; Rational r,t; bool left,right;
+		if(!tailExponential(q.a,bottom,a,r,left,depth+1)||!tailExponential(q.b,bottom,b,t,right,depth+1)) return false;
+		p=polyProduct(a,b); rate=r+t; scaled=left||right;
+		if(p.length>64||rate.words>128) return false;
+		foreach(c;p) if(c.words>128) return false;
+		return true;
+	}
+	// The scale of such a product outside the binder of the variable.
+	private BoundTerm tailScale(uint id,bool bottom){
+		Rational[] p; Rational rate,cut;
+		if(axisExponential(id,p,rate)||tailPolynomial(id,bottom,cut,p)) return BoundTerm.init;
+		if(!depends(at(id),0)) return dropIndex(at(id));
+		auto q=nodes[id],left=tailScale(q.a,bottom),right=tailScale(q.b,bottom);
+		if(left==BoundTerm.init) return right;
+		if(right==BoundTerm.init) return left;
+		return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[left,right]);
+	}
 	// A comparison of rational affine expressions of the innermost variable
 	// is constant beyond its cut: the cut and the truth value on that side.
 	private bool tailTruth(uint id,bool bottom,out Rational cut,out bool truth){
@@ -1067,31 +1199,50 @@ final class Bindings{
 		if(value.exhausted||arena.view(value.output).op!=Op.boolLit) return false;
 		truth=value.output==arena.boolean(true); return true;
 	}
+	// A polynomial times the exponential of a rate vanishes at that end when
+	// the exponential decays there, or when the polynomial is zero.
+	private static bool vanishing(Rational[] p,Rational rate,bool bottom){
+		bool zero=true; foreach(c;p) zero=zero&&c.zero;
+		return zero||!rate.zero&&(rate<Rational(0))!=bottom;
+	}
+	// The eventual truth of a guard that is decided at that end: beyond the
+	// cuts of its rational affine comparisons, or as the variable against a
+	// bound below or above it that does not mention it.
+	private enum Decided:ubyte{ no,cuts,lower,upper }
+	private Decided decidedGuard(uint id,bool bottom,out bool truth,out Rational cut){
+		auto n=nodes[id];
+		if(n.op!=BoundOp.primitive||type(at(id))!=scalarType(Sort.boolean)) return Decided.no;
+		if(tailTruth(id,bottom,cut,truth)) return Decided.cuts;
+		auto op=arena.view(arena.at(n.data)).op;
+		if(op!=Op.le&&op!=Op.lt) return Decided.no;
+		bool axis(uint x){ return nodes[x].op==BoundOp.variable&&nodes[x].data==0; }
+		if(axis(n.b)&&!depends(at(n.a),0)){ truth=!bottom; return Decided.lower; }
+		if(axis(n.a)&&!depends(at(n.b),0)){ truth=bottom; return Decided.upper; }
+		return Decided.no;
+	}
 	// The eventual value of a term that is eventually constant in its
 	// innermost variable, at +∞ or at -∞, in the context of the binder. A
 	// term that does not mention the variable is its own eventual value, a
-	// rational affine comparison is decided beyond its cut, the variable
-	// passes every bound that does not mention it wherever that bound is
-	// defined, and every operation on eventually constant terms is
+	// guard of rational affine comparisons is decided beyond its cuts, the
+	// variable passes every bound that does not mention it wherever that
+	// bound is defined, a guard that is eventually false masks whatever it
+	// guards, and every operation on eventually constant terms is
 	// eventually constant. Without `build` this only recognizes the term.
 	private BoundTerm eventualTerm(uint id,bool bottom,bool build=true,uint depth=0){
 		if(depth>64) return BoundTerm.init;
 		auto found=at(id);
 		if(!depends(found,0)) return build?dropIndex(found):found;
 		auto n=nodes[id]; if(n.op!=BoundOp.primitive) return BoundTerm.init;
-		auto op=arena.view(arena.at(n.data)).op;
-		if(op==Op.le||op==Op.lt||op==Op.nonzero){
-			Rational cut; bool truth,lower,decided=tailTruth(id,bottom,cut,truth);
-			if(!decided){
-				if(op==Op.nonzero) return BoundTerm.init;
-				bool axis(uint x){ return nodes[x].op==BoundOp.variable&&nodes[x].data==0; }
-				lower=axis(n.b)&&!depends(at(n.a),0);
-				if(!lower&&(!axis(n.a)||depends(at(n.b),0))) return BoundTerm.init;
-				truth=lower!=bottom;
-			}
+		BoundTerm literal(Term value){ return scalar(Scope(this,contexts[context(found).index].parent),value); }
+		bool truth; Rational cut; auto decided=decidedGuard(id,bottom,truth,cut);
+		if(decided!=Decided.no){
 			if(!build) return found;
-			auto value=scalar(Scope(this,contexts[context(found).index].parent),arena.boolean(truth));
-			return decided?value:sequence(dropIndex(at(lower?n.a:n.b)),value);
+			auto value=literal(arena.boolean(truth));
+			return decided==Decided.cuts?value:sequence(dropIndex(at(decided==Decided.lower?n.a:n.b)),value);
+		}
+		if(arena.view(arena.at(n.data)).op==Op.mask&&decidedGuard(n.a,bottom,truth,cut)!=Decided.no&&!truth){
+			if(!build) return found;
+			return primitive(arena.at(n.data),[eventualTerm(n.a,bottom,true,depth+1),literal(arena.number(Number(0),elementSort(type(found))))]);
 		}
 		auto a=eventualTerm(n.a,bottom,build,depth+1); if(a==BoundTerm.init) return a;
 		if(n.b==uint.max) return build?primitive(arena.at(n.data),[a]):found;
@@ -1103,20 +1254,22 @@ final class Bindings{
 	// polynomial times a decaying exponential of rational rate tends to
 	// zero, also under a scale that does not mention the variable, sums,
 	// products and powers of convergent terms converge, and an eventually
-	// decided guard masks the limit of its value. The result is in the
-	// context of the binder. Nothing is claimed for a body outside this
-	// fragment: a limit that does not exist has no value. Without `build`
-	// this only recognizes the body.
+	// decided guard masks the limit of its value. A factor of the polynomial
+	// may be piecewise: beyond its last cut it is a polynomial, and where
+	// that is zero the product vanishes whatever the exponential does. The
+	// result is in the context of the binder. Nothing is claimed for a body
+	// outside this fragment: a limit that does not exist has no value.
+	// Without `build` this only recognizes the body.
 	private BoundTerm limitTerms(uint body,bool bottom,bool build=true,uint depth=0){
 		if(depth>64) return BoundTerm.init;
 		auto found=at(body);
 		if(eventualTerm(body,bottom,false)!=BoundTerm.init) return build?eventualTerm(body,bottom):found;
 		Rational[] p; Rational rate; bool scaled;
-		if(scaledExponential(body,p,rate,scaled)){
-			if(rate.zero||(rate<Rational(0))==bottom) return BoundTerm.init;
+		if(tailExponential(body,bottom,p,rate,scaled)){
+			if(!vanishing(p,rate,bottom)) return BoundTerm.init;
 			if(!build) return found;
 			auto zero=scalar(Scope(this,contexts[context(found).index].parent),arena.real_(0));
-			return scaled?primitive(arena.mul(arena.real_(1),arena.real_(1),true),[exponentialScale(body),zero]):zero;
+			return scaled?primitive(arena.mul(arena.real_(1),arena.real_(1),true),[tailScale(body,bottom),zero]):zero;
 		}
 		auto n=nodes[body]; if(n.op!=BoundOp.primitive) return BoundTerm.init;
 		auto op=arena.view(arena.at(n.data)).op;
@@ -2509,108 +2662,15 @@ final class Bindings{
 		// Probe each singleton independently of the two adjacent formulas.
 		bool polynomialGrid(uint[] factors,out PolynomialGrid grid,bool zeroTails=false){
 			auto arg=arena.variable(Sort.real_,cast(uint)arena.length+1); Rational[] cuts;
-			bool numerical(uint id){
-				auto q=nodes[id];
-				if(q.op==BoundOp.scalar){auto leaf=arena.at(q.data);return arena.isNumber(leaf)||arena.view(leaf).op==Op.boolLit;}
-				if(q.op==BoundOp.variable)return q.data==0;
-				if(q.op!=BoundOp.primitive)return false;
-				auto op=arena.view(arena.at(q.data));
-				bool allowed=op.op==Op.add||op.op==Op.mul||op.op==Op.pow||op.op==Op.abs||op.op==Op.mask||op.op==Op.lt||op.op==Op.le||op.op==Op.nonzero||op.op==Op.and_||op.op==Op.or_||op.op==Op.not_||
-					op.op==Op.builtin&&(op.value>=Builtin.castNZ&&op.value<=Builtin.castQR||op.value==Builtin.addN||op.value==Builtin.addZ||op.value==Builtin.addQ||op.value==Builtin.mulN||op.value==Builtin.mulZ||op.value==Builtin.mulQ);
-				return allowed&&numerical(q.a)&&(q.b==uint.max||numerical(q.b));
-			}
-			bool kink(uint id,out Rational slope,out Rational offset){
-				auto inside=scalarBody(at(id),arg);
-				return inside!=Term.init&&integralAffine(arena,inside,arg,slope,offset)&&slope.words<=128&&offset.words<=128;
-			}
-			// Below a cast the axis occurs only in guards: a step expression.
-			bool steps(uint id,uint depth){
-				auto q=nodes[id];
-				if(depth>64) return false;
-				if(!depends(at(id),0)) return true;
-				if(q.op!=BoundOp.primitive) return false;
-				auto op=arena.view(arena.at(q.data));
-				if(op.op==Op.mask){
-					if(depends(at(q.a),0)){
-						auto predicate=scalarBody(at(q.a),arg); Rational[] points;
-						if(predicate==Term.init||!integralCutPoints(arena,predicate,arg,points)) return false;
-						cuts~=points;
-					}
-					return steps(q.b,depth+1);
-				}
-				if(op.op!=Op.builtin) return false;
-				if(op.value>=Builtin.castNZ&&op.value<=Builtin.castQR) return steps(q.a,depth+1);
-				return (op.value==Builtin.addN||op.value==Builtin.addZ||op.value==Builtin.addQ||op.value==Builtin.mulN||op.value==Builtin.mulZ||op.value==Builtin.mulQ)&&steps(q.a,depth+1)&&steps(q.b,depth+1);
-			}
-			bool collect(uint id,uint depth=0){
-				auto q=nodes[id];
-				if(depth>64) return false;
-				if(!depends(at(id),0)||q.op==BoundOp.variable) return true;
-				if(q.op!=BoundOp.primitive) return false;
-				auto op=arena.view(arena.at(q.data));
-				if(op.op==Op.mask){
-					if(depends(at(q.a),0)){
-						auto predicate=scalarBody(at(q.a),arg); Rational[] points;
-						if(predicate==Term.init||!integralCutPoints(arena,predicate,arg,points)) return false;
-						cuts~=points;
-					}
-					return collect(q.b,depth+1);
-				}
-				if(op.op==Op.add||op.op==Op.mul) return collect(q.a,depth+1)&&collect(q.b,depth+1);
-				if(op.op==Op.builtin) return op.value>=Builtin.castNZ&&op.value<=Builtin.castQR&&steps(q.a,depth+1);
-				if(op.op==Op.abs){
-					// The kink of an absolute value of an affine expression is a cut.
-					Rational slope,offset; if(!kink(q.a,slope,offset)) return false;
-					if(!slope.zero) cuts~=-offset/slope;
-					return true;
-				}
-				return op.op==Op.pow&&op.value<=16&&collect(q.a,depth+1);
-			}
-			foreach(id;factors) if(!numerical(id)||!collect(id)) return false;
+			foreach(id;factors) if(!gridNumerical(id)||!gridCuts(id,arg,cuts)) return false;
 			import std.algorithm:sort;
 			sort(cuts); Rational[] unique;
 			foreach(q;cuts) if(!unique.length||unique[$-1]!=q) unique~=q;
 			if(unique.length>16) return false;
 			if(!unique.length) unique=[Rational(0)];
-			bool evaluate(uint id,Rational point,out Term value){
-				auto source=scalarBody(at(id),arena.real_(point)); if(source==Term.init) return false;
-				auto r=simplify(arena,source); if(r.exhausted) return false;
-				value=r.output; return true;
-			}
-			// The polynomial of an expression on the cell around a sample. A
-			// false guard needs nothing of the value it masks.
-			bool polynomial(uint id,Rational sample,out Rational[] p){
-				auto q=nodes[id]; Term value;
-				if(!depends(at(id),0)){
-					if(!evaluate(id,Rational(0),value)||!arena.isNumber(value)||!arena.number(value).im.zero) return false;
-					p=[arena.number(value).re]; return true;
-				}
-				if(q.op==BoundOp.variable){ p=[Rational(0),Rational(1)]; return true; }
-				auto op=arena.view(arena.at(q.data)); Rational[] a,b;
-				if(op.op==Op.builtin){
-					if(!evaluate(id,sample,value)||!arena.isNumber(value)||!arena.number(value).im.zero) return false;
-					p=[arena.number(value).re]; return true;
-				}
-				if(op.op==Op.mask){
-					if(!evaluate(q.a,sample,value)||arena.view(value).op!=Op.boolLit) return false;
-					if(value==arena.boolean(false)){ p=[]; return true; }
-					return polynomial(q.b,sample,p);
-				}
-				if(op.op==Op.abs){
-					Rational slope,offset; if(!kink(q.a,slope,offset)) return false;
-					auto inside=slope*sample+offset;
-					p=inside.zero?[]:inside<Rational(0)?[-offset,-slope]:[offset,slope]; return true;
-				}
-				if(!polynomial(q.a,sample,a)) return false;
-				if(op.op==Op.pow){ p=[Rational(1)]; foreach(i;0..op.value){ p=polyProduct(p,a); if(p.length>64) return false; } }
-				else{ if(!polynomial(q.b,sample,b)) return false; p=op.op==Op.add?polySum(a,b):polyProduct(a,b); }
-				if(p.length>64) return false;
-				foreach(c;p) if(c.words>128) return false;
-				return true;
-			}
 			bool density(Rational sample,out Rational[] p){
 				p=[Rational(1)];
-				foreach(id;factors){ Rational[] w; if(!polynomial(id,sample,w)) return false; p=polyProduct(p,w); }
+				foreach(id;factors){ Rational[] w; if(!gridPolynomial(id,arg,sample,w)) return false; p=polyProduct(p,w); }
 				return true;
 			}
 			grid.cuts=unique; grid.cells.length=unique.length+1;
@@ -2628,7 +2688,7 @@ final class Bindings{
 				auto height=Rational(1);
 				foreach(id;factors){
 					Term value;
-					if(!evaluate(id,point,value)||!arena.isNumber(value)||!arena.number(value).im.zero) return false;
+					if(!gridValue(id,point,value)||!arena.isNumber(value)||!arena.number(value).im.zero) return false;
 					height=height*arena.number(value).re;
 				}
 				grid.points~=height;
@@ -5739,31 +5799,52 @@ final class Bindings{
 		string eventual(uint id,uint output){
 			if(!depends(at(id),0)) return "(Limit.Eventual.const Filter."~end~" ("~name(output)~".eval ξ ρ))";
 			auto n=nodes[id],o=nodes[output],op=arena.view(arena.at(n.data)).op;
-			if(op==Op.le||op==Op.lt||op==Op.nonzero){
-				Rational cut; bool truth;
-				if(tailTruth(id,s.bottom,cut,truth)){
-					auto sample=s.bottom?cut-Rational(1):cut+Rational(1),value=truth?"true":"false";
-					auto region="(."~(s.bottom?"before":"after")~" "~cert.q(cut)~")";
-					return "(Limit.Eventual.step (Limit.tail_"~(s.bottom?"before":"after")~" "~cert.q(cut)~") "~cert.q(sample)~" rfl "~
-						cert.uniform(id,region,sample)~" "~cert.numericProof(id,sample,value)~" "~literal(output,value)~")";
-				}
-				enforce(o.op==BoundOp.sequence,"missing limit bound");
-				bool lower=nodes[n.b].op==BoundOp.variable&&!depends(at(n.a),0);
+			bool truth; Rational cut; auto decided=decidedGuard(id,s.bottom,truth,cut);
+			if(decided==Decided.cuts){
+				auto sample=s.bottom?cut-Rational(1):cut+Rational(1),value=truth?"true":"false";
+				auto side=s.bottom?"before":"after",region="(."~side~" "~cert.q(cut)~")";
+				return "(Limit.Eventual.step (Limit.tail_"~side~" "~cert.q(cut)~") "~cert.q(sample)~" rfl "~
+					cert.uniform(id,region,sample)~" "~cert.numericProof(id,sample,value)~" "~literal(output,value)~")";
+			}
+			if(decided!=Decided.no){
+				enforce(o.op==BoundOp.sequence,"missing limit bound"); bool lower=decided==Decided.lower;
 				return "(Limit.Eventual."~(lower?"bound_":"")~(op==Op.le?"le":"lt")~(lower?"":"_bound")~" Limit.above_"~end~" ("~
-					name(o.a)~".eval ξ ρ) "~literal(o.b,lower!=s.bottom?"true":"false")~")";
+					name(o.a)~".eval ξ ρ) "~literal(o.b,truth?"true":"false")~")";
 			}
 			enforce(o.op==BoundOp.primitive&&n.data==o.data,"eventual value mismatch");
+			if(op==Op.mask&&(decided=decidedGuard(n.a,s.bottom,truth,cut))!=Decided.no&&!truth){
+				auto g=nodes[o.a];
+				auto never=decided==Decided.cuts?"(Limit.never_false "~literal(o.a,"false")~")":"(Limit.never_bound ("~name(g.a)~".eval ξ ρ) "~literal(g.b,"false")~")";
+				return "(Limit.Eventual.mask_never "~eventual(n.a,o.a)~" "~never~" "~cert.functionAt(n.b)~" ("~name(o.b)~".eval ξ ρ))";
+			}
 			return "(Limit.Eventual."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~eventual(n.a,o.a)~(n.b==uint.max?"":" "~eventual(n.b,o.b))~")";
+		}
+		// Eventually a polynomial times an exponential: the factors are such
+		// everywhere, piecewise polynomials beyond their last cut, or free of
+		// the variable; these are the scale.
+		string tail(uint id,out bool scaled){
+			Rational[] p; Rational rate,cut;
+			if(axisExponential(id,p,rate)) return "(Limit.EventualExp.of_global "~cert.exponential(id).proof~")";
+			if(tailPolynomial(id,s.bottom,cut,p)){
+				auto side=s.bottom?"before":"after",region="(."~side~" "~cert.q(cut)~")";
+				auto piece=cert.piece(id,"(Distribution.StepSource.Region.contains "~region~")",region,s.bottom?cut-Rational(1):cut+Rational(1));
+				return "(Limit.EventualExp.of_piece (Limit.tail_"~side~" "~cert.q(cut)~") "~piece.proof~")";
+			}
+			scaled=true;
+			if(!depends(at(id),0)) return "(Limit.EventualScaled.constant Filter."~end~" ("~name(dropIndex(at(id)).id)~".eval ξ ρ))";
+			bool left,right; auto product=nodes[id];
+			auto a=tail(product.a,left),b=tail(product.b,right); scaled=left||right;
+			return scaled?"(Limit.EventualScaled."~(left&&right?"mul":left?"times":"after")~" "~a~" "~b~")":"(Limit.EventualExp.mul "~a~" "~b~")";
 		}
 		string visit(uint body,uint output){
 			if(!depends(at(body),0)) return "(Limit.Exact.const Filter."~end~" ("~name(output)~".eval ξ ρ))";
 			if(eventualTerm(body,s.bottom,false)!=BoundTerm.init) return "(Limit.Exact.of_eventual "~eventual(body,output)~")";
 			Rational[] p; Rational rate; bool scaled;
-			if(scaledExponential(body,p,rate,scaled)){
-				enforce(!rate.zero&&(rate<Rational(0))!=s.bottom,"limit term does not decay");
+			if(tailExponential(body,s.bottom,p,rate,scaled)){
+				enforce(vanishing(p,rate,s.bottom),"limit term does not vanish");
+				bool decays=!rate.zero&&(rate<Rational(0))!=s.bottom;
 				auto zero=scaled?nodes[output].b:output;
-				auto hv=scaled?cert.scaledFactor(body,scaled):cert.exponential(body).proof;
-				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~hv~" (Limit.decays_"~end~" rfl) "~literal(zero,"(0 : ℚ)")~")";
+				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~tail(body,scaled)~" (Limit."~(decays?"decays_"~end:"vanishes_zero")~" rfl) "~literal(zero,"(0 : ℚ)")~")";
 			}
 			auto n=nodes[body],o=nodes[output];
 			enforce(n.op==BoundOp.primitive&&o.op==BoundOp.primitive&&n.data==o.data,"limit structure mismatch");

@@ -491,7 +491,19 @@ private Case[] cases(){ return [
 	Case("LimitIntegralBottom","lim[t→-∞] ∫dx [t≤x≤0]*exp(x)*λ[x]","ℝ","1"),
 	Case("LimitIntegralMoment","lim[t→∞] ∫dx [0≤x≤t]*x*exp(-x)*λ[x]","ℝ","1"),
 	Case("LimitGuardOscillating","lim[x→∞] [sin(x)≤2]","ℝ"),
-	Case("LimitHiddenGrowth","lim[x→∞] [x≤0]*exp(x)","ℝ"),
+	Case("LimitHiddenGrowth","lim[x→∞] [x≤0]*exp(x)","ℝ","0"),
+	Case("LimitHiddenGrowthBottom","lim[x→-∞] [0≤x≤1]*exp(-x)","ℝ","0"),
+	Case("LimitHiddenGrowthBound","lim[x→∞] [x≤a]*exp(x)/b","ℝ","0"),
+	Case("LimitHiddenOscillation","lim[x→∞] [x≤0]*sin(x)","ℝ","0"),
+	Case("LimitTwoSided","lim[x→∞] [x≤0]*exp(x)/2+[0≤x]*exp(-x)/2","ℝ","0"),
+	Case("LimitTwoSidedBottom","lim[x→-∞] [x≤0]*exp(x)/2+[0≤x]*exp(-x)/2","ℝ","0"),
+	Case("LimitConditionalDecay","lim[x→∞] (if x<0 then exp(x) else exp(-x))","ℝ","0"),
+	Case("LimitAbsolute","lim[x→∞] |x|*exp(-x)","ℝ","0"),
+	Case("LimitAbsoluteBottom","lim[x→-∞] a*|x-1|*exp(x)","ℝ","0"),
+	Case("LimitPiecewiseFactor","lim[x→∞] ([x≤0]+[1≤x])*x*exp(-x)*c","ℝ","0"),
+	Case("LimitPiecewiseZero","lim[x→∞] ([x≤0]+[x≤1])*exp(x)","ℝ","0"),
+	Case("LimitPiecewiseGrowing","lim[x→∞] ([x≤0]+[1≤x])*exp(x)","ℝ"),
+	Case("LimitVisibleGrowth","lim[x→∞] [0≤x]*x^2","ℝ"),
 	Case("LimitGrowing","lim[x→∞] exp(x)","ℝ"),
 	Case("LimitPolynomial","lim[x→∞] x^2","ℝ"),
 	Case("LimitWrongEnd","lim[x→-∞] exp(-x)","ℝ"),
@@ -876,7 +888,7 @@ private void run(string directory){
 		// body that has no limit, or one outside the fragment, keeps its binder.
 		if(c.name.indexOf("Limit")==0){
 			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||c.name=="LimitComplex"||
-				c.name=="LimitGuardOscillating"||c.name=="LimitHiddenGrowth";
+				c.name=="LimitGuardOscillating"||c.name=="LimitPiecewiseGrowing"||c.name=="LimitVisibleGrowth";
 			enforce((certificate.indexOf("Limit.Exact.sound")>=0)!=retained,c.name~" limit certificate");
 			enforce((text.indexOf("lim[")>=0)==retained,c.name~": "~text);
 			// A bracket or a guard is decided beyond its last cut, and a bound
@@ -886,6 +898,16 @@ private void run(string directory){
 			if(c.name=="LimitBracketBounds"||c.name=="LimitBracketPartialBound")
 				enforce(certificate.indexOf("Limit.Eventual.bound_le")>=0&&certificate.indexOf("Limit.Eventual.step")<0,c.name);
 			if(c.name=="LimitBracketPartialBound") enforce(text.indexOf("a≠0")>=0,c.name~": "~text);
+			// A guard that is eventually false masks whatever it guards, and a
+			// piecewise polynomial factor counts beyond its last cut: where it
+			// is zero there the product vanishes whatever the exponential does.
+			if(c.name.indexOf("LimitHidden")==0||c.name.indexOf("LimitTwoSided")==0||c.name=="LimitConditionalDecay")
+				enforce(certificate.indexOf("Limit.Eventual.mask_never")>=0,c.name);
+			if(c.name=="LimitHiddenGrowthBound") enforce(certificate.indexOf("Limit.never_bound")>=0,c.name);
+			if(c.name.indexOf("LimitAbsolute")==0||c.name=="LimitPiecewiseFactor"||c.name=="LimitPiecewiseZero")
+				enforce(certificate.indexOf("Limit.EventualExp.of_piece")>=0,c.name);
+			if(c.name=="LimitPiecewiseZero") enforce(certificate.indexOf("Limit.vanishes_zero")>=0,c.name);
+			if(c.name=="LimitAbsoluteBottom"||c.name=="LimitPiecewiseFactor") enforce(certificate.indexOf("Limit.EventualScaled.")>=0,c.name);
 			// The limit of an integral between bounds is the limit of its
 			// closed form behind the guard that orders the bounds.
 			if(c.name=="LimitMask"||c.name.indexOf("LimitIntegral")==0) enforce(certificate.indexOf("Limit.Exact.mask")>=0,c.name);
