@@ -177,6 +177,7 @@ theorem Exact.mask [Zero α] {l : Filter ℝ} {p : ℝ → Option Bool} {g : Opt
   · exact ⟨fun _ => 0, hm, tendsto_const_nhds⟩
   · exact hf.congr hm
 
+omit [TopologicalSpace α] in
 /-- Behind a guard that is eventually never true nothing is asked of the
 value: the mask is eventually zero where the guard is false and undefined
 where it is. Any value stands for the masked one. -/

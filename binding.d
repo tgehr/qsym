@@ -72,7 +72,8 @@ private struct IntervalData{
 	bool swap,strictLower,strictUpper,nested,half;
 	IntervalTerm[] terms;
 }
-private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; }
+private struct GaussianData{ Rational[] primitive; Rational constant,c0,c1,c2,vertex,width; uint factor,exponent,scale,circle; }
+private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell; }
 private struct PolynomialGrid{
 	Rational[] cuts,points;
 	Rational[][] cells;
@@ -1166,37 +1167,38 @@ final class Bindings{
 	// at one end: a polynomial, the exponential of one, or a closed piecewise
 	// polynomial beyond its last cut.
 	private enum TailFactor:ubyte{ none,polynomial,exponential,piece }
-	private TailFactor tailFactor(uint id,bool bottom,out Rational[] p,out Rational[] exponent,out Rational cut){
+	private TailFactor tailFactor(uint id,bool bottom,out Rational[] p,out Rational[] exponent,out Rational cut,bool pieces=true){
 		if(axisPolynomial(id,p)) return TailFactor.polynomial;
 		auto n=nodes[id];
 		if(n.op==BoundOp.primitive){
 			auto op=arena.view(arena.at(n.data));
 			if(op.op==Op.builtin&&op.value==Builtin.expR&&axisPolynomial(n.a,exponent)){ p=[Rational(1)]; return TailFactor.exponential; }
 		}
-		return tailPolynomial(id,bottom,cut,p)?TailFactor.piece:TailFactor.none;
+		return pieces&&tailPolynomial(id,bottom,cut,p)?TailFactor.piece:TailFactor.none;
 	}
 	// A product of such factors and of factors that do not mention the
-	// variable, which are its scale: the polynomial and the exponent.
-	private bool tailExponential(uint id,bool bottom,out Rational[] p,out Rational[] exponent,out bool scaled,uint depth=0){
+	// variable, which are its scale: the polynomial and the exponent. Without
+	// `pieces` every factor is what it is on the whole line.
+	private bool tailExponential(uint id,bool bottom,out Rational[] p,out Rational[] exponent,out bool scaled,bool pieces=true,uint depth=0){
 		if(depth>16) return false;
 		Rational cut;
-		if(tailFactor(id,bottom,p,exponent,cut)!=TailFactor.none) return true;
+		if(tailFactor(id,bottom,p,exponent,cut,pieces)!=TailFactor.none) return true;
 		if(!depends(at(id),0)){ scaled=true; p=[Rational(1)]; return true; }
 		auto q=nodes[id];
 		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
 		Rational[] a,b,r,t; bool left,right;
-		if(!tailExponential(q.a,bottom,a,r,left,depth+1)||!tailExponential(q.b,bottom,b,t,right,depth+1)) return false;
+		if(!tailExponential(q.a,bottom,a,r,left,pieces,depth+1)||!tailExponential(q.b,bottom,b,t,right,pieces,depth+1)) return false;
 		p=polyProduct(a,b); exponent=polySum(r,t); scaled=left||right;
 		if(p.length>64||exponent.length>64) return false;
 		foreach(c;p~exponent) if(c.words>128) return false;
 		return true;
 	}
 	// The scale of such a product outside the binder of the variable.
-	private BoundTerm tailScale(uint id,bool bottom){
+	private BoundTerm tailScale(uint id,bool bottom,bool pieces=true){
 		Rational[] p,exponent; Rational cut;
-		if(tailFactor(id,bottom,p,exponent,cut)!=TailFactor.none) return BoundTerm.init;
+		if(tailFactor(id,bottom,p,exponent,cut,pieces)!=TailFactor.none) return BoundTerm.init;
 		if(!depends(at(id),0)) return dropIndex(at(id));
-		auto q=nodes[id],left=tailScale(q.a,bottom),right=tailScale(q.b,bottom);
+		auto q=nodes[id],left=tailScale(q.a,bottom,pieces),right=tailScale(q.b,bottom,pieces);
 		if(left==BoundTerm.init) return right;
 		if(right==BoundTerm.init) return left;
 		return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[left,right]);
@@ -2932,6 +2934,50 @@ final class Bindings{
 		// A guard that does not mention the axis leaves the observation. The
 		// mask is not strict, so this is an equation even where the inner
 		// observation is missing. Used only if the rest can then be observed.
+		// The whole line under a polynomial times the exponential of a
+		// quadratic with rational coefficients and negative curvature, with
+		// optional factors that do not mention the axis. The polynomial is a
+		// constant up to the derivative of a polynomial times that exponential,
+		// which vanishes at both ends; the constant multiplies the Gaussian
+		// integral. A missing factor is missing in the result: the theorem is
+		// an equation of partial values.
+		BoundTerm integrateGaussian(BoundTerm t,out IntegralSolution solution){
+			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||!solution.from.length) return BoundTerm.init;
+			Rational[] p=[Rational(1)],q; bool scaled;
+			foreach(id;solution.from){
+				Rational[] a,r; bool part;
+				if(!tailExponential(id,false,a,r,part,false)) return BoundTerm.init;
+				p=polyProduct(p,a); q=polySum(q,r); scaled=scaled||part;
+				if(p.length>64) return BoundTerm.init;
+			}
+			while(q.length&&q[$-1].zero) q.length=q.length-1;
+			if(q.length!=3||!(q[2]<Rational(0))) return BoundTerm.init;
+			GaussianData d; d.c0=q[0]; d.c1=q[1]; d.c2=q[2];
+			// R' + Q'·R + κ = P, from the highest coefficient down.
+			auto m=p.length; auto primitive_=new Rational[](m?m-1:0);
+			Rational at_(size_t i){ return i<primitive_.length?primitive_[i]:Rational(0); }
+			foreach_reverse(j;1..m) primitive_[j-1]=(p[j]-Rational(cast(long)j+1)*at_(j+1)-d.c1*at_(j))/(Rational(2)*d.c2);
+			d.constant=(m?p[0]:Rational(0))-at_(1)-d.c1*at_(0); d.primitive=primitive_;
+			d.vertex=d.c0-d.c1*d.c1/(Rational(4)*d.c2); d.width=Rational(-1)/d.c2;
+			foreach(c;primitive_~[d.constant,d.vertex,d.width]) if(c.words>128) return BoundTerm.init;
+			auto ctx=context(t),product=arena.mul(arena.real_(1),arena.real_(1),true);
+			auto factor=scalar(ctx,arena.real_(d.constant)),exponent=scalar(ctx,arena.real_(d.vertex));
+			auto scale=scalar(ctx,arena.real_(d.width)),circle=scalar(ctx,arena.call(Builtin.pi,[]));
+			d.factor=factor.id; d.exponent=exponent.id; d.scale=scale.id; d.circle=circle.id;
+			auto bell=primitive(product,[primitive(arena.call(Builtin.expR,[arena.real_(0)]),[exponent]),
+				primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[primitive(product,[circle,scale])])]);
+			auto result=primitive(product,[factor,bell]);
+			if(scaled){
+				BoundTerm outside;
+				foreach(id;solution.from){
+					Rational[] a,r; bool part; tailExponential(id,false,a,r,part,false);
+					if(!part) continue;
+					auto here=tailScale(id,false,false); outside=outside==BoundTerm.init?here:primitive(product,[outside,here]);
+				}
+				result=primitive(product,[outside,result]);
+			}
+			solution.bell=d; solution.gaussian=true; solution.piecewise=true; solution.output=result.id; return result;
+		}
 		BoundTerm massGuard(BoundTerm t,uint depth){
 			uint guard; BoundTerm rest; string shape;
 			if(depth>8||!axisFreeGuard(t.id,guard,rest,shape)) return BoundTerm.init;
@@ -2940,6 +2986,7 @@ final class Bindings{
 			IntegralSolution trial; bool observed=integrateSteps(inside,trial)!=BoundTerm.init;
 			if(!observed){ trial=IntegralSolution.init; observed=integratePolynomials(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integrateInterval(inside,trial)!=BoundTerm.init; }
+			if(!observed){ trial=IntegralSolution.init; observed=integrateGaussian(inside,trial)!=BoundTerm.init; }
 			if(!observed&&massGuard(inside,depth+1)==BoundTerm.init) return BoundTerm.init;
 			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[dropIndex(at(guard)),inside]);
 		}
@@ -4437,6 +4484,7 @@ final class Bindings{
 				IntegralSolution solution; auto evaluated=integrateSteps(at(result.output),solution);
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePolynomials(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateInterval(at(result.output),solution); }
+				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateGaussian(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){
 					auto unguarded=massGuard(at(result.output),0);
 					if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
@@ -5892,6 +5940,27 @@ final class Bindings{
 			}
 			r.proof=save("Distribution.StepSource.ExpPolynomial "~functionAt(id)~" "~r.poly~" "~rate,r.proof);return r;
 		}
+		// Along a filter a polynomial times the exponential of a polynomial:
+		// the factors are polynomials, exponentials of polynomials, with
+		// `pieces` piecewise polynomials beyond their last cut at that end, or
+		// free of the variable; these are the scale.
+		string exponentialTail(uint id,string filter,bool bottom,bool pieces,out bool scaled){
+			Rational[] p,exponent; Rational cut;
+			final switch(tailFactor(id,bottom,p,exponent,cut,pieces)){
+				case TailFactor.polynomial:return "(Limit.EventualExp.polynomial "~piece(id,everywhere,"",Rational(0)).proof~")";
+				case TailFactor.exponential:return "(Limit.EventualExp.exp "~piece(nodes[id].a,everywhere,"",Rational(0)).proof~")";
+				case TailFactor.piece:
+					auto side=bottom?"before":"after",region="(."~side~" "~q(cut)~")";
+					auto part=piece(id,"(Distribution.StepSource.Region.contains "~region~")",region,bottom?cut-Rational(1):cut+Rational(1));
+					return "(Limit.EventualExp.piece (Limit.tail_"~side~" "~q(cut)~") "~part.proof~")";
+				case TailFactor.none:break;
+			}
+			scaled=true;
+			if(!depends(at(id),0)) return "(Limit.EventualScaled.constant "~filter~" ("~name(dropIndex(at(id)).id)~".eval ξ ρ))";
+			bool left,right; auto product=nodes[id];
+			auto a=exponentialTail(product.a,filter,bottom,pieces,left),b=exponentialTail(product.b,filter,bottom,pieces,right); scaled=left||right;
+			return scaled?"(Limit.EventualScaled."~(left&&right?"mul":left?"times":"after")~" "~a~" "~b~")":"(Limit.EventualExp.mul "~a~" "~b~")";
+		}
 		// Such a product with factors free of the axis: these are its scale,
 		// the others multiply.
 		string scaledFactor(uint factor,out bool scaled){
@@ -5937,27 +6006,6 @@ final class Bindings{
 			}
 			return "(Limit.Eventual."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~eventual(n.a,o.a)~(n.b==uint.max?"":" "~eventual(n.b,o.b))~")";
 		}
-		// Eventually a polynomial times the exponential of a polynomial: the
-		// factors are polynomials, exponentials of polynomials, piecewise
-		// polynomials beyond their last cut, or free of the variable; these
-		// are the scale.
-		string tail(uint id,out bool scaled){
-			Rational[] p,exponent; Rational cut;
-			final switch(tailFactor(id,s.bottom,p,exponent,cut)){
-				case TailFactor.polynomial:return "(Limit.EventualExp.polynomial "~cert.piece(id,cert.everywhere,"",Rational(0)).proof~")";
-				case TailFactor.exponential:return "(Limit.EventualExp.exp "~cert.piece(nodes[id].a,cert.everywhere,"",Rational(0)).proof~")";
-				case TailFactor.piece:
-					auto side=s.bottom?"before":"after",region="(."~side~" "~cert.q(cut)~")";
-					auto piece=cert.piece(id,"(Distribution.StepSource.Region.contains "~region~")",region,s.bottom?cut-Rational(1):cut+Rational(1));
-					return "(Limit.EventualExp.piece (Limit.tail_"~side~" "~cert.q(cut)~") "~piece.proof~")";
-				case TailFactor.none:break;
-			}
-			scaled=true;
-			if(!depends(at(id),0)) return "(Limit.EventualScaled.constant Filter."~end~" ("~name(dropIndex(at(id)).id)~".eval ξ ρ))";
-			bool left,right; auto product=nodes[id];
-			auto a=tail(product.a,left),b=tail(product.b,right); scaled=left||right;
-			return scaled?"(Limit.EventualScaled."~(left&&right?"mul":left?"times":"after")~" "~a~" "~b~")":"(Limit.EventualExp.mul "~a~" "~b~")";
-		}
 		// A quotient of polynomials, by its structure.
 		string quotient(uint id){
 			Rational[] p;
@@ -5976,7 +6024,7 @@ final class Bindings{
 				enforce(vanishing(p,exponent,s.bottom,vanishes,rate,order),"limit term does not vanish");
 				auto decay=vanishes?"(Limit.vanishes_zero rfl)":"(Limit.decays_"~end~" "~cert.q(rate)~" "~to!string(order)~" rfl)";
 				auto zero=scaled?nodes[output].b:output;
-				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~tail(body,scaled)~" "~decay~" "~literal(zero,"(0 : ℚ)")~")";
+				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~cert.exponentialTail(body,"Filter."~end,s.bottom,true,scaled)~" "~decay~" "~literal(zero,"(0 : ℚ)")~")";
 			}
 			size_t degree; Rational ratio;
 			if(quotientLimit(body,degree,ratio))
@@ -6144,6 +6192,23 @@ final class Bindings{
 				if(proof.length)proof=save("Distribution.StepSource.ZeroOrUndefined (Distribution.DensityProgram.density "~program~" ("~q(point)~" : ℝ))",proof);
 			}
 			enforce(proof.length,"missing step tail witness");return proof;
+		}
+		if(s.gaussian){
+			// The density is a polynomial times the exponential of a quadratic
+			// everywhere, weight by weight; the kernel checks the antiderivative.
+			auto d=s.bell;enum whole="(⊤ : Filter ℝ)";
+			auto program="Distribution.DensityProgram.lebesgue";bool scaled;
+			auto evidence="(Limit.EventualExp.polynomial (l := ⊤) (Distribution.StepSource.polynomial_one "~SourceCertificates.everywhere~"))";
+			foreach(id;s.from){
+				bool part;auto w=cert.exponentialTail(id,whole,false,false,part);
+				program="(Distribution.DensityProgram.weight "~functionAt(id)~" "~program~")";
+				evidence=part||scaled?"(Limit.EventualScaled."~(part&&scaled?"mul":scaled?"times":"after")~" "~evidence~" "~w~")":"(Limit.EventualExp.mul "~evidence~" "~w~")";
+				scaled=scaled||part;
+			}
+			string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~q(value)~" rfl)";}
+			string list="[";foreach(i,c;d.primitive)list~=(i?", ":"")~q(c);list~="]";
+			return "Distribution.DensityProgram.presentation_mass_gaussian"~(scaled?"_scaled ":" ")~program~" (R := "~list~") "~q(d.constant)~" "~q(d.c0)~" "~q(d.c1)~" "~q(d.c2)~" "~
+				q(d.vertex)~" "~q(d.width)~" "~evidence~" rfl "~literal(d.factor,d.constant)~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
 		}
 		if(s.interval){
 			auto d=s.bounds;enum everywhere=SourceCertificates.everywhere;
@@ -7687,7 +7752,7 @@ final class Bindings{
 				}
 				case BindingRule.distributionInterval,BindingRule.distributionIntegralAE:{
 					auto s=result.integrals[p.extra];enforce(s.piecewise||s.ae,"missing compositional integral certificate");
-					if(s.interval){ proof=".ofEq (fun ξ ρ => let h := "~stepProofs[p.extra]~"; h)"; break; }
+					if(s.interval||s.gaussian){ proof=".ofEq (fun ξ ρ => let h := "~stepProofs[p.extra]~"; h)"; break; }
 					string rationalQ(Rational q){return q.denominator==1?"("~to!string(q.numerator)~" : ℚ)":"(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)";}
 					string tail="[";foreach(k,q;s.exceptions[1..$]){if(k)tail~=",";tail~=rationalQ(q);}tail~="]";
 					proof=".ofEq (fun ξ ρ => (Distribution.DensityProgram.presentation_mass_"~(s.polynomial?"polynomial":s.ae?"grid_null_edit":s.closed?"grid_known":"grid")~" "~densityProgram(s.from)~(s.ae?" "~densityProgram(s.to):"")~" (a := "~rationalQ(s.exceptions[0])~") (bs := "~tail~") "~(s.closed?"(v := "~rationalQ(s.value)~") ":"")~stepProofs[p.extra]~")"~(s.ae?"":".trans (Eq.symm "~stepOutputs[p.extra]~")")~")";break;

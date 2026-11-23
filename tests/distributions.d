@@ -557,6 +557,22 @@ private Case[] cases(){ return [
 	Case("LimitWrongEnd","lim[x→-∞] exp(-x)","ℝ"),
 	Case("LimitOscillating","lim[x→∞] sin(x)","ℝ"),
 	Case("LimitComplex","lim[x→∞] ⅈ*exp(-x)","ℂ","0"),
+	Case("GaussianMass","∫dx exp(-x^2)*λ[x]","ℝ","sqrt(π)"),
+	Case("GaussianNormal","∫dx exp(-x^2/2)/sqrt(2*π)*λ[x]","ℝ","1"),
+	Case("GaussianVariance","∫dx x^2*exp(-x^2/2)/sqrt(2*π)*λ[x]","ℝ","1"),
+	Case("GaussianOdd","∫dx x*exp(-x^2/2)*λ[x]","ℝ","0"),
+	Case("GaussianMean","∫dx x*exp(-(x-3)^2/8)/sqrt(8*π)*λ[x]","ℝ","3"),
+	Case("GaussianFourth","∫dx x^4*exp(-x^2)*λ[x]","ℝ","3/4·sqrt(π)"),
+	Case("GaussianTilted","∫dx exp(-x^2)*exp(2*x)*λ[x]","ℝ","sqrt(π)·e"),
+	Case("GaussianCentral","∫dx (x-1)^2*exp(-(x-1)^2/2)/sqrt(2*π)*λ[x]","ℝ","1"),
+	Case("GaussianScaled","∫dx a*exp(-x^2)*λ[x]","ℝ","a·sqrt(π)"),
+	Case("GaussianGuarded","∫dx [c≤d]*exp(-x^2)*λ[x]","ℝ","[c≤d]·sqrt(π)"),
+	Case("GaussianPartialScale","λ(a:ℝ). ∫dx exp(-x^2)/a*λ[x]","ℝ→ℝ"),
+	Case("GaussianTwoWeights","∫dx exp(-x^2)*λ[x]*x^2","ℝ","1/2·sqrt(π)"),
+	Case("GaussianGrowing","∫dx exp(x^2)*λ[x]","ℝ"),
+	Case("GaussianQuartic","∫dx exp(-x^4)*λ[x]","ℝ"),
+	Case("GaussianSymbolic","∫dx exp(-(x-m)^2)*λ[x]","ℝ"),
+	Case("GaussianHalfLine","∫dx [0≤x]*exp(-x^2)*λ[x]","ℝ"),
 	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ"),
 	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
@@ -937,6 +953,19 @@ private void run(string directory){
 			bool retained=c.name=="HalfLineGrowing"||c.name=="HalfLineUpper";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_halfline")>=0)!=retained,c.name~" half-line certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
+		// The whole line under a polynomial times the exponential of a quadratic
+		// with negative curvature: the polynomial is a constant up to a
+		// derivative that vanishes at both ends. Other exponents, symbolic
+		// coefficients and half-lines keep their integral.
+		if(c.name.indexOf("Gaussian")==0){
+			bool retained=c.name=="GaussianGrowing"||c.name=="GaussianQuartic"||c.name=="GaussianSymbolic"||c.name=="GaussianHalfLine";
+			auto scaled=c.name=="GaussianNormal"||c.name=="GaussianVariance"||c.name=="GaussianMean"||c.name=="GaussianCentral"||c.name=="GaussianScaled"||c.name=="GaussianPartialScale";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian")>=0)!=retained,c.name~" Gaussian certificate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(!retained) enforce((certificate.indexOf("presentation_mass_gaussian_scaled")>=0)==scaled,c.name~" scale");
+			if(c.name=="GaussianGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name);
+			if(c.name=="GaussianPartialScale") enforce(text.indexOf("a≠0")>=0&&text.indexOf("sqrt(π)")>=0,c.name~": "~text);
 		}
 		// A limit is evaluated by structure with evidence for every term. A
 		// body that has no limit, or one outside the fragment, keeps its binder.
