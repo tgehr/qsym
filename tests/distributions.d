@@ -368,7 +368,27 @@ private Case[] cases(){ return [
 	Case("PolynomialMixedMoment","∫dx (1/3*δ(1)[x]+2/3*[0≤x≤3]*(1/3)*λ[x])*x^2","ℝ","7/3"),
 	Case("PolynomialUnbounded","∫dx [0≤x]*x*λ[x]","ℝ"),
 	Case("PolynomialEverywhere","∫dx x^2*λ[x]","ℝ"),
-	Case("PolynomialParameter","λ(a:ℝ).∫dx [0≤x≤1]*(x+a)*λ[x]","ℝ→ℝ"),
+	Case("SymbolicIntervalLength","∫dx [a≤x]*[x≤b]*λ[x]","ℝ","[a≤b]·(-a+b)"),
+	Case("SymbolicIntervalSwapped","∫dx [x≤b]*[a≤x]*λ[x]","ℝ","[a≤b]·(b-a)"),
+	Case("SymbolicIntervalHalf","∫dx [0≤x]*[x≤a]*λ[x]","ℝ","[0≤a]·a"),
+	Case("SymbolicIntervalStrict","∫dx c*[a<x]*[x<b]*x*λ[x]","ℝ","[a<b]·(c·(-1/2·a^2+1/2·b^2))"),
+	Case("SymbolicIntervalMoment","∫dx [a≤x]*[x≤b]*x^2*λ[x]","ℝ","[a≤b]·(-1/3·a^3+1/3·b^3)"),
+	Case("SymbolicIntervalMean","∫dx ([a≤x]*[x≤b]*λ[x])*x","ℝ","[a≤b]·(-1/2·a^2+1/2·b^2)"),
+	Case("SymbolicIntervalScaledMoment","∫dx ([a≤x]*[x≤b]*c*λ[x])*x^2","ℝ","[a≤b]·(c·(-1/3·a^3+1/3·b^3))"),
+	Case("SymbolicIntervalCoefficients","∫dx [a≤x≤b]*(x^2+c*x+d)*λ[x]","ℝ","[a≤b]·(-1/3·a^3+1/3·b^3+c·(-1/2·a^2+1/2·b^2)+d·(-a+b))"),
+	Case("SymbolicIntervalParameter","∫dx [0≤x≤1]*(x+y)*λ[x]","ℝ","y+1/2"),
+	Case("SymbolicIntervalPartialScale","∫dx [a≤x≤b]*(1/c)*λ[x]","ℝ","[a≤b]·((-a+b)·c⁻¹)"),
+	Case("SymbolicIntervalBoundCoefficient","λ(a:ℝ).∫dx [0≤x≤1]*(x+a)*λ[x]","ℝ→ℝ","λ(a:ℝ). a+1/2"),
+	Case("SymbolicIntervalBoundVariable","λ(a:ℝ).∫dx [0≤x]*[x≤a]*x*λ[x]","ℝ→ℝ","λ(a:ℝ). [0≤a]·(1/2·a^2)"),
+	Case("SymbolicIntervalTwoBinders","λ(a:ℝ).λ(b:ℝ).∫dx [a<x]*[x≤b]*λ[x]","ℝ→ℝ→ℝ","λ(a:ℝ). λ(b:ℝ). [a<b]·(-a+b)"),
+	Case("SymbolicIntervalNested","∫dx [0≤x≤1]*λ[x]*∫dy [0≤y]*[y≤x]*λ[y]","ℝ","1/2"),
+	Case("SymbolicIntervalNestedMoment","∫dx [0≤x≤1]*λ[x]*∫dy [0≤y]*[y≤x]*y*λ[y]","ℝ","1/6"),
+	Case("SymbolicIntervalNestedSum","∫dx [0≤x≤2]*λ[x]*∫dy [x≤y]*[y≤2]*(x+y)*λ[y]","ℝ","4"),
+	Case("SymbolicIntervalSimplex","∫dx [0≤x≤1]*λ[x]*∫dy [0≤y]*[y≤1-x]*λ[y]","ℝ","1/2"),
+	Case("SymbolicIntervalDensity","Λ(x:ℝ). (∫dy [0≤y]*[y≤x]*λ[y])*[0≤x≤1]*λ[x]","Distribution(ℝ)","Λ(x:ℝ). ([0≤x∧x≤1]·x)·λ[x]"),
+	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
+	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
+	Case("SymbolicIntervalExponential","∫dx [a≤x≤b]*exp(x)*λ[x]","ℝ"),
 	Case("WeightedAffineChart","Λx. ∫dy [0≤y≤1]*y*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(y·(1/4)-1/4))·λ[y]"),
 	Case("WeightedAffineReflection","Λx. ∫dy [0≤y≤1]*2*y*λ[y]*δ(1-y)[x]","Distribution(ℝ)","Λ(y:ℝ). ([y≤1∧0≤y]·(-2·y+2))·λ[y]"),
 	Case("WeightedAffineMixture","Λx. ∫dy (1/2*δ(0)[y]+1/2*[0≤y≤1]*λ[y])*δ(y+1)[x]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(1)[x]+([1≤x∧x≤2]·(1/2))·λ[x]"),
@@ -691,14 +711,21 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_grid")<0,c.name~" must not invent a step certificate");
 			enforce(c.name=="StepNonconstant"||text.indexOf("∫")>=0,c.name~" must retain its unsupported integral");
 		}
+		// One lower and one upper bound around polynomial terms. More bounds,
+		// an open side and other integrands keep their integral.
+		if(c.name.indexOf("SymbolicInterval")==0){
+			bool retained=c.name=="SymbolicIntervalThreeBounds"||c.name=="SymbolicIntervalUnbounded"||c.name=="SymbolicIntervalExponential";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
 		// A total weight is evaluated at the inverse point of an affine graph.
 		// A weight that is missing somewhere keeps the ordered rows.
 		if(c.name.indexOf("WeightedAffine")==0&&c.name!="WeightedAffineMean"&&c.name!="WeightedAffineMoment")
 			enforce((certificate.indexOf("_affine_weighted_rule")>=0)==(c.name!="WeightedAffinePartialWeight"),c.name~": "~text);
 		// A polynomial on every cell of a rational grid is integrated cell by
-		// cell. Nonzero tails and open coefficients are not.
+		// cell. Nonzero tails are not.
 		if(c.name=="StepNonconstant"||c.name.indexOf("Polynomial")==0){
-			bool retained=c.name=="PolynomialUnbounded"||c.name=="PolynomialEverywhere"||c.name=="PolynomialParameter";
+			bool retained=c.name=="PolynomialUnbounded"||c.name=="PolynomialEverywhere";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_polynomial")>=0)!=retained,c.name~" polynomial certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}

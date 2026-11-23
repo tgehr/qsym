@@ -335,7 +335,7 @@ clean:
 # Focused, source-checked distribution prototype regression suite.
 test-distributions: build/distribution-tests test-distribution-model-rules test-dependent-references test-distribution-source-model
 	./build/distribution-tests build/distributions
-	cd lean && $(LAKE) build QSym.DistributionSquareIntegral QSym.DistributionGraphBridge QSym.DistributionMixture QSym.DistributionSum QSym.DistributionPolynomialGrid QSym.DistributionWeightedAffine QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.RawPolynomial QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
+	cd lean && $(LAKE) build QSym.DistributionSquareIntegral QSym.DistributionGraphBridge QSym.DistributionMixture QSym.DistributionSum QSym.DistributionPolynomialGrid QSym.DistributionInterval QSym.DistributionWeightedAffine QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.RawPolynomial QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
 	cd lean && $(LAKE) env lean ../tests/RestrictedSquare.lean
 	cd lean && $(LAKE) env lean ../tests/SquareReconstruction.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionCoordinates.lean

@@ -50,7 +50,28 @@ private enum BindingRule:ubyte{
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct IntegralCell{ Rational lower,upper,sample; }
-private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial; Rational value; Rational[] values; uint output=uint.max; }
+// Rational coefficient lists, lowest degree first.
+private Rational[] polySum(Rational[] a,Rational[] b) @safe {
+	auto r=new Rational[](a.length>b.length?a.length:b.length);
+	foreach(i,ref v;r) v=(i<a.length?a[i]:Rational(0))+(i<b.length?b[i]:Rational(0));
+	return r;
+}
+private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
+	if(!a.length||!b.length) return [];
+	auto r=new Rational[](a.length+b.length-1);
+	foreach(ref v;r) v=Rational(0);
+	foreach(i,x;a) foreach(j,y;b) r[i+j]=r[i+j]+x*y;
+	return r;
+}
+// One summand below an interval guard: a polynomial in the axis with an
+// optional factor that does not mention the axis, and its antiderivative.
+private struct IntervalTerm{ uint value,scale=uint.max,polynomial=uint.max,scaleOutside=uint.max,primitive=uint.max; bool scaleLeft; }
+private struct IntervalData{
+	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne;
+	bool swap,strictLower,strictUpper,nested;
+	IntervalTerm[] terms;
+}
+private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; }
 private struct AffineChart{
 	uint map,inverse,jacobian,predicateDomain;
 	uint powerDegree,derivativeNumerator=uint.max,derivativeDenominator=uint.max;
@@ -861,6 +882,30 @@ final class Bindings{
 		Term[] args=[x];
 		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument); if(y==Term.init) return Term.init; args~=y; }
 		return arena.viewRebuild(arena.at(n.data),args,true);
+	}
+	// A polynomial in the innermost variable with rational literal coefficients.
+	private bool axisPolynomial(uint id,out Rational[] p,uint depth=0){
+		if(depth>64) return false;
+		auto q=nodes[id];
+		if(q.op==BoundOp.scalar){
+			auto leaf=arena.at(q.data);
+			if(!arena.isNumber(leaf)||arena.sort(leaf)!=Sort.real_||!arena.number(leaf).im.zero) return false;
+			p=[arena.number(leaf).re]; return true;
+		}
+		if(q.op==BoundOp.variable){ p=[Rational(0),Rational(1)]; return q.data==0; }
+		if(q.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(q.data)); Rational[] a,b;
+		if(op.op!=Op.add&&op.op!=Op.mul&&op.op!=Op.pow||!axisPolynomial(q.a,a,depth+1)) return false;
+		if(op.op==Op.pow){
+			if(op.value>16) return false;
+			p=[Rational(1)]; foreach(i;0..op.value){ p=polyProduct(p,a); if(p.length>64) return false; }
+		}else{
+			if(!axisPolynomial(q.b,b,depth+1)) return false;
+			p=op.op==Op.add?polySum(a,b):polyProduct(a,b);
+		}
+		if(p.length>64) return false;
+		foreach(c;p) if(c.words>128) return false;
+		return true;
 	}
 	private uint freshScalarIndex(uint root){
 		// Freshness is relative to the binder's free scalar variables, not
@@ -2295,18 +2340,6 @@ final class Bindings{
 			foreach(q;cuts) if(!unique.length||unique[$-1]!=q) unique~=q;
 			if(unique.length>16) return BoundTerm.init;
 			if(!unique.length) unique=[Rational(0)];
-			static Rational[] sum(Rational[] a,Rational[] b){
-				auto r=new Rational[](a.length>b.length?a.length:b.length);
-				foreach(i,ref v;r) v=(i<a.length?a[i]:Rational(0))+(i<b.length?b[i]:Rational(0));
-				return r;
-			}
-			static Rational[] product(Rational[] a,Rational[] b){
-				if(!a.length||!b.length) return [];
-				auto r=new Rational[](a.length+b.length-1);
-				foreach(ref v;r) v=Rational(0);
-				foreach(i,x;a) foreach(j,y;b) r[i+j]=r[i+j]+x*y;
-				return r;
-			}
 			bool evaluate(uint id,Rational point,out Term value){
 				auto source=scalarBody(at(id),arena.real_(point)); if(source==Term.init) return false;
 				auto r=simplify(arena,source); if(r.exhausted) return false;
@@ -2332,15 +2365,15 @@ final class Bindings{
 					return polynomial(q.b,sample,p);
 				}
 				if(!polynomial(q.a,sample,a)) return false;
-				if(op.op==Op.pow){ p=[Rational(1)]; foreach(i;0..op.value){ p=product(p,a); if(p.length>64) return false; } }
-				else{ if(!polynomial(q.b,sample,b)) return false; p=op.op==Op.add?sum(a,b):product(a,b); }
+				if(op.op==Op.pow){ p=[Rational(1)]; foreach(i;0..op.value){ p=polyProduct(p,a); if(p.length>64) return false; } }
+				else{ if(!polynomial(q.b,sample,b)) return false; p=op.op==Op.add?polySum(a,b):polyProduct(a,b); }
 				if(p.length>64) return false;
 				foreach(c;p) if(c.words>128) return false;
 				return true;
 			}
 			bool density(Rational sample,out Rational[] p){
 				p=[Rational(1)];
-				foreach(id;solution.from){ Rational[] w; if(!polynomial(id,sample,w)) return false; p=product(p,w); }
+				foreach(id;solution.from){ Rational[] w; if(!polynomial(id,sample,w)) return false; p=polyProduct(p,w); }
 				return true;
 			}
 			foreach(point;[unique[0]-Rational(1),unique[$-1]+Rational(1)]){
@@ -2362,6 +2395,94 @@ final class Bindings{
 			solution.exceptions=unique; solution.value=total;
 			solution.polynomial=true; solution.closed=true; solution.piecewise=true;
 			auto result=scalar(ctx,arena.real_(total)); solution.output=result.id; return result;
+		}
+		// One lower and one upper bound of the axis, in either order, around a
+		// sum of polynomials with optional factors that do not mention the
+		// axis. Bounds and factors may be missing; the theorem is an equation
+		// of partial values. Each antiderivative is evaluated at the two
+		// bounds, and the certificate differentiates it.
+		BoundTerm integrateInterval(BoundTerm t,out IntegralSolution solution){
+			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||!solution.from.length) return BoundTerm.init;
+			auto ctx=context(t),inner=context(at(solution.from[0])); IntervalData d;
+			bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
+			bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
+			auto body=nodes[solution.from[0]];
+			if(call(body,Builtin.castQR)&&call(nodes[body.a],Builtin.castZQ)&&call(nodes[nodes[body.a].a],Builtin.castNZ)){
+				auto bracket=nodes[nodes[nodes[body.a].a].a];
+				if(!isOp(bracket,Op.mask)||nodes[bracket.b].op!=BoundOp.scalar||arena.at(nodes[bracket.b].data)!=arena.natural_(1)) return BoundTerm.init;
+				d.guard=bracket.a; d.unit=bracket.b;
+			}else if(isOp(body,Op.mask)){ d.guard=body.a; d.value=body.b; }
+			else return BoundTerm.init;
+			// Below a binder the two guards stay nested masks: their conjunction.
+			uint first=uint.max,second=uint.max;
+			if(isOp(nodes[d.guard],Op.and_)){ first=nodes[d.guard].a; second=nodes[d.guard].b; }
+			else if(d.unit==uint.max&&isOp(nodes[d.value],Op.mask)){ d.nested=true; first=d.guard; second=nodes[d.value].a; d.value=nodes[d.value].b; }
+			else return BoundTerm.init;
+			bool bound(uint id,out bool lower,out bool strict,out uint term){
+				auto c=nodes[id]; if(!isOp(c,Op.le)&&!isOp(c,Op.lt)) return false;
+				strict=isOp(c,Op.lt);
+				bool axis(uint i){auto v=nodes[i];return v.op==BoundOp.variable&&v.data==0;}
+				if(axis(c.b)&&!depends(at(c.a),0)){ lower=true; term=c.a; return true; }
+				if(axis(c.a)&&!depends(at(c.b),0)){ term=c.b; return true; }
+				return false;
+			}
+			bool lower1,strict1,lower2,strict2; uint term1,term2;
+			if(!bound(first,lower1,strict1,term1)||!bound(second,lower2,strict2,term2)||lower1==lower2) return BoundTerm.init;
+			d.swap=!lower1; d.strictLower=lower1?strict1:strict2; d.strictUpper=lower1?strict2:strict1;
+			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
+			auto outer=[Rational(1)];
+			foreach(id;solution.from[1..$]){ Rational[] w; if(!axisPolynomial(id,w)) return BoundTerm.init; outer=polyProduct(outer,w); if(outer.length>64) return BoundTerm.init; }
+			auto addOp=arena.add(arena.real_(0),arena.real_(0),true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
+			auto minusOne=scalar(ctx,arena.real_(Rational(-1)));
+			// x·(p₀/1+x·(p₁/2+…)), in Horner form, below the axis binder.
+			BoundTerm antiderivative(Rational[] p){
+				auto x=variable(inner,0);
+				if(!p.length) return scalar(inner,arena.real_(Rational(0)));
+				auto horner=scalar(inner,arena.real_(p[$-1]/Rational(cast(long)p.length)));
+				foreach_reverse(k;0..p.length-1) horner=primitive(addOp,[scalar(inner,arena.real_(p[k]/Rational(cast(long)k+1))),primitive(mulOp,[x,horner])]);
+				return primitive(mulOp,[x,horner]);
+			}
+			// The bound itself replaces the axis: no application is left behind.
+			BoundTerm evaluate(BoundTerm expression,BoundTerm bound){
+				BoundTerm[] values=[bound];
+				foreach(i;0..depth(ctx)) values~=variable(ctx,i);
+				return substitute(expression,ctx,values);
+			}
+			bool leaf(uint id,ref IntervalTerm r,out Rational[] p){
+				r.value=id; auto q=nodes[id];
+				if(axisPolynomial(id,p)){ r.polynomial=id; return true; }
+				if(!depends(at(id),0)){ r.scale=id; p=[Rational(1)]; return true; }
+				if(!isOp(q,Op.mul)) return false;
+				if(!depends(at(q.a),0)&&axisPolynomial(q.b,p)){ r.scale=q.a; r.polynomial=q.b; r.scaleLeft=true; return true; }
+				if(!depends(at(q.b),0)&&axisPolynomial(q.a,p)){ r.scale=q.b; r.polynomial=q.a; return true; }
+				return false;
+			}
+			BoundTerm difference(IntervalTerm r,Rational[] p){
+				p=polyProduct(p,outer);
+				foreach(c;p) if(c.words>128) return BoundTerm.init;
+				auto primitive_=antiderivative(p); r.primitive=primitive_.id;
+				auto result=primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
+				if(r.scale!=uint.max){ auto c=dropIndex(at(r.scale)); r.scaleOutside=c.id; result=primitive(mulOp,[c,result]); }
+				d.terms~=r; return result;
+			}
+			BoundTerm build(uint id,uint depth){
+				IntervalTerm r; Rational[] p;
+				if(leaf(id,r,p)) return difference(r,p);
+				// A sum is integrated term by term only without further weights.
+				auto q=nodes[id];
+				if(depth>16||d.terms.length>16||solution.from.length!=1||!isOp(q,Op.add)) return BoundTerm.init;
+				auto a=build(q.a,depth+1); if(a==BoundTerm.init) return a;
+				auto b=build(q.b,depth+1); if(b==BoundTerm.init) return b;
+				return primitive(addOp,[a,b]);
+			}
+			auto total=d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)]):build(d.value,0);
+			if(total==BoundTerm.init) return BoundTerm.init;
+			auto zero=arena.real_(0),strict=d.strictLower||d.strictUpper;
+			auto test=primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[lower,upper]);
+			auto result=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[test,total]);
+			d.lower=lower.id; d.upper=upper.id; d.minusOne=minusOne.id;
+			solution.bounds=d; solution.interval=true; solution.piecewise=true; solution.output=result.id;
+			return result;
 		}
 		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
 			bool call(BoundNode q,Builtin f){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f;}
@@ -3717,6 +3838,7 @@ final class Bindings{
 			if(current.op==BoundOp.distributionMass){
 				IntegralSolution solution; auto evaluated=integrateSteps(at(result.output),solution);
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePolynomials(at(result.output),solution); }
+				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateInterval(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution); }
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
 			}
@@ -5134,6 +5256,96 @@ final class Bindings{
 			}
 			enforce(proof.length,"missing step tail witness");return proof;
 		}
+		// Polynomial evidence on a predicate of the axis: a cell of a grid, or
+		// everywhere. Coefficient lists stay symbolic in the claims; Lean
+		// computes them where a certificate compares them.
+		struct Piece{string proof,poly;}
+		Piece delegate(uint,string,string,Rational) @safe piece;
+		Piece pieceRaw(uint id,string set,string region,Rational sample){
+			auto n=nodes[id];
+			if(!depends(at(id),0)){
+				auto term=scalarBody(at(id),arena.real_(Rational(0)));enforce(term!=Term.init,"missing polynomial constant");
+				auto v=simplify(arena,term);enforce(!v.exhausted&&arena.isNumber(v.output),"non-numeric polynomial constant");
+				auto c=q(arena.number(v.output).re);
+				return Piece(app("polynomial_constant",set~" "~atPoint(id,Rational(0))~" "~c~" "~numericProof(id,Rational(0),c)),"["~c~"]");
+			}
+			if(n.op==BoundOp.variable&&n.data==0)return Piece(app("polynomial_variable",set),"[0, 1]");
+			enforce(n.op==BoundOp.primitive,"unsupported polynomial step expression");auto op=arena.view(arena.at(n.data));
+			if(op.op==Op.builtin){
+				enforce(region.length,"step expression outside a cell");
+				auto term=scalarBody(at(id),arena.real_(sample));enforce(term!=Term.init,"missing polynomial step");
+				auto v=simplify(arena,term);enforce(!v.exhausted&&arena.isNumber(v.output),"non-numeric polynomial step");
+				auto c=q(arena.number(v.output).re);
+				return Piece(app("polynomial_uniform",q(sample)~" "~c~" rfl "~uniform(id,region,sample)~" "~numericProof(id,sample,c)),"["~c~"]");
+			}
+			if(op.op==Op.mask){
+				enforce(region.length,"guard outside a cell");
+				auto pred=scalarBody(at(n.a),arena.real_(sample));enforce(pred!=Term.init,"missing polynomial guard");
+				auto v=simplify(arena,pred);enforce(!v.exhausted&&arena.view(v.output).op==Op.boolLit,"undecided polynomial guard");
+				bool truth=v.output==arena.boolean(true);
+				auto guard=q(sample)~" rfl "~uniform(n.a,region,sample)~" "~numericProof(n.a,sample,truth?"true":"false");
+				if(!truth)return Piece(app("polynomial_mask_false",functionAt(n.b)~" "~guard),"[]");
+				auto b=piece(n.b,set,region,sample);
+				return Piece(app("polynomial_mask_true",guard~" "~b.proof),b.poly);
+			}
+			auto a=piece(n.a,set,region,sample);
+			if(op.op==Op.pow)return Piece(app("polynomial_pow",to!string(op.value)~" "~a.proof),"(Distribution.StepSource.polyPow "~a.poly~" "~to!string(op.value)~")");
+			enforce(op.op==Op.add||op.op==Op.mul,"unsupported polynomial step operation");
+			auto b=piece(n.b,set,region,sample);bool add=op.op==Op.add;
+			return Piece(app(add?"polynomial_add":"polynomial_mul",a.proof~" "~b.proof),"(Distribution.StepSource.poly"~(add?"Add":"Mul")~" "~a.poly~" "~b.poly~")");
+		}
+		piece=(uint id,string set,string region,Rational sample) @safe {
+			auto r=pieceRaw(id,set,region,sample);
+			r.proof=save("Distribution.StepSource.PolynomialOn "~set~" "~functionAt(id)~" "~r.poly,r.proof);return r;
+		};
+		if(s.interval){
+			auto d=s.bounds;enum everywhere="(fun _ : ℝ => True)";
+			string ev(uint id){return "("~name(id)~".eval ξ ρ)";}
+			string truth(bool b){return b?"true":"false";}
+			auto a=ev(d.lower),b=ev(d.upper),m=ev(d.minusOne);
+			auto flags=truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper);
+			auto guard="(Distribution.StepSource.intervalGuard "~flags~" "~a~" "~b~")";
+			// The first weight is the guard around the value, by evaluation.
+			auto body=s.from[0],value=d.unit!=uint.max?"(fun _ : ℝ => some (1 : ℝ))":functionAt(d.value);
+			auto shape=save("∀ x : ℝ, "~functionAt(body)~" x = Value.mask ("~guard~" x) ("~value~" x)",
+				d.unit!=uint.max?"(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")":
+				d.nested?"(fun _ => Distribution.StepSource.mask_mask _ _ _)":"(fun _ => rfl)");
+			auto program="(Distribution.DensityProgram.weight "~functionAt(body)~" Distribution.DensityProgram.lebesgue)";
+			auto masked=save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_first",shape));
+			string[] factors;
+			foreach(id;s.from[1..$]){
+				auto w=piece(id,everywhere,"",Rational(0));
+				program="(Distribution.DensityProgram.weight "~functionAt(id)~" "~program~")";
+				value="(fun x : ℝ => Value.mul ("~value~" x) ("~functionAt(id)~" x))";
+				masked=save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_times",masked~" "~w.proof));
+				factors~=w.proof;
+			}
+			size_t next;
+			string terms(uint id){
+				enforce(next<d.terms.length,"missing interval term");auto r=d.terms[next];
+				if(r.value!=id){
+					auto sum=nodes[id];enforce(sum.op==BoundOp.primitive&&arena.view(arena.at(sum.data)).op==Op.add,"bad interval sum");
+					auto left=terms(sum.a),right=terms(sum.b);
+					return "(Distribution.StepSource.IntervalTerms.add "~left~" "~right~")";
+				}
+				++next;
+				auto primitive_="(G := fun o : Option ℝ => "~name(r.primitive)~".eval ξ (Binding.Env.cons (a := .scalar .real) o ρ)) ";
+				auto derivative=" "~piece(r.primitive,everywhere,"",Rational(0)).proof~" rfl)";
+				if(r.scale==uint.max){
+					auto hv=id==uint.max?app("polynomial_unit",everywhere):piece(id,everywhere,"",Rational(0)).proof;
+					foreach(w;factors)hv=app("polynomial_mul",hv~" "~w);
+					return "(Distribution.StepSource.IntervalTerms.pure "~primitive_~hv~derivative;
+				}
+				auto c=ev(r.scaleOutside);
+				auto hv=r.polynomial==uint.max?app("scaled_constant",c):
+					app(r.scaleLeft?"scaled_left":"scaled_right",c~" "~piece(r.polynomial,everywhere,"",Rational(0)).proof);
+				foreach(w;factors)hv=app("scaled_times",hv~" "~w);
+				return "(Distribution.StepSource.IntervalTerms.scaled "~primitive_~hv~derivative;
+			}
+			auto total=terms(d.unit!=uint.max?uint.max:d.value);
+			auto minus="(Numeric.calculate_sound ξ n"~to!string(nodes[d.minusOne].data)~" (-1 : ℚ) rfl)";
+			return "Distribution.DensityProgram.presentation_mass_interval "~program~" "~flags~" "~a~" "~b~" "~m~" "~minus~" "~masked~" "~total;
+		}
 		auto cuts=s.exceptions;enforce(cuts.length,"empty step grid");
 		string density(){
 			auto p="Distribution.DensityProgram.lebesgue";
@@ -5180,52 +5392,14 @@ final class Bindings{
 		}
 
 		if(s.polynomial){
-			// Coefficient lists stay symbolic in the claims; Lean computes them
-			// once, for the zero tails and for the final value.
-			struct Piece{string proof,poly;}
-			Piece delegate(uint,string,Rational) @safe piece;
-			Piece pieceRaw(uint id,string region,Rational sample){
-				auto n=nodes[id];
-				if(!depends(at(id),0)){
-					auto term=scalarBody(at(id),arena.real_(Rational(0)));enforce(term!=Term.init,"missing polynomial constant");
-					auto v=simplify(arena,term);enforce(!v.exhausted&&arena.isNumber(v.output),"non-numeric polynomial constant");
-					auto c=q(arena.number(v.output).re);
-					return Piece(app("polynomial_constant",region~" "~atPoint(id,Rational(0))~" "~c~" "~numericProof(id,Rational(0),c)),"["~c~"]");
-				}
-				if(n.op==BoundOp.variable&&n.data==0)return Piece(app("polynomial_variable",region),"[0, 1]");
-				enforce(n.op==BoundOp.primitive,"unsupported polynomial step expression");auto op=arena.view(arena.at(n.data));
-				if(op.op==Op.builtin){
-					auto term=scalarBody(at(id),arena.real_(sample));enforce(term!=Term.init,"missing polynomial step");
-					auto v=simplify(arena,term);enforce(!v.exhausted&&arena.isNumber(v.output),"non-numeric polynomial step");
-					auto c=q(arena.number(v.output).re);
-					return Piece(app("polynomial_uniform",q(sample)~" "~c~" rfl "~uniform(id,region,sample)~" "~numericProof(id,sample,c)),"["~c~"]");
-				}
-				if(op.op==Op.mask){
-					auto pred=scalarBody(at(n.a),arena.real_(sample));enforce(pred!=Term.init,"missing polynomial guard");
-					auto v=simplify(arena,pred);enforce(!v.exhausted&&arena.view(v.output).op==Op.boolLit,"undecided polynomial guard");
-					bool truth=v.output==arena.boolean(true);
-					auto guard=q(sample)~" rfl "~uniform(n.a,region,sample)~" "~numericProof(n.a,sample,truth?"true":"false");
-					if(!truth)return Piece(app("polynomial_mask_false",functionAt(n.b)~" "~guard),"[]");
-					auto b=piece(n.b,region,sample);
-					return Piece(app("polynomial_mask_true",guard~" "~b.proof),b.poly);
-				}
-				auto a=piece(n.a,region,sample);
-				if(op.op==Op.pow)return Piece(app("polynomial_pow",to!string(op.value)~" "~a.proof),"(Distribution.StepSource.polyPow "~a.poly~" "~to!string(op.value)~")");
-				enforce(op.op==Op.add||op.op==Op.mul,"unsupported polynomial step operation");
-				auto b=piece(n.b,region,sample);bool add=op.op==Op.add;
-				return Piece(app(add?"polynomial_add":"polynomial_mul",a.proof~" "~b.proof),"(Distribution.StepSource.poly"~(add?"Add":"Mul")~" "~a.poly~" "~b.poly~")");
-			}
-			piece=(uint id,string region,Rational sample) @safe {
-				auto r=pieceRaw(id,region,sample);
-				r.proof=save("Distribution.StepSource.PolynomialOn "~region~" "~functionAt(id)~" "~r.poly,r.proof);return r;
-			};
 			Piece densityPiece(string region,Rational sample){
-				auto program="Distribution.DensityProgram.lebesgue";auto r=Piece(app("polynomial_one",region),"[1]");
+				auto set="(Distribution.StepSource.Region.contains "~region~")";
+				auto program="Distribution.DensityProgram.lebesgue";auto r=Piece(app("polynomial_one",set),"[1]");
 				foreach(id;s.from){
-					auto b=piece(id,region,sample);
+					auto b=piece(id,set,region,sample);
 					program="(Distribution.DensityProgram.weight "~functionAt(id)~" "~program~")";
 					r.poly="(Distribution.StepSource.polyMul "~r.poly~" "~b.poly~")";
-					r.proof=save("Distribution.StepSource.PolynomialOn "~region~" (Distribution.DensityProgram.density "~program~") "~r.poly,app("polynomial_mul",r.proof~" "~b.proof));
+					r.proof=save("Distribution.StepSource.PolynomialOn "~set~" (Distribution.DensityProgram.density "~program~") "~r.poly,app("polynomial_mul",r.proof~" "~b.proof));
 				}
 				return r;
 			}
@@ -5456,7 +5630,7 @@ final class Bindings{
 			if(c.inverse!=uint.max) stack~=c.inverse;
 			if(c.powerDegree) stack~=[c.derivativeNumerator,c.derivativeDenominator];
 		}
-		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; }
+		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) stack~=r.primitive; }
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd||p.rule==BindingRule.distributionCoverAffine) stack~=p.extra;
 		while(stack.length){
@@ -6654,6 +6828,7 @@ final class Bindings{
 				}
 				case BindingRule.distributionInterval,BindingRule.distributionIntegralAE:{
 					auto s=result.integrals[p.extra];enforce(s.piecewise||s.ae,"missing compositional integral certificate");
+					if(s.interval){ proof=".ofEq (fun ξ ρ => let h := "~stepProofs[p.extra]~"; h)"; break; }
 					string rationalQ(Rational q){return q.denominator==1?"("~to!string(q.numerator)~" : ℚ)":"(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)";}
 					string tail="[";foreach(k,q;s.exceptions[1..$]){if(k)tail~=",";tail~=rationalQ(q);}tail~="]";
 					proof=".ofEq (fun ξ ρ => (Distribution.DensityProgram.presentation_mass_"~(s.polynomial?"polynomial":s.ae?"grid_null_edit":s.closed?"grid_known":"grid")~" "~densityProgram(s.from)~(s.ae?" "~densityProgram(s.to):"")~" (a := "~rationalQ(s.exceptions[0])~") (bs := "~tail~") "~(s.closed?"(v := "~rationalQ(s.value)~") ":"")~stepProofs[p.extra]~")"~(s.ae?"":".trans (Eq.symm "~stepOutputs[p.extra]~")")~")";break;

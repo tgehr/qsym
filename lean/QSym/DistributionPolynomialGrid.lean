@@ -138,61 +138,61 @@ theorem polyCell_integral (p : List ℚ) {a b : ℚ} (hab : a < b) :
     ← intervalIntegral.integral_of_le (le_of_lt (Rat.cast_lt.mpr hab))]
   exact polyEval_intervalIntegral p a b
 
-/-- On the open region the partial function is this polynomial; in
-particular it is defined there. -/
-structure PolynomialOn (r : Region) (f : ℝ → Option ℝ) (p : List ℚ) : Prop where
-  equation : ∀ x, r.contains x → f x = some (polyEval p x)
+/-- Where the predicate holds, the partial function is this polynomial; in
+particular it is defined there. Grid cells use the predicate of a region. -/
+structure PolynomialOn (s : ℝ → Prop) (f : ℝ → Option ℝ) (p : List ℚ) : Prop where
+  equation : ∀ x, s x → f x = some (polyEval p x)
 
-theorem polynomial_variable (r : Region) : PolynomialOn r (fun x => some x) [0, 1] :=
+theorem polynomial_variable (s : ℝ → Prop) : PolynomialOn s (fun x => some x) [0, 1] :=
   ⟨fun x _ => by simp [polyEval]⟩
 
-theorem polynomial_constant (r : Region) (v : Option ℝ) (q : ℚ) (h : v = some (q : ℝ)) :
-    PolynomialOn r (fun _ => v) [q] :=
+theorem polynomial_constant (s : ℝ → Prop) (v : Option ℝ) (q : ℚ) (h : v = some (q : ℝ)) :
+    PolynomialOn s (fun _ => v) [q] :=
   ⟨fun x _ => by simp [polyEval, h]⟩
 
-theorem polynomial_one (r : Region) : PolynomialOn r DensityProgram.lebesgue.density [1] :=
+theorem polynomial_one (s : ℝ → Prop) : PolynomialOn s DensityProgram.lebesgue.density [1] :=
   ⟨fun x _ => by simp [DensityProgram.density, polyEval]⟩
 
-theorem polynomial_add {r : Region} {f g : ℝ → Option ℝ} {p q : List ℚ}
-    (hf : PolynomialOn r f p) (hg : PolynomialOn r g q) :
-    PolynomialOn r (fun x => Value.add (f x) (g x)) (polyAdd p q) :=
+theorem polynomial_add {s : ℝ → Prop} {f g : ℝ → Option ℝ} {p q : List ℚ}
+    (hf : PolynomialOn s f p) (hg : PolynomialOn s g q) :
+    PolynomialOn s (fun x => Value.add (f x) (g x)) (polyAdd p q) :=
   ⟨fun x hx => by simp only [hf.equation x hx, hg.equation x hx, Value.add, polyEval_add]⟩
 
-theorem polynomial_mul {r : Region} {f g : ℝ → Option ℝ} {p q : List ℚ}
-    (hf : PolynomialOn r f p) (hg : PolynomialOn r g q) :
-    PolynomialOn r (fun x => Value.mul (f x) (g x)) (polyMul p q) :=
+theorem polynomial_mul {s : ℝ → Prop} {f g : ℝ → Option ℝ} {p q : List ℚ}
+    (hf : PolynomialOn s f p) (hg : PolynomialOn s g q) :
+    PolynomialOn s (fun x => Value.mul (f x) (g x)) (polyMul p q) :=
   ⟨fun x hx => by simp only [hf.equation x hx, hg.equation x hx, Value.mul, polyEval_mul]⟩
 
-theorem polynomial_pow {r : Region} {f : ℝ → Option ℝ} {p : List ℚ} (n : ℕ)
-    (hf : PolynomialOn r f p) :
-    PolynomialOn r (fun x => (f x).map (fun y : ℝ => y ^ n)) (polyPow p n) :=
+theorem polynomial_pow {s : ℝ → Prop} {f : ℝ → Option ℝ} {p : List ℚ} (n : ℕ)
+    (hf : PolynomialOn s f p) :
+    PolynomialOn s (fun x => (f x).map (fun y : ℝ => y ^ n)) (polyPow p n) :=
   ⟨fun x hx => by simp only [hf.equation x hx, Option.map_some', polyEval_pow]⟩
 
 /-- A step expression, for example a cast Iverson bracket, is a constant
 polynomial on a cell. The sample is spelled as a rational literal. -/
 theorem polynomial_uniform {r : Region} {f : ℝ → Option ℝ} (s q : ℚ) (hr : r.sample = s)
-    (hu : Uniform r f) (hs : f (s : ℝ) = some (q : ℝ)) : PolynomialOn r f [q] :=
+    (hu : Uniform r f) (hs : f (s : ℝ) = some (q : ℝ)) : PolynomialOn r.contains f [q] :=
   ⟨fun x hx => by subst hr; rw [hu x hx, hs]; simp [polyEval]⟩
 
 /-- A guard that is constant on the region selects its value there. -/
 theorem polynomial_mask_true {r : Region} {c : ℝ → Option Bool} {f : ℝ → Option ℝ}
     {p : List ℚ} (s : ℚ) (hr : r.sample = s) (hc : Uniform r c)
-    (hs : c (s : ℝ) = some true) (hf : PolynomialOn r f p) :
-    PolynomialOn r (fun x => Value.mask (c x) (f x)) p :=
+    (hs : c (s : ℝ) = some true) (hf : PolynomialOn r.contains f p) :
+    PolynomialOn r.contains (fun x => Value.mask (c x) (f x)) p :=
   ⟨fun x hx => by subst hr; rw [hc x hx, hs]; exact hf.equation x hx⟩
 
 /-- Masking is not strict: a false guard needs nothing of the masked value. -/
 theorem polynomial_mask_false {r : Region} {c : ℝ → Option Bool} (f : ℝ → Option ℝ)
     (s : ℚ) (hr : r.sample = s) (hc : Uniform r c) (hs : c (s : ℝ) = some false) :
-    PolynomialOn r (fun x => Value.mask (c x) (f x)) [] :=
+    PolynomialOn r.contains (fun x => Value.mask (c x) (f x)) [] :=
   ⟨fun x hx => by subst hr; rw [hc x hx, hs]; rfl⟩
 
 /-- The cells to the right of a cut, with their accumulated integral. -/
 inductive PolynomialTail (f : ℝ → Option ℝ) : ℚ → List ℚ → ℚ → Prop
-  | nil (a : ℚ) {p : List ℚ} (h : PolynomialOn (.after a) f p) (zero : polyZero p = true) :
+  | nil (a : ℚ) {p : List ℚ} (h : PolynomialOn (Region.after a).contains f p) (zero : polyZero p = true) :
       PolynomialTail f a [] 0
   | cons {a b w : ℚ} {bs : List ℚ} {p : List ℚ} (ordered : a < b)
-      (h : PolynomialOn (.between a b) f p) (tail : PolynomialTail f b bs w) :
+      (h : PolynomialOn (Region.between a b).contains f p) (tail : PolynomialTail f b bs w) :
       PolynomialTail f a (b :: bs) (polyIntegral p a b + w)
 
 theorem PolynomialTail.integral {f a bs w} (h : PolynomialTail f a bs w) :
@@ -225,7 +225,7 @@ theorem PolynomialTail.integral {f a bs w} (h : PolynomialTail f a bs w) :
     · rw [integral_add ci hi, cv, hv, Rat.cast_add]
 
 theorem polynomial_grid {f : ℝ → Option ℝ} {a : ℚ} {bs : List ℚ} {q : List ℚ} {w : ℚ}
-    (hl : PolynomialOn (.before a) f q) (zl : polyZero q = true)
+    (hl : PolynomialOn (Region.before a).contains f q) (zl : polyZero q = true)
     (ht : PolynomialTail f a bs w)
     (hd : ProbeFacts (fun x => Value.Defined (f x)) ((a :: bs).map (fun q : ℚ => (q : ℝ)))) :
     partialIntegral volume f = some ((w : ℚ) : ℝ) := by
@@ -255,7 +255,7 @@ namespace QSym.Distribution.DensityProgram
 
 theorem presentation_mass_polynomial (p : DensityProgram) {a : ℚ} {bs : List ℚ}
     {q : List ℚ} {v w : ℚ}
-    (hl : StepSource.PolynomialOn (.before a) p.density q) (zl : StepSource.polyZero q = true)
+    (hl : StepSource.PolynomialOn (StepSource.Region.before a).contains p.density q) (zl : StepSource.polyZero q = true)
     (ht : StepSource.PolynomialTail p.density a bs w)
     (hd : StepSource.ProbeFacts (fun x => Value.Defined (p.density x))
       ((a :: bs).map (fun q : ℚ => (q : ℝ))))
