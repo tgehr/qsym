@@ -1,3 +1,5 @@
+import QSym.DistributionInverseSheets
+import QSym.DistributionInverseBranch
 import QSym.DistributionRadius
 import QSym.DistributionRootCover
 import QSym.DistributionStepSource
@@ -34,6 +36,70 @@ theorem inverseCover_eq {ι : Type} {g : ι → ℝ → Option ℝ} {f : ℝ →
     (cover : ∀ x y, (∃ i, g i y = some x) ↔ f x = some y) :
     inverseCoverValue (some g) = realPushforwardOnValue (some fun _ => some true) (some f) := by
   simp [inverseCoverValue, inverseCoverOutput_eq cover]
+
+/-- Pair the joint graph recovered from inverse coordinates with an arbitrary
+partial signed test. A source guard is evaluated before the test. The chosen
+regular sheets need not be exhaustive: the residual stays in source coordinates. -/
+theorem inverseCover_joint_split {ι : Type} {g : ι → ℝ → Option ℝ} {f : ℝ → ℝ}
+    (cover : ∀ x y, (∃ i, g i y = some x) ↔ f x = y)
+    (s : Set ℝ) (hs : MeasurableSet s) (bs : List (InverseSheet f)) (h : ℝ → ℝ → Option ℝ) :
+    branchIntegral s (fun x => (inverseCoverOutput g x).bind (h x)) = InverseSheet.sum s h bs := by
+  rw [inverseCoverOutput_eq (f := fun x => some (f x)) (fun x y => by simpa using cover x y)]
+  exact InverseSheet.reconstruct bs s hs h
+
+/-- Several inverse coordinates may describe the same regular global branch.
+Only their joint relation matters, so a repeated coordinate adds no mass. -/
+theorem inverseCover_regular {ι : Type} {g : ι → ℝ → Option ℝ} {f inv slope : ℝ → ℝ}
+    (cover : ∀ x y, (∃ i, g i y = some x) ↔ f x = y)
+    (branch : GlobalInverseBranch f inv slope) (regular : ∀ x, slope x ≠ 0) :
+    inverseCoverValue (some g) =
+      weightValue (some fun y => some |slope (inv y)|⁻¹) lebesgueValue := by
+  rw [inverseCover_eq (f := fun x => some (f x)) (fun x y => by simpa using cover x y),
+    branch.lebesgueChart (fun _ => some true) (fun _ => ⟨_,rfl⟩)
+      (fun x h => False.elim (regular x h))]
+  simp [Value.mask, Value.inv, regular, weightValue, lebesgueValue, densityValue, weight,
+    Value.mul_one_left]
+
+private theorem singleton_regular {g w : ℝ → Option ℝ} {f inv slope : ℝ → ℝ}
+    (branch : GlobalInverseBranch f inv slope) (regular : ∀ x, slope x ≠ 0)
+    (hg : ∀ y, g y = some (inv y)) (hw : ∀ y, w y = some |slope (inv y)|⁻¹) :
+    inverseCoverValue (Tensor.consValue (some g) Tensor.nilValue) =
+      weightValue (some w) lebesgueValue := by
+  rw [funext hw]
+  apply inverseCover_regular (f := f) _ branch regular
+  intro x y
+  constructor
+  · rintro ⟨i,h⟩
+    fin_cases i
+    change g y = some x at h
+    rw [hg] at h
+    exact (Option.some.inj h) ▸ branch.inverse y
+  · intro h
+    refine ⟨0, ?_⟩
+    change g y = some x
+    rw [hg, ← h, branch.injective (branch.inverse (f x))]
+
+theorem sinh_inverse_coordinate :
+    inverseCoverValue (Tensor.consValue (some fun y => Functions.sinhR.apply (some y)) Tensor.nilValue) =
+      weightValue (some fun y => Functions.coshR.apply (some y)) lebesgueValue := by
+  let branch : GlobalInverseBranch Real.arsinh Real.sinh (fun x => (√(1+x^2))⁻¹) :=
+    ⟨Real.arsinh_injective, Real.arsinh_sinh, Real.hasStrictDerivAt_arsinh⟩
+  apply singleton_regular branch (fun x => by positivity) (fun y => by simp [Functions.sinhR, Function1.apply])
+  intro y
+  simp [Functions.coshR, Function1.apply, abs_of_nonneg (Real.sqrt_nonneg _), ← Real.cosh_sq',
+    Real.sqrt_sq_eq_abs, abs_inv, abs_of_pos (Real.cosh_pos _)]
+
+theorem asinh_inverse_coordinate :
+    inverseCoverValue (Tensor.consValue (some fun y => Functions.asinhR.apply (some y)) Tensor.nilValue) =
+      weightValue (some fun y => Value.inv (Functions.sqrtR.apply
+        (Value.add (some ((1 : ℤ) : ℝ)) ((some y).map (· ^ 2))))) lebesgueValue := by
+  let branch : GlobalInverseBranch Real.sinh Real.arsinh Real.cosh :=
+    ⟨Real.sinh_injective, Real.sinh_arsinh, Real.hasStrictDerivAt_sinh⟩
+  apply singleton_regular branch (fun x => (Real.cosh_pos x).ne') (fun y => by simp [Functions.asinhR, Function1.apply])
+  intro y
+  have pos : 0 < 1+y^2 := by positivity
+  simp [Functions.sqrtR, Function1.apply, Value.add, Value.inv, pos.le,
+    (Real.sqrt_pos.mpr pos).ne', abs_of_pos (Real.cosh_pos _), Real.cosh_arsinh, abs_of_nonneg (Real.sqrt_nonneg _)]
 
 /-- A global affine inverse contributes the absolute slope of the inverse,
 including when it reverses orientation. -/
@@ -185,6 +251,36 @@ theorem inverseCover_integral_add {ι : Type} {g : ι → ℝ → Option ℝ} {f
 inverse chart for the output map. Both arguments may themselves be partial. -/
 def inverseSourcePartValue {ι : Type} (p : Option (ℝ → Option Bool)) (gs : Option (ι → ℝ → Option ℝ)) :
     Option (D ℝ) := pushforwardOnValue p (gs.map inverseCoverOutput)
+
+/-- The source-restricted inverse notation uses a strict weight, so even
+a zero weight checks the test at its output. An undefined predicate stays
+undefined. The target-domain guards of the sheets, in contrast, short-circuit. -/
+theorem inversePart_pairing_split {ι : Type} {g : ι → ℝ → Option ℝ} {f : ℝ → ℝ}
+    (cover : ∀ x y, (∃ i, g i y = some x) ↔ f x = y)
+    (p : Option (ℝ → Option Bool)) (bs : List (InverseSheet f)) (t : ℝ → Option ℝ) :
+    ((inverseSourcePartValue p (some g)).bind (fun d => integrate d t)) =
+      p.bind (fun pred => InverseSheet.sum univ
+        (fun x y => Value.mul (Value.mask (pred x) (some 1)) (t y)) bs) := by
+  change ((pushforwardOnValue p (some (inverseCoverOutput g))).bind _) = _
+  cases p with
+  | none => rfl
+  | some pred =>
+    rw [inverseCoverOutput_eq (f := fun x => some (f x)) (fun x y => by simpa using cover x y)]
+    exact (branchIntegral_univ _).symm.trans (InverseSheet.reconstruct bs univ MeasurableSet.univ
+      (fun x y => Value.mul (Value.mask (pred x) (some 1)) (t y)))
+
+/-- Pointwise counterpart to the pairing rule. Each distinct source root
+appears exactly once. A false guard suppresses its reciprocal, including
+when the forward derivative vanishes. -/
+theorem inversePart_density_roots {ι : Type} {g : ι → ℝ → Option ℝ} {f : ℝ → ℝ}
+    (cover : ∀ x y, (∃ i, g i y = some x) ↔ f x = y) {y : ℝ} {xs : List ℝ}
+    (roots : RootCover univ f y xs) (p : ℝ → Option Bool) (hf : Measurable f)
+    (d : ℝ → ℝ) (hd : ∀ x ∈ xs, p x ≠ some false → HasStrictDerivAt f (d x) x) :
+    densityAtValue (inverseSourcePartValue (some p) (some g)) (some y) =
+      xs.foldr (fun x acc => Value.add (Value.mask (p x) (Value.inv (some |d x|))) acc) (some 0) := by
+  change densityAt (.density _ (inverseCoverOutput g)) y = _
+  rw [inverseCoverOutput_eq (f := fun x => some (f x)) (fun x y => by simpa using cover x y)]
+  exact (congrFun (coordinates_density _) y).symm.trans (roots.density p hf d hd)
 
 /-- Inverse coordinates restricted to a set of source points. The forward
 map is recovered from the coordinates and is shared by both pieces. -/

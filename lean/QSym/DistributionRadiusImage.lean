@@ -52,6 +52,61 @@ theorem radius_sqrt_density (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
   exact affineSquare_unrestricted_density a b j ha jac (eq a b) (eq a⁻¹ (-b/a)) hv
     (2*|a|) 1 one_ne_zero (mul_one _).symm rfl rfl false y
 
+/-- A square cover contributes two equal regular branches. Their combined
+Jacobian is j / √y. Its common endpoint is visited once, even for a partial test. -/
+theorem radius_sqrt_pairing (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
+    (hz : z = some (c : ℝ)) (hv : v = some (j : ℝ)) {r : ℝ → Option ℝ}
+    (hr : r = sqrtRadius v) (test : Option (ℝ → Option ℝ)) :
+    massValue (weightValue test (radiusImageValue z (some r))) =
+      (test.bind (fun t => t ((0 : ℤ) : ℝ))).bind (fun _ =>
+        massValue (weightValue (some fun y => Value.mask (Value.lt (some ((0 : ℤ) : ℝ)) (some y))
+          (Value.mul (test.bind (fun t => t y))
+            (Value.mul (Value.inv (Functions.sqrtR.apply (some y))) v))) lebesgueValue)) := by
+  cases test with
+  | none => rfl
+  | some t =>
+    rw [hr, hv, hz, radius_coordinates _ _ (by exact_mod_cast hj)]
+    let a : ℝ := (j : ℝ)⁻¹
+    let b : ℝ := -(c : ℝ) / j
+    have ha : a ≠ 0 := inv_ne_zero (by exact_mod_cast hj.ne')
+    have scale : |a|⁻¹ = (j : ℝ) := by
+      dsimp [a]; rw [abs_inv, inv_inv, abs_of_pos (by exact_mod_cast hj)]
+    have h := affine_square_masked_image_integral a b ha t
+    have crit := affine_square_critical_density a b ha
+    rw [coordinates_density] at crit
+    rw [coordinates_of_missing_density crit, scale] at h
+    change partialIntegral volume (fun x => Value.mul (Value.mul (some 1) (t ((a*x+b)^2))) (some 1)) = _
+    simp only [Value.mul_one_right, Value.mul_one_left]
+    change partialIntegral volume (fun x => Value.mul (some 1) (t ((a*x+b)^2))) = _ at h
+    simp only [Value.mul_one_left] at h
+    rw [h, ← Set.Ioi_union_left (a := (0 : ℝ))]
+    let w (y : ℝ) := unrestrictedSquareDensity (some (j : ℝ)) (some y)
+    have reg (y : ℝ) (hy : 0 < y) :
+        w y = Value.mul (Value.inv (Functions.sqrtR.apply (some y))) (some (j : ℝ)) := by
+      simp [w, unrestrictedSquareDensity, Value.mask, Value.le, hy.le]
+    rw [imageIntegral_split volume _ _ w t (fun y hy => by
+      change 0 < y at hy
+      simp [reg y hy, Value.Defined, Value.mul, Value.inv, Function1.apply, Functions.sqrtR,
+        hy.le, (Real.sqrt_pos.mpr hy).ne']) (by
+      intro y hy _; obtain rfl : y = 0 := hy
+      simp [w, unrestrictedSquareDensity, Value.mask, Value.le, Value.inv,
+        Function1.apply, Functions.sqrtR, Value.mul])]
+    simp only [Int.cast_zero]
+    cases ht : t 0 with
+    | none => simp [ht, Value.Defined]
+    | some v =>
+      simp only [Set.mem_singleton_iff, forall_eq, ht, Value.Defined, Option.some.injEq, exists_eq',
+        if_true, Option.some_bind]
+      change partialIntegral volume _ = partialIntegral volume _
+      apply congrArg (partialIntegral volume)
+      funext y
+      simp only [Option.some_bind, Value.mul_one_left, Value.mul_one_right, Int.cast_zero]
+      by_cases hy : 0 < y
+      · simp only [Set.mem_Ioi, hy, if_true, reg y hy, Value.lt, Option.some_bind, decide_true, Value.mask]
+        generalize Value.mul (Value.inv (Functions.sqrtR.apply (some y))) (some (j : ℝ)) = k
+        cases t y <;> cases k <;> simp [Value.mul, mul_comm, hy]
+      · simp [hy, Set.mem_Ioi, Value.mask, Value.lt]
+
 /-- Scalar normalization may represent an Iverson bracket as a natural mask
 followed by the three exact casts to real. -/
 def sublevelWeight (casts : Bool) (q : Option ℝ) (y : ℝ) : Option ℝ :=

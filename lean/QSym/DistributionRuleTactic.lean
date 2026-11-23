@@ -135,6 +135,9 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.sqrtRadius_image_integral; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_image; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_output; assumption
+  | solve | apply Distribution.GraphFibre.inverseCover_joint_split <;> assumption
+  | solve | apply Distribution.GraphFibre.inversePart_density_roots <;> assumption
+  | solve | apply Distribution.GraphFibre.inversePart_pairing_split <;> assumption
   | solve | apply Distribution.GraphFibre.inverseCover_sum <;> assumption
   | solve | apply Distribution.GraphFibre.inverseCover_eq; assumption
   | solve | apply Distribution.GraphFibre.inverseCoverOutput_eq; assumption

@@ -44,7 +44,8 @@ private enum BindingRule:ubyte{
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
-	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum
+	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
+	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -3068,6 +3069,51 @@ final class Bindings{
 			auto ctx=context(cover);
 			return distribution(ctx,BoundOp.distributionRadiusImage,[scalar(ctx,centre),radius]);
 		}
+		bool unitSquarePart(BoundTerm part,out uint lowerBody,out uint upperBody){
+			auto first=nodes[node(part).b];
+			if(first.op!=BoundOp.vectorCons) return false;
+			auto second=nodes[first.b];
+			if(second.op!=BoundOp.vectorCons||nodes[second.b].op!=BoundOp.vectorNil) return false;
+			auto lower=nodes[first.a],upper=nodes[second.a]; string form;
+			if(lower.op!=BoundOp.lambda||sqrtRadiusScale(second.a,form)==Term.init||form!="one") return false;
+			auto minus=nodes[lower.a];
+			if(minus.op!=BoundOp.primitive||arena.view(arena.at(minus.data)).op!=Op.mul||
+				minus.b!=upper.a||nodes[minus.a].op!=BoundOp.scalar||arena.at(nodes[minus.a].data)!=arena.real_(-1))
+				return false;
+			lowerBody=lower.a; upperBody=upper.a; return true;
+		}
+		// The two open sqrt sheets have distinct source signs. Retain the
+		// joint probe at their common endpoint as a strict zero contribution.
+		BoundTerm squarePartPairing(BoundTerm part,BoundTerm test){
+			uint lower,upper;
+			if(!unitSquarePart(part,lower,upper)) return BoundTerm.init;
+			auto pred=at(node(part).a),ctx=context(part),inner=context(at(upper)),y=variable(inner,0);
+			auto zero=arena.real_(0),one=arena.real_(1),mul=scalarOperator(type(y),TensorOp.mul);
+			uint[] shift; foreach(i;0..contexts[ctx.index].length) shift~=i+1;
+			auto localPred=rename(pred,inner,shift);
+			if(test==BoundTerm.init){
+				auto mask=primitive(arena.mask(arena.boolean(true),one),[apply(localPred,y),scalar(inner,one)]);
+				auto source=distribution(ctx,BoundOp.distributionWeight,[hint(lambda(mask),binderHint(pred).name),distribution(ctx,BoundOp.distributionLebesgue)]);
+				return sequence(pred,distribution(ctx,BoundOp.distributionMass,[source]));
+			}
+			auto localTest=rename(test,inner,shift);
+			BoundTerm probe(BoundTerm p,BoundTerm t,BoundTerm x,BoundTerm target){
+				auto mask=primitive(arena.mask(arena.boolean(true),one),[apply(p,x),scalar(context(x),one)]);
+				return primitive(mul,[mask,apply(t,target)]);
+			}
+			auto den=primitive(mul,[scalar(inner,arena.real_(2)),at(upper)]);
+			auto jac=primitive(arena.inv(one),[den]);
+			auto positive=primitive(arena.lt(zero,zero),[scalar(inner,zero),y]);
+			BoundTerm branch(uint root){
+				auto weighted=primitive(mul,[probe(localPred,localTest,at(root),y),jac]);
+				auto row=hint(lambda(primitive(arena.mask(arena.boolean(true),one),[positive,weighted])),binderHint(lambda(at(upper))).name);
+				return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,
+					[row,distribution(ctx,BoundOp.distributionLebesgue)])]);
+			}
+			auto z=scalar(ctx,zero),endpoint=sequence(probe(pred,test,z,z),z);
+			auto plus=arena.add(zero,zero,true);
+			return primitive(plus,[branch(lower),primitive(plus,[branch(upper),endpoint])]);
+		}
 		BoundTerm inverseSquareChart(BoundTerm graph,out uint evidence){
 			auto n=node(graph);
 			if(n.op!=BoundOp.distributionPushforwardOn||nodes[n.a].op!=BoundOp.lambda) return BoundTerm.init;
@@ -3539,6 +3585,25 @@ final class Bindings{
 					next=distribution(ctx,BoundOp.distributionLebesgue);
 					if(j!=Rational(1)) next=distribution(ctx,BoundOp.distributionWeight,[hint(lambda(coefficient),binderHint(at(first.a)).name),next]);
 					extra=coefficient.id; rule=BindingRule.distributionCoverAffine;
+				}else if(first.op==BoundOp.vectorCons&&nodes[first.b].op==BoundOp.vectorNil&&nodes[first.a].op==BoundOp.lambda){
+					auto body=nodes[nodes[first.a].a];
+					if(body.op==BoundOp.primitive&&nodes[body.a].op==BoundOp.variable&&nodes[body.a].data==0){
+						auto op=arena.view(arena.at(body.data));
+						if(op.op==Op.builtin&&(op.value==Builtin.sinhR||op.value==Builtin.asinhR)){
+							auto y=at(body.a),zero=arena.real_(0); BoundTerm w;
+							if(op.value==Builtin.sinhR){
+								w=primitive(arena.call(Builtin.coshR,[zero]),[y]);
+								rule=BindingRule.distributionCoverSinh;
+							}else{
+								auto sq=primitive(arena.pow(zero,2),[y]);
+								auto sum=primitive(arena.add(zero,zero,true),[scalar(context(y),arena.real_(1)),sq]);
+								w=primitive(arena.inv(zero),[primitive(arena.call(Builtin.sqrtR,[zero]),[sum])]);
+								rule=BindingRule.distributionCoverAsinh;
+							}
+							next=distribution(ctx,BoundOp.distributionWeight,[hint(lambda(w),binderHint(at(first.a)).name),
+								distribution(ctx,BoundOp.distributionLebesgue)]);
+						}
+					}
 				}
 			}
 			if(current.op==BoundOp.distributionBind||current.op==BoundOp.distributionIntegral){
@@ -3582,6 +3647,12 @@ final class Bindings{
 				auto d=nodes[current.a];
 				if(d.op==BoundOp.bottom){ next=bottom(ctx,types[current.type]); rule=BindingRule.fold; }
 				else if(d.op==BoundOp.distributionZero){ next=scalar(ctx,arena.real_(0)); rule=BindingRule.distributionMassZero; }
+				else if(d.op==BoundOp.distributionInversePart||d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionInversePart){
+					bool bare=d.op==BoundOp.distributionInversePart;
+					auto test=bare?BoundTerm.init:at(d.a);
+					next=squarePartPairing(at(bare?current.a:d.b),test);
+					if(next!=BoundTerm.init) rule=bare?BindingRule.distributionSquarePartMass:BindingRule.distributionSquarePartPairing;
+				}
 				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionRadiusImage){
 					auto image=nodes[d.b]; string form; bool casts;
 					auto j=sqrtRadiusScale(image.b,form),bound=sublevelBound(d.a,casts);
@@ -3596,6 +3667,18 @@ final class Bindings{
 							next=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[le,primitive(mul,[width,root])]);
 						}
 						rule=BindingRule.distributionRadiusSublevel; extra=q.id;
+					}else if(j!=Term.init&&nodes[image.a].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[image.a].data))){
+						auto test=at(d.a),inner=push(ctx,scalarType(Sort.real_)),y=variable(inner,0);
+						uint[] shift; foreach(i;0..contexts[ctx.index].length) shift~=i+1;
+						auto zero=arena.real_(0),mul=scalarOperator(type(y),TensorOp.mul);
+						auto pos=primitive(arena.lt(zero,zero),[scalar(inner,zero),y]);
+						auto root=primitive(arena.call(Builtin.sqrtR,[zero]),[y]);
+						auto jac=primitive(mul,[primitive(arena.inv(zero),[root]),scalar(inner,j)]);
+						auto value=primitive(mul,[apply(rename(test,inner,shift),y),jac]);
+						auto weight=hint(lambda(primitive(arena.mask(arena.boolean(true),arena.real_(1)),[pos,value])),binderHint(at(image.b)).name);
+						auto source=distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)]);
+						next=sequence(apply(test,scalar(ctx,zero)),distribution(ctx,BoundOp.distributionMass,[source]));
+						rule=BindingRule.distributionRadiusPairing;
 					}
 				}
 				else if(d.op==BoundOp.distributionPushforwardOn&&nodes[d.a].op==BoundOp.lambda){
@@ -3882,6 +3965,16 @@ final class Bindings{
 				auto d=nodes[current.a],query=at(current.b);
 				auto densityBranch=d.op==BoundOp.distributionPushforwardOn?oddMap(d.b):PowerMap.init;
 				if(d.op==BoundOp.distributionLebesgue){ next=sequence(query,scalar(ctx,arena.real_(1))); rule=BindingRule.distributionDensityLebesgue; }
+				else if(d.op==BoundOp.distributionInversePart){
+					uint lower,upper;
+					if(unitSquarePart(at(current.a),lower,upper)){
+						auto inner=context(at(upper)),x=variable(inner,0);
+						auto square=lambda(primitive(arena.pow(arena.real_(0),2),[x]));
+						auto graphD=distribution(ctx,BoundOp.distributionPushforwardOn,[at(d.a),square]);
+						next=distribution(ctx,BoundOp.distributionDensityAt,[graphD,query]);
+						rule=BindingRule.distributionSquarePartDensity;
+					}
+				}
 				else if(d.op==BoundOp.distributionRadiusImage&&nodes[d.a].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[d.a].data))){
 					string form; auto j=sqrtRadiusScale(d.b,form);
 					if(j!=Term.init){next=maskedInverseRoot(query,j); rule=BindingRule.distributionRadiusDensity;}
@@ -6722,6 +6815,20 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.radius_sqrt_sublevel "~radiusArguments(nodes[d.b])~
 						(casts?" true":" false")~" ("~name(p.extra)~".eval ξ ρ); h)"; break;
 				}
+				case BindingRule.distributionSquarePartDensity:
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.inversePart_square_density ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
+				case BindingRule.distributionSquarePartMass:
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.inversePart_square_mass ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
+				case BindingRule.distributionSquarePartPairing:{
+					auto weight=nodes[n.a],part=nodes[weight.b];
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.inversePart_square_pairing ("~name(part.a)~".eval ξ ρ) ("~name(weight.a)~".eval ξ ρ))"; break;
+				}
+				case BindingRule.distributionRadiusPairing:{
+					auto d=nodes[n.a];
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.radius_sqrt_pairing "~radiusArguments(nodes[d.b])~" ("~name(d.a)~".eval ξ ρ))"; break;
+				}
+				case BindingRule.distributionCoverSinh,BindingRule.distributionCoverAsinh:
+					proof=".ofEq (fun _ _ => Distribution.GraphFibre."~(p.rule==BindingRule.distributionCoverSinh?"sinh":"asinh")~"_inverse_coordinate)"; break;
 				case BindingRule.distributionCoverAffine:
 					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affine_inverse_coordinate "~affineCovers.get(cast(uint)i,"")~"; h)"; break;
 				case BindingRule.distributionCoverRadius:{

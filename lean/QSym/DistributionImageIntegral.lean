@@ -13,6 +13,43 @@ def imageIntegral {Y : Type} [MeasurableSpace Y] (ν : Measure Y) (s : Set Y)
   if ∀ y ∈ s, Value.Defined (t y)
   then partialIntegral ν (fun y => some (j y * s.indicator (fun z => (t z).getD 0) y)) else none
 
+/-- A target chart can use an ordinary masked integral on its regular set.
+An exceptional target with zero integration coefficient still checks the test.
+The regular coefficient need only exist on the regular set. -/
+theorem imageIntegral_split {Y : Type} [MeasurableSpace Y] (ν : Measure Y)
+    (regular exceptional : Set Y) (w : Y → Option ℝ) (t : Y → Option ℝ)
+    (hw : ∀ y ∈ regular, Value.Defined (w y))
+    (hz : ∀ y ∈ exceptional, y ∉ regular → (w y).getD 0 = 0) :
+    imageIntegral ν (regular ∪ exceptional) (fun y => (w y).getD 0) t =
+      if ∀ y ∈ exceptional, Value.Defined (t y) then
+        partialIntegral ν (fun y => if y ∈ regular then Value.mul (w y) (t y) else some 0)
+      else none := by
+  classical
+  unfold imageIntegral
+  by_cases he : ∀ y ∈ exceptional, Value.Defined (t y)
+  · rw [if_pos he]
+    by_cases hr : ∀ y ∈ regular, Value.Defined (t y)
+    · rw [if_pos (fun y hy => hy.elim (hr y) (he y))]
+      apply congrArg (partialIntegral ν)
+      funext y
+      by_cases hy : y ∈ regular
+      · obtain ⟨a, ha⟩ := hw y hy
+        obtain ⟨b, hb⟩ := hr y hy
+        simp [hy, ha, hb, Value.mul]
+      · by_cases hx : y ∈ exceptional <;> simp [hy, hx, hz, *]
+    · rw [if_neg (fun h => hr (fun y hy => h y (Or.inl hy)))]
+      symm
+      cases h : partialIntegral ν (fun y => if y ∈ regular then Value.mul (w y) (t y) else some 0) with
+      | none => rfl
+      | some a =>
+        exfalso
+        apply hr
+        intro y hy
+        have d := ((partialIntegral_defined_iff _ _).mp ⟨a,h⟩).1 y
+        obtain ⟨v,hv⟩ := hw y hy
+        cases ht : t y <;> simp_all [Value.Defined, Value.mul]
+  · rw [if_neg he, if_neg (fun h => he (fun y hy => h y (Or.inr hy)))]
+
 /-- A change of variables proved for all total tests extends to strict partial
 tests by retaining the exact image of the source map. Zero source weights
 still demand a defined test at their output. -/

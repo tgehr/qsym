@@ -103,6 +103,17 @@ private Case[] cases(){ return [
 	Case("CoverThree","Λy. λ[y-1,y,y+1]","Distribution(ℝ)"),
 	Case("CoverSingle","Λy. λ[1+y]","Distribution(ℝ)","Λ(x:ℝ). λ[x]"),
 	Case("CoverAffineDensity","densityAtD(Λy. λ[3-2*y],1)","ℝ","2"),
+	Case("CoverRegularSum","Λy. λ[sinh(y)]+λ[asinh(y)]","Distribution(ℝ)","Λ(y:ℝ). (cosh(y))·λ[y]+(sqrt(y^2+1)⁻¹)·λ[y]"),
+	Case("CoverPairing","λ(t:ℝ→ℝ). ∫dy t(y)·λ[-sqrt(y),sqrt(y)]","(ℝ→ℝ)→ℝ"),
+	Case("CoverPairingMissingEndpoint","∫dy y⁻¹·λ[-sqrt(y),sqrt(y)]","ℝ","undefined(ℝ)"),
+	Case("CoverPairingGap","∫dy [0<y]·[y<0]·λ[-sqrt(y),sqrt(y)]","ℝ","0"),
+	Case("CoverPairingShifted","λ(t:ℝ→ℝ). ∫dy t(y)·λ[3-3·sqrt(y),3+3·sqrt(y)]","(ℝ→ℝ)→ℝ"),
+	Case("SheetPartPairing","λ(p:ℝ→𝔹). λ(t:ℝ→ℝ). ∫dy t(y)·λ[-sqrt(y),sqrt(y) | x. p(x)]","(ℝ→𝔹)→(ℝ→ℝ)→ℝ"),
+	Case("SheetPartCritical","∫dy y⁻¹·λ[-sqrt(y),sqrt(y) | x. 0<x]","ℝ","undefined(ℝ)"),
+	Case("SheetPartDensityPositive","densityAtD(Λy. λ[-sqrt(y),sqrt(y) | x. 0<x],4)","ℝ","1/4"),
+	Case("SheetPartDensityExcluded","densityAtD(Λy. λ[-sqrt(y),sqrt(y) | x. 0<x],0)","ℝ","0"),
+	Case("SheetPartDensityCritical","densityAtD(Λy. λ[-sqrt(y),sqrt(y) | x. x≤0],0)","ℝ","undefined(ℝ)"),
+	Case("SheetPartMass","∫dy λ[-sqrt(y),sqrt(y) | x. 0<x<1]","ℝ","1"),
 	Case("CoverAffineSum","Λy. λ[3-2*y]+λ[y+1]","Distribution(ℝ)"),
 	Case("CoverPartSum","Λy. λ[-sqrt(y),sqrt(y) | x. x≤0] + λ[-sqrt(y),sqrt(y) | x. 0<x]","Distribution(ℝ)"),
 	Case("CoverPartCapture","λ(a:ℝ). Λy. λ[y+a,y-a | x. a<x]","ℝ→Distribution(ℝ)"),
@@ -459,6 +470,16 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name=="SheetPartDensityPositive"||c.name=="SheetPartDensityExcluded"||c.name=="SheetPartDensityCritical")
+			enforce(certificate.indexOf("GraphFibre.inversePart_square_density")>=0,c.name);
+		if(c.name=="SheetPartPairing"||c.name=="SheetPartCritical"||c.name=="SheetPartMass")
+			enforce(certificate.indexOf("GraphFibre.inversePart_square_"~(c.name=="SheetPartMass"?"mass":"pairing"))>=0,c.name);
+		if(c.name=="CoverRegularSum") enforce(certificate.indexOf("GraphFibre.sinh_inverse_coordinate")>=0&&
+			certificate.indexOf("GraphFibre.asinh_inverse_coordinate")>=0,c.name);
+		if(c.name=="CoverPairing"||c.name=="CoverPairingMissingEndpoint"||c.name=="CoverPairingShifted"){
+			enforce(certificate.indexOf("GraphFibre.radius_sqrt_pairing")>=0,c.name);
+			if(c.name!="CoverPairingMissingEndpoint") enforce(text.indexOf("λ[y]")>=0&&text.indexOf("domain(t)")>=0,c.name);
+		}
 		if(c.name=="CoverAffineSum") enforce(certificate.indexOf("GraphFibre.affine_inverse_coordinate")>=0&&certificate.indexOf("Distribution.addValue")>=0,c.name);
 		if(c.name=="CoverPartSum")
 			enforce(certificate.indexOf("Distribution.addValue")>=0&&certificate.indexOf("GraphFibre.inverseSourcePartValue")>=0,c.name);

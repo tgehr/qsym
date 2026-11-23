@@ -1,7 +1,7 @@
 import QSym.DistributionWeightedSquareBridge
 import QSym.DistributionAffineOdd
 import QSym.DistributionSquareWindow
-import QSym.DistributionInverseCover
+import QSym.DistributionInverseSquareSheets
 import QSym.Binding
 import QSym.Refinement
 

@@ -149,6 +149,11 @@ theorem missing_critical : partialIntegral volume (fun x : ℝ => if x = 0 then 
     rw [branchIntegral_congr (measurableSet_singleton _).compl eq]
     simp [branchIntegral, Value.Defined]
 
+#qsym_check_axioms square_joint_inverse_split
+#qsym_check_axioms InverseSheet.reciprocal
+#qsym_check_axioms inverseCover_joint_split
+#qsym_check_axioms inversePart_pairing_split
+#qsym_check_axioms inversePart_density_roots
 #qsym_check_axioms square_positiveSource_disintegrates
 #qsym_check_axioms branchIntegral_image
 #qsym_check_axioms injectiveBranch_disintegrates_ae
