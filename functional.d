@@ -558,6 +558,7 @@ struct FunctionSyntax{
 			string axisHint(uint id) @safe {
 				auto d=b.node(b.at(id));
 				if(d.op==BoundOp.distributionWeight) return b.binderHint(b.at(d.a)).name;
+				if(d.op==BoundOp.distributionRadiusImage) return b.binderHint(b.at(d.b)).name;
 				if(d.op==BoundOp.distributionPushforwardOn){
 					auto source=b.binderHint(b.at(d.b)).name;
 					if(!source.length||source=="x") return "y";
@@ -581,6 +582,12 @@ struct FunctionSyntax{
 				if(masked) return "("~value(q.a)~"("~value(q.b)~"))["~axis~"]";
 				return "(graphFibreD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
 			}
+			bool inverseSource(uint id){
+				auto q=b.node(b.at(id));
+				if(q.op==BoundOp.distributionAdd) return inverseSource(q.a)||inverseSource(q.b);
+				if(q.op==BoundOp.distributionScale||q.op==BoundOp.distributionWeight) return inverseSource(q.b);
+				return q.op==BoundOp.distributionRadiusImage;
+			}
 			string form(BoundTerm d,string axis,string[] names,uint level=0,bool group=false) @safe {
 				enforce(level<128,"distribution formatting depth exceeded"); auto q=b.node(d);
 				string value(uint id){ return render(b.at(id),names,depth+level+1); }
@@ -589,6 +596,18 @@ struct FunctionSyntax{
 				switch(q.op){
 					case BoundOp.distributionZero:return "0";
 					case BoundOp.distributionLebesgue:return "λ["~axis~"]";
+					case BoundOp.distributionRadiusImage:{
+						auto radius=b.node(b.at(q.b)),centre=b.node(b.at(q.a));
+						if(radius.op!=BoundOp.lambda)
+							return "(radiusImageD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
+						auto zero=centre.op==BoundOp.scalar&&a.at(centre.data)==a.real_(0);
+						auto left=zero?"":render(b.at(q.a),names,depth+level+1,scalarType(Sort.real_))~" ";
+						auto body=b.printedRadiusBody(b.at(q.b)),v=b.node(body);
+						auto right=render(body,[axis]~names,depth+level+1,scalarType(Sort.real_));
+						if((v.op==BoundOp.primitive||v.op==BoundOp.scalar)&&a.view(a.at(v.data)).op==Op.add||
+							right.length&&right[0]=='-') right="("~right~")";
+						return "λ["~left~"±"~(zero?"":" ")~right~"]";
+					}
 					case BoundOp.distributionDirac:return "δ("~render(b.at(q.a),names,depth+level+1,b.type(b.at(q.a)))~")["~axis~"]";
 					case BoundOp.conditional:return grouped("if "~value(q.a)~" then "~nested(q.b,false)~" else "~nested(q.c,false));
 					case BoundOp.bottom:return value(d.id);
@@ -639,7 +658,12 @@ struct FunctionSyntax{
 						if(f.op!=BoundOp.lambda||maskedBind) return (q.op==BoundOp.distributionBind?"(bindD("~value(q.a)~","~value(q.b)~"))":"(integralD("~value(q.a)~"))")~"["~axis~"]";
 						auto y=fresh([axis]~names,b.binderHint(fn).name),param=pool.view(b.type(fn)).fields[0];
 						auto body=f.op==BoundOp.lambda?form(b.at(f.a),axis,[y]~names,level+1):"("~render(fn,names,depth+1)~"("~y~"))["~axis~"]";
-						auto measure=q.op==BoundOp.distributionBind?"·("~form(b.at(q.a),y,names,level+1)~")":"";
+						string measure;
+						if(q.op==BoundOp.distributionBind){
+							// An inverse form takes its target from the enclosing binder.
+							// Give a nested integration source its own target explicitly.
+							measure=inverseSource(q.a)?"·("~value(q.a)~")["~y~"]":"·("~form(b.at(q.a),y,names,level+1)~")";
+						}
 						return "(∫("~y~":"~typeName(param,names)~"). ("~body~")"~measure~")";
 					}
 					default:return "("~render(d,names,depth+level+1)~")["~axis~"]";
@@ -650,7 +674,10 @@ struct FunctionSyntax{
 				return "get("~child(base)~","~to!string(index)~")";
 			}
 			switch(n.op){
-				case BoundOp.distributionRadiusImage:return "radiusImageD("~render(b.at(n.a),locals,depth+1,scalarType(Sort.real_))~","~child(n.b)~")";
+				case BoundOp.distributionRadiusImage:
+					if(b.node(b.at(n.b)).op!=BoundOp.lambda)
+						return "radiusImageD("~render(b.at(n.a),locals,depth+1,scalarType(Sort.real_))~","~child(n.b)~")";
+					goto case BoundOp.distributionZero;
 				case BoundOp.distributionMaskedGraph:return "maskedGraphD("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.distributionDirac:return "δ("~child(n.a)~")";
 				case BoundOp.distributionMass:{

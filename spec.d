@@ -212,7 +212,13 @@ struct Parser{
 	}
 	private Pattern postfix(Pattern p,uint depth){
 		if(take("[")){
-			auto axis=new Pattern(ident()); expect("]"); p=pattern("$distributionApply",[p,axis]);
+			auto lookahead=lexer;
+			if(p.name=="λ"&&!p.called&&(token.kind!=TokenKind.identifier||lookahead.next().text!="]")){
+				// ± separates inverse Lebesgue coordinates only inside these brackets.
+				auto centre=token.text=="±"?integerPattern(0):expression(depth+1);
+				expect("±"); p=pattern("$radiusForm",[centre,expression(depth+1)]);
+			}else p=pattern("$distributionApply",[p,new Pattern(ident())]);
+			expect("]");
 		}
 		while(p.name!="#"&&p.name!="rat"&&take("(")){
 			p=pattern("$apply",[p,expression(depth+1)]); expect(")");

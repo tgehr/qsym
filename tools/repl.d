@@ -25,6 +25,7 @@ int repl(){
 			if(line==":quit"||line==":q") break;
 			if(line==":help"){
 				writeln("Expressions: 2^(1/2), exp(z), sin(z), [x≠0]·x⁻¹, (1+ⅈ)^2");
+				writeln("Inverse Lebesgue chart: Λy. λ[c ± r(y)]. Each y has source coordinates c ± r(y) for a defined, nonnegative radius.");
 				writeln("Undeclared variables are real. ASCII operators also work.");
 				writeln("Whole numerals default to ℕ; decimals such as 0.125 or 1e-3 are exact rationals.");
 				writeln("Up/Down: session history; Left/Right, Home/End, Backspace/Delete: edit.");

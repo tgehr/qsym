@@ -103,6 +103,25 @@ bool polynomialZero(Arena a,Term input){
  catch(Limit e){return false;}
 }
 
+// Recover the rational affine square from its polynomial, regardless of how
+// its products were expanded or ordered. The caller certifies the identity.
+bool rationalAffineSquare(Arena a,Term expression,Term x,out Rational slope,out Rational offset){
+ import qsym.elementary:Elementary;
+ try{
+  auto arithmetic=new Arithmetic(a); Polynomial p;
+  if(!arithmetic.parse(expression,p))return false;
+  Number[3] c;
+  foreach(powers,v;p){
+   if(!v.im.zero||powers.length&&(powers.length!=2||powers[0]!=x.id||powers[1]>2))return false;
+   c[powers.length?powers[1]:0]=v;
+  }
+  if(c[2].re<=Rational(0)||!(new Elementary(a,arithmetic.budget)).root(c[2].re,2,slope))return false;
+  auto b=arithmetic.budget.calc!"/"(c[1],arithmetic.budget.calc!"*"(Number(2),Number(slope)));
+  if(arithmetic.budget.calc!"*"(b,b)!=c[0])return false;
+  offset=b.re;return true;
+ }catch(Limit e){return false;}
+}
+
 Term polynomialAntidifference(Arena a,Term input,Term index){
  auto type=a.sort(input);
  if(type!=Sort.rational&&type!=Sort.real_&&type!=Sort.complex||a.sort(index)!=Sort.natural)return Term.init;

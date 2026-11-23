@@ -30,7 +30,7 @@ private bool graphForm(Pattern p,out Pattern input,out Pattern mapping,out Patte
 string distributionOutputAxis(Pattern root){
 	string axis;
 	void visit(Pattern p,bool inForm) @safe {
-		if(p.binder.length) return;
+		if(p.binder.length||p.name=="$radiusForm") return;
 		if(p.name=="$disintegrate"){
 			Pattern input,mapping,target,mask;
 			if(inForm&&graphForm(p,input,mapping,target,mask)){
@@ -70,7 +70,8 @@ bool distributionOccurs(Pattern p,string name) @safe {
 
 Pattern distributionSyntax(Pattern root){
 	bool form(Pattern p,string axis) @safe {
-		if(p.binder==axis) return false;
+		if(p.binder==axis||p.name=="$distribution") return false;
+		if(p.name=="$radiusForm") return true;
 		if(p.name=="$distributionApply"&&p.args[1].name==axis) return true;
 		foreach(a;p.args) if(form(a,axis)) return true;
 		return false;
@@ -82,6 +83,11 @@ Pattern distributionSyntax(Pattern root){
 	Pattern delegate(Pattern) @safe expand;
 	Pattern lower(Pattern p,string axis,TypePattern ty) @safe {
 		auto dt=new TypePattern("Distribution",[ty]);
+		if(p.name=="$radiusForm"){
+			enforce(ty.name=="Real"||ty.name=="ℝ","inverse Lebesgue coordinates require a real axis");
+			enforce(!distributionOccurs(p.args[0],axis),"the inverse chart centre must be independent of its output axis");
+			return pattern("radiusImageD",[expand(p.args[0]),lambda(axis,ty,expand(p.args[1]))]);
+		}
 		if(p.name=="$if"){
 			enforce(!distributionOccurs(p.args[0],axis),"a distribution branch condition must be independent of its output axis");
 			return pattern("$if",[expand(p.args[0]),lower(p.args[1],axis,ty),lower(p.args[2],axis,ty)]);
@@ -100,6 +106,11 @@ Pattern distributionSyntax(Pattern root){
 			flatten(p.args[0]); size_t selected=size_t.max;
 			foreach(i,f;factors) if(f.name=="$distributionApply"&&f.args[1].name==p.binder){
 				enforce(selected==size_t.max,"multiple distributions for one integration axis are unsupported"); selected=i;
+			}
+			if(selected==size_t.max) foreach(i,f;factors){
+				if(f.name!="$radiusForm"||!distributionOccurs(f.args[1],p.binder)||distributionOccurs(f,axis)) continue;
+				enforce(selected==size_t.max,"ambiguous inverse coordinates for the integration axis");
+				selected=i;
 			}
 			if(selected==size_t.max) return pattern("integralD",[lambda(p.binder,p.annotation,lower(p.args[0],axis,ty))]);
 			enforce(!distributionOccurs(factors[selected].args[0],axis),"integration source depending on the output axis is unsupported");
@@ -170,6 +181,7 @@ Pattern distributionSyntax(Pattern root){
 			auto x=d.args[1];
 			return pattern("densityAtD",[lower(p.args[0],x.name,new TypePattern("Real")),x]);
 		}
+		enforce(p.name!="$radiusForm","inverse Lebesgue coordinates require an output axis from Λ, ∫ or //λ[y]");
 		enforce(p.name!="$distributionApply","distribution applications need a Λ or ∫ binder, or //λ[x]");
 		auto q=new Pattern(p.name=="δ"?"dirac":p.name);
 		q.annotation=p.annotation; q.binder=p.binder; q.called=p.called;

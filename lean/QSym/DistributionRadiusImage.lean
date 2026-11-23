@@ -60,20 +60,21 @@ def sublevelWeight (casts : Bool) (q : Option ℝ) (y : ℝ) : Option ℝ :=
     (Functions.castNZ.apply (Value.mask p (some 1))))
   else Value.mask p (some ((1 : ℤ) : ℝ))
 
+theorem sublevelWeight_eq (casts : Bool) (q : Option ℝ) : sublevelWeight casts q = sublevelWeight false q := by
+  funext y
+  unfold sublevelWeight
+  cases Value.le (some y) q with
+  | none => cases casts <;> rfl
+  | some p => cases p <;> cases casts <;> norm_num [Value.mask, Function1.apply,
+      Functions.castNZ, Functions.castZQ, Functions.castQR]
+
 theorem radius_sqrt_sublevel (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
     (hz : z = some (c : ℝ)) (hv : v = some (j : ℝ)) {r : ℝ → Option ℝ}
     (hr : r = sqrtRadius v) (casts : Bool) (q : Option ℝ) :
     massValue (weightValue (some (sublevelWeight casts q)) (radiusImageValue z (some r))) =
       Value.mask (Value.le (some ((0 : ℤ) : ℝ)) q)
         (Value.mul (Value.mul (some ((2 : ℤ) : ℝ)) v) (Functions.sqrtR.apply q)) := by
-  have weight : sublevelWeight casts q = sublevelWeight false q := by
-    funext y
-    unfold sublevelWeight
-    cases Value.le (some y) q with
-    | none => cases casts <;> rfl
-    | some p => cases p <;> cases casts <;> norm_num [Value.mask, Function1.apply,
-        Functions.castNZ, Functions.castZQ, Functions.castQR]
-  rw [weight, hr, hv, hz]
+  rw [sublevelWeight_eq casts q, hr, hv, hz]
   exact radius_sublevel c j (by exact_mod_cast hj) q
 
 end QSym.Distribution.GraphFibre

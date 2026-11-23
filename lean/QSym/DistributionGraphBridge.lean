@@ -1,6 +1,6 @@
 import QSym.DistributionWeightedSquareBridge
 import QSym.DistributionAffineOdd
-import QSym.DistributionRadiusImage
+import QSym.DistributionSquareWindow
 import QSym.Binding
 import QSym.Refinement
 

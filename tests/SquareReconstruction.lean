@@ -243,4 +243,14 @@ theorem inverse_radius_pairing (a b : ℝ) (ha : a ≠ 0) (t : ℝ → Option �
 #qsym_check_axioms inverse_radius_partial
 #qsym_check_axioms inverse_radius_pairing
 
+theorem restrict_chart_rule (f : ℝ → ℝ) (hf : Measurable f) (s : Set ℝ) [DecidablePred (· ∈ s)]
+    (z : ℝ) (active : z ∈ s)
+    (bad : densityAtValue (pushforwardOnValue (some fun _ => some true)
+      (some fun x => some (f x))) (some z) = none) :
+    realPushforwardOnValue (some fun x => some (decide (f x ∈ s))) (some fun x => some (f x)) =
+      weightValue (some (fun y => Value.mask (some (decide (y ∈ s))) (some (1 : ℝ))))
+        (realPushforwardOnValue (some fun _ => some true) (some fun x => some (f x))) := by qsym_rule
+
+#qsym_check_axioms restrict_chart_rule
+
 end QSym.Distribution.SquareReconstructionTests

@@ -77,7 +77,7 @@ theorem sqrtRadius_image_integral (a b : ℝ) (ha : a ≠ 0) (t : ℝ → Option
   rw [sqrtRadius_image a b ha]
   exact affine_square_masked_image_integral a b ha t
 
-private theorem radius_coordinates (c j : ℝ) (hj : 0 < j) :
+theorem radius_coordinates (c j : ℝ) (hj : 0 < j) :
     radiusImageValue (some c) (some (sqrtRadius (some j))) =
       some (affineSquareSource j⁻¹ (-c/j)) := by
   have centre : -(-c/j)/j⁻¹ = c := by field_simp

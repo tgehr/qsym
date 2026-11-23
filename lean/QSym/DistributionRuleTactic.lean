@@ -128,6 +128,8 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.affine_square_masked_image_integral <;> assumption
   | solve | apply Distribution.GraphFibre.unrestricted_density_eq_marginal <;> assumption
   | solve | apply Distribution.GraphFibre.affine_square_critical_density <;> assumption
+  | solve | apply Distribution.GraphFibre.restrict_target_chart <;> assumption
+  | solve | apply Distribution.GraphFibre.restrict_target_density; assumption
   | solve | apply Distribution.GraphFibre.radius_sublevel; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_image_integral; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_image; assumption

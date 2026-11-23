@@ -164,6 +164,52 @@ theorem unrestricted_density_eq_marginal (f : ℝ → ℝ) (hf : Measurable f) (
     simpa [densityAtValue, pushforwardOnValue, Value.mask, marginalOn] using
       pushforwardOn_density Set.univ f hf y
 
+/-- Selecting an entire target fibre commutes with observing its pointwise
+density. In particular an excluded critical fibre has density zero. -/
+theorem restrict_target_density (f : ℝ → ℝ) (hf : Measurable f) (targets : Set ℝ) [DecidablePred (· ∈ targets)] (y : ℝ) :
+    densityAtValue (pushforwardOnValue (some fun x => some (decide (f x ∈ targets)))
+      (some fun x => some (f x))) (some y) =
+      Value.mask (some (decide (y ∈ targets))) (densityAtValue (pushforwardOnValue
+        (some fun _ => some true) (some fun x => some (f x))) (some y)) := by
+  let s := f ⁻¹' targets
+  letI : DecidablePred (· ∈ s) := fun x => inferInstanceAs (Decidable (f x ∈ targets))
+  have left := pushforwardOn_density s f hf y
+  have right := pushforwardOn_density Set.univ f hf y
+  simp only [Set.mem_univ, decide_true] at right
+  change densityAtValue (pushforwardOnValue (some fun x => some (decide (x ∈ s))) _) _ = _
+  rw [left, right]
+  by_cases hy : y ∈ targets
+  · have roots : (fun x => x ∈ s ∧ f x = y) = (fun x => f x = y) := by
+      funext x
+      apply propext
+      exact ⟨And.right, fun h => ⟨show f x ∈ targets by simpa [h] using hy, h⟩⟩
+    simp [marginalOn, fibreOn, fibre, roots, hy, Value.mask]
+  · have noRoot : y ∉ f '' s := fun ⟨x, hx, he⟩ => hy (he ▸ hx)
+    simp [marginalOn, fibreOn_of_notMem_image noRoot, hy, Value.mask, observe]
+
+/-- When both charts retain a critical point, weighting in target coordinates
+preserves the whole distribution, including the domain of partial tests. -/
+theorem restrict_target_chart (f : ℝ → ℝ) (hf : Measurable f) (targets : Set ℝ) [DecidablePred (· ∈ targets)] {critical : ℝ}
+    (active : critical ∈ targets) (bad : densityAtValue (pushforwardOnValue (some fun _ => some true)
+      (some fun x => some (f x))) (some critical) = none) :
+    realPushforwardOnValue (some fun x => some (decide (f x ∈ targets))) (some fun x => some (f x)) =
+      weightValue (some (fun y => Value.mask (some (decide (y ∈ targets))) (some (1 : ℝ)))) (realPushforwardOnValue
+        (some fun _ => some true) (some fun x => some (f x))) := by
+  let g := fun x => some (f x)
+  let w := fun x => Value.mask (some (decide (f x ∈ targets))) (some (1 : ℝ))
+  have cut := restrict_target_density f hf targets critical
+  rw [bad] at cut
+  change densityAt (.density w g) critical = _ at cut
+  simp only [active, decide_true, Value.mask] at cut
+  change densityAt (.density (fun _ => some 1) g) critical = none at bad
+  change some (inLebesgueCoordinates (.density w g)) =
+    weightValue _ (some (inLebesgueCoordinates (.density (fun _ => some 1) g)))
+  rw [coordinates_of_missing_density cut, coordinates_of_missing_density bad]
+  change some (Presentation.density w g) = some (Presentation.density _ g)
+  congr 2
+  funext x
+  simp [w, g, Value.le, Value.mul_one_left]
+
 theorem realPushforward_identity (p : ℝ → Option Bool) :
     realPushforwardOnValue (some p) (some some) =
       weightValue (some (fun y => Value.mask (p y) (some ((1 : ℤ) : ℝ)))) lebesgueValue := by
