@@ -184,6 +184,14 @@ Pattern distributionSyntax(Pattern root){
 			enforce(!distributionOccurs(d,axis),"distribution source must be independent of its output axis");
 			return typed(expand(d),dt);
 		}
+		if(p.name=="$sum"){
+			// A sum of forms is the sum of presentations over ℤ; ∑_i δ(i)[x] is the
+			// counting measure. A bound on the index is a bracket in the term.
+			enforce(p.binder!=axis,"a sum shadows the distribution output axis");
+			auto index=p.annotation is null?"":p.annotation.name;
+			enforce(index=="Int"||index=="ℤ","a sum of forms ranges over ℤ; bound the index with a bracket such as [0≤i]");
+			return pattern("sumD",[lambda(p.binder,p.annotation,lower(p.args[0],axis,ty))]);
+		}
 		if(p.name=="$add") return pattern("addD",[lower(p.args[0],axis,ty),lower(p.args[1],axis,ty)]);
 		if(p.name=="$neg"){ auto one=new Pattern("#"); one.number=1; return pattern("scaleD",[pattern("$neg",[one]),lower(p.args[0],axis,ty)]); }
 		if(p.name=="$mul"){

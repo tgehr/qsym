@@ -6,6 +6,7 @@ import QSym.Distribution
 import QSym.DistributionIntegral
 import QSym.DistributionGraphBridge
 import QSym.DistributionMixture
+import QSym.DistributionSum
 import QSym.DistributionFibreCertificate
 import QSym.DistributionPartialModel
 import QSym.DistributionPartialSequential

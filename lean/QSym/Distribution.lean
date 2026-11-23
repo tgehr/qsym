@@ -19,6 +19,7 @@ inductive Presentation (α : Type) where
   | add : Presentation α → Presentation α → Presentation α
   | scale : ℝ → Presentation α → Presentation α
   | integral : (ℝ → Presentation α) → Presentation α
+  | sum : (ℤ → Presentation α) → Presentation α
 
 abbrev D := Presentation
 
@@ -51,6 +52,7 @@ def weight (f : α → Option ℝ) : D α → Option (D α)
   | .add a b => addValue (weight f a) (weight f b)
   | .scale r d => scaleValue (some r) (weight f d)
   | .integral k => some (.integral (fun r => (weight f (k r)).getD .invalid))
+  | .sum k => some (.sum (fun i => (weight f (k i)).getD .invalid))
 
 def weightValue {α : Type} (f : Option (α → Option ℝ))
     (d : Option (D α)) : Option (D α) := do
@@ -64,6 +66,22 @@ theorem constant_weight_dirac {α : Type} (r : Option ℝ) (a : Option α) :
 def integralValue {α : Type} (k : Option (ℝ → Option (D α))) : Option (D α) :=
   k.map (fun f => .integral (fun r => (f r).getD .invalid))
 
+/-- The observer of a sum of tests: every term is defined and the series is
+absolutely convergent. This is the semantics of scalar summation over ℤ
+(`Summation.value norm`, see `Distribution.partialSum_eq_value`); it is stated
+here because scalar summation is defined above the binding language. -/
+noncomputable def partialSum (f : ℤ → Option ℝ) : Option ℝ := by
+  classical
+  exact if (∀ i, (f i).isSome) ∧
+      Summable (fun i => ‖(f i).getD 0‖) ∧ Summable (fun i => (f i).getD 0)
+    then some (∑' i, (f i).getD 0) else none
+
+/-- A sum of presentations indexed by ℤ. Like an integral node it is a request:
+`∑ i, δ i` is the counting measure on ℤ, and whether a test of the sum exists
+is decided by the scalar observer, with the semantics of scalar summation. -/
+def sumValue {α : Type} (k : Option (ℤ → Option (D α))) : Option (D α) :=
+  k.map (fun f => .sum (fun i => (f i).getD .invalid))
+
 /-- Composition of presentations. Continuous-source composition remains an
 explicit integral request; no change-of-variables or Fubini law is assumed. -/
 def bind (d : D α) (k : α → Option (D β)) : Option (D β) :=
@@ -75,6 +93,7 @@ def bind (d : D α) (k : α → Option (D β)) : Option (D β) :=
   | .add a b => addValue (bind a k) (bind b k)
   | .scale r a => scaleValue (some r) (bind a k)
   | .integral f => some (.integral (fun r => (bind (f r) k).getD .invalid))
+  | .sum f => some (.sum (fun i => (bind (f i) k).getD .invalid))
 
 def bindValue {α β : Type} (d : Option (D α))
     (k : Option (α → Option (D β))) : Option (D β) := do
@@ -92,6 +111,7 @@ noncomputable def integrate (d : D α) (f : α → Option ℝ) : Option ℝ :=
   | .scale r a => Value.mul (some r) (integrate a f)
   | .integral k => partialIntegral MeasureTheory.volume
       (fun r => integrate (k r) f)
+  | .sum k => partialSum (fun i => integrate (k i) f)
 
 noncomputable def massValue {α : Type} (d : Option (D α)) : Option ℝ :=
   d.bind (fun a => integrate a (fun _ => some 1))
@@ -111,6 +131,9 @@ noncomputable def realFibre (d : D ℝ) (x : ℝ) : RealDensityFibre := by
   | .scale r a => (realFibre a x).scale r
   | .integral k => ⟨0, partialIntegral MeasureTheory.volume
       (fun r => (realFibre (k r) x).density)⟩
+  | .sum k => ⟨∑' i, (realFibre (k i) x).charge,
+      if Summable (fun i => |(realFibre (k i) x).charge|)
+        then partialSum (fun i => (realFibre (k i) x).regular) else none⟩
 
 noncomputable def densityAt (d : D ℝ) (x : ℝ) : Option ℝ :=
   (realFibre d x).density

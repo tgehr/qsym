@@ -24,7 +24,7 @@ private theorem atomRow_test {d : D ℝ} {a : ℝ × ℝ} (h : atomRow d = some 
       change Value.mul (some c) (integrate d t) = _
       rw [ih hd]
       cases t b.2 <;> simp [Value.mul, mul_assoc]
-  | invalid | zero | add | density | integral => simp [atomRow] at h
+  | invalid | zero | add | density | integral | sum => simp [atomRow] at h
 
 /-- Interpret a real integral of point masses as one weighted parameter space.
 The fallback retains the ordered integral when any row is missing or contains
@@ -94,6 +94,7 @@ def realBind {α : Type} : D α → (α → Option (D ℝ)) → Option (D ℝ)
   | .zero, _ => some .zero
   | .dirac a, k => k a
   | .integral f, k => some (.integral (fun r => (bind (f r) k).getD .invalid))
+  | .sum f, k => some (.sum (fun i => (realBind (f i) k).getD .invalid))
 
 def realBindValue {α : Type} (d : Option (D α)) (k : Option (α → Option (D ℝ))) : Option (D ℝ) := do
   realBind (← d) (← k)
@@ -115,6 +116,10 @@ private theorem scale_test {β : Type} (r : ℝ) (x : Option (D β)) (f : β →
       Value.mul (some r) (x.bind (fun a => integrate a f)) := by
   cases x <;> rfl
 
+private theorem missing_test {β : Type} (x : Option (D β)) (f : β → Option ℝ) :
+    integrate (x.getD .invalid) f = x.bind (fun a => integrate a f) := by
+  cases x <;> rfl
+
 theorem realBind_test {α : Type} (d : D α) (k : α → Option (D ℝ)) (t : ℝ → ℝ) :
     (realBind d k).bind (fun a => integrate a (fun y => some (t y))) =
       (bind d k).bind (fun a => integrate a (fun y => some (t y))) := by
@@ -126,6 +131,13 @@ theorem realBind_test {α : Type} (d : D α) (k : α → Option (D ℝ)) (t : �
   | scale r a ih =>
     change (scaleValue (some r) (realBind a k)).bind _ = (scaleValue (some r) (bind a k)).bind _
     rw [scale_test, scale_test, ih]
+  | sum f ih =>
+    change partialSum (fun i => integrate ((realBind (f i) k).getD .invalid) _) =
+      partialSum (fun i => integrate ((bind (f i) k).getD .invalid) _)
+    congr 1
+    funext i
+    rw [missing_test, missing_test]
+    exact ih i
   | invalid | zero | dirac | integral => rfl
 
 theorem realBind_total {α : Type} (d : Option (D α)) (k : Option (α → Option (D ℝ))) (t : ℝ → ℝ) :

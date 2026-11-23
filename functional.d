@@ -119,7 +119,7 @@ struct FunctionSyntax{
 			name=="∑"||name=="sum"||name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
 	}
 	private bool distributionName(string name){
-		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","positiveLebesgueD","λ₊","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD","maskedGraphD","pushforwardOnD","radiusImageD","inverseCoverD","inversePartD"])
+		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","positiveLebesgueD","λ₊","zeroD","addD","scaleD","weightD","bindD","integralD","sumD","massD","densityAtD","graphFibreD","maskedGraphD","pushforwardOnD","radiusImageD","inverseCoverD","inversePartD"])
 			if(name==n) return true;
 		return false;
 	}
@@ -280,6 +280,7 @@ struct FunctionSyntax{
 					case "weightD":op=BoundOp.distributionWeight; break;
 					case "bindD":op=BoundOp.distributionBind; break;
 					case "integralD":op=BoundOp.distributionIntegral; break;
+					case "sumD":op=BoundOp.distributionSum; break;
 					case "massD":op=BoundOp.distributionMass; break;
 					case "inversePartD":op=BoundOp.distributionInversePart; break;
 					case "inverseCoverD":op=BoundOp.distributionInverseCover; break;
@@ -676,6 +677,12 @@ struct FunctionSyntax{
 						auto guard=unrestricted?"":"·["~render(b.at(pred.a),inner,depth+level+1)~"]";
 						return grouped("∫d"~x~" λ["~x~"]·δ("~f~")["~axis~"]"~guard);
 					}
+					case BoundOp.distributionSum:{
+						auto fn=b.at(q.a),f=b.node(fn);
+						if(f.op!=BoundOp.lambda) return "(sumD("~value(q.a)~"))["~axis~"]";
+						auto i=fresh([axis]~names,b.binderHint(fn).name);
+						return "(∑("~i~":ℤ). "~form(b.at(f.a),axis,[i]~names,level+1)~")";
+					}
 					case BoundOp.distributionBind,BoundOp.distributionIntegral:{
 						auto fn=b.at(q.op==BoundOp.distributionBind?q.b:q.a),f=b.node(fn);
 						// Keep unproved partial rows explicit: a missing coefficient or
@@ -726,7 +733,7 @@ struct FunctionSyntax{
 				case BoundOp.conditional:
 					if(pool.view(b.type(t)).kind!=TypeKind.distribution) return "(if "~child(n.a)~" then "~child(n.b)~" else "~child(n.c)~")";
 					goto case BoundOp.distributionZero;
-				case BoundOp.distributionZero,BoundOp.distributionGraphFibre,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionPushforwardOn,BoundOp.distributionBind:{
+				case BoundOp.distributionZero,BoundOp.distributionGraphFibre,BoundOp.distributionLebesgue,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionSum,BoundOp.distributionPushforwardOn,BoundOp.distributionBind:{
 					auto axis=fresh(locals,t==result.reduction.output&&result.outputAxis.length?result.outputAxis:axisHint(t.id));
 					return "Λ("~axis~":"~typeName(pool.view(b.type(t)).fields[0],locals)~"). "~form(t,axis,locals);
 				}
