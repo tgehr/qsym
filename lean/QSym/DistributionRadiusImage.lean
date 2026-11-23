@@ -107,21 +107,29 @@ theorem radius_sqrt_pairing (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
         cases t y <;> cases k <;> simp [Value.mul, mul_comm, hy]
       · simp [hy, Set.mem_Ioi, Value.mask, Value.lt]
 
-/-- Scalar normalization may represent an Iverson bracket as a natural mask
-followed by the three exact casts to real. -/
-def sublevelWeight (casts : Bool) (q : Option ℝ) (y : ℝ) : Option ℝ :=
-  let p := Value.le (some y) q
+def windowCompare (strict : Bool) : Option ℝ → Option ℝ → Option Bool :=
+  if strict then Value.lt else Value.le
+
+/-- A real Iverson bracket, also allowing the three exact casts from a natural mask. -/
+def windowWeight (strict casts : Bool) (q : Option ℝ) (y : ℝ) : Option ℝ :=
+  let p := windowCompare strict (some y) q
   if casts then Functions.castQR.apply (Functions.castZQ.apply
     (Functions.castNZ.apply (Value.mask p (some 1))))
   else Value.mask p (some ((1 : ℤ) : ℝ))
 
-theorem sublevelWeight_eq (casts : Bool) (q : Option ℝ) : sublevelWeight casts q = sublevelWeight false q := by
+abbrev sublevelWeight := windowWeight false
+
+theorem windowWeight_eq (strict casts : Bool) (q : Option ℝ) :
+    windowWeight strict casts q = windowWeight strict false q := by
   funext y
-  unfold sublevelWeight
-  cases Value.le (some y) q with
+  unfold windowWeight
+  cases windowCompare strict (some y) q with
   | none => cases casts <;> rfl
   | some p => cases p <;> cases casts <;> norm_num [Value.mask, Function1.apply,
       Functions.castNZ, Functions.castZQ, Functions.castQR]
+
+theorem sublevelWeight_eq (casts : Bool) (q : Option ℝ) : sublevelWeight casts q = sublevelWeight false q :=
+  windowWeight_eq false casts q
 
 theorem radius_sqrt_sublevel (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
     (hz : z = some (c : ℝ)) (hv : v = some (j : ℝ)) {r : ℝ → Option ℝ}
@@ -131,5 +139,38 @@ theorem radius_sqrt_sublevel (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
         (Value.mul (Value.mul (some ((2 : ℤ) : ℝ)) v) (Functions.sqrtR.apply q)) := by
   rw [sublevelWeight_eq casts q, hr, hv, hz]
   exact radius_sublevel c j (by exact_mod_cast hj) q
+
+/-- For mass with the unit test, opening a sublevel removes at most two
+source points. A missing threshold remains missing on the entire source. -/
+theorem radius_sqrt_open_sublevel (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
+    (hz : z = some (c : ℝ)) (hv : v = some (j : ℝ)) {r : ℝ → Option ℝ}
+    (hr : r = sqrtRadius v) (casts : Bool) (q : Option ℝ) :
+    massValue (weightValue (some (windowWeight true casts q)) (radiusImageValue z (some r))) =
+      Value.mask (Value.le (some ((0 : ℤ) : ℝ)) q)
+        (Value.mul (Value.mul (some ((2 : ℤ) : ℝ)) v) (Functions.sqrtR.apply q)) := by
+  rw [← radius_sqrt_sublevel c j hj hz hv hr false q, windowWeight_eq true casts,
+    hr, hv, hz, radius_coordinates _ _ (by exact_mod_cast hj)]
+  let f (x : ℝ) := (j:ℝ)⁻¹*x + -(c:ℝ)/j
+  change partialIntegral volume (fun x => Value.mul (Value.mul (some 1) (windowWeight true false q (f x ^ 2))) (some 1)) =
+    partialIntegral volume (fun x => Value.mul (Value.mul (some 1) (windowWeight false false q (f x ^ 2))) (some 1))
+  simp only [Value.mul_one_left, Value.mul_one_right]
+  cases q with
+  | none => rfl
+  | some t =>
+    apply partialIntegral_congr_away _ _ [(c:ℝ)-(j:ℝ)*√t, (c:ℝ)+(j:ℝ)*√t]
+    · intro x; by_cases h : f x ^ 2 < t <;> simp [windowWeight, windowCompare, Value.lt, Value.mask, Value.Defined, h]
+    · intro x; by_cases h : f x ^ 2 ≤ t <;> simp [windowWeight, windowCompare, Value.le, Value.mask, Value.Defined, h]
+    · intro x hx
+      have off : f x ^ 2 ≠ t := by
+        rintro rfl
+        rw [Real.sqrt_sq_eq_abs] at hx
+        have e : (j:ℝ) * f x = x-c := by dsimp [f]; field_simp; ring
+        by_cases pos : 0 ≤ f x
+        · rw [abs_of_nonneg pos, e] at hx
+          exact hx _ (List.mem_cons_of_mem _ List.mem_cons_self) (by ring)
+        · rw [abs_of_neg (lt_of_not_ge pos), mul_neg, e] at hx
+          exact hx _ List.mem_cons_self (by ring)
+      have cmp : f x ^ 2 < t ↔ f x ^ 2 ≤ t := ⟨le_of_lt, fun h => lt_of_le_of_ne h off⟩
+      simp [windowWeight, windowCompare, Value.le, Value.lt, cmp]
 
 end QSym.Distribution.GraphFibre

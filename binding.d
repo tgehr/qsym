@@ -103,7 +103,7 @@ private struct LimitSolution{ uint body,output; bool bottom; }
 private struct AffineChart{
 	uint map,inverse,jacobian,predicateDomain;
 	uint powerDegree,derivativeNumerator=uint.max,derivativeDenominator=uint.max;
-	bool squareProduct;
+	bool squareProduct,openBand;
 	uint borelPredicate=uint.max,punctureBody=uint.max,radiusCentre=uint.max;
 	uint polynomialCheck=uint.max,bandLo=uint.max,bandHi=uint.max,cutoff=uint.max;
 }
@@ -553,7 +553,7 @@ final class Bindings{
 	}
 	// A real Iverson bracket is sometimes normalized to three exact casts of
 	// a natural mask. In both forms the threshold must be independent of y.
-	private BoundTerm sublevelBound(uint functionId,out bool casts){
+	private BoundTerm sublevelBound(uint functionId,out bool casts,out bool strict){
 		auto f=nodes[functionId];
 		if(f.op!=BoundOp.lambda) return BoundTerm.init;
 		auto mask=nodes[f.a];
@@ -569,7 +569,8 @@ final class Bindings{
 		if(mask.op!=BoundOp.primitive||arena.view(arena.at(mask.data)).op!=Op.mask) return BoundTerm.init;
 		auto one=nodes[mask.b],test=nodes[mask.a];
 		if(one.op!=BoundOp.scalar||arena.at(one.data)!=arena.number(Number(1),casts?Sort.natural:Sort.real_)) return BoundTerm.init;
-		if(test.op!=BoundOp.primitive||arena.view(arena.at(test.data)).op!=Op.le||
+		strict=primitiveOp(mask.a,Op.lt);
+		if((!strict&&!primitiveOp(mask.a,Op.le))||
 			nodes[test.a].op!=BoundOp.variable||nodes[test.a].data!=0||depends(at(test.b),0)) return BoundTerm.init;
 		return at(test.b);
 	}
@@ -3710,12 +3711,13 @@ final class Bindings{
 			check.input=diff; check.variable=index; check.sort=Sort.real_; check.polynomial=true;
 			return PowerMap(2,lambda(restoreBody(base,context(body),x)),a,b,false);
 		}
-		bool closedBand(uint predicate,out uint lo,out uint hi){
+		bool squareBand(uint predicate,out uint lo,out uint hi,out bool strict){
 			auto n=nodes[predicate];
 			bool op(BoundNode q,Op which){ return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==which; }
 			if(!op(n,Op.and_)) return false;
 			auto l=nodes[n.a],r=nodes[n.b];
-			if(!op(l,Op.le)||!op(r,Op.le)||l.b!=r.a||nodes[l.b].op!=BoundOp.variable||nodes[l.b].data!=0) return false;
+			strict=op(l,Op.lt);
+			if((!strict&&!op(l,Op.le))||!op(r,strict?Op.lt:Op.le)||l.b!=r.a||nodes[l.b].op!=BoundOp.variable||nodes[l.b].data!=0) return false;
 			lo=l.a; hi=r.b;
 			return nodes[lo].op==BoundOp.scalar&&nodes[hi].op==BoundOp.scalar&&
 				arena.isNumber(arena.at(nodes[lo].data))&&arena.isNumber(arena.at(nodes[hi].data));
@@ -3814,7 +3816,7 @@ final class Bindings{
 			if(n.op!=BoundOp.distributionPushforwardOn||nodes[n.a].op!=BoundOp.lambda) return BoundTerm.init;
 			auto body=nodes[n.a].a;
 			uint lo,hi;
-			bool band=closedBand(body,lo,hi);
+			bool strict; bool band=squareBand(body,lo,hi,strict);
 			if(!band&&!isTrue(body,true)) return BoundTerm.init;
 			ScalarDomain polynomial;
 			auto map=powerMap(n.b,true);
@@ -3823,7 +3825,7 @@ final class Bindings{
 			auto centre=-map.offset/map.slope; Rational cap;
 			if(band){
 				auto l=arena.number(arena.at(nodes[lo].data)).re,h=arena.number(arena.at(nodes[hi].data)).re;
-				if(l>h||l+h!=Rational(2)*centre) return BoundTerm.init;
+				if(l>h||strict&&l==h||l+h!=Rational(2)*centre) return BoundTerm.init;
 				auto edge=map.slope*h+map.offset; cap=edge*edge;
 			}
 			auto chart=affineChart(map.affine.id,map.slope,map.offset,false);
@@ -3834,10 +3836,11 @@ final class Bindings{
 			chart.radiusCentre=scalar(inner,arena.real_(centre)).id; chart.squareProduct=map.product;
 			if(polynomial.polynomial){chart.polynomialCheck=cast(uint)scalarDomains.length; scalarDomains~=polynomial;}
 			if(band){
-				auto bound=scalar(inner,arena.real_(cap)),pred=primitive(arena.le(arena.real_(0),arena.real_(0)),[y,bound]);
+				auto zero=arena.real_(0),bound=scalar(inner,arena.real_(cap));
+				auto pred=primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[y,bound]);
 				auto mask=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[pred,scalar(inner,arena.real_(1))]);
 				image=distribution(ctx,BoundOp.distributionWeight,[hint(lambda(mask),"y"),image]);
-				chart.bandLo=lo; chart.bandHi=hi; chart.cutoff=bound.id;
+				chart.bandLo=lo; chart.bandHi=hi; chart.cutoff=bound.id; chart.openBand=strict;
 			}
 			evidence=cast(uint)affineCharts.length; affineCharts~=chart;
 			return image;
@@ -4370,8 +4373,8 @@ final class Bindings{
 					if(next!=BoundTerm.init) rule=bare?BindingRule.distributionSquarePartMass:BindingRule.distributionSquarePartPairing;
 				}
 				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionRadiusImage){
-					auto image=nodes[d.b]; string form; bool casts;
-					auto j=sqrtRadiusScale(image.b,form),bound=sublevelBound(d.a,casts);
+					auto image=nodes[d.b]; string form; bool casts,strict;
+					auto j=sqrtRadiusScale(image.b,form),bound=sublevelBound(d.a,casts,strict);
 					if(j!=Term.init&&bound!=BoundTerm.init&&nodes[image.a].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[image.a].data))){
 						auto q=dropIndex(bound);
 						if(node(q).op==BoundOp.bottom) next=q;
@@ -4709,11 +4712,12 @@ final class Bindings{
 					if(j!=Term.init){next=maskedInverseRoot(query,j); rule=BindingRule.distributionRadiusDensity;}
 				}
 				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionRadiusImage){
-					auto chart=nodes[d.b]; bool casts; string form;
-					auto bound=sublevelBound(d.a,casts),j=sqrtRadiusScale(chart.b,form);
+					auto chart=nodes[d.b]; bool casts,strict; string form;
+					auto bound=sublevelBound(d.a,casts,strict),j=sqrtRadiusScale(chart.b,form);
 					if(bound!=BoundTerm.init&&node(bound).op==BoundOp.scalar&&arena.isNumber(arena.at(node(bound).data))&&
 						j!=Term.init&&nodes[chart.a].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[chart.a].data))){
-						auto q=dropIndex(bound),test=primitive(arena.le(arena.real_(0),arena.real_(0)),[query,q]);
+						auto q=dropIndex(bound),zero=arena.real_(0);
+						auto test=primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[query,q]);
 						next=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[test,maskedInverseRoot(query,j)]);
 						rule=BindingRule.distributionCutoffDensity; extra=q.id;
 					}
@@ -7853,9 +7857,9 @@ final class Bindings{
 					break;
 				}
 				case BindingRule.distributionRadiusSublevel:{
-					auto d=nodes[n.a]; bool casts;
-					sublevelBound(d.a,casts);
-					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.radius_sqrt_sublevel "~radiusArguments(nodes[d.b])~
+					auto d=nodes[n.a]; bool casts,strict;
+					sublevelBound(d.a,casts,strict);
+					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre."~(strict?"radius_sqrt_open_sublevel ":"radius_sqrt_sublevel ")~radiusArguments(nodes[d.b])~
 						(casts?" true":" false")~" ("~name(p.extra)~".eval ξ ρ); h)"; break;
 				}
 				case BindingRule.distributionSquarePartDensity:
@@ -7927,14 +7931,14 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.sqrtCover "~args~")"; break;
 				}
 				case BindingRule.distributionCutoffDensity:{
-					auto weight=nodes[n.a],image=nodes[weight.b]; bool casts;
-					sublevelBound(weight.a,casts);
+					auto weight=nodes[n.a],image=nodes[weight.b]; bool casts,strict;
+					sublevelBound(weight.a,casts,strict);
 					auto q=arena.at(nodes[p.extra].data),k=SourceCertificates.q(arena.number(q).re);
 					auto y="("~name(n.b)~".eval ξ ρ)",limit="("~name(p.extra)~".eval ξ ρ)";
-					auto term="Distribution.GraphFibre.radius_sqrt_cutoff_density "~radiusArguments(image)~
+					auto term="Distribution.GraphFibre."~(strict?"radius_sqrt_window_density true ":"radius_sqrt_cutoff_density ")~radiusArguments(image)~
 						(casts?" true ":" false ")~k~" (Numeric.calculate_sound ξ n"~to!string(q.id)~" "~k~" rfl) "~y;
 					if(nodes[n.b].op==BoundOp.scalar&&arena.at(nodes[n.b].data)==arena.real_(0))
-						term="Eq.trans ("~term~") (congrArg (Value.mask (Value.le "~y~" "~limit~")) (Distribution.GraphFibre.unrestrictedSquareDensity_zero _))";
+						term="Eq.trans ("~term~") (congrArg (Value.mask ("~(strict?"Value.lt ":"Value.le ")~y~" "~limit~")) (Distribution.GraphFibre.unrestrictedSquareDensity_zero _))";
 					proof=".ofEq (fun ξ ρ => let h := "~term~"; h)"; break;
 				}
 				case BindingRule.distributionRadiusDensity:{
@@ -7945,7 +7949,7 @@ final class Bindings{
 				}
 				case BindingRule.distributionRadiusChart:{
 					auto chart=result.affineCharts[p.extra];
-					auto law=chart.bandLo==uint.max?"affineSquare_radius_image":"closedBand_square_chart";
+					auto law=chart.bandLo==uint.max?"affineSquare_radius_image":chart.openBand?"openBand_square_chart":"closedBand_square_chart";
 					auto term="Distribution.GraphFibre."~law~" "~chartProofs[p.extra];
 					if(chart.polynomialCheck!=uint.max){
 						auto id=chart.polynomialCheck,index=to!string(result.domains[id].variable);

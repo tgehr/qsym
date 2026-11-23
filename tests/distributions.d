@@ -86,6 +86,17 @@ private Case[] cases(){ return [
 	Case("ScaledFour","Λy. ∫dx λ[x]·δ(4*x²)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-(1/2·sqrt(y)), 1/2·sqrt(y)]"),
 	Case("ExpandedSquare","Λy. ∫dx λ[x]·δ(4*x²-4*x+1)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)]"),
 	Case("SymmetricBand","Λy. ∫dx [0≤x≤1]·λ[x]·δ((1-2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)]"),
+	Case("OpenSquareWindow","Λy. ∫dx [0<x<1]·λ[x]·δ((1-2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). [y<1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)]"),
+	Case("OpenSquareExpanded","Λy. ∫dx [-1<x<1]·λ[x]·δ(4*x²)[y]","Distribution(ℝ)","Λ(y:ℝ). [y<4]·λ[-(1/2·sqrt(y)), 1/2·sqrt(y)]"),
+	Case("OpenSquareArgument","λ(k:Distribution(ℝ)→𝔹). k(Λy. ∫dx [0<x<1]·λ[x]·δ((1-2*x)^2)[y])","(Distribution(ℝ)→𝔹)→𝔹"),
+	Case("OpenSquareAtCritical","densityAtD(Λy. [y<1]·λ[1/2-1/2·sqrt(y),1/2+1/2·sqrt(y)],0)","ℝ","undefined(ℝ)"),
+	Case("OpenSquareAtEdge","densityAtD(Λy. [y<1]·λ[1/2-1/2·sqrt(y),1/2+1/2·sqrt(y)],1)","ℝ","0"),
+	Case("OpenSquareInside","densityAtD(Λy. [y<1]·λ[1/2-1/2·sqrt(y),1/2+1/2·sqrt(y)],1/4)","ℝ","1"),
+	Case("OpenSquareExcludedCritical","densityAtD(Λy. [y<0]·λ[-sqrt(y),sqrt(y)],0)","ℝ","0"),
+	Case("OpenSquareMass","∫dy [y<1]·λ[1/2-1/2·sqrt(y),1/2+1/2·sqrt(y)]","ℝ","1"),
+	Case("OpenSquareEmptyMass","∫dy [y<0]·λ[-sqrt(y),sqrt(y)]","ℝ","0"),
+	Case("OpenSquareMissingBound","∫dy [y<undefined(ℝ)]·λ[-sqrt(y),sqrt(y)]","ℝ","undefined(ℝ)"),
+	Case("HalfOpenSquareEdge","densityAtD(Λy. ∫dx [0≤x<1]·λ[x]·δ((1-2*x)^2)[y],1)","ℝ","1/4"),
 	Case("ExpandedBand","Λy. ∫dx [-1≤x≤1]·λ[x]·δ(4*x²)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤4]·λ[-(1/2·sqrt(y)), 1/2·sqrt(y)]"),
 	Case("ScaledSquareAtFour","densityAtD(Λy. ∫dx λ[x]·δ(4*x²)[y],4)","ℝ","1/4"),
 	Case("PointBand","Λy. ∫dx [1≤x≤1]·λ[x]·δ((x-1)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤0]·λ[1-sqrt(y), 1+sqrt(y)]"),
@@ -686,6 +697,12 @@ private void run(string directory){
 			enforce(certificate.indexOf("GraphFibre.Coordinates.sqrtCover ")>=0,c.name~" requires the inverse-cover certificate");
 		if(c.name=="ExpandedSquare"||c.name=="ScaledFour"||c.name=="ExpandedBand")
 			enforce(certificate.indexOf("GraphFibre.graph_square_congr")>=0,c.name);
+		if(c.name=="OpenSquareWindow"||c.name=="OpenSquareExpanded"||c.name=="OpenSquareArgument")
+			enforce(certificate.indexOf("GraphFibre.openBand_square_chart")>=0,c.name);
+		if(c.name=="OpenSquareAtCritical"||c.name=="OpenSquareAtEdge"||c.name=="OpenSquareExcludedCritical")
+			enforce(certificate.indexOf("GraphFibre.radius_sqrt_window_density true")>=0,c.name);
+		if(c.name=="OpenSquareMass")
+			enforce(certificate.indexOf("GraphFibre.radius_sqrt_open_sublevel")>=0,c.name);
 		if(c.name=="SymmetricBand"||c.name=="ExpandedBand"||c.name=="PointBand")
 			enforce(certificate.indexOf("GraphFibre.closedBand_square_chart")>=0,c.name);
 		if(c.name=="BandAtEdge"||c.name=="BandAtCritical"||c.name=="BandCutBelow")
