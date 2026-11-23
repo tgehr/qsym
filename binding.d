@@ -41,7 +41,7 @@ private enum BindingRule:ubyte{
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
-	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
+	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum
@@ -3544,6 +3544,26 @@ final class Bindings{
 			if(current.op==BoundOp.distributionBind||current.op==BoundOp.distributionIntegral){
 				next=atomRowsGraph(at(result.output),extra);
 				if(next!=BoundTerm.init) rule=BindingRule.distributionAtomRows;
+				else{
+					// A total weight that is not a unit guard travels through an
+					// affine graph as a function: evaluate it at the inverse point.
+					uint weight,point; Rational slope,offset; ScalarDomain weightDomain;
+					if(realAtomRow(at(result.output),weight,point)&&weight!=uint.max){
+						auto map=lambda(at(point));
+						if(affineMap(map.id,slope,offset)&&!slope.zero&&totalRowDomain(weight,weightDomain)){
+							auto chart=affineChart(map.id,slope,offset,true,cast(uint)scalarDomains.length);
+							auto inv=at(chart.inverse),inner=context(inv),jac=at(chart.jacobian);
+							uint[] shift;
+							foreach(i;0..contexts[ctx.index].length) shift~=i+1;
+							auto value=apply(rename(lambda(at(weight)),inner,shift),inv);
+							auto density=hint(lambda(primitive(arena.mul(arena.real_(1),arena.real_(1),true),[value,jac])),"y");
+							next=distribution(ctx,BoundOp.distributionWeight,[density,distribution(ctx,BoundOp.distributionLebesgue)]);
+							extra=cast(uint)affineCharts.length;
+							affineCharts~=chart;
+							scalarDomains~=weightDomain; rule=BindingRule.distributionWeightedAffine;
+						}
+					}
+				}
 			}
 			if(domains&&current.op==BoundOp.distributionScale){
 				auto weight=at(current.a);
@@ -6654,6 +6674,13 @@ final class Bindings{
 					// binding evaluations. This avoids expensive backward unification.
 					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affine_chart_rule "~realBody(n.a)~" "~
 						rowTotalProof(chart.predicateDomain)~" "~chartProofs[p.extra]~"; h)"; break;
+				}
+				case BindingRule.distributionWeightedAffine:{
+					auto chart=result.affineCharts[p.extra];uint weight,point;
+					enforce(realAtomRow(at(p.from),weight,point)&&weight!=uint.max,"missing weighted affine row");
+					auto kind=n.op==BoundOp.distributionIntegral?"integral":nodes[n.a].op==BoundOp.distributionWeight?"weighted_bind":"bind";
+					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre."~kind~"_affine_weighted_rule (fun x : ℝ => "~name(weight)~
+						".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ)) "~rowTotalProof(chart.predicateDomain)~" "~chartProofs[p.extra]~"; h)"; break;
 				}
 				case BindingRule.distributionMaskedAffine:{
 					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.masked_affine_rule ("~name(nodes[n.a].a)~

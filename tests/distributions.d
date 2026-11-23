@@ -358,6 +358,16 @@ private Case[] cases(){ return [
 	Case("PolynomialUnbounded","∫dx [0≤x]*x*λ[x]","ℝ"),
 	Case("PolynomialEverywhere","∫dx x^2*λ[x]","ℝ"),
 	Case("PolynomialParameter","λ(a:ℝ).∫dx [0≤x≤1]*(x+a)*λ[x]","ℝ→ℝ"),
+	Case("WeightedAffineChart","Λx. ∫dy [0≤y≤1]*y*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(y·(1/4)-1/4))·λ[y]"),
+	Case("WeightedAffineReflection","Λx. ∫dy [0≤y≤1]*2*y*λ[y]*δ(1-y)[x]","Distribution(ℝ)","Λ(y:ℝ). ([y≤1∧0≤y]·(-2·y+2))·λ[y]"),
+	Case("WeightedAffineMixture","Λx. ∫dy (1/2*δ(0)[y]+1/2*[0≤y≤1]*λ[y])*δ(y+1)[x]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(1)[x]+([1≤x∧x≤2]·(1/2))·λ[x]"),
+	Case("WeightedAffineGaussian","Λx. ∫dy exp(-y^2/2)/sqrt(2*π)*λ[y]*δ(3*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). (sqrt(2·π)⁻¹·(1/3)·exp(-1/2·(y·(1/3)-1/3)^2))·λ[y]"),
+	Case("WeightedAffineExponential","Λx. ∫dy exp(-y)*[0≤y]*λ[y]*δ(y/2)[x]","Distribution(ℝ)","Λ(y:ℝ). ([0≤y]·(2·exp(-2·y)))·λ[y]"),
+	Case("WeightedAffineRows","integralD(λ(y:ℝ). scaleD(y^2+1, δ(1-y)))","Distribution(ℝ)","Λ(y:ℝ). ((-y+1)^2+1)·λ[y]"),
+	Case("WeightedAffineBindRows","bindD(Λ(y:ℝ). λ[y], λ(y:ℝ). scaleD(y^2+1, δ(1-y)))","Distribution(ℝ)","Λ(y:ℝ). ((-y+1)^2+1)·λ[y]"),
+	Case("WeightedAffineMean","∫dx (∫dy [0≤y≤1]*λ[y]*δ(2*y+1)[x])*x","ℝ","2"),
+	Case("WeightedAffineMoment","∫dx (∫dy [0≤y≤1]*2*y*λ[y]*δ(3-y)[x])*x^2","ℝ","11/2"),
+	Case("WeightedAffinePartialWeight","Λx. ∫dy (1/y)*λ[y]*δ(2*y)[x]","Distribution(ℝ)"),
 	Case("Puncture","Λ(x:ℝ).[x≠0]*λ[x]","Distribution(ℝ)"),
 	Case("WeightedDirac","Λ(x:ℝ).x*δ(2)[x]","Distribution(ℝ)","Λ(x:ℝ). 2·δ(2)[x]"),
 	Case("MixtureExpectation","∫dx (1/2*δ(0)[x]+1/2*δ(1)[x])*x","ℝ","1/2"),
@@ -660,6 +670,10 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_grid")<0,c.name~" must not invent a step certificate");
 			enforce(c.name=="StepNonconstant"||text.indexOf("∫")>=0,c.name~" must retain its unsupported integral");
 		}
+		// A total weight is evaluated at the inverse point of an affine graph.
+		// A weight that is missing somewhere keeps the ordered rows.
+		if(c.name.indexOf("WeightedAffine")==0&&c.name!="WeightedAffineMean"&&c.name!="WeightedAffineMoment")
+			enforce((certificate.indexOf("_affine_weighted_rule")>=0)==(c.name!="WeightedAffinePartialWeight"),c.name~": "~text);
 		// A polynomial on every cell of a rational grid is integrated cell by
 		// cell. Nonzero tails and open coefficients are not.
 		if(c.name=="StepNonconstant"||c.name.indexOf("Polynomial")==0){

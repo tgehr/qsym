@@ -8,6 +8,7 @@ import QSym.DistributionGraphBridge
 import QSym.DistributionMixture
 import QSym.DistributionSum
 import QSym.DistributionPolynomialGrid
+import QSym.DistributionWeightedAffine
 import QSym.DistributionFibreCertificate
 import QSym.DistributionPartialModel
 import QSym.DistributionPartialSequential
