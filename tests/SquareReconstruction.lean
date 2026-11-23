@@ -119,6 +119,14 @@ theorem signed_cancellation :
 
 #qsym_check_axioms reconstruction_rule
 #qsym_check_axioms regular_rule
+open Classical in
+theorem affine_square_chart (s : Set ℝ) (hs : MeasurableSet s) (t : ℝ → ℝ) (a b : ℝ) (ha : a ≠ 0) :
+    partialIntegral volume (fun x => some (if x ∈ s then t ((a*x+b)^2) else 0)) =
+      partialIntegral volume (fun y => some
+        (squareChartWeight ((fun u => (u-b)/a) ⁻¹' s) y * |a|⁻¹ * t y)) := by
+  qsym_rule
+
+#qsym_check_axioms affine_square_chart
 #qsym_check_axioms positive_mask_scalar_eq
 #qsym_check_axioms active_critical_zero_test
 #qsym_check_axioms open_unit_mass

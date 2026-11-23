@@ -73,6 +73,15 @@ private Case[] cases(){ return [
 	Case("FifthChart","Λy. ∫dx λ[x]·δ(x^5)[y]·[x≠0]","Distribution(ℝ)"),
 	Case("CubicCriticalSource","Λy. ∫dx λ[x]·δ(x³)[y]·[0≤x]","Distribution(ℝ)"),
 	Case("CubicPartialSource","pushforwardOnD(λ(x:ℝ).0<x⁻¹,λ(x:ℝ).x^3)","Distribution(ℝ)"),
+	Case("SquareChartShifted","Λy. ∫dx λ[x]·δ((2*x+1)^2)[y]·[0<x<1]","Distribution(ℝ)"),
+	Case("SquareChartOverlap","Λy. ∫dx λ[x]·δ(x²)[y]·[x≠0∧-2<x]","Distribution(ℝ)"),
+	Case("SquareChartBoth","Λy. ∫dx λ[x]·δ((1-2*x)^2)[y]·[2*x≠1]","Distribution(ℝ)","Λ(y:ℝ). ([0<y]·(sqrt(y)⁻¹·(1/2)))·λ[y]"),
+	Case("SquareChartRational","pushforwardOnD(λ(x:ℝ).x<3,λ(x:ℝ).(x/3-1)*(x/3-1))","Distribution(ℝ)"),
+	Case("SquareChartScaledPuncture","Λy. ∫dx λ[x]·δ((x/3-1)^2)[y]·[x≠3]","Distribution(ℝ)","Λ(y:ℝ). ([0<y]·(3·sqrt(y)⁻¹))·λ[y]"),
+	Case("SquareChartWrongPuncture","pushforwardOnD(λ(x:ℝ).x≠0,λ(x:ℝ).(x/3-1)^2)","Distribution(ℝ)"),
+	Case("SquareChartBare","Λy. ∫dx λ[x]·δ(x²)[y]·[x≠0]","Distribution(ℝ)","Λ(y:ℝ). ([0<y]·sqrt(y)⁻¹)·λ[y]"),
+	Case("SquareChartActive","Λy. ∫dx λ[x]·δ((1-2*x)^2)[y]·[0<x]","Distribution(ℝ)"),
+	Case("SquareChartPartial","pushforwardOnD(λ(x:ℝ).0<(x+2)⁻¹,λ(x:ℝ).(x/3-1)^2)","Distribution(ℝ)"),
 	Case("AffineSquareSymbolic","λ[x]·δ((2*x+1)^2)[y]//λ[y]","Distribution(ℝ)"),
 	Case("AffineSquareIncreasing","(λ(y:ℝ). λ[x]·δ((2*x+1)^2)[y]//λ[y])(9)","Distribution(ℝ)","Λ(x:ℝ). 1/12·δ(-2)[x]+1/12·δ(1)[x]"),
 	Case("AffineSquareDecreasing","(λ(y:ℝ). λ[x]·δ((1-2*x)^2)[y]//λ[y])(9)","Distribution(ℝ)","Λ(x:ℝ). 1/12·δ(-1)[x]+1/12·δ(2)[x]"),
@@ -363,6 +372,22 @@ private void run(string directory){
 		if(c.name=="CubicMarginal"||c.name=="SeventhPositiveMass") enforce(certificate.indexOf("GraphFibre.oddPower_mass_rule")>=0,c.name);
 		if(c.name=="RestrictedCubic"||c.name=="CubicPartialDensity"||c.name=="CubicExcludedDensity"||c.name=="CubicCriticalDensity"||c.name=="CubicPredicateParameter")
 			enforce(certificate.indexOf("GraphFibre.oddPower_density_rule")>=0,c.name);
+		if(c.name.indexOf("SquareChart")==0){
+			bool fallback=c.name=="SquareChartWrongPuncture"||c.name=="SquareChartActive"||c.name=="SquareChartPartial";
+			bool puncture=c.name=="SquareChartScaledPuncture"||c.name=="SquareChartBare"||c.name=="SquareChartBoth";
+			auto lemma=puncture?"GraphFibre.affineSquare_puncture_rule":"GraphFibre.affineSquare_chart_rule";
+			enforce((certificate.indexOf(lemma)>=0)==!fallback,c.name~": "~text);
+			enforce((text.indexOf("∫")>=0)==fallback,c.name~": "~text);
+			if(c.name=="SquareChartOverlap"){
+				// Observe the printed chart itself at a gap, the critical value,
+				// an overlap, and the open endpoint of the negative branch.
+				string[] expected=["0","0","1","1/4"];
+				foreach(i,y;["-1","0","1","4"]){
+					auto obs=s.run(a,"densityAtD("~text~","~y~")",[],Options(DensityMode.preserve,true));
+					enforce(s.format(a,obs)==expected[i],c.name~" at "~y~": "~s.format(a,obs));
+				}
+			}
+		}
 		if(c.name=="AffineSquareZeroSlope") enforce(certificate.indexOf("affineSquareExpression")<0,c.name);
 		else if(c.name.indexOf("AffineSquare")==0)
 			enforce(certificate.indexOf("GraphFibre.affineSquareExpression")>=0,c.name);

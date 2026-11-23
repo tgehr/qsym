@@ -24,6 +24,12 @@ structure SquareExpression (F : ℝ → Option ℝ) (l r w : Option ℝ → Opti
   covers : ∀ y, ∃ xs, RootCover Set.univ f y xs ∧ squareRows l r w z (some y) =
     some (xs.map fun x => (x, Value.inv (some |slope x|)))
 
+/-- The two regular inverse rows, extended by zero off the positive half-line. -/
+def squareChartValue (l r w : Option ℝ → Option ℝ) (p : ℝ → Option Bool) (y : ℝ) :=
+  Value.mask (Value.lt (some ((0 : ℤ) : ℝ)) (some y))
+    (Value.add (Value.mask ((l (some y)).bind p) (w (some y)))
+      (Value.mask ((r (some y)).bind p) (w (some y))))
+
 namespace SquareExpression
 variable {F : ℝ → Option ℝ} {l r w : Option ℝ → Option ℝ} {z : Option ℝ}
 private theorem mapM_map {α β γ : Type} (xs : List α) (f : α → β) (g : β → Option γ) :
@@ -150,6 +156,14 @@ theorem density_rule (p : Option (ℝ → Option Bool)) (y : Option ℝ) :
           simp [squareRows, squareCases, Value.lt, Binding.conditionalValue, hp, hl, hr,
             Value.add_zero_right, mask_missing, add_missing]
         all_goals rfl
+
+theorem chart_density (p : ℝ → Option Bool) (h0 : z.bind p = some false) (y : ℝ) :
+    densityAtValue (realPushforwardOnValue (some p) (some F)) (some y) = squareChartValue l r w p y := by
+  rw [c.density_rule]
+  rcases lt_trichotomy y 0 with hn | rfl | hp
+  · simp [squareChartValue, squareCases, Binding.conditionalValue, Value.lt, Value.mask, hn, not_lt_of_gt hn]
+  · simp [squareChartValue, squareCases, Binding.conditionalValue, Value.lt, Value.mask, h0]
+  · simp [squareChartValue, squareCases, Binding.conditionalValue, Value.lt, Value.mask, hp]
 
 end SquareExpression
 end QSym.Distribution.GraphFibre

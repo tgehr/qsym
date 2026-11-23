@@ -95,6 +95,17 @@ private theorem inverseRows_integral (g : ℝ → Option ℝ) :
       rfl
   · simp [partialIntegral, hd, mt (inverseRows_domain g).mp hd]
 
+/-- A total source integrand reconstructs as a pair over the regular square
+branches. The value at the single critical source has zero integral. -/
+theorem square_pair_integral (g : ℝ → ℝ) :
+    partialIntegral volume (fun x => some (g x)) =
+      (partialIntegral volume (fun y => some (if 0 < y then
+        (jac y * g (-√y), jac y * g (√y)) else (0, 0)))).map (fun v => v.1 + v.2) := by
+  rw [inverseRows_integral]
+  congr 2
+  funext y
+  by_cases hp : 0 < y <;> simp [inverseRows, hp]
+
 private theorem masked_inverse_rows (p : ℝ → Option Bool) (h : ℝ → ℝ → Option ℝ) :
     inverseRows (fun x => Value.mul (Value.mask (p x) (some 1)) (h x (square x))) =
       squareReconstructionRows (Value.mul (Value.mask (p 0) (some 1)) (h 0 0))

@@ -1,7 +1,7 @@
 import QSym.DistributionOddPower
 import QSym.DistributionRootCover
 import QSym.DistributionPartialModel
-import QSym.DistributionSquareReconstruction
+import QSym.DistributionSquareChart
 import QSym.DistributionAtomRows
 import QSym.DistributionFiniteMixedReal
 import QSym.DistributionModelLaws
@@ -121,6 +121,8 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.fibreOn_of_notMem_image <;> assumption
   | solve | apply Distribution.GraphFibre.branchIntegral_union <;> assumption
   | solve | apply Distribution.GraphFibre.branchIntegral_image <;> assumption
+  | solve | apply Distribution.GraphFibre.affine_square_integral <;> assumption
+  | solve | apply Distribution.GraphFibre.square_masked_integral <;> assumption
   | solve | apply Distribution.GraphFibre.square_positiveSource_disintegrates <;> assumption
   | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates <;> assumption
   | solve | apply Distribution.GraphFibre.injectiveBranch_disintegrates_masked <;> assumption
