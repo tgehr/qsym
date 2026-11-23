@@ -387,6 +387,14 @@ private Case[] cases(){ return [
 	Case("SumGeometricMass","∫dx (∑_i [0≤i]·(1/2)^(i+1)·δ(i)[x])","ℝ"),
 	Case("SumBind","Λx. ∫dy (∑_i [0≤i]·[i≤1]·(1/2)·δ(i)[y])·δ(y+1)[x]","Distribution(ℝ)"),
 	Case("SumMissingWeight","weightD(undefined(ℝ→ℝ),sumD(λ(i:ℤ). δ((i:ℝ))))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("NaturalCounting","Λx. ∑(n:ℕ). δ(n)[x]","Distribution(ℝ)","Λ(x:ℝ). (∑(n:ℕ). δ((n:ℝ))[x])"),
+	Case("NaturalAtoms","sumD(λ(n:ℕ). δ(n))","Distribution(ℕ)","Λ(x:ℕ). (∑(n:ℕ). δ(n)[x])"),
+	Case("NaturalCountingMass","∫dx ∑(n:ℕ). δ(n)[x]","ℝ","undefined(ℝ)"),
+	Case("NaturalGeometricMass","∫dx (∑(n:ℕ). (1/2)^(n+1)·δ(n)[x])","ℝ","1"),
+	Case("NaturalGeometricMean","∫dx (∑(n:ℕ). (1/3)·(2/3)^n·δ(n)[x])·x","ℝ","2"),
+	Case("NaturalDieMean","∫dx (∑(n:ℕ). [n<6]·(1/6)·δ(n+1)[x])·x","ℝ","7/2"),
+	Case("NaturalDieVariance","∫dx (∑(n:ℕ). [n<6]·(1/6)·δ(n+1)[x])·(x-7/2)^2","ℝ","35/12"),
+	Case("NaturalBind","Λx. ∫dy (∑(n:ℕ). [n≤1]·(1/2)·δ(n)[y])·δ(y+1)[x]","Distribution(ℝ)"),
 	Case("TwoMaskGraph","Λx. ∫dy [0≤y]*[y≤1]*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(1/2))·λ[y]"),
 	Case("TwoMaskJoint","(λ[y]*[0≤y]*[y≤1]*δ(2*y)[x])//λ[x]","Distribution(ℝ)","([0≤x∧x≤2]·(1/2))·δ(x·(1/2))[y]"),
 	Case("TwoSourceGraph","Λx. ∫dy ∫dz [0≤y]*[y≤1]*λ[y]*[0≤z]*[z≤1]*λ[z]*δ(y+z)[x]","Distribution(ℝ)"),
@@ -594,6 +602,10 @@ private void run(string directory){
 		if(c.name=="CountingMass"||c.name=="SumGeometricMass") enforce(certificate.indexOf("Distribution.mass_sumValue")>=0,c.name);
 		if(c.name=="SumMean") enforce(certificate.indexOf("Distribution.mass_sumValue")>=0&&certificate.indexOf("Distribution.weight_sumValue")>=0&&text.indexOf("∑(")==0,c.name~": "~text);
 		if(c.name=="SumBind") enforce(certificate.indexOf("GraphFibre.realBind_sumValue")>=0,c.name);
+		if(c.name=="NaturalCountingMass"||c.name=="NaturalGeometricMass") enforce(certificate.indexOf("Distribution.mass_sumNatValue")>=0,c.name);
+		if(c.name=="NaturalGeometricMean"||c.name=="NaturalDieMean"||c.name=="NaturalDieVariance")
+			enforce(certificate.indexOf("Distribution.mass_sumNatValue")>=0&&certificate.indexOf("Distribution.weight_sumNatValue")>=0,c.name);
+		if(c.name=="NaturalBind") enforce(certificate.indexOf("GraphFibre.realBind_sumNatValue")>=0,c.name);
 		if(c.name=="TwoMaskGraph") enforce(certificate.indexOf("GraphFibre.affine_chart_rule")>=0,c.name);
 		if(c.name=="TwoMaskJoint") enforce(certificate.indexOf("GraphFibre.masked_affine_rule")>=0,c.name);
 		if(c.name.indexOf("MixedDensity")==0) enforce(certificate.indexOf("Distribution.model_density_atom_add")>=0,c.name);
@@ -643,7 +655,7 @@ private void run(string directory){
 		"maskedGraphD(λ(x:ℝ).x,λ(x:ℝ).x)", "maskedGraphD(λ(x:ℝ).0<x,λ(n:ℕ).n)",
 		"pushforwardOnD(λ(x:ℝ).x,λ(x:ℝ).x)", "pushforwardOnD(λ(x:ℝ).x<1,λ(n:ℕ).n)",
 		"Λ(x:ℕ).λ[x]", "Λ(x:ℝ).δ(x)[x]", "Λ(x:ℝ).λ[x]*λ[x]",
-		"Λx. ∑(n:ℕ). δ(n)[x]", "Λx. ∑_x δ(x)[x]", "sumD(λ(x:ℝ). δ(x))",
+		"Λx. ∑(q:ℚ). δ(q)[x]", "Λx. ∑_x δ(x)[x]", "sumD(λ(x:ℝ). δ(x))",
 		"Λ(x:ℝ).δ(2)[y]", "δ(2)=δ(2)", "(δ(2):Distribution(𝔹))",
 		"μ(f:ℕ→ℝ).λ(n:ℕ).massD(Λ(x:ℝ).f(n)*λ[x])",
 		"μ(f:ℕ→ℝ).λ(n:ℕ).densityAtD(Λ(x:ℝ).f(n)*λ[x],0)"

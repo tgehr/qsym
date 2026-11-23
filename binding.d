@@ -570,8 +570,9 @@ final class Bindings{
 				enforce(v.kind==TypeKind.function_&&v.fields[0]==realType&&pool.view(v.fields[1]).kind==TypeKind.distribution,"integralD requires Real -> Distribution(A)"); output=v.fields[1]; break;
 			}
 			case BoundOp.distributionSum:{
-				enforce(args.length==1,"sumD takes an integer-indexed distribution function"); auto v=pool.view(type(args[0]));
-				enforce(v.kind==TypeKind.function_&&v.fields[0]==scalarType(Sort.integer)&&pool.view(v.fields[1]).kind==TypeKind.distribution,"sumD requires Int -> Distribution(A)"); output=v.fields[1]; break;
+				enforce(args.length==1,"sumD takes a natural- or integer-indexed distribution function"); auto v=pool.view(type(args[0]));
+				enforce(v.kind==TypeKind.function_&&(v.fields[0]==scalarType(Sort.integer)||v.fields[0]==scalarType(Sort.natural))&&
+					pool.view(v.fields[1]).kind==TypeKind.distribution,"sumD requires Nat -> Distribution(A) or Int -> Distribution(A)"); output=v.fields[1]; break;
 			}
 			case BoundOp.distributionBind:{
 				enforce(args.length==2,"bindD takes a distribution and a kernel"); element=distributed(args[0]); auto v=pool.view(type(args[1]));
@@ -4547,6 +4548,9 @@ final class Bindings{
 		if(sort==Sort.complex) return "((("~s~" : ℤ) : ℂ) + ((0 : ℤ) : ℂ) * Complex.I)";
 		return s;
 	}
+	// A sum of presentations over ℕ is, in the model, the sum over ℤ whose terms
+	// at negative indices are zero; its laws are stated separately.
+	private bool naturalIndex(uint function_){ return pool.view(type(at(function_))).fields[0]==scalarType(Sort.natural); }
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
 			case BoundOp.distributionInverseCover:return "Distribution.GraphFibre.inverseCoverValue";
@@ -4566,7 +4570,7 @@ final class Bindings{
 			case BoundOp.distributionWeight:return "Distribution.weightValue";
 			case BoundOp.distributionIntegral:return pool.view(type(at(n.a))).fields[1]==pool.distribution(scalarType(Sort.real_))?
 				"Distribution.GraphFibre.realIntegralValue":"Distribution.integralValue";
-			case BoundOp.distributionSum:return "Distribution.sumValue";
+			case BoundOp.distributionSum:return naturalIndex(n.a)?"Distribution.sumNatValue":"Distribution.sumValue";
 			case BoundOp.distributionMass:return "Distribution.massValue";
 			case BoundOp.distributionDensityAt:return "Distribution.densityAtValue";
 			case BoundOp.distributionZero,BoundOp.distributionLebesgue:assert(0);
@@ -6339,17 +6343,22 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionMassDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
-				case BindingRule.distributionMassSum:
-					proof=".ofEq (fun ξ ρ => Distribution.mass_sumValue (fun i : ℤ => "~name(nodes[nodes[n.a].a].a)~".eval ξ (Binding.Env.cons (a := .scalar .integer) (some i) ρ)))"; break;
+				case BindingRule.distributionMassSum:{
+					bool natural=naturalIndex(nodes[n.a].a);
+					proof=".ofEq (fun ξ ρ => Distribution.mass_sum"~(natural?"Nat":"")~"Value (fun i : "~(natural?"ℕ":"ℤ")~" => "~name(nodes[nodes[n.a].a].a)~
+						".eval ξ (Binding.Env.cons (a := .scalar ."~(natural?"natural":"integer")~") (some i) ρ)))"; break;
+				}
 				case BindingRule.distributionWeightSum,BindingRule.distributionBindSum:{
 					// The target is other; sumD(λi. row) with the copy of other in the row.
 					bool weight=p.rule==BindingRule.distributionWeightSum;
 					auto row=nodes[nodes[nodes[nodes[p.to].b].a].a],term=weight?row.b:row.a,copy=weight?row.a:row.b;
-					string under(uint id){ return "(fun i : ℤ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .integer) (some i) ρ))"; }
+					bool natural=naturalIndex(nodes[weight?n.b:n.a].a);
+					string under(uint id){ return "(fun i : "~(natural?"ℕ":"ℤ")~" => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar ."~(natural?"natural":"integer")~") (some i) ρ))"; }
 					auto other="("~name(weight?n.a:n.b)~".eval ξ ρ)";
 					bool realTarget=!weight&&pool.view(type(at(n.b))).fields[1]==pool.distribution(scalarType(Sort.real_));
-					auto law=weight?"Distribution.weight_sumValue "~other~" "~under(copy)~" "~under(term):
-						(realTarget?"Distribution.GraphFibre.realBind_sumValue ":"Distribution.bind_sumValue ")~under(term)~" "~other~" "~under(copy);
+					auto sum=natural?"sumNatValue ":"sumValue ";
+					auto law=weight?"Distribution.weight_"~sum~other~" "~under(copy)~" "~under(term):
+						(realTarget?"Distribution.GraphFibre.realBind_":"Distribution.bind_")~sum~under(term)~" "~other~" "~under(copy);
 					proof=".ofEq (fun ξ ρ => "~law~" (fun _ => rfl))"; break;
 				}
 				case BindingRule.distributionStrict:{

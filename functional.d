@@ -681,7 +681,7 @@ struct FunctionSyntax{
 						auto fn=b.at(q.a),f=b.node(fn);
 						if(f.op!=BoundOp.lambda) return "(sumD("~value(q.a)~"))["~axis~"]";
 						auto i=fresh([axis]~names,b.binderHint(fn).name);
-						return "(∑("~i~":ℤ). "~form(b.at(f.a),axis,[i]~names,level+1)~")";
+						return "(∑("~i~":"~typeName(pool.view(b.type(fn)).fields[0],names)~"). "~form(b.at(f.a),axis,[i]~names,level+1)~")";
 					}
 					case BoundOp.distributionBind,BoundOp.distributionIntegral:{
 						auto fn=b.at(q.op==BoundOp.distributionBind?q.b:q.a),f=b.node(fn);

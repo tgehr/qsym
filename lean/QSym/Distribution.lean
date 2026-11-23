@@ -82,6 +82,11 @@ is decided by the scalar observer, with the semantics of scalar summation. -/
 def sumValue {α : Type} (k : Option (ℤ → Option (D α))) : Option (D α) :=
   k.map (fun f => .sum (fun i => (f i).getD .invalid))
 
+/-- A sum indexed by ℕ is the sum over ℤ whose terms at negative indices are
+zero. Its tests are scalar sums over ℕ (`Distribution.mass_sumNatValue`). -/
+def sumNatValue {α : Type} (k : Option (ℕ → Option (D α))) : Option (D α) :=
+  k.map (fun f => .sum (fun i => if 0 ≤ i then (f i.toNat).getD .invalid else .zero))
+
 /-- Composition of presentations. Continuous-source composition remains an
 explicit integral request; no change-of-variables or Fubini law is assumed. -/
 def bind (d : D α) (k : α → Option (D β)) : Option (D β) :=

@@ -185,11 +185,11 @@ Pattern distributionSyntax(Pattern root){
 			return typed(expand(d),dt);
 		}
 		if(p.name=="$sum"){
-			// A sum of forms is the sum of presentations over ℤ; ∑_i δ(i)[x] is the
-			// counting measure. A bound on the index is a bracket in the term.
+			// A sum of forms is the sum of presentations over ℤ or ℕ; ∑_i δ(i)[x] is
+			// the counting measure on ℤ. A bound on the index is a bracket in the term.
 			enforce(p.binder!=axis,"a sum shadows the distribution output axis");
 			auto index=p.annotation is null?"":p.annotation.name;
-			enforce(index=="Int"||index=="ℤ","a sum of forms ranges over ℤ; bound the index with a bracket such as [0≤i]");
+			enforce(index=="Int"||index=="ℤ"||index=="Nat"||index=="ℕ","a sum of forms ranges over ℕ or ℤ");
 			return pattern("sumD",[lambda(p.binder,p.annotation,lower(p.args[0],axis,ty))]);
 		}
 		if(p.name=="$add") return pattern("addD",[lower(p.args[0],axis,ty),lower(p.args[1],axis,ty)]);
