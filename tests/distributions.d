@@ -479,6 +479,19 @@ private Case[] cases(){ return [
 	Case("LimitPower","lim[x→-∞] (exp(x)+c)^2+1","ℝ","c^2+1"),
 	Case("LimitBinder","λ(y:ℝ). lim[x→∞] y*exp(-x)","ℝ→ℝ","λ(y:ℝ). (0:ℝ)"),
 	Case("LimitNested","lim[x→∞] lim[y→-∞] exp(-x)*exp(y)+x*exp(-x)","ℝ","0"),
+	Case("LimitBracket","lim[x→∞] [3≤x]*5","ℝ","5"),
+	Case("LimitBracketBottom","lim[x→-∞] [x≤3]","ℝ","1"),
+	Case("LimitBracketAffine","lim[x→∞] [2*x+1≤x+5]+[x≠7]","ℝ","1"),
+	Case("LimitBracketBounds","lim[x→∞] [a≤x]*[x≤b]","ℝ","0"),
+	Case("LimitBracketPartialBound","λ(a:ℝ). lim[x→∞] [1/a≤x]","ℝ→ℝ"),
+	Case("LimitConditional","lim[x→∞] (if x≤3 then 1 else 2)","ℝ","2"),
+	Case("LimitMask","lim[t→∞] [0≤t]*(1-exp(-t))","ℝ","1"),
+	Case("LimitIntegral","lim[t→∞] ∫dx [0≤x≤t]*exp(-x)*λ[x]","ℝ","1"),
+	Case("LimitIntegralBound","lim[t→∞] ∫dx [a≤x≤t]*exp(-x)*λ[x]","ℝ","exp(-a)"),
+	Case("LimitIntegralBottom","lim[t→-∞] ∫dx [t≤x≤0]*exp(x)*λ[x]","ℝ","1"),
+	Case("LimitIntegralMoment","lim[t→∞] ∫dx [0≤x≤t]*x*exp(-x)*λ[x]","ℝ","1"),
+	Case("LimitGuardOscillating","lim[x→∞] [sin(x)≤2]","ℝ"),
+	Case("LimitHiddenGrowth","lim[x→∞] [x≤0]*exp(x)","ℝ"),
 	Case("LimitGrowing","lim[x→∞] exp(x)","ℝ"),
 	Case("LimitPolynomial","lim[x→∞] x^2","ℝ"),
 	Case("LimitWrongEnd","lim[x→-∞] exp(-x)","ℝ"),
@@ -862,9 +875,21 @@ private void run(string directory){
 		// A limit is evaluated by structure with evidence for every term. A
 		// body that has no limit, or one outside the fragment, keeps its binder.
 		if(c.name.indexOf("Limit")==0){
-			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||c.name=="LimitComplex";
+			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||c.name=="LimitComplex"||
+				c.name=="LimitGuardOscillating"||c.name=="LimitHiddenGrowth";
 			enforce((certificate.indexOf("Limit.Exact.sound")>=0)!=retained,c.name~" limit certificate");
 			enforce((text.indexOf("lim[")>=0)==retained,c.name~": "~text);
+			// A bracket or a guard is decided beyond its last cut, and a bound
+			// that does not mention the variable is passed where it is defined.
+			if(c.name.indexOf("LimitBracket")==0) enforce(certificate.indexOf("Limit.Exact.of_eventual")>=0,c.name);
+			if(c.name=="LimitBracket"||c.name=="LimitBracketBottom"||c.name=="LimitBracketAffine") enforce(certificate.indexOf("Limit.Eventual.step")>=0,c.name);
+			if(c.name=="LimitBracketBounds"||c.name=="LimitBracketPartialBound")
+				enforce(certificate.indexOf("Limit.Eventual.bound_le")>=0&&certificate.indexOf("Limit.Eventual.step")<0,c.name);
+			if(c.name=="LimitBracketPartialBound") enforce(text.indexOf("a≠0")>=0,c.name~": "~text);
+			// The limit of an integral between bounds is the limit of its
+			// closed form behind the guard that orders the bounds.
+			if(c.name=="LimitMask"||c.name.indexOf("LimitIntegral")==0) enforce(certificate.indexOf("Limit.Exact.mask")>=0,c.name);
+			if(c.name.indexOf("LimitIntegral")==0) enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0,c.name);
 		}
 		// A total weight is evaluated at the inverse point of an affine graph.
 		// A weight that is missing somewhere keeps the ordered rows.

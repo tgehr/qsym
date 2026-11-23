@@ -29,7 +29,7 @@ def batch(files):
     missing = needed - blocks.keys()
     if missing:
         raise RuntimeError(f"missing scalar dependencies: {sorted(missing)}")
-    imports = ["Binding", "DistributionIntegral", "DistributionFibreCertificate", "DistributionGraphBridge", "DistributionMixture", "DistributionSum", "DistributionPolynomialGrid", "DistributionInterval", "DistributionCoordinateGrid", "DistributionWeightedAffine", "LimitExponential", "Refinement", "ProofCache", "AxiomCheck", "Numeric", "RawPolynomial", "Tensor", "SummationMasks", "AC", "Bag"]
+    imports = ["Binding", "DistributionIntegral", "DistributionFibreCertificate", "DistributionGraphBridge", "DistributionMixture", "DistributionSum", "DistributionPolynomialGrid", "DistributionInterval", "DistributionCoordinateGrid", "DistributionWeightedAffine", "LimitExponential", "LimitStep", "Refinement", "ProofCache", "AxiomCheck", "Numeric", "RawPolynomial", "Tensor", "SummationMasks", "AC", "Bag"]
     parts = ["\n".join("import QSym." + m for m in imports),
              "import Mathlib.Data.Multiset.Fold\nnamespace QSym.Generated",
              "\n\n".join(blocks[n] for n in blocks if n in needed), "end QSym.Generated"]

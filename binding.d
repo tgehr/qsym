@@ -1056,29 +1056,80 @@ final class Bindings{
 		if(right==BoundTerm.init) return left;
 		return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[left,right]);
 	}
-	// The limit of a body in its innermost variable at +∞ or at -∞, by
-	// structure: a value that does not mention the variable is its own limit,
-	// a polynomial times a decaying exponential of rational rate tends to
-	// zero, also under a scale that does not mention the variable, and sums,
-	// products and powers of convergent terms converge. The result is in the
-	// context of the binder. Nothing is claimed for a body outside this
-	// fragment: a limit that does not exist has no value.
-	private BoundTerm limitTerms(uint body,bool bottom,uint depth=0){
+	// A comparison of rational affine expressions of the innermost variable
+	// is constant beyond its cut: the cut and the truth value on that side.
+	private bool tailTruth(uint id,bool bottom,out Rational cut,out bool truth){
+		auto arg=arena.variable(Sort.real_,freshScalarIndex(id)),predicate=scalarBody(at(id),arg); Rational[] points;
+		if(predicate==Term.init||!integralCutPoints(arena,predicate,arg,points)) return false;
+		foreach(i,point;points) if(!i||(point<cut)==bottom) cut=point;
+		auto sample=bottom?cut-Rational(1):cut+Rational(1); if(sample.words>128) return false;
+		auto value=simplify(arena,scalarBody(at(id),arena.real_(sample)));
+		if(value.exhausted||arena.view(value.output).op!=Op.boolLit) return false;
+		truth=value.output==arena.boolean(true); return true;
+	}
+	// The eventual value of a term that is eventually constant in its
+	// innermost variable, at +∞ or at -∞, in the context of the binder. A
+	// term that does not mention the variable is its own eventual value, a
+	// rational affine comparison is decided beyond its cut, the variable
+	// passes every bound that does not mention it wherever that bound is
+	// defined, and every operation on eventually constant terms is
+	// eventually constant. Without `build` this only recognizes the term.
+	private BoundTerm eventualTerm(uint id,bool bottom,bool build=true,uint depth=0){
 		if(depth>64) return BoundTerm.init;
-		if(!depends(at(body),0)) return dropIndex(at(body));
+		auto found=at(id);
+		if(!depends(found,0)) return build?dropIndex(found):found;
+		auto n=nodes[id]; if(n.op!=BoundOp.primitive) return BoundTerm.init;
+		auto op=arena.view(arena.at(n.data)).op;
+		if(op==Op.le||op==Op.lt||op==Op.nonzero){
+			Rational cut; bool truth,lower,decided=tailTruth(id,bottom,cut,truth);
+			if(!decided){
+				if(op==Op.nonzero) return BoundTerm.init;
+				bool axis(uint x){ return nodes[x].op==BoundOp.variable&&nodes[x].data==0; }
+				lower=axis(n.b)&&!depends(at(n.a),0);
+				if(!lower&&(!axis(n.a)||depends(at(n.b),0))) return BoundTerm.init;
+				truth=lower!=bottom;
+			}
+			if(!build) return found;
+			auto value=scalar(Scope(this,contexts[context(found).index].parent),arena.boolean(truth));
+			return decided?value:sequence(dropIndex(at(lower?n.a:n.b)),value);
+		}
+		auto a=eventualTerm(n.a,bottom,build,depth+1); if(a==BoundTerm.init) return a;
+		if(n.b==uint.max) return build?primitive(arena.at(n.data),[a]):found;
+		auto b=eventualTerm(n.b,bottom,build,depth+1); if(b==BoundTerm.init) return b;
+		return build?primitive(arena.at(n.data),[a,b]):found;
+	}
+	// The limit of a body in its innermost variable at +∞ or at -∞, by
+	// structure: an eventually constant term tends to its eventual value, a
+	// polynomial times a decaying exponential of rational rate tends to
+	// zero, also under a scale that does not mention the variable, sums,
+	// products and powers of convergent terms converge, and an eventually
+	// decided guard masks the limit of its value. The result is in the
+	// context of the binder. Nothing is claimed for a body outside this
+	// fragment: a limit that does not exist has no value. Without `build`
+	// this only recognizes the body.
+	private BoundTerm limitTerms(uint body,bool bottom,bool build=true,uint depth=0){
+		if(depth>64) return BoundTerm.init;
+		auto found=at(body);
+		if(eventualTerm(body,bottom,false)!=BoundTerm.init) return build?eventualTerm(body,bottom):found;
 		Rational[] p; Rational rate; bool scaled;
 		if(scaledExponential(body,p,rate,scaled)){
 			if(rate.zero||(rate<Rational(0))==bottom) return BoundTerm.init;
-			auto zero=scalar(Scope(this,contexts[context(at(body)).index].parent),arena.real_(0));
+			if(!build) return found;
+			auto zero=scalar(Scope(this,contexts[context(found).index].parent),arena.real_(0));
 			return scaled?primitive(arena.mul(arena.real_(1),arena.real_(1),true),[exponentialScale(body),zero]):zero;
 		}
 		auto n=nodes[body]; if(n.op!=BoundOp.primitive) return BoundTerm.init;
 		auto op=arena.view(arena.at(n.data)).op;
+		if(op==Op.mask){
+			if(eventualTerm(n.a,bottom,false)==BoundTerm.init) return BoundTerm.init;
+			auto value=limitTerms(n.b,bottom,build,depth+1); if(value==BoundTerm.init) return value;
+			return build?primitive(arena.at(n.data),[eventualTerm(n.a,bottom),value]):found;
+		}
 		if(op!=Op.add&&op!=Op.mul&&op!=Op.pow) return BoundTerm.init;
-		auto left=limitTerms(n.a,bottom,depth+1); if(left==BoundTerm.init) return left;
-		if(op==Op.pow) return primitive(arena.at(n.data),[left]);
-		auto right=limitTerms(n.b,bottom,depth+1); if(right==BoundTerm.init) return right;
-		return primitive(arena.at(n.data),[left,right]);
+		auto left=limitTerms(n.a,bottom,build,depth+1); if(left==BoundTerm.init) return left;
+		if(op==Op.pow) return build?primitive(arena.at(n.data),[left]):found;
+		auto right=limitTerms(n.b,bottom,build,depth+1); if(right==BoundTerm.init) return right;
+		return build?primitive(arena.at(n.data),[left,right]):found;
 	}
 	private uint freshScalarIndex(uint root){
 		// Freshness is relative to the binder's free scalar variables, not
@@ -4567,10 +4618,10 @@ final class Bindings{
 				}
 			}
 			if(next==BoundTerm.init&&current.op==BoundOp.limit&&nodes[current.a].op==BoundOp.lambda&&steps<budget){
-				auto value=limitTerms(nodes[current.a].a,current.data!=0);
-				if(value!=BoundTerm.init){
-					next=value; rule=BindingRule.limitTerms;
-					extra=cast(uint)limits.length; limits~=LimitSolution(nodes[current.a].a,value.id,current.data!=0);
+				auto body=nodes[current.a].a; bool bottom=current.data!=0;
+				if(limitTerms(body,bottom,false)!=BoundTerm.init){
+					next=limitTerms(body,bottom); rule=BindingRule.limitTerms;
+					extra=cast(uint)limits.length; limits~=LimitSolution(body,next.id,bottom);
 				}
 			}
 			if(current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
@@ -5683,19 +5734,41 @@ final class Bindings{
 	// Evidence for a structural limit, case by case as the rule found it.
 	private string limitProof(LimitSolution s,SourceCertificates cert){
 		auto end=s.bottom?"atBot":"atTop";
+		string literal(uint id,string value){ return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~value~" rfl)"; }
+		// An eventually constant term and its eventual value.
+		string eventual(uint id,uint output){
+			if(!depends(at(id),0)) return "(Limit.Eventual.const Filter."~end~" ("~name(output)~".eval ξ ρ))";
+			auto n=nodes[id],o=nodes[output],op=arena.view(arena.at(n.data)).op;
+			if(op==Op.le||op==Op.lt||op==Op.nonzero){
+				Rational cut; bool truth;
+				if(tailTruth(id,s.bottom,cut,truth)){
+					auto sample=s.bottom?cut-Rational(1):cut+Rational(1),value=truth?"true":"false";
+					auto region="(."~(s.bottom?"before":"after")~" "~cert.q(cut)~")";
+					return "(Limit.Eventual.step (Limit.tail_"~(s.bottom?"before":"after")~" "~cert.q(cut)~") "~cert.q(sample)~" rfl "~
+						cert.uniform(id,region,sample)~" "~cert.numericProof(id,sample,value)~" "~literal(output,value)~")";
+				}
+				enforce(o.op==BoundOp.sequence,"missing limit bound");
+				bool lower=nodes[n.b].op==BoundOp.variable&&!depends(at(n.a),0);
+				return "(Limit.Eventual."~(lower?"bound_":"")~(op==Op.le?"le":"lt")~(lower?"":"_bound")~" Limit.above_"~end~" ("~
+					name(o.a)~".eval ξ ρ) "~literal(o.b,lower!=s.bottom?"true":"false")~")";
+			}
+			enforce(o.op==BoundOp.primitive&&n.data==o.data,"eventual value mismatch");
+			return "(Limit.Eventual."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~eventual(n.a,o.a)~(n.b==uint.max?"":" "~eventual(n.b,o.b))~")";
+		}
 		string visit(uint body,uint output){
 			if(!depends(at(body),0)) return "(Limit.Exact.const Filter."~end~" ("~name(output)~".eval ξ ρ))";
+			if(eventualTerm(body,s.bottom,false)!=BoundTerm.init) return "(Limit.Exact.of_eventual "~eventual(body,output)~")";
 			Rational[] p; Rational rate; bool scaled;
 			if(scaledExponential(body,p,rate,scaled)){
 				enforce(!rate.zero&&(rate<Rational(0))!=s.bottom,"limit term does not decay");
 				auto zero=scaled?nodes[output].b:output;
 				auto hv=scaled?cert.scaledFactor(body,scaled):cert.exponential(body).proof;
-				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~hv~" (Limit.decays_"~end~" rfl) (Numeric.calculate_sound ξ n"~
-					to!string(nodes[zero].data)~" (0 : ℚ) rfl))";
+				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~hv~" (Limit.decays_"~end~" rfl) "~literal(zero,"(0 : ℚ)")~")";
 			}
 			auto n=nodes[body],o=nodes[output];
 			enforce(n.op==BoundOp.primitive&&o.op==BoundOp.primitive&&n.data==o.data,"limit structure mismatch");
 			auto op=arena.view(arena.at(n.data));
+			if(op.op==Op.mask) return "(Limit.Exact.mask "~eventual(n.a,o.a)~" "~visit(n.b,o.b)~")";
 			if(op.op==Op.pow) return "(Limit.Exact.pow "~to!string(op.value)~" "~visit(n.a,o.a)~")";
 			enforce(op.op==Op.add||op.op==Op.mul,"unsupported limit operation");
 			return "(Limit.Exact."~(op.op==Op.add?"add":"mul")~" "~visit(n.a,o.a)~" "~visit(n.b,o.b)~")";
