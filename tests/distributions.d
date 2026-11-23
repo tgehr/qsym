@@ -456,6 +456,21 @@ private Case[] cases(){ return [
 	Case("HalfLineNested","∫dx [0≤x]*λ[x]*exp(-x)*∫dy [0≤y]*[y≤x]*λ[y]","ℝ","1"),
 	Case("HalfLineGrowing","∫dx [0≤x]*exp(x)*λ[x]","ℝ"),
 	Case("HalfLineUpper","∫dx [x≤0]*exp(x)*λ[x]","ℝ"),
+	Case("LimitDecay","lim[x→∞] exp(-x)*x^2","ℝ","0"),
+	Case("LimitBottom","lim[x→-∞] x^3*exp(x/2)","ℝ","0"),
+	Case("LimitConstant","lim[x→∞] 1/a","ℝ","a⁻¹"),
+	Case("LimitParameter","lim[t→∞] a*exp(-t)+b","ℝ","b"),
+	Case("LimitScale","lim[x→∞] a*x*exp(-x)*b","ℝ","0"),
+	Case("LimitPartialScale","λ(a:ℝ). lim[x→∞] exp(-x)/a","ℝ→ℝ","λ(a:{a:ℝ | a≠0}). (0:ℝ)"),
+	Case("LimitProduct","lim[x→∞] (a+exp(-x))*(b+x*exp(-2*x))","ℝ","a·b"),
+	Case("LimitPower","lim[x→-∞] (exp(x)+c)^2+1","ℝ","c^2+1"),
+	Case("LimitBinder","λ(y:ℝ). lim[x→∞] y*exp(-x)","ℝ→ℝ","λ(y:ℝ). (0:ℝ)"),
+	Case("LimitNested","lim[x→∞] lim[y→-∞] exp(-x)*exp(y)+x*exp(-x)","ℝ","0"),
+	Case("LimitGrowing","lim[x→∞] exp(x)","ℝ"),
+	Case("LimitPolynomial","lim[x→∞] x^2","ℝ"),
+	Case("LimitWrongEnd","lim[x→-∞] exp(-x)","ℝ"),
+	Case("LimitOscillating","lim[x→∞] sin(x)","ℝ"),
+	Case("LimitComplex","lim[x→∞] ⅈ*exp(-x)","ℂ"),
 	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ"),
 	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
@@ -825,6 +840,13 @@ private void run(string directory){
 			bool retained=c.name=="HalfLineGrowing"||c.name=="HalfLineUpper";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_halfline")>=0)!=retained,c.name~" half-line certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
+		// A limit is evaluated by structure with evidence for every term. A
+		// body that has no limit, or one outside the fragment, keeps its binder.
+		if(c.name.indexOf("Limit")==0){
+			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||c.name=="LimitComplex";
+			enforce((certificate.indexOf("Limit.Exact.sound")>=0)!=retained,c.name~" limit certificate");
+			enforce((text.indexOf("lim[")>=0)==retained,c.name~": "~text);
 		}
 		// A total weight is evaluated at the inverse point of an affine graph.
 		// A weight that is missing somewhere keeps the ordered rows.

@@ -10,6 +10,8 @@ import QSym.DistributionSum
 import QSym.DistributionPolynomialGrid
 import QSym.DistributionInterval
 import QSym.DistributionWeightedAffine
+import QSym.Limit
+import QSym.LimitExponential
 import QSym.DistributionFibreCertificate
 import QSym.DistributionPartialModel
 import QSym.DistributionPartialSequential

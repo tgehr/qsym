@@ -126,7 +126,20 @@ struct Parser{
 			expect(")"); expect("."); auto p=pattern("$sum",[expression(depth+1)]); p.binder=name; p.annotation=ty; return p;
 		}
 		// Notation shared with sym: ∑_i f is a sum over ℤ, ⌊x⌋ and ⌈x⌉ round,
-		// and √x, ∛x are real roots of the following factor.
+		// √x, ∛x are real roots of the following factor, and lim[x→∞] f,
+		// lim[x→-∞] f are limits of a real variable.
+		lookahead=lexer;
+		if(token.text=="lim"&&lookahead.next().text=="["&&lookahead.next().kind==TokenKind.identifier){
+			auto arrow=lookahead.next().text;
+			if(arrow=="=>"||arrow=="->"){
+				next(); next(); auto name=ident(); next();
+				bool bottom=take("-");
+				enforce(take("∞")||take("inf"),"a limit is taken at ∞ or at -∞");
+				expect("]");
+				auto p=pattern("$lim",[expression(depth+1)]);
+				p.binder=name; p.annotation=new TypePattern("Real"); p.number=bottom?-1:1; return p;
+			}
+		}
 		lookahead=lexer;
 		if(token.text=="∑"){
 			auto index=lookahead.next();

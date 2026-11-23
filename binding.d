@@ -28,7 +28,7 @@ struct BoundTerm{
 	@property uint id()const{ return index; }
 	bool opEquals(BoundTerm rhs)const{ return owner is rhs.owner&&index==rhs.index; }
 }
-enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,conditional,distributionDirac,distributionZero,distributionLebesgue,distributionAdd,distributionScale,distributionWeight,distributionIntegral,distributionMass,distributionDensityAt,distributionBind,distributionGraphFibre,distributionGraphMass,distributionPushforwardOn,distributionMaskedGraph,distributionRadiusImage,distributionInverseCover,distributionInversePart,distributionSum }
+enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,limit,conditional,distributionDirac,distributionZero,distributionLebesgue,distributionAdd,distributionScale,distributionWeight,distributionIntegral,distributionMass,distributionDensityAt,distributionBind,distributionGraphFibre,distributionGraphMass,distributionPushforwardOn,distributionMaskedGraph,distributionRadiusImage,distributionInverseCover,distributionInversePart,distributionSum }
 enum TensorOp:ubyte{ add,mul,dot,matvec,matmul,power }
 struct BoundNode{
 	BoundOp op;
@@ -45,7 +45,8 @@ private enum BindingRule:ubyte{
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
-	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart
+	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
+	limitTerms
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -72,6 +73,7 @@ private struct IntervalData{
 	IntervalTerm[] terms;
 }
 private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; }
+private struct LimitSolution{ uint body,output; bool bottom; }
 private struct AffineChart{
 	uint map,inverse,jacobian,predicateDomain;
 	uint powerDegree,derivativeNumerator=uint.max,derivativeDenominator=uint.max;
@@ -108,6 +110,7 @@ struct BindingResult{
 	private FibreStep[][] fibres;
 	private AffineChart[] affineCharts;
 	private CoverStep[] covers;
+	private LimitSolution[] limits;
 }
 
 final class Bindings{
@@ -769,6 +772,13 @@ final class Bindings{
 		enforce(numeric,"summation requires scalar numeric values");
 		return intern(BoundNode(BoundOp.summation,n.context,typeId(v.fields[1]),f.id));
 	}
+	/// The limit of a function of a real variable at +∞, or at -∞.
+	BoundTerm limit(BoundTerm f,bool bottom=false){
+		auto n=node(f),v=pool.view(type(f));
+		enforce(v.kind==TypeKind.function_&&v.fields[0]==scalarType(Sort.real_),"a limit requires a function of a real variable");
+		enforce(v.fields[1]==scalarType(Sort.real_)||v.fields[1]==scalarType(Sort.complex),"a limit requires real or complex values");
+		return intern(BoundNode(BoundOp.limit,n.context,typeId(v.fields[1]),f.id,uint.max,bottom));
+	}
 	BoundTerm domain(BoundTerm f){
 		auto n=node(f),v=pool.view(type(f)); enforce(v.kind==TypeKind.function_||v.kind==TypeKind.pi,"domain requires a function");
 		return intern(BoundNode(BoundOp.domain,n.context,typeId(pool.set(v.fields[0])),f.id));
@@ -816,6 +826,7 @@ final class Bindings{
 			case BoundOp.fixed:return inheritHint(t,fixed(args[0]));
 			case BoundOp.finiteSum:return finiteSum(args[0],args[1]);
 			case BoundOp.summation:return summation(args[0]);
+			case BoundOp.limit:return limit(args[0],n.data!=0);
 			case BoundOp.domain:return domain(args[0]);
 			case BoundOp.defined:return defined(args[0]);
 			case BoundOp.holds:return holds(args[0]);
@@ -995,6 +1006,30 @@ final class Bindings{
 		if(left==BoundTerm.init) return right;
 		if(right==BoundTerm.init) return left;
 		return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[left,right]);
+	}
+	// The limit of a body in its innermost variable at +∞ or at -∞, by
+	// structure: a value that does not mention the variable is its own limit,
+	// a polynomial times a decaying exponential of rational rate tends to
+	// zero, also under a scale that does not mention the variable, and sums,
+	// products and powers of convergent terms converge. The result is in the
+	// context of the binder. Nothing is claimed for a body outside this
+	// fragment: a limit that does not exist has no value.
+	private BoundTerm limitTerms(uint body,bool bottom,uint depth=0){
+		if(depth>64) return BoundTerm.init;
+		if(!depends(at(body),0)) return dropIndex(at(body));
+		Rational[] p; Rational rate; bool scaled;
+		if(scaledExponential(body,p,rate,scaled)){
+			if(rate.zero||(rate<Rational(0))==bottom) return BoundTerm.init;
+			auto zero=scalar(Scope(this,contexts[context(at(body)).index].parent),arena.real_(0));
+			return scaled?primitive(arena.mul(arena.real_(1),arena.real_(1),true),[exponentialScale(body),zero]):zero;
+		}
+		auto n=nodes[body]; if(n.op!=BoundOp.primitive) return BoundTerm.init;
+		auto op=arena.view(arena.at(n.data)).op;
+		if(op!=Op.add&&op!=Op.mul&&op!=Op.pow) return BoundTerm.init;
+		auto left=limitTerms(n.a,bottom,depth+1); if(left==BoundTerm.init) return left;
+		if(op==Op.pow) return primitive(arena.at(n.data),[left]);
+		auto right=limitTerms(n.b,bottom,depth+1); if(right==BoundTerm.init) return right;
+		return primitive(arena.at(n.data),[left,right]);
 	}
 	private uint freshScalarIndex(uint root){
 		// Freshness is relative to the binder's free scalar variables, not
@@ -2205,7 +2240,7 @@ final class Bindings{
 	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
 		if(telescope_) return normalizeDependent(term,budget);
-		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals; FibreStep[][] fibres; AffineChart[] affineCharts; CoverStep[] covers;
+		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals; FibreStep[][] fibres; AffineChart[] affineCharts; CoverStep[] covers; LimitSolution[] limits;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
@@ -3862,7 +3897,7 @@ final class Bindings{
 				}
 				// Beta reduction already preserves the argument domain; normalize
 				// an applied lambda after substitution, not once on each side of it.
-				if(x.output==uint.max) x=n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.fixed||n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.lambda?Result(n.a,emit(BindingRule.refl,n.a,n.a)):visit(at(n.a),depth+1);
+				if(x.output==uint.max) x=n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.limit||n.op==BoundOp.fixed||n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.lambda?Result(n.a,emit(BindingRule.refl,n.a,n.a)):visit(at(n.a),depth+1);
 				BoundTerm[] args=[at(x.output)]; uint y=uint.max,z=uint.max;
 				if(n.b!=uint.max){
 					bool skip; auto left=nodes[x.output];
@@ -4406,6 +4441,13 @@ final class Bindings{
 						next=primitive(arena.add(zero,zero,true),[primitive(mask,[predicate,at(current.b)]),primitive(mask,[neg,at(current.c)])]);
 						rule=BindingRule.conditionalNumeric;
 					}
+				}
+			}
+			if(next==BoundTerm.init&&current.op==BoundOp.limit&&nodes[current.a].op==BoundOp.lambda&&steps<budget){
+				auto value=limitTerms(nodes[current.a].a,current.data!=0);
+				if(value!=BoundTerm.init){
+					next=value; rule=BindingRule.limitTerms;
+					extra=cast(uint)limits.length; limits~=LimitSolution(nodes[current.a].a,value.id,current.data!=0);
 				}
 			}
 			if(current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
@@ -5048,11 +5090,12 @@ final class Bindings{
 			}
 			// Try the original binder first: scalar narrowing can hide a geometric
 			// power behind casts, and normalizing masks can obscure their bounds.
-			if(next==BoundTerm.init&&(current.op==BoundOp.summation||current.op==BoundOp.finiteSum)&&steps<budget){
+			if(next==BoundTerm.init&&(current.op==BoundOp.summation||current.op==BoundOp.finiteSum||current.op==BoundOp.limit)&&steps<budget){
 				auto function_=visit(at(current.a),depth+1);
 				if(function_.output!=current.a){
-					auto normalized=current.op==BoundOp.summation?summation(at(function_.output)):finiteSum(at(function_.output),at(current.b)); ++steps;
-					auto bp=current.op==BoundOp.summation?uint.max:emit(BindingRule.refl,current.b,current.b);
+					auto normalized=current.op==BoundOp.summation?summation(at(function_.output)):
+						current.op==BoundOp.limit?limit(at(function_.output),current.data!=0):finiteSum(at(function_.output),at(current.b)); ++steps;
+					auto bp=current.op==BoundOp.finiteSum?emit(BindingRule.refl,current.b,current.b):uint.max;
 					auto step=emit(BindingRule.congr,result.output,normalized.id,function_.proof,bp),tail=visit(normalized,depth+1);
 					auto rest=emit(BindingRule.trans,result.output,tail.output,step,tail.proof);
 					result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,result.proof,rest));
@@ -5069,7 +5112,7 @@ final class Bindings{
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
 		normalizeClosed=&visit;
-		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres,affineCharts,covers);
+		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres,affineCharts,covers,limits);
 	}
 
 	/// A scalar refinement can fill a hole in a pointwise observation. If its
@@ -5212,6 +5255,7 @@ final class Bindings{
 			case BoundOp.summation:
 				auto sort=elementSort(types[n.type]);
 				return "(Summation.value "~(sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm")~")";
+			case BoundOp.limit:return "(Limit.value Filter."~(n.data?"atBot":"atTop")~")";
 			case BoundOp.domain:return "Binding.inputDomain";
 			case BoundOp.defined:return "Binding.definedValue";
 			case BoundOp.holds:return "Binding.holdsValue";
@@ -5410,13 +5454,8 @@ final class Bindings{
 			auto hc=numericProof(left?n.a:n.b,Rational(0),q(c.offset));
 			r.proof=app("affine_mul_constant_"~(left?"left":"right"),"(a := "~q(f.slope)~") (b := "~q(f.offset)~") "~q(c.offset)~" "~(left?hc~" "~f.proof:f.proof~" "~hc));return seal(r,id);
 		}
-	}
-	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof){
-		auto q=&cert.q,app=&cert.app,atPoint=&cert.atPoint,functionAt=&cert.functionAt;
-		auto save=&cert.save,numericProof=&cert.numericProof,affineProof=&cert.affineProof;
-		alias Linear=SourceCertificates.Linear;
-		string delegate(uint,string,Rational) @safe uniform;
-		string uniformRaw(uint id,string region,Rational sample){
+		// Constancy of a step expression on a region of the axis.
+		private string uniformRaw(uint id,string region,Rational sample){
 			auto n=nodes[id];
 			if(!depends(at(id),0))return app("uniform_const",region~" "~atPoint(id,Rational(0)));
 			enforce(n.op==BoundOp.primitive,"unsupported step uniform expression");auto op=arena.view(arena.at(n.data));
@@ -5431,9 +5470,121 @@ final class Bindings{
 			auto a=uniform(n.a,region,sample);
 			return app("uniform_"~(n.b==uint.max?"unary":"binary"),valueOperation(n)~" "~a~(n.b==uint.max?"":" "~uniform(n.b,region,sample)));
 		}
-		uniform=(uint id,string region,Rational sample) @safe {
+		string uniform(uint id,string region,Rational sample){
 			return save("Distribution.StepSource.Uniform "~region~" "~functionAt(id),uniformRaw(id,region,sample));
-		};
+		}
+		// Polynomial evidence on a predicate of the axis: a cell of a grid, or
+		// everywhere. Coefficient lists stay symbolic in the claims; Lean
+		// computes them where a certificate compares them.
+		struct Piece{string proof,poly;}
+		enum everywhere="(fun _ : ℝ => True)";
+		private Piece pieceRaw(uint id,string set,string region,Rational sample){
+			auto n=nodes[id];
+			if(!depends(at(id),0)){
+				auto term=scalarBody(at(id),arena.real_(Rational(0)));enforce(term!=Term.init,"missing polynomial constant");
+				auto v=simplify(arena,term);enforce(!v.exhausted&&arena.isNumber(v.output),"non-numeric polynomial constant");
+				auto c=q(arena.number(v.output).re);
+				return Piece(app("polynomial_constant",set~" "~atPoint(id,Rational(0))~" "~c~" "~numericProof(id,Rational(0),c)),"["~c~"]");
+			}
+			if(n.op==BoundOp.variable&&n.data==0)return Piece(app("polynomial_variable",set),"[0, 1]");
+			enforce(n.op==BoundOp.primitive,"unsupported polynomial step expression");auto op=arena.view(arena.at(n.data));
+			if(op.op==Op.builtin){
+				enforce(region.length,"step expression outside a cell");
+				auto term=scalarBody(at(id),arena.real_(sample));enforce(term!=Term.init,"missing polynomial step");
+				auto v=simplify(arena,term);enforce(!v.exhausted&&arena.isNumber(v.output),"non-numeric polynomial step");
+				auto c=q(arena.number(v.output).re);
+				return Piece(app("polynomial_uniform",q(sample)~" "~c~" rfl "~uniform(id,region,sample)~" "~numericProof(id,sample,c)),"["~c~"]");
+			}
+			if(op.op==Op.mask){
+				enforce(region.length,"guard outside a cell");
+				auto pred=scalarBody(at(n.a),arena.real_(sample));enforce(pred!=Term.init,"missing polynomial guard");
+				auto v=simplify(arena,pred);enforce(!v.exhausted&&arena.view(v.output).op==Op.boolLit,"undecided polynomial guard");
+				bool truth=v.output==arena.boolean(true);
+				auto guard=q(sample)~" rfl "~uniform(n.a,region,sample)~" "~numericProof(n.a,sample,truth?"true":"false");
+				if(!truth)return Piece(app("polynomial_mask_false",functionAt(n.b)~" "~guard),"[]");
+				auto b=piece(n.b,set,region,sample);
+				return Piece(app("polynomial_mask_true",guard~" "~b.proof),b.poly);
+			}
+			if(op.op==Op.abs){
+				enforce(region.length,"absolute value outside a cell");
+				auto inside=affineProof(n.a);auto at_=inside.slope*sample+inside.offset;
+				auto sign=at_.zero?"zero":at_<Rational(0)?"negative":"positive";
+				return Piece(app("polynomial_abs","(r := "~region~") ."~sign~" "~inside.proof~" rfl"),
+					"(Distribution.StepSource.absPoly ."~sign~" "~q(inside.slope)~" "~q(inside.offset)~")");
+			}
+			auto a=piece(n.a,set,region,sample);
+			if(op.op==Op.pow)return Piece(app("polynomial_pow",to!string(op.value)~" "~a.proof),"(Distribution.StepSource.polyPow "~a.poly~" "~to!string(op.value)~")");
+			enforce(op.op==Op.add||op.op==Op.mul,"unsupported polynomial step operation");
+			auto b=piece(n.b,set,region,sample);bool add=op.op==Op.add;
+			return Piece(app(add?"polynomial_add":"polynomial_mul",a.proof~" "~b.proof),"(Distribution.StepSource.poly"~(add?"Add":"Mul")~" "~a.poly~" "~b.poly~")");
+		}
+		Piece piece(uint id,string set,string region,Rational sample){
+			auto r=pieceRaw(id,set,region,sample);
+			r.proof=save("Distribution.StepSource.PolynomialOn "~set~" "~functionAt(id)~" "~r.poly,r.proof);return r;
+		}
+		// A polynomial, the exponential of a rational multiple of the axis,
+		// or a product of these.
+		Piece exponential(uint id){
+			Rational[] coefficients;Piece r;string rate;
+			if(axisPolynomial(id,coefficients)){
+				auto w=piece(id,everywhere,"",Rational(0));
+				r=Piece(app("exp_polynomial",w.proof),w.poly);rate="0";
+			}else{
+				auto n=nodes[id];enforce(n.op==BoundOp.primitive,"unsupported exponential term");
+				auto op=arena.view(arena.at(n.data));
+				if(op.op==Op.builtin){
+					enforce(op.value==Builtin.expR,"unsupported exponential function");
+					auto inside=affineProof(n.a);enforce(inside.offset.zero,"shifted exponent");
+					r=Piece(app("exp_affine",inside.proof),"[1]");rate=q(inside.slope);
+				}else{
+					enforce(op.op==Op.mul,"unsupported exponential operation");
+					auto a=exponential(n.a),b=exponential(n.b);
+					r=Piece(app("exp_mul",a.proof~" "~b.proof),"(Distribution.StepSource.polyMul "~a.poly~" "~b.poly~")");
+					return r;
+				}
+			}
+			r.proof=save("Distribution.StepSource.ExpPolynomial "~functionAt(id)~" "~r.poly~" "~rate,r.proof);return r;
+		}
+		// Such a product with factors free of the axis: these are its scale,
+		// the others multiply.
+		string scaledFactor(uint factor,out bool scaled){
+			Rational[] coefficients;Rational rate;
+			if(axisExponential(factor,coefficients,rate))return exponential(factor).proof;
+			scaled=true;
+			if(!depends(at(factor),0))return app("scaled_constant","("~name(dropIndex(at(factor)).id)~".eval ξ ρ)");
+			bool left,right;auto product=nodes[factor];
+			auto a=scaledFactor(product.a,left),b=scaledFactor(product.b,right);
+			return app(left&&right?"scaled_mul":left?"scaled_times":"scaled_after",a~" "~b);
+		}
+	}
+	// Evidence for a structural limit, case by case as the rule found it.
+	private string limitProof(LimitSolution s,SourceCertificates cert){
+		auto end=s.bottom?"atBot":"atTop";
+		string visit(uint body,uint output){
+			if(!depends(at(body),0)) return "(Limit.Exact.const Filter."~end~" ("~name(output)~".eval ξ ρ))";
+			Rational[] p; Rational rate; bool scaled;
+			if(scaledExponential(body,p,rate,scaled)){
+				enforce(!rate.zero&&(rate<Rational(0))!=s.bottom,"limit term does not decay");
+				auto zero=scaled?nodes[output].b:output;
+				auto hv=scaled?cert.scaledFactor(body,scaled):cert.exponential(body).proof;
+				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~hv~" (Limit.decays_"~end~" rfl) (Numeric.calculate_sound ξ n"~
+					to!string(nodes[zero].data)~" (0 : ℚ) rfl))";
+			}
+			auto n=nodes[body],o=nodes[output];
+			enforce(n.op==BoundOp.primitive&&o.op==BoundOp.primitive&&n.data==o.data,"limit structure mismatch");
+			auto op=arena.view(arena.at(n.data));
+			if(op.op==Op.pow) return "(Limit.Exact.pow "~to!string(op.value)~" "~visit(n.a,o.a)~")";
+			enforce(op.op==Op.add||op.op==Op.mul,"unsupported limit operation");
+			return "(Limit.Exact."~(op.op==Op.add?"add":"mul")~" "~visit(n.a,o.a)~" "~visit(n.b,o.b)~")";
+		}
+		return "Limit.Exact.sound "~visit(s.body,s.output);
+	}
+	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof){
+		auto q=&cert.q,app=&cert.app,atPoint=&cert.atPoint,functionAt=&cert.functionAt;
+		auto save=&cert.save,numericProof=&cert.numericProof,affineProof=&cert.affineProof;
+		alias Linear=SourceCertificates.Linear;
+		alias Piece=SourceCertificates.Piece;
+		auto uniform=&cert.uniform,piece=&cert.piece,exponential=&cert.exponential;
 		string densityUniform(string region,Rational sample){
 			auto proof=app("uniform_const",region~" (some (1 : ℝ))"),program="Distribution.DensityProgram.lebesgue";
 			foreach(id;s.from){
@@ -5493,57 +5644,8 @@ final class Bindings{
 			}
 			enforce(proof.length,"missing step tail witness");return proof;
 		}
-		// Polynomial evidence on a predicate of the axis: a cell of a grid, or
-		// everywhere. Coefficient lists stay symbolic in the claims; Lean
-		// computes them where a certificate compares them.
-		struct Piece{string proof,poly;}
-		Piece delegate(uint,string,string,Rational) @safe piece;
-		Piece pieceRaw(uint id,string set,string region,Rational sample){
-			auto n=nodes[id];
-			if(!depends(at(id),0)){
-				auto term=scalarBody(at(id),arena.real_(Rational(0)));enforce(term!=Term.init,"missing polynomial constant");
-				auto v=simplify(arena,term);enforce(!v.exhausted&&arena.isNumber(v.output),"non-numeric polynomial constant");
-				auto c=q(arena.number(v.output).re);
-				return Piece(app("polynomial_constant",set~" "~atPoint(id,Rational(0))~" "~c~" "~numericProof(id,Rational(0),c)),"["~c~"]");
-			}
-			if(n.op==BoundOp.variable&&n.data==0)return Piece(app("polynomial_variable",set),"[0, 1]");
-			enforce(n.op==BoundOp.primitive,"unsupported polynomial step expression");auto op=arena.view(arena.at(n.data));
-			if(op.op==Op.builtin){
-				enforce(region.length,"step expression outside a cell");
-				auto term=scalarBody(at(id),arena.real_(sample));enforce(term!=Term.init,"missing polynomial step");
-				auto v=simplify(arena,term);enforce(!v.exhausted&&arena.isNumber(v.output),"non-numeric polynomial step");
-				auto c=q(arena.number(v.output).re);
-				return Piece(app("polynomial_uniform",q(sample)~" "~c~" rfl "~uniform(id,region,sample)~" "~numericProof(id,sample,c)),"["~c~"]");
-			}
-			if(op.op==Op.mask){
-				enforce(region.length,"guard outside a cell");
-				auto pred=scalarBody(at(n.a),arena.real_(sample));enforce(pred!=Term.init,"missing polynomial guard");
-				auto v=simplify(arena,pred);enforce(!v.exhausted&&arena.view(v.output).op==Op.boolLit,"undecided polynomial guard");
-				bool truth=v.output==arena.boolean(true);
-				auto guard=q(sample)~" rfl "~uniform(n.a,region,sample)~" "~numericProof(n.a,sample,truth?"true":"false");
-				if(!truth)return Piece(app("polynomial_mask_false",functionAt(n.b)~" "~guard),"[]");
-				auto b=piece(n.b,set,region,sample);
-				return Piece(app("polynomial_mask_true",guard~" "~b.proof),b.poly);
-			}
-			if(op.op==Op.abs){
-				enforce(region.length,"absolute value outside a cell");
-				auto inside=affineProof(n.a);auto at_=inside.slope*sample+inside.offset;
-				auto sign=at_.zero?"zero":at_<Rational(0)?"negative":"positive";
-				return Piece(app("polynomial_abs","(r := "~region~") ."~sign~" "~inside.proof~" rfl"),
-					"(Distribution.StepSource.absPoly ."~sign~" "~q(inside.slope)~" "~q(inside.offset)~")");
-			}
-			auto a=piece(n.a,set,region,sample);
-			if(op.op==Op.pow)return Piece(app("polynomial_pow",to!string(op.value)~" "~a.proof),"(Distribution.StepSource.polyPow "~a.poly~" "~to!string(op.value)~")");
-			enforce(op.op==Op.add||op.op==Op.mul,"unsupported polynomial step operation");
-			auto b=piece(n.b,set,region,sample);bool add=op.op==Op.add;
-			return Piece(app(add?"polynomial_add":"polynomial_mul",a.proof~" "~b.proof),"(Distribution.StepSource.poly"~(add?"Add":"Mul")~" "~a.poly~" "~b.poly~")");
-		}
-		piece=(uint id,string set,string region,Rational sample) @safe {
-			auto r=pieceRaw(id,set,region,sample);
-			r.proof=save("Distribution.StepSource.PolynomialOn "~set~" "~functionAt(id)~" "~r.poly,r.proof);return r;
-		};
 		if(s.interval){
-			auto d=s.bounds;enum everywhere="(fun _ : ℝ => True)";
+			auto d=s.bounds;enum everywhere=SourceCertificates.everywhere;
 			string ev(uint id){return "("~name(id)~".eval ξ ρ)";}
 			string truth(bool b){return b?"true":"false";}
 			auto a=ev(d.lower),b=ev(d.upper),m=ev(d.minusOne);
@@ -5558,30 +5660,6 @@ final class Bindings{
 				d.nested?"(fun _ => Distribution.StepSource.mask_mask _ _ _)":"(fun _ => rfl)");
 			auto program="(Distribution.DensityProgram.weight "~functionAt(body)~" Distribution.DensityProgram.lebesgue)";
 			auto masked=save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_first",shape));
-			// A polynomial, the exponential of a rational multiple of the axis,
-			// or a product of these.
-			Piece delegate(uint) @safe exponential;
-			exponential=(uint id) @safe {
-				Rational[] coefficients;Piece r;string rate;
-				if(axisPolynomial(id,coefficients)){
-					auto w=piece(id,everywhere,"",Rational(0));
-					r=Piece(app("exp_polynomial",w.proof),w.poly);rate="0";
-				}else{
-					auto n=nodes[id];enforce(n.op==BoundOp.primitive,"unsupported exponential term");
-					auto op=arena.view(arena.at(n.data));
-					if(op.op==Op.builtin){
-						enforce(op.value==Builtin.expR,"unsupported exponential function");
-						auto inside=affineProof(n.a);enforce(inside.offset.zero,"shifted exponent");
-						r=Piece(app("exp_affine",inside.proof),"[1]");rate=q(inside.slope);
-					}else{
-						enforce(op.op==Op.mul,"unsupported exponential operation");
-						auto a=exponential(n.a),b=exponential(n.b);
-						r=Piece(app("exp_mul",a.proof~" "~b.proof),"(Distribution.StepSource.polyMul "~a.poly~" "~b.poly~")");
-						return r;
-					}
-				}
-				r.proof=save("Distribution.StepSource.ExpPolynomial "~functionAt(id)~" "~r.poly~" "~rate,r.proof);return r;
-			};
 			string[] factors;
 			foreach(id;s.from[1..$]){
 				auto w=exponential(id);
@@ -5607,18 +5685,7 @@ final class Bindings{
 					foreach(w;factors)hv=app("exp_mul",hv~" "~w);
 					return "("~termsName~".pure "~primitive_~hv~derivative;
 				}
-				// Factors free of the axis are the scale; the others multiply.
-				string delegate(uint,out bool) @safe scaledFactor;
-				scaledFactor=(uint factor,out bool scaled) @safe {
-					Rational[] coefficients;Rational rate;
-					if(axisExponential(factor,coefficients,rate))return exponential(factor).proof;
-					scaled=true;
-					if(!depends(at(factor),0))return app("scaled_constant",ev(dropIndex(at(factor)).id));
-					bool left,right;auto product=nodes[factor];
-					auto a=scaledFactor(product.a,left),b=scaledFactor(product.b,right);
-					return app(left&&right?"scaled_mul":left?"scaled_times":"scaled_after",a~" "~b);
-				};
-				bool scaled;auto hv=scaledFactor(id,scaled);
+				bool scaled;auto hv=cert.scaledFactor(id,scaled);
 				foreach(w;factors)hv=app("scaled_times",hv~" "~w);
 				return "("~termsName~".scaled "~primitive_~hv~derivative;
 			}
@@ -5837,6 +5904,11 @@ final class Bindings{
 			auto c=new SourceCertificates("step"~to!string(i)~"_",s.from[0]);
 			stepProofs[i]=stepGridProof(s,c,stepOutputs[i]);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
 		}
+		string[] limitProofs=new string[result.limits.length];
+		foreach(i,s;result.limits){
+			auto c=new SourceCertificates("limit"~to!string(i)~"_",s.body);
+			limitProofs[i]=limitProof(s,c);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
+		}
 		Table!(uint,string) squareWeights;
 		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionWeightedSquare&&p.left!=uint.max){
 			uint weight,point; enforce(realAtomRow(at(p.from),weight,point));
@@ -5960,7 +6032,7 @@ final class Bindings{
 				case BoundOp.variable:
 					expr=".here"; foreach(j;0..n.data) expr="(.there "~expr~")";
 					expr=".var "~expr; break;
-				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionSum,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionInverseCover,BoundOp.distributionInversePart,BoundOp.distributionRadiusImage,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass,BoundOp.finiteSum,BoundOp.summation,BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
+				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionSum,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionInverseCover,BoundOp.distributionInversePart,BoundOp.distributionRadiusImage,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass,BoundOp.finiteSum,BoundOp.summation,BoundOp.limit,BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
 					expr="."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~name(n.a);
 					if(n.b!=uint.max) expr~=" "~name(n.b); break;
 				case BoundOp.lambda:expr=".lam "~name(n.a); break;
@@ -7227,6 +7299,8 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affine_chart_rule "~realBody(n.a)~" "~
 						rowTotalProof(chart.predicateDomain)~" "~chartProofs[p.extra]~"; h)"; break;
 				}
+				case BindingRule.limitTerms:
+					proof=".ofEq (fun ξ ρ => let h := "~limitProofs[p.extra]~"; h)"; break;
 				case BindingRule.distributionMassGuard:{
 					uint guard;BoundTerm rest;string shape;
 					enforce(axisFreeGuard(p.from,guard,rest,shape),"missing guard free of the axis");
@@ -7451,7 +7525,7 @@ final class Bindings{
 				case BindingRule.congr:
 					if(n.op==BoundOp.conditional){ proof=".conditional "~proofName(p.left)~" "~proofName(p.right)~" "~proofName(p.extra); break; }
 					if(n.op==BoundOp.fixed){ auto ty=leanType(types[n.type]); proof=".unary (a := .arrow "~ty~" "~ty~") (b := "~ty~") Recursion.fixedValue (.lam "~proofName(p.left)~")"; break; }
-					auto generic=n.op>=BoundOp.distributionDirac||n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.equal||n.op==BoundOp.typeEq||n.op==BoundOp.primitive||n.op==BoundOp.member||n.op==BoundOp.subset||n.op==BoundOp.domain||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.guard||n.op==BoundOp.pair||n.op==BoundOp.vectorCons||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor;
+					auto generic=n.op>=BoundOp.distributionDirac||n.op==BoundOp.finiteSum||n.op==BoundOp.summation||n.op==BoundOp.limit||n.op==BoundOp.equal||n.op==BoundOp.typeEq||n.op==BoundOp.primitive||n.op==BoundOp.member||n.op==BoundOp.subset||n.op==BoundOp.domain||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.guard||n.op==BoundOp.pair||n.op==BoundOp.vectorCons||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor;
 					auto op=generic?(n.b==uint.max?"unary":"binary"):
 						n.op==BoundOp.lambda?"lam":n.op==BoundOp.set?"set":n.op==BoundOp.apply?"app":"seq";
 					proof="."~op;

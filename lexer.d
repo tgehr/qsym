@@ -84,7 +84,7 @@ struct Lexer{
 			case '∧':symbol="&&"; break;
 			case '∨':symbol="||"; break;
 			case '¬':symbol="!"; break;
-			case '±','∫','∑','{','}','.','∈','∉','⊆','⊈','(',')','[',']',',',':',';','+','-','*','×','@','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
+			case '±','∫','∑','∞','{','}','.','∈','∉','⊆','⊈','(',')','[',']',',',':',';','+','-','*','×','@','/','^','⅟','ⅈ','<','>','=','!','|':symbol=source[start..pos]; break;
 			case '⌊','⌋','⌈','⌉':symbol=source[start..pos]; break;
 			case '√','∛':{
 				// sym prints a radicand under combining overlines: √x̅+̅1̅ is √(x+1).

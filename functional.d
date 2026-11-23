@@ -154,7 +154,7 @@ struct FunctionSyntax{
 	private bool special(Pattern p){
 		if(p.name=="$type"||p.name=="$arrowtype"||p.name=="$tuple"||p.name=="$matmul"||p.name=="dot"||p.name=="get") return true;
 		if(typeAlias(p.name)||p.name=="Set"||distributionName(p.name)||p.name=="$distribution"||p.name=="$integral"||p.name=="$disintegrate"||p.name=="$distributionApply") return true;
-		if(p.name=="$sum"||p.name=="$fix"||p.name=="$bottom"||p.name=="$lambda"||p.name=="$set"||p.name=="$apply"||p.name=="$member"||p.name=="$subset"||
+		if(p.name=="$sum"||p.name=="$lim"||p.name=="$fix"||p.name=="$bottom"||p.name=="$lambda"||p.name=="$set"||p.name=="$apply"||p.name=="$member"||p.name=="$subset"||
 			p.name=="domain"||p.name=="defined"||p.name=="holds"||p.name=="guard"||p.name=="seq") return true;
 		if(p.annotation !is null&&p.annotation.args.length) return true;
 		foreach(f;functions) if(f.name==p.name) return true;
@@ -163,7 +163,7 @@ struct FunctionSyntax{
 	}
 	private BoundTerm parseBound(Arena a,Bindings b,Pattern raw){
 		void collect(Pattern p,string[] bound){
-			if(p.name=="$sum"||p.name=="$fix"||p.name=="$lambda"||p.name=="$set"){
+			if(p.name=="$sum"||p.name=="$lim"||p.name=="$fix"||p.name=="$lambda"||p.name=="$set"){
 				enforce(!reserved(p.binder),"reserved binder name: "~p.binder);
 				for(auto ty=p.annotation;ty.name=="$subset";ty=ty.args[0]){
 					enforce(!reserved(ty.binder),"reserved binder name: "~ty.binder); collect(ty.predicate,bound~ty.binder);
@@ -397,6 +397,14 @@ struct FunctionSyntax{
 				enforce(param==scalarType(Sort.natural)||param==scalarType(Sort.integer),"summation index must be ℕ or ℤ");
 				auto inner=b.push(ctx,param),body=build(p.args[0],inner,[p.binder]~locals,expected,depth+1);
 				return finish(b.summation(b.hint(b.lambda(body),p.binder)));
+			}
+			if(p.name=="$lim"){
+				// The variable is real; values are real unless they are complex.
+				auto real_=scalarType(Sort.real_),inner=b.push(ctx,real_);
+				auto body=build(p.args[0],inner,[p.binder]~locals,TypeId.init,depth+1); Sort sort;
+				enforce(scalarSort(b.type(body),sort)&&sort!=Sort.boolean,"a limit requires numeric values");
+				if(sort!=Sort.complex) body=coerce(body,real_);
+				return finish(b.limit(b.hint(b.lambda(body),p.binder),p.number<0));
 			}
 			if(p.name=="$lambda"||p.name=="$set"){
 				auto base=p.annotation; while(base.name=="$subset") base=base.args[0];
@@ -783,6 +791,9 @@ struct FunctionSyntax{
 					auto fn=b.at(n.a),body=b.node(fn),ctx=b.context(b.at(body.a));
 					auto name=fresh(locals,b.binderHint(fn).name);
 					return "∑("~name~":"~typeName(b.type(b.variable(ctx,0)),locals)~"). "~render(b.at(body.a),[name]~locals,depth+1);
+				case BoundOp.limit:
+					auto fn=b.at(n.a),name=fresh(locals,b.binderHint(fn).name);
+					return "lim["~name~"→"~(n.data?"-∞":"∞")~"] "~render(b.at(b.node(fn).a),[name]~locals,depth+1);
 				case BoundOp.lambda,BoundOp.set:
 					auto h=b.binderHint(t),name=fresh(locals,h.name),param=typeName(pool.view(b.type(t)).fields[0],locals),bodyTerm=b.at(n.a),v=b.node(bodyTerm);
 					if(n.op==BoundOp.lambda&&v.op==BoundOp.guard){
