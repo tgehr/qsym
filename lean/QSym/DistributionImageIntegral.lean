@@ -1,4 +1,5 @@
 import QSym.DistributionSquareChart
+import QSym.Functions
 
 noncomputable section
 namespace QSym.Distribution.GraphFibre
@@ -42,6 +43,17 @@ theorem imageIntegral_of_transport {X Y : Type} [MeasurableSpace X] [MeasurableS
 
 def affineSquareIntegralWeight (a y : ℝ) : ℝ :=
   if 0 < y then (|a| * √y)⁻¹ else 0
+
+/-- The closed guard selects the singular reciprocal at zero. It short-circuits
+the square root at negative targets. This coefficient is a density observation. -/
+def unrestrictedSquareDensity (j y : Option ℝ) : Option ℝ :=
+  Value.mask (Value.le (some ((0 : ℤ) : ℝ)) y)
+    (Value.mul (Value.inv (Functions.sqrtR.apply y)) j)
+
+theorem unrestrictedSquareDensity_zero (j : Option ℝ) :
+    unrestrictedSquareDensity j (some ((0 : ℤ) : ℝ)) = none := by
+  simp [unrestrictedSquareDensity, Function1.apply, Functions.sqrtR, Value.mask, Value.le,
+    Value.inv, Value.mul]
 
 abbrev affineSquareSource (a b : ℝ) : D ℝ :=
   .density (fun _ => some 1) (fun x => some ((a*x+b)^2))
@@ -88,5 +100,25 @@ theorem affine_square_image_integral (a b : ℝ) (ha : a ≠ 0) (t : ℝ → Opt
       ring
     · simp [squareChartWeight, affineSquareIntegralWeight, hy]
   simpa only [f, mem_univ, if_true, one_mul, preimage_univ, weight] using h
+
+/-- The same closed Iverson expression can supply the integration coefficient
+after filling its single missing value. The test is still checked separately
+on the entire reachable half-line, including zero. -/
+theorem affine_square_masked_image_integral (a b : ℝ) (ha : a ≠ 0) (t : ℝ → Option ℝ) :
+    integrate (inLebesgueCoordinates (affineSquareSource a b)) t =
+      imageIntegral volume (Ici 0)
+        (fun y => (unrestrictedSquareDensity (some |a|⁻¹) (some y)).getD 0) t := by
+  rw [affine_square_image_integral a b ha]
+  have weights (y : ℝ) : affineSquareIntegralWeight a y =
+      (unrestrictedSquareDensity (some |a|⁻¹) (some y)).getD 0 := by
+    rcases lt_trichotomy y 0 with hy | rfl | hy
+    · simp [affineSquareIntegralWeight, unrestrictedSquareDensity, Value.le, Value.mask,
+        not_le_of_gt hy, not_lt_of_gt hy]
+    · simp [affineSquareIntegralWeight, unrestrictedSquareDensity, Value.le, Value.mask,
+        Value.mul, Value.inv, Function1.apply, Functions.sqrtR]
+    · simp [affineSquareIntegralWeight, unrestrictedSquareDensity, Value.le, Value.mask,
+        Value.mul, Value.inv, Function1.apply, Functions.sqrtR, hy, hy.le, (Real.sqrt_pos.mpr hy).ne',
+        mul_inv_rev]
+  rw [funext weights]
 
 end QSym.Distribution.GraphFibre

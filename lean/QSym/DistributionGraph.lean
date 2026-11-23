@@ -151,6 +151,19 @@ theorem coordinates_identity (w : ℝ → Option ℝ) :
 def realPushforwardOnValue (p : Option (ℝ → Option Bool)) (v : Option (ℝ → Option ℝ)) :=
   (pushforwardOnValue p v).map inLebesgueCoordinates
 
+/-- With all source points active, a density query observes the mass of the
+same fibre as disintegration, including an undefined critical fibre. -/
+theorem unrestricted_density_eq_marginal (f : ℝ → ℝ) (hf : Measurable f) (y : Option ℝ) :
+    densityAtValue (realPushforwardOnValue (some fun _ => some true) (some fun x => some (f x))) y =
+      marginal (some fun x => some (f x)) y := by
+  cases y with
+  | none => rfl
+  | some y =>
+    change densityAt (inLebesgueCoordinates _) y = _
+    rw [coordinates_density, marginal, atomsValue_total _ hf]
+    simpa [densityAtValue, pushforwardOnValue, Value.mask, marginalOn] using
+      pushforwardOn_density Set.univ f hf y
+
 theorem realPushforward_identity (p : ℝ → Option Bool) :
     realPushforwardOnValue (some p) (some some) =
       weightValue (some (fun y => Value.mask (p y) (some ((1 : ℤ) : ℝ)))) lebesgueValue := by

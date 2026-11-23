@@ -195,4 +195,34 @@ theorem missing_test_point (p : ℝ) :
 #qsym_check_axioms unrestricted_critical
 #qsym_check_axioms missing_test_point
 
+theorem all_active_observer (f : ℝ → ℝ) (hf : Measurable f) (y : Option ℝ) :
+    densityAtValue (realPushforwardOnValue (some fun _ => some true) (some fun x => some (f x))) y =
+      marginal (some fun x => some (f x)) y := by qsym_rule
+
+theorem closed_mask_pairing (t : ℝ → Option ℝ) :
+    integrate (inLebesgueCoordinates (affineSquareSource (-2) 1)) t =
+      imageIntegral volume (Set.Ici 0)
+        (fun y => (unrestrictedSquareDensity (some |(-2 : ℝ)|⁻¹) (some y)).getD 0) t := by
+  have ha : (-2 : ℝ) ≠ 0 := by norm_num
+  qsym_rule
+
+/-- A missing coefficient in an ordinary Lebesgue chart fails even the zero
+test. The affine-square graph returns zero for the same test. -/
+theorem critical_weight_zero_test (a b : ℝ) (w : ℝ → Option ℝ) (hw : w 0 = none) :
+    integrate (inLebesgueCoordinates (affineSquareSource a b)) (fun _ => some 0) = some 0 ∧
+    integrate (.density w some) (fun _ => some 0) = none := by
+  constructor
+  · rw [coordinates_test _ (fun _ => 0)]
+    simpa [affineSquareSource, integrate, Value.mul] using (partialIntegral_zero (volume : Measure ℝ))
+  · change partialIntegral volume _ = none
+    unfold partialIntegral
+    split
+    · rename_i h
+      simpa [hw, Value.Defined, Value.mul] using h.1 0
+    · rfl
+
+#qsym_check_axioms all_active_observer
+#qsym_check_axioms closed_mask_pairing
+#qsym_check_axioms critical_weight_zero_test
+
 end QSym.Distribution.SquareReconstructionTests

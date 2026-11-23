@@ -42,7 +42,7 @@ private enum BindingRule:ubyte{
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
-	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity
+	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -2813,6 +2813,17 @@ final class Bindings{
 			hi=affineInverseAt(chart,map.slope>Rational(0)?root:minus);
 			w=powerJacobian(map,chart,root);
 		}
+		BoundTerm closedSquareDensity(PowerMap map,BoundTerm y,out uint evidence){
+			auto chart=sourceChart(map),ctx=context(y),zero=scalar(ctx,arena.real_(0));
+			evidence=cast(uint)affineCharts.length; affineCharts~=chart;
+			if(node(y).op==BoundOp.bottom||y==zero) return bottom(ctx,type(y));
+			auto nonnegative=primitive(arena.le(arena.real_(0),arena.real_(0)),[zero,y]);
+			auto root=primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[y]);
+			auto inv=primitive(arena.inv(arena.real_(1)),[root]);
+			auto jac=scalar(ctx,arena.at(nodes[chart.jacobian].data));
+			auto weight=primitive(scalarOperator(type(y),TensorOp.mul),[inv,jac]);
+			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[nonnegative,weight]);
+		}
 		BoundTerm squareObservation(PowerMap map,BoundTerm y,BoundTerm predicate,bool scalarResult,out uint evidence){
 			auto chart=sourceChart(map),ctx=context(y);
 			evidence=cast(uint)affineCharts.length; affineCharts~=chart;
@@ -3358,9 +3369,13 @@ final class Bindings{
 					rule=maskedGraph?BindingRule.distributionMaskedSquare:BindingRule.distributionSquareGraph;
 				}
 			}else if(graph&&(squareBranch=powerMap(graphMap,true)).degree){
-				next=squareObservation(squareBranch,at(current.b),maskedGraph?at(nodes[current.a].a):BoundTerm.init,
-					current.op==BoundOp.distributionGraphMass,extra);
-				rule=BindingRule.distributionAffineSquare;
+				if(current.op==BoundOp.distributionGraphMass){
+					next=closedSquareDensity(squareBranch,at(current.b),extra);
+					rule=BindingRule.distributionClosedSquare;
+				}else{
+					next=squareObservation(squareBranch,at(current.b),maskedGraph?at(nodes[current.a].a):BoundTerm.init,false,extra);
+					rule=BindingRule.distributionAffineSquare;
+				}
 			}else if(graph){
 				Rational slope,offset;
 				if(affineMap(graphMap,slope,offset)){
@@ -3398,8 +3413,13 @@ final class Bindings{
 					if(node(query).op==BoundOp.bottom) next=bottom(ctx,type(query));
 					rule=BindingRule.distributionRestrictedSquare; extra=squareProduct;
 				}else if(d.op==BoundOp.distributionPushforwardOn&&(squareBranch=powerMap(d.b,true)).degree){
-					next=squareObservation(squareBranch,query,at(d.a),true,extra);
-					rule=BindingRule.distributionAffineSquare;
+					if(nodes[d.a].op==BoundOp.lambda&&isTrue(nodes[d.a].a,true)){
+						next=closedSquareDensity(squareBranch,query,extra);
+						rule=BindingRule.distributionClosedSquare;
+					}else{
+						next=squareObservation(squareBranch,query,at(d.a),true,extra);
+						rule=BindingRule.distributionAffineSquare;
+					}
 				}else if(d.op==BoundOp.distributionDirac){
 					next=guard(awayFromAtom(d.a,query),scalar(ctx,arena.real_(0)));
 					rule=BindingRule.distributionDensityDirac;
@@ -6041,6 +6061,14 @@ final class Bindings{
 						proof=".ofEq (fun ξ ρ => let h := "~certificate~"."~observer~predicate~" ("~name(n.b)~".eval ξ ρ); h)";
 					}
 					break;
+				}
+				case BindingRule.distributionClosedSquare:{
+					auto observer=n.op==BoundOp.distributionGraphMass?"mass":"density";
+					auto term="Distribution.GraphFibre.affineSquare_unrestricted_"~observer~" "~chartProofs[p.extra]~
+						" ("~name(n.b)~".eval ξ ρ)";
+					if(nodes[p.to].op==BoundOp.bottom&&nodes[n.b].op!=BoundOp.bottom)
+						term="Eq.trans ("~term~") (Distribution.GraphFibre.unrestrictedSquareDensity_zero _)";
+					proof=".ofEq (fun ξ ρ => let h := "~term~"; h)"; break;
 				}
 				case BindingRule.distributionOddChart:
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.oddPower_chart_rule "~to!string(p.extra)~" "~

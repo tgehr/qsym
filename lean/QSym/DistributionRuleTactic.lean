@@ -124,6 +124,8 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.branchIntegral_union <;> assumption
   | solve | apply Distribution.GraphFibre.branchIntegral_image <;> assumption
   | solve | apply Distribution.GraphFibre.affine_square_image_integral <;> assumption
+  | solve | apply Distribution.GraphFibre.affine_square_masked_image_integral <;> assumption
+  | solve | apply Distribution.GraphFibre.unrestricted_density_eq_marginal <;> assumption
   | solve | apply Distribution.GraphFibre.affine_square_critical_density <;> assumption
   | solve | apply Distribution.GraphFibre.imageIntegral_of_transport <;> assumption
   | exact Distribution.GraphFibre.weighted_square_density _ _

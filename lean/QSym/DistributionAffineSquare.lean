@@ -1,6 +1,6 @@
 import QSym.DistributionSquareExpression
 import QSym.DistributionAffineExpression
-import QSym.DistributionSquareChart
+import QSym.DistributionImageIntegral
 import QSym.DistributionBorel
 
 noncomputable section
@@ -77,6 +77,39 @@ def affineSquareWeight (a den : ℚ) (i : ℝ → Option ℝ) (u v : Option ℝ)
   squareChartValue (fun y => (signedSqrt (decide (0 < a)) y).bind i)
     (fun y => (signedSqrt (!(decide (0 < a))) y).bind i)
     (fun y => rationalInvMul den u v (Functions.sqrtR.apply y)) p
+
+include ha hj hf hi hv hn hd hu hv' in
+theorem affineSquare_unrestricted_mass (product : Bool) (y : Option ℝ) :
+    marginal (some fun x => squareInput product (f x)) y = unrestrictedSquareDensity v y := by
+  rw [(affineSquareExpression a b j ha hj hf hi hv num den hn hd hu hv' product).mass_rule]
+  cases y with
+  | none => rfl
+  | some y =>
+    rcases lt_trichotomy y 0 with hy | rfl | hy
+    · simp [unrestrictedSquareDensity, squareCases, Binding.conditionalValue, Value.lt,
+        Value.le, Value.mask, hy, not_le_of_gt hy, not_lt_of_gt hy]
+    · simpa [squareCases, Binding.conditionalValue, Value.lt] using (unrestrictedSquareDensity_zero v).symm
+    · have sr : Functions.sqrtR.apply (some y) = some (√y) := by
+        simp [Function1.apply, Functions.sqrtR, hy.le]
+      have w : rationalInvMul den u v' (some (√y)) = Value.inv (some ((2*|(a : ℝ)|)*√y)) := by
+        rw [hu, hv', hd]
+        push_cast
+        exact rationalInvMul_some hn _ _
+      have an : (a : ℝ) ≠ 0 := by exact_mod_cast ha
+      simp [squareCases, Binding.conditionalValue, Value.lt, Value.le, hy, hy.le,
+        unrestrictedSquareDensity, sr, w, hv, hj, Value.mask, Value.inv, Value.add, Value.mul,
+        an, (Real.sqrt_pos.mpr hy).ne', mul_inv_rev, abs_inv]
+      ring
+
+include ha hj hf hi hv hn hd hu hv' in
+theorem affineSquare_unrestricted_density (product : Bool) (y : Option ℝ) :
+    densityAtValue (realPushforwardOnValue (some fun _ => some true)
+      (some fun x => squareInput product (f x))) y = unrestrictedSquareDensity v y := by
+  rw [← affineSquare_unrestricted_mass a b j ha hj hf hi hv num den hn hd hu hv' product]
+  let c := affineSquareExpression a b j ha hj hf hi hv num den hn hd hu hv' product
+  rw [funext c.forward]
+  exact unrestricted_density_eq_marginal c.f
+    (continuous_iff_continuousAt.mpr fun x => (c.derivative x).continuousAt).measurable y
 
 private theorem mask_of_total {p : ℝ → Option Bool} (hp : ∀ x, Value.Defined (p x)) (x c : ℝ) :
     Value.mask (p x) (some c) = some (if p x = some true then c else 0) := by
