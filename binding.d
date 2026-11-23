@@ -28,7 +28,7 @@ struct BoundTerm{
 	@property uint id()const{ return index; }
 	bool opEquals(BoundTerm rhs)const{ return owner is rhs.owner&&index==rhs.index; }
 }
-enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,conditional,distributionDirac,distributionZero,distributionLebesgue,distributionAdd,distributionScale,distributionWeight,distributionIntegral,distributionMass,distributionDensityAt,distributionBind,distributionGraphFibre,distributionGraphMass,distributionPushforwardOn,distributionMaskedGraph }
+enum BoundOp:ubyte{ scalar,variable,primitive,lambda,apply,sequence,global,set,member,domain,defined,holds,guard,subset,typeValue,typeEq,bottom,fixed,equal,unit,vectorNil,vectorCons,pair,first,rest,get,tensor,summation,finiteSum,conditional,distributionDirac,distributionZero,distributionLebesgue,distributionAdd,distributionScale,distributionWeight,distributionIntegral,distributionMass,distributionDensityAt,distributionBind,distributionGraphFibre,distributionGraphMass,distributionPushforwardOn,distributionMaskedGraph,distributionRadiusImage }
 enum TensorOp:ubyte{ add,mul,dot,matvec,matmul,power }
 struct BoundNode{
 	BoundOp op;
@@ -42,7 +42,7 @@ private enum BindingRule:ubyte{
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
-	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare
+	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -52,7 +52,7 @@ private struct AffineChart{
 	uint map,inverse,jacobian,predicateDomain;
 	uint powerDegree,derivativeNumerator=uint.max,derivativeDenominator=uint.max;
 	bool squareProduct;
-	uint borelPredicate=uint.max,punctureBody=uint.max;
+	uint borelPredicate=uint.max,punctureBody=uint.max,radiusCentre=uint.max;
 }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
 private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
@@ -420,6 +420,57 @@ final class Bindings{
 		}
 		return visit(root);
 	}
+	// Return the positive scale and the expression shape needed by the proof.
+	private Term sqrtRadiusScale(uint functionId,out string form){
+		auto f=nodes[functionId];
+		if(f.op!=BoundOp.lambda) return Term.init;
+		bool root(uint id){
+			auto n=nodes[id];
+			if(n.op!=BoundOp.primitive||n.a==uint.max) return false;
+			auto op=arena.view(arena.at(n.data));
+			return op.op==Op.builtin&&op.value==Builtin.sqrtR&&nodes[n.a].op==BoundOp.variable&&nodes[n.a].data==0;
+		}
+		if(root(f.a)){form="one"; return arena.real_(1);}
+		auto n=nodes[f.a];
+		if(n.op==BoundOp.guard&&root(n.b)){
+			auto condition=nodes[n.a];
+			if(condition.op==BoundOp.primitive&&arena.view(arena.at(condition.data)).op==Op.le&&
+				nodes[condition.a].op==BoundOp.scalar&&arena.at(nodes[condition.a].data)==arena.real_(0)&&
+				nodes[condition.b].op==BoundOp.variable&&nodes[condition.b].data==0){
+				form="guardedOne"; return arena.real_(1);
+			}
+		}
+		if(n.op!=BoundOp.primitive||arena.view(arena.at(n.data)).op!=Op.mul) return Term.init;
+		bool right=root(n.a);
+		if(!right&&!root(n.b)) return Term.init;
+		auto coeff=nodes[right?n.b:n.a];
+		if(coeff.op!=BoundOp.scalar) return Term.init;
+		auto value=arena.at(coeff.data);
+		if(!arena.isNumber(value)||arena.number(value).re<=Rational(0)) return Term.init;
+		form=right?"right":"left"; return value;
+	}
+	// A real Iverson bracket is sometimes normalized to three exact casts of
+	// a natural mask. In both forms the threshold must be independent of y.
+	private BoundTerm sublevelBound(uint functionId,out bool casts){
+		auto f=nodes[functionId];
+		if(f.op!=BoundOp.lambda) return BoundTerm.init;
+		auto mask=nodes[f.a];
+		if(mask.op==BoundOp.primitive&&arena.view(arena.at(mask.data)).op==Op.builtin){
+			foreach(op;[Builtin.castQR,Builtin.castZQ,Builtin.castNZ]){
+				if(mask.op!=BoundOp.primitive) return BoundTerm.init;
+				auto v=arena.view(arena.at(mask.data));
+				if(v.op!=Op.builtin||v.value!=op) return BoundTerm.init;
+				mask=nodes[mask.a];
+			}
+			casts=true;
+		}
+		if(mask.op!=BoundOp.primitive||arena.view(arena.at(mask.data)).op!=Op.mask) return BoundTerm.init;
+		auto one=nodes[mask.b],test=nodes[mask.a];
+		if(one.op!=BoundOp.scalar||arena.at(one.data)!=arena.number(Number(1),casts?Sort.natural:Sort.real_)) return BoundTerm.init;
+		if(test.op!=BoundOp.primitive||arena.view(arena.at(test.data)).op!=Op.le||
+			nodes[test.a].op!=BoundOp.variable||nodes[test.a].data!=0||depends(at(test.b),0)) return BoundTerm.init;
+		return at(test.b);
+	}
 	// A real weighted Dirac row can place the coefficient on the row itself
 	// or on the Lebesgue source of a bind. A plain row has no weight body.
 	private bool realAtomRow(BoundTerm t,out uint weight,out uint point){
@@ -500,6 +551,10 @@ final class Bindings{
 				enforce(v.kind==TypeKind.function_&&v.fields[0]==element&&pool.view(v.fields[1]).kind==TypeKind.distribution,"bindD requires A -> Distribution(B)"); output=v.fields[1]; break;
 			}
 			case BoundOp.distributionMass:enforce(args.length==1,"mass takes one distribution"); distributed(args[0]); output=realType; break;
+			case BoundOp.distributionRadiusImage:
+				enforce(args.length==2&&type(args[0])==realType&&type(args[1])==pool.function_(realType,realType),
+					"radiusImageD takes a real centre and a real radius function");
+				output=pool.distribution(realType); break;
 			case BoundOp.distributionPushforwardOn:{
 				enforce(args.length==2&&type(args[0])==pool.function_(realType,scalarType(Sort.boolean)),
 					"pushforwardOnD requires a real source predicate");
@@ -658,7 +713,7 @@ final class Bindings{
 		TypeId mapped(uint id){ return dimensions is null?types[id]:pool.map(types[id],dimensions); }
 		final switch(n.op){
 			case BoundOp.distributionZero:return distribution(target,n.op,[],pool.view(mapped(n.type)).fields[0]);
-			case BoundOp.distributionLebesgue,BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:return distribution(target,n.op,args);
+			case BoundOp.distributionLebesgue,BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionRadiusImage,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:return distribution(target,n.op,args);
 			case BoundOp.unit,BoundOp.vectorNil:return tuple(target,[],mapped(n.type));
 			case BoundOp.vectorCons,BoundOp.pair:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id,args[1].id));
 			case BoundOp.first,BoundOp.rest:return intern(BoundNode(n.op,target.index,typeId(mapped(n.type)),args[0].id));
@@ -2813,16 +2868,20 @@ final class Bindings{
 			hi=affineInverseAt(chart,map.slope>Rational(0)?root:minus);
 			w=powerJacobian(map,chart,root);
 		}
-		BoundTerm closedSquareDensity(PowerMap map,BoundTerm y,out uint evidence){
-			auto chart=sourceChart(map),ctx=context(y),zero=scalar(ctx,arena.real_(0));
-			evidence=cast(uint)affineCharts.length; affineCharts~=chart;
+		BoundTerm maskedInverseRoot(BoundTerm y,Term scale){
+			auto ctx=context(y),zero=scalar(ctx,arena.real_(0));
 			if(node(y).op==BoundOp.bottom||y==zero) return bottom(ctx,type(y));
 			auto nonnegative=primitive(arena.le(arena.real_(0),arena.real_(0)),[zero,y]);
 			auto root=primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[y]);
 			auto inv=primitive(arena.inv(arena.real_(1)),[root]);
-			auto jac=scalar(ctx,arena.at(nodes[chart.jacobian].data));
+			auto jac=scalar(ctx,scale);
 			auto weight=primitive(scalarOperator(type(y),TensorOp.mul),[inv,jac]);
 			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[nonnegative,weight]);
+		}
+		BoundTerm closedSquareDensity(PowerMap map,BoundTerm y,out uint evidence){
+			auto chart=sourceChart(map);
+			evidence=cast(uint)affineCharts.length; affineCharts~=chart;
+			return maskedInverseRoot(y,arena.at(nodes[chart.jacobian].data));
 		}
 		BoundTerm squareObservation(PowerMap map,BoundTerm y,BoundTerm predicate,bool scalarResult,out uint evidence){
 			auto chart=sourceChart(map),ctx=context(y);
@@ -3178,6 +3237,22 @@ final class Bindings{
 				auto d=nodes[current.a];
 				if(d.op==BoundOp.bottom){ next=bottom(ctx,types[current.type]); rule=BindingRule.fold; }
 				else if(d.op==BoundOp.distributionZero){ next=scalar(ctx,arena.real_(0)); rule=BindingRule.distributionMassZero; }
+				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionRadiusImage){
+					auto image=nodes[d.b]; string form; bool casts;
+					auto j=sqrtRadiusScale(image.b,form),bound=sublevelBound(d.a,casts);
+					if(j!=Term.init&&bound!=BoundTerm.init&&nodes[image.a].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[image.a].data))){
+						auto q=dropIndex(bound);
+						if(node(q).op==BoundOp.bottom) next=q;
+						else{
+							auto zero=scalar(ctx,arena.real_(0)),two=scalar(ctx,arena.real_(2));
+							auto le=primitive(arena.le(arena.real_(0),arena.real_(0)),[zero,q]);
+							auto mul=scalarOperator(type(q),TensorOp.mul),width=primitive(mul,[two,scalar(ctx,j)]);
+							auto root=primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[q]);
+							next=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[le,primitive(mul,[width,root])]);
+						}
+						rule=BindingRule.distributionRadiusSublevel; extra=q.id;
+					}
+				}
 				else if(d.op==BoundOp.distributionPushforwardOn&&nodes[d.a].op==BoundOp.lambda){
 					bool product;
 					bool square=squareMap(d.b,product);
@@ -3256,6 +3331,16 @@ final class Bindings{
 				auto branch=oddMap(current.b);
 				if(!branch.degree) branch=powerMap(current.b,true);
 				auto body=nodes[current.a].a;
+				if(branch.degree==2&&isTrue(body,true)){
+					auto chart=affineChart(branch.affine.id,branch.slope,branch.offset,false);
+					auto centre=arena.real_(-branch.offset/branch.slope);
+					auto inner=context(at(chart.map)),y=variable(inner,0);
+					auto root=primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[y]);
+					auto radius=primitive(scalarOperator(type(y),TensorOp.mul),[at(chart.jacobian),root]);
+					next=distribution(ctx,BoundOp.distributionRadiusImage,[scalar(ctx,centre),hint(lambda(radius),"y")]);
+					chart.radiusCentre=scalar(inner,centre).id; chart.squareProduct=branch.product;
+					extra=cast(uint)affineCharts.length; affineCharts~=chart; rule=BindingRule.distributionRadiusChart;
+				}
 				uint puncture=uint.max;
 				if(branch.degree==2&&nodes[body].op==BoundOp.primitive&&arena.view(arena.at(nodes[body].data)).op==Op.nonzero){
 					Rational slope,offset;
@@ -3402,6 +3487,10 @@ final class Bindings{
 				auto d=nodes[current.a],query=at(current.b);
 				auto densityBranch=d.op==BoundOp.distributionPushforwardOn?oddMap(d.b):PowerMap.init;
 				if(d.op==BoundOp.distributionLebesgue){ next=sequence(query,scalar(ctx,arena.real_(1))); rule=BindingRule.distributionDensityLebesgue; }
+				else if(d.op==BoundOp.distributionRadiusImage&&nodes[d.a].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[d.a].data))){
+					string form; auto j=sqrtRadiusScale(d.b,form);
+					if(j!=Term.init){next=maskedInverseRoot(query,j); rule=BindingRule.distributionRadiusDensity;}
+				}
 				else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionLebesgue){ next=apply(at(d.a),query); rule=BindingRule.distributionDensityWeight; }
 				else if(densityBranch.degree){
 					auto chart=sourceChart(densityBranch); BoundTerm point,weight;
@@ -4214,6 +4303,7 @@ final class Bindings{
 	}
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
+			case BoundOp.distributionRadiusImage:return "Distribution.GraphFibre.radiusImageValue";
 			case BoundOp.distributionMaskedGraph:return "Distribution.GraphFibre.maskedKernel";
 			case BoundOp.distributionGraphFibre:return "Distribution.GraphFibre.value";
 			case BoundOp.distributionGraphMass:return "Distribution.GraphFibre.marginal";
@@ -4365,7 +4455,7 @@ final class Bindings{
 			switch(n.op){
 				case BoundOp.distributionZero:return "Distribution.zeroValue";
 				case BoundOp.distributionLebesgue:return "Distribution.lebesgueValue";
-				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:
+				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionRadiusImage,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass:
 					return "("~valueOperation(n)~" "~child(n.a)~(n.b==uint.max?"":" "~child(n.b))~")";
 				case BoundOp.variable:return "(some "~vars[n.data]~")";
 				case BoundOp.scalar:return "(n"~to!string(n.data)~".eval ξ)";
@@ -4416,7 +4506,7 @@ final class Bindings{
 		Term[] numericTerms;
 		uint parent;
 		this(string prefix,uint body){this.prefix=prefix;parent=contexts[nodes[body].context].parent;}
-		string q(Rational v){return v.denominator==1?"("~to!string(v.numerator)~" : ℚ)":"(("~to!string(v.numerator)~") / ("~to!string(v.denominator)~") : ℚ)";}
+		static string q(Rational v){return v.denominator==1?"("~to!string(v.numerator)~" : ℚ)":"(("~to!string(v.numerator)~") / ("~to!string(v.denominator)~") : ℚ)";}
 		string app(string lemma,string args){return "(Distribution.StepSource."~lemma~" "~args~")";}
 		string atPoint(uint id,Rational point){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some ("~q(point)~" : ℝ)) ρ))";}
 		uint serial;Table!(string,string) proofCache;
@@ -4728,6 +4818,16 @@ final class Bindings{
 			squareWeights.set(cast(uint)i,c.functionAt(weight)~" "~borelProof(weight,c));
 			stepDeclarations~=c.declarations;
 		}
+		string radiusArguments(BoundNode image){
+			auto centre=arena.at(nodes[image.a].data);
+			string form; auto scale=sqrtRadiusScale(image.b,form);
+			alias q=SourceCertificates.q;
+			string number(Term t){return "(Numeric.calculate_sound ξ n"~to!string(t.id)~" "~q(arena.number(t).re)~" rfl)";}
+			auto unit=form=="one"||form=="guardedOne";
+			auto shape="(Distribution.GraphFibre.sqrtRadius_"~form~(unit?"":" _")~")";
+			return q(arena.number(centre).re)~" "~q(arena.number(scale).re)~" (of_decide_eq_true rfl) "~number(centre)~
+				" "~(unit?"rfl":number(scale))~" "~shape;
+		}
 		string[] chartProofs;
 		foreach(i,chart;result.affineCharts){
 			auto c=new SourceCertificates("affine"~to!string(i)~"_",chart.map);
@@ -4735,6 +4835,12 @@ final class Bindings{
 			auto invProof=chart.inverse==uint.max?"":c.affineProof(chart.inverse).proof~" ";
 			auto reciprocal=Rational(1)/f.slope,jac=reciprocal<Rational(0)?-reciprocal:reciprocal;
 			auto hj=c.numericProof(chart.jacobian,Rational(0),c.q(jac));
+			if(chart.radiusCentre!=uint.max){
+				auto centre=c.numericProof(chart.radiusCentre,Rational(0),c.q(-f.offset/f.slope));
+				chartProofs~=c.q(f.slope)~" "~c.q(f.offset)~" "~c.q(jac)~" (of_decide_eq_true rfl) rfl "~
+					f.proof~" "~centre~" "~hj~(chart.squareProduct?" true":" false");
+				stepNumerics~=c.numericTerms; stepDeclarations~=c.declarations; continue;
+			}
 			chartProofs~=c.q(f.slope)~" "~c.q(f.offset)~" "~c.q(jac)~" (of_decide_eq_true rfl) rfl "~
 				f.proof~" "~invProof~hj;
 			if(chart.powerDegree){
@@ -4813,7 +4919,7 @@ final class Bindings{
 				case BoundOp.variable:
 					expr=".here"; foreach(j;0..n.data) expr="(.there "~expr~")";
 					expr=".var "~expr; break;
-				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass,BoundOp.finiteSum,BoundOp.summation,BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
+				case BoundOp.distributionDirac,BoundOp.distributionAdd,BoundOp.distributionScale,BoundOp.distributionWeight,BoundOp.distributionIntegral,BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionBind,BoundOp.distributionPushforwardOn,BoundOp.distributionRadiusImage,BoundOp.distributionMaskedGraph,BoundOp.distributionGraphFibre,BoundOp.distributionGraphMass,BoundOp.finiteSum,BoundOp.summation,BoundOp.primitive,BoundOp.member,BoundOp.subset,BoundOp.domain,BoundOp.defined,BoundOp.holds,BoundOp.guard,BoundOp.typeEq,BoundOp.equal,BoundOp.vectorCons,BoundOp.pair,BoundOp.first,BoundOp.rest,BoundOp.get,BoundOp.tensor:
 					expr="."~(n.b==uint.max?"unary":"binary")~" "~valueOperation(n)~" "~name(n.a);
 					if(n.b!=uint.max) expr~=" "~name(n.b); break;
 				case BoundOp.lambda:expr=".lam "~name(n.a); break;
@@ -6062,6 +6168,20 @@ final class Bindings{
 					}
 					break;
 				}
+				case BindingRule.distributionRadiusSublevel:{
+					auto d=nodes[n.a]; bool casts;
+					sublevelBound(d.a,casts);
+					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.radius_sqrt_sublevel "~radiusArguments(nodes[d.b])~
+						(casts?" true":" false")~" ("~name(p.extra)~".eval ξ ρ); h)"; break;
+				}
+				case BindingRule.distributionRadiusDensity:{
+					auto term="Distribution.GraphFibre.radius_sqrt_density "~radiusArguments(nodes[n.a])~" ("~name(n.b)~".eval ξ ρ)";
+					if(nodes[p.to].op==BoundOp.bottom&&nodes[n.b].op!=BoundOp.bottom)
+						term="Eq.trans ("~term~") (Distribution.GraphFibre.unrestrictedSquareDensity_zero _)";
+					proof=".ofEq (fun ξ ρ => let h := "~term~"; h)"; break;
+				}
+				case BindingRule.distributionRadiusChart:
+					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affineSquare_radius_image "~chartProofs[p.extra]~"; h)"; break;
 				case BindingRule.distributionClosedSquare:{
 					auto observer=n.op==BoundOp.distributionGraphMass?"mass":"density";
 					auto term="Distribution.GraphFibre.affineSquare_unrestricted_"~observer~" "~chartProofs[p.extra]~

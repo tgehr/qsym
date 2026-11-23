@@ -119,7 +119,7 @@ struct FunctionSyntax{
 			name=="∑"||name=="sum"||name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
 	}
 	private bool distributionName(string name){
-		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","positiveLebesgueD","λ₊","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD","maskedGraphD","pushforwardOnD"])
+		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","positiveLebesgueD","λ₊","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD","maskedGraphD","pushforwardOnD","radiusImageD"])
 			if(name==n) return true;
 		return false;
 	}
@@ -281,6 +281,7 @@ struct FunctionSyntax{
 					case "bindD":op=BoundOp.distributionBind; break;
 					case "integralD":op=BoundOp.distributionIntegral; break;
 					case "massD":op=BoundOp.distributionMass; break;
+					case "radiusImageD":op=BoundOp.distributionRadiusImage; break;
 					case "pushforwardOnD":op=BoundOp.distributionPushforwardOn; break;
 					case "maskedGraphD":op=BoundOp.distributionMaskedGraph; break;
 					case "graphFibreD":op=BoundOp.distributionGraphFibre; break;
@@ -290,6 +291,7 @@ struct FunctionSyntax{
 				BoundTerm[] args;
 				foreach(i,arg;p.args){
 					TypeId want;
+					if(op==BoundOp.distributionRadiusImage) want=i==0?scalarType(Sort.real_):pool.function_(scalarType(Sort.real_),scalarType(Sort.real_));
 					if(op==BoundOp.distributionMaskedGraph&&i==1) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.real_));
 					if((op==BoundOp.distributionPushforwardOn||op==BoundOp.distributionMaskedGraph)&&i==0) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.boolean));
 					if(p.name=="graphFibreD") want=i==0?pool.function_(scalarType(Sort.real_),scalarType(Sort.real_)):scalarType(Sort.real_);
@@ -648,6 +650,7 @@ struct FunctionSyntax{
 				return "get("~child(base)~","~to!string(index)~")";
 			}
 			switch(n.op){
+				case BoundOp.distributionRadiusImage:return "radiusImageD("~render(b.at(n.a),locals,depth+1,scalarType(Sort.real_))~","~child(n.b)~")";
 				case BoundOp.distributionMaskedGraph:return "maskedGraphD("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.distributionDirac:return "δ("~child(n.a)~")";
 				case BoundOp.distributionMass:{

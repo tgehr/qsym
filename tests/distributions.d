@@ -79,7 +79,20 @@ private Case[] cases(){ return [
 	Case("WeightedFibreGap","densityAtD(integralD(λ(x:ℝ).scaleD(1+x²,δ(x*x))),-1)","ℝ","0"),
 	Case("WeightedFibreMissing","densityAtD(bindD(weightD(λ(x:ℝ).x,lebesgueD()),λ(x:ℝ).δ(x²)),undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("WeightedSquareAbs","Λy. ∫dx λ[x]·δ(x²)[y]·abs(x)","Distribution(ℝ)","Λ(y:ℝ). [0<y]·λ[y]"),
-	Case("BareCriticalGraph","Λy. ∫dx λ[x]·δ((1-2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). ∫dx λ[x]·δ((-2·x+1)^2)[y]"),
+	Case("BareCriticalGraph","Λy. ∫dx λ[x]·δ((1-2*x)^2)[y]","Distribution(ℝ)","radiusImageD(1/2,λ(y:ℝ). 1/2·sqrt(y))"),
+	Case("RadiusRational","Λy. ∫dx λ[x]·δ((x/3-1)*(x/3-1))[y]","Distribution(ℝ)","radiusImageD(3,λ(y:ℝ). 3·sqrt(y))"),
+	Case("RadiusUnit","Λy. ∫dx λ[x]·δ(x²)[y]","Distribution(ℝ)","radiusImageD(0,λ(y:{y:ℝ | 0≤y}). sqrt(y))"),
+	Case("RadiusPositive","densityAtD(radiusImageD(1/2,λ(y:ℝ). 1/2·sqrt(y)),4)","ℝ","1/4"),
+	Case("RadiusCritical","densityAtD(radiusImageD(3,λ(y:ℝ). sqrt(y)·3),0)","ℝ","undefined(ℝ)"),
+	Case("RadiusEmpty","densityAtD(radiusImageD(0,λ(y:ℝ). sqrt(y)),-1)","ℝ","0"),
+	Case("RadiusGuarded","densityAtD(radiusImageD(0,λ(y:{y:ℝ | 0≤y}). sqrt(y)),4)","ℝ","1/2"),
+	Case("RadiusMissing","densityAtD(radiusImageD(0,λ(y:ℝ). sqrt(y)),undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("RadiusSublevel","massD(weightD(λ(y:ℝ).[y≤4],Λz. ∫dx λ[x]·δ((1-2*x)^2)[z]))","ℝ","2"),
+	Case("RadiusSublevelGap","∫dy [y≤-1]·(radiusImageD(3,λ(y:ℝ).3*sqrt(y)))[y]","ℝ","0"),
+	Case("RadiusSublevelCritical","∫dy [y≤0]·(radiusImageD(3,λ(y:ℝ).3*sqrt(y)))[y]","ℝ","0"),
+	Case("RadiusSublevelShifted","∫dy [y≤4]·(radiusImageD(3,λ(y:ℝ).3*sqrt(y)))[y]","ℝ","12"),
+	Case("RadiusSublevelMissing","∫dy [y≤undefined(ℝ)]·(radiusImageD(1/2,λ(y:ℝ).1/2*sqrt(y)))[y]","ℝ","undefined(ℝ)"),
+	Case("RadiusSublevelSymbolic","λ(t:ℝ).∫dy [y≤t]·(radiusImageD(1/2,λ(y:ℝ).1/2*sqrt(y)))[y]","ℝ→ℝ","λ(t:ℝ). [0≤t]·sqrt(t)"),
 	Case("BareCriticalPoint","densityAtD(Λy. ∫dx λ[x]·δ((1-2*x)^2)[y],0)","ℝ","undefined(ℝ)"),
 	Case("BareCriticalNegative","densityAtD(Λy. ∫dx λ[x]·δ((1-2*x)^2)[y],-1)","ℝ","0"),
 	Case("BareCriticalPositive","densityAtD(Λy. ∫dx λ[x]·δ((1-2*x)^2)[y],4)","ℝ","1/4"),
@@ -330,6 +343,13 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name=="BareCriticalGraph"||c.name=="RadiusRational"||c.name=="RadiusUnit"){
+			enforce(certificate.indexOf("GraphFibre.affineSquare_radius_image")>=0,c.name);
+			enforce(s.inspectType(a,text)==c.type&&text.indexOf("∫")<0,c.name);
+		}else if(c.name.indexOf("RadiusSublevel")==0)
+			enforce(certificate.indexOf("GraphFibre.radius_sqrt_sublevel")>=0&&text.indexOf("∫")<0,c.name~": "~text);
+		else if(c.name.indexOf("Radius")==0)
+			enforce(certificate.indexOf("GraphFibre.radius_sqrt_density")>=0,c.name);
 		if(c.name=="NativeTruePartial")
 			enforce(text.indexOf("pushforwardOnD(")>=0&&text.indexOf("[true]")<0,c.name~": "~text);
 		if(c.name=="SquareGraph"||c.name=="SquareGraphFour"||c.name=="CubicGraph"){
@@ -434,7 +454,8 @@ private void run(string directory){
 		}
 		if(c.name.indexOf("ClosedSquare")==0||c.name=="AffineSquareMass"){
 			auto observer=c.name=="ClosedSquareMass"||c.name=="AffineSquareMass"?"mass":"density";
-			enforce(certificate.indexOf("GraphFibre.affineSquare_unrestricted_"~observer)>=0,c.name);
+			enforce(certificate.indexOf("GraphFibre.affineSquare_unrestricted_"~observer)>=0||
+				observer=="density"&&certificate.indexOf("GraphFibre.radius_sqrt_density")>=0,c.name);
 		}
 		else if(c.name=="AffineSquareZeroSlope") enforce(certificate.indexOf("affineSquareExpression")<0,c.name);
 		else if(c.name.indexOf("AffineSquare")==0)
@@ -493,6 +514,7 @@ private void run(string directory){
 		"if x<0 then δ(0)[x] else λ[x]", "(λ[x]·δ(x+y)[y])//λ[y]", "Λ(z:ℝ).(λ[x]·δ(x²)[y])//λ[y]",
 		"μ(f:ℝ→ℝ).λ(y:ℝ).massD((λ[x]·δ(f(x))[y])//λ[y])",
 		"([x<y]·λ[x]·δ(x)[y])//λ[y]", "([0<x]·λ[x]·δ(x+y)[y])//λ[y]",
+		"radiusImageD(0)","radiusImageD(true,λ(x:ℝ).x)","radiusImageD(0,λ(x:ℝ).x<0)",
 		"maskedGraphD(λ(x:ℝ).x,λ(x:ℝ).x)", "maskedGraphD(λ(x:ℝ).0<x,λ(n:ℕ).n)",
 		"pushforwardOnD(λ(x:ℝ).x,λ(x:ℝ).x)", "pushforwardOnD(λ(x:ℝ).x<1,λ(n:ℕ).n)",
 		"Λ(x:ℕ).λ[x]", "Λ(x:ℝ).δ(x)[x]", "Λ(x:ℝ).λ[x]*λ[x]",

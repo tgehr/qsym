@@ -225,4 +225,22 @@ theorem critical_weight_zero_test (a b : ℝ) (w : ℝ → Option ℝ) (hw : w 0
 #qsym_check_axioms closed_mask_pairing
 #qsym_check_axioms critical_weight_zero_test
 
+theorem inverse_radius_partial {c : ℝ} {r f : ℝ → Option ℝ}
+    (h : ∀ x y, r y = some |x-c| ↔ f x = some y) : radiusOutput c r = f := by qsym_rule
+
+theorem inverse_radius_distribution {c : ℝ} {r f : ℝ → Option ℝ}
+    (h : ∀ x y, r y = some |x-c| ↔ f x = some y) :
+    realPushforwardOnValue (some fun _ => some true) (some f) =
+      radiusImageValue (some c) (some r) := by qsym_rule
+
+theorem inverse_radius_pairing (a b : ℝ) (ha : a ≠ 0) (t : ℝ → Option ℝ) :
+    (radiusImageValue (some (-b/a)) (some (sqrtRadius (some |a|⁻¹)))).bind
+        (fun d => integrate d t) =
+      imageIntegral volume (Set.Ici 0)
+        (fun y => (unrestrictedSquareDensity (some |a|⁻¹) (some y)).getD 0) t := by qsym_rule
+
+#qsym_check_axioms inverse_radius_distribution
+#qsym_check_axioms inverse_radius_partial
+#qsym_check_axioms inverse_radius_pairing
+
 end QSym.Distribution.SquareReconstructionTests
