@@ -332,6 +332,20 @@ theorem r_real_mask_complement (v_p : Option (Ty.denote .bool)) (v_x : Option (T
 
 #qsym_check_axioms r_real_mask_complement
 
+theorem r_real_mask_le_complement (v_a : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real)) (v_x : Option (Ty.denote .real)) :
+    Value.Refines (Value.add (Value.mask (Value.le v_a v_b) v_x) (Value.mask (Value.lt v_b v_a) v_x)) v_x := qsym_cached% by
+  cases v_a <;> cases v_b <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_le_complement
+
+theorem r_real_mask_power (v_p : Option (Ty.denote .bool)) (v_n : Nat) :
+    Value.Refines ((Value.mask v_p (some (((1) : Int) : ℝ))).map (fun x => x ^ (v_n + (1)))) (Value.mask v_p (some (((1) : Int) : ℝ))) := qsym_cached% by
+  cases v_p
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_power
+
 theorem r_real_mask_mul_left (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
     Value.Refines (Value.mul (Value.mask v_p v_x) v_y) (Value.mask v_p (Value.mul v_x v_y)) := qsym_cached% by
   cases v_p <;> cases v_x <;> cases v_y

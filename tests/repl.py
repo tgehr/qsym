@@ -284,3 +284,11 @@ assert result.returncode==0,result.stderr
 assert result.stdout.splitlines()==["55","ℤ","7","1","4","3","sqrt(x+1)⁻¹","[x≤4]","2·abs(x)"],result.stdout
 assert "expected" in result.stderr,result.stderr
 print("Shared notation REPL checks passed.")
+
+# Complementary order brackets cover the line; a bracket is idempotent.
+result=subprocess.run([str(root/"build/qsym")],input="\n".join([
+	"[x≤0]+[x>0]","[x≤y]*z+[y<x]*z","2*[x<0]+2*[x≥0]","[x≤0]^2","[x<1]^3*x",
+	"[x≤y]*x+[y<x]*y",":quit",""]),text=True,capture_output=True,timeout=30)
+assert result.returncode==0 and not result.stderr,result.stderr
+assert result.stdout.splitlines()==["1","z","2","[x≤0]","[x<1]·x","[y<x]·y+[x≤y]·x"],result.stdout
+print("Bracket complement REPL checks passed.")
