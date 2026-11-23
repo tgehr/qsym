@@ -162,6 +162,14 @@ theorem corner_density (a y : ℝ) :
   rw [corner_source]
   exact corner_source_density a y
 
+/-- The critical singleton has zero charge even at the point where its
+regular density is missing. This also determines its contribution to signed sums. -/
+theorem corner_components (a : ℝ) : ∃ d, VariationChart.corner a (some true) = some d ∧
+    ∀ y, (realFibre d y).charge = 0 ∧ (realFibre d y).regular = if y = a then none else some 0 := by
+  refine ⟨cornerSource a, corner_source a, fun y => ⟨rfl, ?_⟩⟩
+  have hz : (realFibre (cornerSource a) y).charge = 0 := rfl
+  simpa only [densityAt, RealDensityFibre.density, hz, if_true] using corner_source_density a y
+
 theorem corner_integral (a : ℝ) (t : ℝ → Option ℝ) (ht : ∀ y, Value.Defined (t y)) :
     massValue (weightValue (some t) (VariationChart.corner a (some true))) = some 0 := by
   rw [corner_source]

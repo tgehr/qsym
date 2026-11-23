@@ -45,7 +45,7 @@ private enum BindingRule:ubyte{
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
-	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
+	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
 	limitTerms
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
@@ -73,6 +73,32 @@ private struct IntervalData{
 	IntervalTerm[] terms;
 }
 private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; }
+private struct PolynomialGrid{
+	Rational[] cuts,points;
+	Rational[][] cells;
+}
+private enum JoinKind{ smooth,corner,jump }
+private struct CoordinateJoin{
+	JoinKind kind;
+	Rational left,right,slope;
+	uint event=uint.max;
+}
+private struct CoordinateGrid{
+	PolynomialGrid grid;
+	uint body,weight;
+	CoordinateJoin[] joins;
+}
+private Rational polynomialAt(Rational[] p,Rational x) @safe {
+	auto result=Rational(0);
+	foreach_reverse(c;p) result=c+x*result;
+	return result;
+}
+private Rational[] derivativeCoefficients(Rational[] p) @safe {
+	Rational[] d;
+	foreach(i;1..p.length) d~=Rational(cast(long)i)*p[i];
+	while(d.length&&d[$-1].zero) --d.length;
+	return d;
+}
 private struct LimitSolution{ uint body,output; bool bottom; }
 private struct AffineChart{
 	uint map,inverse,jacobian,predicateDomain;
@@ -111,6 +137,7 @@ struct BindingResult{
 	private AffineChart[] affineCharts;
 	private CoverStep[] covers;
 	private LimitSolution[] limits;
+	private CoordinateGrid[] coordinates;
 }
 
 final class Bindings{
@@ -392,7 +419,7 @@ final class Bindings{
 			if(index!=uint.max) return index;
 			auto d=nodes[id];
 			BoundTerm charge,regular;
-			uint[] weights;
+			uint[] weights; Term offset; bool swap;
 			if(d.op==BoundOp.distributionAdd){
 				auto left=visit(d.a); if(left==uint.max) return uint.max;
 				auto right=visit(d.b); if(right==uint.max) return uint.max;
@@ -413,6 +440,10 @@ final class Bindings{
 					charge=primitive(mul,[coefficient,charge]);
 					regular=primitive(mul,[coefficient,regular]);
 				}
+			}else if(cornerChart(id,offset,swap)){
+				auto location=offset==Term.init?zero:scalar(ctx,offset);
+				charge=sequence(query,zero);
+				regular=guard(awayFromAtom(location.id,query),zero);
 			}else if(d.op==BoundOp.distributionZero||densityBodies(id,weights)){
 				charge=sequence(query,zero);
 				regular=d.op==BoundOp.distributionZero?zero:retainedWeight(weights,query);
@@ -938,6 +969,24 @@ final class Bindings{
 		foreach_reverse(c;casts) rest=primitive(arena.at(nodes[c].data),[rest]);
 		return true;
 	}
+	// A singleton source parameter maps to a critical point at the offset.
+	private bool cornerChart(uint id,out Term offset,out bool swap){
+		auto graph=nodes[id];
+		if(graph.op!=BoundOp.distributionPushforwardOn||nodes[graph.a].op!=BoundOp.lambda||nodes[graph.b].op!=BoundOp.lambda) return false;
+		auto predicate=nodes[graph.a].a,map=nodes[graph.b].a;
+		if(!primitiveOp(predicate,Op.not_)||!primitiveOp(nodes[predicate].a,Op.nonzero)) return false;
+		if(primitiveOp(map,Op.add)){
+			auto m=nodes[map]; swap=nodes[m.a].op==BoundOp.scalar;
+			auto c=nodes[swap?m.a:m.b]; map=swap?m.b:m.a;
+			if(c.op!=BoundOp.scalar||!arena.isNumber(arena.at(c.data))) return false;
+			offset=arena.at(c.data);
+		}
+		if(!primitiveOp(map,Op.pow)) return false;
+		auto x=nodes[map].a;
+		return arena.view(arena.at(nodes[map].data)).value==2&&nodes[nodes[predicate].a].a==x&&
+			nodes[x].op==BoundOp.variable&&nodes[x].data==0;
+	}
+	private bool cornerChart(uint id){ Term offset; bool swap; return cornerChart(id,offset,swap); }
 	// A polynomial in the innermost variable with rational literal coefficients.
 	private bool axisPolynomial(uint id,out Rational[] p,uint depth=0){
 		if(depth>64) return false;
@@ -2240,7 +2289,7 @@ final class Bindings{
 	}
 	BindingResult normalize(BoundTerm term,uint budget=4096,bool domains=false){
 		if(telescope_) return normalizeDependent(term,budget);
-		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals; FibreStep[][] fibres; AffineChart[] affineCharts; CoverStep[] covers; LimitSolution[] limits;
+		check(term); uint steps,fixedSteps; bool exhausted; BindingStep[] proofs; ScalarDomain[] scalarDomains; RecurrenceSolution[] solutions; DomainRank[] ranks; SpectralSolution[] spectra; SummationSolution[] sums; IntegralSolution[] integrals; FibreStep[][] fibres; AffineChart[] affineCharts; CoverStep[] covers; LimitSolution[] limits; CoordinateGrid[] coordinates;
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
@@ -2405,12 +2454,10 @@ final class Bindings{
 			}
 			solution.piecewise=true; solution.output=result.id; return result;
 		}
-		// Piecewise polynomial densities with closed rational coefficients on a
-		// rational grid. The certificate rechecks the polynomial of every cell,
-		// both vanishing tails and definedness at every cut.
-		BoundTerm integratePolynomials(BoundTerm t,out IntegralSolution solution){
-			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)) return BoundTerm.init;
-			auto ctx=context(t),arg=arena.variable(Sort.real_,cast(uint)arena.length+1); Rational[] cuts;
+		// Partition the axis once for both mass and coordinate certificates.
+		// Probe each singleton independently of the two adjacent formulas.
+		bool polynomialGrid(uint[] factors,out PolynomialGrid grid,bool zeroTails=false){
+			auto arg=arena.variable(Sort.real_,cast(uint)arena.length+1); Rational[] cuts;
 			bool numerical(uint id){
 				auto q=nodes[id];
 				if(q.op==BoundOp.scalar){auto leaf=arena.at(q.data);return arena.isNumber(leaf)||arena.view(leaf).op==Op.boolLit;}
@@ -2468,11 +2515,11 @@ final class Bindings{
 				}
 				return op.op==Op.pow&&op.value<=16&&collect(q.a,depth+1);
 			}
-			foreach(id;solution.from) if(!numerical(id)||!collect(id)) return BoundTerm.init;
+			foreach(id;factors) if(!numerical(id)||!collect(id)) return false;
 			import std.algorithm:sort;
 			sort(cuts); Rational[] unique;
 			foreach(q;cuts) if(!unique.length||unique[$-1]!=q) unique~=q;
-			if(unique.length>16) return BoundTerm.init;
+			if(unique.length>16) return false;
 			if(!unique.length) unique=[Rational(0)];
 			bool evaluate(uint id,Rational point,out Term value){
 				auto source=scalarBody(at(id),arena.real_(point)); if(source==Term.init) return false;
@@ -2512,20 +2559,38 @@ final class Bindings{
 			}
 			bool density(Rational sample,out Rational[] p){
 				p=[Rational(1)];
-				foreach(id;solution.from){ Rational[] w; if(!polynomial(id,sample,w)) return false; p=polyProduct(p,w); }
+				foreach(id;factors){ Rational[] w; if(!polynomial(id,sample,w)) return false; p=polyProduct(p,w); }
 				return true;
 			}
-			foreach(point;[unique[0]-Rational(1),unique[$-1]+Rational(1)]){
-				Rational[] p; if(!density(point,p)) return BoundTerm.init;
-				foreach(c;p) if(!c.zero) return BoundTerm.init;
+			grid.cuts=unique; grid.cells.length=unique.length+1;
+			bool tail(size_t i,Rational sample){
+				if(!density(sample,grid.cells[i])) return false;
+				if(zeroTails) foreach(c;grid.cells[i]) if(!c.zero) return false;
+				return true;
 			}
-			foreach(point;unique) foreach(id;solution.from){
-				Term value; if(!evaluate(id,point,value)||!arena.isNumber(value)) return BoundTerm.init;
+			if(!tail(0,unique[0]-Rational(1))||!tail(unique.length,unique[$-1]+Rational(1))) return false;
+			foreach(i;1..unique.length){
+				auto sample=(unique[i-1]+unique[i])/Rational(2);
+				if(!density(sample,grid.cells[i])) return false;
 			}
+			foreach(point;unique){
+				auto height=Rational(1);
+				foreach(id;factors){
+					Term value;
+					if(!evaluate(id,point,value)||!arena.isNumber(value)||!arena.number(value).im.zero) return false;
+					height=height*arena.number(value).re;
+				}
+				grid.points~=height;
+			}
+			return true;
+		}
+		BoundTerm integratePolynomials(BoundTerm t,out IntegralSolution solution){
+			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)) return BoundTerm.init;
+			PolynomialGrid grid; if(!polynomialGrid(solution.from,grid,true)) return BoundTerm.init;
+			auto unique=grid.cuts,ctx=context(t);
 			auto total=Rational(0);
 			foreach(i;0..unique.length-1){
-				auto lower=unique[i],upper=unique[i+1],sample=(lower+upper)/Rational(2); Rational[] p;
-				if(!density(sample,p)) return BoundTerm.init;
+				auto lower=unique[i],upper=unique[i+1],sample=(lower+upper)/Rational(2),p=grid.cells[i+1];
 				auto lo=lower,hi=upper;
 				foreach(k,c;p){ total=total+c*(hi-lo)/Rational(cast(long)k+1); lo=lo*lower; hi=hi*upper; }
 				if(total.words>128) return BoundTerm.init;
@@ -3236,6 +3301,69 @@ final class Bindings{
 			rule=BindingRule.distributionCoordinateRayLinear;
 			return distribution(ctx,BoundOp.distributionAdd,[corner,regular]);
 		}
+		BoundTerm polynomialCoordinate(BoundTerm fn,out uint index){
+			auto body=at(node(fn).a),inner=context(body),ctx=context(fn),x=variable(inner,0);
+			CoordinateGrid cert;
+			Rational[] global;
+			if(axisPolynomial(body.id,global)) cert.grid.cells~=global;
+			else if(!polynomialGrid([body.id],cert.grid)) return BoundTerm.init;
+			auto cuts=cert.grid.cuts;
+			// A global polynomial needs no cuts or region certificates.
+			Rational[][] slopes;
+			foreach(p;cert.grid.cells) slopes~=derivativeCoefficients(p);
+			foreach(i,a;cuts){
+				auto l=polynomialAt(cert.grid.cells[i],a),r=polynomialAt(cert.grid.cells[i+1],a);
+				auto dl=polynomialAt(slopes[i],a),dr=polynomialAt(slopes[i+1],a),v=cert.grid.points[i];
+				if((v!=l&&v!=r)||l.words>128||r.words>128||dl.words>128||dr.words>128) return BoundTerm.init;
+				cert.joins~=CoordinateJoin(l!=r?JoinKind.jump:dl!=dr?JoinKind.corner:JoinKind.smooth,l,r,dl);
+			}
+			auto zero=arena.real_(0),mul=arena.mul(zero,zero,true),add=arena.add(zero,zero,true);
+			auto lt=arena.lt(zero,zero),le=arena.le(zero,zero),mask=arena.mask(arena.boolean(true),zero);
+			BoundTerm weight;
+			foreach(i,p;slopes){
+				if(!p.length) continue;
+				BoundTerm derivative;
+				foreach(k,c;p){
+					if(c.zero) continue;
+					auto term=scalar(inner,arena.real_(c));
+					if(k){
+						auto power=k==1?x:primitive(arena.pow(zero,cast(uint)k),[x]);
+						term=c==Rational(1)?power:primitive(mul,[term,power]);
+					}
+					derivative=derivative==BoundTerm.init?term:primitive(add,[derivative,term]);
+				}
+				auto magnitude=primitive(arena.abs(zero),[derivative]);
+				BoundTerm guard;
+				if(i) guard=primitive(cert.joins[i-1].kind==JoinKind.smooth?le:lt,[scalar(inner,arena.real_(cuts[i-1])),x]);
+				if(i<cuts.length){
+					auto upper=primitive(lt,[x,scalar(inner,arena.real_(cuts[i]))]);
+					guard=guard==BoundTerm.init?upper:primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[guard,upper]);
+				}
+				if(guard!=BoundTerm.init) magnitude=primitive(mask,[guard,magnitude]);
+				weight=weight==BoundTerm.init?magnitude:primitive(add,[weight,magnitude]);
+			}
+			if(weight==BoundTerm.init) weight=scalar(inner,zero);
+			auto result=distribution(ctx,BoundOp.distributionWeight,[inheritHint(fn,lambda(weight)),distribution(ctx,BoundOp.distributionLebesgue)]);
+			foreach_reverse(i,a;cuts){
+				auto join=cert.joins[i];
+				if(join.kind==JoinKind.smooth) continue;
+				BoundTerm event;
+				if(join.kind==JoinKind.corner){
+					auto isZero=primitive(arena.not_(arena.boolean(true)),[primitive(arena.nonzero(zero),[x])]);
+					auto square=primitive(arena.pow(zero,2),[x]);
+					auto map=primitive(add,[square,scalar(inner,arena.real_(a))]);
+					event=distribution(ctx,BoundOp.distributionPushforwardOn,[lambda(isZero),lambda(map)]);
+				}else{
+					auto k=join.right-join.left; if(k<Rational(0)) k=-k;
+					event=distribution(ctx,BoundOp.distributionDirac,[scalar(ctx,arena.real_(a))]);
+					if(k!=Rational(1)) event=distribution(ctx,BoundOp.distributionScale,[scalar(ctx,arena.real_(k)),event]);
+				}
+				cert.joins[i].event=event.id;
+				result=distribution(ctx,BoundOp.distributionAdd,[event,result]);
+			}
+			cert.body=body.id;cert.weight=weight.id;index=cast(uint)coordinates.length;coordinates~=cert;
+			return result;
+		}
 		BoundTerm jumpCoordinate(BoundTerm fn,JumpRays rays){
 			auto x=at(rays.x),ctx=context(fn),inner=context(x),zero=arena.real_(0);
 			auto mask=arena.mask(arena.boolean(true),zero);
@@ -3251,15 +3379,6 @@ final class Bindings{
 			if(arena.number(rays.b).re!=Rational(1))
 				rightAtom=distribution(ctx,BoundOp.distributionScale,[b,rightAtom]);
 			return distribution(ctx,BoundOp.distributionAdd,[leftAtom,distribution(ctx,BoundOp.distributionAdd,[rightAtom,regular])]);
-		}
-		bool cornerChart(uint id){
-			auto graph=nodes[id];
-			if(graph.op!=BoundOp.distributionPushforwardOn||nodes[graph.a].op!=BoundOp.lambda||nodes[graph.b].op!=BoundOp.lambda) return false;
-			auto predicate=nodes[graph.a].a,map=nodes[graph.b].a;
-			if(!primitiveOp(predicate,Op.not_)||!primitiveOp(nodes[predicate].a,Op.nonzero)||!primitiveOp(map,Op.pow)) return false;
-			auto x=nodes[map].a;
-			return arena.view(arena.at(nodes[map].data)).value==2&&nodes[nodes[predicate].a].a==x&&
-				nodes[x].op==BoundOp.variable&&nodes[x].data==0;
 		}
 		bool squareMap(uint id,out bool product){
 			if(nodes[id].op!=BoundOp.lambda) return false;
@@ -3972,6 +4091,10 @@ final class Bindings{
 							next=distribution(ctx,BoundOp.distributionWeight,[hint(lambda(w),binderHint(at(first.a)).name),
 								distribution(ctx,BoundOp.distributionLebesgue)]);
 						}
+					}
+					if(next==BoundTerm.init){
+						next=polynomialCoordinate(at(first.a),extra);
+						if(next!=BoundTerm.init) rule=BindingRule.distributionCoordinateGrid;
 					}
 				}
 			}
@@ -5112,7 +5235,7 @@ final class Bindings{
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
 		normalizeClosed=&visit;
-		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres,affineCharts,covers,limits);
+		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres,affineCharts,covers,limits,coordinates);
 	}
 
 	/// A scalar refinement can fill a hole in a pointwise observation. If its
@@ -5579,6 +5702,82 @@ final class Bindings{
 		}
 		return "Limit.Exact.sound "~visit(s.body,s.output);
 	}
+	private string coordinateGridProof(CoordinateGrid c,SourceCertificates cert){
+		alias q=SourceCertificates.q;
+		enum grid="Distribution.GraphFibre.Coordinates.Grid.";
+		string app(string lemma,string args){ return "("~grid~lemma~" "~args~")"; }
+		string numeric(Term t,Rational v){
+			cert.numericTerms~=t;
+			return "(Numeric.calculate_sound ξ n"~to!string(t.id)~" "~q(v)~" rfl)";
+		}
+		auto cuts=c.grid.cuts,f=cert.functionAt(c.body),w=cert.functionAt(c.weight);
+		string[] sources,cells;
+		foreach(i;0..cuts.length+1){
+			auto region=!cuts.length?"":!i?"(.before "~q(cuts[0])~")":i==cuts.length?"(.after "~q(cuts[$-1])~")":"(.between "~q(cuts[i-1])~" "~q(cuts[i])~")";
+			auto set=cuts.length?"(Distribution.StepSource.Region.contains "~region~")":cert.everywhere;
+			auto sample=!cuts.length?Rational(0):!i?cuts[0]-Rational(1):i==cuts.length?cuts[$-1]+Rational(1):(cuts[i-1]+cuts[i])/Rational(2);
+			auto src=cert.piece(c.body,set,region,sample);
+			sources~=src.proof;
+			// The emitted sum has disjoint masks. At most one absolute
+			// polynomial contributes on this cell; every sibling certifies zero.
+			struct Magnitude{ string proof; bool active; }
+			Magnitude magnitude(uint id){
+				auto n=nodes[id];
+				if(primitiveOp(id,Op.abs))
+					return Magnitude(app("magnitude_abs",cert.piece(n.a,set,region,sample).proof),true);
+				if(primitiveOp(id,Op.mask)){
+					auto predicate=scalarBody(at(n.a),arena.real_(sample));
+					if(simplify(arena,predicate).output==arena.boolean(true)){
+						auto v=magnitude(n.b);
+						return Magnitude(app("magnitude_mask",q(sample)~" rfl "~cert.uniform(n.a,region,sample)~" "~cert.numericProof(n.a,sample,"true")~" "~v.proof),true);
+					}
+				}
+				if(primitiveOp(id,Op.add)){
+					auto a=magnitude(n.a),b=magnitude(n.b);
+					if(a.active||b.active){
+						enforce(!(a.active&&b.active),"overlapping coordinate cells");
+						return Magnitude(app(a.active?"magnitude_add_left":"magnitude_add_right",a.proof~" "~b.proof),true);
+					}
+					return Magnitude(app("zero_add",a.proof~" "~b.proof),false);
+				}
+				return Magnitude(app("zero_on",cert.piece(id,set,region,sample).proof~" rfl"),false);
+			}
+			auto weight=magnitude(c.weight);
+			auto proof=weight.active?weight.proof:app("magnitude_zero",weight.proof);
+			cells~=cert.save(grid~"Cell "~set~" "~f~" "~w~" "~src.poly,app("cell",src.proof~" "~proof~" rfl"));
+		}
+		if(!cuts.length) return app("polynomial",cells[0]);
+		string events="([] : List "~grid~"Event)";
+		auto tail=app("last","(a := "~q(cuts[$-1])~") "~cells[$-1]);
+		foreach_reverse(i,a;cuts){
+			auto j=c.joins[i],v=c.grid.points[i],lo=i?"(some "~q(cuts[i-1])~")":"none",hi=i+1<cuts.length?"(some "~q(cuts[i+1])~")":"none";
+			auto bounds="(lo := "~lo~") (a := "~q(a)~") ";
+			auto germs=app("germs",bounds~"(hi := "~hi~") rfl rfl "~sources[i]~" "~sources[i+1]);
+			auto point="(v := "~q(v)~") (w := "~w~") ",pv=cert.numericProof(c.body,a,q(v));
+			string law;
+			if(j.kind==JoinKind.smooth){
+				auto k=j.slope<Rational(0)?-j.slope:j.slope;
+				law=app("smooth",point~"(slope := "~q(j.slope)~") "~germs~" "~pv~" rfl rfl rfl rfl "~cert.numericProof(c.weight,a,q(k)));
+			}else{
+				auto zero=cert.numericProof(c.weight,a,q(Rational(0)));
+				auto av=arena.real_(a),apos=numeric(av,a);
+				string eq;
+				if(j.kind==JoinKind.corner){
+					law=app("corner",point~germs~" "~pv~" rfl rfl (of_decide_eq_true rfl) "~zero);
+					eq=app("cornerTerm",q(a)~" "~apos);
+				}else{
+					auto height=j.right-j.left;if(height<Rational(0))height=-height;
+					auto side=v==j.left?"(Or.inl rfl)":"(Or.inr rfl)";
+					law=app("jump",point~"(l := "~q(j.left)~") (r := "~q(j.right)~") "~germs~" "~pv~" rfl rfl (of_decide_eq_true rfl) "~side~" "~zero);
+					eq=app("atomTerm",q(a)~" "~q(height)~" "~apos~" "~numeric(arena.real_(height),height));
+				}
+				law=app("moveBreak",law~" "~eq);
+				events="((("~q(a)~" : ℝ), "~name(j.event)~".eval ξ ρ) :: "~events~")";
+			}
+			tail=cert.save(grid~"Checked "~f~" "~w~" "~lo~" "~events,app(j.kind==JoinKind.smooth?"pass":"cut",bounds~"rfl "~cells[i]~" "~law~" "~tail));
+		}
+		return app("finish",tail);
+	}
 	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof){
 		auto q=&cert.q,app=&cert.app,atPoint=&cert.atPoint,functionAt=&cert.functionAt;
 		auto save=&cert.save,numericProof=&cert.numericProof,affineProof=&cert.affineProof;
@@ -5915,6 +6114,12 @@ final class Bindings{
 			auto c=new SourceCertificates("weight"~to!string(i)~"_",weight);
 			squareWeights.set(cast(uint)i,c.functionAt(weight)~" "~borelProof(weight,c));
 			stepDeclarations~=c.declarations;
+		}
+		string[] coordinateProofs;
+		foreach(i,coordinate;result.coordinates){
+			auto c=new SourceCertificates("grid"~to!string(i)~"_",coordinate.body);
+			coordinateProofs~=coordinateGridProof(coordinate,c);
+			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
 		}
 		Table!(uint,string) affineCovers;
 		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionCoverAffine){
@@ -7372,12 +7577,22 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.weight_weight_chart "~realBody(inner.a)~" "~realBody(n.a)~
 						" ("~name(graph.a)~".eval ξ ρ) ("~name(graph.b)~".eval ξ ρ))"; break;
 				}
-				case BindingRule.distributionCornerPairing:
-					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.corner_pairing "~realBody(nodes[n.a].a)~" "~rowTotalProof(p.extra)~")"; break;
+				case BindingRule.distributionCornerPairing:{
+					auto d=nodes[n.a]; Term offset; bool swap; enforce(cornerChart(d.b,offset,swap));
+					string lemma="Distribution.GraphFibre.Coordinates.corner_pairing ";
+					if(offset!=Term.init){
+						auto a=SourceCertificates.q(arena.number(offset).re);
+						lemma="Distribution.GraphFibre.Coordinates.Grid.shifted_pairing "~a~(swap?" true ":" false ")~
+							"(Numeric.calculate_sound ξ n"~to!string(offset.id)~" "~a~" rfl) ";
+					}
+					proof=".ofEq (fun ξ ρ => "~lemma~realBody(d.a)~" "~rowTotalProof(p.extra)~")"; break;
+				}
 				case BindingRule.distributionDensityAddWeight:{
 					auto sum=nodes[n.a];
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.density_add_weight ("~name(sum.a)~".eval ξ ρ) "~realBody(nodes[sum.b].a)~" ("~name(n.b)~".eval ξ ρ))"; break;
 				}
+				case BindingRule.distributionCoordinateGrid:
+					proof=".ofEq (fun ξ ρ => "~coordinateProofs[p.extra]~")"; break;
 				case BindingRule.distributionCoordinateTwoJumps:{
 					JumpRays rays; enforce(jumpRays(nodes[n.a].a,rays),"missing jump certificate");
 					alias q=SourceCertificates.q;
@@ -7497,14 +7712,21 @@ final class Bindings{
 					auto q=ev(n.b);
 					proof=".ofEq (fun ξ ρ =>\n";
 					foreach(f;result.fibres[p.extra]){
-						auto d=nodes[f.source]; string lemma;
+						auto d=nodes[f.source]; string lemma; Term offset; bool swap;
 						if(d.op==BoundOp.distributionAdd) lemma="add "~witness(d.a)~" "~witness(d.b);
 						else if(d.op==BoundOp.distributionScale) lemma="scale "~ev(d.a)~" "~witness(d.b);
 						else if(d.op==BoundOp.distributionDirac) lemma="dirac "~ev(d.a)~" "~q;
 						else if(d.op==BoundOp.distributionZero) lemma="zero "~q;
 						else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionDirac)
 							lemma="weightDirac "~ev(d.a)~" "~ev(nodes[d.b].a)~" "~q;
-						else lemma="chart "~densityProgram(f.weights)~" "~q;
+						else if(cornerChart(f.source,offset,swap)){
+							bool bare=offset==Term.init;
+							if(bare) offset=arena.real_(0);
+							auto a=SourceCertificates.q(arena.number(offset).re);
+							auto hv="(Numeric.calculate_sound ξ n"~to!string(offset.id)~" "~a~" rfl)";
+							auto shape="Distribution.GraphFibre.Coordinates.Grid."~(bare?"cornerBare":(swap?"cornerSwapped ":"cornerTerm ")~a~" "~hv);
+							lemma="corner "~a~" "~hv~" ("~shape~") "~q;
+						}else lemma="chart "~densityProgram(f.weights)~" "~q;
 						proof~="  let "~witness(f.source)~" : Distribution.FibreCertificate "~ev(f.source)~" "~q~" "~ev(f.charge)~" "~ev(f.regular)~" := Distribution.FibreCertificate."~lemma~"\n";
 					}
 					proof~="  Distribution.FibreCertificate.extract "~witness(n.a)~")";

@@ -125,6 +125,19 @@ private Case[] cases(){ return [
 	Case("CoordinateJumpsClosed","∫dx [-1≤x≤1]·λ[[x<-1]·x²+[x>1]·x]","ℝ","2"),
 	Case("CoordinateJumpsOpen","∫dx [-1<x<1]·λ[[x<-1]·x²+[x>1]·x]","ℝ","0"),
 	Case("CoordinateJumpsBoth","∫dx [-2≤x≤2]·λ[[x<-1]·x²+[x>1]·x]","ℝ","6"),
+	Case("GridPolynomial","Λx. λ[x³-x]","Distribution(ℝ)","Λ(x:ℝ). (abs(3·x^2-1))·λ[x]"),
+	Case("GridSmoothJoin","densityAtD(Λx. λ[x+[0<x]·x²],0)","ℝ","1"),
+	Case("GridArgument","λ(k:Distribution(ℝ)→𝔹). k(Λx. λ[x³-x])","(Distribution(ℝ)→𝔹)→𝔹"),
+	Case("GridMixed","Λx. λ[[0<x]·x-[1<x]·(x-1)+2·[2≤x]]","Distribution(ℝ)"),
+	Case("GridMixedClosed","∫dx [0≤x≤2]·λ[[0<x]·x-[1<x]·(x-1)+2·[2≤x]]","ℝ","3"),
+	Case("GridMixedOpen","∫dx [0<x<2]·λ[[0<x]·x-[1<x]·(x-1)+2·[2≤x]]","ℝ","1"),
+	Case("GridCornerDensity","densityAtD(Λx. λ[[0<x]·x-[1<x]·(x-1)+2·[2≤x]],1)","ℝ","undefined(ℝ)"),
+	Case("GridJumpDensity","densityAtD(Λx. λ[[0<x]·x-[1<x]·(x-1)+2·[2≤x]],2)","ℝ","undefined(ℝ)"),
+	Case("GridRegularDensity","densityAtD(Λx. λ[[0<x]·x-[1<x]·(x-1)+2·[2≤x]],1/2)","ℝ","1"),
+	Case("GridRationalCorner","densityAtD(Λx. λ[abs(2*x-3)],3/2)","ℝ","undefined(ℝ)"),
+	Case("GridDownwardJump","∫dx [0≤x≤1]·λ[[x<1/2]·3]","ℝ","3"),
+	Case("GridPartialTest","∫dx [0≤x≤2]·λ[abs(2*x-3)]·(2*x-3)⁻¹","ℝ"),
+	Case("GridSpike","Λx. λ[[x=0]]","Distribution(ℝ)","Λ(x:ℝ). λ[([x=0])]"),
 	Case("CoordinateSquare","Λx. λ[x²]","Distribution(ℝ)","Λ(x:ℝ). (2·abs(x))·λ[x]"),
 	Case("CoordinateSquareProduct","Λx. λ[x*x]","Distribution(ℝ)","Λ(x:ℝ). (2·abs(x))·λ[x]"),
 	Case("CoordinateSquareNegative","densityAtD(Λx. λ[x²],-2)","ℝ","4"),
@@ -577,6 +590,11 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name.indexOf("Grid")==0){
+			auto compiled=certificate.indexOf("GraphFibre.Coordinates.Grid.cell ")>=0;
+			enforce(compiled==(c.name!="GridSpike"),c.name);
+			if(c.name=="GridPartialTest") enforce(certificate.indexOf("Grid.shifted_pairing ")<0,c.name);
+		}
 		if(c.name=="SheetPartDensityPositive"||c.name=="SheetPartDensityExcluded"||c.name=="SheetPartDensityCritical")
 			enforce(certificate.indexOf("GraphFibre.Coordinates.square_density")>=0,c.name);
 		if(c.name=="SheetPartPairing"||c.name=="SheetPartCritical"||c.name=="SheetPartMass")

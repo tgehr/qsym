@@ -9,6 +9,7 @@ import QSym.DistributionMixture
 import QSym.DistributionSum
 import QSym.DistributionPolynomialGrid
 import QSym.DistributionInterval
+import QSym.DistributionCoordinateGrid
 import QSym.DistributionWeightedAffine
 import QSym.Limit
 import QSym.LimitExponential
