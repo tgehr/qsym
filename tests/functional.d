@@ -20,6 +20,8 @@ private Case[] cases(){
 		Case("DecimalBody","(λ(x:ℝ).2.5)(0)","5/2"),
 		Case("LeadingDecimal","(λ(x:ℝ). .5)(0)","1/2"),
 		Case("PartialApplication","(λ(a:ℕ). λ(b:ℕ). a+b)(1)"),
+		Case("RepeatedFactorSign","λ(a:ℝ). λ(b:ℝ). -(a·a)","λ(a:ℝ). λ(b:ℝ). -a·a"),
+		Case("RepeatedFactorSignEven","λ(a:ℝ). λ(b:ℝ). b-a·a·a·a","λ(a:ℝ). λ(b:ℝ). -a·a·a·a+b"),
 		Case("FunctionBody","λ(x:ℝ). x/x"),
 		Case("GlobalBodyDomain","λ(x:ℝ). y/y","","y:ℝ"),
 		Case("FunctionValueDefined","defined(λ(x:ℝ). 1/x)","true"),

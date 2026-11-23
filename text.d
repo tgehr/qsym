@@ -161,7 +161,8 @@ struct Syntax{
 					}else if(result.iverson||p.iverson) result=Piece("mul"~suffix(s)~"("~render(result)~","~render(p)~")");
 					else if(a.isNumber(e.term)&&(-a.number(e.term)).one) result.negative=!result.negative;
 					else if(result.text=="1"){
-						p.negative=p.negative!=result.negative; result=p;
+						// The operand is repeated for its multiplicity: adjust a copy.
+						auto signed=p; signed.negative=p.negative!=result.negative; result=signed;
 					}else result=Piece(render(result,70,true)~"·"~render(p,71,true),70,result.negative!=p.negative);
 					enforce(result.text.length<=1_000_000,"formatted expression exceeds one million bytes");
 				}
