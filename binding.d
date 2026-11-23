@@ -770,6 +770,44 @@ final class Bindings{
 		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument); if(y==Term.init) return Term.init; args~=y; }
 		return arena.viewRebuild(arena.at(n.data),args,true);
 	}
+	private uint freshScalarIndex(uint root){
+		// Freshness is relative to the binder's free scalar variables, not
+		// every temporary ever allocated in the arena. Reusing this witness
+		// keeps associative-region grouping stable across pointwise passes.
+		uint index; uint[] pending=[root]; Table!(uint,bool) seen;
+		while(pending.length){
+			auto id=pending[$-1]; --pending.length;
+			if(seen.get(id,false)) continue; seen.set(id,true);
+			auto n=nodes[id];
+			if(n.op==BoundOp.scalar) foreach(scalarId;arena.viewPostorder(arena.at(n.data))){
+				auto v=arena.view(arena.at(scalarId));
+				if(v.op==Op.variable){ enforce(v.value<uint.max-1,"scalar variable limit exceeded"); if(v.value>=index) index=cast(uint)v.value+1; }
+			}
+			if(n.a!=uint.max) pending~=n.a;
+			if(n.b!=uint.max) pending~=n.b;
+			if(n.c!=uint.max) pending~=n.c;
+		}
+		return index;
+	}
+	// A successful scalar domain certificate applies at every real parameter
+	// and every assignment of the expression's free scalar variables.
+	private bool totalRowDomain(uint body,out ScalarDomain check,bool trace=true){
+		auto index=freshScalarIndex(body),arg=arena.variable(Sort.real_,index);
+		auto expression=scalarBody(at(body),arg);
+		if(expression==Term.init) return false;
+		auto domain=simplifyDomain(arena,expression,[],Options(DensityMode.preserve,trace));
+		if(domain.exhausted||domain.output!=arena.boolean(true)) return false;
+		check=ScalarDomain(expression,domain,ScalarResult.init,index,Sort.real_);
+		return true;
+	}
+	// Bare integral syntax reparses as a real bind of Dirac rows. The
+	// row theorem identifies it with a native graph only for a total map.
+	bool bareGraphSyntax(BoundTerm map){
+		auto n=node(map);
+		if(n.op!=BoundOp.lambda||type(map)!=pool.function_(scalarType(Sort.real_),scalarType(Sort.real_))) return false;
+		ScalarDomain domain;
+		return totalRowDomain(n.a,domain,false);
+	}
 	private BoundTerm restoreBody(Term t,Scope ctx,Term argument){
 		if(t==argument) return variable(ctx,0);
 		auto n=arena.view(t); if(!n.arity) return scalar(ctx,t);
@@ -2599,25 +2637,6 @@ final class Bindings{
 			scalarDomains~=checks;
 			extra=cast(uint)sums.length; sums~=SummationSolution(t.id,output.id,g.id,index,infinite?uint.max:start,infinite?start:start+1,tail,totals,convergence); return output;
 		}
-		uint freshScalarIndex(uint root){
-			// Freshness is relative to the binder's free scalar variables, not
-			// every temporary ever allocated in the arena. Reusing this witness
-			// keeps associative-region grouping stable across pointwise passes.
-			uint index; uint[] pending=[root]; Table!(uint,bool) seen;
-			while(pending.length){
-				auto id=pending[$-1]; --pending.length;
-				if(seen.get(id,false)) continue; seen.set(id,true);
-				auto n=nodes[id];
-				if(n.op==BoundOp.scalar) foreach(scalarId;arena.viewPostorder(arena.at(n.data))){
-					auto v=arena.view(arena.at(scalarId));
-					if(v.op==Op.variable){ enforce(v.value<uint.max-1,"scalar variable limit exceeded"); if(v.value>=index) index=cast(uint)v.value+1; }
-				}
-				if(n.a!=uint.max) pending~=n.a;
-				if(n.b!=uint.max) pending~=n.b;
-				if(n.c!=uint.max) pending~=n.c;
-			}
-			return index;
-		}
 		BoundTerm pointwise(BoundTerm binder,out uint extra){
 			auto body=at(node(binder).a),ctx=context(body),param=type(variable(ctx,0)); Sort sort; bool scalarParam;
 			foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex,Sort.boolean])
@@ -2691,17 +2710,6 @@ final class Bindings{
 			if(nodes[id].op!=BoundOp.lambda) return false;
 			auto body=at(nodes[id].a);
 			return body==openUnit(variable(context(body),0));
-		}
-		// A successful scalar domain certificate applies at every real parameter
-		// and every assignment of the expression's free scalar variables.
-		bool totalRowDomain(uint body,out ScalarDomain check){
-			auto index=freshScalarIndex(body),arg=arena.variable(Sort.real_,index);
-			auto expression=scalarBody(at(body),arg);
-			if(expression==Term.init) return false;
-			auto domain=simplifyDomain(arena,expression,[],Options(DensityMode.preserve,true));
-			if(domain.exhausted||domain.output!=arena.boolean(true)) return false;
-			check=ScalarDomain(expression,domain,ScalarResult.init,index,Sort.real_);
-			return true;
 		}
 		Table!(uint,uint) mapDomains;
 		uint totalMapDomain(uint body){

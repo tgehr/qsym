@@ -2,6 +2,7 @@ import QSym.DistributionOddPower
 import QSym.DistributionRootCover
 import QSym.DistributionPartialModel
 import QSym.DistributionWeightedSquare
+import QSym.DistributionImageIntegral
 import QSym.DistributionAtomRows
 import QSym.DistributionFiniteMixedReal
 import QSym.DistributionModelLaws
@@ -25,6 +26,7 @@ elab "qsym_distribution_goal" : tactic => do
   let target ← instantiateMVars (← getMainTarget)
   let heads := #[``Distribution.GraphFibre.RootCover, ``Distribution.GraphFibre.GlobalInverseBranch, ``Distribution.GraphFibre.branchIntegral, ``Distribution.GraphFibre.fibreOn,
     ``partialIntegral, ``FiniteIntegralTheory.integrate, ``Distribution.GraphFibre.weightedSquareDensity,
+    ``Distribution.GraphFibre.imageIntegral, ``Distribution.GraphFibre.affineSquareSource,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
     ``Distribution.GraphFibre.realBindValue, ``Distribution.GraphFibre.realIntegralValue,
@@ -121,6 +123,9 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.fibreOn_of_notMem_image <;> assumption
   | solve | apply Distribution.GraphFibre.branchIntegral_union <;> assumption
   | solve | apply Distribution.GraphFibre.branchIntegral_image <;> assumption
+  | solve | apply Distribution.GraphFibre.affine_square_image_integral <;> assumption
+  | solve | apply Distribution.GraphFibre.affine_square_critical_density <;> assumption
+  | solve | apply Distribution.GraphFibre.imageIntegral_of_transport <;> assumption
   | exact Distribution.GraphFibre.weighted_square_density _ _
   | solve | apply Distribution.GraphFibre.weighted_square_chart <;> assumption
   | solve | apply Distribution.GraphFibre.weighted_square_integral <;> assumption

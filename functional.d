@@ -556,7 +556,10 @@ struct FunctionSyntax{
 			string axisHint(uint id) @safe {
 				auto d=b.node(b.at(id));
 				if(d.op==BoundOp.distributionWeight) return b.binderHint(b.at(d.a)).name;
-				if(d.op==BoundOp.distributionPushforwardOn&&b.binderHint(b.at(d.b)).name=="x") return "y";
+				if(d.op==BoundOp.distributionPushforwardOn){
+					auto source=b.binderHint(b.at(d.b)).name;
+					if(!source.length||source=="x") return "y";
+				}
 				if(d.op==BoundOp.distributionAdd||d.op==BoundOp.distributionScale) return axisHint(d.op==BoundOp.distributionScale?d.b:d.a);
 				return "x";
 			}
@@ -612,11 +615,14 @@ struct FunctionSyntax{
 					}
 					case BoundOp.distributionPushforwardOn:{
 						auto pred=b.node(b.at(q.a)),map=b.node(b.at(q.b));
-						if(pred.op!=BoundOp.lambda||map.op!=BoundOp.lambda)
+						bool unrestricted=pred.op==BoundOp.lambda&&b.node(b.at(pred.a)).op==BoundOp.scalar&&
+							a.at(b.node(b.at(pred.a)).data)==a.boolean(true);
+						if(pred.op!=BoundOp.lambda||map.op!=BoundOp.lambda||unrestricted&&!b.bareGraphSyntax(b.at(q.b)))
 							return "(pushforwardOnD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
 						auto x=fresh([axis]~names,b.binderHint(b.at(q.b)).name),inner=[x]~names;
-						auto f=render(b.at(map.a),inner,depth+level+1),p=render(b.at(pred.a),inner,depth+level+1);
-						return grouped("∫d"~x~" λ["~x~"]·δ("~f~")["~axis~"]·["~p~"]");
+						auto f=render(b.at(map.a),inner,depth+level+1);
+						auto guard=unrestricted?"":"·["~render(b.at(pred.a),inner,depth+level+1)~"]";
+						return grouped("∫d"~x~" λ["~x~"]·δ("~f~")["~axis~"]"~guard);
 					}
 					case BoundOp.distributionBind,BoundOp.distributionIntegral:{
 						auto fn=b.at(q.op==BoundOp.distributionBind?q.b:q.a),f=b.node(fn);

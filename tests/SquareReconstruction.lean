@@ -167,4 +167,32 @@ theorem odd_weight_cancellation :
 #qsym_check_axioms excluded_missing_test
 #qsym_check_axioms signed_cancellation
 
+theorem unrestricted_image (a b : ℝ) (ha : a ≠ 0) (t : ℝ → Option ℝ) :
+    integrate (inLebesgueCoordinates (affineSquareSource a b)) t =
+      imageIntegral volume (Set.Ici 0) (affineSquareIntegralWeight a) t := by qsym_rule
+
+theorem unrestricted_critical (a b : ℝ) (ha : a ≠ 0) :
+    densityAt (inLebesgueCoordinates (affineSquareSource a b)) 0 = none := by qsym_rule
+
+theorem missing_test_point (p : ℝ) :
+    integrate (inLebesgueCoordinates (affineSquareSource (-2) 1))
+      (fun y => if y = p then none else some 0) = if p < 0 then some 0 else none := by
+  rw [unrestricted_image _ _ (by norm_num)]
+  by_cases hp : p < 0
+  · have hd (y : ℝ) (hy : y ∈ Set.Ici (0 : ℝ)) :
+        Value.Defined (if y = p then none else some (0 : ℝ)) := by
+      simp [ne_of_gt (hp.trans_le hy), Value.Defined]
+    have zero (y : ℝ) : (if y = p then none else some (0 : ℝ)).getD 0 = 0 := by
+      split <;> rfl
+    rw [imageIntegral, if_pos hd, if_pos hp]
+    simpa [zero] using (partialIntegral_zero (volume : Measure ℝ))
+  · have bad : ¬ ∀ y ∈ Set.Ici (0 : ℝ), Value.Defined (if y = p then none else some (0 : ℝ)) := by
+      intro h
+      simpa [Value.Defined] using h p (le_of_not_gt hp)
+    rw [imageIntegral, if_neg bad, if_neg hp]
+
+#qsym_check_axioms unrestricted_image
+#qsym_check_axioms unrestricted_critical
+#qsym_check_axioms missing_test_point
+
 end QSym.Distribution.SquareReconstructionTests
