@@ -408,10 +408,22 @@ private Case[] cases(){ return [
 	Case("GuardedBoundVariable","λ(c:ℝ). ∫dx [0≤c]*[0≤x]*[x≤c]*x*λ[x]","ℝ→ℝ","λ(c:ℝ). [0≤c]·(1/2·c^2)"),
 	Case("GuardedJointTriangle","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤x]*λ[x]*λ[y]","ℝ","1/2"),
 	Case("GuardedJointMoment","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤x]*x*y*λ[x]*λ[y]","ℝ","1/8"),
-	Case("GuardedUnobserved","∫dx [c≤d]*exp(x)*[0≤x≤1]*λ[x]","ℝ"),
+	Case("GuardedUnobserved","∫dx [c≤d]*sin(x)*[0≤x≤1]*λ[x]","ℝ"),
+	Case("ExponentialGuarded","∫dx [c≤d]*e^x*[0≤x≤1]*λ[x]","ℝ","[c≤d]·(e-1)"),
+	Case("ExponentialInterval","∫dx [0≤x≤1]*exp(2*x)*λ[x]","ℝ","1/2·exp(2)-1/2"),
+	Case("ExponentialSymbolicBounds","∫dx [a≤x≤b]*exp(-x)*λ[x]","ℝ","[a≤b]·(exp(-a)-exp(-b))"),
+	Case("ExponentialMoment","∫dx [0≤x≤1]*x^3*exp(-2*x)*λ[x]","ℝ","-19/8·exp(-2)+3/8"),
+	Case("ExponentialScaled","∫dx [a≤x≤b]*c*exp(3*x)*x*λ[x]","ℝ","[a≤b]·(c·(-(a·(1/3)-1/9)·exp(3·a)+(b·(1/3)-1/9)·exp(3·b)))"),
+	Case("ExponentialWeight","∫dx ([a≤x≤b]*c*λ[x])*x*exp(x)","ℝ","[a≤b]·(c·(-(a-1)·exp(a)+(b-1)·exp(b)))"),
+	Case("ExponentialSum","∫dx [0≤x≤1]*(c*exp(x)+d*x)*λ[x]","ℝ","c·(e-1)+d·(1/2)"),
+	Case("ExponentialTwoScales","∫dx [a≤x≤b]*c*x*d*λ[x]","ℝ","[a≤b]·(c·d·(-1/2·a^2+1/2·b^2))"),
+	Case("ExponentialCdf","λ(a:ℝ).∫dx [0≤x]*[x≤a]*2*exp(-2*x)*λ[x]","ℝ→ℝ","λ(a:ℝ). [0≤a]·(-exp(-2·a)+1)"),
+	Case("ExponentialNested","∫dx [0≤x≤2]*λ[x]*∫dy [0≤y]*[y≤x]*exp(-y)*λ[y]","ℝ","exp(-2)+1"),
+	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ"),
+	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
-	Case("SymbolicIntervalExponential","∫dx [a≤x≤b]*exp(x)*λ[x]","ℝ"),
+	Case("SymbolicIntervalSine","∫dx [a≤x≤b]*sin(x)*λ[x]","ℝ"),
 	Case("WeightedAffineChart","Λx. ∫dy [0≤y≤1]*y*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(y·(1/4)-1/4))·λ[y]"),
 	Case("WeightedAffineReflection","Λx. ∫dy [0≤y≤1]*2*y*λ[y]*δ(1-y)[x]","Distribution(ℝ)","Λ(y:ℝ). ([y≤1∧0≤y]·(-2·y+2))·λ[y]"),
 	Case("WeightedAffineMixture","Λx. ∫dy (1/2*δ(0)[y]+1/2*[0≤y≤1]*λ[y])*δ(y+1)[x]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(1)[x]+([1≤x∧x≤2]·(1/2))·λ[x]"),
@@ -736,10 +748,11 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_grid")<0,c.name~" must not invent a step certificate");
 			enforce(c.name=="StepNonconstant"||text.indexOf("∫")>=0,c.name~" must retain its unsupported integral");
 		}
-		// One lower and one upper bound around polynomial terms. More bounds,
-		// an open side and other integrands keep their integral.
+		// One lower and one upper bound around polynomial and exponential
+		// terms. More bounds, an open side and other integrands keep their
+		// integral.
 		if(c.name.indexOf("SymbolicInterval")==0){
-			bool retained=c.name=="SymbolicIntervalThreeBounds"||c.name=="SymbolicIntervalUnbounded"||c.name=="SymbolicIntervalExponential";
+			bool retained=c.name=="SymbolicIntervalThreeBounds"||c.name=="SymbolicIntervalUnbounded"||c.name=="SymbolicIntervalSine";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
@@ -748,6 +761,15 @@ private void run(string directory){
 		if(c.name.indexOf("Guarded")==0){
 			enforce((certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0)==(c.name!="GuardedUnobserved"),c.name~" guard certificate");
 			enforce((text.indexOf("∫")>=0)==(c.name=="GuardedUnobserved"),c.name~": "~text);
+		}
+		// A polynomial times an exponential of rational rate has an
+		// antiderivative of the same kind. Shifted exponents and symbolic
+		// rates keep their integral.
+		if(c.name.indexOf("Exponential")==0){
+			bool retained=c.name=="ExponentialShifted"||c.name=="ExponentialSymbolicRate";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
+			if(c.name!="ExponentialTwoScales") enforce((certificate.indexOf("StepSource.exp_affine")>=0)!=retained,c.name~" exponential evidence");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
 		// A total weight is evaluated at the inverse point of an affine graph.
 		// A weight that is missing somewhere keeps the ordered rows.

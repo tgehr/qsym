@@ -65,7 +65,7 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 }
 // One summand below an interval guard: a polynomial in the axis with an
 // optional factor that does not mention the axis, and its antiderivative.
-private struct IntervalTerm{ uint value,scale=uint.max,polynomial=uint.max,scaleOutside=uint.max,primitive=uint.max; bool scaleLeft; }
+private struct IntervalTerm{ uint value,primitive=uint.max; bool scaled; }
 private struct IntervalData{
 	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne;
 	bool swap,strictLower,strictUpper,nested;
@@ -927,6 +927,51 @@ final class Bindings{
 		if(p.length>64) return false;
 		foreach(c;p) if(c.words>128) return false;
 		return true;
+	}
+	// A polynomial in the innermost variable times the exponential of a
+	// rational multiple of it. A rate of zero is a polynomial.
+	private bool axisExponential(uint id,out Rational[] p,out Rational rate,uint depth=0){
+		if(depth>64) return false;
+		if(axisPolynomial(id,p)) return true;
+		auto q=nodes[id]; if(q.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(q.data));
+		if(op.op==Op.builtin&&op.value==Builtin.expR){
+			auto arg=arena.variable(Sort.real_,freshScalarIndex(q.a)),inside=scalarBody(at(q.a),arg); Rational offset;
+			if(inside==Term.init||!integralAffine(arena,inside,arg,rate,offset)||!offset.zero||rate.words>128) return false;
+			p=[Rational(1)]; return true;
+		}
+		if(op.op!=Op.mul) return false;
+		Rational[] a,b; Rational r,t;
+		if(!axisExponential(q.a,a,r,depth+1)||!axisExponential(q.b,b,t,depth+1)) return false;
+		p=polyProduct(a,b); rate=r+t;
+		if(p.length>64||rate.words>128) return false;
+		foreach(c;p) if(c.words>128) return false;
+		return true;
+	}
+	// A product of such factors and of factors that do not mention the
+	// innermost variable; these are the scale of the term.
+	private bool scaledExponential(uint id,out Rational[] p,out Rational rate,out bool scaled,uint depth=0){
+		if(depth>16) return false;
+		if(axisExponential(id,p,rate)) return true;
+		if(!depends(at(id),0)){ scaled=true; p=[Rational(1)]; return true; }
+		auto q=nodes[id];
+		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
+		Rational[] a,b; Rational r,t; bool left,right;
+		if(!scaledExponential(q.a,a,r,left,depth+1)||!scaledExponential(q.b,b,t,right,depth+1)) return false;
+		p=polyProduct(a,b); rate=r+t; scaled=left||right;
+		if(p.length>64||rate.words>128) return false;
+		foreach(c;p) if(c.words>128) return false;
+		return true;
+	}
+	// The scale of such a product outside the binder of the axis.
+	private BoundTerm exponentialScale(uint id){
+		Rational[] p; Rational rate;
+		if(axisExponential(id,p,rate)) return BoundTerm.init;
+		if(!depends(at(id),0)) return dropIndex(at(id));
+		auto q=nodes[id],left=exponentialScale(q.a),right=exponentialScale(q.b);
+		if(left==BoundTerm.init) return right;
+		if(right==BoundTerm.init) return left;
+		return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[left,right]);
 	}
 	private uint freshScalarIndex(uint root){
 		// Freshness is relative to the binder's free scalar variables, not
@@ -2433,8 +2478,8 @@ final class Bindings{
 			auto result=scalar(ctx,arena.real_(total)); solution.output=result.id; return result;
 		}
 		// One lower and one upper bound of the axis, in either order, around a
-		// sum of polynomials with optional factors that do not mention the
-		// axis. Bounds and factors may be missing; the theorem is an equation
+		// sum of polynomials, each optionally times an exponential of rational
+		// rate, with optional factors that do not mention the axis. Bounds and factors may be missing; the theorem is an equation
 		// of partial values. Each antiderivative is evaluated at the two
 		// bounds, and the certificate differentiates it.
 		BoundTerm integrateInterval(BoundTerm t,out IntegralSolution solution){
@@ -2466,17 +2511,29 @@ final class Bindings{
 			if(!bound(first,lower1,strict1,term1)||!bound(second,lower2,strict2,term2)||lower1==lower2) return BoundTerm.init;
 			d.swap=!lower1; d.strictLower=lower1?strict1:strict2; d.strictUpper=lower1?strict2:strict1;
 			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
-			auto outer=[Rational(1)];
-			foreach(id;solution.from[1..$]){ Rational[] w; if(!axisPolynomial(id,w)) return BoundTerm.init; outer=polyProduct(outer,w); if(outer.length>64) return BoundTerm.init; }
+			auto outer=[Rational(1)],outerRate=Rational(0);
+			foreach(id;solution.from[1..$]){
+				Rational[] w; Rational rate; if(!axisExponential(id,w,rate)) return BoundTerm.init;
+				outer=polyProduct(outer,w); outerRate=outerRate+rate; if(outer.length>64) return BoundTerm.init;
+			}
 			auto addOp=arena.add(arena.real_(0),arena.real_(0),true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
 			auto minusOne=scalar(ctx,arena.real_(Rational(-1)));
-			// x·(p₀/1+x·(p₁/2+…)), in Horner form, below the axis binder.
-			BoundTerm antiderivative(Rational[] p){
+			// x·(p₀/1+x·(p₁/2+…)), in Horner form, below the axis binder. With
+			// a rate r the antiderivative of P·exp(r·x) is Q·exp(r·x), Q'+r·Q=P.
+			BoundTerm antiderivative(Rational[] p,Rational rate){
 				auto x=variable(inner,0);
 				if(!p.length) return scalar(inner,arena.real_(Rational(0)));
-				auto horner=scalar(inner,arena.real_(p[$-1]/Rational(cast(long)p.length)));
-				foreach_reverse(k;0..p.length-1) horner=primitive(addOp,[scalar(inner,arena.real_(p[k]/Rational(cast(long)k+1))),primitive(mulOp,[x,horner])]);
-				return primitive(mulOp,[x,horner]);
+				if(rate.zero){
+					auto horner=scalar(inner,arena.real_(p[$-1]/Rational(cast(long)p.length)));
+					foreach_reverse(k;0..p.length-1) horner=primitive(addOp,[scalar(inner,arena.real_(p[k]/Rational(cast(long)k+1))),primitive(mulOp,[x,horner])]);
+					return primitive(mulOp,[x,horner]);
+				}
+				auto q=new Rational[](p.length);
+				foreach_reverse(k;0..p.length) q[k]=(p[k]-(k+1<p.length?Rational(cast(long)k+1)*q[k+1]:Rational(0)))/rate;
+				auto horner=scalar(inner,arena.real_(q[$-1]));
+				foreach_reverse(k;0..q.length-1) horner=primitive(addOp,[scalar(inner,arena.real_(q[k])),primitive(mulOp,[x,horner])]);
+				auto exponent=primitive(mulOp,[scalar(inner,arena.real_(rate)),x]);
+				return primitive(mulOp,[horner,primitive(arena.call(Builtin.expR,[arena.real_(0)]),[exponent])]);
 			}
 			// The bound itself replaces the axis: no application is left behind.
 			BoundTerm evaluate(BoundTerm expression,BoundTerm bound){
@@ -2484,26 +2541,18 @@ final class Bindings{
 				foreach(i;0..depth(ctx)) values~=variable(ctx,i);
 				return substitute(expression,ctx,values);
 			}
-			bool leaf(uint id,ref IntervalTerm r,out Rational[] p){
-				r.value=id; auto q=nodes[id];
-				if(axisPolynomial(id,p)){ r.polynomial=id; return true; }
-				if(!depends(at(id),0)){ r.scale=id; p=[Rational(1)]; return true; }
-				if(!isOp(q,Op.mul)) return false;
-				if(!depends(at(q.a),0)&&axisPolynomial(q.b,p)){ r.scale=q.a; r.polynomial=q.b; r.scaleLeft=true; return true; }
-				if(!depends(at(q.b),0)&&axisPolynomial(q.a,p)){ r.scale=q.b; r.polynomial=q.a; return true; }
-				return false;
-			}
-			BoundTerm difference(IntervalTerm r,Rational[] p){
-				p=polyProduct(p,outer);
+			BoundTerm difference(IntervalTerm r,Rational[] p,Rational rate){
+				p=polyProduct(p,outer); rate=rate+outerRate;
 				foreach(c;p) if(c.words>128) return BoundTerm.init;
-				auto primitive_=antiderivative(p); r.primitive=primitive_.id;
+				if(rate.words>128) return BoundTerm.init;
+				auto primitive_=antiderivative(p,rate); r.primitive=primitive_.id;
 				auto result=primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
-				if(r.scale!=uint.max){ auto c=dropIndex(at(r.scale)); r.scaleOutside=c.id; result=primitive(mulOp,[c,result]); }
+				if(r.scaled) result=primitive(mulOp,[exponentialScale(r.value),result]);
 				d.terms~=r; return result;
 			}
 			BoundTerm build(uint id,uint depth){
-				IntervalTerm r; Rational[] p;
-				if(leaf(id,r,p)) return difference(r,p);
+				IntervalTerm r; Rational[] p; Rational rate; r.value=id;
+				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
 				// A sum is integrated term by term only without further weights.
 				auto q=nodes[id];
 				if(depth>16||d.terms.length>16||solution.from.length!=1||!isOp(q,Op.add)) return BoundTerm.init;
@@ -2511,7 +2560,7 @@ final class Bindings{
 				auto b=build(q.b,depth+1); if(b==BoundTerm.init) return b;
 				return primitive(addOp,[a,b]);
 			}
-			auto total=d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)]):build(d.value,0);
+			auto total=d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
 			if(total==BoundTerm.init) return BoundTerm.init;
 			auto zero=arena.real_(0),strict=d.strictLower||d.strictUpper;
 			auto test=primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[lower,upper]);
@@ -5388,9 +5437,33 @@ final class Bindings{
 				d.nested?"(fun _ => Distribution.StepSource.mask_mask _ _ _)":"(fun _ => rfl)");
 			auto program="(Distribution.DensityProgram.weight "~functionAt(body)~" Distribution.DensityProgram.lebesgue)";
 			auto masked=save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_first",shape));
+			// A polynomial, the exponential of a rational multiple of the axis,
+			// or a product of these.
+			Piece delegate(uint) @safe exponential;
+			exponential=(uint id) @safe {
+				Rational[] coefficients;Piece r;string rate;
+				if(axisPolynomial(id,coefficients)){
+					auto w=piece(id,everywhere,"",Rational(0));
+					r=Piece(app("exp_polynomial",w.proof),w.poly);rate="0";
+				}else{
+					auto n=nodes[id];enforce(n.op==BoundOp.primitive,"unsupported exponential term");
+					auto op=arena.view(arena.at(n.data));
+					if(op.op==Op.builtin){
+						enforce(op.value==Builtin.expR,"unsupported exponential function");
+						auto inside=affineProof(n.a);enforce(inside.offset.zero,"shifted exponent");
+						r=Piece(app("exp_affine",inside.proof),"[1]");rate=q(inside.slope);
+					}else{
+						enforce(op.op==Op.mul,"unsupported exponential operation");
+						auto a=exponential(n.a),b=exponential(n.b);
+						r=Piece(app("exp_mul",a.proof~" "~b.proof),"(Distribution.StepSource.polyMul "~a.poly~" "~b.poly~")");
+						return r;
+					}
+				}
+				r.proof=save("Distribution.StepSource.ExpPolynomial "~functionAt(id)~" "~r.poly~" "~rate,r.proof);return r;
+			};
 			string[] factors;
 			foreach(id;s.from[1..$]){
-				auto w=piece(id,everywhere,"",Rational(0));
+				auto w=exponential(id);
 				program="(Distribution.DensityProgram.weight "~functionAt(id)~" "~program~")";
 				value="(fun x : ℝ => Value.mul ("~value~" x) ("~functionAt(id)~" x))";
 				masked=save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_times",masked~" "~w.proof));
@@ -5406,15 +5479,24 @@ final class Bindings{
 				}
 				++next;
 				auto primitive_="(G := fun o : Option ℝ => "~name(r.primitive)~".eval ξ (Binding.Env.cons (a := .scalar .real) o ρ)) ";
-				auto derivative=" "~piece(r.primitive,everywhere,"",Rational(0)).proof~" rfl)";
-				if(r.scale==uint.max){
-					auto hv=id==uint.max?app("polynomial_unit",everywhere):piece(id,everywhere,"",Rational(0)).proof;
-					foreach(w;factors)hv=app("polynomial_mul",hv~" "~w);
+				auto derivative=" "~exponential(r.primitive).proof~" rfl)";
+				if(!r.scaled){
+					auto hv=id==uint.max?app("exp_polynomial",app("polynomial_unit",everywhere)):exponential(id).proof;
+					foreach(w;factors)hv=app("exp_mul",hv~" "~w);
 					return "(Distribution.StepSource.IntervalTerms.pure "~primitive_~hv~derivative;
 				}
-				auto c=ev(r.scaleOutside);
-				auto hv=r.polynomial==uint.max?app("scaled_constant",c):
-					app(r.scaleLeft?"scaled_left":"scaled_right",c~" "~piece(r.polynomial,everywhere,"",Rational(0)).proof);
+				// Factors free of the axis are the scale; the others multiply.
+				string delegate(uint,out bool) @safe scaledFactor;
+				scaledFactor=(uint factor,out bool scaled) @safe {
+					Rational[] coefficients;Rational rate;
+					if(axisExponential(factor,coefficients,rate))return exponential(factor).proof;
+					scaled=true;
+					if(!depends(at(factor),0))return app("scaled_constant",ev(dropIndex(at(factor)).id));
+					bool left,right;auto product=nodes[factor];
+					auto a=scaledFactor(product.a,left),b=scaledFactor(product.b,right);
+					return app(left&&right?"scaled_mul":left?"scaled_times":"scaled_after",a~" "~b);
+				};
+				bool scaled;auto hv=scaledFactor(id,scaled);
 				foreach(w;factors)hv=app("scaled_times",hv~" "~w);
 				return "(Distribution.StepSource.IntervalTerms.scaled "~primitive_~hv~derivative;
 			}

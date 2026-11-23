@@ -3,14 +3,16 @@ import QSym.DistributionPolynomialGrid
 /-! Intervals with symbolic endpoints. The guard is one lower and one upper
 comparison of the axis with two partial bounds, in either order, strict or
 not. The masked value is a sum of polynomials with rational coefficients,
-each optionally scaled by a partial constant. The result is an equation of
+each optionally times an exponential of rational rate and optionally scaled
+by a partial constant. The result is an equation of
 partial values for every definedness pattern of the bounds and scales: the
 conjunction and the mask are not strict, so an empty interval forgets a
 missing scale, and exactly then the comparison of the bounds is false.
 
 The antiderivative of every term is an expression of the frontend with its
-own polynomial evidence. The certificate only checks that its derivative is
-the integrand, by kernel reduction on rational coefficient lists. -/
+own evidence of the same kind. The certificate only checks that its
+derivative is the integrand, by kernel reduction on rational coefficient
+lists: for Q·exp(r·x) this is Q' + r·Q = P. -/
 noncomputable section
 namespace QSym.Distribution.StepSource
 open MeasureTheory Set
@@ -20,9 +22,11 @@ def polyDerivative : List ℚ → List ℚ
   | [] => []
   | _ :: p => polyAdd p (0 :: polyDerivative p)
 
-/-- The derivative of the first list is the second, up to trailing zeros. -/
-def isPrimitive (P p : List ℚ) : Bool :=
-  polyZero (polyAdd (polyDerivative P) (polyScale (-1) p))
+/-- The first list times exp(s·x) is an antiderivative of the second list
+times exp(r·x): the rates agree and Q' + s·Q = P up to trailing zeros. -/
+def expPrimitive (P p : List ℚ) (r s : ℚ) : Bool :=
+  decide (r = s) &&
+    polyZero (polyAdd (polyAdd (polyDerivative P) (polyScale s P)) (polyScale (-1) p))
 
 theorem polyEval_hasDerivAt (p : List ℚ) (x : ℝ) :
     HasDerivAt (polyEval p) (polyEval (polyDerivative p) x) x := by
@@ -36,18 +40,33 @@ theorem polyEval_hasDerivAt (p : List ℚ) (x : ℝ) :
     simp only [polyDerivative, polyEval_add, polyEval, Rat.cast_zero, id]
     ring
 
-theorem isPrimitive_deriv {P p : List ℚ} (h : isPrimitive P p = true) (x : ℝ) :
-    HasDerivAt (polyEval P) (polyEval p x) x := by
-  have hz := polyEval_zero h x
-  rw [polyEval_add, polyEval_scale] at hz
-  have he : polyEval (polyDerivative P) x = polyEval p x := by
+theorem expPrimitive_deriv {P p : List ℚ} {r s : ℚ} (h : expPrimitive P p r s = true) (x : ℝ) :
+    HasDerivAt (fun y => polyEval P y * Real.exp ((s : ℝ) * y))
+      (polyEval p x * Real.exp ((r : ℝ) * x)) x := by
+  simp only [expPrimitive, Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨hr, hz⟩ := h
+  subst hr
+  have hz := polyEval_zero hz x
+  rw [polyEval_add, polyEval_add, polyEval_scale, polyEval_scale] at hz
+  have he : polyEval (polyDerivative P) x + (r : ℝ) * polyEval P x = polyEval p x := by
     push_cast at hz; linarith
-  exact he ▸ polyEval_hasDerivAt P x
+  have hd := (polyEval_hasDerivAt P x).mul
+    ((Real.hasDerivAt_exp ((r : ℝ) * x)).comp x ((hasDerivAt_id x).const_mul (r : ℝ)))
+  convert hd using 1
+  rw [← he]
+  simp only [id, mul_one, Function.comp_apply]
+  ring
 
-theorem isPrimitive_integral {P p : List ℚ} (h : isPrimitive P p = true) (l u : ℝ) :
-    ∫ x in l..u, polyEval p x = polyEval P u - polyEval P l :=
-  intervalIntegral.integral_eq_sub_of_hasDerivAt (fun x _ => isPrimitive_deriv h x)
-    ((polyEval_continuous p).intervalIntegrable _ _)
+theorem expPolynomial_continuous (p : List ℚ) (r : ℚ) :
+    Continuous (fun x => polyEval p x * Real.exp ((r : ℝ) * x)) :=
+  (polyEval_continuous p).mul (Real.continuous_exp.comp (continuous_const.mul continuous_id))
+
+theorem expPrimitive_integral {P p : List ℚ} {r s : ℚ} (h : expPrimitive P p r s = true)
+    (l u : ℝ) :
+    ∫ x in l..u, polyEval p x * Real.exp ((r : ℝ) * x) =
+      polyEval P u * Real.exp ((s : ℝ) * u) - polyEval P l * Real.exp ((s : ℝ) * l) :=
+  intervalIntegral.integral_eq_sub_of_hasDerivAt (fun x _ => expPrimitive_deriv h x)
+    ((expPolynomial_continuous p r).intervalIntegrable _ _)
 
 /-- A frontend comparison, strict or not. -/
 def compare : Bool → Option ℝ → Option ℝ → Option Bool
@@ -60,29 +79,63 @@ def intervalGuard (swap strictLower strictUpper : Bool) (a b : Option ℝ) (x : 
   | false => Value.and (compare strictLower a (some x)) (compare strictUpper (some x) b)
   | true => Value.and (compare strictUpper (some x) b) (compare strictLower a (some x))
 
-/-- A polynomial scaled by a partial constant. -/
-structure ScaledPolynomial (v : ℝ → Option ℝ) (c : Option ℝ) (p : List ℚ) : Prop where
-  equation : ∀ x, v x = Value.mul c (some (polyEval p x))
+/-- A polynomial times an exponential of rational rate, everywhere. A rate
+of zero is a polynomial. -/
+structure ExpPolynomial (v : ℝ → Option ℝ) (p : List ℚ) (r : ℚ) : Prop where
+  equation : ∀ x, v x = some (polyEval p x * Real.exp ((r : ℝ) * x))
 
-theorem scaled_constant (c : Option ℝ) : ScaledPolynomial (fun _ => c) c [1] :=
+theorem exp_polynomial {v : ℝ → Option ℝ} {p : List ℚ}
+    (h : PolynomialOn (fun _ => True) v p) : ExpPolynomial v p 0 :=
+  ⟨fun x => by rw [h.equation x trivial]; simp⟩
+
+/-- The exponential of a rational multiple of the axis. -/
+theorem exp_affine {f : ℝ → Option ℝ} {r : ℚ} (hf : Affine f r 0) :
+    ExpPolynomial (fun x => Functions.expR.apply (f x)) [1] r :=
+  ⟨fun x => by rw [hf x]; simp [Function1.apply, Functions.expR, polyEval]⟩
+
+theorem exp_mul {v w : ℝ → Option ℝ} {p q : List ℚ} {r s : ℚ}
+    (hv : ExpPolynomial v p r) (hw : ExpPolynomial w q s) :
+    ExpPolynomial (fun x => Value.mul (v x) (w x)) (polyMul p q) (r + s) :=
+  ⟨fun x => by
+    rw [hv.equation x, hw.equation x]
+    simp only [Value.mul, polyEval_mul, Rat.cast_add, add_mul, Real.exp_add, Option.some.injEq]
+    ring⟩
+
+/-- The same, scaled by a partial constant. -/
+structure Scaled (v : ℝ → Option ℝ) (c : Option ℝ) (p : List ℚ) (r : ℚ) : Prop where
+  equation : ∀ x, v x = Value.mul c (some (polyEval p x * Real.exp ((r : ℝ) * x)))
+
+theorem scaled_constant (c : Option ℝ) : Scaled (fun _ => c) c [1] 0 :=
   ⟨fun x => by cases c <;> simp [Value.mul, polyEval]⟩
 
-theorem scaled_left (c : Option ℝ) {w : ℝ → Option ℝ} {p : List ℚ}
-    (hw : PolynomialOn (fun _ => True) w p) :
-    ScaledPolynomial (fun x => Value.mul c (w x)) c p :=
-  ⟨fun x => by rw [hw.equation x trivial]⟩
-
-theorem scaled_right (c : Option ℝ) {w : ℝ → Option ℝ} {p : List ℚ}
-    (hw : PolynomialOn (fun _ => True) w p) :
-    ScaledPolynomial (fun x => Value.mul (w x) c) c p :=
-  ⟨fun x => by rw [hw.equation x trivial]; cases c <;> simp [Value.mul, mul_comm]⟩
-
-theorem scaled_times {v w : ℝ → Option ℝ} {c : Option ℝ} {p q : List ℚ}
-    (hv : ScaledPolynomial v c p) (hw : PolynomialOn (fun _ => True) w q) :
-    ScaledPolynomial (fun x => Value.mul (v x) (w x)) c (polyMul p q) :=
+/-- Total factors multiply the polynomial part on either side. -/
+theorem scaled_times {v w : ℝ → Option ℝ} {c : Option ℝ} {p q : List ℚ} {r s : ℚ}
+    (hv : Scaled v c p r) (hw : ExpPolynomial w q s) :
+    Scaled (fun x => Value.mul (v x) (w x)) c (polyMul p q) (r + s) :=
   ⟨fun x => by
-    rw [hv.equation x, hw.equation x trivial]
-    cases c <;> simp [Value.mul, polyEval_mul, mul_assoc]⟩
+    rw [hv.equation x, hw.equation x]
+    cases c <;>
+      simp only [Value.mul, polyEval_mul, Rat.cast_add, add_mul, Real.exp_add, Option.some.injEq]
+    ring⟩
+
+theorem scaled_after {v w : ℝ → Option ℝ} {c : Option ℝ} {p q : List ℚ} {r s : ℚ}
+    (hw : ExpPolynomial w q s) (hv : Scaled v c p r) :
+    Scaled (fun x => Value.mul (w x) (v x)) c (polyMul q p) (s + r) :=
+  ⟨fun x => by
+    rw [hv.equation x, hw.equation x]
+    cases c <;>
+      simp only [Value.mul, polyEval_mul, Rat.cast_add, add_mul, Real.exp_add, Option.some.injEq]
+    ring⟩
+
+/-- Two scaled factors: the scales multiply, strictly. -/
+theorem scaled_mul {v w : ℝ → Option ℝ} {c d : Option ℝ} {p q : List ℚ} {r s : ℚ}
+    (hv : Scaled v c p r) (hw : Scaled w d q s) :
+    Scaled (fun x => Value.mul (v x) (w x)) (Value.mul c d) (polyMul p q) (r + s) :=
+  ⟨fun x => by
+    rw [hv.equation x, hw.equation x]
+    cases c <;> cases d <;>
+      simp only [Value.mul, polyEval_mul, Rat.cast_add, add_mul, Real.exp_add, Option.some.injEq]
+    ring⟩
 
 theorem polynomial_unit (s : ℝ → Prop) : PolynomialOn s (fun _ => some (1 : ℝ)) [1] :=
   ⟨fun x _ => by simp [polyEval]⟩
@@ -124,12 +177,12 @@ theorem masked_first {w : ℝ → Option ℝ} {g : ℝ → Option Bool} {v : ℝ
     Masked (DensityProgram.density (.weight w .lebesgue)) g v :=
   ⟨fun x => by simp only [DensityProgram.density, Value.mul_one_left, h x]⟩
 
-/-- A total polynomial factor moves below the mask. -/
+/-- A total factor moves below the mask. -/
 theorem masked_times {f w : ℝ → Option ℝ} {g : ℝ → Option Bool} {v : ℝ → Option ℝ}
-    {q : List ℚ} (hf : Masked f g v) (hw : PolynomialOn (fun _ => True) w q) :
+    {q : List ℚ} {s : ℚ} (hf : Masked f g v) (hw : ExpPolynomial w q s) :
     Masked (fun x => Value.mul (f x) (w x)) g (fun x => Value.mul (v x) (w x)) :=
   ⟨fun x => by
-    rw [hf.equation x, hw.equation x trivial]
+    rw [hf.equation x, hw.equation x]
     rcases g x with _ | _ | _ <;> simp [Value.mask, Value.mul]⟩
 
 /-- The value below the mask and its integral between the bounds. Each
@@ -137,24 +190,24 @@ antiderivative is evaluated at the partial bounds themselves, so the result
 contains no application. The last operand of the difference is the literal
 minus one of the frontend. -/
 inductive IntervalTerms (a b m : Option ℝ) : (ℝ → Option ℝ) → Option ℝ → Prop
-  | pure {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {p P : List ℚ}
-      (hv : PolynomialOn (fun _ => True) v p)
-      (hG : PolynomialOn (fun _ => True) (fun t => G (some t)) P) (hd : isPrimitive P p = true) :
+  | pure {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {p P : List ℚ} {r s : ℚ}
+      (hv : ExpPolynomial v p r) (hG : ExpPolynomial (fun t => G (some t)) P s)
+      (hd : expPrimitive P p r s = true) :
       IntervalTerms a b m v (Value.add (G b) (Value.mul m (G a)))
   | scaled {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {c : Option ℝ} {p P : List ℚ}
-      (hv : ScaledPolynomial v c p)
-      (hG : PolynomialOn (fun _ => True) (fun t => G (some t)) P) (hd : isPrimitive P p = true) :
+      {r s : ℚ} (hv : Scaled v c p r) (hG : ExpPolynomial (fun t => G (some t)) P s)
+      (hd : expPrimitive P p r s = true) :
       IntervalTerms a b m v (Value.mul c (Value.add (G b) (Value.mul m (G a))))
   | add {v w : ℝ → Option ℝ} {s t : Option ℝ} :
       IntervalTerms a b m v s → IntervalTerms a b m w t →
       IntervalTerms a b m (fun x => Value.add (v x) (w x)) (Value.add s t)
 
-private theorem difference {G : Option ℝ → Option ℝ} {P p : List ℚ}
-    (hG : PolynomialOn (fun _ => True) (fun t => G (some t)) P) (hd : isPrimitive P p = true)
+private theorem difference {G : Option ℝ → Option ℝ} {P p : List ℚ} {r s : ℚ}
+    (hG : ExpPolynomial (fun t => G (some t)) P s) (hd : expPrimitive P p r s = true)
     (l u : ℝ) :
     Value.add (G (some u)) (Value.mul (some (-1)) (G (some l))) =
-      some (∫ x in l..u, polyEval p x) := by
-  rw [isPrimitive_integral hd, hG.equation u trivial, hG.equation l trivial]
+      some (∫ x in l..u, polyEval p x * Real.exp ((r : ℝ) * x)) := by
+  rw [expPrimitive_integral hd, hG.equation u, hG.equation l]
   simp only [Value.mul, Value.add, Option.some.injEq]
   ring
 
@@ -166,13 +219,14 @@ theorem IntervalTerms.sound {a b m : Option ℝ} {v : ℝ → Option ℝ} {out :
       ((∀ x, v x = none) ∧ out = none) := by
   subst hm ha hb
   induction h with
-  | pure hv hG hd =>
-    exact Or.inl ⟨_, polyEval_continuous _, fun x => hv.equation x trivial, difference hG hd l u⟩
-  | @scaled v G c p P hv hG hd =>
+  | @pure v G p P r s hv hG hd =>
+    exact Or.inl ⟨_, expPolynomial_continuous p r, hv.equation, difference hG hd l u⟩
+  | @scaled v G c p P r s hv hG hd =>
     cases c with
     | none => exact Or.inr ⟨fun x => by rw [hv.equation x]; rfl, rfl⟩
     | some c =>
-      refine Or.inl ⟨fun x => c * polyEval p x, continuous_const.mul (polyEval_continuous p),
+      refine Or.inl ⟨fun x => c * (polyEval p x * Real.exp ((r : ℝ) * x)),
+        continuous_const.mul (expPolynomial_continuous p r),
         fun x => by rw [hv.equation x]; rfl, ?_⟩
       rw [difference hG hd l u, intervalIntegral.integral_const_mul]
       rfl
