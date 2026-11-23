@@ -1199,6 +1199,35 @@ final class Bindings{
 		if(value.exhausted||arena.view(value.output).op!=Op.boolLit) return false;
 		truth=value.output==arena.boolean(true); return true;
 	}
+	// A quotient of polynomials of the innermost variable with rational
+	// coefficients: numerator, denominator, and a polynomial outside of whose
+	// roots the term is that quotient.
+	private bool axisQuotient(uint id,out Rational[] n,out Rational[] d,out Rational[] c,uint depth=0){
+		if(depth>32) return false;
+		if(axisPolynomial(id,n)){ d=[Rational(1)]; c=[Rational(1)]; return true; }
+		auto q=nodes[id]; if(q.op!=BoundOp.primitive||type(at(id))!=scalarType(Sort.real_)) return false;
+		auto op=arena.view(arena.at(q.data)); Rational[] n1,d1,c1,n2,d2,c2;
+		if(op.op!=Op.inv&&op.op!=Op.mul&&(op.op!=Op.pow||op.value>16)||!axisQuotient(q.a,n1,d1,c1,depth+1)) return false;
+		if(op.op==Op.inv){ n=d1; d=n1; c=polyProduct(c1,n1); }
+		else if(op.op==Op.pow){
+			n=[Rational(1)]; d=[Rational(1)]; c=c1;
+			foreach(i;0..op.value){ n=polyProduct(n,n1); d=polyProduct(d,d1); if(n.length>64||d.length>64) return false; }
+		}else{
+			if(!axisQuotient(q.b,n2,d2,c2,depth+1)) return false;
+			n=polyProduct(n1,n2); d=polyProduct(d1,d2); c=polyProduct(c1,c2);
+		}
+		foreach(p;[n,d,c]){ if(p.length>64) return false; foreach(x;p) if(x.words>128) return false; }
+		return true;
+	}
+	// Such a quotient tends at both ends to the quotient of the coefficients
+	// at the degree of its denominator, when the numerator has no larger one.
+	private bool quotientLimit(uint id,out size_t degree,out Rational value){
+		Rational[] n,d,c; if(!axisQuotient(id,n,d,c)) return false;
+		static long top(Rational[] p){ foreach_reverse(i,x;p) if(!x.zero) return cast(long)i; return -1; }
+		auto b=top(d); if(b<0||top(c)<0||top(n)>b) return false;
+		degree=cast(size_t)b; value=(degree<n.length?n[degree]:Rational(0))/d[degree];
+		return value.words<=128;
+	}
 	// Builtins that are defined and continuous everywhere keep a limit.
 	private static bool regularBuiltin(ulong value){
 		switch(cast(Builtin)value){
@@ -1297,7 +1326,9 @@ final class Bindings{
 	// Absolute values and builtins that are defined and continuous everywhere
 	// keep a limit. A reciprocal keeps a limit that is a rational number
 	// other than zero, and a partial builtin one in the interior of its
-	// domain. The result is in the context of the binder.
+	// domain. A quotient of polynomials whose denominator has at least the
+	// degree of its numerator tends to the quotient of the coefficients of
+	// that degree. The result is in the context of the binder.
 	// Nothing is claimed for a body outside this fragment: a limit that does
 	// not exist has no value. Without `build` this only recognizes the body.
 	private BoundTerm limitTerms(uint body,bool bottom,bool build=true,uint depth=0){
@@ -1311,6 +1342,9 @@ final class Bindings{
 			auto zero=scalar(Scope(this,contexts[context(found).index].parent),arena.real_(0));
 			return scaled?primitive(arena.mul(arena.real_(1),arena.real_(1),true),[tailScale(body,bottom),zero]):zero;
 		}
+		size_t degree; Rational quotient;
+		if(quotientLimit(body,degree,quotient))
+			return build?scalar(Scope(this,contexts[context(found).index].parent),arena.real_(quotient)):found;
 		auto n=nodes[body]; if(n.op!=BoundOp.primitive&&n.op!=BoundOp.guard) return BoundTerm.init;
 		auto view=n.op==BoundOp.guard?arena.view(arena.boolean(true)):arena.view(arena.at(n.data)),op=view.op;
 		if(n.op==BoundOp.guard||op==Op.mask){
@@ -5894,6 +5928,15 @@ final class Bindings{
 			auto a=tail(product.a,left),b=tail(product.b,right); scaled=left||right;
 			return scaled?"(Limit.EventualScaled."~(left&&right?"mul":left?"times":"after")~" "~a~" "~b~")":"(Limit.EventualExp.mul "~a~" "~b~")";
 		}
+		// A quotient of polynomials, by its structure.
+		string quotient(uint id){
+			Rational[] p;
+			if(axisPolynomial(id,p)) return "(Limit.quotient_polynomial "~cert.piece(id,cert.everywhere,"",Rational(0)).proof~")";
+			auto n=nodes[id],op=arena.view(arena.at(n.data));
+			if(op.op==Op.inv) return "(Limit.quotient_inv "~quotient(n.a)~")";
+			if(op.op==Op.pow) return "(Limit.quotient_pow "~to!string(op.value)~" "~quotient(n.a)~")";
+			return "(Limit.quotient_mul "~quotient(n.a)~" "~quotient(n.b)~")";
+		}
 		string visit(uint body,uint output){
 			if(!depends(at(body),0)) return "(Limit.Exact.const Filter."~end~" ("~name(output)~".eval ξ ρ))";
 			if(eventualTerm(body,s.bottom,false)!=BoundTerm.init) return "(Limit.Exact.of_eventual "~eventual(body,output)~")";
@@ -5904,6 +5947,9 @@ final class Bindings{
 				auto zero=scaled?nodes[output].b:output;
 				return "(Limit.Exact."~(scaled?"scaled_decay":"decay")~" "~tail(body,scaled)~" (Limit."~(decays?"decays_"~end:"vanishes_zero")~" rfl) "~literal(zero,"(0 : ℚ)")~")";
 			}
+			size_t degree; Rational ratio;
+			if(quotientLimit(body,degree,ratio))
+				return "(Limit.Exact.quotient Limit.Infinite."~(s.bottom?"bottom":"top")~" "~quotient(body)~" "~to!string(degree)~" "~cert.q(ratio)~" rfl "~literal(output,cert.q(ratio))~")";
 			auto n=nodes[body],o=nodes[output];
 			if(n.op==BoundOp.guard){
 				enforce(o.op==BoundOp.guard,"limit guard mismatch");

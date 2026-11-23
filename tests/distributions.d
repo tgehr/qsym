@@ -519,7 +519,18 @@ private Case[] cases(){ return [
 	Case("LimitInteriorBoundary","lim[x→∞] acos(1+exp(-x))","ℝ"),
 	Case("LimitStrictGuard","lim[x→∞] log(2*x)-log(x)","ℝ","log(2)"),
 	Case("LimitStrictGuardUndefined","lim[x→-∞] log(2*x)-log(x)","ℝ","undefined(ℝ)"),
-	Case("LimitStrictGuardDecay","lim[x→∞] exp(-x)*x/x","ℝ","0"),
+	Case("LimitStrictGuardDecay","lim[x→∞] exp(-x)+log(x)-log(x)","ℝ","0"),
+	Case("LimitQuotientReciprocal","lim[x→∞] 1/x","ℝ","0"),
+	Case("LimitQuotientDegrees","lim[x→∞] (2*x+1)/(x+3)","ℝ","2"),
+	Case("LimitQuotientBottom","lim[x→-∞] (x^3-x)/(1-2*x^3)","ℝ","-1/2"),
+	Case("LimitQuotientSmaller","lim[x→∞] x/(x^2+1)","ℝ","0"),
+	Case("LimitQuotientSum","lim[x→∞] 1/x+1/x^2+y","ℝ","y"),
+	Case("LimitQuotientScale","lim[x→∞] a/x","ℝ","0"),
+	Case("LimitQuotientPower","lim[x→-∞] 3*x/(1+x^2)^2","ℝ","0"),
+	Case("LimitQuotientInside","lim[x→∞] exp(1/x)+cos(1/x)","ℝ","2"),
+	Case("LimitQuotientDecay","lim[x→∞] exp(-x)/(1+x^2)","ℝ","0"),
+	Case("LimitQuotientLarger","lim[x→∞] x^3/(x^2+1)","ℝ"),
+	Case("LimitQuotientParameter","lim[x→∞] (a*x+1)/x","ℝ"),
 	Case("LimitGrowing","lim[x→∞] exp(x)","ℝ"),
 	Case("LimitPolynomial","lim[x→∞] x^2","ℝ"),
 	Case("LimitWrongEnd","lim[x→-∞] exp(-x)","ℝ"),
@@ -905,7 +916,7 @@ private void run(string directory){
 		if(c.name.indexOf("Limit")==0){
 			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||
 				c.name=="LimitGuardOscillating"||c.name=="LimitPiecewiseGrowing"||c.name=="LimitVisibleGrowth"||
-				c.name=="LimitReciprocalParameter"||c.name=="LimitInteriorBoundary";
+				c.name=="LimitReciprocalParameter"||c.name=="LimitInteriorBoundary"||c.name=="LimitQuotientLarger"||c.name=="LimitQuotientParameter";
 			enforce((certificate.indexOf("Limit.Exact.sound")>=0)!=retained,c.name~" limit certificate");
 			enforce((text.indexOf("lim[")>=0)==retained,c.name~": "~text);
 			// A bracket or a guard is decided beyond its last cut, and a bound
@@ -935,6 +946,11 @@ private void run(string directory){
 			if(c.name.indexOf("LimitInterior")==0&&!retained) enforce(certificate.indexOf("Limit.Exact.interior")>=0,c.name);
 			if(c.name=="LimitStrictGuard"||c.name=="LimitStrictGuardUndefined") enforce(certificate.indexOf("Limit.Eventual.binary Binding.guardValue")>=0,c.name);
 			if(c.name=="LimitStrictGuardDecay") enforce(certificate.indexOf("Limit.Exact.guard")>=0,c.name);
+			// A quotient of polynomials tends at both ends to the quotient of
+			// the coefficients at the degree of its denominator, unless the
+			// numerator has a larger one.
+			if(c.name.indexOf("LimitQuotient")==0&&!retained)
+				enforce(certificate.indexOf("Limit.Exact.quotient Limit.Infinite."~(c.name=="LimitQuotientBottom"||c.name=="LimitQuotientPower"?"bottom":"top"))>=0,c.name);
 			// The limit of an integral between bounds is the limit of its
 			// closed form behind the guard that orders the bounds.
 			if(c.name=="LimitMask"||c.name.indexOf("LimitIntegral")==0) enforce(certificate.indexOf("Limit.Exact.mask")>=0,c.name);
