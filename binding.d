@@ -3246,6 +3246,17 @@ final class Bindings{
 				result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,proof,tail.proof));
 				active.set(t.id,false); memo.set(t.id,result); return result;
 			}
+			// Split a bind over the sum or scaling of its source before the
+			// summands are normalized: a chart is recognized from its original mask.
+			if(n.op==BoundOp.distributionBind&&(nodes[n.a].op==BoundOp.distributionAdd||nodes[n.a].op==BoundOp.distributionScale)&&steps<budget){
+				auto d=nodes[n.a],k=at(n.b),scope_=context(t); bool sum=d.op==BoundOp.distributionAdd;
+				auto next=sum?distribution(scope_,BoundOp.distributionAdd,[distribution(scope_,BoundOp.distributionBind,[at(d.a),k]),distribution(scope_,BoundOp.distributionBind,[at(d.b),k])])
+					:distribution(scope_,BoundOp.distributionScale,[at(d.a),distribution(scope_,BoundOp.distributionBind,[at(d.b),k])]);
+				++steps;
+				auto proof=emit(sum?BindingRule.distributionBindAdd:BindingRule.distributionBindScale,t.id,next.id),tail=visit(next,depth+1);
+				result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,proof,tail.proof));
+				active.set(t.id,false); memo.set(t.id,result); return result;
+			}
 			if(n.op==BoundOp.distributionMass&&nodes[n.a].op==BoundOp.distributionGraphFibre&&steps<budget){
 				auto graph=nodes[n.a],out_=distribution(context(t),BoundOp.distributionGraphMass,[at(graph.a),at(graph.b)]);
 				++steps;
@@ -3480,9 +3491,8 @@ final class Bindings{
 			}
 			// Finite mixtures of point masses. Weighting and composition follow the
 			// constructors of the source; coefficients and atoms are not merged.
-			// A real-valued bind out of a parameter chart has its own row
-			// interpreter, so the bind laws need a source rooted at an atom, a
-			// scaling, a sum or zero. The exporter proves that from the constructor.
+			// The real bind is structural in sums and scalings, so a parameter chart
+			// below them keeps its row interpreter.
 			if(next==BoundTerm.init&&current.op==BoundOp.distributionWeight){
 				auto f=at(current.a),d=nodes[current.b];
 				if(d.op==BoundOp.distributionDirac){
@@ -3497,10 +3507,10 @@ final class Bindings{
 			if(next==BoundTerm.init&&current.op==BoundOp.distributionBind){
 				auto d=nodes[current.a],k=at(current.b);
 				if(d.op==BoundOp.distributionDirac){ next=apply(k,at(d.a)); rule=BindingRule.distributionBindDirac; }
-				else if(d.op==BoundOp.distributionAdd&&mixtureRoot(d.a)&&mixtureRoot(d.b)){
+				else if(d.op==BoundOp.distributionAdd){
 					next=distribution(ctx,BoundOp.distributionAdd,[distribution(ctx,BoundOp.distributionBind,[at(d.a),k]),distribution(ctx,BoundOp.distributionBind,[at(d.b),k])]);
 					rule=BindingRule.distributionBindAdd;
-				}else if(d.op==BoundOp.distributionScale&&mixtureRoot(d.b)){
+				}else if(d.op==BoundOp.distributionScale){
 					next=distribution(ctx,BoundOp.distributionScale,[at(d.a),distribution(ctx,BoundOp.distributionBind,[at(d.b),k])]); rule=BindingRule.distributionBindScale;
 				}else if(d.op==BoundOp.distributionZero){
 					next=sequence(k,distribution(ctx,BoundOp.distributionZero,[],pool.view(types[current.type]).fields[0])); rule=BindingRule.distributionBindZero;
@@ -4512,11 +4522,6 @@ final class Bindings{
 		if(sort==Sort.real_) return "(("~s~" : ℤ) : ℝ)";
 		if(sort==Sort.complex) return "((("~s~" : ℤ) : ℂ) + ((0 : ℤ) : ℂ) * Complex.I)";
 		return s;
-	}
-	// Roots whose value, when defined, is never a parameter chart.
-	private bool mixtureRoot(uint id){
-		auto op=nodes[id].op;
-		return op==BoundOp.distributionDirac||op==BoundOp.distributionScale||op==BoundOp.distributionAdd||op==BoundOp.distributionZero;
 	}
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
@@ -6328,26 +6333,13 @@ final class Bindings{
 				case BindingRule.distributionWeightAdd,BindingRule.distributionWeightScale:
 					proof=".ofEq (fun ξ ρ => Distribution.weight_"~(p.rule==BindingRule.distributionWeightAdd?"add":"scale")~"Value ("~name(n.a)~".eval ξ ρ) ("~name(nodes[n.b].a)~".eval ξ ρ) ("~name(nodes[n.b].b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionBindDirac,BindingRule.distributionBindAdd,BindingRule.distributionBindScale,BindingRule.distributionBindZero:{
-					// The premise is the constructor of the already evaluated source.
-					string mixture(uint id){
-						switch(nodes[id].op){
-							case BoundOp.distributionDirac:return " (Distribution.mixture_diracValue _)";
-							case BoundOp.distributionScale:return " (Distribution.mixture_scaleValue _ _)";
-							case BoundOp.distributionAdd:return " (Distribution.mixture_addValue _ _)";
-							case BoundOp.distributionZero:return " Distribution.mixture_zeroValue";
-							default:enforce(false,"mixture certificate for a source that is not a mixture"); return null;
-						}
-					}
 					auto d=nodes[n.a],k=" ("~name(n.b)~".eval ξ ρ)";
 					bool realTarget=pool.view(type(at(n.b))).fields[1]==pool.distribution(scalarType(Sort.real_));
 					auto law=realTarget?"Distribution.GraphFibre.realBind_":"Distribution.bind_";
 					string arguments;
 					if(p.rule==BindingRule.distributionBindDirac) arguments=" ("~name(d.a)~".eval ξ ρ)"~k;
 					else if(p.rule==BindingRule.distributionBindZero) arguments=k;
-					else{
-						arguments=" ("~name(d.a)~".eval ξ ρ) ("~name(d.b)~".eval ξ ρ)"~k;
-						if(realTarget) arguments~=p.rule==BindingRule.distributionBindAdd?mixture(d.a)~mixture(d.b):mixture(d.b);
-					}
+					else arguments=" ("~name(d.a)~".eval ξ ρ) ("~name(d.b)~".eval ξ ρ)"~k;
 					auto which=p.rule==BindingRule.distributionBindDirac?"dirac":p.rule==BindingRule.distributionBindAdd?"add":p.rule==BindingRule.distributionBindScale?"scale":"zero";
 					proof=".ofEq (fun ξ ρ => "~law~which~"Value"~arguments~")"; break;
 				}

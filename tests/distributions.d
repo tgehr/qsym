@@ -367,6 +367,8 @@ private Case[] cases(){ return [
 	Case("MixtureMissingSummand","densityAtD(addD(undefined(Distribution(ℝ)),lebesgueD()),1)","ℝ","undefined(ℝ)"),
 	Case("MixtureChartSummand","λ(d:Distribution(ℝ)). bindD(addD(d,δ((0:ℝ))),λ(y:ℝ). δ(y+1))","Distribution(ℝ)→Distribution(ℝ)"),
 	Case("MixtureScaledChart","bindD(scaleD(2,lebesgueD()),λ(y:ℝ). δ(y+1))","Distribution(ℝ)"),
+	Case("MixtureMaskedChart","Λx. ∫dy (1/2*δ(0)[y]+[0≤y]*[y≤1]*λ[y])*δ(y+1)[x]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(1)[x]+[1≤x∧x≤2]·λ[x]"),
+	Case("MixtureMaskedChartMass","∫dx ∫dy (1/2*δ(0)[y]+1/2*[0≤y]*[y≤1]*λ[y])*δ(y+1)[x]","ℝ","1"),
 	Case("MixtureStrictSummand","addD(lebesgueD(),undefined(Distribution(ℝ)))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
 	Case("MixtureStrictScale","scaleD(2,undefined(Distribution(ℝ)))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
 	Case("MixtureStrictWeight","weightD(λ(x:ℝ). x,undefined(Distribution(ℝ)))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
@@ -380,7 +382,6 @@ private Case[] cases(){ return [
 	Case("TwoMaskGraph","Λx. ∫dy [0≤y]*[y≤1]*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(1/2))·λ[y]"),
 	Case("TwoMaskJoint","(λ[y]*[0≤y]*[y≤1]*δ(2*y)[x])//λ[x]","Distribution(ℝ)","([0≤x∧x≤2]·(1/2))·δ(x·(1/2))[y]"),
 	Case("TwoSourceGraph","Λx. ∫dy ∫dz [0≤y]*[y≤1]*λ[y]*[0≤z]*[z≤1]*λ[z]*δ(y+z)[x]","Distribution(ℝ)"),
-	Case("MixedSource","Λx. ∫dy (1/2*δ(0)[y]+1/2*[0≤y]*[y≤1]*λ[y])*δ(y+1)[x]","Distribution(ℝ)"),
 	Case("Mixture","Λ(x:ℝ).δ(0)[x]+[x≠0]*λ[x]","Distribution(ℝ)"),
 	Case("Signed","Λ(x:ℝ).-δ(0)[x]","Distribution(ℝ)"),
 	Case("Integral","∫(x:ℝ).x*δ(2)[x]","ℝ"),
@@ -565,19 +566,22 @@ private void run(string directory){
 		if(c.name=="WeightedDirac"||c.name=="MixtureWeightedAtoms") enforce(certificate.indexOf("Distribution.weight_diracValue")>=0,c.name);
 		if(c.name=="MixtureAtomBind") enforce(certificate.indexOf("GraphFibre.realBind_diracValue")>=0,c.name);
 		if(c.name=="MixtureBind"||c.name=="MixtureBranch")
-			enforce(certificate.indexOf("GraphFibre.realBind_addValue")>=0&&certificate.indexOf("GraphFibre.realBind_scaleValue")>=0&&
-				certificate.indexOf("Distribution.mixture_scaleValue")>=0,c.name);
+			enforce(certificate.indexOf("GraphFibre.realBind_addValue")>=0&&certificate.indexOf("GraphFibre.realBind_scaleValue")>=0,c.name);
 		if(c.name=="MixtureHigherAtoms") enforce(certificate.indexOf("Distribution.bind_addValue")>=0&&certificate.indexOf("realBind")<0,c.name);
 		if(c.name=="MixtureZeroSource") enforce(certificate.indexOf("GraphFibre.realBind_zeroValue")>=0,c.name);
 		foreach(lemma;[["MixtureStrictSummand","Distribution.add_none_right"],["MixtureStrictScale","Distribution.scale_none_right"],
 			["MixtureStrictWeight","Distribution.weight_none_right"],["MixtureStrictSource","GraphFibre.realBind_none_left"],
 			["MixtureStrictHigherSource","Distribution.bind_none_left"],["MixtureStrictQuery","Distribution.densityAt_none_right"],
 			["MixtureHigherZero","Distribution.bind_zeroValue"],["MixtureHigherScale","Distribution.bind_scaleValue"],
-			["MixtureNaturalWeight","Distribution.weight_addValue"],["MixtureScaledSum","Distribution.mixture_addValue"]])
+			["MixtureNaturalWeight","Distribution.weight_addValue"],["MixtureScaledSum","GraphFibre.realBind_addValue"]])
 			if(c.name==lemma[0]) enforce(certificate.indexOf(lemma[1])>=0,c.name);
-		// Sources that may be parameter charts keep the ordered bind.
-		if(c.name=="MixtureChartSummand"||c.name=="MixtureScaledChart"||c.name=="MixedSource")
-			enforce(text.indexOf("∫")>=0&&certificate.indexOf("realBind_addValue")<0&&certificate.indexOf("realBind_scaleValue")<0,c.name~": "~text);
+		// The real bind is structural, so a chart below a sum or a scaling
+		// is reached and keeps its row interpreter.
+		if(c.name=="MixtureChartSummand"||c.name=="MixtureMaskedChart"||c.name=="MixtureMaskedChartMass")
+			enforce(certificate.indexOf("GraphFibre.realBind_addValue")>=0&&certificate.indexOf("mixture_")<0,c.name~": "~text);
+		if(c.name=="MixtureChartSummand") enforce(text.indexOf("δ(1)[x]")>=0&&text.indexOf("(d)[y]")>=0,c.name~": "~text);
+		if(c.name=="MixtureScaledChart") enforce(text.indexOf("∫")<0&&certificate.indexOf("GraphFibre.realBind_scaleValue")>=0,c.name~": "~text);
+		if(c.name=="MixtureMaskedChart") enforce(certificate.indexOf("GraphFibre.affine_chart_rule")>=0,c.name);
 		if(c.name=="TwoMaskGraph") enforce(certificate.indexOf("GraphFibre.affine_chart_rule")>=0,c.name);
 		if(c.name=="TwoMaskJoint") enforce(certificate.indexOf("GraphFibre.masked_affine_rule")>=0,c.name);
 		if(c.name.indexOf("MixedDensity")==0) enforce(certificate.indexOf("Distribution.model_density_atom_add")>=0,c.name);

@@ -83,14 +83,50 @@ theorem realIntegralRows_partial (rows : ℝ → D ℝ) (t : ℝ → Option ℝ)
 def realIntegralValue (k : Option (ℝ → Option (D ℝ))) : Option (D ℝ) :=
   k.map (fun f => realIntegralRows (fun r => (f r).getD .invalid))
 
-/-- A real-valued bind out of a parameter chart uses the same row interpreter
-as a real integral. Other source constructors retain their usual bind. -/
+/-- A real-valued bind uses the row interpreter of a real integral for every
+parameter chart of its source, including charts below sums and scalings. Atoms,
+zero and ordered integrals retain their usual bind. -/
+def realBind {α : Type} : D α → (α → Option (D ℝ)) → Option (D ℝ)
+  | .density w v, k => some (realIntegralRows (fun r => (scaleValue (w r) ((v r).bind k)).getD .invalid))
+  | .add a b, k => addValue (realBind a k) (realBind b k)
+  | .scale r a, k => scaleValue (some r) (realBind a k)
+  | .invalid, _ => none
+  | .zero, _ => some .zero
+  | .dirac a, k => k a
+  | .integral f, k => some (.integral (fun r => (bind (f r) k).getD .invalid))
+
 def realBindValue {α : Type} (d : Option (D α)) (k : Option (α → Option (D ℝ))) : Option (D ℝ) := do
-  let source ← d
-  let kernel ← k
-  match source with
-  | .density w v => return realIntegralRows (fun r => (scaleValue (w r) ((v r).bind kernel)).getD .invalid)
-  | other => bind other kernel
+  realBind (← d) (← k)
+
+private theorem add_test {β : Type} (x y : Option (D β)) (f : β → Option ℝ) :
+    (addValue x y).bind (fun a => integrate a f) =
+      Value.add (x.bind (fun a => integrate a f)) (y.bind (fun a => integrate a f)) := by
+  cases x with
+  | none => rfl
+  | some a =>
+    cases y with
+    | some b => rfl
+    | none =>
+      change none = Value.add (integrate a f) none
+      cases integrate a f <;> rfl
+
+private theorem scale_test {β : Type} (r : ℝ) (x : Option (D β)) (f : β → Option ℝ) :
+    (scaleValue (some r) x).bind (fun a => integrate a f) =
+      Value.mul (some r) (x.bind (fun a => integrate a f)) := by
+  cases x <;> rfl
+
+theorem realBind_test {α : Type} (d : D α) (k : α → Option (D ℝ)) (t : ℝ → ℝ) :
+    (realBind d k).bind (fun a => integrate a (fun y => some (t y))) =
+      (bind d k).bind (fun a => integrate a (fun y => some (t y))) := by
+  induction d with
+  | density w v => exact realIntegralRows_total _ t
+  | add a b iha ihb =>
+    change (addValue (realBind a k) (realBind b k)).bind _ = (addValue (bind a k) (bind b k)).bind _
+    rw [add_test, add_test, iha, ihb]
+  | scale r a ih =>
+    change (scaleValue (some r) (realBind a k)).bind _ = (scaleValue (some r) (bind a k)).bind _
+    rw [scale_test, scale_test, ih]
+  | invalid | zero | dirac | integral => rfl
 
 theorem realBind_total {α : Type} (d : Option (D α)) (k : Option (α → Option (D ℝ))) (t : ℝ → ℝ) :
     (realBindValue d k).bind (fun a => integrate a (fun y => some (t y))) =
@@ -100,8 +136,7 @@ theorem realBind_total {α : Type} (d : Option (D α)) (k : Option (α → Optio
   | some d =>
     cases k with
     | none => rfl
-    | some k =>
-      cases d <;> first | rfl | exact realIntegralRows_total _ t
+    | some k => exact realBind_test d k t
 
 theorem realBind_mass {α : Type} (d : Option (D α)) (k : Option (α → Option (D ℝ))) :
     massValue (realBindValue d k) = massValue (bindValue d k) :=

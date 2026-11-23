@@ -194,6 +194,16 @@ Pattern distributionSyntax(Pattern root){
 			// including when the coefficient or atom is undefined.
 			if(d.name=="$distributionApply"&&(d.args[0].name=="δ"||d.args[0].name=="dirac")&&!distributionOccurs(scalar,axis))
 				return pattern("scaleD",[expand(scalar),lower(d,axis,ty)]);
+			// Adjacent brackets nest, so a weight made only of brackets on the axis
+			// is one mask guarded from left to right; charts are recognized from
+			// that form. Brackets on parameters stay separate factors.
+			Pattern[] brackets; bool masks=true;
+			void collect(Pattern q) @safe { if(q.name=="$mul"){ collect(q.args[0]); collect(q.args[1]); }else{ brackets~=q; masks=masks&&q.name=="$iverson"&&distributionOccurs(q,axis); } }
+			collect(scalar);
+			if(masks&&brackets.length>1){
+				Pattern predicate; foreach(b;brackets) predicate=predicate is null?b.args[0]:pattern("and",[predicate,b.args[0]]);
+				scalar=pattern("$iverson",[predicate]);
+			}
 			return pattern("weightD",[lambda(axis,ty,expand(scalar)),lower(d,axis,ty)]);
 		}
 		enforce(false,"unsupported distribution form; expected d[x], a weighted form, or a sum");
