@@ -42,7 +42,8 @@ private enum BindingRule:ubyte{
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
-	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity
+	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
+	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -3171,6 +3172,14 @@ final class Bindings{
 					active.set(t.id,false); memo.set(t.id,result); return result;
 				}
 			}
+			// A test of one atom has a direct observer. Use it before the atom's
+			// weight is evaluated as a coefficient by the mixture laws below.
+			if(n.op==BoundOp.distributionMass&&nodes[n.a].op==BoundOp.distributionWeight&&nodes[nodes[n.a].b].op==BoundOp.distributionDirac&&steps<budget){
+				auto d=nodes[n.a],next=apply(at(d.a),at(nodes[d.b].a)); ++steps;
+				auto proof=emit(BindingRule.distributionMassWeightedDirac,t.id,next.id),tail=visit(next,depth+1);
+				result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,proof,tail.proof));
+				active.set(t.id,false); memo.set(t.id,result); return result;
+			}
 			if(n.op==BoundOp.distributionMass&&nodes[n.a].op==BoundOp.distributionGraphFibre&&steps<budget){
 				auto graph=nodes[n.a],out_=distribution(context(t),BoundOp.distributionGraphMass,[at(graph.a),at(graph.b)]);
 				++steps;
@@ -3384,6 +3393,42 @@ final class Bindings{
 
 			if(current.op==BoundOp.distributionMass&&nodes[current.a].op==BoundOp.distributionWeight&&nodes[nodes[current.a].b].op==BoundOp.distributionDirac){
 				auto d=nodes[current.a]; next=apply(at(d.a),at(nodes[d.b].a)); rule=BindingRule.distributionMassWeightedDirac;
+			}
+			// A missing distribution operand makes these constructors missing.
+			if(next==BoundTerm.init&&(current.op==BoundOp.distributionAdd||current.op==BoundOp.distributionScale||current.op==BoundOp.distributionWeight||
+				current.op==BoundOp.distributionBind||current.op==BoundOp.distributionDensityAt)){
+				bool left=nodes[current.a].op==BoundOp.bottom,right=nodes[current.b].op==BoundOp.bottom;
+				bool either=current.op==BoundOp.distributionAdd||current.op==BoundOp.distributionDensityAt;
+				bool source=current.op==BoundOp.distributionBind;
+				if(left&&(either||source)||right&&!source){ next=bottom(ctx,types[current.type]); rule=BindingRule.distributionStrict; }
+			}
+			// Finite mixtures of point masses. Weighting and composition follow the
+			// constructors of the source; coefficients and atoms are not merged.
+			// A real-valued bind out of a parameter chart has its own row
+			// interpreter, so the bind laws need a source rooted at an atom, a
+			// scaling, a sum or zero. The exporter proves that from the constructor.
+			if(next==BoundTerm.init&&current.op==BoundOp.distributionWeight){
+				auto f=at(current.a),d=nodes[current.b];
+				if(d.op==BoundOp.distributionDirac){
+					next=distribution(ctx,BoundOp.distributionScale,[apply(f,at(d.a)),at(current.b)]); rule=BindingRule.distributionWeightDirac;
+				}else if(d.op==BoundOp.distributionAdd){
+					next=distribution(ctx,BoundOp.distributionAdd,[distribution(ctx,BoundOp.distributionWeight,[f,at(d.a)]),distribution(ctx,BoundOp.distributionWeight,[f,at(d.b)])]);
+					rule=BindingRule.distributionWeightAdd;
+				}else if(d.op==BoundOp.distributionScale){
+					next=distribution(ctx,BoundOp.distributionScale,[at(d.a),distribution(ctx,BoundOp.distributionWeight,[f,at(d.b)])]); rule=BindingRule.distributionWeightScale;
+				}
+			}
+			if(next==BoundTerm.init&&current.op==BoundOp.distributionBind){
+				auto d=nodes[current.a],k=at(current.b);
+				if(d.op==BoundOp.distributionDirac){ next=apply(k,at(d.a)); rule=BindingRule.distributionBindDirac; }
+				else if(d.op==BoundOp.distributionAdd&&mixtureRoot(d.a)&&mixtureRoot(d.b)){
+					next=distribution(ctx,BoundOp.distributionAdd,[distribution(ctx,BoundOp.distributionBind,[at(d.a),k]),distribution(ctx,BoundOp.distributionBind,[at(d.b),k])]);
+					rule=BindingRule.distributionBindAdd;
+				}else if(d.op==BoundOp.distributionScale&&mixtureRoot(d.b)){
+					next=distribution(ctx,BoundOp.distributionScale,[at(d.a),distribution(ctx,BoundOp.distributionBind,[at(d.b),k])]); rule=BindingRule.distributionBindScale;
+				}else if(d.op==BoundOp.distributionZero){
+					next=sequence(k,distribution(ctx,BoundOp.distributionZero,[],pool.view(types[current.type]).fields[0])); rule=BindingRule.distributionBindZero;
+				}
 			}
 			bool squareProduct;
 			if(current.op==BoundOp.distributionPushforwardOn&&nodes[current.a].op==BoundOp.lambda&&nodes[current.b].op==BoundOp.lambda){
@@ -4391,6 +4436,11 @@ final class Bindings{
 		if(sort==Sort.real_) return "(("~s~" : ℤ) : ℝ)";
 		if(sort==Sort.complex) return "((("~s~" : ℤ) : ℂ) + ((0 : ℤ) : ℂ) * Complex.I)";
 		return s;
+	}
+	// Roots whose value, when defined, is never a parameter chart.
+	private bool mixtureRoot(uint id){
+		auto op=nodes[id].op;
+		return op==BoundOp.distributionDirac||op==BoundOp.distributionScale||op==BoundOp.distributionAdd||op==BoundOp.distributionZero;
 	}
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
@@ -6173,6 +6223,48 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionMassDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
+				case BindingRule.distributionStrict:{
+					bool left=nodes[n.a].op==BoundOp.bottom&&n.op!=BoundOp.distributionScale&&n.op!=BoundOp.distributionWeight;
+					string law;
+					switch(n.op){
+						case BoundOp.distributionAdd:law="add_none"; break;
+						case BoundOp.distributionScale:law="scale_none"; break;
+						case BoundOp.distributionWeight:law="weight_none"; break;
+						case BoundOp.distributionDensityAt:law="densityAt_none"; break;
+						case BoundOp.distributionBind:
+							law=pool.view(type(at(n.b))).fields[1]==pool.distribution(scalarType(Sort.real_))?"GraphFibre.realBind_none":"bind_none"; break;
+						default:enforce(false,"strictness certificate for an unsupported constructor");
+					}
+					proof=".ofEq (fun ξ ρ => Distribution."~law~(left?"_left (":"_right (")~name(left?n.b:n.a)~".eval ξ ρ))"; break;
+				}
+				case BindingRule.distributionWeightDirac:
+					proof=".ofEq (fun ξ ρ => Distribution.weight_diracValue ("~name(n.a)~".eval ξ ρ) ("~name(nodes[n.b].a)~".eval ξ ρ))"; break;
+				case BindingRule.distributionWeightAdd,BindingRule.distributionWeightScale:
+					proof=".ofEq (fun ξ ρ => Distribution.weight_"~(p.rule==BindingRule.distributionWeightAdd?"add":"scale")~"Value ("~name(n.a)~".eval ξ ρ) ("~name(nodes[n.b].a)~".eval ξ ρ) ("~name(nodes[n.b].b)~".eval ξ ρ))"; break;
+				case BindingRule.distributionBindDirac,BindingRule.distributionBindAdd,BindingRule.distributionBindScale,BindingRule.distributionBindZero:{
+					// The premise is the constructor of the already evaluated source.
+					string mixture(uint id){
+						switch(nodes[id].op){
+							case BoundOp.distributionDirac:return " (Distribution.mixture_diracValue _)";
+							case BoundOp.distributionScale:return " (Distribution.mixture_scaleValue _ _)";
+							case BoundOp.distributionAdd:return " (Distribution.mixture_addValue _ _)";
+							case BoundOp.distributionZero:return " Distribution.mixture_zeroValue";
+							default:enforce(false,"mixture certificate for a source that is not a mixture"); return null;
+						}
+					}
+					auto d=nodes[n.a],k=" ("~name(n.b)~".eval ξ ρ)";
+					bool realTarget=pool.view(type(at(n.b))).fields[1]==pool.distribution(scalarType(Sort.real_));
+					auto law=realTarget?"Distribution.GraphFibre.realBind_":"Distribution.bind_";
+					string arguments;
+					if(p.rule==BindingRule.distributionBindDirac) arguments=" ("~name(d.a)~".eval ξ ρ)"~k;
+					else if(p.rule==BindingRule.distributionBindZero) arguments=k;
+					else{
+						arguments=" ("~name(d.a)~".eval ξ ρ) ("~name(d.b)~".eval ξ ρ)"~k;
+						if(realTarget) arguments~=p.rule==BindingRule.distributionBindAdd?mixture(d.a)~mixture(d.b):mixture(d.b);
+					}
+					auto which=p.rule==BindingRule.distributionBindDirac?"dirac":p.rule==BindingRule.distributionBindAdd?"add":p.rule==BindingRule.distributionBindScale?"scale":"zero";
+					proof=".ofEq (fun ξ ρ => "~law~which~"Value"~arguments~")"; break;
+				}
 				case BindingRule.distributionGraphMass:
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.mass_eq_marginal ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[n.a].b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionWeightedSquare,BindingRule.distributionWeightedSquareDensity:{

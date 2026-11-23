@@ -49,7 +49,7 @@ private Case[] cases(){ return [
 	Case("SignedFibreDistinct","densityAtD(Λ(x:ℝ).δ(0)[x]+(-δ(2)[x])+λ[x],2)","ℝ","undefined(ℝ)"),
 	Case("SignedFibreAway","densityAtD(Λ(x:ℝ).δ(0)[x]+(-δ(2)[x])+λ[x],1)","ℝ","1"),
 	Case("SignedFibreZeroScale","densityAtD(scaleD(0,δ((3:ℝ))),3)","ℝ","0"),
-	Case("SignedFibrePartialWeight","densityAtD(Λ(x:ℝ).(1/x)*δ(0)[x]+λ[x],1)","ℝ"),
+	Case("SignedFibrePartialWeight","densityAtD(Λ(x:ℝ).(1/x)*δ(0)[x]+λ[x],1)","ℝ","undefined(ℝ)"),
 	Case("SignedFibreRegularHole","densityAtD(Λ(x:ℝ).δ(0)[x]+((1/x)*λ[x]+(-δ(0)[x])),0)","ℝ","0⁻¹"),
 	Case("SignedFibreSymbolic","λ(a:ℝ).densityAtD(Λ(x:ℝ).δ(a)[x]+(λ[x]+(-δ(a)[x])),a)","ℝ→ℝ","λ(a:ℝ). (1:ℝ)"),
 	Case("CubicGraph","(λ[x]·δ(x^3)[y])//λ[y]","Distribution(ℝ)","(3·cbrt(y)^2)⁻¹·δ(cbrt(y))[x]"),
@@ -329,7 +329,28 @@ private Case[] cases(){ return [
 	Case("StepUnbounded","∫dx [x<0∨1<x]*λ[x]","ℝ"),
 	Case("StepNonconstant","∫dx x*[0≤x≤1]*λ[x]","ℝ"),
 	Case("Puncture","Λ(x:ℝ).[x≠0]*λ[x]","Distribution(ℝ)"),
-	Case("WeightedDirac","Λ(x:ℝ).x*δ(2)[x]","Distribution(ℝ)"),
+	Case("WeightedDirac","Λ(x:ℝ).x*δ(2)[x]","Distribution(ℝ)","Λ(x:ℝ). 2·δ(2)[x]"),
+	Case("MixtureExpectation","∫dx (1/2*δ(0)[x]+1/2*δ(1)[x])*x","ℝ","1/2"),
+	Case("MixtureEvent","∫dx (1/2*δ(0)[x]+1/2*δ(1)[x])*[x=1]","ℝ","1/2"),
+	Case("MixtureSymbolicMean","λ(p:ℝ). ∫dx (p*δ(1)[x]+(1-p)*δ(0)[x])*x","ℝ→ℝ","λ(p:ℝ). p"),
+	Case("MixtureWeightedAtoms","Λx. (1/3*δ(1)[x]+2/3*δ(2)[x])*x","Distribution(ℝ)"),
+	Case("MixtureAtomBind","Λx. ∫dy δ(0)[y]*δ(y+1)[x]","Distribution(ℝ)","δ((1:ℝ))"),
+	Case("MixtureBind","Λx. ∫dy (1/2*δ(0)[y]+1/2*δ(1)[y])*δ(y+1)[x]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(1)[x]+1/2·δ(2)[x]"),
+	Case("MixtureBranch","Λr. ∫dx (1/2*δ(0)[x]+1/2*δ(1)[x])*(if x=1 then δ(10)[r] else δ(20)[r])","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(20)[x]+1/2·δ(10)[x]"),
+	Case("MixtureBindDensityOff","densityAtD(Λx. ∫dy (1/2*δ(0)[y]+1/2*δ(1)[y])*δ(y+1)[x],3)","ℝ","0"),
+	Case("MixtureBindDensityAtom","densityAtD(Λx. ∫dy (1/2*δ(0)[y]+1/2*δ(1)[y])*δ(y+1)[x],2)","ℝ","undefined(ℝ)"),
+	Case("MixtureTwoSources","∫dx x*(∫dy ∫dz (1/2*δ(0)[y]+1/2*δ(1)[y])*(1/2*δ(0)[z]+1/2*δ(1)[z])*δ(y+z)[x])","ℝ","1"),
+	Case("MixtureProductExpectation","∫dx ∫dy (1/2*δ(0)[x]+1/2*δ(1)[x])*(1/3*δ(1)[y]+2/3*δ(2)[y])*x*y","ℝ","5/6"),
+	Case("MixtureDependentKernel","∫dx ∫dy (1/2*δ(0)[x]+1/2*δ(1)[x])*δ(x+1)[y]*y","ℝ","3/2"),
+	Case("MixtureNestedKernel","∫dx (1/2*δ(0)[x]+1/2*δ(1)[x])*∫dy (1/2*δ(x)[y]+1/2*δ(x+1)[y])*y","ℝ","1"),
+	Case("MixtureHigherAtoms","bindD(addD(δ(λ(n:ℕ).n),δ(λ(n:ℕ).n+1)),λ(f:ℕ→ℕ).δ(f(1)))","Distribution(ℕ)","Λ(x:ℕ). δ(1)[x]+δ(2)[x]"),
+	Case("MixtureZeroSource","massD(bindD(zeroD(ℝ),λ(y:ℝ). δ(y+1)))","ℝ","0"),
+	Case("MixturePartialAtom","∫dx (1/2*δ(0)[x]+1/2*δ(1/0)[x])*x","ℝ","undefined(ℝ)"),
+	Case("MixturePartialWeight","∫dx (δ(0)[x]+δ(1)[x])*(1/x)","ℝ","undefined(ℝ)"),
+	Case("MixtureMissingKernel","bindD(δ((1:ℝ)),undefined(ℝ→Distribution(ℝ)))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("MixtureMissingSummand","densityAtD(addD(undefined(Distribution(ℝ)),lebesgueD()),1)","ℝ","undefined(ℝ)"),
+	Case("MixtureChartSummand","λ(d:Distribution(ℝ)). bindD(addD(d,δ((0:ℝ))),λ(y:ℝ). δ(y+1))","Distribution(ℝ)→Distribution(ℝ)"),
+	Case("MixtureScaledChart","bindD(scaleD(2,lebesgueD()),λ(y:ℝ). δ(y+1))","Distribution(ℝ)"),
 	Case("TwoMaskGraph","Λx. ∫dy [0≤y]*[y≤1]*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(1/2))·λ[y]"),
 	Case("TwoMaskJoint","(λ[y]*[0≤y]*[y≤1]*δ(2*y)[x])//λ[x]","Distribution(ℝ)","([0≤x∧x≤2]·(1/2))·δ(x·(1/2))[y]"),
 	Case("TwoSourceGraph","Λx. ∫dy ∫dz [0≤y]*[y≤1]*λ[y]*[0≤z]*[z≤1]*λ[z]*δ(y+z)[x]","Distribution(ℝ)"),
@@ -501,10 +522,26 @@ private void run(string directory){
 		if(c.name=="CubicPartialSource"||c.name=="CubicCriticalSource"||c.name=="QuarticGraph")
 			enforce(certificate.indexOf("GraphFibre.oddPower_")<0,c.name);
 		if(c.name.indexOf("SquareGraph")==0&&c.name!="SquareGraphMassMissing") enforce(certificate.indexOf("Distribution.GraphFibre.square_")>=0,c.name~": "~text);
-		if(c.name.indexOf("SignedFibre")==0) enforce(certificate.indexOf("Distribution.FibreCertificate.extract")>=0,c.name);
+		// A weight that is missing at its atom is now a missing coefficient
+		// before any fibre is extracted.
+		if(c.name=="SignedFibrePartialWeight")
+			enforce(certificate.indexOf("Distribution.weight_diracValue")>=0&&certificate.indexOf("Distribution.add_none_left")>=0,c.name);
+		else if(c.name.indexOf("SignedFibre")==0) enforce(certificate.indexOf("Distribution.FibreCertificate.extract")>=0,c.name);
+		if(c.name=="MixtureExpectation"||c.name=="MixtureEvent"||c.name=="MixtureSymbolicMean")
+			enforce(certificate.indexOf("Distribution.weight_addValue")>=0&&certificate.indexOf("Distribution.weight_scaleValue")>=0&&
+				certificate.indexOf("Distribution.weight_diracValue")>=0,c.name);
+		if(c.name=="WeightedDirac"||c.name=="MixtureWeightedAtoms") enforce(certificate.indexOf("Distribution.weight_diracValue")>=0,c.name);
+		if(c.name=="MixtureAtomBind") enforce(certificate.indexOf("GraphFibre.realBind_diracValue")>=0,c.name);
+		if(c.name=="MixtureBind"||c.name=="MixtureBranch")
+			enforce(certificate.indexOf("GraphFibre.realBind_addValue")>=0&&certificate.indexOf("GraphFibre.realBind_scaleValue")>=0&&
+				certificate.indexOf("Distribution.mixture_scaleValue")>=0,c.name);
+		if(c.name=="MixtureHigherAtoms") enforce(certificate.indexOf("Distribution.bind_addValue")>=0&&certificate.indexOf("realBind")<0,c.name);
+		if(c.name=="MixtureZeroSource") enforce(certificate.indexOf("GraphFibre.realBind_zeroValue")>=0,c.name);
+		// Sources that may be parameter charts keep the ordered bind.
+		if(c.name=="MixtureChartSummand"||c.name=="MixtureScaledChart"||c.name=="MixedSource")
+			enforce(text.indexOf("∫")>=0&&certificate.indexOf("realBind_addValue")<0&&certificate.indexOf("realBind_scaleValue")<0,c.name~": "~text);
 		if(c.name=="TwoMaskGraph") enforce(certificate.indexOf("GraphFibre.affine_chart_rule")>=0,c.name);
 		if(c.name=="TwoMaskJoint") enforce(certificate.indexOf("GraphFibre.masked_affine_rule")>=0,c.name);
-		if(c.name=="MixedSource") enforce(text.indexOf("∫")>=0,c.name~": "~text);
 		if(c.name.indexOf("MixedDensity")==0) enforce(certificate.indexOf("Distribution.model_density_atom_add")>=0,c.name);
 		if(c.name.indexOf("AtomDensity")==0) enforce(certificate.indexOf("Distribution.model_density_dirac")>=0,c.name);
 		if(c.name=="DensityRecovery") enforce(certificate.indexOf("Distribution.model_density_weight_lebesgueValue")>=0);
