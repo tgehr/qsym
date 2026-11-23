@@ -2619,7 +2619,17 @@ final class Bindings{
 					auto left=mask?at(child.a):primitive(arena.at(n.data),[at(child.a)]),right=primitive(arena.at(n.data),[at(child.b)]);
 					auto op2=mask?arena.mask(arena.boolean(false),arena.number(Number(0),elementSort(type(t)))):scalarOperator(type(t),TensorOp.add);
 					auto next=primitive(op2,[left,right]),step=emit(mask?BindingRule.sumCastMask:BindingRule.sumCastAdd,out_.id,next.id);
-					return Result(next.id,emit(BindingRule.trans,t.id,next.id,proof,step));
+					auto total=emit(BindingRule.trans,t.id,next.id,proof,step);
+					if(mask){
+						// The coercion now sits on the masked value, which may itself be masked.
+						auto inner=exposeSumMasks(right);
+						if(inner.output!=right.id){
+							auto deeper=primitive(op2,[left,at(inner.output)]);
+							auto lift=emit(BindingRule.congr,next.id,deeper.id,emit(BindingRule.refl,left.id,left.id),inner.proof);
+							return Result(deeper.id,emit(BindingRule.trans,t.id,deeper.id,total,lift));
+						}
+					}
+					return Result(next.id,total);
 				}
 			}
 			return Result(out_.id,proof);
@@ -3820,6 +3830,9 @@ final class Bindings{
 							if(sumDefined(piece,depth+1).output!=uint.max){useful=true;break;}
 						}
 					}
+					// A mask below a coercion is not read by the tail and interval rules:
+					// (∑(x:ℤ). [0≤x]·(1/2)^x:ℝ) must sum like its rational summand.
+					if(exposed.output!=nodes[current.a].a&&!useful&&b.op==BoundOp.primitive&&arena.view(arena.at(b.data)).op==Op.mask) useful=true;
 					if(exposed.output!=nodes[current.a].a&&useful){
 						auto fn=inheritHint(at(current.a),lambda(at(exposed.output))),out_=summation(fn);
 						auto fp=emit(BindingRule.congr,current.a,fn.id,exposed.proof),sp=emit(BindingRule.congr,result.output,out_.id,fp);++steps;

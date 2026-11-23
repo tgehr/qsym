@@ -383,8 +383,11 @@ private Case[] cases(){ return [
 	Case("CountingExplicit","sumD(λ(i:ℤ). δ((i:ℝ)))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ((i:ℝ))[x])"),
 	Case("CountingMass","∫dx ∑_i δ(i)[x]","ℝ","undefined(ℝ)"),
 	Case("SumUniform","Λx. ∑_i [0≤i]·[i≤3]·(1/4)·δ(i)[x]","Distribution(ℝ)"),
-	Case("SumMean","∫dx (∑_i [0≤i]·[i≤3]·(1/4)·δ(i)[x])·x","ℝ"),
-	Case("SumGeometricMass","∫dx (∑_i [0≤i]·(1/2)^(i+1)·δ(i)[x])","ℝ"),
+	Case("SumMean","∫dx (∑_i [0≤i]·[i≤3]·(1/4)·δ(i)[x])·x","ℝ","3/2"),
+	Case("SumGeometricMass","∫dx (∑_i [0≤i]·(1/2)^(i+1)·δ(i)[x])","ℝ","1"),
+	Case("SumGeometricMean","∫dx (∑_i [0≤i]·(1/2)^(i+1)·δ(i)[x])·x","ℝ","1"),
+	Case("SumDieVariance","∫dx (∑_i [1≤i≤6]·(1/6)·δ(i)[x])·(x-7/2)^2","ℝ","35/12"),
+	Case("SumIntegerAtoms","∫(x:ℤ). ∑_i δ(i)[x]·(1/2)^i·[0≤x]","ℝ","2"),
 	Case("SumBind","Λx. ∫dy (∑_i [0≤i]·[i≤1]·(1/2)·δ(i)[y])·δ(y+1)[x]","Distribution(ℝ)"),
 	Case("SumMissingWeight","weightD(undefined(ℝ→ℝ),sumD(λ(i:ℤ). δ((i:ℝ))))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
 	Case("NaturalCounting","Λx. ∑(n:ℕ). δ(n)[x]","Distribution(ℝ)","Λ(x:ℝ). (∑(n:ℕ). δ((n:ℝ))[x])"),
@@ -600,7 +603,7 @@ private void run(string directory){
 		if(c.name=="MixtureMaskedChart") enforce(certificate.indexOf("GraphFibre.affine_chart_rule")>=0,c.name);
 		// A sum of presentations is observed through the scalar sum of its terms.
 		if(c.name=="CountingMass"||c.name=="SumGeometricMass") enforce(certificate.indexOf("Distribution.mass_sumValue")>=0,c.name);
-		if(c.name=="SumMean") enforce(certificate.indexOf("Distribution.mass_sumValue")>=0&&certificate.indexOf("Distribution.weight_sumValue")>=0&&text.indexOf("∑(")==0,c.name~": "~text);
+		if(c.name=="SumMean") enforce(certificate.indexOf("Distribution.mass_sumValue")>=0&&certificate.indexOf("Distribution.weight_sumValue")>=0,c.name~": "~text);
 		if(c.name=="SumBind") enforce(certificate.indexOf("GraphFibre.realBind_sumValue")>=0,c.name);
 		if(c.name=="NaturalCountingMass"||c.name=="NaturalGeometricMass") enforce(certificate.indexOf("Distribution.mass_sumNatValue")>=0,c.name);
 		if(c.name=="NaturalGeometricMean"||c.name=="NaturalDieMean"||c.name=="NaturalDieVariance")
