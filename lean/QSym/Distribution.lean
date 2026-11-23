@@ -58,6 +58,11 @@ def weightValue {α : Type} (f : Option (α → Option ℝ))
     (d : Option (D α)) : Option (D α) := do
   weight (← f) (← d)
 
+theorem weight_weight_lebesgue (g f : ℝ → Option ℝ) :
+    weightValue (some f) (weightValue (some g) lebesgueValue) =
+      weightValue (some fun x => Value.mul (g x) (f x)) lebesgueValue := by
+  simp [weightValue, weight, lebesgueValue, densityValue, Value.mul_one_left]
+
 /-- Plain scalar multiplication on a Dirac agrees with a constant weight, including partial operands. -/
 theorem constant_weight_dirac {α : Type} (r : Option ℝ) (a : Option α) :
     weightValue (some (fun _ => r)) (diracValue a) = scaleValue r (diracValue a) := by

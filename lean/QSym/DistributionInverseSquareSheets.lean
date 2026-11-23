@@ -55,6 +55,15 @@ private def rootAt (negative : Bool) (y : ℝ) :=
 private abbrev squareCoordinates :=
   Tensor.consValue (some (rootAt true)) (Tensor.consValue (some (rootAt false)) Tensor.nilValue)
 
+private theorem restricted_square_coordinates (p : Option (ℝ → Option Bool)) :
+    Coordinates.restricted p squareCoordinates = inverseSourcePartValue p squareCoordinates := by
+  apply Coordinates.restricted_of_gap (x := -1)
+  have gap : Functions.sqrtR.apply (some (-1)) = none := by norm_num [Functions.sqrtR, Function1.apply]
+  intro i; fin_cases i
+  · change Value.mul _ (Functions.sqrtR.apply (some (-1))) = none
+    rw [gap]; rfl
+  · exact gap
+
 private theorem squareCoordinates_output :
     squareCoordinates.map inverseCoverOutput = some (fun x => some (square x)) := by
   let g : Fin 2 → ℝ → Option ℝ := Fin.cases (rootAt true) (Fin.cases (rootAt false) Fin.elim0)
@@ -154,4 +163,27 @@ theorem inversePart_square_mass (p : Option (ℝ → Option Bool)) :
   rw [squareCoordinates_output, mass_pushforwardOn_total]
   cases p <;> rfl
 
+namespace Coordinates
+
+theorem square_pairing (p : Option (ℝ → Option Bool)) (t : Option (ℝ → Option ℝ)) :
+    massValue (weightValue t (restricted p squareCoordinates)) =
+      Value.add (regularMass true p t) (Value.add (regularMass false p t)
+        ((probe p t (some ((0 : ℤ) : ℝ)) (some ((0 : ℤ) : ℝ))).bind (fun _ => some ((0 : ℤ) : ℝ)))) := by
+  rw [restricted_square_coordinates]
+  exact inversePart_square_pairing p t
+
+theorem square_mass (p : Option (ℝ → Option Bool)) :
+    massValue (restricted p squareCoordinates) =
+      p.bind fun _ => massValue (weightValue
+        (some fun x => Value.mask (p.bind (fun pred => pred x)) (some ((1 : ℤ) : ℝ))) lebesgueValue) := by
+  rw [restricted_square_coordinates]
+  exact inversePart_square_mass p
+
+theorem square_density (p : Option (ℝ → Option Bool)) (y : Option ℝ) :
+    densityAtValue (restricted p squareCoordinates) y =
+      densityAtValue (realPushforwardOnValue p (some fun x => (some x).map (· ^ 2))) y := by
+  rw [restricted_square_coordinates]
+  exact inversePart_square_density p y
+
+end Coordinates
 end QSym.Distribution.GraphFibre

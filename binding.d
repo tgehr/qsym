@@ -45,7 +45,7 @@ private enum BindingRule:ubyte{
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
-	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity
+	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -3699,14 +3699,21 @@ final class Bindings{
 			}
 
 			if(current.op==BoundOp.distributionInverseCover){
-				auto first=nodes[current.a]; Rational slope,offset;
-				if(first.op==BoundOp.vectorCons&&nodes[first.b].op==BoundOp.vectorNil&&affineMap(first.a,slope,offset)){
+				auto first=nodes[current.a]; Rational slope,offset; bool product;
+				bool single=first.op==BoundOp.vectorCons&&nodes[first.b].op==BoundOp.vectorNil;
+				if(single&&squareMap(first.a,product)){
+					auto x=at(nodes[nodes[first.a].a].a),zero=arena.real_(0);
+					auto magnitude=primitive(arena.abs(zero),[x]);
+					auto jac=primitive(scalarOperator(type(x),TensorOp.mul),[scalar(context(x),arena.real_(2)),magnitude]);
+					next=distribution(ctx,BoundOp.distributionWeight,[inheritHint(at(first.a),lambda(jac)),distribution(ctx,BoundOp.distributionLebesgue)]);
+					extra=product; rule=BindingRule.distributionCoordinateSquare;
+				}else if(single&&affineMap(first.a,slope,offset)){
 					auto j=slope<Rational(0)?-slope:slope;
 					auto inner=context(at(nodes[first.a].a)),coefficient=scalar(inner,arena.real_(j));
 					next=distribution(ctx,BoundOp.distributionLebesgue);
 					if(j!=Rational(1)) next=distribution(ctx,BoundOp.distributionWeight,[hint(lambda(coefficient),binderHint(at(first.a)).name),next]);
 					extra=coefficient.id; rule=BindingRule.distributionCoverAffine;
-				}else if(first.op==BoundOp.vectorCons&&nodes[first.b].op==BoundOp.vectorNil&&nodes[first.a].op==BoundOp.lambda){
+				}else if(single&&nodes[first.a].op==BoundOp.lambda){
 					auto body=nodes[nodes[first.a].a];
 					if(body.op==BoundOp.primitive&&nodes[body.a].op==BoundOp.variable&&nodes[body.a].data==0){
 						auto op=arena.view(arena.at(body.data));
@@ -3885,6 +3892,14 @@ final class Bindings{
 				auto f=at(current.a),d=nodes[current.b];
 				if(d.op==BoundOp.distributionDirac){
 					next=distribution(ctx,BoundOp.distributionScale,[apply(f,at(d.a)),at(current.b)]); rule=BindingRule.distributionWeightDirac;
+				}else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionLebesgue&&
+					node(f).op==BoundOp.lambda&&nodes[d.a].op==BoundOp.lambda&&depends(at(nodes[d.a].a),0)){
+					// Combine a varying density with its test. Constant parameter factors
+					// are already handled separately by the scalar integral rules.
+					auto g=at(nodes[d.a].a),outer=at(node(f).a);
+					auto bothWeights=primitive(scalarOperator(type(g),TensorOp.mul),[g,outer]);
+					next=distribution(ctx,BoundOp.distributionWeight,[inheritHint(at(d.a),lambda(bothWeights)),at(d.b)]);
+					rule=BindingRule.distributionWeightWeightLebesgue;
 				}else if(d.op==BoundOp.distributionAdd){
 					next=distribution(ctx,BoundOp.distributionAdd,[distribution(ctx,BoundOp.distributionWeight,[f,at(d.a)]),distribution(ctx,BoundOp.distributionWeight,[f,at(d.b)])]);
 					rule=BindingRule.distributionWeightAdd;
@@ -4929,8 +4944,8 @@ final class Bindings{
 	private bool naturalIndex(uint function_){ return pool.view(type(at(function_))).fields[0]==scalarType(Sort.natural); }
 	private string valueOperation(BoundNode n){
 		final switch(n.op){
-			case BoundOp.distributionInverseCover:return "Distribution.GraphFibre.inverseCoverValue";
-			case BoundOp.distributionInversePart:return "Distribution.GraphFibre.inverseSourcePartValue";
+			case BoundOp.distributionInverseCover:return "Distribution.GraphFibre.Coordinates.value";
+			case BoundOp.distributionInversePart:return "Distribution.GraphFibre.Coordinates.restricted";
 			case BoundOp.distributionRadiusImage:return "Distribution.GraphFibre.radiusImageValue";
 			case BoundOp.distributionMaskedGraph:return "Distribution.GraphFibre.maskedKernel";
 			case BoundOp.distributionGraphFibre:return "Distribution.GraphFibre.value";
@@ -5568,7 +5583,7 @@ final class Bindings{
 		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionCoverAffine){
 			auto fn=nodes[nodes[nodes[p.from].a].a],c=new SourceCertificates("coordinate"~to!string(i)~"_",fn.a);
 			auto f=c.affineProof(fn.a),j=arena.number(arena.at(nodes[p.extra].data)).re;
-			auto args=c.q(f.slope)~" "~c.q(f.offset)~" "~c.q(j)~" (of_decide_eq_true rfl) rfl "~f.proof~" "~c.numericProof(p.extra,Rational(0),c.q(j));
+			auto args=c.q(f.slope)~" "~c.q(f.offset)~" "~c.q(j)~" rfl "~f.proof~" "~c.numericProof(p.extra,Rational(0),c.q(j));
 			affineCovers.set(cast(uint)i,args~(j==Rational(1)?" true":" false")~" (of_decide_eq_true rfl)");
 			stepNumerics~=c.numericTerms; stepDeclarations~=c.declarations;
 		}
@@ -6869,6 +6884,10 @@ final class Bindings{
 					}
 					proof=".ofEq (fun ξ ρ => Distribution."~law~(left?"_left (":"_right (")~name(left?n.b:n.a)~".eval ξ ρ))"; break;
 				}
+				case BindingRule.distributionWeightWeightLebesgue:{
+					string body(uint fn){ return "(fun x => "~name(nodes[fn].a)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
+					proof=".ofEq (fun ξ ρ => Distribution.weight_weight_lebesgue "~body(nodes[n.b].a)~" "~body(n.a)~")"; break;
+				}
 				case BindingRule.distributionWeightDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.weight_diracValue ("~name(n.a)~".eval ξ ρ) ("~name(nodes[n.b].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionWeightAdd,BindingRule.distributionWeightScale:
@@ -6991,21 +7010,23 @@ final class Bindings{
 						(casts?" true":" false")~" ("~name(p.extra)~".eval ξ ρ); h)"; break;
 				}
 				case BindingRule.distributionSquarePartDensity:
-					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.inversePart_square_density ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.square_density ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionSquarePartMass:
-					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.inversePart_square_mass ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.square_mass ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
 				case BindingRule.distributionSquarePartPairing:{
 					auto weight=nodes[n.a],part=nodes[weight.b];
-					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.inversePart_square_pairing ("~name(part.a)~".eval ξ ρ) ("~name(weight.a)~".eval ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.square_pairing ("~name(part.a)~".eval ξ ρ) ("~name(weight.a)~".eval ξ ρ))"; break;
 				}
 				case BindingRule.distributionRadiusPairing:{
 					auto d=nodes[n.a];
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.radius_sqrt_pairing "~radiusArguments(nodes[d.b])~" ("~name(d.a)~".eval ξ ρ))"; break;
 				}
+				case BindingRule.distributionCoordinateSquare:
+					proof=".ofEq (fun _ _ => Distribution.GraphFibre.Coordinates.square "~(p.extra?"true":"false")~")"; break;
 				case BindingRule.distributionCoverSinh,BindingRule.distributionCoverAsinh:
-					proof=".ofEq (fun _ _ => Distribution.GraphFibre."~(p.rule==BindingRule.distributionCoverSinh?"sinh":"asinh")~"_inverse_coordinate)"; break;
+					proof=".ofEq (fun _ _ => Distribution.GraphFibre.Coordinates."~(p.rule==BindingRule.distributionCoverSinh?"sinh":"asinh")~")"; break;
 				case BindingRule.distributionCoverAffine:
-					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.affine_inverse_coordinate "~affineCovers.get(cast(uint)i,"")~"; h)"; break;
+					proof=".ofEq (fun ξ ρ => let h := Distribution.GraphFibre.Coordinates.affine "~affineCovers.get(cast(uint)i,"")~"; h)"; break;
 				case BindingRule.distributionCoverRadius:{
 					auto image=nodes[p.to];
 					string form;
@@ -7017,7 +7038,7 @@ final class Bindings{
 					auto args=radiusArguments(image)~flag(step.centred)~" (of_decide_eq_true rfl)"~
 						flag(step.nested)~" (Numeric.calculate_sound ξ n"~k~" "~neg~" rfl)"~
 						flag(step.lowerSwap)~flag(step.upperSwap)~flag(step.factorSwap);
-					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.sqrt_cover "~args~")"; break;
+					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.sqrtCover "~args~")"; break;
 				}
 				case BindingRule.distributionCutoffDensity:{
 					auto weight=nodes[n.a],image=nodes[weight.b]; bool casts;

@@ -26,6 +26,7 @@ elab "qsym_distribution_goal" : tactic => do
   let target ← instantiateMVars (← getMainTarget)
   let heads := #[``Distribution.GraphFibre.RootCover, ``Distribution.GraphFibre.GlobalInverseBranch, ``Distribution.GraphFibre.branchIntegral, ``Distribution.GraphFibre.fibreOn,
     ``partialIntegral, ``FiniteIntegralTheory.integrate, ``Distribution.GraphFibre.weightedSquareDensity,
+    ``Distribution.GraphFibre.Coordinates.value, ``Distribution.GraphFibre.Coordinates.restricted,
     ``Distribution.GraphFibre.chartObservations, ``Distribution.GraphFibre.inverseCoverValue,
     ``Distribution.GraphFibre.inverseCoverOutput, ``Distribution.GraphFibre.radiusOutput, ``Distribution.GraphFibre.radiusImageValue,
     ``Distribution.GraphFibre.imageIntegral, ``Distribution.GraphFibre.affineSquareSource,
@@ -135,6 +136,9 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.sqrtRadius_image_integral; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_image; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_output; assumption
+  | solve | apply Distribution.GraphFibre.Coordinates.length_eq; assumption
+  | solve | apply Distribution.GraphFibre.Coordinates.restricted_length_eq; assumption
+  | solve | apply Distribution.GraphFibre.Coordinates.branch_image <;> assumption
   | solve | apply Distribution.GraphFibre.inverseCover_joint_split <;> assumption
   | solve | apply Distribution.GraphFibre.inversePart_density_roots <;> assumption
   | solve | apply Distribution.GraphFibre.inversePart_pairing_split <;> assumption

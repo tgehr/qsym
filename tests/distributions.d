@@ -101,6 +101,15 @@ private Case[] cases(){ return [
 	Case("CoverDuplicate","Λy. λ[y,y]","Distribution(ℝ)"),
 	Case("CoverNested","bindD(Λs. λ[s+1,s²],λ(t:ℝ).δ(t))","Distribution(ℝ)"),
 	Case("CoverThree","Λy. λ[y-1,y,y+1]","Distribution(ℝ)"),
+	Case("CoordinateSquare","Λx. λ[x²]","Distribution(ℝ)","Λ(x:ℝ). (2·abs(x))·λ[x]"),
+	Case("CoordinateSquareProduct","Λx. λ[x*x]","Distribution(ℝ)","Λ(x:ℝ). (2·abs(x))·λ[x]"),
+	Case("CoordinateSquareNegative","densityAtD(Λx. λ[x²],-2)","ℝ","4"),
+	Case("CoordinateSquarePositive","densityAtD(Λx. λ[x²],2)","ℝ","4"),
+	Case("CoordinateSquareZero","densityAtD(Λx. λ[x²],0)","ℝ","0"),
+	Case("CoordinateSquareLeftMass","∫dx [-1≤x≤0]·λ[x²]","ℝ","1"),
+	Case("CoordinateSquareRightMass","∫dx [0≤x≤1]·λ[x²]","ℝ","1"),
+	Case("CoordinateSquareZeroTest","∫dx 0·λ[x²]","ℝ","0"),
+	Case("CoordinateSquareArgument","λ(k:Distribution(ℝ)→𝔹). k(Λx. λ[x²])","(Distribution(ℝ)→𝔹)→𝔹"),
 	Case("CoverSingle","Λy. λ[1+y]","Distribution(ℝ)","Λ(x:ℝ). λ[x]"),
 	Case("CoverAffineDensity","densityAtD(Λy. λ[3-2*y],1)","ℝ","2"),
 	Case("CoverRegularSum","Λy. λ[sinh(y)]+λ[asinh(y)]","Distribution(ℝ)","Λ(y:ℝ). (cosh(y))·λ[y]+(sqrt(y^2+1)⁻¹)·λ[y]"),
@@ -491,20 +500,22 @@ private void run(string directory){
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
 		if(c.name=="SheetPartDensityPositive"||c.name=="SheetPartDensityExcluded"||c.name=="SheetPartDensityCritical")
-			enforce(certificate.indexOf("GraphFibre.inversePart_square_density")>=0,c.name);
+			enforce(certificate.indexOf("GraphFibre.Coordinates.square_density")>=0,c.name);
 		if(c.name=="SheetPartPairing"||c.name=="SheetPartCritical"||c.name=="SheetPartMass")
-			enforce(certificate.indexOf("GraphFibre.inversePart_square_"~(c.name=="SheetPartMass"?"mass":"pairing"))>=0,c.name);
-		if(c.name=="CoverRegularSum") enforce(certificate.indexOf("GraphFibre.sinh_inverse_coordinate")>=0&&
-			certificate.indexOf("GraphFibre.asinh_inverse_coordinate")>=0,c.name);
+			enforce(certificate.indexOf("GraphFibre.Coordinates.square_"~(c.name=="SheetPartMass"?"mass":"pairing"))>=0,c.name);
+		if(c.name.indexOf("CoordinateSquare")==0)
+			enforce(certificate.indexOf("GraphFibre.Coordinates.square ")>=0,c.name);
+		if(c.name=="CoverRegularSum") enforce(certificate.indexOf("GraphFibre.Coordinates.sinh")>=0&&
+			certificate.indexOf("GraphFibre.Coordinates.asinh")>=0,c.name);
 		if(c.name=="CoverPairing"||c.name=="CoverPairingMissingEndpoint"||c.name=="CoverPairingShifted"){
 			enforce(certificate.indexOf("GraphFibre.radius_sqrt_pairing")>=0,c.name);
 			if(c.name!="CoverPairingMissingEndpoint") enforce(text.indexOf("λ[y]")>=0&&text.indexOf("domain(t)")>=0,c.name);
 		}
-		if(c.name=="CoverAffineSum") enforce(certificate.indexOf("GraphFibre.affine_inverse_coordinate")>=0&&certificate.indexOf("Distribution.addValue")>=0,c.name);
+		if(c.name=="CoverAffineSum") enforce(certificate.indexOf("GraphFibre.Coordinates.affine")>=0&&certificate.indexOf("Distribution.addValue")>=0,c.name);
 		if(c.name=="CoverPartSum")
-			enforce(certificate.indexOf("Distribution.addValue")>=0&&certificate.indexOf("GraphFibre.inverseSourcePartValue")>=0,c.name);
+			enforce(certificate.indexOf("Distribution.addValue")>=0&&certificate.indexOf("GraphFibre.Coordinates.restricted")>=0,c.name);
 		if(c.name=="CoverDensityZero"||c.name=="CoverScaled"||c.name=="CoverShifted"||c.name=="BandAtEdge")
-			enforce(certificate.indexOf("GraphFibre.sqrt_cover ")>=0,c.name~" requires the inverse-cover certificate");
+			enforce(certificate.indexOf("GraphFibre.Coordinates.sqrtCover ")>=0,c.name~" requires the inverse-cover certificate");
 		if(c.name=="ExpandedSquare"||c.name=="ScaledFour"||c.name=="ExpandedBand")
 			enforce(certificate.indexOf("GraphFibre.graph_square_congr")>=0,c.name);
 		if(c.name=="SymmetricBand"||c.name=="ExpandedBand"||c.name=="PointBand")

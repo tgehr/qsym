@@ -149,6 +149,21 @@ theorem missing_critical : partialIntegral volume (fun x : ℝ => if x = 0 then 
     rw [branchIntegral_congr (measurableSet_singleton _).compl eq]
     simp [branchIntegral, Value.Defined]
 
+theorem smooth_coordinate_rule {ι : Type} {sheets : ι → ℝ → Option ℝ} {g : ℝ → ℝ}
+    (hg : Coordinates.Describes sheets g) :
+    Coordinates.value (some sheets) = weightValue (some fun x => some |deriv g x|) lebesgueValue := by
+  qsym_rule
+
+theorem smooth_coordinate_restriction_rule {ι : Type} {sheets : ι → ℝ → Option ℝ} {g : ℝ → ℝ}
+    (hg : Coordinates.Describes sheets g) (p : ℝ → Option Bool) :
+    Coordinates.restricted (some p) (some sheets) =
+      weightValue (some fun x => Value.mask (p (g x)) (some |deriv g x|)) lebesgueValue := by
+  qsym_rule
+
+#qsym_check_axioms smooth_coordinate_rule
+#qsym_check_axioms smooth_coordinate_restriction_rule
+#qsym_check_axioms Coordinates.branch_image
+#qsym_check_axioms Coordinates.square
 #qsym_check_axioms square_joint_inverse_split
 #qsym_check_axioms InverseSheet.reciprocal
 #qsym_check_axioms inverseCover_joint_split

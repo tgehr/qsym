@@ -1,3 +1,4 @@
+import QSym.DistributionAffineSquare
 import QSym.DistributionInverseSheets
 import QSym.DistributionInverseBranch
 import QSym.DistributionRadius
@@ -403,5 +404,155 @@ theorem sqrt_cover (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
       simp [shift, sqrtRadius, h, Value.mul]
   · cases nested <;> congr 2 <;> funext y <;> cases h : Functions.sqrtR.apply (some y) <;>
       simp [shift, sqrtRadius, h, Value.mul, Value.add, sub_eq_add_neg]
+
+
+namespace Coordinates
+
+/-- The displayed relation is the graph of one total continuously differentiable
+coordinate. The criterion is invariant under repetitions and reindexing of sheets. -/
+def Describes {ι : Type} (gs : ι → ℝ → Option ℝ) (g : ℝ → ℝ) : Prop :=
+  ContDiff ℝ 1 g ∧ ∀ x z, (∃ i, gs i x = some z) ↔ g x = z
+
+private def interpret {ι : Type} (gs : ι → ℝ → Option ℝ)
+    (smooth : (ℝ → ℝ) → Option (D ℝ)) (fallback : Option (D ℝ)) : Option (D ℝ) :=
+  if h : ∃ g, Describes gs g then smooth h.choose else fallback
+
+private theorem interpret_smooth {ι : Type} {gs : ι → ℝ → Option ℝ} {g : ℝ → ℝ}
+    (hg : Describes gs g) (smooth fallback) : interpret gs smooth fallback = smooth g := by
+  have existsG : ∃ f, Describes gs f := ⟨g,hg⟩
+  have eq : existsG.choose = g := funext fun x =>
+    (existsG.choose_spec.2 x _).mp ((hg.2 x _).mpr rfl)
+  simp [interpret, existsG, eq]
+
+/-- Length along a smooth displayed coordinate is measured on the displayed
+axis, with pointwise Jacobian |g'|. Other relations retain the inverse-cover
+semantics, including the partial tests at exceptional targets. -/
+def value {ι : Type} (coords : Option (ι → ℝ → Option ℝ)) : Option (D ℝ) :=
+  coords.bind fun gs => interpret gs
+    (fun g => weightValue (some fun x => some |deriv g x|) lebesgueValue) (inverseCoverValue (some gs))
+
+/-- Interpret an existing source restriction with the same choice of chart.
+On a smooth coordinate g the source parameter at x is g(x). -/
+def restricted {ι : Type} (p : Option (ℝ → Option Bool)) (coords : Option (ι → ℝ → Option ℝ)) :
+    Option (D ℝ) :=
+  p.bind fun pred => coords.bind fun gs => interpret gs
+    (fun g => weightValue (some fun x => Value.mask (pred (g x)) (some |deriv g x|)) lebesgueValue)
+    (inverseSourcePartValue (some pred) (some gs))
+
+theorem length_eq {ι : Type} {gs : ι → ℝ → Option ℝ} {g : ℝ → ℝ} (hg : Describes gs g) :
+    value (some gs) = weightValue (some fun x => some |deriv g x|) lebesgueValue := by
+  simp only [value, Option.some_bind, interpret_smooth hg]
+
+theorem restricted_length_eq {ι : Type} {gs : ι → ℝ → Option ℝ} {g : ℝ → ℝ} (hg : Describes gs g)
+    (p : ℝ → Option Bool) : restricted (some p) (some gs) =
+      weightValue (some fun x => Value.mask (p (g x)) (some |deriv g x|)) lebesgueValue := by
+  simp only [restricted, Option.some_bind, interpret_smooth hg]
+
+/-- On each injective piece this pointwise density gives ordinary Lebesgue
+integration on the image, including the domain of every partial signed test. -/
+theorem branch_image {ι : Type} {gs : ι → ℝ → Option ℝ} {g : ℝ → ℝ} (hg : Describes gs g)
+    {s : Set ℝ} (hs : MeasurableSet s) (hinj : InjOn g s) (t : ℝ → Option ℝ) :
+    branchIntegral (g '' s) t = branchIntegral s (fun x =>
+      Value.mul (densityAtValue (value (some gs)) (some x)) (t (g x))) := by
+  have hd (x : ℝ) (_ : x ∈ s) : HasDerivWithinAt g (deriv g x) s x :=
+    ((hg.1.differentiable le_rfl x).hasDerivAt).hasDerivWithinAt
+  rw [branchIntegral_image hs hinj hd t, length_eq hg]
+  apply branchIntegral_congr hs
+  intro x _
+  simp only [density_weight_lebesgueValue, Option.some_bind]
+  cases t (g x) <;> rfl
+
+private theorem singleton {coord w : ℝ → Option ℝ} {g : ℝ → ℝ}
+    (hg : ContDiff ℝ 1 g) (hc : ∀ x, coord x = some (g x)) (hw : ∀ x, w x = some |deriv g x|) :
+    value (Tensor.consValue (some coord) Tensor.nilValue) = weightValue (some w) lebesgueValue := by
+  rw [funext hw]
+  apply length_eq (g := g)
+  refine ⟨hg, fun x z => ⟨?_, ?_⟩⟩
+  · rintro ⟨i,h⟩
+    fin_cases i
+    change coord x = some z at h
+    exact Option.some.inj ((hc x).symm.trans h)
+  · intro h
+    exact ⟨0, (hc x).trans (congrArg some h)⟩
+
+theorem square (product : Bool) :
+    value (Tensor.consValue (some fun x => squareInput product (some x)) Tensor.nilValue) =
+      weightValue (some fun x => Value.mul (some ((2 : ℤ) : ℝ)) (Value.abs (some x))) lebesgueValue := by
+  apply singleton (g := fun x => x ^ 2) (by fun_prop)
+  · intro x; cases product <;> simp [squareInput, Value.mul, pow_two]
+  · intro x
+    simp [Value.mul, Value.abs, deriv_square, GraphFibre.square, abs_mul]
+
+theorem sinh :
+    value (Tensor.consValue (some fun x => Functions.sinhR.apply (some x)) Tensor.nilValue) =
+      weightValue (some fun x => Functions.coshR.apply (some x)) lebesgueValue := by
+  apply singleton (coord := fun x => Functions.sinhR.apply (some x)) Real.contDiff_sinh
+    (fun x => by simp [Functions.sinhR, Function1.apply])
+  intro x; simp [Function1.apply, Functions.coshR, Real.deriv_sinh, abs_of_pos (Real.cosh_pos x)]
+
+theorem asinh :
+    value (Tensor.consValue (some fun x => Functions.asinhR.apply (some x)) Tensor.nilValue) =
+      weightValue (some fun x => Value.inv (Functions.sqrtR.apply
+        (Value.add (some ((1 : ℤ) : ℝ)) ((some x).map (· ^ 2))))) lebesgueValue := by
+  apply singleton (coord := fun x => Functions.asinhR.apply (some x)) Real.contDiff_arsinh
+    (fun x => by simp [Functions.asinhR, Function1.apply])
+  intro x
+  have h : 0 < 1+x^2 := by positivity
+  simp [(Real.hasDerivAt_arsinh x).deriv, Value.add, Value.inv, Functions.sqrtR, Function1.apply, h.le,
+    (Real.sqrt_pos.mpr h).ne', abs_inv, abs_of_nonneg (Real.sqrt_nonneg _)]
+
+theorem affine (a b j : ℚ) (hj : j = |a|) {g : ℝ → Option ℝ} (hg : StepSource.Affine g a b)
+    {v : Option ℝ} (hv : v = some (j : ℝ)) (unit : Bool) (hu : if unit then j = 1 else True) :
+    value (Tensor.consValue (some g) Tensor.nilValue) =
+      if unit then lebesgueValue else weightValue (some fun _ => v) lebesgueValue := by
+  have h := singleton (w := fun _ => v) (by fun_prop) hg.equation (fun x => by
+    rw [(affine_derivative (a : ℝ) (b : ℝ) x).hasDerivAt.deriv, hv, hj, Rat.cast_abs])
+  cases unit
+  · exact h
+  · rw [h, hv, show j = 1 from hu]
+    simp [weightValue, weight, lebesgueValue, densityValue, Value.mul]
+
+/-- A gap in the displayed axis rules out a total smooth coordinate. -/
+private theorem interpret_gap {ι : Type} {gs : ι → ℝ → Option ℝ} {x : ℝ} (gap : ∀ i, gs i x = none)
+    (smooth fallback) : interpret gs smooth fallback = fallback := by
+  apply dif_neg
+  rintro ⟨g,h⟩
+  obtain ⟨i,hi⟩ := (h.2 x _).mpr rfl
+  simp [gap] at hi
+
+theorem of_gap {ι : Type} {gs : ι → ℝ → Option ℝ} {x : ℝ} (gap : ∀ i, gs i x = none) :
+    value (some gs) = inverseCoverValue (some gs) := by
+  simp only [value, Option.some_bind, interpret_gap gap]
+
+theorem restricted_of_gap {ι : Type} {gs : ι → ℝ → Option ℝ} {x : ℝ} (gap : ∀ i, gs i x = none)
+    (p : Option (ℝ → Option Bool)) : restricted p (some gs) = inverseSourcePartValue p (some gs) := by
+  cases p with
+  | none => rfl
+  | some pred =>
+    simp only [restricted, Option.some_bind, interpret_gap gap]
+
+private theorem pair_gap {l u : ℝ → Option ℝ} {x : ℝ} (hl : l x = none) (hu : u x = none) :
+    value (pair l u) = inverseCoverValue (pair l u) := by
+  apply of_gap (x := x)
+  intro i; fin_cases i
+  · exact hl
+  · exact hu
+
+theorem sqrtCover (c j : ℚ) (hj : 0 < j) {z v : Option ℝ}
+    (hz : z = some (c : ℝ)) (hv : v = some (j : ℝ)) {r : ℝ → Option ℝ} (hr : r = sqrtRadius v)
+    (centred : Bool) (hc : if centred then True else c = 0) (nested : Bool) {k : Option ℝ}
+    (hk : k = some (((if nested then -1 else -j) : ℚ) : ℝ)) (lowerSwap upperSwap factorSwap : Bool) :
+    value (pair (fun y => shift centred lowerSwap z (ordered factorSwap Value.mul k (if nested then r y else Functions.sqrtR.apply (some y))))
+      (fun y => shift centred upperSwap z (r y))) = radiusImageValue z (some r) := by
+  have root : Functions.sqrtR.apply (some (-1)) = none := by norm_num [Functions.sqrtR, Function1.apply]
+  have rad : r (-1) = none := by simp [hr, sqrtRadius, root, Value.mul]
+  refine Eq.trans (pair_gap (x := -1) ?_ ?_)
+    (sqrt_cover c j hj hz hv hr centred hc nested hk lowerSwap upperSwap factorSwap)
+  · simp only [shift_eq, ordered_mul, rad, root, ite_self]
+    cases k <;> cases z <;> cases centred <;> rfl
+  · simp only [shift_eq, rad]
+    cases z <;> cases centred <;> rfl
+
+end Coordinates
 
 end QSym.Distribution.GraphFibre
