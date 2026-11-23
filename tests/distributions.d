@@ -351,6 +351,16 @@ private Case[] cases(){ return [
 	Case("MixtureMissingSummand","densityAtD(addD(undefined(Distribution(ℝ)),lebesgueD()),1)","ℝ","undefined(ℝ)"),
 	Case("MixtureChartSummand","λ(d:Distribution(ℝ)). bindD(addD(d,δ((0:ℝ))),λ(y:ℝ). δ(y+1))","Distribution(ℝ)→Distribution(ℝ)"),
 	Case("MixtureScaledChart","bindD(scaleD(2,lebesgueD()),λ(y:ℝ). δ(y+1))","Distribution(ℝ)"),
+	Case("MixtureStrictSummand","addD(lebesgueD(),undefined(Distribution(ℝ)))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("MixtureStrictScale","scaleD(2,undefined(Distribution(ℝ)))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("MixtureStrictWeight","weightD(λ(x:ℝ). x,undefined(Distribution(ℝ)))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("MixtureStrictSource","bindD(undefined(Distribution(ℝ)),λ(y:ℝ). δ(y+1))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("MixtureStrictHigherSource","bindD(undefined(Distribution(ℕ)),λ(n:ℕ). δ(λ(m:ℕ).n))","Distribution(ℕ→ℕ)","undefined(Distribution(ℕ→ℕ))"),
+	Case("MixtureStrictQuery","λ(d:Distribution(ℝ)). densityAtD(d,undefined(ℝ))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). undefined(ℝ)"),
+	Case("MixtureHigherZero","bindD(zeroD(ℕ),λ(n:ℕ). δ(λ(m:ℕ).n))","Distribution(ℕ→ℕ)","Λ(x:ℕ→ℕ). 0"),
+	Case("MixtureHigherScale","bindD(scaleD(2,δ(3)),λ(n:ℕ). δ(λ(m:ℕ).n+1))","Distribution(ℕ→ℕ)","Λ(x:ℕ→ℕ). 2·δ(λ(m:ℕ). 4)[x]"),
+	Case("MixtureNaturalWeight","weightD(λ(n:ℕ). (n:ℝ),addD(δ(1),δ(2)))","Distribution(ℕ)","Λ(x:ℕ). 1·δ(1)[x]+2·δ(2)[x]"),
+	Case("MixtureScaledSum","bindD(scaleD(2,addD(δ((1:ℝ)),zeroD(ℝ))),λ(y:ℝ). δ(y+1))","Distribution(ℝ)"),
 	Case("TwoMaskGraph","Λx. ∫dy [0≤y]*[y≤1]*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(1/2))·λ[y]"),
 	Case("TwoMaskJoint","(λ[y]*[0≤y]*[y≤1]*δ(2*y)[x])//λ[x]","Distribution(ℝ)","([0≤x∧x≤2]·(1/2))·δ(x·(1/2))[y]"),
 	Case("TwoSourceGraph","Λx. ∫dy ∫dz [0≤y]*[y≤1]*λ[y]*[0≤z]*[z≤1]*λ[z]*δ(y+z)[x]","Distribution(ℝ)"),
@@ -537,6 +547,12 @@ private void run(string directory){
 				certificate.indexOf("Distribution.mixture_scaleValue")>=0,c.name);
 		if(c.name=="MixtureHigherAtoms") enforce(certificate.indexOf("Distribution.bind_addValue")>=0&&certificate.indexOf("realBind")<0,c.name);
 		if(c.name=="MixtureZeroSource") enforce(certificate.indexOf("GraphFibre.realBind_zeroValue")>=0,c.name);
+		foreach(lemma;[["MixtureStrictSummand","Distribution.add_none_right"],["MixtureStrictScale","Distribution.scale_none_right"],
+			["MixtureStrictWeight","Distribution.weight_none_right"],["MixtureStrictSource","GraphFibre.realBind_none_left"],
+			["MixtureStrictHigherSource","Distribution.bind_none_left"],["MixtureStrictQuery","Distribution.densityAt_none_right"],
+			["MixtureHigherZero","Distribution.bind_zeroValue"],["MixtureHigherScale","Distribution.bind_scaleValue"],
+			["MixtureNaturalWeight","Distribution.weight_addValue"],["MixtureScaledSum","Distribution.mixture_addValue"]])
+			if(c.name==lemma[0]) enforce(certificate.indexOf(lemma[1])>=0,c.name);
 		// Sources that may be parameter charts keep the ordered bind.
 		if(c.name=="MixtureChartSummand"||c.name=="MixtureScaledChart"||c.name=="MixedSource")
 			enforce(text.indexOf("∫")>=0&&certificate.indexOf("realBind_addValue")<0&&certificate.indexOf("realBind_scaleValue")<0,c.name~": "~text);
