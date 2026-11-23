@@ -343,7 +343,21 @@ private Case[] cases(){ return [
 	Case("StepBoundaryParameter","λ(a:ℝ).∫dx ([0<x<1]+[1<x<2]+[x=1]*(1/a))*λ[x]","ℝ→ℝ","λ(a:{a:ℝ | a≠0}). (2:ℝ)"),
 	Case("StepProduct","∫dx ([0<x<1]+[1<x<3])*λ[x]*[0≤x≤2]","ℝ","2"),
 	Case("StepUnbounded","∫dx [x<0∨1<x]*λ[x]","ℝ"),
-	Case("StepNonconstant","∫dx x*[0≤x≤1]*λ[x]","ℝ"),
+	Case("StepNonconstant","∫dx x*[0≤x≤1]*λ[x]","ℝ","1/2"),
+	Case("PolynomialMoment","∫dx [0≤x≤1]*x^2*λ[x]","ℝ","1/3"),
+	Case("PolynomialQuadratic","∫dx [0≤x≤2]*(x^2+3*x+1)*λ[x]","ℝ","32/3"),
+	Case("PolynomialVariance","∫dx ([0≤x≤1]*λ[x])*(x-1/2)^2","ℝ","1/12"),
+	Case("PolynomialTriangle","∫dx [0≤x≤2]*([x≤1]*x+[1<x]*(2-x))*λ[x]","ℝ","1"),
+	Case("PolynomialBeta","∫dx [0≤x≤1]*x^2*(1-x)^3*λ[x]","ℝ","1/60"),
+	Case("PolynomialOdd","∫dx [-1≤x≤1]*x^3*λ[x]","ℝ","0"),
+	Case("PolynomialRationalCuts","∫dx [1/3≤x≤1/2]*x*λ[x]","ℝ","5/72"),
+	Case("PolynomialOpenCell","∫dx [0<x<1]*[x≠1/2]*x*λ[x]","ℝ","1/2"),
+	Case("PolynomialTwoIntervals","∫dx ([0≤x≤1]+[2≤x≤3])*x*λ[x]","ℝ","3"),
+	Case("PolynomialMixedMean","∫dx (1/2*δ(0)[x]+1/2*[0≤x≤1]*λ[x])*x","ℝ","1/4"),
+	Case("PolynomialMixedMoment","∫dx (1/3*δ(1)[x]+2/3*[0≤x≤3]*(1/3)*λ[x])*x^2","ℝ","7/3"),
+	Case("PolynomialUnbounded","∫dx [0≤x]*x*λ[x]","ℝ"),
+	Case("PolynomialEverywhere","∫dx x^2*λ[x]","ℝ"),
+	Case("PolynomialParameter","λ(a:ℝ).∫dx [0≤x≤1]*(x+a)*λ[x]","ℝ→ℝ"),
 	Case("Puncture","Λ(x:ℝ).[x≠0]*λ[x]","Distribution(ℝ)"),
 	Case("WeightedDirac","Λ(x:ℝ).x*δ(2)[x]","Distribution(ℝ)","Λ(x:ℝ). 2·δ(2)[x]"),
 	Case("MixtureExpectation","∫dx (1/2*δ(0)[x]+1/2*δ(1)[x])*x","ℝ","1/2"),
@@ -644,7 +658,14 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_grid")>=0,c.name~" must use a checked step certificate");
 		if(c.name=="StepUnbounded"||c.name=="StepNonconstant"){
 			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_grid")<0,c.name~" must not invent a step certificate");
-			enforce(text.indexOf("∫")>=0,c.name~" must retain its unsupported integral");
+			enforce(c.name=="StepNonconstant"||text.indexOf("∫")>=0,c.name~" must retain its unsupported integral");
+		}
+		// A polynomial on every cell of a rational grid is integrated cell by
+		// cell. Nonzero tails and open coefficients are not.
+		if(c.name=="StepNonconstant"||c.name.indexOf("Polynomial")==0){
+			bool retained=c.name=="PolynomialUnbounded"||c.name=="PolynomialEverywhere"||c.name=="PolynomialParameter";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_polynomial")>=0)!=retained,c.name~" polynomial certificate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
 		write(buildPath(directory,c.name~".lean"),certificate);
 	}
