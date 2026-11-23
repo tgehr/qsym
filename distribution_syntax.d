@@ -14,7 +14,8 @@ private bool graphForm(Pattern p,out Pattern input,out Pattern mapping,out Patte
 	bool collect(Pattern q) @safe {
 		if(q.name=="$mul") return collect(q.args[0])&&collect(q.args[1]);
 		if(measure(q)&&base is null){ base=q; return true; }
-		if(q.name=="$iverson"&&mask is null){ mask=q; return true; }
+		// Adjacent brackets nest, so later masks are guarded by earlier ones.
+		if(q.name=="$iverson"){ mask=mask is null?q:pattern("$iverson",[pattern("and",[mask.args[0],q.args[0]])]); return true; }
 		if(q.name=="$distributionApply"&&point is null){ point=q; return true; }
 		return false;
 	}
@@ -80,6 +81,28 @@ Pattern distributionSyntax(Pattern root){
 		auto p=pattern("$lambda",[body]); p.binder=name; p.annotation=ty; return p;
 	}
 	Pattern typed(Pattern p,TypePattern ty) @safe { auto q=pattern("$ascribe",[p]); q.annotation=ty; return q; }
+	// The factors of an integrand over `binder`. A form on that axis may be
+	// written inside inner integrals over other axes that it does not mention,
+	// as in ∫dy ∫dz μ[y]·ν[z]·δ(y+z)[x]; it is then the source of the outer one.
+	Pattern[] integrandFactors(Pattern body,string binder) @safe {
+		Pattern[] factors;
+		void flatten(Pattern q) @safe { if(q.name=="$mul"){ flatten(q.args[0]); flatten(q.args[1]); }else factors~=q; }
+		flatten(body);
+		foreach(f;factors) if(f.name!="$integral"&&form(f,binder)) return factors;
+		Pattern[] result;
+		foreach(f;factors){
+			if(f.name!="$integral"||!form(f,binder)){ result~=f; continue; }
+			Pattern[] kept,moved;
+			foreach(g;integrandFactors(f.args[0],binder)){
+				if(g.name!="$integral"&&form(g,binder)&&!distributionOccurs(g,f.binder)) moved~=g; else kept~=g;
+			}
+			if(!moved.length||!kept.length){ result~=f; continue; }
+			Pattern rest; foreach(g;kept) rest=rest is null?g:pattern("$mul",[rest,g]);
+			auto inner=pattern("$integral",[rest]); inner.binder=f.binder; inner.annotation=f.annotation;
+			result~=moved; result~=inner;
+		}
+		return result;
+	}
 	Pattern delegate(Pattern) @safe expand;
 	Pattern lower(Pattern p,string axis,TypePattern ty) @safe {
 		auto dt=new TypePattern("Distribution",[ty]);
@@ -101,10 +124,10 @@ Pattern distributionSyntax(Pattern root){
 		if(p.name=="#"&&p.number==0){ auto t=pattern("$type",[]); t.annotation=ty; return pattern("zeroD",[t]); }
 		if(p.name=="$integral"){
 			enforce(p.binder!=axis,"an integral shadows the distribution output axis");
-			Pattern[] factors;
-			void flatten(Pattern q) @safe { if(q.name=="$mul"){ flatten(q.args[0]); flatten(q.args[1]); }else factors~=q; }
-			flatten(p.args[0]); size_t selected=size_t.max;
-			foreach(i,f;factors) if(f.name=="$distributionApply"&&f.args[1].name==p.binder){
+			// The source is the one factor that is a form on the integration axis:
+			// d[y], or a weighted form or sum of forms such as a finite mixture.
+			auto factors=integrandFactors(p.args[0],p.binder); size_t selected=size_t.max;
+			foreach(i,f;factors) if(form(f,p.binder)){
 				enforce(selected==size_t.max,"multiple distributions for one integration axis are unsupported"); selected=i;
 			}
 			if(selected==size_t.max) foreach(i,f;factors){
@@ -113,21 +136,24 @@ Pattern distributionSyntax(Pattern root){
 				selected=i;
 			}
 			if(selected==size_t.max) return pattern("integralD",[lambda(p.binder,p.annotation,lower(p.args[0],axis,ty))]);
-			enforce(!distributionOccurs(factors[selected].args[0],axis),"integration source depending on the output axis is unsupported");
+			enforce(!distributionOccurs(factors[selected],axis),"integration source depending on the output axis is unsupported");
 			auto measure=lower(factors[selected],p.binder,p.annotation); Pattern rest;
 			foreach(i,f;factors) if(i!=selected) rest=rest is null?f:pattern("$mul",[rest,f]);
 			enforce(rest !is null,"a distribution-valued integral needs an output form");
 			// A native restricted graph retains the predicate and map independently,
-			// even when evaluating one of them can fail.
-			auto base=factors[selected].args[0];
-			if(base.name=="λ"&&!base.called&&rest.name=="$mul"){
-				foreach(i;0..2){
-					auto mask=rest.args[i],point=rest.args[1-i];
-					if(mask.name!="$iverson"||point.name!="$distributionApply"||point.args[1].name!=axis) continue;
-					auto atom=point.args[0];
-					if((atom.name!="δ"&&atom.name!="dirac")||atom.args.length!=1||
-						distributionOccurs(mask,axis)||distributionOccurs(atom,axis)) continue;
-					auto pred=lambda(p.binder,p.annotation,expand(mask.args[0]));
+			// even when evaluating one of them can fail. Adjacent brackets nest, so
+			// several source masks are one predicate guarded from left to right.
+			auto base=factors[selected].name=="$distributionApply"?factors[selected].args[0]:null;
+			if(base !is null&&base.name=="λ"&&!base.called){
+				Pattern predicate,atom; bool graph=true;
+				foreach(i,f;factors) if(i!=selected){
+					if(f.name=="$iverson"&&!distributionOccurs(f,axis)) predicate=predicate is null?f.args[0]:pattern("and",[predicate,f.args[0]]);
+					else if(atom is null&&f.name=="$distributionApply"&&f.args[1].name==axis&&
+						(f.args[0].name=="δ"||f.args[0].name=="dirac")&&f.args[0].args.length==1&&!distributionOccurs(f.args[0],axis)) atom=f.args[0];
+					else graph=false;
+				}
+				if(graph&&predicate !is null&&atom !is null){
+					auto pred=lambda(p.binder,p.annotation,expand(predicate));
 					auto map=lambda(p.binder,p.annotation,typed(expand(atom.args[0]),ty));
 					return typed(pattern("pushforwardOnD",[pred,map]),dt);
 				}
@@ -165,7 +191,10 @@ Pattern distributionSyntax(Pattern root){
 			return pattern("weightD",[lambda(y.name,new TypePattern("Real"),weight),new Pattern("lebesgueD")]);
 		}
 		if(p.name=="$distribution") return lower(p.args[0],p.binder,p.annotation);
-		if(p.name=="$integral") return pattern("massD",[lower(p.args[0],p.binder,p.annotation)]);
+		if(p.name=="$integral"){
+			Pattern body; foreach(f;integrandFactors(p.args[0],p.binder)) body=body is null?f:pattern("$mul",[body,f]);
+			return pattern("massD",[lower(body,p.binder,p.annotation)]);
+		}
 		if(p.name=="$disintegrate"){
 			Pattern input,mapping,target,mask;
 			if(graphForm(p,input,mapping,target,mask)){
