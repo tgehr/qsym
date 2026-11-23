@@ -164,6 +164,47 @@ theorem smooth_coordinate_restriction_rule {ι : Type} {sheets : ι → ℝ → 
 #qsym_check_axioms smooth_coordinate_restriction_rule
 #qsym_check_axioms Coordinates.branch_image
 #qsym_check_axioms Coordinates.square
+theorem joined_coordinate_rule {l r : ℝ → ℝ} {a : ℝ} (hl : ContDiff ℝ 1 l) (hr : ContDiff ℝ 1 r)
+    (hv : l a = r a) (hd : deriv l a = deriv r a) :
+    Coordinates.value (Tensor.consValue (some fun x => some (if x < a then l x else r x)) Tensor.nilValue) =
+      weightValue (some fun x => some |if x < a then deriv l x else deriv r x|) lebesgueValue := by qsym_rule
+
+open Classical in
+/-- The nonconstant pieces of [x < -1]x² + [1 < x]x both visit
+(1,∞). Separate tests allow those visits to be observed independently. -/
+theorem jumping_coordinate_pieces (u v : ℝ → Option ℝ) :
+    branchIntegral (Iio (-1) ∪ Ioi 1) (fun x : ℝ =>
+      if x ∈ Iio (-1) then (u (x^2)).map (|2*x| • ·) else (v x).map (|(1:ℝ)| • ·)) =
+    Value.add (branchIntegral ((fun x : ℝ => x^2) '' Iio (-1)) u) (branchIntegral (id '' Ioi 1) v) := by
+  apply Coordinates.branch_pair_image (dl := fun x => 2*x) (dr := fun _ => 1)
+    measurableSet_Iio measurableSet_Ioi
+  · exact Set.disjoint_left.mpr fun x (hl : x < -1) (hr : 1 < x) => by linarith
+  · intro x (hx : x < -1) y (hy : y < -1) (h : x^2 = y^2)
+    rcases sq_eq_sq_iff_eq_or_eq_neg.mp h with h | h
+    · exact h
+    · linarith
+  · exact Set.injOn_id _
+  · intro x _
+    simpa using (hasDerivAt_pow 2 x).hasDerivWithinAt
+  · exact fun x _ => (hasDerivAt_id x).hasDerivWithinAt
+
+theorem variation_coordinate_rule {ι : Type} {gs : ι → ℝ → Option ℝ} {c : Coordinates.VariationChart}
+    (hc : Coordinates.Displays gs c) :
+    Coordinates.value (some gs) = c.present none := by qsym_rule
+
+#qsym_check_axioms variation_coordinate_rule
+#qsym_check_axioms Coordinates.VariationChart.atCut_of_limits
+#qsym_check_axioms jumping_coordinate_pieces
+#qsym_check_axioms joined_coordinate_rule
+#qsym_check_axioms Coordinates.contDiff_join
+#qsym_check_axioms Coordinates.pieces_eq
+#qsym_check_axioms Coordinates.restricted_pieces_eq
+#qsym_check_axioms Coordinates.rayLinear
+#qsym_check_axioms Coordinates.corner_density
+#qsym_check_axioms Coordinates.corner_integral
+#qsym_check_axioms Coordinates.corner_pairing
+#qsym_check_axioms Coordinates.twoRayJumps
+#qsym_check_axioms Coordinates.rayPower
 #qsym_check_axioms square_joint_inverse_split
 #qsym_check_axioms InverseSheet.reciprocal
 #qsym_check_axioms inverseCover_joint_split

@@ -2,7 +2,8 @@ import QSym.DistributionOddPower
 import QSym.DistributionRootCover
 import QSym.DistributionPartialModel
 import QSym.DistributionWeightedSquare
-import QSym.DistributionInverseCover
+import QSym.DistributionCoordinateCorners
+import QSym.DistributionCoordinateJumps
 import QSym.DistributionAtomRows
 import QSym.DistributionFiniteMixedReal
 import QSym.DistributionModelLaws
@@ -136,8 +137,11 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.sqrtRadius_image_integral; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_image; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_output; assumption
+  | solve | apply Distribution.GraphFibre.Coordinates.singleton_join <;> assumption
   | solve | apply Distribution.GraphFibre.Coordinates.length_eq; assumption
   | solve | apply Distribution.GraphFibre.Coordinates.restricted_length_eq; assumption
+  | solve | apply Distribution.GraphFibre.Coordinates.pieces_eq; assumption
+  | solve | apply Distribution.GraphFibre.Coordinates.restricted_pieces_eq; assumption
   | solve | apply Distribution.GraphFibre.Coordinates.branch_image <;> assumption
   | solve | apply Distribution.GraphFibre.inverseCover_joint_split <;> assumption
   | solve | apply Distribution.GraphFibre.inversePart_density_roots <;> assumption

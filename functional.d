@@ -663,7 +663,16 @@ struct FunctionSyntax{
 						auto f=b.node(b.at(q.a));
 						if(f.op!=BoundOp.lambda) return "(weightD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
 						auto weight=render(b.at(f.a),[axis]~names,depth+level+1,scalarType(Sort.real_));
-						bool atomic=numericLiteral(weight)||weight.length&&weight[0]=='['&&weight[$-1]==']';
+						bool singleBracket(string text){
+							if(!text.length||text[0]!='[') return false;
+							size_t depth;
+							foreach(i,c;text){
+								if(c=='[') ++depth;
+								else if(c==']'&&--depth==0) return i+1==text.length;
+							}
+							return false;
+						}
+						bool atomic=numericLiteral(weight)||singleBracket(weight);
 						return (atomic?weight:"("~weight~")")~"·"~nested(q.b);
 					}
 					case BoundOp.distributionPushforwardOn:{

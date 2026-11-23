@@ -1,3 +1,4 @@
+import QSym.DistributionCoordinateVariation
 import QSym.DistributionAffineSquare
 import QSym.DistributionInverseSheets
 import QSym.DistributionInverseBranch
@@ -374,7 +375,7 @@ private theorem sqrtRadius_nonnegative {j : ℚ} (hj : 0 < j) {v : Option ℝ}
   by_cases hy : 0 ≤ y <;> simp [sqrtRadius, Functions.sqrtR, Function1.apply, Value.mul, hy] at h
   exact h ▸ mul_nonneg (by exact_mod_cast hj.le) (Real.sqrt_nonneg y)
 
-private def ordered (swap : Bool) (op : Option ℝ → Option ℝ → Option ℝ) (x y : Option ℝ) :=
+def ordered (swap : Bool) (op : Option ℝ → Option ℝ → Option ℝ) (x y : Option ℝ) :=
   if swap then op y x else op x y
 
 private theorem ordered_mul (s : Bool) (x y : Option ℝ) : ordered s Value.mul x y = Value.mul x y := by
@@ -413,40 +414,57 @@ coordinate. The criterion is invariant under repetitions and reindexing of sheet
 def Describes {ι : Type} (gs : ι → ℝ → Option ℝ) (g : ℝ → ℝ) : Prop :=
   ContDiff ℝ 1 g ∧ ∀ x z, (∃ i, gs i x = some z) ↔ g x = z
 
+def Displays {ι : Type} (gs : ι → ℝ → Option ℝ) (c : VariationChart) : Prop :=
+  ∀ x z, (∃ i, gs i x = some z) ↔ c.coord x = z
+
 private def interpret {ι : Type} (gs : ι → ℝ → Option ℝ)
-    (smooth : (ℝ → ℝ) → Option (D ℝ)) (fallback : Option (D ℝ)) : Option (D ℝ) :=
-  if h : ∃ g, Describes gs g then smooth h.choose else fallback
+    (p : Option (ℝ → Option Bool)) (fallback : Option (D ℝ)) : Option (D ℝ) :=
+  if h : ∃ c, Displays gs c then h.choose.present p else fallback
 
-private theorem interpret_smooth {ι : Type} {gs : ι → ℝ → Option ℝ} {g : ℝ → ℝ}
-    (hg : Describes gs g) (smooth fallback) : interpret gs smooth fallback = smooth g := by
-  have existsG : ∃ f, Describes gs f := ⟨g,hg⟩
-  have eq : existsG.choose = g := funext fun x =>
-    (existsG.choose_spec.2 x _).mp ((hg.2 x _).mpr rfl)
-  simp [interpret, existsG, eq]
+private theorem interpret_pieces {ι : Type} {gs : ι → ℝ → Option ℝ} {c : VariationChart}
+    (hc : Displays gs c) (p fallback) : interpret gs p fallback = c.present p := by
+  have ex : ∃ b, Displays gs b := ⟨c, hc⟩
+  have eq : ex.choose = c := VariationChart.ext_coord (funext fun x =>
+    (ex.choose_spec x _).mp ((hc x _).mpr rfl))
+  simp [interpret, ex, eq]
 
-/-- Length along a smooth displayed coordinate is measured on the displayed
-axis, with pointwise Jacobian |g'|. Other relations retain the inverse-cover
-semantics, including the partial tests at exceptional targets. -/
+/-- Total finite-piece coordinates carry length on regular pieces and the
+absolute length of each jump at its breakpoint. Other relations use the
+inverse cover, including partial and multivalued inverse sheets. -/
 def value {ι : Type} (coords : Option (ι → ℝ → Option ℝ)) : Option (D ℝ) :=
-  coords.bind fun gs => interpret gs
-    (fun g => weightValue (some fun x => some |deriv g x|) lebesgueValue) (inverseCoverValue (some gs))
+  coords.bind fun gs => interpret gs none (inverseCoverValue (some gs))
 
-/-- Interpret an existing source restriction with the same choice of chart.
-On a smooth coordinate g the source parameter at x is g(x). -/
 def restricted {ι : Type} (p : Option (ℝ → Option Bool)) (coords : Option (ι → ℝ → Option ℝ)) :
     Option (D ℝ) :=
-  p.bind fun pred => coords.bind fun gs => interpret gs
-    (fun g => weightValue (some fun x => Value.mask (pred (g x)) (some |deriv g x|)) lebesgueValue)
-    (inverseSourcePartValue (some pred) (some gs))
+  p.bind fun pred => coords.bind fun gs => interpret gs (some pred) (inverseSourcePartValue (some pred) (some gs))
+
+theorem pieces_eq {ι : Type} {gs : ι → ℝ → Option ℝ} {c : VariationChart} (h : Displays gs c) :
+    value (some gs) = c.present none := interpret_pieces h _ _
+
+theorem restricted_pieces_eq {ι : Type} {gs : ι → ℝ → Option ℝ} {c : VariationChart}
+    (h : Displays gs c) (p : ℝ → Option Bool) :
+    restricted (some p) (some gs) = c.present (some p) := interpret_pieces h _ _
 
 theorem length_eq {ι : Type} {gs : ι → ℝ → Option ℝ} {g : ℝ → ℝ} (hg : Describes gs g) :
-    value (some gs) = weightValue (some fun x => some |deriv g x|) lebesgueValue := by
-  simp only [value, Option.some_bind, interpret_smooth hg]
+    value (some gs) = weightValue (some fun x => some |deriv g x|) lebesgueValue :=
+  pieces_eq (c := .smooth g hg.1) hg.2
 
 theorem restricted_length_eq {ι : Type} {gs : ι → ℝ → Option ℝ} {g : ℝ → ℝ} (hg : Describes gs g)
     (p : ℝ → Option Bool) : restricted (some p) (some gs) =
-      weightValue (some fun x => Value.mask (p (g x)) (some |deriv g x|)) lebesgueValue := by
-  simp only [restricted, Option.some_bind, interpret_smooth hg]
+      weightValue (some fun x => Value.mask (p (g x)) (some |deriv g x|)) lebesgueValue :=
+  restricted_pieces_eq (c := .smooth g hg.1) hg.2 p
+
+theorem singleton_pieces {coord : ℝ → Option ℝ} (c : VariationChart)
+    (hc : ∀ x, coord x = some (c.coord x)) :
+    value (Tensor.consValue (some coord) Tensor.nilValue) = c.present none := by
+  apply pieces_eq
+  intro x z
+  constructor
+  · rintro ⟨i,h⟩
+    fin_cases i
+    exact Option.some.inj ((hc x).symm.trans h)
+  · intro h
+    exact ⟨0, (hc x).trans (congrArg some h)⟩
 
 /-- On each injective piece this pointwise density gives ordinary Lebesgue
 integration on the image, including the domain of every partial signed test. -/
@@ -462,23 +480,16 @@ theorem branch_image {ι : Type} {gs : ι → ℝ → Option ℝ} {g : ℝ → �
   simp only [density_weight_lebesgueValue, Option.some_bind]
   cases t (g x) <;> rfl
 
-private theorem singleton {coord w : ℝ → Option ℝ} {g : ℝ → ℝ}
+theorem singleton_length {coord w : ℝ → Option ℝ} {g : ℝ → ℝ}
     (hg : ContDiff ℝ 1 g) (hc : ∀ x, coord x = some (g x)) (hw : ∀ x, w x = some |deriv g x|) :
     value (Tensor.consValue (some coord) Tensor.nilValue) = weightValue (some w) lebesgueValue := by
   rw [funext hw]
-  apply length_eq (g := g)
-  refine ⟨hg, fun x z => ⟨?_, ?_⟩⟩
-  · rintro ⟨i,h⟩
-    fin_cases i
-    change coord x = some z at h
-    exact Option.some.inj ((hc x).symm.trans h)
-  · intro h
-    exact ⟨0, (hc x).trans (congrArg some h)⟩
+  exact singleton_pieces (.smooth g hg) hc
 
 theorem square (product : Bool) :
     value (Tensor.consValue (some fun x => squareInput product (some x)) Tensor.nilValue) =
       weightValue (some fun x => Value.mul (some ((2 : ℤ) : ℝ)) (Value.abs (some x))) lebesgueValue := by
-  apply singleton (g := fun x => x ^ 2) (by fun_prop)
+  apply singleton_length (g := fun x => x ^ 2) (by fun_prop)
   · intro x; cases product <;> simp [squareInput, Value.mul, pow_two]
   · intro x
     simp [Value.mul, Value.abs, deriv_square, GraphFibre.square, abs_mul]
@@ -486,7 +497,7 @@ theorem square (product : Bool) :
 theorem sinh :
     value (Tensor.consValue (some fun x => Functions.sinhR.apply (some x)) Tensor.nilValue) =
       weightValue (some fun x => Functions.coshR.apply (some x)) lebesgueValue := by
-  apply singleton (coord := fun x => Functions.sinhR.apply (some x)) Real.contDiff_sinh
+  apply singleton_length (coord := fun x => Functions.sinhR.apply (some x)) Real.contDiff_sinh
     (fun x => by simp [Functions.sinhR, Function1.apply])
   intro x; simp [Function1.apply, Functions.coshR, Real.deriv_sinh, abs_of_pos (Real.cosh_pos x)]
 
@@ -494,7 +505,7 @@ theorem asinh :
     value (Tensor.consValue (some fun x => Functions.asinhR.apply (some x)) Tensor.nilValue) =
       weightValue (some fun x => Value.inv (Functions.sqrtR.apply
         (Value.add (some ((1 : ℤ) : ℝ)) ((some x).map (· ^ 2))))) lebesgueValue := by
-  apply singleton (coord := fun x => Functions.asinhR.apply (some x)) Real.contDiff_arsinh
+  apply singleton_length (coord := fun x => Functions.asinhR.apply (some x)) Real.contDiff_arsinh
     (fun x => by simp [Functions.asinhR, Function1.apply])
   intro x
   have h : 0 < 1+x^2 := by positivity
@@ -505,19 +516,19 @@ theorem affine (a b j : ℚ) (hj : j = |a|) {g : ℝ → Option ℝ} (hg : StepS
     {v : Option ℝ} (hv : v = some (j : ℝ)) (unit : Bool) (hu : if unit then j = 1 else True) :
     value (Tensor.consValue (some g) Tensor.nilValue) =
       if unit then lebesgueValue else weightValue (some fun _ => v) lebesgueValue := by
-  have h := singleton (w := fun _ => v) (by fun_prop) hg.equation (fun x => by
+  have h := singleton_length (w := fun _ => v) (by fun_prop) hg.equation (fun x => by
     rw [(affine_derivative (a : ℝ) (b : ℝ) x).hasDerivAt.deriv, hv, hj, Rat.cast_abs])
   cases unit
   · exact h
   · rw [h, hv, show j = 1 from hu]
     simp [weightValue, weight, lebesgueValue, densityValue, Value.mul]
 
-/-- A gap in the displayed axis rules out a total smooth coordinate. -/
+/-- A gap in the displayed axis rules out a total coordinate. -/
 private theorem interpret_gap {ι : Type} {gs : ι → ℝ → Option ℝ} {x : ℝ} (gap : ∀ i, gs i x = none)
-    (smooth fallback) : interpret gs smooth fallback = fallback := by
+    (p fallback) : interpret gs p fallback = fallback := by
   apply dif_neg
   rintro ⟨g,h⟩
-  obtain ⟨i,hi⟩ := (h.2 x _).mpr rfl
+  obtain ⟨i,hi⟩ := (h x _).mpr rfl
   simp [gap] at hi
 
 theorem of_gap {ι : Type} {gs : ι → ℝ → Option ℝ} {x : ℝ} (gap : ∀ i, gs i x = none) :

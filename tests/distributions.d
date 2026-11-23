@@ -101,6 +101,30 @@ private Case[] cases(){ return [
 	Case("CoverDuplicate","Λy. λ[y,y]","Distribution(ℝ)"),
 	Case("CoverNested","bindD(Λs. λ[s+1,s²],λ(t:ℝ).δ(t))","Distribution(ℝ)"),
 	Case("CoverThree","Λy. λ[y-1,y,y+1]","Distribution(ℝ)"),
+	Case("CoordinateRayOpenLeft","Λx. λ[[x<0]·x²]","Distribution(ℝ)","Λ(x:ℝ). ([x<0]·(-2·x))·λ[x]"),
+	Case("CoordinateRayClosedLeft","Λt. λ[[t≤0]·t⁴]","Distribution(ℝ)","Λ(t:ℝ). ([t≤0]·(-4·t^3))·λ[t]"),
+	Case("CoordinateRayOpenRight","Λv. λ[[0<v]·v²]","Distribution(ℝ)","Λ(v:ℝ). ([0<v]·(2·v))·λ[v]"),
+	Case("CoordinateRayClosedRight","Λu. λ[[0≤u]·u³]","Distribution(ℝ)","Λ(u:ℝ). ([0≤u]·(3·u^2))·λ[u]"),
+	Case("CoordinateRayDensity","densityAtD(Λx. λ[[x<0]·x²],-2)","ℝ","4"),
+	Case("CoordinateRayCut","densityAtD(Λx. λ[[x≤0]·x²],0)","ℝ","0"),
+	Case("CoordinateRayMass","∫dx [-1≤x≤1]·λ[[x<0]·x²]","ℝ","1"),
+	Case("CoordinateRayArgument","λ(k:Distribution(ℝ)→𝔹). k(Λx. λ[[x<0]·x²])","(Distribution(ℝ)→𝔹)→𝔹"),
+	Case("CoordinateCorner","Λx. λ[[0<x]·x]","Distribution(ℝ)","Λ(y:ℝ). (∫dx λ[x]·δ(x^2)[y]·[x=0])+[0<y]·λ[y]"),
+	Case("CoordinateCornerAt","densityAtD(Λx. λ[[0<x]·x],0)","ℝ","undefined(ℝ)"),
+	Case("CoordinateCornerClosedAt","densityAtD(Λx. λ[[0≤x]·x],0)","ℝ","undefined(ℝ)"),
+	Case("CoordinateCornerOff","densityAtD(Λx. λ[[0<x]·x],-2)","ℝ","0"),
+	Case("CoordinateCornerOn","densityAtD(Λx. λ[[0<x]·x],2)","ℝ","1"),
+	Case("CoordinateCornerLeft","densityAtD(Λx. λ[[x≤0]·x],-2)","ℝ","1"),
+	Case("CoordinateCornerMass","∫dx [-1≤x≤1]·λ[[x>0]·x]","ℝ","1"),
+	Case("CoordinateCornerPartial","∫dx [-1≤x≤1]·λ[[x>0]·x]·(1/x)","ℝ"),
+	Case("CoordinateCornerArgument","λ(k:Distribution(ℝ)→𝔹). k(Λx. λ[[0<x]·x])","(Distribution(ℝ)→𝔹)→𝔹"),
+	Case("CoordinateJumps","Λx. λ[[x<-1]·x²+[x>1]·x]","Distribution(ℝ)","Λ(x:ℝ). δ(-1)[x]+(δ(1)[x]+([x<-1]·(-2·x)+[1<x])·λ[x])"),
+	Case("CoordinateJumpsSwapped","Λx. λ[[2<x]·x+[x<-1/2]·x²]","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(-1/2)[x]+(2·δ(2)[x]+([x<-1/2]·(-2·x)+[2<x])·λ[x])"),
+	Case("CoordinateJumpsAt","densityAtD(Λx. λ[[x<-1]·x²+[1<x]·x],1)","ℝ","undefined(ℝ)"),
+	Case("CoordinateJumpsOff","densityAtD(Λx. λ[[x<-1]·x²+[1<x]·x],-2)","ℝ","4"),
+	Case("CoordinateJumpsClosed","∫dx [-1≤x≤1]·λ[[x<-1]·x²+[x>1]·x]","ℝ","2"),
+	Case("CoordinateJumpsOpen","∫dx [-1<x<1]·λ[[x<-1]·x²+[x>1]·x]","ℝ","0"),
+	Case("CoordinateJumpsBoth","∫dx [-2≤x≤2]·λ[[x<-1]·x²+[x>1]·x]","ℝ","6"),
 	Case("CoordinateSquare","Λx. λ[x²]","Distribution(ℝ)","Λ(x:ℝ). (2·abs(x))·λ[x]"),
 	Case("CoordinateSquareProduct","Λx. λ[x*x]","Distribution(ℝ)","Λ(x:ℝ). (2·abs(x))·λ[x]"),
 	Case("CoordinateSquareNegative","densityAtD(Λx. λ[x²],-2)","ℝ","4"),
@@ -542,6 +566,16 @@ private void run(string directory){
 			enforce(certificate.indexOf("GraphFibre.Coordinates.square_density")>=0,c.name);
 		if(c.name=="SheetPartPairing"||c.name=="SheetPartCritical"||c.name=="SheetPartMass")
 			enforce(certificate.indexOf("GraphFibre.Coordinates.square_"~(c.name=="SheetPartMass"?"mass":"pairing"))>=0,c.name);
+		if(c.name.indexOf("CoordinateCorner")==0)
+			enforce(certificate.indexOf("GraphFibre.Coordinates.rayLinear ")>=0,c.name);
+		if(c.name=="CoordinateCornerPartial")
+			enforce(certificate.indexOf("Coordinates.corner_pairing ")<0,c.name);
+		if(c.name=="CoordinateCornerMass")
+			enforce(certificate.indexOf("Coordinates.corner_pairing ")>=0,c.name);
+		if(c.name.indexOf("CoordinateJumps")==0)
+			enforce(certificate.indexOf("GraphFibre.Coordinates.twoRayJumps ")>=0,c.name);
+		if(c.name.indexOf("CoordinateRay")==0)
+			enforce(certificate.indexOf("GraphFibre.Coordinates.rayPower ")>=0,c.name);
 		if(c.name.indexOf("CoordinateSquare")==0)
 			enforce(certificate.indexOf("GraphFibre.Coordinates.square ")>=0,c.name);
 		if(c.name=="CoverRegularSum") enforce(certificate.indexOf("GraphFibre.Coordinates.sinh")>=0&&
