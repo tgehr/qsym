@@ -2,7 +2,7 @@ import QSym.DistributionOddPower
 import QSym.DistributionRootCover
 import QSym.DistributionPartialModel
 import QSym.DistributionWeightedSquare
-import QSym.DistributionRadius
+import QSym.DistributionInverseCover
 import QSym.DistributionAtomRows
 import QSym.DistributionFiniteMixedReal
 import QSym.DistributionModelLaws
@@ -26,7 +26,8 @@ elab "qsym_distribution_goal" : tactic => do
   let target ← instantiateMVars (← getMainTarget)
   let heads := #[``Distribution.GraphFibre.RootCover, ``Distribution.GraphFibre.GlobalInverseBranch, ``Distribution.GraphFibre.branchIntegral, ``Distribution.GraphFibre.fibreOn,
     ``partialIntegral, ``FiniteIntegralTheory.integrate, ``Distribution.GraphFibre.weightedSquareDensity,
-    ``Distribution.GraphFibre.radiusOutput, ``Distribution.GraphFibre.radiusImageValue,
+    ``Distribution.GraphFibre.chartObservations, ``Distribution.GraphFibre.inverseCoverValue,
+    ``Distribution.GraphFibre.inverseCoverOutput, ``Distribution.GraphFibre.radiusOutput, ``Distribution.GraphFibre.radiusImageValue,
     ``Distribution.GraphFibre.imageIntegral, ``Distribution.GraphFibre.affineSquareSource,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
@@ -134,6 +135,9 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.sqrtRadius_image_integral; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_image; assumption
   | solve | apply Distribution.GraphFibre.sqrtRadius_output; assumption
+  | solve | apply Distribution.GraphFibre.inverseCover_sum <;> assumption
+  | solve | apply Distribution.GraphFibre.inverseCover_eq; assumption
+  | solve | apply Distribution.GraphFibre.inverseCoverOutput_eq; assumption
   | solve | apply Distribution.GraphFibre.radiusOutput_of_inverse; assumption
   | solve | apply Distribution.GraphFibre.radiusImage_of_inverse; assumption
   | solve | apply Distribution.GraphFibre.imageIntegral_of_transport <;> assumption

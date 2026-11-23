@@ -119,7 +119,7 @@ struct FunctionSyntax{
 			name=="∑"||name=="sum"||name=="domain"||name=="defined"||name=="holds"||name=="guard"||name=="seq"||name=="Set"||name=="sub"||name=="dot"||name=="get"||name=="Π"||name=="Pi";
 	}
 	private bool distributionName(string name){
-		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","positiveLebesgueD","λ₊","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD","maskedGraphD","pushforwardOnD","radiusImageD"])
+		foreach(n;["Distribution","Dist","Λ","distribution","∫","integral","λ","δ","dirac","lebesgueD","positiveLebesgueD","λ₊","zeroD","addD","scaleD","weightD","bindD","integralD","massD","densityAtD","graphFibreD","maskedGraphD","pushforwardOnD","radiusImageD","inverseCoverD","inversePartD"])
 			if(name==n) return true;
 		return false;
 	}
@@ -281,6 +281,8 @@ struct FunctionSyntax{
 					case "bindD":op=BoundOp.distributionBind; break;
 					case "integralD":op=BoundOp.distributionIntegral; break;
 					case "massD":op=BoundOp.distributionMass; break;
+					case "inversePartD":op=BoundOp.distributionInversePart; break;
+					case "inverseCoverD":op=BoundOp.distributionInverseCover; break;
 					case "radiusImageD":op=BoundOp.distributionRadiusImage; break;
 					case "pushforwardOnD":op=BoundOp.distributionPushforwardOn; break;
 					case "maskedGraphD":op=BoundOp.distributionMaskedGraph; break;
@@ -291,6 +293,11 @@ struct FunctionSyntax{
 				BoundTerm[] args;
 				foreach(i,arg;p.args){
 					TypeId want;
+					if(op==BoundOp.distributionInversePart&&i==0) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.boolean));
+					if((op==BoundOp.distributionInverseCover||op==BoundOp.distributionInversePart&&i==1)&&arg.name=="$tuple"){
+						auto realType=scalarType(Sort.real_);
+						want=pool.vector(pool.function_(realType,realType),cast(uint)arg.args.length);
+					}
 					if(op==BoundOp.distributionRadiusImage) want=i==0?scalarType(Sort.real_):pool.function_(scalarType(Sort.real_),scalarType(Sort.real_));
 					if(op==BoundOp.distributionMaskedGraph&&i==1) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.real_));
 					if((op==BoundOp.distributionPushforwardOn||op==BoundOp.distributionMaskedGraph)&&i==0) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.boolean));
@@ -558,6 +565,10 @@ struct FunctionSyntax{
 			string axisHint(uint id) @safe {
 				auto d=b.node(b.at(id));
 				if(d.op==BoundOp.distributionWeight) return b.binderHint(b.at(d.a)).name;
+				if(d.op==BoundOp.distributionInverseCover||d.op==BoundOp.distributionInversePart){
+					auto xs=b.node(b.at(d.op==BoundOp.distributionInversePart?d.b:d.a));
+					if(xs.op==BoundOp.vectorCons) return b.binderHint(b.at(xs.a)).name;
+				}
 				if(d.op==BoundOp.distributionRadiusImage) return b.binderHint(b.at(d.b)).name;
 				if(d.op==BoundOp.distributionPushforwardOn){
 					auto source=b.binderHint(b.at(d.b)).name;
@@ -586,7 +597,7 @@ struct FunctionSyntax{
 				auto q=b.node(b.at(id));
 				if(q.op==BoundOp.distributionAdd) return inverseSource(q.a)||inverseSource(q.b);
 				if(q.op==BoundOp.distributionScale||q.op==BoundOp.distributionWeight) return inverseSource(q.b);
-				return q.op==BoundOp.distributionRadiusImage;
+				return q.op==BoundOp.distributionRadiusImage||q.op==BoundOp.distributionInverseCover||q.op==BoundOp.distributionInversePart;
 			}
 			string form(BoundTerm d,string axis,string[] names,uint level=0,bool group=false) @safe {
 				enforce(level<128,"distribution formatting depth exceeded"); auto q=b.node(d);
@@ -596,17 +607,37 @@ struct FunctionSyntax{
 				switch(q.op){
 					case BoundOp.distributionZero:return "0";
 					case BoundOp.distributionLebesgue:return "λ["~axis~"]";
+					case BoundOp.distributionInversePart,BoundOp.distributionInverseCover:{
+						bool part=q.op==BoundOp.distributionInversePart;
+						auto vector=part?q.b:q.a,cell=b.node(b.at(vector)); string[] coords;
+						while(cell.op==BoundOp.vectorCons){
+							auto fn=b.node(b.at(cell.a));
+							if(fn.op!=BoundOp.lambda) break;
+							coords~=render(b.at(fn.a),[axis]~names,depth+level+1,scalarType(Sort.real_));
+							cell=b.node(b.at(cell.b));
+						}
+						auto pred=part?b.node(b.at(q.a)):BoundNode.init;
+						if(cell.op!=BoundOp.vectorNil||!coords.length||part&&pred.op!=BoundOp.lambda)
+							return "("~(part?"inversePartD("~value(q.a)~",":"inverseCoverD(")~value(vector)~"))["~axis~"]";
+						if(!part&&coords.length==1) return "λ[("~coords[0]~")]";
+						import std.string:join;
+						string restriction;
+						if(part){
+							auto x=fresh([axis]~names,b.binderHint(b.at(q.a)).name);
+							restriction=" | "~x~". "~render(b.at(pred.a),[x]~names,depth+level+1);
+						}
+						return "λ["~coords.join(", ")~restriction~"]";
+					}
 					case BoundOp.distributionRadiusImage:{
-						auto radius=b.node(b.at(q.b)),centre=b.node(b.at(q.a));
-						if(radius.op!=BoundOp.lambda)
+						if(!b.printableSquareCover(q))
 							return "(radiusImageD("~value(q.a)~","~value(q.b)~"))["~axis~"]";
-						auto zero=centre.op==BoundOp.scalar&&a.at(centre.data)==a.real_(0);
-						auto left=zero?"":render(b.at(q.a),names,depth+level+1,scalarType(Sort.real_))~" ";
-						auto body=b.printedRadiusBody(b.at(q.b)),v=b.node(body);
-						auto right=render(body,[axis]~names,depth+level+1,scalarType(Sort.real_));
-						if((v.op==BoundOp.primitive||v.op==BoundOp.scalar)&&a.view(a.at(v.data)).op==Op.add||
-							right.length&&right[0]=='-') right="("~right~")";
-						return "λ["~left~"±"~(zero?"":" ")~right~"]";
+						auto zero=a.at(b.node(b.at(q.a)).data)==a.real_(0);
+						auto centre=render(b.at(q.a),names,depth+level+1,scalarType(Sort.real_));
+						auto r=b.printedRadiusBody(b.at(q.b));
+						auto radius=render(r,[axis]~names,depth+level+1,scalarType(Sort.real_));
+						auto lower=zero?(b.node(r).op==BoundOp.primitive&&a.view(a.at(b.node(r).data)).op==Op.mul?
+							"-("~radius~")":"-"~radius):centre~"-"~radius;
+						return "λ["~lower~", "~(zero?"":centre~"+")~radius~"]";
 					}
 					case BoundOp.distributionDirac:return "δ("~render(b.at(q.a),names,depth+level+1,b.type(b.at(q.a)))~")["~axis~"]";
 					case BoundOp.conditional:return grouped("if "~value(q.a)~" then "~nested(q.b,false)~" else "~nested(q.c,false));
@@ -675,9 +706,10 @@ struct FunctionSyntax{
 			}
 			switch(n.op){
 				case BoundOp.distributionRadiusImage:
-					if(b.node(b.at(n.b)).op!=BoundOp.lambda)
+					if(!b.printableSquareCover(n))
 						return "radiusImageD("~render(b.at(n.a),locals,depth+1,scalarType(Sort.real_))~","~child(n.b)~")";
 					goto case BoundOp.distributionZero;
+				case BoundOp.distributionInverseCover,BoundOp.distributionInversePart:goto case BoundOp.distributionZero;
 				case BoundOp.distributionMaskedGraph:return "maskedGraphD("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.distributionDirac:return "δ("~child(n.a)~")";
 				case BoundOp.distributionMass:{

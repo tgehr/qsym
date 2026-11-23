@@ -253,4 +253,70 @@ theorem restrict_chart_rule (f : ℝ → ℝ) (hf : Measurable f) (s : Set ℝ) 
 
 #qsym_check_axioms restrict_chart_rule
 
+private def squareBranches (right : Bool) (y : ℝ) : Option ℝ :=
+  if 0 ≤ y then some (if right then √y else -√y) else none
+
+private theorem branches_inverse (x y : ℝ) :
+    (∃ i, squareBranches i y = some x) ↔ square x = y := by
+  by_cases h : 0 ≤ y
+  · have eq := Real.sq_sqrt h
+    constructor
+    · rintro ⟨i,hi⟩
+      cases i <;> simp [squareBranches, h] at hi <;> subst x <;> simpa [square] using eq
+    · intro hx
+      rcases (sq_eq_sq_iff_eq_or_eq_neg).mp (hx.trans eq.symm) with e | e
+      · exact ⟨true, by simp [squareBranches, h, e]⟩
+      · exact ⟨false, by simp [squareBranches, h, e]⟩
+  · simp [squareBranches, h, ne_of_gt ((lt_of_not_ge h).trans_le (sq_nonneg x)), square]
+
+/-- The overlap at zero belongs to the left summand. Both scalar observers
+agree with ordinary distribution addition, even for a test missing at zero. -/
+theorem square_inverse_sum :
+    chartObservations (inverseCoverValue (some squareBranches)) = chartObservations
+      (addValue (inversePartValue squareBranches (fun x => decide (x ∈ Set.Iic 0)))
+        (inversePartValue squareBranches (fun x => decide (x ∈ (Set.Iic 0)ᶜ)))) := by
+  have hd (x : ℝ) : HasStrictDerivAt square (2*x) x := by
+    simpa [square] using hasStrictDerivAt_pow 2 x
+  have roots (y : ℝ) : ∃ xs, RootCover Set.univ square y xs := by
+    rcases lt_trichotomy y 0 with h | rfl | h
+    · exact ⟨[], squareCover_negative id h⟩
+    · exact ⟨[0], by constructor <;> simp [List.Sorted, square]⟩
+    · have r := square_positive_roots h
+      exact ⟨_, r.sorted, fun x => by simpa using r.complete x⟩
+  have bad := affine_square_critical_density 1 0 one_ne_zero
+  rw [coordinates_density] at bad
+  have critical : densityAt (.density (fun _ => some 1) (fun x => some (square x))) 0 = none := by
+    simpa only [affineSquareSource, one_mul, add_zero, square] using bad
+  have hf : Measurable square := measurable_id.pow_const 2
+  have hs : MeasurableSet (Set.Iic (0 : ℝ)) := measurableSet_Iic
+  have inverse := branches_inverse
+  qsym_rule
+
+/-- Ambiguity is between distinct targets, not between labels for the same target. -/
+theorem repeated_coordinate : inverseCoverOutput (fun (_ : Bool) y => some y) = some := by
+  apply inverseCoverOutput_eq
+  simp [eq_comm]
+
+theorem ambiguous_coordinate : inverseCoverOutput (fun (_ : Unit) (_ : ℝ) => some 0) 0 = none := by
+  unfold inverseCoverOutput
+  apply dif_neg
+  rintro ⟨y,_,h⟩
+  have a := h 0 ⟨(), rfl⟩
+  have b := h 1 ⟨(), rfl⟩
+  linarith
+
+theorem positive_inverse_alone :
+    (inverseCoverValue (some (fun (_ : Unit) => squareBranches true))).bind
+      (fun d => integrate d (fun _ => some 0)) = none := by
+  apply inverseCover_missing_zero_test (x := -1)
+  intro _ y
+  by_cases hy : 0 ≤ y <;> simp [squareBranches, hy]
+  linarith [Real.sqrt_nonneg y]
+
+#qsym_check_axioms positive_inverse_alone
+#qsym_check_axioms square_inverse_sum
+#qsym_check_axioms repeated_coordinate
+#qsym_check_axioms ambiguous_coordinate
+#qsym_check_axioms affineSquare_not_presentation_add
+
 end QSym.Distribution.SquareReconstructionTests

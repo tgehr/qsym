@@ -79,27 +79,43 @@ private Case[] cases(){ return [
 	Case("WeightedFibreGap","densityAtD(integralD(λ(x:ℝ).scaleD(1+x²,δ(x*x))),-1)","ℝ","0"),
 	Case("WeightedFibreMissing","densityAtD(bindD(weightD(λ(x:ℝ).x,lebesgueD()),λ(x:ℝ).δ(x²)),undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("WeightedSquareAbs","Λy. ∫dx λ[x]·δ(x²)[y]·abs(x)","Distribution(ℝ)","Λ(y:ℝ). [0<y]·λ[y]"),
-	Case("BareCriticalGraph","Λy. ∫dx λ[x]·δ((1-2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[1/2 ± 1/2·sqrt(y)]"),
-	Case("RadiusRational","Λy. ∫dx λ[x]·δ((x/3-1)*(x/3-1))[y]","Distribution(ℝ)","Λ(y:ℝ). λ[3 ± 3·sqrt(y)]"),
-	Case("RadiusUnit","Λy. ∫dx λ[x]·δ(x²)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[±sqrt(y)]"),
-	Case("ScaledSquare","Λy. ∫dx λ[x]·δ((2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[±1/2·sqrt(y)]"),
-	Case("ScaledFour","Λy. ∫dx λ[x]·δ(4*x²)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[±1/2·sqrt(y)]"),
-	Case("ExpandedSquare","Λy. ∫dx λ[x]·δ(4*x²-4*x+1)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[1/2 ± 1/2·sqrt(y)]"),
-	Case("SymmetricBand","Λy. ∫dx [0≤x≤1]·λ[x]·δ((1-2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤1]·λ[1/2 ± 1/2·sqrt(y)]"),
-	Case("ExpandedBand","Λy. ∫dx [-1≤x≤1]·λ[x]·δ(4*x²)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤4]·λ[±1/2·sqrt(y)]"),
+	Case("BareCriticalGraph","Λy. ∫dx λ[x]·δ((1-2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)]"),
+	Case("RadiusRational","Λy. ∫dx λ[x]·δ((x/3-1)*(x/3-1))[y]","Distribution(ℝ)","Λ(y:ℝ). λ[3-3·sqrt(y), 3+3·sqrt(y)]"),
+	Case("RadiusUnit","Λy. ∫dx λ[x]·δ(x²)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y), sqrt(y)]"),
+	Case("ScaledSquare","Λy. ∫dx λ[x]·δ((2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-(1/2·sqrt(y)), 1/2·sqrt(y)]"),
+	Case("ScaledFour","Λy. ∫dx λ[x]·δ(4*x²)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-(1/2·sqrt(y)), 1/2·sqrt(y)]"),
+	Case("ExpandedSquare","Λy. ∫dx λ[x]·δ(4*x²-4*x+1)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)]"),
+	Case("SymmetricBand","Λy. ∫dx [0≤x≤1]·λ[x]·δ((1-2*x)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)]"),
+	Case("ExpandedBand","Λy. ∫dx [-1≤x≤1]·λ[x]·δ(4*x²)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤4]·λ[-(1/2·sqrt(y)), 1/2·sqrt(y)]"),
 	Case("ScaledSquareAtFour","densityAtD(Λy. ∫dx λ[x]·δ(4*x²)[y],4)","ℝ","1/4"),
-	Case("PointBand","Λy. ∫dx [1≤x≤1]·λ[x]·δ((x-1)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤0]·λ[1 ± sqrt(y)]"),
-	Case("BandCutBelow","densityAtD(Λy. [y≤-1]·λ[±sqrt(y)],0)","ℝ","0"),
-	Case("ChartSumRadius","Λy. λ[±(y+1)]","Distribution(ℝ)","Λ(y:ℝ). λ[±(y+1)]"),
+	Case("PointBand","Λy. ∫dx [1≤x≤1]·λ[x]·δ((x-1)^2)[y]","Distribution(ℝ)","Λ(y:ℝ). [y≤0]·λ[1-sqrt(y), 1+sqrt(y)]"),
+	Case("BandCutBelow","densityAtD(Λy. [y≤-1]·λ[-sqrt(y), sqrt(y)],0)","ℝ","0"),
+	Case("ChartSumRadius","Λy. λ[±(y+1)]","Distribution(ℝ)","radiusImageD(0,λ(y:ℝ). y+1)"),
 	Case("ChartWeightedSource","bindD(Λs. [s≤1]·λ[±(1/2·sqrt(s))],λ(t:ℝ).δ(t))","Distribution(ℝ)"),
+	Case("CoverDensityZero","densityAtD(Λy. λ[-sqrt(y),sqrt(y)],0)","ℝ","undefined(ℝ)"),
+	Case("CoverDensityPositive","densityAtD(Λy. λ[-sqrt(y),sqrt(y)],4)","ℝ","1/2"),
+	Case("CoverDensityGap","densityAtD(Λy. λ[-sqrt(y),sqrt(y)],-2)","ℝ","0"),
+	Case("CoverAsymmetric","Λy. λ[y+1,y²]","Distribution(ℝ)"),
+	Case("CoverScaled","Λy. λ[-1/2·sqrt(y),1/2·sqrt(y)]","Distribution(ℝ)","Λ(y:ℝ). λ[-(1/2·sqrt(y)), 1/2·sqrt(y)]"),
+	Case("CoverShifted","Λy. λ[3-3·sqrt(y),3+3·sqrt(y)]","Distribution(ℝ)","Λ(y:ℝ). λ[3-3·sqrt(y), 3+3·sqrt(y)]"),
+	Case("CoverDuplicate","Λy. λ[y,y]","Distribution(ℝ)"),
+	Case("CoverNested","bindD(Λs. λ[s+1,s²],λ(t:ℝ).δ(t))","Distribution(ℝ)"),
+	Case("CoverThree","Λy. λ[y-1,y,y+1]","Distribution(ℝ)"),
+	Case("CoverSingle","Λy. λ[1+y]","Distribution(ℝ)","Λ(x:ℝ). λ[x]"),
+	Case("CoverAffineDensity","densityAtD(Λy. λ[3-2*y],1)","ℝ","2"),
+	Case("CoverAffineSum","Λy. λ[3-2*y]+λ[y+1]","Distribution(ℝ)"),
+	Case("CoverPartSum","Λy. λ[-sqrt(y),sqrt(y) | x. x≤0] + λ[-sqrt(y),sqrt(y) | x. 0<x]","Distribution(ℝ)"),
+	Case("CoverPartCapture","λ(a:ℝ). Λy. λ[y+a,y-a | x. a<x]","ℝ→Distribution(ℝ)"),
+	Case("CoverPartMissing","inversePartD(undefined(ℝ→𝔹),(λ(y:ℝ).y,))","Distribution(ℝ)"),
+	Case("CoverShadow","λ(a:ℝ).Λy. λ[a-y,a+y,a]","ℝ→Distribution(ℝ)"),
 	Case("ChartComposition","Λy. ∫dx λ[±1/2·sqrt(x)]·δ(x)[y]","Distribution(ℝ)"),
-	Case("BandAtEdge","densityAtD(Λy. [y≤1]·λ[1/2 ± 1/2·sqrt(y)],1)","ℝ","1/2"),
-	Case("BandAtCritical","densityAtD(Λy. [y≤1]·λ[1/2 ± 1/2·sqrt(y)],0)","ℝ","undefined(ℝ)"),
-	Case("BandAbove","densityAtD(Λy. [y≤1]·λ[1/2 ± 1/2·sqrt(y)],2)","ℝ","0"),
-	Case("BandOutsideImage","densityAtD(Λy. [y≤1]·λ[1/2 ± 1/2·sqrt(y)],-1)","ℝ","0"),
-	Case("BandMissing","densityAtD(Λy. [y≤1]·λ[1/2 ± 1/2·sqrt(y)],undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("BandAtEdge","densityAtD(Λy. [y≤1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)],1)","ℝ","1/2"),
+	Case("BandAtCritical","densityAtD(Λy. [y≤1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)],0)","ℝ","undefined(ℝ)"),
+	Case("BandAbove","densityAtD(Λy. [y≤1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)],2)","ℝ","0"),
+	Case("BandOutsideImage","densityAtD(Λy. [y≤1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)],-1)","ℝ","0"),
+	Case("BandMissing","densityAtD(Λy. [y≤1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)],undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("BandInside","densityAtD(Λy. ∫dx [0≤x≤1]·λ[x]·δ((1-2*x)^2)[y],1/4)","ℝ","1"),
-	Case("BandTotalMass","∫dy [y≤1]·λ[1/2 ± 1/2·sqrt(y)]","ℝ","1"),
+	Case("BandTotalMass","∫dy [y≤1]·λ[1/2-1/2·sqrt(y), 1/2+1/2·sqrt(y)]","ℝ","1"),
 	Case("ChartCaptured","λ(y:ℝ). Λz. λ[y ± 1/2·sqrt(z)]","ℝ→Distribution(ℝ)"),
 	Case("PartialChart","radiusImageD(3,undefined(ℝ→ℝ))","Distribution(ℝ)"),
 	Case("RadiusPositive","densityAtD(radiusImageD(1/2,λ(y:ℝ). 1/2·sqrt(y)),4)","ℝ","1/4"),
@@ -392,12 +408,18 @@ private void run(string directory){
 		if(c.name=="Integral") enforce(text=="2",c.name~": "~text);
 		if(c.name=="RecursiveAtom") enforce(text=="1",c.name~": "~text);
 		auto again=s.run(a,text,[],Options(DensityMode.preserve,true));
-		enforce(s.format(a,again)==text,c.name~" round trip: "~text);
+		auto roundTrip=s.format(a,again);
+		enforce(roundTrip==text,c.name~" round trip: "~text~" -> "~roundTrip);
 		auto certificate=s.exportCertificate(a,r);
 		// These existing rules now cross a proved bridge to the reference-aware
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name=="CoverAffineSum") enforce(certificate.indexOf("GraphFibre.affine_inverse_coordinate")>=0&&certificate.indexOf("Distribution.addValue")>=0,c.name);
+		if(c.name=="CoverPartSum")
+			enforce(certificate.indexOf("Distribution.addValue")>=0&&certificate.indexOf("GraphFibre.inverseSourcePartValue")>=0,c.name);
+		if(c.name=="CoverDensityZero"||c.name=="CoverScaled"||c.name=="CoverShifted"||c.name=="BandAtEdge")
+			enforce(certificate.indexOf("GraphFibre.sqrt_cover ")>=0,c.name~" requires the inverse-cover certificate");
 		if(c.name=="ExpandedSquare"||c.name=="ScaledFour"||c.name=="ExpandedBand")
 			enforce(certificate.indexOf("GraphFibre.graph_square_congr")>=0,c.name);
 		if(c.name=="SymmetricBand"||c.name=="ExpandedBand"||c.name=="PointBand")
@@ -600,7 +622,7 @@ private void run(string directory){
 		"if x<0 then δ(0)[x] else λ[x]", "(λ[x]·δ(x+y)[y])//λ[y]", "Λ(z:ℝ).(λ[x]·δ(x²)[y])//λ[y]",
 		"μ(f:ℝ→ℝ).λ(y:ℝ).massD((λ[x]·δ(f(x))[y])//λ[y])",
 		"([x<y]·λ[x]·δ(x)[y])//λ[y]", "([0<x]·λ[x]·δ(x+y)[y])//λ[y]",
-		"Λy. λ[y ± sqrt(y)]","Λ(n:ℕ). λ[±n]","Λy. δ(0)[1 ± y]","Λy. λ[1+y]","λ[±sqrt(y)]",
+		"Λy. λ[y ± sqrt(y)]","Λ(n:ℕ). λ[±n]","Λy. δ(0)[1 ± y]","Λy. λ[1+y,]","λ[±sqrt(y)]","λ[-sqrt(y),sqrt(y)]","Λ(n:ℕ). λ[n,n]","Λy. λ[y,true]","inverseCoverD(3)","Λy. λ[y,y | x. x<y]","Λy. λ[y,y | x. x]",
 		"radiusImageD(0)","radiusImageD(true,λ(x:ℝ).x)","radiusImageD(0,λ(x:ℝ).x<0)",
 		"maskedGraphD(λ(x:ℝ).x,λ(x:ℝ).x)", "maskedGraphD(λ(x:ℝ).0<x,λ(n:ℕ).n)",
 		"pushforwardOnD(λ(x:ℝ).x,λ(x:ℝ).x)", "pushforwardOnD(λ(x:ℝ).x<1,λ(n:ℕ).n)",

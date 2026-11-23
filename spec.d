@@ -234,9 +234,19 @@ struct Parser{
 		if(take("[")){
 			auto lookahead=lexer;
 			if(p.name=="λ"&&!p.called&&(token.kind!=TokenKind.identifier||lookahead.next().text!="]")){
-				// ± separates inverse Lebesgue coordinates only inside these brackets.
-				auto centre=token.text=="±"?integerPattern(0):expression(depth+1);
-				expect("±"); p=pattern("$radiusForm",[centre,expression(depth+1)]);
+				auto first=token.text=="±"?integerPattern(0):expression(depth+1);
+				if(take("±")) p=pattern("$radiusForm",[first,expression(depth+1)]);
+				else{
+					Pattern[] coordinates=[first];
+					while(take(",")) coordinates~=expression(depth+1);
+					p=pattern("$inverseCover",coordinates);
+					if(take("|")){
+						auto x=ident(); expect(".");
+						auto pred=pattern("$lambda",[expression(depth+1)]);
+						pred.binder=x; pred.annotation=new TypePattern("Real");
+						p=pattern("$inversePart",[pred,p]);
+					}
+				}
 			}else p=pattern("$distributionApply",[p,new Pattern(ident())]);
 			expect("]");
 		}
