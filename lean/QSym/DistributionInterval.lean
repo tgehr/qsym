@@ -1,4 +1,6 @@
 import QSym.DistributionPolynomialGrid
+import Mathlib.MeasureTheory.Integral.ExpDecay
+import Mathlib.MeasureTheory.Integral.IntegralEqImproper
 
 /-! Intervals with symbolic endpoints. The guard is one lower and one upper
 comparison of the axis with two partial bounds, in either order, strict or
@@ -409,9 +411,194 @@ theorem interval_integral (swap sl su : Bool) (a b m : Option ℝ)
           refine zero_integral f (fun x => ?_)
           rw [hf.equation, hg, mask_decide, if_neg (region_empty sl su hT x)]
 
+/-! A half-line. Below one lower bound every term must decay: a negative
+rate. The antiderivative then vanishes at infinity, so the result is its
+value at the bound with the opposite sign, and no limit is left behind. -/
+
+open Filter Asymptotics Topology in
+theorem polyEval_isBigO_exp (p : List ℚ) {b : ℝ} (hb : 0 < b) :
+    (polyEval p) =O[atTop] fun x => Real.exp (b * x) := by
+  induction p generalizing b with
+  | nil =>
+    exact (isBigO_zero _ _).congr_left (fun _ => rfl)
+  | cons c p ih =>
+    have hc : (fun _ : ℝ => (c : ℝ)) =O[atTop] fun x => Real.exp (b * x) := by
+      refine IsBigO.of_bound |(c : ℝ)| ?_
+      filter_upwards [eventually_ge_atTop (0 : ℝ)] with x hx
+      have h1 : (1 : ℝ) ≤ Real.exp (b * x) := Real.one_le_exp (mul_nonneg hb.le hx)
+      rw [Real.norm_eq_abs, Real.norm_eq_abs, abs_of_pos (Real.exp_pos _)]
+      nlinarith [abs_nonneg (c : ℝ)]
+    have hx : (fun x : ℝ => x) =O[atTop] fun x => Real.exp (b / 2 * x) := by
+      simpa using (isLittleO_pow_exp_pos_mul_atTop 1 (half_pos hb)).isBigO
+    have hm := hx.mul (ih (half_pos hb))
+    have he : (fun x : ℝ => Real.exp (b / 2 * x) * Real.exp (b / 2 * x)) =
+        fun x => Real.exp (b * x) := by
+      funext x; rw [← Real.exp_add]; congr 1; ring
+    rw [he] at hm
+    exact hc.add hm
+
+open Filter Asymptotics Topology in
+theorem expPolynomial_isBigO (p : List ℚ) {r : ℝ} (hr : r < 0) :
+    (fun x => polyEval p x * Real.exp (r * x)) =O[atTop] fun x => Real.exp (-(-r / 2) * x) := by
+  have hp := polyEval_isBigO_exp p (show (0 : ℝ) < -r / 2 by linarith)
+  have hm := hp.mul (isBigO_refl (fun x : ℝ => Real.exp (r * x)) atTop)
+  have he : (fun x : ℝ => Real.exp (-r / 2 * x) * Real.exp (r * x)) =
+      fun x => Real.exp (-(-r / 2) * x) := by
+    funext x; rw [← Real.exp_add]; congr 1; ring
+  rwa [he] at hm
+
+open Filter Topology in
+theorem expPolynomial_tendsto (p : List ℚ) {r : ℝ} (hr : r < 0) :
+    Tendsto (fun x => polyEval p x * Real.exp (r * x)) atTop (𝓝 0) := by
+  refine (expPolynomial_isBigO p hr).trans_tendsto ?_
+  have hb : (0 : ℝ) < -r / 2 := by linarith
+  have ht := Real.tendsto_exp_neg_atTop_nhds_zero.comp (tendsto_id.const_mul_atTop hb)
+  refine ht.congr (fun x => ?_)
+  simp only [Function.comp_apply, id]
+  congr 1; ring
+
+theorem expPolynomial_integrableOn (p : List ℚ) {r : ℚ} (hr : (r : ℝ) < 0) (l : ℝ) :
+    IntegrableOn (fun x => polyEval p x * Real.exp ((r : ℝ) * x)) (Ioi l) volume :=
+  integrable_of_isBigO_exp_neg (show (0 : ℝ) < -(r : ℝ) / 2 by linarith)
+    (expPolynomial_continuous p r).continuousOn (expPolynomial_isBigO p hr)
+
+theorem expPrimitive_integral_Ioi {P p : List ℚ} {r s : ℚ} (h : expPrimitive P p r s = true)
+    (hr : (r : ℝ) < 0) (l : ℝ) :
+    ∫ x in Ioi l, polyEval p x * Real.exp ((r : ℝ) * x) =
+      0 - polyEval P l * Real.exp ((s : ℝ) * l) := by
+  have hs : s = r := by
+    simp only [expPrimitive, Bool.and_eq_true, decide_eq_true_eq] at h
+    exact h.1.symm
+  have hs' : (s : ℝ) < 0 := by rw [hs]; exact hr
+  exact integral_Ioi_of_hasDerivAt_of_tendsto' (fun x _ => expPrimitive_deriv h x)
+    (expPolynomial_integrableOn p hr l) (expPolynomial_tendsto P hs')
+
+/-- The value below the mask of one lower bound and its integral. Every
+antiderivative is strict in the bound, so a missing bound is missing in the
+result without a mask. -/
+inductive HalfLineTerms (a m : Option ℝ) : (ℝ → Option ℝ) → Option ℝ → Prop
+  | pure {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {p P : List ℚ} {r s : ℚ}
+      (hv : ExpPolynomial v p r) (hG : ExpPolynomial (fun t => G (some t)) P s)
+      (h0 : G none = none) (hd : expPrimitive P p r s = true) (hr : decide (r < 0) = true) :
+      HalfLineTerms a m v (Value.mul m (G a))
+  | scaled {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {c : Option ℝ} {p P : List ℚ}
+      {r s : ℚ} (hv : Scaled v c p r) (hG : ExpPolynomial (fun t => G (some t)) P s)
+      (h0 : G none = none) (hd : expPrimitive P p r s = true) (hr : decide (r < 0) = true) :
+      HalfLineTerms a m v (Value.mul c (Value.mul m (G a)))
+  | add {v w : ℝ → Option ℝ} {s t : Option ℝ} :
+      HalfLineTerms a m v s → HalfLineTerms a m w t →
+      HalfLineTerms a m (fun x => Value.add (v x) (w x)) (Value.add s t)
+
+theorem HalfLineTerms.missing {a m : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
+    (h : HalfLineTerms a m v out) (ha : a = none) : out = none := by
+  subst ha
+  induction h with
+  | pure _ _ h0 _ _ => rw [h0]; cases m <;> rfl
+  | @scaled v G c p P r s _ _ h0 _ _ => rw [h0]; cases m <;> cases c <;> rfl
+  | add _ _ ih₁ _ => rw [ih₁]; rfl
+
+theorem HalfLineTerms.sound {a m : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
+    (h : HalfLineTerms a m v out) (hm : m = some (-1 : ℝ)) {l : ℝ} (ha : a = some l) :
+    (∃ g : ℝ → ℝ, IntegrableOn g (Ioi l) volume ∧ (∀ x, v x = some (g x)) ∧
+        out = some (∫ x in Ioi l, g x)) ∨ ((∀ x, v x = none) ∧ out = none) := by
+  subst hm ha
+  induction h with
+  | @pure v G p P r s hv hG _ hd hr =>
+    have hr' : (r : ℝ) < 0 := by exact_mod_cast of_decide_eq_true hr
+    refine Or.inl ⟨_, expPolynomial_integrableOn p hr' l, hv.equation, ?_⟩
+    rw [expPrimitive_integral_Ioi hd hr', hG.equation l]
+    simp only [Value.mul, Option.some.injEq]
+    ring
+  | @scaled v G c p P r s hv hG _ hd hr =>
+    have hr' : (r : ℝ) < 0 := by exact_mod_cast of_decide_eq_true hr
+    cases c with
+    | none => exact Or.inr ⟨fun x => by rw [hv.equation x]; rfl, rfl⟩
+    | some c =>
+      refine Or.inl ⟨fun x => c * (polyEval p x * Real.exp ((r : ℝ) * x)),
+        (expPolynomial_integrableOn p hr' l).const_mul c,
+        fun x => by rw [hv.equation x]; rfl, ?_⟩
+      rw [integral_const_mul, expPrimitive_integral_Ioi hd hr', hG.equation l]
+      simp only [Value.mul, Option.some.injEq]
+      ring
+  | @add v w s t _ _ ih₁ ih₂ =>
+    rcases ih₁ with ⟨g, hg, hv, hs⟩ | ⟨hv, hs⟩
+    · rcases ih₂ with ⟨k, hk, hw, ht⟩ | ⟨hw, ht⟩
+      · refine Or.inl ⟨fun x => g x + k x, hg.add hk, fun x => ?_, ?_⟩
+        · show Value.add (v x) (w x) = _
+          rw [hv x, hw x]; rfl
+        · rw [hs, ht, integral_add hg hk]
+          rfl
+      · refine Or.inr ⟨fun x => ?_, by rw [hs, ht]; rfl⟩
+        show Value.add (v x) (w x) = _
+        rw [hv x, hw x]; rfl
+    · refine Or.inr ⟨fun x => ?_, by rw [hs]; rfl⟩
+      show Value.add (v x) (w x) = _
+      rw [hv x]; rfl
+
+/-- The observation of a guarded value above one partial bound. -/
+theorem halfline_integral (strict : Bool) (a m : Option ℝ)
+    {f v : ℝ → Option ℝ} {out : Option ℝ} (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hf : Masked f (fun x => compare strict a (some x)) v) (ht : HalfLineTerms a m v out) :
+    partialIntegral volume f = out := by
+  have hm : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  have missing : ∀ y, f y = none → partialIntegral volume f = none := by
+    intro y hy
+    apply if_neg
+    intro hd
+    obtain ⟨r, hr⟩ := hd.1 y
+    rw [hy] at hr
+    cases hr
+  cases a with
+  | none =>
+    rw [ht.missing rfl]
+    exact missing 0 (by rw [hf.equation]; cases strict <;> rfl)
+  | some l =>
+    have hg : ∀ x, compare strict (some l) (some x) =
+        some (decide (if strict = true then l < x else l ≤ x)) := compare_defined strict l
+    rcases ht.sound hm rfl with ⟨g, hi, hv, ho⟩ | ⟨hv, ho⟩
+    · have total : ∀ x, Value.Defined (f x) := by
+        intro x
+        rw [hf.equation, hg, hv, mask_decide]
+        split_ifs <;> exact ⟨_, rfl⟩
+      have he : (fun x => (f x).getD 0) =ᵐ[volume] (Ioi l).indicator g := by
+        filter_upwards [ae_away [l]] with x hx
+        have hl : x ≠ l := hx l (by simp)
+        rw [hf.equation, hg, hv, mask_decide]
+        by_cases hin : x ∈ Ioi l
+        · have hc : (if strict = true then l < x else l ≤ x) := by
+            split_ifs
+            · exact hin
+            · exact le_of_lt hin
+          rw [if_pos hc, Set.indicator_of_mem hin, Option.getD_some]
+        · have hc : ¬(if strict = true then l < x else l ≤ x) := by
+            intro h
+            apply hin
+            split_ifs at h
+            · exact h
+            · exact lt_of_le_of_ne h (Ne.symm hl)
+          rw [if_neg hc, Set.indicator_of_not_mem hin, Option.getD_some]
+      have hint : Integrable ((Ioi l).indicator g) volume :=
+        (integrable_indicator_iff measurableSet_Ioi).mpr hi
+      rw [partialIntegral_valid volume f total ((integrable_congr he).mpr hint),
+        integral_congr_ae he, integral_indicator measurableSet_Ioi, ho]
+    · rw [ho]
+      refine missing (l + 1) ?_
+      rw [hf.equation, hg, hv, mask_decide]
+      have hc : (if strict = true then l < l + 1 else l ≤ l + 1) := by
+        split_ifs <;> linarith
+      rw [if_pos hc]
+
 end QSym.Distribution.StepSource
 
 namespace QSym.Distribution.DensityProgram
+
+theorem presentation_mass_halfline (p : DensityProgram) (strict : Bool) (a m : Option ℝ)
+    {v : ℝ → Option ℝ} {out : Option ℝ} (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hf : StepSource.Masked p.density (fun x => StepSource.compare strict a (some x)) v)
+    (ht : StepSource.HalfLineTerms a m v out) :
+    massValue p.presentation = out := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  exact StepSource.halfline_integral strict a m hm hf ht
 
 theorem presentation_mass_interval (p : DensityProgram) (swap sl su : Bool) (a b m : Option ℝ)
     {v : ℝ → Option ℝ} {out : Option ℝ} (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))

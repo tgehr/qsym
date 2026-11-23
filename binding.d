@@ -68,7 +68,7 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 private struct IntervalTerm{ uint value,primitive=uint.max; bool scaled; }
 private struct IntervalData{
 	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne;
-	bool swap,strictLower,strictUpper,nested;
+	bool swap,strictLower,strictUpper,nested,half;
 	IntervalTerm[] terms;
 }
 private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; }
@@ -2495,10 +2495,11 @@ final class Bindings{
 			}else if(isOp(body,Op.mask)){ d.guard=body.a; d.value=body.b; }
 			else return BoundTerm.init;
 			// Below a binder the two guards stay nested masks: their conjunction.
-			uint first=uint.max,second=uint.max;
+			// A single lower bound is a half-line.
+			uint first=d.guard,second=uint.max;
 			if(isOp(nodes[d.guard],Op.and_)){ first=nodes[d.guard].a; second=nodes[d.guard].b; }
-			else if(d.unit==uint.max&&isOp(nodes[d.value],Op.mask)){ d.nested=true; first=d.guard; second=nodes[d.value].a; d.value=nodes[d.value].b; }
-			else return BoundTerm.init;
+			else if(d.unit==uint.max&&isOp(nodes[d.value],Op.mask)){ d.nested=true; second=nodes[d.value].a; d.value=nodes[d.value].b; }
+			else d.half=true;
 			bool bound(uint id,out bool lower,out bool strict,out uint term){
 				auto c=nodes[id]; if(!isOp(c,Op.le)&&!isOp(c,Op.lt)) return false;
 				strict=isOp(c,Op.lt);
@@ -2508,14 +2509,25 @@ final class Bindings{
 				return false;
 			}
 			bool lower1,strict1,lower2,strict2; uint term1,term2;
-			if(!bound(first,lower1,strict1,term1)||!bound(second,lower2,strict2,term2)||lower1==lower2) return BoundTerm.init;
+			if(!bound(first,lower1,strict1,term1)) return BoundTerm.init;
+			if(d.half){ if(!lower1) return BoundTerm.init; term2=term1; }
+			else if(!bound(second,lower2,strict2,term2)||lower1==lower2) return BoundTerm.init;
 			d.swap=!lower1; d.strictLower=lower1?strict1:strict2; d.strictUpper=lower1?strict2:strict1;
-			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
 			auto outer=[Rational(1)],outerRate=Rational(0);
 			foreach(id;solution.from[1..$]){
 				Rational[] w; Rational rate; if(!axisExponential(id,w,rate)) return BoundTerm.init;
 				outer=polyProduct(outer,w); outerRate=outerRate+rate; if(outer.length>64) return BoundTerm.init;
 			}
+			// Decide before building anything: a refused integral leaves no
+			// terms behind. Above a single bound every term must decay.
+			bool admissible(uint id,uint depth){
+				Rational[] p; Rational rate; bool scaled;
+				if(scaledExponential(id,p,rate,scaled)) return !d.half||rate+outerRate<Rational(0);
+				auto q=nodes[id];
+				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
+			}
+			if(d.unit!=uint.max?d.half&&!(outerRate<Rational(0)):!admissible(d.value,0)) return BoundTerm.init;
+			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
 			auto addOp=arena.add(arena.real_(0),arena.real_(0),true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
 			auto minusOne=scalar(ctx,arena.real_(Rational(-1)));
 			// x·(p₀/1+x·(p₁/2+…)), in Horner form, below the axis binder. With
@@ -2545,8 +2557,12 @@ final class Bindings{
 				p=polyProduct(p,outer); rate=rate+outerRate;
 				foreach(c;p) if(c.words>128) return BoundTerm.init;
 				if(rate.words>128) return BoundTerm.init;
+				// Above a single bound every term must decay; its antiderivative
+				// then vanishes at infinity.
+				if(d.half&&!(rate<Rational(0))) return BoundTerm.init;
 				auto primitive_=antiderivative(p,rate); r.primitive=primitive_.id;
-				auto result=primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
+				auto result=d.half?primitive(mulOp,[minusOne,evaluate(primitive_,lower)]):
+					primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
 				if(r.scaled) result=primitive(mulOp,[exponentialScale(r.value),result]);
 				d.terms~=r; return result;
 			}
@@ -2564,7 +2580,7 @@ final class Bindings{
 			if(total==BoundTerm.init) return BoundTerm.init;
 			auto zero=arena.real_(0),strict=d.strictLower||d.strictUpper;
 			auto test=primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[lower,upper]);
-			auto result=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[test,total]);
+			auto result=d.half?total:primitive(arena.mask(arena.boolean(true),arena.real_(1)),[test,total]);
 			d.lower=lower.id; d.upper=upper.id; d.minusOne=minusOne.id;
 			solution.bounds=d; solution.interval=true; solution.piecewise=true; solution.output=result.id;
 			return result;
@@ -5428,8 +5444,10 @@ final class Bindings{
 			string ev(uint id){return "("~name(id)~".eval ξ ρ)";}
 			string truth(bool b){return b?"true":"false";}
 			auto a=ev(d.lower),b=ev(d.upper),m=ev(d.minusOne);
-			auto flags=truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper);
-			auto guard="(Distribution.StepSource.intervalGuard "~flags~" "~a~" "~b~")";
+			auto flags=d.half?truth(d.strictLower)~" "~a~" "~m:truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~" "~a~" "~b~" "~m;
+			auto guard=d.half?"(fun x : ℝ => Distribution.StepSource.compare "~truth(d.strictLower)~" "~a~" (some x))":
+				"(Distribution.StepSource.intervalGuard "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~" "~a~" "~b~")";
+			auto termsName="Distribution.StepSource."~(d.half?"HalfLineTerms":"IntervalTerms");
 			// The first weight is the guard around the value, by evaluation.
 			auto body=s.from[0],value=d.unit!=uint.max?"(fun _ : ℝ => some (1 : ℝ))":functionAt(d.value);
 			auto shape=save("∀ x : ℝ, "~functionAt(body)~" x = Value.mask ("~guard~" x) ("~value~" x)",
@@ -5475,15 +5493,16 @@ final class Bindings{
 				if(r.value!=id){
 					auto sum=nodes[id];enforce(sum.op==BoundOp.primitive&&arena.view(arena.at(sum.data)).op==Op.add,"bad interval sum");
 					auto left=terms(sum.a),right=terms(sum.b);
-					return "(Distribution.StepSource.IntervalTerms.add "~left~" "~right~")";
+					return "("~termsName~".add "~left~" "~right~")";
 				}
 				++next;
 				auto primitive_="(G := fun o : Option ℝ => "~name(r.primitive)~".eval ξ (Binding.Env.cons (a := .scalar .real) o ρ)) ";
-				auto derivative=" "~exponential(r.primitive).proof~" rfl)";
+				// On a half-line: strict in the bound, a derivative, and decay.
+				auto derivative=" "~exponential(r.primitive).proof~(d.half?" rfl rfl rfl)":" rfl)");
 				if(!r.scaled){
 					auto hv=id==uint.max?app("exp_polynomial",app("polynomial_unit",everywhere)):exponential(id).proof;
 					foreach(w;factors)hv=app("exp_mul",hv~" "~w);
-					return "(Distribution.StepSource.IntervalTerms.pure "~primitive_~hv~derivative;
+					return "("~termsName~".pure "~primitive_~hv~derivative;
 				}
 				// Factors free of the axis are the scale; the others multiply.
 				string delegate(uint,out bool) @safe scaledFactor;
@@ -5498,11 +5517,11 @@ final class Bindings{
 				};
 				bool scaled;auto hv=scaledFactor(id,scaled);
 				foreach(w;factors)hv=app("scaled_times",hv~" "~w);
-				return "(Distribution.StepSource.IntervalTerms.scaled "~primitive_~hv~derivative;
+				return "("~termsName~".scaled "~primitive_~hv~derivative;
 			}
 			auto total=terms(d.unit!=uint.max?uint.max:d.value);
 			auto minus="(Numeric.calculate_sound ξ n"~to!string(nodes[d.minusOne].data)~" (-1 : ℚ) rfl)";
-			return "Distribution.DensityProgram.presentation_mass_interval "~program~" "~flags~" "~a~" "~b~" "~m~" "~minus~" "~masked~" "~total;
+			return "Distribution.DensityProgram.presentation_mass_"~(d.half?"halfline":"interval")~" "~program~" "~flags~" "~minus~" "~masked~" "~total;
 		}
 		auto cuts=s.exceptions;enforce(cuts.length,"empty step grid");
 		string density(){

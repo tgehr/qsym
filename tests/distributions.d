@@ -419,6 +419,19 @@ private Case[] cases(){ return [
 	Case("ExponentialTwoScales","∫dx [a≤x≤b]*c*x*d*λ[x]","ℝ","[a≤b]·(c·d·(-1/2·a^2+1/2·b^2))"),
 	Case("ExponentialCdf","λ(a:ℝ).∫dx [0≤x]*[x≤a]*2*exp(-2*x)*λ[x]","ℝ→ℝ","λ(a:ℝ). [0≤a]·(-exp(-2·a)+1)"),
 	Case("ExponentialNested","∫dx [0≤x≤2]*λ[x]*∫dy [0≤y]*[y≤x]*exp(-y)*λ[y]","ℝ","exp(-2)+1"),
+	Case("HalfLineExponential","∫dx [0≤x]*exp(-x)*λ[x]","ℝ","1"),
+	Case("HalfLineGamma","∫dx [0≤x]*x^3*exp(-2*x)*λ[x]","ℝ","3/8"),
+	Case("HalfLineSymbolicBound","∫dx [a≤x]*exp(-x)*λ[x]","ℝ","exp(-a)"),
+	Case("HalfLineStrictScaled","∫dx [a<x]*c*exp(-3*x)*x*λ[x]","ℝ","-c·(-a·(1/3)-1/9)·exp(-3·a)"),
+	Case("HalfLineLawMean","∫dx ([0≤x]*2*exp(-2*x)*λ[x])*x","ℝ","1/2"),
+	Case("HalfLineLawMoment","∫dx ([0≤x]*2*exp(-2*x)*λ[x])*x^2","ℝ","1/2"),
+	Case("HalfLineBracketWeight","∫dx ([0≤x]*λ[x])*exp(-x)","ℝ","1"),
+	Case("HalfLineSum","∫dx [0≤x]*(exp(-x)+exp(-2*x))*λ[x]","ℝ","3/2"),
+	Case("HalfLineBoundVariable","λ(a:ℝ).∫dx [a≤x]*exp(-x)*λ[x]","ℝ→ℝ","λ(a:ℝ). exp(-a)"),
+	Case("HalfLineGuarded","∫dx [c≤d]*[0≤x]*exp(-x)*λ[x]","ℝ","[c≤d]"),
+	Case("HalfLineNested","∫dx [0≤x]*λ[x]*exp(-x)*∫dy [0≤y]*[y≤x]*λ[y]","ℝ","1"),
+	Case("HalfLineGrowing","∫dx [0≤x]*exp(x)*λ[x]","ℝ"),
+	Case("HalfLineUpper","∫dx [x≤0]*exp(x)*λ[x]","ℝ"),
 	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ"),
 	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
@@ -769,6 +782,14 @@ private void run(string directory){
 			bool retained=c.name=="ExponentialShifted"||c.name=="ExponentialSymbolicRate";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
 			if(c.name!="ExponentialTwoScales") enforce((certificate.indexOf("StepSource.exp_affine")>=0)!=retained,c.name~" exponential evidence");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
+		// Above one lower bound every term must decay; the antiderivative
+		// then vanishes at infinity. A growing term and an upper half-line
+		// keep their integral.
+		if(c.name.indexOf("HalfLine")==0){
+			bool retained=c.name=="HalfLineGrowing"||c.name=="HalfLineUpper";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_halfline")>=0)!=retained,c.name~" half-line certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
 		// A total weight is evaluated at the inverse point of an affine graph.
