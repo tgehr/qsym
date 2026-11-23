@@ -1,5 +1,6 @@
 import QSym.DistributionGraphBridge
 import QSym.AxiomCheck
+import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 
 noncomputable section
 namespace QSym.Distribution.SquareReconstructionTests
@@ -126,6 +127,38 @@ theorem affine_square_chart (s : Set ℝ) (hs : MeasurableSet s) (t : ℝ → �
         (squareChartWeight ((fun u => (u-b)/a) ⁻¹' s) y * |a|⁻¹ * t y)) := by
   qsym_rule
 
+theorem unequal_branch_weights (w t : ℝ → ℝ) (hm : Measurable w) (hs : ∀ x, 0 ≤ w (-x) * w x) :
+    partialIntegral volume (fun x => some (w x * t (square x))) =
+      partialIntegral volume (fun y => some (weightedSquareDensity w y * t y)) := by qsym_rule
+
+theorem unequal_branch_density (w : ℝ → ℝ) (y : ℝ) :
+    densityAt (.density (fun x => some (w x)) (fun x => some (square x))) y =
+      (if y = 0 ∧ w 0 ≠ 0 then none else some (weightedSquareDensity w y)) := by qsym_rule
+
+theorem unequal_branch_chart (w : ℝ → ℝ) (h0 : w 0 = 0) (hm : Measurable w) (hs : ∀ x, 0 ≤ w (-x) * w x) :
+    inLebesgueCoordinates (.density (fun x => some (w x)) (fun x => some (square x))) =
+      .density (fun y => some (weightedSquareDensity w y)) some := by qsym_rule
+
+/-- Opposite branch weights cancel in every density query. The constant
+test still detects the nonintegrable source. -/
+theorem odd_weight_cancellation :
+    let d := inLebesgueCoordinates (.density some (fun x => some (square x)))
+    (∀ y, densityAt d y = some 0) ∧ integrate d (fun _ => some 1) = none := by
+  dsimp only
+  constructor
+  · intro y
+    rw [coordinates_density]
+    simpa [weightedSquareDensity] using weighted_square_density (fun x => x) y
+  · rw [coordinates_test _ (fun _ => 1)]
+    apply partialIntegral_invalid
+    intro h
+    have hi : Integrable (fun x : ℝ => x) := by simpa [Value.mul] using h
+    exact not_integrableOn_Ioi_rpow 1 (by simpa using (hi.integrableOn (s := Set.Ioi 0)))
+
+#qsym_check_axioms unequal_branch_weights
+#qsym_check_axioms unequal_branch_density
+#qsym_check_axioms unequal_branch_chart
+#qsym_check_axioms odd_weight_cancellation
 #qsym_check_axioms affine_square_chart
 #qsym_check_axioms positive_mask_scalar_eq
 #qsym_check_axioms active_critical_zero_test

@@ -1,7 +1,7 @@
 import QSym.DistributionOddPower
 import QSym.DistributionRootCover
 import QSym.DistributionPartialModel
-import QSym.DistributionSquareChart
+import QSym.DistributionWeightedSquare
 import QSym.DistributionAtomRows
 import QSym.DistributionFiniteMixedReal
 import QSym.DistributionModelLaws
@@ -24,7 +24,7 @@ open Lean Meta Elab Tactic in
 elab "qsym_distribution_goal" : tactic => do
   let target ← instantiateMVars (← getMainTarget)
   let heads := #[``Distribution.GraphFibre.RootCover, ``Distribution.GraphFibre.GlobalInverseBranch, ``Distribution.GraphFibre.branchIntegral, ``Distribution.GraphFibre.fibreOn,
-    ``partialIntegral, ``FiniteIntegralTheory.integrate,
+    ``partialIntegral, ``FiniteIntegralTheory.integrate, ``Distribution.GraphFibre.weightedSquareDensity,
     ``Distribution.ObservationTheory.observe, ``Distribution.ObservationTheory.comp,
     ``Distribution.ObservationTheory.reweight, ``Distribution.Model.atomTestValue,
     ``Distribution.GraphFibre.realBindValue, ``Distribution.GraphFibre.realIntegralValue,
@@ -121,6 +121,10 @@ macro "qsym_distribution_eq" : tactic => `(tactic| first
   | solve | apply Distribution.GraphFibre.fibreOn_of_notMem_image <;> assumption
   | solve | apply Distribution.GraphFibre.branchIntegral_union <;> assumption
   | solve | apply Distribution.GraphFibre.branchIntegral_image <;> assumption
+  | exact Distribution.GraphFibre.weighted_square_density _ _
+  | solve | apply Distribution.GraphFibre.weighted_square_chart <;> assumption
+  | solve | apply Distribution.GraphFibre.weighted_square_integral <;> assumption
+  | solve | apply Distribution.GraphFibre.integral_pair_common_test <;> assumption
   | solve | apply Distribution.GraphFibre.affine_square_integral <;> assumption
   | solve | apply Distribution.GraphFibre.square_masked_integral <;> assumption
   | solve | apply Distribution.GraphFibre.square_positiveSource_disintegrates <;> assumption

@@ -1,3 +1,4 @@
+import QSym.DistributionWeightedSquareBridge
 import QSym.DistributionAffineOdd
 import QSym.DistributionAffineSquare
 import QSym.Binding

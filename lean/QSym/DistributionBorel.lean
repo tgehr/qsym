@@ -60,6 +60,24 @@ theorem pow (n : ℕ) (hf : BorelReal f) : BorelReal (fun x => (f x).map (· ^ n
 
 theorem abs (hf : BorelReal f) : BorelReal (fun x => Value.abs (f x)) := hf.map _ continuous_abs.measurable
 
+theorem mask {p : ℝ → Option Bool} (hp : BorelPred p) (hf : BorelReal f) :
+    BorelReal (fun x => Value.mask (p x) (f x)) := by
+  classical
+  constructor
+  · convert (hp false).union ((hp true).inter hf.domain) using 1
+    ext x
+    cases h : p x with
+    | none => simp [h, Value.mask, Value.Defined]
+    | some b => cases b <;> simp [h, Value.mask, Value.Defined]
+  · have eq : (fun x => (Value.mask (p x) (f x)).getD 0) =
+        {x | p x = some true}.indicator (fun x => (f x).getD 0) := by
+      funext x
+      cases h : p x with
+      | none => simp [h, Value.mask, Set.indicator]
+      | some b => cases b <;> simp [h, Value.mask, Set.indicator]
+    rw [eq]
+    exact hf.val.indicator (hp true)
+
 theorem inv (hf : BorelReal f) : BorelReal (fun x => Value.inv (f x)) := by
   classical
   constructor

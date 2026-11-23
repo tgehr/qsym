@@ -73,6 +73,21 @@ private Case[] cases(){ return [
 	Case("FifthChart","Λy. ∫dx λ[x]·δ(x^5)[y]·[x≠0]","Distribution(ℝ)"),
 	Case("CubicCriticalSource","Λy. ∫dx λ[x]·δ(x³)[y]·[0≤x]","Distribution(ℝ)"),
 	Case("CubicPartialSource","pushforwardOnD(λ(x:ℝ).0<x⁻¹,λ(x:ℝ).x^3)","Distribution(ℝ)"),
+	Case("WeightedFibreCancel","densityAtD(Λy. ∫dx λ[x]·δ(x²)[y]·x,4)","ℝ","0"),
+	Case("WeightedFibreZero","densityAtD(Λy. ∫dx λ[x]·δ(x²)[y]·x,0)","ℝ","0"),
+	Case("WeightedFibreCritical","densityAtD(integralD(λ(x:ℝ).scaleD(1+x²,δ(x*x))),0)","ℝ","undefined(ℝ)"),
+	Case("WeightedFibreGap","densityAtD(integralD(λ(x:ℝ).scaleD(1+x²,δ(x*x))),-1)","ℝ","0"),
+	Case("WeightedFibreMissing","densityAtD(bindD(weightD(λ(x:ℝ).x,lebesgueD()),λ(x:ℝ).δ(x²)),undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("WeightedSquareAbs","Λy. ∫dx λ[x]·δ(x²)[y]·abs(x)","Distribution(ℝ)","Λ(y:ℝ). [0<y]·λ[y]"),
+	Case("WeightedAbsObservation","λ(z:ℝ). densityAtD(Λy. ∫dx λ[x]·δ(x²)[y]·abs(x),z)","ℝ→ℝ","λ(z:ℝ). [0<z]"),
+	Case("WeightedSquareSource","bindD(weightD(λ(x:ℝ).abs(x),lebesgueD()),λ(x:ℝ).δ(x*x))","Distribution(ℝ)","Λ(y:ℝ). [0<y]·λ[y]"),
+	Case("WeightedSquareAsymmetric","Λy. ∫dx λ[x]·δ(x²)[y]·(x*(x+1))^2","Distribution(ℝ)"),
+	Case("WeightedSquareChanging","integralD(λ(x:ℝ).scaleD(x²*(x²-1)*(1+x)^2,δ(x²)))","Distribution(ℝ)"),
+	Case("WeightedSquareMasked","Λy. ∫dx ([0<x]·(1+x²))·λ[x]·δ(x²)[y]","Distribution(ℝ)"),
+	Case("WeightedSquareNegative","integralD(λ(x:ℝ).scaleD(-x²,δ(x*x)))","Distribution(ℝ)"),
+	Case("WeightedSquareCancels","Λy. ∫dx λ[x]·δ(x²)[y]·x","Distribution(ℝ)"),
+	Case("WeightedSquareCritical","integralD(λ(x:ℝ).scaleD(1+x²,δ(x²)))","Distribution(ℝ)"),
+	Case("WeightedSquarePartial","integralD(λ(x:ℝ).scaleD(abs((x-1)⁻¹)*x²,δ(x²)))","Distribution(ℝ)"),
 	Case("SquareChartShifted","Λy. ∫dx λ[x]·δ((2*x+1)^2)[y]·[0<x<1]","Distribution(ℝ)"),
 	Case("SquareChartOverlap","Λy. ∫dx λ[x]·δ(x²)[y]·[x≠0∧-2<x]","Distribution(ℝ)"),
 	Case("SquareChartBoth","Λy. ∫dx λ[x]·δ((1-2*x)^2)[y]·[2*x≠1]","Distribution(ℝ)","Λ(y:ℝ). ([0<y]·(sqrt(y)⁻¹·(1/2)))·λ[y]"),
@@ -372,6 +387,24 @@ private void run(string directory){
 		if(c.name=="CubicMarginal"||c.name=="SeventhPositiveMass") enforce(certificate.indexOf("GraphFibre.oddPower_mass_rule")>=0,c.name);
 		if(c.name=="RestrictedCubic"||c.name=="CubicPartialDensity"||c.name=="CubicExcludedDensity"||c.name=="CubicCriticalDensity"||c.name=="CubicPredicateParameter")
 			enforce(certificate.indexOf("GraphFibre.oddPower_density_rule")>=0,c.name);
+		if(c.name.indexOf("WeightedFibre")==0) enforce(certificate.indexOf("GraphFibre.SquareRows.density")>=0,c.name);
+		if(c.name.indexOf("WeightedSquare")==0){
+			bool absolute=c.name=="WeightedSquareAbs"||c.name=="WeightedSquareSource";
+			bool general=c.name=="WeightedSquareAsymmetric"||c.name=="WeightedSquareNegative"||
+				c.name=="WeightedSquareChanging"||c.name=="WeightedSquareMasked";
+			enforce((certificate.indexOf("GraphFibre.absSquareChart")>=0)==absolute,c.name);
+			enforce((certificate.indexOf("GraphFibre.squareWeightSource_of_product")>=0)==general,c.name~": "~text);
+			if(general){
+				enforce(text.indexOf("∫")<0&&text.indexOf("bindD")<0,c.name~": "~text);
+				string[] expected=c.name=="WeightedSquareNegative"?["0","0","-1/2","-1","-2"]:
+					c.name=="WeightedSquareChanging"?["0","0","-15/32","0","30"]:
+					c.name=="WeightedSquareMasked"?["0","0","5/4","1","5/4"]:["0","0","5/8","2","10"];
+				foreach(i,y;["-1","0","1/4","1","4"]){
+					auto obs=s.run(a,"densityAtD("~text~","~y~")",[],Options(DensityMode.preserve,true));
+					enforce(s.format(a,obs)==expected[i],c.name~" at "~y~": "~s.format(a,obs));
+				}
+			}
+		}
 		if(c.name.indexOf("SquareChart")==0){
 			bool fallback=c.name=="SquareChartWrongPuncture"||c.name=="SquareChartActive"||c.name=="SquareChartPartial";
 			bool puncture=c.name=="SquareChartScaledPuncture"||c.name=="SquareChartBare"||c.name=="SquareChartBoth";
