@@ -808,12 +808,24 @@ private Case[] cases(){ return [
 	Case("RatePolynomialGuarded","∫dx [c≤d]*[1≤x]*x*exp(-r*x)*λ[x]","ℝ","([c≤d]·(guard(0<r,(r⁻¹+(r^2)⁻¹)·exp(-r))):ℝ)"),
 	Case("RateDegree","∫dx [0≤x]*x^17*exp(-r*x)*λ[x]","ℝ"),
 	Case("RateTerms","∫dx [0≤x]*(x+m)*exp(-r*x)*λ[x]","ℝ"),
-	Case("RateBetween","∫dx [0≤x≤1]*exp(-r*x)*λ[x]","ℝ"),
+	Case("RateBetween","∫dx [0≤x≤1]*exp(-r*x)*λ[x]","ℝ","[r≠0]·(-r⁻¹·exp(-r)+r⁻¹)+[r=0]"),
+	Case("RateBetweenPolynomial","∫dx [0≤x≤1]*x*exp(-r*x)*λ[x]","ℝ","[r≠0]·((-r⁻¹-(r^2)⁻¹)·exp(-r)+(r^2)⁻¹)+[r=0]·(1/2)"),
+	Case("RateBetweenBounds","∫dx [a≤x≤b]*exp(r*x)*λ[x]","ℝ","[a≤b]·([r≠0]·(-r⁻¹·exp(a·r)+r⁻¹·exp(b·r))+[r=0]·(-a+b))"),
+	Case("RateBetweenScaled","∫dx [a≤x≤b]*x*c*exp(r*x+d)*λ[x]","ℝ",
+		"[a≤b]·(c·([r≠0]·(-(a·r⁻¹-(r^2)⁻¹)·exp(a·r+d)+(b·r⁻¹-(r^2)⁻¹)·exp(b·r+d))+[r=0]·((-1/2·a^2+1/2·b^2)·exp(d))))"),
+	Case("RateBetweenStrict","∫dx [0<x<t]*r*exp(-r*x)*λ[x]","ℝ","[0<t]·(r·([r≠0]·(-r⁻¹·exp(-t·r)+r⁻¹)+[r=0]·t))"),
+	Case("RateBetweenSum","∫dx [0≤x≤1]*(exp(-r*x)+exp(-x))*λ[x]","ℝ","[r≠0]·(-r⁻¹·exp(-r)+r⁻¹)+[r=0]-exp(-1)+1"),
+	Case("RateBetweenInverse","∫dx [0≤x≤1]*exp(-x/s)*λ[x]","ℝ","guard(s≠0,-s·exp(-s⁻¹)+s)"),
+	Case("RateBetweenCircle","∫dx [0≤x≤1]*x^2*exp(π*x)*λ[x]","ℝ","(π⁻¹-2·(π^2)⁻¹+2·(π^3)⁻¹)·exp(π)-2·(π^3)⁻¹"),
+	Case("RateBetweenFunction","λ(t:ℝ).∫dx [0≤x≤t]*r*exp(-r*x)*λ[x]","ℝ→ℝ","λ(t:ℝ). [0≤t]·(r·([r≠0]·(-r⁻¹·exp(-r·t)+r⁻¹)+[r=0]·t))"),
+	Case("RateBetweenGuarded","∫dx [c≤d]*[0≤x≤1]*exp(-r*x)*λ[x]","ℝ","[c≤d]·([r≠0]·(-r⁻¹·exp(-r)+r⁻¹)+[r=0])"),
+	Case("RateBetweenDegree","∫dx [0≤x≤1]*x^17*exp(-r*x)*λ[x]","ℝ"),
+	Case("RateBetweenTerms","∫dx [0≤x≤1]*(x+m)*exp(-r*x)*λ[x]","ℝ"),
 	Case("RateSum","∫dx [0≤x]*(exp(-r*x)+exp(-x))*λ[x]","ℝ"),
 	Case("LimitOffset","lim[x→∞] exp(a-x)","ℝ","0"),
 	Case("LimitOffsetBottom","lim[x→-∞] x*exp(a+b+3*x)","ℝ","0"),
 	Case("LimitOffsetGrowing","lim[x→∞] exp(a+x)","ℝ"),
-	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
+	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ","r·([r≠0]·(-r⁻¹·exp(-r)+r⁻¹)+[r=0])"),
 	Case("CurveHalfLine","∫dx [0≤x]*x*exp(-x^2)*λ[x]","ℝ","1/2"),
 	Case("CurveInterval","∫dx [0≤x≤1]*x*exp(-x^2)*λ[x]","ℝ","-1/2·exp(-1)+1/2"),
 	Case("CurveSymbolicBound","∫dx [a≤x]*x*exp(-x^2)*λ[x]","ℝ","1/2·exp(-a^2)"),
@@ -1216,13 +1228,15 @@ private void run(string directory){
 		// A polynomial times an exponential of rational rate has an
 		// antiderivative of the same kind. A constant part of the exponent that
 		// does not mention the axis is a scale: its exponential leaves the
-		// integral. Symbolic rates keep their integral.
+		// integral. A rate that is a term has the antiderivative of a table
+		// instead, with the case of a rate that is zero beside it.
 		bool offset=c.name=="ExponentialShifted"||c.name.indexOf("ExponentialOffset")==0||c.name.indexOf("HalfLineOffset")==0||c.name.indexOf("LimitOffset")==0;
 		if(c.name.indexOf("Exponential")==0){
-			bool retained=c.name=="ExponentialSymbolicRate";
-			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
-			if(c.name!="ExponentialTwoScales"&&!offset) enforce((certificate.indexOf("StepSource.exp_affine")>=0)!=retained,c.name~" exponential evidence");
-			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			bool symbolic=c.name=="ExponentialSymbolicRate";
+			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0,c.name~" interval certificate");
+			if(c.name!="ExponentialTwoScales"&&!offset) enforce((certificate.indexOf("StepSource.exp_affine")>=0)!=symbolic,c.name~" exponential evidence");
+			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.rate (")>=0)==symbolic,c.name~" rate that is a term");
+			enforce(text.indexOf("∫")<0,c.name~": "~text);
 		}
 		// Above one lower bound every term must decay; the antiderivative
 		// then vanishes at infinity. A growing term keeps its integral.
@@ -1548,10 +1562,36 @@ private void run(string directory){
 		// itself and not a term of an observation that adds. A scale that may
 		// vanish leaves the zero function: the guard then holds there too,
 		// around the mask of the scale. A polynomial of too high a degree or
-		// with coefficients that are terms, two bounds and a summand keep
-		// their integral.
-		if(c.name.indexOf("Rate")==0){
-			bool retained=c.name=="RateBetween"||c.name=="RateSum"||c.name=="RateDegree"||c.name=="RateTerms";
+		// with coefficients that are terms and a summand keep their integral.
+		//
+		// Between two bounds the same is integrable whatever the rate, and a
+		// term like any other, also of a sum. Where the rate is not zero its
+		// integral is the difference of that antiderivative at the bounds;
+		// where it is zero, the exponential of the constant times the
+		// difference of an antiderivative of the polynomial. The two stand
+		// under the masks of that test. The certificate has the table and
+		// that antiderivative, and at each bound the monomials of both.
+		if(c.name.indexOf("RateBetween")==0){
+			bool retained=c.name=="RateBetweenDegree"||c.name=="RateBetweenTerms";
+			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.rate (")>=0)!=retained,c.name~" rate between bounds");
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" certificate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			// The table and the antiderivative of the polynomial are elaborated
+			// to their end, one after the other.
+			enforce((certificate.indexOf("]] :) ([(0 : ℚ), ")>=0)!=retained,c.name~" table and antiderivative");
+			// A bound that is a closed zero leaves only the constants; at
+			// another one a monomial is skipped where its coefficient is zero.
+			bool origin=c.name!="RateBetweenBounds"&&c.name!="RateBetweenScaled"&&!retained;
+			bool skipped=c.name=="RateBetweenPolynomial"||c.name=="RateBetweenScaled"||c.name=="RateBetweenCircle";
+			enforce((certificate.indexOf("Distribution.StepSource.RowTerms.vanish")>=0)==origin,c.name~" bound that is zero");
+			enforce((certificate.indexOf("Distribution.StepSource.RowTerms.zero")>=0)==skipped,c.name~" coefficient that is zero");
+			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.add")>=0)==(c.name=="RateBetweenSum"),c.name~" sum");
+			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.guard")>=0)==(c.name=="RateBetweenInverse"),c.name~" domain");
+			// The masks of the test stay where the rate may vanish.
+			enforce((text.indexOf("≠0]")>=0)==(!retained&&c.name!="RateBetweenInverse"&&c.name!="RateBetweenCircle"),c.name~": "~text);
+			if(c.name=="RateBetweenGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+		}else if(c.name.indexOf("Rate")==0){
+			bool retained=c.name=="RateSum"||c.name=="RateDegree"||c.name=="RateTerms";
 			bool below=c.name=="RateBelow"||c.name=="RateCircle"||c.name=="RateBelowMasked"||c.name=="RateBelowPolynomial"||c.name=="RateBelowZero"||c.name=="RateBelowMean";
 			bool masked=c.name=="RateDensity"||c.name=="RateSurvival"||c.name=="RateBelowMasked"||c.name=="RateMean"||c.name=="RateSecond"||c.name=="RateBelowMean"||
 				c.name=="RateMeanFunction";

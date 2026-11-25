@@ -282,6 +282,12 @@ inductive IntervalTerms (a b m : Option ℝ) : (ℝ → Option ℝ) → Option �
       (hv : ∀ x, v x = Value.mul c (some (g x))) (hG : ∀ t, G (some t) = some (F t))
       (hc : Continuous g) (hd : ∀ x, HasDerivAt F (g x) x) :
       IntervalTerms a b m v (Value.mul c (Value.add (G b) (Value.mul m (G a))))
+  /-- Any continuous value, with its integral between these bounds. Where a
+  bound is missing the observation is, whatever stands here. -/
+  | value {v : ℝ → Option ℝ} {g : ℝ → ℝ} {out : Option ℝ} (hv : ∀ x, v x = some (g x))
+      (hc : Continuous g)
+      (ho : ∀ l u, a = some l → b = some u → m = some (-1 : ℝ) →
+        out = some (∫ x in l..u, g x)) : IntervalTerms a b m v out
 
 private theorem difference {G : Option ℝ → Option ℝ} {P p : List ℚ} {r s : ℚ}
     (hG : ExpPolynomial (fun t => G (some t)) P s) (hd : expPrimitive P p r s = true)
@@ -347,6 +353,7 @@ theorem IntervalTerms.sound {a b m : Option ℝ} {v : ℝ → Option ℝ} {out :
           (hc.intervalIntegrable _ _)]
       simp only [Value.mul, Value.add, Option.some.injEq]
       ring
+  | @value v g out hv hc ho => exact Or.inl ⟨g, hc, hv, ho l u rfl rfl rfl⟩
 
 private theorem and_some (p q : Bool) : Value.and (some p) (some q) = some (p && q) := by
   cases p <;> rfl

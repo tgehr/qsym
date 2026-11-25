@@ -1521,6 +1521,129 @@ theorem rate_below_masked (strict : Bool) {b : Option ℝ} {v : ℝ → Option �
   · rw [rate_below strict K hv hE hK (fun t ht => by cases ht; exact hs) hm hk hz]
     simp [Value.nonzero, hs, Value.not, Value.or, Value.mask, scaleBy]
 
+/-! Between two bounds a polynomial times the exponential of a linear exponent
+is integrable whatever the rate. Where the rate is not zero the integral is
+the difference of the antiderivative above at the bounds; where it is zero the
+exponential is that of the constant, in front of the difference of an
+antiderivative of the polynomial. The two stand under the masks of that test:
+the first mentions the inverse of the rate, and its mask hides it where the
+rate is zero. -/
+
+/-- The polynomial is the derivative of the other. -/
+def flatCheck (P Q : List ℚ) : Bool :=
+  polyZero (polyAdd (polyDerivative Q) (polyScale (-1) P))
+
+theorem flat_deriv {P Q : List ℚ} (h : flatCheck P Q = true) (x : ℝ) :
+    HasDerivAt (fun t : ℝ => polyEval Q t) (polyEval P x) x := by
+  have h0 := polyEval_zero h x
+  rw [polyEval_add, polyEval_scale] at h0
+  push_cast at h0
+  have hd : polyEval (polyDerivative Q) x = polyEval P x := by linarith
+  rw [← hd]
+  exact polyEval_hasDerivAt Q x
+
+/-- The sum of the monomials of a polynomial at a point. -/
+private theorem flat_sum {c p : Option ℝ} {Q : List ℚ} {qs : List (Option ℝ)}
+    (hq : RowTerms none c Q 0 [] qs) (hp : Sums qs p) (t : ℝ) (hc : c = some t) :
+    p = some (polyEval Q t) := by
+  rw [hp.value, hq.value t hc (by simp)]
+  simp [factorReal, listSum, Value.add]
+
+/-- Between two bounds, under the scale:
+`[c₁≠0]·(k_b·exp(c₀+c₁·b) - k_a·exp(c₀+c₁·a)) + [c₁=0]·(exp(c₀)·(p_b - p_a))`,
+where `k` is the table of the antiderivative at a bound and at the inverse of
+the rate, and `p` an antiderivative of the polynomial at a bound. -/
+theorem IntervalTerms.rate {a b m : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (K : List (List ℚ)) (Q : List ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
+    (hK : rateTableCheck 1 P K = true) (hQ : flatCheck P Q = true)
+    {kb ka pb pa : Option ℝ} {msb msa qsb qsa : List (Option ℝ)}
+    (hmb : MomentTerms b (curvatureCoefs (Value.inv c1) K 0) K msb) (hkb : Sums msb kb)
+    (hma : MomentTerms a (curvatureCoefs (Value.inv c1) K 0) K msa) (hka : Sums msa ka)
+    (hqb : RowTerms none b Q 0 [] qsb) (hpb : Sums qsb pb)
+    (hqa : RowTerms none a Q 0 [] qsa) (hpa : Sums qsa pa) :
+    IntervalTerms a b m v (scaleBy S (Value.add
+      (Value.mask (Value.nonzero c1) (Value.add
+        (Value.mul kb (Functions.expR.apply (Value.add c0 (Value.mul c1 b))))
+        (Value.mul m (Value.mul ka (Functions.expR.apply (Value.add c0 (Value.mul c1 a)))))))
+      (Value.mask (Value.not (Value.nonzero c1))
+        (Value.mul (Functions.expR.apply c0) (Value.add pb (Value.mul m pa)))))) := by
+  obtain ⟨hmiss, hval⟩ := rate_value hv hE
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  by_cases hu : S = some none ∨ c0 = none ∨ c1 = none
+  · have hout : scaleBy S (Value.add
+        (Value.mask (Value.nonzero c1) (Value.add
+          (Value.mul kb (Functions.expR.apply (Value.add c0 (Value.mul c1 b))))
+          (Value.mul m (Value.mul ka (Functions.expR.apply (Value.add c0 (Value.mul c1 a)))))))
+        (Value.mask (Value.not (Value.nonzero c1))
+          (Value.mul (Functions.expR.apply c0) (Value.add pb (Value.mul m pa))))) = none := by
+      rcases hu with rfl | rfl | rfl
+      · rfl
+      · have h1 : Value.add (Value.mul kb (Functions.expR.apply (Value.add none (Value.mul c1 b))))
+            (Value.mul m (Value.mul ka (Functions.expR.apply (Value.add none (Value.mul c1 a))))) =
+            none := by
+          cases kb <;> rfl
+        have h2 : Value.mul (Functions.expR.apply none) (Value.add pb (Value.mul m pa)) = none :=
+          rfl
+        rw [h1, h2]
+        rcases c1 with _ | β
+        · exact hnone
+        · by_cases hβ : β = 0 <;>
+            simp [Value.nonzero, Value.not, Value.mask, Value.add, hβ, hnone]
+      · exact hnone
+    rw [hout]
+    exact IntervalTerms.undefined (hmiss hu)
+  simp only [not_or] at hu
+  obtain ⟨hS', h0, h1⟩ := hu
+  obtain ⟨α, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨β, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  have hg := hval α β hS' rfl rfl
+  have hcP : Continuous fun x : ℝ => polyEval P x * Real.exp (α + β * x) :=
+    (polyEval_continuous P).mul (Real.continuous_exp.comp (by fun_prop))
+  refine IntervalTerms.value hg (continuous_const.mul hcP) fun l u ha hb hm => ?_
+  subst ha hb hm
+  rw [intervalIntegral.integral_const_mul]
+  by_cases hβ : β = 0
+  · subst hβ
+    have hI : ∫ x in l..u, polyEval P x * Real.exp (α + 0 * x) =
+        Real.exp α * polyEval Q u - Real.exp α * polyEval Q l := by
+      have hd : ∀ x ∈ Set.uIcc l u, HasDerivAt (fun t : ℝ => Real.exp α * polyEval Q t)
+          (polyEval P x * Real.exp (α + 0 * x)) x := fun x _ => by
+        refine ((flat_deriv hQ x).const_mul (Real.exp α)).congr_deriv ?_
+        rw [zero_mul, add_zero]
+        ring
+      rw [intervalIntegral.integral_eq_sub_of_hasDerivAt hd (hcP.intervalIntegrable _ _)]
+    rw [hI, flat_sum hqb hpb u rfl, flat_sum hqa hpa l rfl]
+    rcases S with _ | _ | s
+    · simp [scaleBy, scaleReal, Value.nonzero, Value.not, Value.mask, Value.add, Value.mul,
+        Function1.apply, Functions.expR]
+      ring
+    · exact absurd rfl hS'
+    · simp [scaleBy, scaleReal, Value.nonzero, Value.not, Value.mask, Value.add, Value.mul,
+        Function1.apply, Functions.expR]
+      left
+      ring
+  · have hI : ∫ x in l..u, polyEval P x * Real.exp (α + β * x) =
+        Real.exp (α + β * u) * poly2Eval K u β⁻¹ - Real.exp (α + β * l) * poly2Eval K l β⁻¹ := by
+      have hd : ∀ x ∈ Set.uIcc l u,
+          HasDerivAt (fun t : ℝ => Real.exp (α + β * t) * poly2Eval K t β⁻¹)
+            (polyEval P x * Real.exp (α + β * x)) x := fun x _ => by
+        refine (rateTable_deriv hK α hβ x).congr_deriv ?_
+        push_cast
+        ring
+      rw [intervalIntegral.integral_eq_sub_of_hasDerivAt hd (hcP.intervalIntegrable _ _)]
+    rw [hI, rate_sum hmb hkb u hβ rfl rfl, rate_sum hma hka l hβ rfl rfl]
+    rcases S with _ | _ | s
+    · simp [scaleBy, scaleReal, Value.nonzero, Value.not, Value.mask, Value.add, Value.mul,
+        Function1.apply, Functions.expR, hβ]
+      ring
+    · exact absurd rfl hS'
+    · simp [scaleBy, scaleReal, Value.nonzero, Value.not, Value.mask, Value.add, Value.mul,
+        Function1.apply, Functions.expR, hβ]
+      left
+      ring
+
 /-! A curvature that does not mention the axis and cannot vanish. Beyond a
 single bound the exponential of the quadratic is integrable exactly where the
 curvature is negative, and the closed form with the complement of the error

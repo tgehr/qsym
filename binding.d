@@ -72,6 +72,10 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 // exponent is a quadratic with its vertex at the single bound `point`: `bell`
 // is the Gaussian integral, of which `half` is half the constant, and `rest`
 // the value of the antiderivative at the vertex with the sign of the end.
+// At one bound, the literals of the monomials of the rows of an antiderivative
+// and of those of an antiderivative of the polynomial (none for one that is
+// skipped), and whether the bound is a closed zero.
+private struct RateEnd{ uint[][] rows; uint[] primitive; bool zero; }
 private struct IntervalTerm{
 	uint value,primitive=uint.max; bool scaled,curved,vertex; Rational rate; uint order;
 	GaussianData bell; Rational point,half,rest; uint restLiteral=uint.max;
@@ -86,7 +90,10 @@ private struct IntervalTerm{
 	// compared with. The rows of `bell` are those of the antiderivative in
 	// the powers of the inverse rate, polynomials in the bound; with
 	// `boundZero` the bound is a closed zero and only their constants stand.
-	bool rateTerm,boundZero; uint rateZero=uint.max;
+	// Between two bounds `bell` also has an antiderivative of the polynomial,
+	// for a rate that is zero, and `ends` the literals at the upper and at
+	// the lower bound.
+	bool rateTerm,boundZero; uint rateZero=uint.max; RateEnd[2] ends;
 	// The exponential of a quadratic whose curvature is a term that cannot
 	// vanish, beyond a single bound: the literal of the factor of the linear
 	// coefficient over the curvature in the argument.
@@ -3481,21 +3488,44 @@ final class Bindings{
 			// antiderivative of `P·exp(c₀+c₁·x)` is `(h·P - h²·P' + h³·P'' - …)`
 			// times the exponential: the rows are those polynomials, with the
 			// sign of the end, after a row of zero for the power that is absent.
-			bool symbolicRate(uint id,ref IntervalTerm r){
-				if(!d.half||d.unit!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
-				BellParts found;
-				if(!bellParts(id,found,false)||!found.exponent||found.symbolic) return false;
-				auto p=found.p,c=found.c; while(p.length&&p[$-1].zero) p.length=p.length-1;
-				if(!p.length||p.length>17||c[2].present||!c[1].present||c[1].closed) return false;
-				Rational[][] rows=[[Rational(0)]]; Rational[] row;
-				foreach(x;p) row~=d.below?x:Rational(0)-x;
+			static bool rateRows(Rational[] p,bool positive,out Rational[][] rows){
+				rows=[[Rational(0)]]; Rational[] row;
+				foreach(x;p) row~=positive?x:Rational(0)-x;
 				while(row.length){
 					foreach(x;row) if(x.words>128) return false;
 					rows~=row;
 					Rational[] derivative; foreach(i;1..row.length) derivative~=Rational(0)-Rational(cast(long)i)*row[i];
 					row=derivative;
 				}
-				r.bell.rows=rows; r.rateTerm=true; return true;
+				return true;
+			}
+			bool symbolicRate(uint id,ref IntervalTerm r){
+				if(!d.half||d.unit!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
+				BellParts found;
+				if(!bellParts(id,found,false)||!found.exponent||found.symbolic) return false;
+				auto p=found.p,c=found.c; while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(!p.length||p.length>17||c[2].present||!c[1].present||c[1].closed) return false;
+				if(!rateRows(p,d.below,r.bell.rows)) return false;
+				r.rateTerm=true; return true;
+			}
+			// Between two bounds the same is integrable whatever the rate, so
+			// it is a term like any other. Where the rate is not zero its
+			// integral is the difference of that antiderivative at the bounds.
+			// Where it is zero the exponential is that of the constant, in
+			// front of the difference of an antiderivative of the polynomial.
+			bool symbolicRateBetween(uint id,ref IntervalTerm r){
+				if(d.half||d.unit!=uint.max||solution.from.length!=1) return false;
+				BellParts found;
+				if(!bellParts(id,found,false)||!found.exponent||found.symbolic) return false;
+				auto p=found.p,c=found.c; while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(!p.length||p.length>17||c[2].present||!c[1].present||c[1].closed) return false;
+				if(!rateRows(p,true,r.bell.rows)) return false;
+				r.bell.primitive=[Rational(0)];
+				foreach(i,x;p){
+					auto q=x/Rational(cast(long)i+1); if(q.words>128) return false;
+					r.bell.primitive~=q;
+				}
+				r.rateTerm=true; return true;
 			}
 			// Beyond a single bound, a constant times the exponential of a
 			// quadratic whose curvature is a term that does not mention the axis.
@@ -3519,7 +3549,7 @@ final class Bindings{
 				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order; IntervalTerm r;
 				if(scaledExponential(id,p,rate,scaled)) return !d.half||decays(rate+outerRate);
 				if(tailExponential(id,false,p,exponent,scaled,false,0,true)) return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r)||erf(p,exponent,r);
-				if(symbolicErf(id,r)) return true;
+				if(symbolicErf(id,r)||symbolicRateBetween(id,r)) return true;
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
@@ -3653,6 +3683,55 @@ final class Bindings{
 				if(built.scaled) result=primitive(mulOp,[built.scale,result]);
 				d.terms~=r; return result;
 			}
+			// `[c₁≠0]·(k(b)·exp(c₀+c₁·b) - k(a)·exp(c₀+c₁·a)) +
+			// [c₁=0]·(exp(c₀)·(p(b) - p(a)))` under the scale, where `k` is the
+			// sum of the monomials of the rows at a bound, each under its power
+			// of the inverse rate, and `p` that of the monomials of the
+			// antiderivative of the polynomial. The first summand mentions the
+			// inverse of the rate, and its mask hides it where the rate is zero.
+			BoundTerm rateBetweenDifference(IntervalTerm r,uint id){
+				if(!symbolicRateBetween(id,r)) return BoundTerm.init;
+				BellParts built; bellParts(id,built,true);
+				auto linear=built.c[1].term; BoundTerm constant;
+				if(built.c[0].present) constant=built.c[0].term;
+				else{ constant=scalar(ctx,arena.real_(0)); r.bell.zero0=constant.id; }
+				auto literal=arena.real_(0),truth=arena.boolean(true);
+				BoundTerm apply1(Builtin f,BoundTerm x){ return primitive(arena.call(f,[literal]),[x]); }
+				BoundTerm balanced(BoundTerm[] xs){ return xs.length==1?xs[0]:primitive(addOp,[balanced(xs[0..$/2]),balanced(xs[$/2..$])]); }
+				BoundTerm power(BoundTerm x,size_t i){ return i==1?x:primitive(arena.pow(arena.real_(0),cast(uint)i),[x]); }
+				auto inverse=primitive(arena.inv(arena.real_(1)),[linear]);
+				BoundTerm[2] decaying,flat;
+				foreach(e,o;[upper,lower]){
+					Rational point; Term closed; auto zero=closedRational(o,point,closed)&&point.zero;
+					r.ends[e].zero=zero;
+					// The constant of a row always, a later monomial where its
+					// coefficient is not zero and the bound is not a closed zero.
+					BoundTerm[] monomials(Rational[] row,BoundTerm factor,ref uint[] literals){
+						BoundTerm[] terms;
+						foreach(i,c;row){
+							if(i&&(c.zero||zero)){ literals~=uint.max; continue; }
+							auto coefficient=scalar(ctx,arena.real_(c)); literals~=coefficient.id;
+							auto monomial=!i?coefficient:primitive(mulOp,[coefficient,power(o,i)]);
+							terms~=factor==BoundTerm.init?monomial:primitive(mulOp,[factor,monomial]);
+						}
+						return terms;
+					}
+					BoundTerm[] terms;
+					foreach(l,row;r.bell.rows){
+						uint[] literals;
+						if(l) terms~=monomials(row,power(inverse,l),literals);
+						r.ends[e].rows~=literals;
+					}
+					decaying[e]=primitive(mulOp,[balanced(terms),apply1(Builtin.expR,primitive(addOp,[constant,primitive(mulOp,[linear,o])]))]);
+					flat[e]=balanced(monomials(r.bell.primitive,BoundTerm.init,r.ends[e].primitive));
+				}
+				BoundTerm between(BoundTerm[2] ends){ return primitive(addOp,[ends[0],primitive(mulOp,[minusOne,ends[1]])]); }
+				auto test=primitive(arena.nonzero(arena.real_(1)),[linear]),mask=arena.mask(truth,arena.real_(1));
+				auto result=primitive(addOp,[primitive(mask,[test,between(decaying)]),
+					primitive(mask,[primitive(arena.not_(truth),[test]),primitive(mulOp,[apply1(Builtin.expR,constant),between(flat)])])]);
+				if(built.scaled) result=primitive(mulOp,[built.scale,result]);
+				d.terms~=r; return result;
+			}
 			BoundTerm build(uint id,uint depth){
 				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
 				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
@@ -3662,6 +3741,7 @@ final class Bindings{
 					return curved!=BoundTerm.init?curved:erfDifference(r,p,exponent);
 				}
 				auto symbolic=symbolicErfDifference(r,id);
+				if(symbolic==BoundTerm.init) symbolic=rateBetweenDifference(r,id);
 				if(symbolic!=BoundTerm.init) return symbolic;
 				// A sum is integrated term by term only without further weights.
 				auto q=nodes[id];
@@ -7691,6 +7771,46 @@ final class Bindings{
 					return "("~termsName~"."~(scaled?"scaledGaussian":"gaussian")~" (R := "~list~") "~cert.q(g.constant)~" "~cert.q(g.c0)~" "~cert.q(g.c1)~" "~cert.q(g.c2)~" "~
 						cert.q(g.vertex)~" "~cert.q(g.width)~" "~cert.q(r.point)~" "~cert.q(r.half)~" "~cert.q(r.rest)~" "~hv~" "~cert.closedProof(at(d.below?d.upper:d.lower),r.point)~" rfl "~
 						literal(g.factor,r.half)~" "~literal(r.restLiteral,r.rest)~" "~literal(g.exponent,g.vertex)~" "~literal(g.scale,g.width)~" rfl)";
+				}
+				if(r.rateTerm){
+					// The term as a scale, a polynomial and the exponential of a
+					// linear exponent by its structure. The kernel checks the
+					// rows of the antiderivative and the antiderivative of the
+					// polynomial; at each bound the first meet their powers of
+					// the inverse rate, and the second is a row of its own.
+					enum src="Distribution.StepSource.";
+					auto g=r.bell;string exponent;AxisCoefficient[] poly;
+					auto hv=cert.bell(id,exponent,poly);
+					string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
+					if(g.zero0!=uint.max)exponent="("~src~"Quadratic.fill0 "~literal(g.zero0,Rational(0))~" "~exponent~")";
+					string list(Rational[] row){string t="[";foreach(i,c;row)t~=(i?", ":"")~cert.q(c);return t~"]";}
+					string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
+					enforce(g.rows.length>1&&g.primitive.length>1,"bad table of a rate");
+					string table;foreach_reverse(row;g.rows)table=list(row)~(table.length?", ":"")~table;
+					string[2] moments,flat;
+					foreach(e;0..2){
+						auto end=r.ends[e];enforce(end.rows.length==g.rows.length&&end.primitive.length==g.primitive.length,"bad literals of a rate");
+						auto vanish=end.zero?cert.closedProof(at(e?d.lower:d.upper),Rational(0)):"";
+						size_t count;
+						string rowProof(Rational[] row,uint[] literals){
+							enforce(literals.length==row.length&&literals[0]!=uint.max,"bad row of a rate");
+							string h=src~"RowTerms.done";
+							foreach_reverse(i,c;row){
+								if(literals[i]!=uint.max){++count;h="("~src~"RowTerms.term "~cert.q(c)~" "~literal(literals[i],c)~" "~h~")";}
+								else h=end.zero?"("~src~"RowTerms.vanish "~vanish~" "~h~")":"("~src~"RowTerms.zero "~h~")";
+							}
+							return h;
+						}
+						string monomials=src~"MomentTerms.done";
+						foreach_reverse(l,row;g.rows)monomials="("~src~"MomentTerms."~(l?"present "~rowProof(row,end.rows[l]):"absent "~list(row))~" "~monomials~")";
+						moments[e]=monomials~" "~sums(count);
+						count=0;auto row=rowProof(g.primitive,end.primitive);
+						flat[e]=row~" "~sums(count);
+					}
+					// Both are evaluated by the statement, and so elaborated to
+					// their end first.
+					return "("~termsName~".rate (["~table~"] :) ("~list(g.primitive)~" :) "~hv~" "~exponent~" rfl rfl "~
+						moments[0]~" "~moments[1]~" "~flat[0]~" "~flat[1]~")";
 				}
 				if(r.erf&&r.symbolic){
 					// The term as a scale, a constant and the exponential of a
