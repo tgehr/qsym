@@ -958,10 +958,21 @@ private Case[] cases(){ return [
 	Case("LogarithmScalePole","∫dx [1≤x≤2]*c*log(x+1)*λ[x]","ℝ","c·(-2·log(2)+3·log(3)-1)"),
 	Case("LogarithmScalePoleBounds","∫dx [a≤x≤b]*log(x+1)*exp(m)*λ[x]","ℝ","([a≤b]·(guard(-1<a∧-1<b,(-(a+1)·log(a+1)+(b+1)·log(b+1)+a-b)·exp(m))):ℝ)"),
 	Case("LogarithmScaleFunction","λ(t:ℝ).∫dx [1≤x]*[x≤t]*c*log(x)*λ[x]","ℝ→ℝ","λ(t:ℝ). [1≤t]·(c·(t·log(t)-t+1))"),
-	Case("LogarithmScaleConstant","∫dx [1≤x≤2]*(c*log(x)+d)*λ[x]","ℝ"),
+	Case("LogarithmScaleConstant","∫dx [1≤x≤2]*(c*log(x)+d)*λ[x]","ℝ","c·(2·log(2)-1)+d"),
 	Case("LogarithmAbove","∫dx [1≤x]*log(x)*λ[x]","ℝ"),
 	Case("LogarithmTwo","∫dx [1≤x≤2]*(log(x)-log(x+1))*λ[x]","ℝ"),
-	Case("LogarithmMultiple","∫dx [1≤x≤2]*log(2*x)*λ[x]","ℝ"),
+	Case("LogarithmMultiple","∫dx [1≤x≤2]*log(2*x)*λ[x]","ℝ","3·log(2)-1"),
+	Case("Summand","∫dx [1≤x≤2]*(log(x)+c)*λ[x]","ℝ","c+2·log(2)-1"),
+	Case("SummandQuotient","∫dx [1≤x≤2]*(1/x+c)*λ[x]","ℝ","c+log(2)"),
+	Case("SummandBounds","∫dx [a≤x≤b]*(log(x)+c)*λ[x]","ℝ","([a≤b]·(c·(-a+b)+(guard(0<a∧0<b,-a·log(a)+b·log(b)+a-b))):ℝ)"),
+	Case("SummandQuotientBounds","∫dx [a≤x≤b]*(1/x+c)*λ[x]","ℝ","([a≤b]·(c·(-a+b)+(guard(0<a∧b≠0∨b<0∧a≠0,-log(abs(a))+log(abs(b))))):ℝ)"),
+	Case("SummandScale","∫dx [a≤x≤b]*(c/x+d)*λ[x]","ℝ","([a≤b]·(d·(-a+b)+(guard(0<a∧b≠0∨b<0∧a≠0,c·(-log(abs(a))+log(abs(b)))))):ℝ)"),
+	Case("SummandPole","∫dx [1≤x≤2]*(1/(x+1)+c)*λ[x]","ℝ","c-log(2)+log(3)"),
+	Case("SummandPoleStrict","∫dx [a<x≤b]*(log(x+1)+c)*λ[x]","ℝ","([a<b]·(c·(-a+b)+(guard(-1<b∧a=-1∨-1<b∧-1<a,(b+1)·log(b+1)+a-b+[a≠-1]·(-(a+1)·log(a+1))))):ℝ)"),
+	Case("SummandDomain","∫dx [1≤x≤2]*(log(x)+sqrt(c))*λ[x]","ℝ","guard(0≤c,sqrt(c)+2·log(2)-1)"),
+	Case("SummandFunction","λ(t:ℝ).∫dx [1≤x]*[x≤t]*(log(x)+c)*λ[x]","ℝ→ℝ","λ(t:ℝ). [1≤t]·(c·(t-1)+t·log(t)-t+1)"),
+	Case("SummandAbove","∫dx [1≤x]*(1/x^2+c)*λ[x]","ℝ"),
+	Case("SummandNested","∫dx [1≤x≤2]*(log(2*x)+x)*λ[x]","ℝ"),
 	Case("QuotientPoleTwo","∫dx [1≤x≤2]*(1/(x+1)+1/x)*λ[x]","ℝ"),
 	Case("QuotientPoleQuadratic","∫dx [1≤x≤2]*(1/(x^2+1))*λ[x]","ℝ"),
 	Case("QuotientScale","∫dx [1≤x≤2]*c/x*λ[x]","ℝ","c·log(2)"),
@@ -1544,13 +1555,15 @@ private void run(string directory){
 		// positive axis it is integrable whatever they are, so their
 		// product stands in front of the difference, under the same guard,
 		// and a domain of such a factor is a guard inside the mask of the
-		// bounds. A power of the logarithm, a quotient with it, a summand
-		// that is a term, a single bound and two poles keep their integral.
+		// bounds. A power of the logarithm, a quotient with it, a single
+		// bound and two poles keep their integral.
 		if(c.name.indexOf("Logarithm")==0){
 			enum src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
-			bool retained=among("LogarithmSquare","LogarithmQuotient","LogarithmAbove","LogarithmTwo","LogarithmMultiple","LogarithmScaleConstant");
+			bool retained=among("LogarithmSquare","LogarithmQuotient","LogarithmAbove","LogarithmTwo");
+			// A summand that is a term: see below.
+			enforce(has("between_add_constant ")==among("LogarithmMultiple","LogarithmScaleConstant"),c.name~" summand that is a term");
 			bool scaled=c.name.indexOf("LogarithmScale")==0&&!retained;
 			bool pole=c.name.indexOf("LogarithmPole")==0||among("LogarithmScalePole","LogarithmScalePoleBounds");
 			enforce(has("log_between"~(scaled?"_scaled ":" "))!=retained,c.name~" logarithm between bounds");
@@ -1588,6 +1601,33 @@ private void run(string directory){
 			enforce(has("polynomial_translate ")==among("LogarithmPoleProduct"),c.name~" polynomial around the pole");
 			// Zero or a negative point in the guard: nothing is observed.
 			enforce((text=="undefined(ℝ)")==among("LogarithmClosed","LogarithmAcross"),c.name~": "~text);
+		}
+		// A summand that does not mention the axis, in front of such a
+		// quotient or logarithm between two bounds. The bounds are a bounded
+		// set, so the sum is integrable exactly where the other summand is,
+		// and it is defined exactly where both are: inside the mask of the
+		// bounds the term adds its multiple by their distance to the
+		// observation of the other summand, whatever that is. Under the
+		// guard of the domain of the other summand the term comes out of
+		// that guard first; a domain of the term is a guard inside the
+		// mask. Beyond one bound the sum is not integrable, and a term
+		// inside a longer sum is not in front: these keep their integral.
+		if(c.name.indexOf("Summand")==0){
+			enum src="Distribution.StepSource.";
+			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
+			bool retained=among("SummandAbove","SummandNested");
+			bool guarded=among("SummandBounds","SummandQuotientBounds","SummandScale","SummandPoleStrict","SummandFunction");
+			enforce(has("between_add_constant ")!=retained,c.name~" summand that is a term");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce(has("value_add_comm ")==(!retained&&!guarded),c.name~" term in front");
+			enforce(has("guard_add_first ")==guarded,c.name~" term under the guard of a domain");
+			enforce(has("between_guard_integral ")==among("SummandDomain"),c.name~" domain of the term");
+			enforce(has("shift_between ")==among("SummandPole","SummandPoleStrict"),c.name~" pole");
+			bool logarithm=among("Summand","SummandBounds","SummandPoleStrict","SummandDomain","SummandFunction");
+			enforce(has("log_between ")==logarithm,c.name~" logarithm next to the term");
+			enforce(has("ratio_between ")==among("SummandQuotient","SummandQuotientBounds","SummandPole"),c.name~" quotient next to the term");
+			enforce(has("ratio_between_scaled_plain ")==among("SummandScale"),c.name~" quotient under a factor next to the term");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;

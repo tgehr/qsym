@@ -144,6 +144,9 @@ private struct IntervalTerm{
 private struct IntervalData{
 	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max,axis=uint.max,both=uint.max,axisClosed=uint.max;
 	ubyte joined; Rational axisPoint; bool axisPositive;
+	// Between two bounds the value may be a summand `constant` that does not
+	// mention the axis plus a quotient or a logarithm `inner`.
+	uint constant=uint.max,inner=uint.max;
 	bool swap,strictLower,strictUpper,nested,half,below,hoisted;
 	// With `direct` the only term is observed by the integral of the mask:
 	// it may be defined without being integrable.
@@ -3868,6 +3871,17 @@ final class Bindings{
 			IntervalTerm whole;
 			d.direct=d.unit==uint.max&&!admissible(d.value,0)&&(symbolicRate(d.value,whole)||symbolicCurvature(d.value,whole)||axisQuotient(d.value,whole)||
 				axisLog(d.value,whole));
+			// A summand that is a term next to such a quotient or logarithm:
+			// between two bounds the sum is integrable exactly where the other
+			// summand is, and the term adds its multiple by the distance of
+			// the bounds.
+			if(!d.direct&&!d.half&&d.unit==uint.max&&!admissible(d.value,0)&&isOp(nodes[d.value],Op.add)){
+				// A sum has such a term in front.
+				auto sum=nodes[d.value]; IntervalTerm other;
+				if(!depends(at(sum.a),0)&&depends(at(sum.b),0)&&(axisQuotient(sum.b,other)||axisLog(sum.b,other))){
+					whole=other; d.direct=true; d.constant=sum.a; d.inner=sum.b;
+				}
+			}
 			if(d.axis!=uint.max&&!(d.direct&&(whole.ratioTerm||whole.logTerm))) return BoundTerm.init;
 			if(!d.direct&&(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0))) return BoundTerm.init;
 			if(!construct) return t;
@@ -4324,9 +4338,11 @@ final class Bindings{
 				}
 				d.terms~=r; return guard(side,value);
 			}
-			auto total=d.direct?(whole.logTerm?logDifference(whole,d.value):whole.ratioTerm?quotientDifference(whole,d.value):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
+			auto subject=d.inner!=uint.max?d.inner:d.value;
+			auto total=d.direct?(whole.logTerm?logDifference(whole,subject):whole.ratioTerm?quotientDifference(whole,subject):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
 				d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
 			if(total==BoundTerm.init) return BoundTerm.init;
+			if(d.constant!=uint.max) total=primitive(addOp,[total,primitive(mulOp,[dropIndex(at(d.constant)),primitive(addOp,[upper,primitive(mulOp,[minusOne,lower])])])]);
 			if(d.domain!=uint.max) total=guard(dropIndex(at(d.domain)),total);
 			auto zero=arena.real_(0),strict=d.strictLower||d.strictUpper;
 			auto test=primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[lower,upper]);
@@ -8339,6 +8355,17 @@ final class Bindings{
 				enforce(!summand&&d.terms.length==1&&(d.terms[0].rateTerm||d.terms[0].curvatureTerm||d.terms[0].ratioTerm||d.terms[0].logTerm)&&q.from.length==1,"bad direct observation");
 				auto r=d.terms[0],g=r.bell;string exponent;AxisCoefficient[] poly;
 				string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
+				// A summand that is a term in front of the value `subject`:
+				// the observation of the value, plus the term times the
+				// distance of the bounds. Under the guard of the domain of the
+				// value the term comes out of that guard first.
+				string summand_(uint subject,string strictness,string observed){
+					if(d.constant==uint.max)return observed;
+					enum src="Distribution.StepSource.";
+					auto other=d.axis!=uint.max?"(fun x : ℝ => Binding.guardValue "~under(d.axis)~" ("~functionAt(subject)~" x))":functionAt(subject);
+					auto split=d.axis!=uint.max?"(fun _ => "~src~"guard_add_first _ _ _)":"(fun _ => "~src~"value_add_comm _ _)";
+					return "("~src~"between_add_constant "~strictness~" "~other~" "~cert.outside(d.constant)~" "~literal(d.minusOne,Rational(-1))~" "~split~" "~observed~")";
+				}
 				if(r.logTerm){
 					// The value as a polynomial times the logarithm plus a
 					// polynomial, by its structure. The kernel checks the
@@ -8351,8 +8378,9 @@ final class Bindings{
 					// With factors that do not mention the axis the theorem
 					// has their product in front.
 					bool scaled=r.ratioScale.length!=0;auto pole=r.ratioPole;string proof;
-					if(scaled){auto part=logFraction(d.value,pole);enforce(part.found,"factor without a logarithm");proof=part.proof;}
-					else proof=logarithm(d.value,pole).proof;
+					auto subject=d.inner!=uint.max?d.inner:d.value;
+					if(scaled){auto part=logFraction(subject,pole);enforce(part.found,"factor without a logarithm");proof=part.proof;}
+					else proof=logarithm(subject,pole).proof;
 					if(d.axis!=uint.max){
 						enforce(d.axisPositive&&d.axisPoint==pole,"domain of another logarithm");
 						auto away="("~src~(pole.zero?"axis_positive ":"shifted_positive "~cert.q(pole)~" ")~literal(d.axisClosed,pole)~")";
@@ -8380,6 +8408,7 @@ final class Bindings{
 					auto observed="("~src~"log_between"~(scaled?"_scaled ":" ")~strictness~" "~list(g.primitive)~" "~list(g.moments)~" "~proof~" rfl "~
 						literal(r.rateZero,Rational(0))~" "~literal(d.minusOne,Rational(-1))~rows~")";
 					if(!pole.zero)observed="("~src~"shift_between "~strictness~" "~cert.q(pole)~" "~literal(r.ratioMove,Rational(0)-pole)~" "~observed~")";
+					observed=summand_(subject,strictness,observed);
 					// Under the strict guard of a domain that does not mention
 					// the axis that guard stays inside the mask of the bounds.
 					if(d.domain!=uint.max)observed="("~src~"between_guard_integral "~strictness~" ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) "~observed~")";
@@ -8399,11 +8428,12 @@ final class Bindings{
 					// value at the axis plus the pole, between the bounds moved
 					// by it; the observation is the same.
 					bool scaled=r.ratioScale.length!=0;auto pole=r.ratioPole;
+					auto subject=d.inner!=uint.max?d.inner:d.value;
 					Quotient evidence;
 					if(scaled){
-						auto part=fraction(d.value,pole);enforce(part.pole,"quotient without a pole");
+						auto part=fraction(subject,pole);enforce(part.pole,"quotient without a pole");
 						evidence=Quotient(part.proof,part.poly,part.power);
-					}else evidence=quotient(d.value,pole);
+					}else evidence=quotient(subject,pole);
 					if(d.axis!=uint.max){
 						enforce(d.axisPoint==pole&&(d.axisClosed==uint.max)==pole.zero,"domain of another pole");
 						auto away=pole.zero?src~"axis_nonzero":"("~src~"shifted_nonzero "~cert.q(pole)~" "~literal(d.axisClosed,Rational(0)-pole)~")";
@@ -8456,6 +8486,7 @@ final class Bindings{
 						truth(d.strictUpper)~" "~to!string(r.ratioShift)~" "~list(g.primitive)~" "~list(g.moments)~" "~cert.q(g.constant)~" "~evidence.proof~" rfl "~
 						literal(r.rateZero,Rational(0))~" "~literal(d.minusOne,Rational(-1))~" "~literal(g.factor,g.constant)~rows~known~")";
 					observed=around("between "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper),observed);
+					observed=summand_(subject,truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper),observed);
 					// Between two bounds that guard stays inside their mask.
 					if(d.domain!=uint.max)observed="("~src~"between_guard_integral "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~
 						" ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) "~observed~")";

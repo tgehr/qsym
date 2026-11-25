@@ -1564,6 +1564,106 @@ theorem between_guard_integral (swap sl su : Bool) {a b : Option ℝ} (q : Optio
     simp only [hv, hout]
     exact between_undefined swap sl su a b
 
+/-! A summand that does not mention the axis. Between two bounds it adds its
+multiple by their distance: the bounds are a bounded set, so the sum is
+integrable exactly where the value is, and it is defined exactly where both
+are. -/
+
+/-- The sum of partial values in either order. -/
+theorem value_add_comm (x y : Option ℝ) : Value.add x y = Value.add y x := by
+  cases x <;> cases y <;> simp [Value.add, add_comm]
+
+/-- A summand in front comes out of a guard of the other summand. -/
+theorem guard_add_first (g : Option Bool) (y κ : Option ℝ) :
+    Binding.guardValue g (Value.add κ y) = Value.add (Binding.guardValue g y) κ := by
+  rcases g with _ | _ | _ <;> cases κ <;> cases y <;> simp [Binding.guardValue, Value.add, add_comm]
+
+/-- Between two bounds, a value that is another one plus a term `κ` that does
+not mention the axis: inside the mask of the bounds, the observation of the
+other value plus `κ` times the distance of the bounds. -/
+theorem between_add_constant (swap sl su : Bool) {a b m : Option ℝ} {v : ℝ → Option ℝ}
+    (w : ℝ → Option ℝ) (κ : Option ℝ) {X : Option ℝ}
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hv : ∀ x, v x = Value.add (w x) κ)
+    (h : partialIntegral volume (fun x => Value.mask (intervalGuard swap sl su a b x) (w x)) =
+      Value.mask (compare (sl || su) a b) X) :
+    partialIntegral volume (fun x => Value.mask (intervalGuard swap sl su a b x) (v x)) =
+      Value.mask (compare (sl || su) a b)
+        (Value.add X (Value.mul κ (Value.add b (Value.mul m a)))) := by
+  have hMinus : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  subst hMinus
+  by_cases hab : a = none ∨ b = none
+  · rw [between_bound_undefined swap sl su hab, compare_undefined _ hab]
+    rfl
+  obtain ⟨l, rfl⟩ := Option.ne_none_iff_exists'.1 fun ha => hab (Or.inl ha)
+  obtain ⟨u, rfl⟩ := Option.ne_none_iff_exists'.1 fun hb => hab (Or.inr hb)
+  have hf : Masked (fun x => Value.mask (intervalGuard swap sl su (some l) (some u) x) (w x))
+      (intervalGuard swap sl su (some l) (some u)) w := ⟨fun _ => rfl⟩
+  have hf' : Masked (fun x => Value.mask (intervalGuard swap sl su (some l) (some u) x) (v x))
+      (intervalGuard swap sl su (some l) (some u)) v := ⟨fun _ => rfl⟩
+  rw [compare_some] at h ⊢
+  by_cases hT : (if (sl || su) = true then l < u else l ≤ u)
+  swap
+  · rw [interval_observation_empty swap sl su l u hf' hT, decide_eq_false hT]
+    rfl
+  rw [decide_eq_true hT] at h ⊢
+  have hX : partialIntegral volume
+      (fun x => Value.mask (intervalGuard swap sl su (some l) (some u) x) (w x)) = X := h
+  show _ = Value.add X _
+  have hlu : l ≤ u := by
+    split_ifs at hT
+    · exact hT.le
+    · exact hT
+  cases κ with
+  | none =>
+    rw [interval_observation_undefined swap sl su l u hf' (fun x => by
+      rw [hv x]
+      cases w x <;> rfl) hT]
+    cases X <;> rfl
+  | some k =>
+    by_cases hdef : ∀ x : ℝ, ((if sl = true then l < x else l ≤ x) ∧
+        (if su = true then x < u else x ≤ u)) → ∃ t, w x = some t
+    · have hg : ∀ x : ℝ, ((if sl = true then l < x else l ≤ x) ∧
+          (if su = true then x < u else x ≤ u)) → w x = some ((fun y => (w y).getD 0) x) :=
+        fun x hx => by
+          obtain ⟨t, ht⟩ := hdef x hx
+          show w x = some ((w x).getD 0)
+          rw [ht]
+          rfl
+      have hg' : ∀ x : ℝ, ((if sl = true then l < x else l ≤ x) ∧
+          (if su = true then x < u else x ≤ u)) →
+          v x = some ((fun y => (w y).getD 0 + k) x) := fun x hx => by
+        rw [hv x, hg x hx]
+        rfl
+      have hconst : IntegrableOn (fun _ : ℝ => k) (Ioo l u) volume :=
+        integrableOn_const.2 (Or.inr measure_Ioo_lt_top)
+      by_cases hI : IntegrableOn (fun y => (w y).getD 0) (Ioo l u) volume
+      · rw [(interval_observation_value swap sl su l u hf hg).1 hI] at hX
+        have hvol : volume.real (Ioo l u) = u - l := by
+          simp [Measure.real, Real.volume_Ioo, ENNReal.toReal_ofReal (sub_nonneg.2 hlu)]
+        rw [(interval_observation_value swap sl su l u hf' hg').1 (hI.add hconst), ← hX,
+          integral_add hI hconst, setIntegral_const, hvol]
+        simp only [Value.add, Value.mul, smul_eq_mul, Option.some.injEq]
+        ring
+      · rw [(interval_observation_value swap sl su l u hf hg).2 hI] at hX
+        have hI' : ¬ IntegrableOn (fun y => (w y).getD 0 + k) (Ioo l u) volume := fun h' =>
+          hI (by
+            have hd : IntegrableOn (fun y => (w y).getD 0 + k - k) (Ioo l u) volume :=
+              h'.sub hconst
+            refine hd.congr_fun (fun x _ => ?_) measurableSet_Ioo
+            simp)
+        rw [(interval_observation_value swap sl su l u hf' hg').2 hI', ← hX]
+        rfl
+    · simp only [not_forall, not_exists] at hdef
+      obtain ⟨x, hx, hnone⟩ := hdef
+      have hwx : w x = none := by
+        cases hw : w x with
+        | none => rfl
+        | some t => exact absurd hw (hnone t)
+      rw [interval_observation_missing swap sl su l u hf hx hwx] at hX
+      rw [interval_observation_missing swap sl su l u hf' hx (by rw [hv x, hwx]; rfl), ← hX]
+      rfl
+
 /-! Closed bounds on one side of zero, by a comparison of rationals. -/
 
 theorem side_closed {a b z : Option ℝ} {qa qb : ℚ}
