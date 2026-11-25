@@ -1345,4 +1345,524 @@ theorem rate_below_masked (strict : Bool) {b : Option ℝ} {v : ℝ → Option �
   · rw [rate_below strict κ hv hE hP (fun t ht => by cases ht; exact hs) hk hz]
     simp [Value.nonzero, hs, Value.not, Value.or, Value.mask, scaleBy]
 
+/-! A curvature that does not mention the axis and cannot vanish. Beyond a
+single bound the exponential of the quadratic is integrable exactly where the
+curvature is negative, and the closed form with the complement of the error
+function is missing exactly where it is positive, the root of a negative
+number: no guard is needed. A curvature that may be zero is another matter:
+there the exponent is linear, and integrable for one sign of its rate. -/
+
+/-- Around its vertex, with real coefficients: the exponential of the value
+there times a Gaussian, and the constant in front of the error function. -/
+private theorem gauss_real_facts (α β : ℝ) {c : ℝ} (hc : c < 0) :
+    (0 : ℝ) < -1 * c ∧ 0 ≤ Real.pi * (-1 * c⁻¹) ∧
+      (∀ t : ℝ, Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) *
+          Real.exp (-(√(-1 * c) * (t + 1 / 2 * c⁻¹ * β)) ^ 2) =
+        Real.exp (α + β * t + c * t ^ 2)) ∧
+      (1 / 2 : ℝ) * √(Real.pi * (-1 * c⁻¹)) * (2 / √Real.pi * √(-1 * c)) = 1 := by
+  have hne : c ≠ 0 := hc.ne
+  have hσ : (0 : ℝ) < -1 * c := by linarith
+  have hinv : (0 : ℝ) < -1 * c⁻¹ := by
+    have := inv_lt_zero.2 hc
+    linarith
+  refine ⟨hσ, mul_nonneg Real.pi_pos.le hinv.le, fun t => ?_, ?_⟩
+  · rw [← Real.exp_add, mul_pow, Real.sq_sqrt hσ.le]
+    congr 1
+    field_simp
+    ring
+  · have hds : √(-1 * c⁻¹) * √(-1 * c) = 1 := by
+      rw [← Real.sqrt_mul hinv.le]
+      have : -1 * c⁻¹ * (-1 * c) = 1 := by field_simp
+      rw [this, Real.sqrt_one]
+    have hpi : √Real.pi ≠ 0 := (Real.sqrt_pos.2 Real.pi_pos).ne'
+    rw [Real.sqrt_mul Real.pi_pos.le]
+    have h1 : (1 / 2 : ℝ) * (√Real.pi * √(-1 * c⁻¹)) * (2 / √Real.pi * √(-1 * c)) =
+        √Real.pi / √Real.pi * (√(-1 * c⁻¹) * √(-1 * c)) := by ring
+    rw [h1, hds, div_self hpi, mul_one]
+
+/-- The exponential of a quadratic with negative curvature above a bound. -/
+theorem gauss_Ioi (α β : ℝ) {c : ℝ} (hc : c < 0) (l : ℝ) :
+    ∫ x in Ioi l, Real.exp (α + β * x + c * x ^ 2) =
+      1 / 2 * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))) *
+        Functions.erfcR.value (√(-1 * c) * (l + 1 / 2 * c⁻¹ * β)) := by
+  obtain ⟨hσ, _, hC, hB⟩ := gauss_real_facts α β hc
+  have hD : ∀ x : ℝ, HasDerivAt (fun t : ℝ => -1 * (1 / 2 *
+        (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))) *
+        Functions.erfcR.value (√(-1 * c) * (t + 1 / 2 * c⁻¹ * β))))
+      (Real.exp (α + β * x + c * x ^ 2)) x := fun x => by
+    have hin : HasDerivAt (fun t : ℝ => √(-1 * c) * (t + 1 / 2 * c⁻¹ * β)) (√(-1 * c) * 1) x :=
+      ((hasDerivAt_id x).add_const (1 / 2 * c⁻¹ * β)).const_mul _
+    have h2 := (((erfc_hasDerivAt (√(-1 * c) * (x + 1 / 2 * c⁻¹ * β))).comp x hin).const_mul
+      (1 / 2 * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))))).const_mul
+        (-1 : ℝ)
+    refine h2.congr_deriv ?_
+    linear_combination
+      (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) *
+        Real.exp (-(√(-1 * c) * (x + 1 / 2 * c⁻¹ * β)) ^ 2)) * hB + hC x
+  have hT : Tendsto (fun t : ℝ => -1 * (1 / 2 *
+        (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))) *
+        Functions.erfcR.value (√(-1 * c) * (t + 1 / 2 * c⁻¹ * β)))) atTop (𝓝 0) := by
+    have harg : Tendsto (fun t : ℝ => √(-1 * c) * (t + 1 / 2 * c⁻¹ * β)) atTop atTop :=
+      (tendsto_atTop_add_const_right atTop (1 / 2 * c⁻¹ * β) tendsto_id).const_mul_atTop
+        (Real.sqrt_pos.2 hσ)
+    have he := ((erfc_tendsto_atTop.comp harg).const_mul
+      (1 / 2 * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))))).const_mul
+        (-1 : ℝ)
+    simpa using he
+  rw [integral_Ioi_of_hasDerivAt_of_tendsto' (fun x _ => hD x)
+    (gaussian_integrable α β c hc).integrableOn hT]
+  ring
+
+/-- Below a bound. -/
+theorem gauss_Iic (α β : ℝ) {c : ℝ} (hc : c < 0) (u : ℝ) :
+    ∫ x in Iic u, Real.exp (α + β * x + c * x ^ 2) =
+      1 / 2 * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))) *
+        Functions.erfcR.value (√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * u)) := by
+  obtain ⟨hσ, _, hC, hB⟩ := gauss_real_facts α β hc
+  have hD : ∀ x : ℝ, HasDerivAt (fun t : ℝ => 1 / 2 *
+        (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))) *
+        Functions.erfcR.value (√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * t)))
+      (Real.exp (α + β * x + c * x ^ 2)) x := fun x => by
+    have hin : HasDerivAt (fun t : ℝ => √(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * t))
+        (√(-1 * c) * (-1 * 1)) x :=
+      (((hasDerivAt_id x).const_mul (-1 : ℝ)).const_add (-1 / 2 * c⁻¹ * β)).const_mul _
+    have h2 := ((erfc_hasDerivAt (√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * x))).comp x hin).const_mul
+      (1 / 2 * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))))
+    refine h2.congr_deriv ?_
+    have hC' := hC x
+    rw [show (-(√(-1 * c) * (x + 1 / 2 * c⁻¹ * β)) ^ 2) =
+        -(√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * x)) ^ 2 by ring] at hC'
+    linear_combination
+      (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) *
+        Real.exp (-(√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * x)) ^ 2)) * hB + hC'
+  have hT : Tendsto (fun t : ℝ => 1 / 2 *
+        (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))) *
+        Functions.erfcR.value (√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * t))) atBot (𝓝 0) := by
+    have harg : Tendsto (fun t : ℝ => √(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * t)) atBot atTop := by
+      have h1 : Tendsto (fun t : ℝ => -1 * t) atBot atTop := by
+        simpa using (tendsto_neg_atBot_atTop : Tendsto (Neg.neg : ℝ → ℝ) atBot atTop)
+      exact (tendsto_atTop_add_const_left atBot (-1 / 2 * c⁻¹ * β) h1).const_mul_atTop
+        (Real.sqrt_pos.2 hσ)
+    have he := (erfc_tendsto_atTop.comp harg).const_mul
+      (1 / 2 * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹))))
+    simpa using he
+  rw [integral_Iic_of_hasDerivAt_of_tendsto' (fun x _ => hD x)
+    (gaussian_integrable α β c hc).integrableOn hT]
+  ring
+
+/-- With a positive curvature the exponential of a quadratic is not integrable
+above a bound: far enough it stays above a constant. -/
+theorem exp_quadratic_not_integrableOn_Ioi (α β : ℝ) {c : ℝ} (hc : 0 < c) (l : ℝ) {k : ℝ}
+    (hk : k ≠ 0) :
+    ¬ IntegrableOn (fun x : ℝ => k * Real.exp (α + β * x + c * x ^ 2)) (Ioi l) volume := by
+  intro hi
+  have hs : IntegrableOn (fun _ : ℝ => |k| * Real.exp α) (Ioi (max l (max (-β / c) 0))) volume := by
+    refine Integrable.mono' (hi.mono_set (Ioi_subset_Ioi (le_max_left _ _))).norm
+      aestronglyMeasurable_const ?_
+    refine (ae_restrict_iff' measurableSet_Ioi).2 (Filter.Eventually.of_forall fun x hx => ?_)
+    have hx' : max l (max (-β / c) 0) < x := hx
+    have h1 : -β / c < x := lt_of_le_of_lt (le_trans (le_max_left _ _) (le_max_right _ _)) hx'
+    have h0 : 0 < x := lt_of_le_of_lt (le_trans (le_max_right _ _) (le_max_right _ _)) hx'
+    have h2 : 0 ≤ β + c * x := by
+      rw [div_lt_iff₀ hc] at h1
+      linarith
+    rw [Real.norm_of_nonneg (mul_nonneg (abs_nonneg k) (Real.exp_pos _).le), norm_mul,
+      Real.norm_eq_abs, Real.norm_of_nonneg (Real.exp_pos _).le]
+    exact mul_le_mul_of_nonneg_left
+      (Real.exp_le_exp.2 (by nlinarith [mul_nonneg h0.le h2])) (abs_nonneg k)
+  rw [integrableOn_const] at hs
+  rcases hs with h0 | hfin
+  · exact (mul_pos (abs_pos.2 hk) (Real.exp_pos _)).ne' h0
+  · rw [Real.volume_Ioi] at hfin
+    exact lt_irrefl _ hfin
+
+/-- Nor below one. -/
+theorem exp_quadratic_not_integrableOn_Iic (α β : ℝ) {c : ℝ} (hc : 0 < c) (u : ℝ) {k : ℝ}
+    (hk : k ≠ 0) :
+    ¬ IntegrableOn (fun x : ℝ => k * Real.exp (α + β * x + c * x ^ 2)) (Iic u) volume := by
+  intro hi
+  have hs : IntegrableOn (fun _ : ℝ => |k| * Real.exp α) (Iic (min u (min (-β / c) 0))) volume := by
+    refine Integrable.mono' (hi.mono_set (Iic_subset_Iic.2 (min_le_left _ _))).norm
+      aestronglyMeasurable_const ?_
+    refine (ae_restrict_iff' measurableSet_Iic).2 (Filter.Eventually.of_forall fun x hx => ?_)
+    have hx' : x ≤ min u (min (-β / c) 0) := hx
+    have h1 : x ≤ -β / c := le_trans hx' (le_trans (min_le_right _ _) (min_le_left _ _))
+    have h0 : x ≤ 0 := le_trans hx' (le_trans (min_le_right _ _) (min_le_right _ _))
+    have h2 : β + c * x ≤ 0 := by
+      rw [le_div_iff₀ hc] at h1
+      linarith
+    rw [Real.norm_of_nonneg (mul_nonneg (abs_nonneg k) (Real.exp_pos _).le), norm_mul,
+      Real.norm_eq_abs, Real.norm_of_nonneg (Real.exp_pos _).le]
+    exact mul_le_mul_of_nonneg_left
+      (Real.exp_le_exp.2 (by nlinarith [mul_nonneg_of_nonpos_of_nonpos h0 h2])) (abs_nonneg k)
+  rw [integrableOn_const] at hs
+  rcases hs with h0 | hfin
+  · exact (mul_pos (abs_pos.2 hk) (Real.exp_pos _)).ne' h0
+  · rw [Real.volume_Iic] at hfin
+    exact lt_irrefl _ hfin
+
+/-- The polynomial in front is a constant other than zero, of which `half` is
+half. -/
+def curvatureHalfCheck (P : List ℚ) (κ half : ℚ) : Bool :=
+  rateCheck P κ && decide (half * 2 = κ)
+
+/-- The constant in front of the complement of the error function:
+`k·(exp(c₀ + (g·c₂⁻¹)·(c₁·c₁))·√(π·(m·c₂⁻¹)))`. -/
+noncomputable def curvatureConstant (c0 c1 c2 k g m pi : Option ℝ) : Option ℝ :=
+  Value.mul k (Value.mul
+    (Functions.expR.apply
+      (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+    (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))
+
+/-- It is undefined where a coefficient is. -/
+private theorem curvatureConstant_missing {c0 c1 c2 : Option ℝ} (k g m pi : Option ℝ)
+    (h : c0 = none ∨ c1 = none ∨ c2 = none) : curvatureConstant c0 c1 c2 k g m pi = none := by
+  have hexp : Functions.expR.apply
+      (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))) = none := by
+    rcases h with rfl | rfl | rfl
+    · rfl
+    · cases c0 <;> cases Value.mul g (Value.inv c2) <;> rfl
+    · cases c0 <;> cases g <;> rfl
+  rw [curvatureConstant, hexp]
+  cases k <;> rfl
+
+/-- The value below the mask: undefined everywhere where a coefficient or the
+scale is, and the constant times the exponential under the scale otherwise. -/
+private theorem curvature_value {v : ℝ → Option ℝ} {S : Option (Option ℝ)} {P : List ℚ}
+    {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} {κ half : ℚ} (hv : Bell v S none P (some E))
+    (hE : Quadratic E (some c0) (some c1) (some c2)) (hP : curvatureHalfCheck P κ half = true) :
+    (κ : ℝ) ≠ 0 ∧ (half : ℝ) * 2 = κ ∧
+      ((S = some none ∨ c0 = none ∨ c1 = none ∨ c2 = none) → ∀ x, v x = none) ∧
+      ∀ α β c : ℝ, S ≠ some none → c0 = some α → c1 = some β → c2 = some c →
+        ∀ x, v x = some (scaleReal S * (κ * Real.exp (α + β * x + c * x ^ 2))) := by
+  simp only [curvatureHalfCheck, rateCheck, Bool.and_eq_true, decide_eq_true_eq] at hP
+  obtain ⟨⟨hz, hκ⟩, hh⟩ := hP
+  have hPx : ∀ x : ℝ, polyEval P x = κ := fun x => by
+    have h0 := polyEval_zero hz x
+    rw [polyEval_add, polyEval_scale] at h0
+    simp only [polyEval] at h0
+    push_cast at h0
+    linarith
+  have hvx : ∀ x, v x = scaleBy S (Value.mul (some (polyEval P x)) (Functions.expR.apply (E x))) :=
+    fun x => hv.plain x
+  refine ⟨by exact_mod_cast hκ, by exact_mod_cast hh, fun hm x => ?_,
+    fun α β c hS h0 h1 h2 x => ?_⟩
+  · rw [hvx]
+    rcases hm with rfl | hm
+    · rfl
+    · rw [hE.missing hm x]
+      rcases S with _ | _ | s <;> simp [scaleBy, Value.mul, Function1.apply]
+  · subst h0 h1 h2
+    have hEx : E x = some (α + β * x + c * x ^ 2) := by
+      rw [hE.equation]
+      show some (α + (β * x + c * x ^ 2)) = some (α + β * x + c * x ^ 2)
+      congr 1
+      ring
+    rw [hvx, hEx, hPx]
+    rcases S with _ | _ | s
+    · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
+    · exact absurd rfl hS
+    · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
+
+/-- The literals of the constant and of the root, at real coefficients with a
+negative curvature; with a positive one the constant is undefined. -/
+private theorem curvature_literals (α β : ℝ) {c : ℝ} (hne : c ≠ 0) {half : ℚ}
+    {k g m pi : Option ℝ} (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    (c < 0 → curvatureConstant (some α) (some β) (some c) k g m pi =
+        some ((half : ℝ) * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹)))) ∧
+      Functions.sqrtR.apply (Value.mul m (some c)) = some (√(-1 * c))) ∧
+    (0 < c → curvatureConstant (some α) (some β) (some c) k g m pi = none) := by
+  constructor
+  · intro hc
+    obtain ⟨hσ, hpos, _⟩ := gauss_real_facts α β hc
+    have hpos' : Real.pi * c⁻¹ ≤ 0 := by linarith
+    constructor
+    · rw [curvatureConstant, hk, hg, hm, hpi]
+      simp [Value.mul, Value.add, Value.inv, hne, Function1.apply, Functions.expR,
+        Functions.sqrtR, Functions.pi, Numeric.denote, hpos']
+    · rw [hm]
+      have : (0 : ℝ) ≤ -c := by linarith
+      simp [Value.mul, Function1.apply, Functions.sqrtR, Numeric.denote, this]
+  · intro hc
+    have hneg : ¬ Real.pi * c⁻¹ ≤ 0 := not_le.2 (mul_pos Real.pi_pos (inv_pos.2 hc))
+    have hroot : Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv (some c)))) = none := by
+      rw [hm, hpi]
+      simp [Value.inv, hne, Value.mul, Function1.apply, Functions.sqrtR, Functions.pi,
+        Numeric.denote, hneg]
+    rw [curvatureConstant, hroot]
+    cases k <;> cases Functions.expR.apply
+      (Value.add (some α) (Value.mul (Value.mul g (Value.inv (some c))) (Value.mul (some β) (some β)))) <;> rfl
+
+/-- Above a bound, with the complement of the error function. -/
+theorem curvature_above (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ half : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hP : curvatureHalfCheck P κ half = true) (hS : scaleNonvanishing S) (hN : Nonvanishing c2)
+    {k g m h pi : Option ℝ} (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hh : h = some (Numeric.denote (s := .real) (1 / 2 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
+      scaleBy S (Value.mul (curvatureConstant c0 c1 c2 k g m pi)
+        (Functions.erfcR.apply (Value.mul (Functions.sqrtR.apply (Value.mul m c2))
+          (Value.add a (Value.mul (Value.mul h (Value.inv c2)) c1))))) := by
+  obtain ⟨hκ, hhalf, hmiss, hval⟩ := curvature_value hv hE hP
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  by_cases hu : S = some none ∨ c0 = none ∨ c1 = none ∨ c2 = none
+  · rw [above_undefined strict a (hmiss hu)]
+    rcases hu with rfl | hu
+    · rfl
+    · rw [curvatureConstant_missing k g m pi hu]
+      exact hnone.symm
+  simp only [not_or] at hu
+  obtain ⟨hS', h0, h1, h2⟩ := hu
+  obtain ⟨α, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨β, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  obtain ⟨c, rfl⟩ := Option.ne_none_iff_exists'.1 h2
+  have hne : c ≠ 0 := hN c rfl
+  have hg' := hval α β c hS' rfl rfl rfl
+  have hσ : scaleReal S ≠ 0 := by
+    rcases S with _ | _ | s
+    · simp [scaleReal]
+    · exact absurd rfl hS'
+    · exact hS s rfl
+  obtain ⟨hlit, hpos⟩ := curvature_literals α β hne hk hg hm hpi
+  have hH : h = some ((1 / 2 : ℝ)) := by rw [hh]; simp [Numeric.denote]
+  rcases a with _ | l
+  · rw [show partialIntegral volume (fun x => Value.mask (compare strict none (some x)) (v x)) =
+        none from if_neg fun hd => by
+          obtain ⟨r, hr⟩ := hd.1 0
+          cases strict <;> cases hr]
+    have : Functions.erfcR.apply (Value.mul (Functions.sqrtR.apply (Value.mul m (some c)))
+        (Value.add none (Value.mul (Value.mul h (Value.inv (some c))) (some β)))) = none := by
+      cases Functions.sqrtR.apply (Value.mul m (some c)) <;> rfl
+    rw [this]
+    cases curvatureConstant (some α) (some β) (some c) k g m pi <;> exact hnone.symm
+  have hcmp : ∀ x : ℝ, l < x → compare strict (some l) (some x) = some true := fun x hx => by
+    cases strict <;> simp [compare, Value.lt, Value.le, hx, hx.le]
+  rcases lt_or_gt_of_ne hne with hc | hc
+  · obtain ⟨hK, hR⟩ := hlit hc
+    have hI : ∀ l' : ℝ, IntegrableOn
+        (fun x : ℝ => scaleReal S * (κ * Real.exp (α + β * x + c * x ^ 2))) (Ioi l') volume :=
+      fun l' => (((gaussian_integrable α β c hc).integrableOn.const_mul _).const_mul _)
+    rw [halfline_integral strict (some l) (some (Numeric.denote (s := .real) (-1 : ℚ))) rfl
+      ⟨fun _ => rfl⟩ (HalfLineTerms.value hg' hI (fun h => by cases h) fun l' hl => by
+        cases hl
+        rfl)]
+    rw [integral_const_mul, integral_const_mul, gauss_Ioi α β hc l, hK, hR, hH]
+    have harg : Value.mul (some (√(-1 * c)))
+        (Value.add (some l) (Value.mul (Value.mul (some (1 / 2 : ℝ)) (Value.inv (some c))) (some β))) =
+        some (√(-1 * c) * (l + 1 / 2 * c⁻¹ * β)) := by
+      simp [Value.mul, Value.add, Value.inv, hne]
+    rw [harg, erfc_apply]
+    rcases S with _ | _ | s
+    · simp only [scaleBy, scaleReal, Value.mul, Option.some.injEq]
+      linear_combination (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹)) *
+        Functions.erfcR.value (√(-1 * c) * (l + 1 / 2 * c⁻¹ * β))) * (-hhalf) / 2
+    · exact absurd rfl hS'
+    · simp only [scaleBy, scaleReal, Value.mul, Option.some.injEq]
+      linear_combination (s * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹)) *
+        Functions.erfcR.value (√(-1 * c) * (l + 1 / 2 * c⁻¹ * β)))) * (-hhalf) / 2
+  · have hn : partialIntegral volume
+        (fun x => Value.mask (compare strict (some l) (some x)) (v x)) = none := by
+      apply if_neg
+      rintro ⟨_, hint⟩
+      have hon : IntegrableOn (fun x : ℝ => scaleReal S * κ * Real.exp (α + β * x + c * x ^ 2))
+          (Ioi l) volume := by
+        refine (hint.integrableOn (s := Ioi l)).congr_fun (fun x hx => ?_) measurableSet_Ioi
+        show (Value.mask (compare strict (some l) (some x)) (v x)).getD 0 = _
+        rw [hcmp x hx, hg']
+        show scaleReal S * (κ * Real.exp (α + β * x + c * x ^ 2)) = _
+        ring
+      exact exp_quadratic_not_integrableOn_Ioi α β hc l (mul_ne_zero hσ hκ) hon
+    rw [hn, hpos hc]
+    exact hnone.symm
+
+/-- Below a bound, with the complement of the reflected argument. -/
+theorem curvature_below (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ half : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hP : curvatureHalfCheck P κ half = true) (hS : scaleNonvanishing S) (hN : Nonvanishing c2)
+    {k g m h pi : Option ℝ} (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hh : h = some (Numeric.denote (s := .real) (-1 / 2 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
+      scaleBy S (Value.mul (curvatureConstant c0 c1 c2 k g m pi)
+        (Functions.erfcR.apply (Value.mul (Functions.sqrtR.apply (Value.mul m c2))
+          (Value.add (Value.mul (Value.mul h (Value.inv c2)) c1) (Value.mul m b))))) := by
+  obtain ⟨hκ, hhalf, hmiss, hval⟩ := curvature_value hv hE hP
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  by_cases hu : S = some none ∨ c0 = none ∨ c1 = none ∨ c2 = none
+  · rw [below_undefined strict b (hmiss hu)]
+    rcases hu with rfl | hu
+    · rfl
+    · rw [curvatureConstant_missing k g m pi hu]
+      exact hnone.symm
+  simp only [not_or] at hu
+  obtain ⟨hS', h0, h1, h2⟩ := hu
+  obtain ⟨α, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨β, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  obtain ⟨c, rfl⟩ := Option.ne_none_iff_exists'.1 h2
+  have hne : c ≠ 0 := hN c rfl
+  have hg' := hval α β c hS' rfl rfl rfl
+  have hσ : scaleReal S ≠ 0 := by
+    rcases S with _ | _ | s
+    · simp [scaleReal]
+    · exact absurd rfl hS'
+    · exact hS s rfl
+  obtain ⟨hlit, hpos⟩ := curvature_literals α β hne hk hg hm hpi
+  have hH : h = some ((-1 / 2 : ℝ)) := by rw [hh]; simp [Numeric.denote]
+  have hM : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  rcases b with _ | u
+  · rw [show partialIntegral volume (fun x => Value.mask (compare strict (some x) none) (v x)) =
+        none from if_neg fun hd => by
+          obtain ⟨r, hr⟩ := hd.1 0
+          cases strict <;> cases hr]
+    have : Functions.erfcR.apply (Value.mul (Functions.sqrtR.apply (Value.mul m (some c)))
+        (Value.add (Value.mul (Value.mul h (Value.inv (some c))) (some β)) (Value.mul m none))) =
+        none := by
+      rw [hM]
+      cases Functions.sqrtR.apply (Value.mul (some (-1 : ℝ)) (some c)) <;>
+        cases Value.mul (Value.mul h (Value.inv (some c))) (some β) <;> rfl
+    rw [this]
+    cases curvatureConstant (some α) (some β) (some c) k g m pi <;> exact hnone.symm
+  have hcmp : ∀ x : ℝ, x < u → compare strict (some x) (some u) = some true := fun x hx => by
+    cases strict <;> simp [compare, Value.lt, Value.le, hx, hx.le]
+  rcases lt_or_gt_of_ne hne with hc | hc
+  · obtain ⟨hK, hR⟩ := hlit hc
+    have hI : ∀ u' : ℝ, IntegrableOn
+        (fun x : ℝ => scaleReal S * (κ * Real.exp (α + β * x + c * x ^ 2))) (Iic u') volume :=
+      fun u' => (((gaussian_integrable α β c hc).integrableOn.const_mul _).const_mul _)
+    rw [upper_integral strict (some u) ⟨fun _ => rfl⟩
+      (UpperTerms.value hg' hI (fun h => by cases h) fun u' hu' => by
+        cases hu'
+        rfl)]
+    rw [integral_const_mul, integral_const_mul, gauss_Iic α β hc u, hK, hR, hH]
+    have harg : Value.mul (some (√(-1 * c)))
+        (Value.add (Value.mul (Value.mul (some (-1 / 2 : ℝ)) (Value.inv (some c))) (some β))
+          (Value.mul m (some u))) = some (√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * u)) := by
+      rw [hM]
+      simp [Value.mul, Value.add, Value.inv, hne]
+    rw [harg, erfc_apply]
+    rcases S with _ | _ | s
+    · simp only [scaleBy, scaleReal, Value.mul, Option.some.injEq]
+      linear_combination (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹)) *
+        Functions.erfcR.value (√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * u))) * (-hhalf) / 2
+    · exact absurd rfl hS'
+    · simp only [scaleBy, scaleReal, Value.mul, Option.some.injEq]
+      linear_combination (s * (Real.exp (α + -1 / 4 * c⁻¹ * (β * β)) * √(Real.pi * (-1 * c⁻¹)) *
+        Functions.erfcR.value (√(-1 * c) * (-1 / 2 * c⁻¹ * β + -1 * u)))) * (-hhalf) / 2
+  · have hn : partialIntegral volume
+        (fun x => Value.mask (compare strict (some x) (some u)) (v x)) = none := by
+      apply if_neg
+      rintro ⟨_, hint⟩
+      have hon : IntegrableOn (fun x : ℝ => scaleReal S * κ * Real.exp (α + β * x + c * x ^ 2))
+          (Iio u) volume := by
+        refine (hint.integrableOn (s := Iio u)).congr_fun (fun x hx => ?_) measurableSet_Iio
+        show (Value.mask (compare strict (some x) (some u)) (v x)).getD 0 = _
+        rw [hcmp x hx, hg']
+        show scaleReal S * (κ * Real.exp (α + β * x + c * x ^ 2)) = _
+        ring
+      exact exp_quadratic_not_integrableOn_Iic α β hc u (mul_ne_zero hσ hκ)
+        (integrableOn_Iic_iff_integrableOn_Iio.2 hon)
+    rw [hn, hpos hc]
+    exact hnone.symm
+
+/-- The same under a scale that may vanish: zero where the scale is, under its
+mask, after the scale, the bound and the coefficients of the exponent. -/
+theorem curvature_above_masked (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {s : Option ℝ}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ half : ℚ)
+    (hv : Bell v (some s) none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hP : curvatureHalfCheck P κ half = true) (hN : Nonvanishing c2)
+    {k g m h pi : Option ℝ} (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hh : h = some (Numeric.denote (s := .real) (1 / 2 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
+      after [s, a, c0, c1, c2] (Value.mask (Value.nonzero s)
+        (Value.mul s (Value.mul (curvatureConstant c0 c1 c2 k g m pi)
+          (Functions.erfcR.apply (Value.mul (Functions.sqrtR.apply (Value.mul m c2))
+            (Value.add a (Value.mul (Value.mul h (Value.inv c2)) c1))))))) := by
+  obtain ⟨_, _, hmiss, hval⟩ := curvature_value hv hE hP
+  rcases s with _ | σ
+  · rw [above_undefined strict a (hmiss (Or.inl rfl))]
+    rfl
+  rcases a with _ | l
+  · rw [show partialIntegral volume (fun x => Value.mask (compare strict none (some x)) (v x)) =
+        none from if_neg fun hd => by
+          obtain ⟨r, hr⟩ := hd.1 0
+          cases strict <;> cases hr]
+    rfl
+  rcases c0 with _ | α
+  · rw [above_undefined strict (some l) (hmiss (Or.inr (Or.inl rfl)))]
+    rfl
+  rcases c1 with _ | β
+  · rw [above_undefined strict (some l) (hmiss (Or.inr (Or.inr (Or.inl rfl))))]
+    rfl
+  rcases c2 with _ | c
+  · rw [above_undefined strict (some l) (hmiss (Or.inr (Or.inr (Or.inr rfl))))]
+    rfl
+  show _ = Value.mask (Value.nonzero (some σ)) _
+  by_cases hs : σ = 0
+  · subst hs
+    rw [partialIntegral_zero fun x => by
+      rw [hval α β c (by simp) rfl rfl rfl x]
+      cases hcmp : compare strict (some l) (some x) with
+      | none => cases strict <;> simp [compare, Value.lt, Value.le] at hcmp
+      | some t => cases t <;> simp [Value.mask, scaleReal]]
+    simp [Value.nonzero, Value.mask]
+  · rw [curvature_above strict κ half hv hE hP (fun t ht => by cases ht; exact hs) hN hk hg hm hh
+      hpi]
+    simp [Value.nonzero, hs, Value.mask, scaleBy]
+
+theorem curvature_below_masked (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {s : Option ℝ}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ half : ℚ)
+    (hv : Bell v (some s) none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hP : curvatureHalfCheck P κ half = true) (hN : Nonvanishing c2)
+    {k g m h pi : Option ℝ} (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hh : h = some (Numeric.denote (s := .real) (-1 / 2 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
+      after [s, b, c0, c1, c2] (Value.mask (Value.nonzero s)
+        (Value.mul s (Value.mul (curvatureConstant c0 c1 c2 k g m pi)
+          (Functions.erfcR.apply (Value.mul (Functions.sqrtR.apply (Value.mul m c2))
+            (Value.add (Value.mul (Value.mul h (Value.inv c2)) c1) (Value.mul m b))))))) := by
+  obtain ⟨_, _, hmiss, hval⟩ := curvature_value hv hE hP
+  rcases s with _ | σ
+  · rw [below_undefined strict b (hmiss (Or.inl rfl))]
+    rfl
+  rcases b with _ | u
+  · rw [show partialIntegral volume (fun x => Value.mask (compare strict (some x) none) (v x)) =
+        none from if_neg fun hd => by
+          obtain ⟨r, hr⟩ := hd.1 0
+          cases strict <;> cases hr]
+    rfl
+  rcases c0 with _ | α
+  · rw [below_undefined strict (some u) (hmiss (Or.inr (Or.inl rfl)))]
+    rfl
+  rcases c1 with _ | β
+  · rw [below_undefined strict (some u) (hmiss (Or.inr (Or.inr (Or.inl rfl))))]
+    rfl
+  rcases c2 with _ | c
+  · rw [below_undefined strict (some u) (hmiss (Or.inr (Or.inr (Or.inr rfl))))]
+    rfl
+  show _ = Value.mask (Value.nonzero (some σ)) _
+  by_cases hs : σ = 0
+  · subst hs
+    rw [partialIntegral_zero fun x => by
+      rw [hval α β c (by simp) rfl rfl rfl x]
+      cases hcmp : compare strict (some x) (some u) with
+      | none => cases strict <;> simp [compare, Value.lt, Value.le] at hcmp
+      | some t => cases t <;> simp [Value.mask, scaleReal]]
+    simp [Value.nonzero, Value.mask]
+  · rw [curvature_below strict κ half hv hE hP (fun t ht => by cases ht; exact hs) hN hk hg hm hh
+      hpi]
+    simp [Value.nonzero, hs, Value.mask, scaleBy]
+
 end QSym.Distribution.StepSource

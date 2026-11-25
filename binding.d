@@ -84,6 +84,10 @@ private struct IntervalTerm{
 	// The exponential of a linear exponent whose rate is a term, beyond a
 	// single bound: the literal of zero that the rate is compared with.
 	bool rateTerm; uint rateZero=uint.max;
+	// The exponential of a quadratic whose curvature is a term that cannot
+	// vanish, beyond a single bound: the literal of the factor of the linear
+	// coefficient over the curvature in the argument.
+	bool curvatureTerm; uint side=uint.max;
 }
 // With `domain` the value is under a strict guard that does not mention the
 // axis; with `hoisted` that guard stands around the mask, after the negations
@@ -3478,6 +3482,22 @@ final class Bindings{
 				if(p.length!=1||c[2].present||!c[1].present||c[1].closed) return false;
 				r.bell.constant=p[0]; r.rateTerm=true; return true;
 			}
+			// Beyond a single bound, a constant times the exponential of a
+			// quadratic whose curvature is a term that does not mention the axis.
+			// Where that term cannot vanish, by its form, the exponential is
+			// integrable exactly where the curvature is negative, and the closed
+			// form with the complement of the error function is missing exactly
+			// where it is positive: no guard is needed. As for a rate, only as
+			// the whole value.
+			bool symbolicCurvature(uint id,ref IntervalTerm r){
+				if(!d.half||d.unit!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
+				BellParts found;
+				if(!bellParts(id,found,false)||!found.exponent||found.symbolic) return false;
+				auto p=found.p,c=found.c; while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(p.length!=1||!c[2].present||c[2].closed) return false;
+				r.half=p[0]/Rational(2); if(r.half.words>128) return false;
+				r.bell.constant=p[0]; r.curvatureTerm=true; return true;
+			}
 			// Decide before building anything: a refused integral leaves no
 			// terms behind. Beyond a single bound every term must decay.
 			bool admissible(uint id,uint depth){
@@ -3489,7 +3509,7 @@ final class Bindings{
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
 			IntervalTerm whole;
-			d.direct=d.unit==uint.max&&!admissible(d.value,0)&&symbolicRate(d.value,whole);
+			d.direct=d.unit==uint.max&&!admissible(d.value,0)&&(symbolicRate(d.value,whole)||symbolicCurvature(d.value,whole));
 			if(!d.direct&&(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0))) return BoundTerm.init;
 			if(!construct) return t;
 			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
@@ -3664,7 +3684,40 @@ final class Bindings{
 				}
 				d.terms~=r; return result;
 			}
-			auto total=d.direct?rateDifference(whole,d.value):d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
+			// `K·erfc(√(-c₂)·(a + c₁/(2·c₂)))` above a bound and
+			// `K·erfc(√(-c₂)·(-c₁/(2·c₂) - b))` below one, where `K` is half the
+			// constant times `exp(c₀-c₁²/(4·c₂))·√(-π/c₂)`, under the scale. A
+			// scale that may vanish has the result under its mask, after
+			// everything the integrand is strict in.
+			BoundTerm curvatureDifference(IntervalTerm r,uint id){
+				BellParts built; bellParts(id,built,true);
+				auto curvature=built.c[2].term,bound=d.below?upper:lower;
+				if(!nonvanishing(curvature.id)) return BoundTerm.init;
+				BoundTerm coefficient(size_t i,ref uint zero){
+					if(built.c[i].present) return built.c[i].term;
+					auto filled=scalar(ctx,arena.real_(0)); zero=filled.id; return filled;
+				}
+				auto constant=coefficient(0,r.bell.zero0),linear=coefficient(1,r.bell.zero1),literal=arena.real_(0),truth=arena.boolean(true);
+				BoundTerm apply1(Builtin f,BoundTerm x){ return primitive(arena.call(f,[literal]),[x]); }
+				auto half=scalar(ctx,arena.real_(r.half)),quarter=scalar(ctx,arena.real_(Rational(-1)/Rational(4))),minus=scalar(ctx,arena.real_(Rational(-1)));
+				auto circle=scalar(ctx,arena.call(Builtin.pi,[])),side=scalar(ctx,arena.real_(Rational(d.below?-1:1)/Rational(2)));
+				r.bell.factor=half.id; r.bell.exponent=quarter.id; r.bell.scale=minus.id; r.bell.circle=circle.id; r.bell.curvature=curvature.id; r.side=side.id; r.value=id;
+				auto inverse=primitive(arena.inv(arena.real_(1)),[curvature]);
+				auto front=primitive(mulOp,[half,primitive(mulOp,[apply1(Builtin.expR,primitive(addOp,[constant,primitive(mulOp,[primitive(mulOp,[quarter,inverse]),primitive(mulOp,[linear,linear])])])),
+					apply1(Builtin.sqrtR,primitive(mulOp,[circle,primitive(mulOp,[minus,inverse])]))])]);
+				auto shift=primitive(mulOp,[primitive(mulOp,[side,inverse]),linear]);
+				auto argument=d.below?primitive(addOp,[shift,primitive(mulOp,[minus,bound])]):primitive(addOp,[bound,shift]);
+				auto value=primitive(mulOp,[front,apply1(Builtin.erfcR,primitive(mulOp,[apply1(Builtin.sqrtR,primitive(mulOp,[minus,curvature])),argument]))]);
+				r.bell.maskScale=built.scaled&&!nonvanishing(built.scale.id);
+				if(built.scaled){ if(!r.bell.maskScale) r.bell.nonzero=built.scale.id; value=primitive(mulOp,[built.scale,value]); }
+				if(r.bell.maskScale){
+					value=primitive(arena.mask(truth,arena.real_(1)),[primitive(arena.nonzero(arena.real_(1)),[built.scale]),value]);
+					foreach_reverse(x;[built.scale,bound,constant,linear,curvature]) value=sequence(x,value);
+				}
+				d.terms~=r; return value;
+			}
+			auto total=d.direct?(whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
+				d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
 			if(total==BoundTerm.init) return BoundTerm.init;
 			if(d.domain!=uint.max) total=guard(dropIndex(at(d.domain)),total);
 			auto zero=arena.real_(0),strict=d.strictLower||d.strictUpper;
@@ -7532,14 +7585,25 @@ final class Bindings{
 				// exponent by its structure, with the coefficients the rule built:
 				// the observation is the integral of its mask, under the strict
 				// guard of its domain where it has one.
-				enforce(!summand&&d.terms.length==1&&d.terms[0].rateTerm&&q.from.length==1,"bad direct observation");
+				enforce(!summand&&d.terms.length==1&&(d.terms[0].rateTerm||d.terms[0].curvatureTerm)&&q.from.length==1,"bad direct observation");
 				auto r=d.terms[0],g=r.bell;string exponent;AxisCoefficient[] poly;
 				auto hv=cert.bell(d.value,exponent,poly);
 				string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
 				if(g.zero0!=uint.max)exponent="(Distribution.StepSource.Quadratic.fill0 "~literal(g.zero0,Rational(0))~" "~exponent~")";
+				if(g.zero1!=uint.max)exponent="(Distribution.StepSource.Quadratic.fill1 "~literal(g.zero1,Rational(0))~" "~exponent~")";
 				enforce(g.nonzero==uint.max||nonvanishing(g.nonzero),"scale may vanish");
-				auto direct="(Distribution.StepSource.rate_"~(d.below?"below":"above")~(g.maskScale?"_masked ":" ")~truth(d.below?d.strictUpper:d.strictLower)~" "~cert.q(g.constant)~" "~hv~" "~exponent~" rfl "~
-					(g.maskScale?"":(g.nonzero==uint.max?"trivial":nonzero(g.nonzero))~" ")~(d.below?"":literal(d.minusOne,Rational(-1))~" ")~literal(g.factor,g.constant)~" "~literal(r.rateZero,Rational(0))~")";
+				auto side=d.below?"below":"above",strictness=truth(d.below?d.strictUpper:d.strictLower),steady=g.maskScale?"":(g.nonzero==uint.max?"trivial":nonzero(g.nonzero))~" ";
+				string direct;
+				if(r.rateTerm)direct="(Distribution.StepSource.rate_"~side~(g.maskScale?"_masked ":" ")~strictness~" "~cert.q(g.constant)~" "~hv~" "~exponent~" rfl "~
+					steady~(d.below?"":literal(d.minusOne,Rational(-1))~" ")~literal(g.factor,g.constant)~" "~literal(r.rateZero,Rational(0))~")";
+				else{
+					// The curvature cannot vanish, by its form; the literals are
+					// half the constant and those of the vertex.
+					enforce(nonvanishing(g.curvature),"curvature may vanish");
+					direct="(Distribution.StepSource.curvature_"~side~(g.maskScale?"_masked ":" ")~strictness~" "~cert.q(g.constant)~" "~cert.q(r.half)~" "~hv~" "~exponent~" rfl "~
+						steady~nonzero(g.curvature)~" "~literal(g.factor,r.half)~" "~literal(g.exponent,Rational(-1)/Rational(4))~" "~literal(g.scale,Rational(-1))~" "~
+						literal(r.side,Rational(d.below?-1:1)/Rational(2))~" rfl)";
+				}
 				if(d.domain!=uint.max)direct="(Distribution.StepSource.masked_guard_integral ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) (Distribution.StepSource.compare_"~(d.below?"upper":"lower")~"_cases _ _) "~direct~")";
 				return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" "~direct;
 			}

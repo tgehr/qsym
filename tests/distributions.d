@@ -771,6 +771,14 @@ private Case[] cases(){ return [
 	Case("HalfLineOffsetMoment","∫dx [0≤x]*x*exp(1-2*x)*λ[x]","ℝ","1/4·e"),
 	Case("HalfLineOffsetBound","∫dx [a≤x]*exp(b-x)*λ[x]","ℝ","exp(-a+b)"),
 	Case("HalfLineOffsetGrowing","∫dx [0≤x]*exp(a+x)*λ[x]","ℝ"),
+	Case("CdfNormal","∫dx [x≤t]*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ","guard(0<v,1/2·erfc((-t+m)·sqrt(v⁻¹·(1/2))))"),
+	Case("CdfTail","∫dx [a≤x]*exp(-x^2/(2*v))*λ[x]","ℝ","guard(0<v,1/2·sqrt(2·v·π)·erfc(a·sqrt(v⁻¹·(1/2))))"),
+	Case("CdfDeviation","∫dx [x≤t]*exp(-(x-m)^2/(2*s^2))/(s*sqrt(2*π))*λ[x]","ℝ","guard(s≠0,s⁻¹·(1/2)·abs(s)·erfc((-t+m)·sqrt((s^2)⁻¹·(1/2))))"),
+	Case("CdfScale","∫dx [0≤x]*c*exp(-x^2/v)*λ[x]","ℝ","guard(v≠0∧c=0∨0<v,[c≠0]·(c·(1/2)·sqrt(v·π)))"),
+	Case("CdfFunction","λ(t:ℝ).∫dx [x≤t]*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ→ℝ","λ(t:{t:ℝ | 0<v}). 1/2·erfc((m-t)·sqrt(v⁻¹·(1/2)))"),
+	Case("CdfBelowScale","∫dx [x<b]*c*exp(m*x-x^2/v)*λ[x]","ℝ","guard(v≠0∧c=0∨0<v,[c≠0]·(c·(1/2)·sqrt(v·π)·exp(v·(1/4)·m^2)·erfc((m·v·(1/2)-b)·sqrt(v⁻¹))))"),
+	Case("CdfVanishing","∫dx [0≤x]*exp(-a*x^2)*λ[x]","ℝ"),
+	Case("CdfPolynomial","∫dx [0≤x]*x^2*exp(-x^2/v)*λ[x]","ℝ"),
 	Case("RateAbove","∫dx [0≤x]*exp(-r*x)*λ[x]","ℝ","guard(0<r,r⁻¹)"),
 	Case("RateDensity","∫dx [0≤x]*r*exp(-r*x)*λ[x]","ℝ","guard(r=0∨0<r,[r≠0])"),
 	Case("RateBound","∫dx [a≤x]*exp(-r*x)*λ[x]","ℝ","guard(0<r,r⁻¹·exp(-a·r))"),
@@ -1477,6 +1485,30 @@ private void run(string directory){
 			if(c.name=="ErfOffset") enforce(certificate.indexOf("Limit.EventualScaled.exp_curve")>=0,c.name~" offset");
 			if(c.name=="ErfDomain") enforce(certificate.indexOf("IntervalTerms.guard")>=0,c.name~" domain");
 			if(c.name=="ErfGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+		}
+		// Beyond a single bound, a constant times the exponential of a
+		// quadratic whose curvature is a term that does not mention the axis
+		// and cannot vanish, by its form: the exponential is integrable
+		// exactly where the curvature is negative, and the closed form with
+		// the complement of the error function is missing exactly where it is
+		// positive, the root of a negative number. So the distribution function
+		// of a normal law whose variance is a term needs no guard but that of
+		// its domain. A scale that may vanish has the result under its mask.
+		// A curvature that may be zero, where the exponent is linear, and a
+		// polynomial in front keep their integral.
+		if(c.name.indexOf("Cdf")==0){
+			bool retained=c.name=="CdfVanishing"||c.name=="CdfPolynomial";
+			bool below=c.name=="CdfNormal"||c.name=="CdfDeviation"||c.name=="CdfFunction"||c.name=="CdfBelowScale";
+			bool masked=c.name=="CdfScale"||c.name=="CdfBelowScale";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_direct")>=0)!=retained,c.name~" certificate");
+			enforce((certificate.indexOf("Distribution.StepSource.curvature_"~(below?"below":"above")~(masked?"_masked ":" "))>=0)!=retained,c.name~" curvature");
+			enforce((certificate.indexOf("Distribution.StepSource.masked_guard_integral")>=0)!=retained,c.name~" domain");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			// An exponent without a constant or a linear part has a zero there.
+			if(!retained){
+				enforce((certificate.indexOf("Distribution.StepSource.Quadratic.fill0")>=0)==(c.name=="CdfTail"||c.name=="CdfScale"||c.name=="CdfBelowScale"),c.name~" constant part");
+				enforce((certificate.indexOf("Distribution.StepSource.Quadratic.fill1")>=0)==(c.name=="CdfTail"||c.name=="CdfScale"),c.name~" linear part");
+			}
 		}
 		// Beyond a single bound, a constant times the exponential of a linear
 		// exponent whose rate is a term that does not mention the axis: it is
