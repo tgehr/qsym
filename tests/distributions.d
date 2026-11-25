@@ -946,10 +946,22 @@ private Case[] cases(){ return [
 	Case("LogarithmPoleStrict","∫dx [2<x≤3]*log(x-2)*λ[x]","ℝ","-1"),
 	Case("LogarithmSquare","∫dx [1≤x≤2]*log(x)^2*λ[x]","ℝ"),
 	Case("LogarithmQuotient","∫dx [1≤x≤2]*log(x)/x*λ[x]","ℝ"),
-	Case("LogarithmScale","∫dx [1≤x≤2]*c*log(x)*λ[x]","ℝ"),
+	Case("LogarithmScale","∫dx [1≤x≤2]*c*log(x)*λ[x]","ℝ","c·(2·log(2)-1)"),
+	Case("LogarithmScaleFactors","∫dx [1≤x≤2]*x*c*log(x)*d*λ[x]","ℝ","c·d·(2·log(2)-3/4)"),
+	Case("LogarithmScaleSum","∫dx [1≤x≤2]*c*(log(x)+x)*λ[x]","ℝ","c·(2·log(2)+1/2)"),
+	Case("LogarithmScaleStrict","∫dx [a<x≤b]*c*log(x)*λ[x]","ℝ","([a<b]·(guard(0≤a∧0<b,c·(b·log(b)+a-b+[a≠0]·(-a·log(a))))):ℝ)"),
+	Case("LogarithmScaleEntropy","∫dx [0<x≤1]*c*x*log(x)*λ[x]","ℝ","-c·(1/4)"),
+	Case("LogarithmScaleDomain","∫dx [1≤x≤2]*log(x)/c*λ[x]","ℝ","guard(c≠0,(2·log(2)-1)·c⁻¹)"),
+	Case("LogarithmScaleGuarded","∫dx [a≤x≤b]*c*(x+1)*log(x)*λ[x]","ℝ","([a≤b]·(guard(0<a∧0<b,c·(-a·(a·(1/2)+1)·log(a)+b·(b·(1/2)+1)·log(b)-a·(-a·(1/4)-1)+b·(-b·(1/4)-1)))):ℝ)"),
+	Case("LogarithmScaleJoined","∫dx [a≤x≤b]*(x+1)*log(x)/sqrt(c)*λ[x]","ℝ","([a≤b]·(guard(0<c∧(0<a∧0<b),(-a·(a·(1/2)+1)·log(a)+b·(b·(1/2)+1)·log(b)-a·(-a·(1/4)-1)+b·(-b·(1/4)-1))·sqrt(c)⁻¹)):ℝ)"),
+	Case("LogarithmScaleJoinedFirst","∫dx [a≤x≤b]*(1/sqrt(c))*(log(x)+x)*λ[x]","ℝ","([a≤b]·(guard(0<c∧(0<a∧0<b),(-a·(a·(1/2)-1)-a·log(a)+b·(b·(1/2)-1)+b·log(b))·sqrt(c)⁻¹)):ℝ)"),
+	Case("LogarithmScalePole","∫dx [1≤x≤2]*c*log(x+1)*λ[x]","ℝ","c·(-2·log(2)+3·log(3)-1)"),
+	Case("LogarithmScalePoleBounds","∫dx [a≤x≤b]*log(x+1)*exp(m)*λ[x]","ℝ","([a≤b]·(guard(-1<a∧-1<b,(-(a+1)·log(a+1)+(b+1)·log(b+1)+a-b)·exp(m))):ℝ)"),
+	Case("LogarithmScaleFunction","λ(t:ℝ).∫dx [1≤x]*[x≤t]*c*log(x)*λ[x]","ℝ→ℝ","λ(t:ℝ). [1≤t]·(c·(t·log(t)-t+1))"),
+	Case("LogarithmScaleConstant","∫dx [1≤x≤2]*(c*log(x)+d)*λ[x]","ℝ"),
 	Case("LogarithmAbove","∫dx [1≤x]*log(x)*λ[x]","ℝ"),
 	Case("LogarithmTwo","∫dx [1≤x≤2]*(log(x)-log(x+1))*λ[x]","ℝ"),
-	Case("LogarithmScaled","∫dx [1≤x≤2]*log(2*x)*λ[x]","ℝ"),
+	Case("LogarithmMultiple","∫dx [1≤x≤2]*log(2*x)*λ[x]","ℝ"),
 	Case("QuotientPoleTwo","∫dx [1≤x≤2]*(1/(x+1)+1/x)*λ[x]","ℝ"),
 	Case("QuotientPoleQuadratic","∫dx [1≤x≤2]*(1/(x^2+1))*λ[x]","ℝ"),
 	Case("QuotientScale","∫dx [1≤x≤2]*c/x*λ[x]","ℝ","c·log(2)"),
@@ -1527,33 +1539,51 @@ private void run(string directory){
 		// has the value by its structure, and the kernel differentiates.
 		// The logarithm may be that of the axis minus a rational pole, on
 		// either side of the closed term; a guard of the domain around the
-		// mask leaves the value as it is. A power of the logarithm, a
-		// quotient with it, a factor or a summand that is a term, a single
-		// bound and two poles keep their integral.
+		// mask leaves the value as it is. Factors that do not mention the
+		// axis may stand anywhere in a product with the value: on the
+		// positive axis it is integrable whatever they are, so their
+		// product stands in front of the difference, under the same guard,
+		// and a domain of such a factor is a guard inside the mask of the
+		// bounds. A power of the logarithm, a quotient with it, a summand
+		// that is a term, a single bound and two poles keep their integral.
 		if(c.name.indexOf("Logarithm")==0){
 			enum src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
-			bool retained=among("LogarithmSquare","LogarithmQuotient","LogarithmScale","LogarithmAbove","LogarithmTwo","LogarithmScaled");
-			bool pole=c.name.indexOf("LogarithmPole")==0;
-			enforce(has("log_between ")!=retained,c.name~" logarithm between bounds");
+			bool retained=among("LogarithmSquare","LogarithmQuotient","LogarithmAbove","LogarithmTwo","LogarithmMultiple","LogarithmScaleConstant");
+			bool scaled=c.name.indexOf("LogarithmScale")==0&&!retained;
+			bool pole=c.name.indexOf("LogarithmPole")==0||among("LogarithmScalePole","LogarithmScalePoleBounds");
+			enforce(has("log_between"~(scaled?"_scaled ":" "))!=retained,c.name~" logarithm between bounds");
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_direct")>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			// The evidence follows the structure of the value.
 			enforce(has("log_axis")!=retained,c.name~" logarithm of the axis");
-			enforce(has("log_axis_shifted ")==among("LogarithmPoleBounds","LogarithmPoleProduct","LogarithmPoleStrict"),c.name~" axis before the closed term");
-			enforce(has("log_axis_shifted' ")==among("LogarithmPole"),c.name~" closed term before the axis");
+			enforce(has("log_axis_shifted ")==among("LogarithmPoleBounds","LogarithmPoleProduct","LogarithmPoleStrict","LogarithmScalePoleBounds"),c.name~" axis before the closed term");
+			enforce(has("log_axis_shifted' ")==among("LogarithmPole","LogarithmScalePole"),c.name~" closed term before the axis");
 			enforce(has("log_mul_left ")==among("LogarithmProduct","LogarithmSum","LogarithmMinus","LogarithmEntropy","LogarithmPoleProduct"),c.name~" polynomial times logarithm");
-			enforce(has("log_mul_right ")==among("LogarithmPolynomial","LogarithmMixed","LogarithmDomainProduct"),c.name~" logarithm times polynomial");
+			enforce(has("log_mul_right ")==among("LogarithmPolynomial","LogarithmMixed","LogarithmDomainProduct","LogarithmScaleJoined"),c.name~" logarithm times polynomial");
 			enforce(has("log_add ")==among("LogarithmSum","LogarithmMixed"),c.name~" sum of logarithms");
-			enforce(has("log_add_left ")==among("LogarithmMixed","LogarithmDomain"),c.name~" polynomial and logarithm");
+			enforce(has("log_add_left ")==among("LogarithmMixed","LogarithmDomain","LogarithmScaleSum","LogarithmScaleJoinedFirst"),c.name~" polynomial and logarithm");
 			enforce(has("log_add_right ")==among("LogarithmMinus"),c.name~" logarithm and polynomial");
-			// The guard of the domain around the mask, and the pole.
+			// Factors that do not mention the axis.
+			enforce(has("LogFraction.scale ")==scaled,c.name~" factor");
+			enforce(has("LogFraction.log ")==scaled,c.name~" value under a factor");
+			enforce(has("LogFraction.mul_left ")==scaled,c.name~" product with a factor");
+			enforce(has("LogFraction.mul_right ")==among("LogarithmScaleGuarded"),c.name~" product with a factor behind");
+			enforce(has("LogFraction.polynomial ")==among("LogarithmScaleFactors","LogarithmScaleGuarded","LogarithmScaleEntropy"),c.name~" polynomial next to a factor");
+			// The guard of the domain around the mask, the domain of a
+			// factor, and the pole.
+			bool guardedFactor=among("LogarithmScaleGuarded","LogarithmScaleJoined","LogarithmScaleJoinedFirst","LogarithmScalePoleBounds");
 			bool guarded=among("LogarithmDomain","LogarithmDomainProduct","LogarithmPoleBounds");
 			enforce(has("log_guard ")==guarded,c.name~" guard of the domain");
-			enforce(has("MaskDomain.mask ")==guarded,c.name~" domain around the mask");
-			enforce(has("axis_positive ")==among("LogarithmDomain","LogarithmDomainProduct"),c.name~" domain of the logarithm");
-			enforce(has("shifted_positive ")==among("LogarithmPoleBounds"),c.name~" domain of the logarithm around the pole");
+			enforce(has("LogFraction.guard ")==guardedFactor,c.name~" guard of the domain under a factor");
+			enforce(has("MaskDomain.mask ")==(guarded||guardedFactor||among("LogarithmScaleDomain")),c.name~" domain around the mask");
+			enforce(has("axis_positive ")==among("LogarithmDomain","LogarithmDomainProduct","LogarithmScaleGuarded","LogarithmScaleJoined","LogarithmScaleJoinedFirst"),
+				c.name~" domain of the logarithm");
+			enforce(has("shifted_positive ")==among("LogarithmPoleBounds","LogarithmScalePoleBounds"),c.name~" domain of the logarithm around the pole");
+			enforce(has("between_guard_integral ")==among("LogarithmScaleDomain","LogarithmScaleJoined","LogarithmScaleJoinedFirst"),c.name~" guard inside the mask of the bounds");
+			enforce(has("guard_and_left ")==among("LogarithmScaleJoined"),c.name~" domain of the axis first");
+			enforce(has("guard_and_right ")==among("LogarithmScaleJoinedFirst"),c.name~" domain of the factor first");
 			enforce(has("shift_between ")==pole,c.name~" pole");
 			enforce(has("polynomial_translate ")==among("LogarithmPoleProduct"),c.name~" polynomial around the pole");
 			// Zero or a negative point in the guard: nothing is observed.

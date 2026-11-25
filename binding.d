@@ -1507,6 +1507,29 @@ final class Bindings{
 		else{ p=polyProduct(q1,p2); q=polyProduct(q1,q2); }
 		return small(p)&&small(q);
 	}
+	// A product of such a value and of factors that do not mention the
+	// innermost variable, in which the logarithm meets polynomials and those
+	// factors only: the value, and the factors in their order, with
+	// `uint.max` for the product of the last two.
+	private bool axisLogFraction(uint id,out Rational[] p,out Rational[] q,Rational pole,out bool found,ref uint[] scale,uint depth=0){
+		if(depth>64) return false;
+		if(axisLogarithm(id,p,q,pole,found)) return true;
+		if(!depends(at(id),0)){ p=[]; q=[Rational(1)]; found=false; scale~=id; return true; }
+		auto n=nodes[id];
+		if(n.op!=BoundOp.primitive||arena.view(arena.at(n.data)).op!=Op.mul) return false;
+		Rational[] p1,q1,p2,q2; bool f1,f2; auto before=scale.length;
+		if(!axisLogFraction(n.a,p1,q1,pole,f1,scale,depth+1)) return false;
+		auto middle=scale.length;
+		if(!axisLogFraction(n.b,p2,q2,pole,f2,scale,depth+1)) return false;
+		if(middle>before&&scale.length>middle) scale~=uint.max;
+		if(f1&&f2) return false;
+		found=f1||f2;
+		if(f1){ p=polyProduct(p1,q2); q=polyProduct(q1,q2); }
+		else{ p=polyProduct(q1,p2); q=polyProduct(q1,q2); }
+		if(p.length>64||q.length>64) return false;
+		foreach(c;p~q) if(c.words>128) return false;
+		return true;
+	}
 	// A polynomial in the innermost variable times the exponential of a
 	// rational multiple of it. A rate of zero is a polynomial.
 	private bool axisExponential(uint id,out Rational[] p,out Rational rate,uint depth=0){
@@ -3546,8 +3569,8 @@ final class Bindings{
 				auto both=nodes[rest];
 				if(nonzeroAxis(rest)||positiveAxis(rest)){ d.axis=rest; return true; }
 				if(!isOp(both,Op.and_)) return false;
-				if(!depends(at(both.b),0)&&nonzeroAxis(both.a)){ d.axis=both.a; d.domain=both.b; d.both=rest; d.joined=1; return true; }
-				if(!depends(at(both.a),0)&&nonzeroAxis(both.b)){ d.axis=both.b; d.domain=both.a; d.both=rest; d.joined=2; return true; }
+				if(!depends(at(both.b),0)&&(nonzeroAxis(both.a)||positiveAxis(both.a))){ d.axis=both.a; d.domain=both.b; d.both=rest; d.joined=1; return true; }
+				if(!depends(at(both.a),0)&&(nonzeroAxis(both.b)||positiveAxis(both.b))){ d.axis=both.b; d.domain=both.a; d.both=rest; d.joined=2; return true; }
 				return false;
 			}
 			if(around!=uint.max){
@@ -3820,13 +3843,17 @@ final class Bindings{
 			// where the guard of the bounds is above it: the lower bound is,
 			// or it is the pole and strict. With `y` for the axis minus the
 			// pole the antiderivative is `y·P₁(y)·log(y) + y·S₁(y)`, where
-			// `(y·P₁)' = p` and `(y·S₁)' = q - P₁`.
+			// `(y·P₁)' = p` and `(y·S₁)' = q - P₁`. Factors that do not
+			// mention the axis may stand anywhere in a product with the
+			// value: there it is integrable whatever they are, so their
+			// product stands in front of the difference.
 			bool axisLog(uint id,ref IntervalTerm r){
-				if(d.half||d.unit!=uint.max||d.domain!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
+				if(d.half||d.unit!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
 				Rational pole; if(!axisLogPole(id,pole)) return false;
 				if(d.axis!=uint.max&&(!d.axisPositive||!(pole==d.axisPoint))) return false;
-				Rational[] p,q; bool found;
-				if(!axisLogarithm(id,p,q,pole,found)||!found) return false;
+				Rational[] p,q; bool found; uint[] scale;
+				if(!axisLogFraction(id,p,q,pole,found,scale)||!found) return false;
+				r.ratioScale=scale;
 				Rational[] P,S;
 				foreach(k,c;p) P~=c/Rational(cast(long)k+1);
 				auto n=q.length>P.length?q.length:P.length;
@@ -4286,7 +4313,16 @@ final class Bindings{
 				auto low=moved(lower),high=moved(upper); r.ratioLower=low.id; r.ratioUpper=high.id;
 				auto above=at_(0,high,false),below=at_(1,low,d.strictLower);
 				auto side=primitive(d.strictLower?arena.le(literal,literal):arena.lt(literal,literal),[zero,low]);
-				d.terms~=r; return guard(side,primitive(addOp,[above,primitive(mulOp,[minusOne,below])]));
+				auto value=primitive(addOp,[above,primitive(mulOp,[minusOne,below])]);
+				if(r.ratioScale.length){
+					BoundTerm[] stack;
+					foreach(x;r.ratioScale){
+						if(x==uint.max){ auto product=primitive(mulOp,[stack[$-2],stack[$-1]]); stack=stack[0..$-2]~product; }
+						else stack~=dropIndex(at(x));
+					}
+					value=primitive(mulOp,[stack[0],value]);
+				}
+				d.terms~=r; return guard(side,value);
 			}
 			auto total=d.direct?(whole.logTerm?logDifference(whole,d.value):whole.ratioTerm?quotientDifference(whole,d.value):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
 				d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
@@ -8216,6 +8252,31 @@ final class Bindings{
 			r.proof=save(src~"LogOn "~functionAround(id,pole)~" "~r.p~" "~r.q,r.proof);
 			return r;
 		}
+		// Such a value in a product with factors that do not mention the
+		// axis: each factor of the product is such a value, a polynomial or
+		// such a factor, and the products follow its structure.
+		struct LogPart{string proof,scale,p,q;bool found;}
+		LogPart logFraction(uint id,Rational pole){
+			enum src="Distribution.StepSource.";
+			Rational[] p,q;bool found;
+			if(axisLogarithm(id,p,q,pole,found)){
+				auto w=logarithm(id,pole);
+				return LogPart("("~src~"LogFraction."~(found?"log ":"polynomial ")~w.proof~")","none",found?w.p:"[]",w.q,found);
+			}
+			if(!depends(at(id),0)){
+				auto c=cert.outside(id);
+				return LogPart("("~src~"LogFraction.scale "~c~")","(some "~c~")","[]","[1]",false);
+			}
+			auto n=nodes[id];enforce(n.op==BoundOp.primitive&&arena.view(arena.at(n.data)).op==Op.mul,"unsupported factor of a logarithm");
+			auto a=logFraction(n.a,pole),b=logFraction(n.b,pole);LogPart r;
+			enforce(!(a.found&&b.found),"product of logarithms");
+			string product(string x,string y){return "("~src~"polyMul "~x~" "~y~")";}
+			r.found=a.found||b.found;r.scale="("~src~"joinScale "~a.scale~" "~b.scale~")";
+			r.p=a.found?product(a.p,b.q):product(a.q,b.p);r.q=product(a.q,b.q);
+			r.proof=save(src~"LogFraction "~functionAround(id,pole)~" "~r.scale~" "~r.p~" "~r.q~" "~(r.found?"true":"false"),
+				"("~src~"LogFraction.mul_"~(a.found?"right ":"left ")~a.proof~" "~b.proof~")");
+			return r;
+		}
 		// An observation between bounds, above or below one; as a summand in
 		// the form that adds, of its weight by itself.
 		string between(IntegralSolution q,bool summand){
@@ -8286,14 +8347,18 @@ final class Bindings{
 					// of this is about the value at the axis plus the pole,
 					// between the bounds moved by it.
 					enum src="Distribution.StepSource.";
-					enforce(!d.half&&d.domain==uint.max,"bad logarithm between bounds");
-					auto pole=r.ratioPole;auto evidence=logarithm(d.value,pole);
+					enforce(!d.half,"bad logarithm between bounds");
+					// With factors that do not mention the axis the theorem
+					// has their product in front.
+					bool scaled=r.ratioScale.length!=0;auto pole=r.ratioPole;string proof;
+					if(scaled){auto part=logFraction(d.value,pole);enforce(part.found,"factor without a logarithm");proof=part.proof;}
+					else proof=logarithm(d.value,pole).proof;
 					if(d.axis!=uint.max){
 						enforce(d.axisPositive&&d.axisPoint==pole,"domain of another logarithm");
 						auto away="("~src~(pole.zero?"axis_positive ":"shifted_positive "~cert.q(pole)~" ")~literal(d.axisClosed,pole)~")";
 						auto test=pole.zero?"fun x : ℝ => "~under(d.axis):
 							"fun y : ℝ => "~name(d.axis)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some (y + (("~cert.q(pole)~" : ℚ) : ℝ))) ρ)";
-						evidence.proof="("~src~"log_guard (g := "~test~") "~evidence.proof~" "~away~")";
+						proof="("~src~(scaled?"LogFraction.guard":"log_guard")~" (g := "~test~") "~proof~" "~away~")";
 					}
 					string list(Rational[] row){string t="[";foreach(i,c;row)t~=(i?", ":"")~cert.q(c);return t~"]";}
 					string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
@@ -8312,9 +8377,12 @@ final class Bindings{
 						rows~=" "~row(g.primitive,r.ends[e].primitive)~" "~row(g.moments,r.ends[e].rows[0]);
 					}
 					auto strictness=truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper);
-					auto observed="("~src~"log_between "~strictness~" "~list(g.primitive)~" "~list(g.moments)~" "~evidence.proof~" rfl "~
+					auto observed="("~src~"log_between"~(scaled?"_scaled ":" ")~strictness~" "~list(g.primitive)~" "~list(g.moments)~" "~proof~" rfl "~
 						literal(r.rateZero,Rational(0))~" "~literal(d.minusOne,Rational(-1))~rows~")";
 					if(!pole.zero)observed="("~src~"shift_between "~strictness~" "~cert.q(pole)~" "~literal(r.ratioMove,Rational(0)-pole)~" "~observed~")";
+					// Under the strict guard of a domain that does not mention
+					// the axis that guard stays inside the mask of the bounds.
+					if(d.domain!=uint.max)observed="("~src~"between_guard_integral "~strictness~" ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) "~observed~")";
 					return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" "~observed;
 				}
 				if(r.ratioTerm){

@@ -903,7 +903,7 @@ theorem partialIntegral_const_mul {γ : ℝ} (hγ : γ ≠ 0) (f : ℝ → Optio
 /-- The observation of a masked value under a factor: under one that is
 undefined the value is undefined wherever the mask holds; under zero it is
 zero wherever the value is defined; and any other factor comes out. -/
-private theorem scaled_observation (g : ℝ → Option Bool) (r : ℝ → Option ℝ) (c : Option ℝ) :
+theorem scaled_observation (g : ℝ → Option Bool) (r : ℝ → Option ℝ) (c : Option ℝ) :
     partialIntegral volume (fun x => Value.mask (g x) (Value.mul c (r x))) =
       match c with
       | none => partialIntegral volume (fun x => Value.mask (g x) (none : Option ℝ))
@@ -924,7 +924,7 @@ private theorem scaled_observation (g : ℝ → Option Bool) (r : ℝ → Option
       simp only [hm, if_neg hγ]
       exact partialIntegral_const_mul hγ _
 
-private theorem compare_undefined (s : Bool) {a b : Option ℝ} (h : a = none ∨ b = none) :
+theorem compare_undefined (s : Bool) {a b : Option ℝ} (h : a = none ∨ b = none) :
     compare s a b = none := by
   rcases h with rfl | rfl
   · cases s <;> rfl
@@ -979,7 +979,7 @@ private theorem outside_some (sl su : Bool) (l u : ℝ) :
 
 /-- Without a value the guard between two bounds leaves the zero function
 where it holds nowhere, and nothing otherwise. -/
-private theorem between_undefined (swap sl su : Bool) (a b : Option ℝ) :
+theorem between_undefined (swap sl su : Bool) (a b : Option ℝ) :
     partialIntegral volume
         (fun x => Value.mask (intervalGuard swap sl su a b x) (none : Option ℝ)) =
       Value.mask (compare (sl || su) a b) none := by
@@ -1166,7 +1166,7 @@ private theorem below_zero (strict : Bool) (b : Option ℝ) {r : ℝ → Option 
       rw [(below_observation_value strict u hg).1 integrableOn_zero, decide_eq_true hout]
       simp [Binding.guardValue]
 
-private theorem mul_mask_guard (γ : ℝ) (t s : Option Bool) (D : Option ℝ) :
+theorem mul_mask_guard (γ : ℝ) (t s : Option Bool) (D : Option ℝ) :
     Value.mul (some γ) (Value.mask t (Binding.guardValue s D)) =
       Value.mask t (Binding.guardValue s (Value.mul (some γ) D)) := by
   rcases t with _ | _ | _ <;> rcases s with _ | _ | _ <;>
