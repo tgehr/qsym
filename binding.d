@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -1836,6 +1836,97 @@ final class Bindings{
 		}else return false;
 		foreach_reverse(c;casts) rest=primitive(arena.at(nodes[c].data),[rest]);
 		return true;
+	}
+	// The comparisons of a weight that are not solved for the axis: one side
+	// is of degree one in the axis, a rational multiple of the axis plus
+	// terms that do not mention it, and the other side does not mention it.
+	// Such a comparison is a bound of the axis by the difference of the
+	// other side and those terms, times the inverse of the slope, from the
+	// other side where the slope is negative; both are missing exactly where
+	// a term is. The weight with every such comparison solved, equal to it
+	// at every point; none where there is nothing to solve. With `under`,
+	// the evaluation of a subterm of the source at a point, the proof of
+	// that equation is built with it.
+	private Spread solveBounds(uint body,scope string delegate(uint) @safe under){
+		auto inner=context(at(body)),real_=scalarType(Sort.real_);
+		enum src="Distribution.StepSource.";
+		string literal(Rational q){ return "(Numeric.calculate_sound ξ n"~to!string(arena.real_(q).id)~" "~SourceCertificates.q(q)~" rfl)"; }
+		bool axis(uint i){ auto v=nodes[i]; return v.op==BoundOp.variable&&v.data==0; }
+		bool isOp(uint i,Op op){ auto q=nodes[i]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op; }
+		// A rational literal as a factor.
+		bool factor(uint i,out Rational c){
+			auto q=nodes[i]; if(q.op!=BoundOp.scalar||!arena.isNumber(arena.at(q.data))) return false;
+			auto value=arena.number(arena.at(q.data)); c=value.re; return value.im.zero;
+		}
+		// The slope of a term of degree one in the axis: a sum of rational
+		// multiples of the axis and of terms that do not mention it. Decided
+		// without building anything.
+		bool slope(uint id,out Rational p,uint depth){
+			if(depth>16||type(at(id))!=real_) return false;
+			if(axis(id)){ p=Rational(1); return true; }
+			auto q=nodes[id]; Rational c,r1,r2;
+			if(isOp(id,Op.mul)){
+				bool left=factor(q.a,c);
+				if(!left&&!factor(q.b,c)||!slope(left?q.b:q.a,r1,depth+1)) return false;
+				p=c*r1; return p.words<=64;
+			}
+			if(!isOp(id,Op.add)) return false;
+			bool da=depends(at(q.a),0),db=depends(at(q.b),0);
+			if(!da&&!db||da&&!slope(q.a,r1,depth+1)||db&&!slope(q.b,r2,depth+1)) return false;
+			p=da&&db?r1+r2:da?r1:r2; return p.words<=64;
+		}
+		// The sum of what such a term has that does not mention the axis, in
+		// the order of the term with a zero for the axis, and the evidence.
+		BoundTerm offset(uint id,out string evidence){
+			auto zero=arena.real_(0);
+			if(axis(id)){
+				if(under) evidence="("~src~"Linear.axis "~literal(Rational(0))~")";
+				return scalar(inner,zero);
+			}
+			auto q=nodes[id]; Rational c; string e1,e2;
+			if(isOp(id,Op.mul)){
+				bool left=factor(q.a,c); if(!left) factor(q.b,c);
+				auto s=offset(left?q.b:q.a,e1);
+				if(under) evidence="("~src~"Linear."~(left?"scale ":"scaled ")~SourceCertificates.q(c)~
+					" (Numeric.calculate_sound ξ n"~to!string(nodes[left?q.a:q.b].data)~" "~SourceCertificates.q(c)~" rfl) "~e1~")";
+				return primitive(arena.at(q.data),left?[at(q.a),s]:[s,at(q.b)]);
+			}
+			bool da=depends(at(q.a),0),db=depends(at(q.b),0);
+			auto s1=da?offset(q.a,e1):at(q.a),s2=db?offset(q.b,e2):at(q.b);
+			if(under) evidence=da&&db?"("~src~"Linear.add "~e1~" "~e2~")":
+				da?"("~src~"Linear.add_left "~e1~" "~under(q.b)~")":"("~src~"Linear.add_right "~under(q.a)~" "~e2~")";
+			return primitive(arena.at(q.data),[s1,s2]);
+		}
+		string congr(string f,string a,string b){ return a.length||b.length?"(congrArg₂ "~f~" "~(a.length?a:"rfl")~" "~(b.length?b:"rfl")~")":""; }
+		Spread visit(uint id,uint depth){
+			auto q=nodes[id];
+			if(depth>64||q.op!=BoundOp.primitive&&q.op!=BoundOp.guard||!depends(at(id),0)) return Spread(id);
+			if(q.op==BoundOp.primitive&&(isOp(id,Op.le)||isOp(id,Op.lt))&&type(at(q.a))==real_){
+				bool da=depends(at(q.a),0),db=depends(at(q.b),0); auto side=da?q.a:q.b,other=da?q.b:q.a;
+				Rational p;
+				if(da==db||axis(side)||!slope(side,p,0)||p.zero) return Spread(id);
+				auto kappa=Rational(1)/p; if(kappa.words>64) return Spread(id);
+				string e; auto terms=offset(side,e),zero=arena.real_(0);
+				auto addOp=arena.add(zero,zero,true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
+				auto minus=scalar(inner,arena.real_(Rational(-1))),k=scalar(inner,arena.real_(kappa));
+				auto solved=primitive(mulOp,[primitive(addOp,[at(other),primitive(mulOp,[minus,terms])]),k]);
+				// The axis is on the side of the term of degree one where the
+				// slope is positive, and on the other side otherwise.
+				bool positive=Rational(0)<kappa,first=da==positive; auto x=variable(inner,0);
+				auto result=primitive(arena.at(q.data),first?[x,solved]:[solved,x]);
+				string proof;
+				if(under) proof="("~src~"solve_"~(da?"left":"right")~(positive?"":"_neg")~(isOp(id,Op.lt)?" true":" false")~
+					" (f := fun x : ℝ => "~under(side)~") "~under(other)~" "~SourceCertificates.q(kappa)~" "~e~" rfl "~literal(Rational(-1))~" "~literal(kappa)~" x)";
+				return Spread(result.id,proof);
+			}
+			auto a=visit(q.a,depth+1),b=q.b==uint.max?Spread.init:visit(q.b,depth+1);
+			if(a.id==q.a&&(q.b==uint.max||b.id==q.b)) return Spread(id);
+			auto rebuilt=q.op==BoundOp.guard?guard(at(a.id),at(b.id)):primitive(arena.at(q.data),q.b==uint.max?[at(a.id)]:[at(a.id),at(b.id)]);
+			if(!under) return Spread(rebuilt.id);
+			return Spread(rebuilt.id,q.b==uint.max?"(congrArg "~valueOperation(q)~" "~a.proof~")":congr(valueOperation(q),a.proof,b.proof));
+		}
+		auto r=visit(body,0);
+		return r.id==body?Spread.init:r;
 	}
 	// Bounds of the axis that compete at the front of the guard of the only
 	// weight of a Lebesgue observation: two on one side, or a third after a
@@ -6597,9 +6688,10 @@ final class Bindings{
 			auto ctx=context(t),weight=inheritHint(at(nodes[n.a].a),lambda(target));
 			return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
 		}
-		// The rule for several bounds on one side, below: the rest of the
-		// next rule may need it, and it that rule.
-		BoundTerm delegate(BoundTerm,uint) @safe splitLater;
+		// An observation that has a closed form, also after steps that leave
+		// an observation inside a larger term: such a step is taken only if
+		// what it leaves can be observed. Defined after those steps, below.
+		bool delegate(BoundTerm,uint) @safe observable;
 		// A guard that does not mention the axis leaves the observation. The
 		// mask is not strict, so this is an equation even where the inner
 		// observation is missing. Used only if the rest can then be observed.
@@ -6608,15 +6700,7 @@ final class Bindings{
 			if(depth>8||!axisFreeGuard(t.id,guard,rest,shape)) return BoundTerm.init;
 			auto ctx=context(t),weight=inheritHint(at(nodes[node(t).a].a),lambda(rest));
 			auto inside=distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
-			IntegralSolution trial; bool observed=integrateSteps(inside,trial)!=BoundTerm.init;
-			if(!observed){ trial=IntegralSolution.init; observed=integratePolynomials(inside,trial)!=BoundTerm.init; }
-			if(!observed){ trial=IntegralSolution.init; observed=integrateInterval(inside,trial)!=BoundTerm.init; }
-			if(!observed){ trial=IntegralSolution.init; observed=integrateGaussian(inside,trial)!=BoundTerm.init; }
-			if(!observed){ trial=IntegralSolution.init; observed=integrateCauchy(inside,trial)!=BoundTerm.init; }
-			if(!observed){ trial=IntegralSolution.init; observed=integrateMissingPoint(inside,trial)!=BoundTerm.init; }
-			if(!observed){ trial=IntegralSolution.init; observed=integratePieces(inside,trial)!=BoundTerm.init; }
-			if(!observed){ trial=IntegralSolution.init; observed=distributeMass(inside,trial,false)!=BoundTerm.init; }
-			if(!observed&&massGuard(inside,depth+1)==BoundTerm.init&&splitLater(inside,depth+1)==BoundTerm.init) return BoundTerm.init;
+			if(!observable(inside,depth+1)) return BoundTerm.init;
 			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[dropIndex(at(guard)),inside]);
 		}
 		// Several bounds of the axis on one side: a bound leaves the guard by a
@@ -6636,17 +6720,8 @@ final class Bindings{
 				auto weight=inheritHint(at(nodes[node(t).a].a),lambda(body));
 				return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
 			}
-			bool observable(BoundTerm inside) @safe {
-				IntegralSolution trial; bool observed=integrateSteps(inside,trial)!=BoundTerm.init;
-				if(!observed){ trial=IntegralSolution.init; observed=integratePolynomials(inside,trial)!=BoundTerm.init; }
-				if(!observed){ trial=IntegralSolution.init; observed=integrateInterval(inside,trial)!=BoundTerm.init; }
-				if(!observed){ trial=IntegralSolution.init; observed=integrateGaussian(inside,trial)!=BoundTerm.init; }
-				if(!observed){ trial=IntegralSolution.init; observed=integratePieces(inside,trial)!=BoundTerm.init; }
-				if(!observed){ trial=IntegralSolution.init; observed=distributeMass(inside,trial,false)!=BoundTerm.init; }
-				return observed||massGuard(inside,depth+1)!=BoundTerm.init||splitBounds(inside,depth+1)!=BoundTerm.init;
-			}
 			auto kept=mass(s.kept),changed=mass(s.changed);
-			if(!observable(kept)||!observable(changed)) return BoundTerm.init;
+			if(!observable(kept,depth+1)||!observable(changed,depth+1)) return BoundTerm.init;
 			auto zero=arena.real_(0);
 			BoundTerm term(size_t i){ return dropIndex(at(s.terms[i])); }
 			BoundTerm test(bool strict,BoundTerm a,BoundTerm b){ return primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[a,b]); }
@@ -6660,7 +6735,30 @@ final class Bindings{
 			bool strict=s.strict[0]||s.strict[1];
 			return masked(s.lower?test(strict,term(0),term(1)):test(strict,term(1),term(0)),sum);
 		}
-		splitLater=&splitBounds;
+		// A comparison that is not solved for the axis: one side is of degree
+		// one in the axis with a rational slope, the other does not mention
+		// it. The weight with every such comparison as a bound of the axis is
+		// the same at every point. Used only if it can then be observed.
+		BoundTerm solveMass(BoundTerm t,uint depth) @safe {
+			auto n=node(t); uint[] bodies;
+			if(depth>8||n.op!=BoundOp.distributionMass||!densityBodies(n.a,bodies)||bodies.length!=1) return BoundTerm.init;
+			auto solved=solveBounds(bodies[0],null); if(solved.id==uint.max) return BoundTerm.init;
+			auto ctx=context(t),weight=inheritHint(at(nodes[n.a].a),lambda(at(solved.id)));
+			auto inside=distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
+			return observable(inside,depth+1)?inside:BoundTerm.init;
+		}
+		bool observed(BoundTerm inside,uint depth) @safe {
+			IntegralSolution trial; bool found=integrateSteps(inside,trial)!=BoundTerm.init;
+			if(!found){ trial=IntegralSolution.init; found=integratePolynomials(inside,trial)!=BoundTerm.init; }
+			if(!found){ trial=IntegralSolution.init; found=integrateInterval(inside,trial)!=BoundTerm.init; }
+			if(!found){ trial=IntegralSolution.init; found=integrateGaussian(inside,trial)!=BoundTerm.init; }
+			if(!found){ trial=IntegralSolution.init; found=integrateCauchy(inside,trial)!=BoundTerm.init; }
+			if(!found){ trial=IntegralSolution.init; found=integrateMissingPoint(inside,trial)!=BoundTerm.init; }
+			if(!found){ trial=IntegralSolution.init; found=integratePieces(inside,trial)!=BoundTerm.init; }
+			if(!found){ trial=IntegralSolution.init; found=distributeMass(inside,trial,false)!=BoundTerm.init; }
+			return found||massGuard(inside,depth)!=BoundTerm.init||splitBounds(inside,depth)!=BoundTerm.init||solveMass(inside,depth)!=BoundTerm.init;
+		}
+		observable=&observed;
 		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
 			bool call(BoundNode q,Builtin f){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f;}
 			auto n=node(t);if(!call(n,Builtin.addN)||depends(at(n.b),0))return false;
@@ -8800,10 +8898,12 @@ final class Bindings{
 					auto strict=unguardMass(at(result.output)),unguarded=strict==BoundTerm.init?massGuard(at(result.output),0):BoundTerm.init;
 					IntegralSolution sum; auto spread=strict==BoundTerm.init&&unguarded==BoundTerm.init?distributeMass(at(result.output),sum,true):BoundTerm.init;
 					auto bounds=strict==BoundTerm.init&&unguarded==BoundTerm.init&&spread==BoundTerm.init?splitBounds(at(result.output),0):BoundTerm.init;
+					auto solved=strict==BoundTerm.init&&unguarded==BoundTerm.init&&spread==BoundTerm.init&&bounds==BoundTerm.init?solveMass(at(result.output),0):BoundTerm.init;
 					if(strict!=BoundTerm.init){ next=strict; rule=BindingRule.distributionMassStrictGuard; }
 					else if(spread!=BoundTerm.init){ next=spread; rule=BindingRule.distributionMassSpread; extra=cast(uint)integrals.length; integrals~=sum; }
 					else if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
 					else if(bounds!=BoundTerm.init){ next=bounds; rule=BindingRule.distributionMassBounds; }
+					else if(solved!=BoundTerm.init){ next=solved; rule=BindingRule.distributionMassSolve; }
 					else{ solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution); }
 				}
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
@@ -14182,6 +14282,13 @@ final class Bindings{
 					auto equation=tail.length?"(Eq.trans "~spread.proof~" "~tail~")":spread.proof;
 					if(guarded)equation="(Eq.trans "~equation~" (Distribution.DensityProgram.GuardedSum.sound "~lift~"))";
 					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_pointwise (w := "~fn(s.from[0])~") (v := "~fn(s.to[0])~") (fun x => "~equation~"); h)"; break;
+				}
+				case BindingRule.distributionMassSolve:{
+					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string fn(uint id){return "(fun x : ℝ => "~under(id)~")";}
+					auto body=nodes[nodes[n.a].a].a,solved=solveBounds(body,&under);
+					enforce(solved.id!=uint.max&&solved.id==nodes[nodes[nodes[p.to].a].a].a,"missing comparison to solve for the axis");
+					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_pointwise (w := "~fn(body)~") (v := "~fn(solved.id)~") (fun x => "~solved.proof~"); h)"; break;
 				}
 				case BindingRule.distributionMassBounds:{
 					BoundSplit s;enforce(competingBounds(p.from,s),"missing bounds on one side");

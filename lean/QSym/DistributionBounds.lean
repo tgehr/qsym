@@ -492,6 +492,217 @@ theorem third_first_integral (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Opt
     rw [h, h₂, axisBound_real, axisBound_real, axisBound_real]
     exact mask_implying_far (meets_of_not_implies hi) _
 
+/-! A comparison of the axis that is not solved for it. One side is of
+degree one in the axis, a rational multiple of the axis plus terms that do
+not mention it, and the other side does not mention it: the comparison is a
+bound of the axis by the difference of the other side and those terms,
+divided by the slope, from the other side where the slope is negative. Both
+are missing exactly where a term is, so this is an equation at every point
+for every definedness pattern. -/
+
+/-- A function of degree one in the axis: a rational multiple of the axis
+plus a partial value that does not mention it. -/
+structure Linear (f : ℝ → Option ℝ) (p : ℚ) (s : Option ℝ) : Prop where
+  equation : ∀ x, f x = Value.add (some ((p : ℝ) * x)) s
+
+theorem Linear.axis {z : Option ℝ} (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    Linear (fun x => some x) 1 z :=
+  ⟨fun x => by subst hz; simp [Value.add, Numeric.denote]⟩
+
+/-- A rational multiple, with the literal on either side. -/
+theorem Linear.scale {f : ℝ → Option ℝ} {p : ℚ} {s c : Option ℝ} (q : ℚ)
+    (hc : c = some (Numeric.denote (s := .real) q)) (h : Linear f p s) :
+    Linear (fun x => Value.mul c (f x)) (q * p) (Value.mul c s) :=
+  ⟨fun x => by
+    subst hc
+    rw [h.equation]
+    rcases s with _ | c
+    · rfl
+    · simp only [Value.add, Value.mul, Numeric.denote, Option.some.injEq]
+      push_cast
+      ring⟩
+
+theorem Linear.scaled {f : ℝ → Option ℝ} {p : ℚ} {s c : Option ℝ} (q : ℚ)
+    (hc : c = some (Numeric.denote (s := .real) q)) (h : Linear f p s) :
+    Linear (fun x => Value.mul (f x) c) (p * q) (Value.mul s c) :=
+  ⟨fun x => by
+    subst hc
+    rw [h.equation]
+    rcases s with _ | c
+    · rfl
+    · simp only [Value.add, Value.mul, Numeric.denote, Option.some.injEq]
+      push_cast
+      ring⟩
+
+/-- A summand that does not mention the axis, on either side. -/
+theorem Linear.add_left {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ} (h : Linear f p s)
+    (t : Option ℝ) : Linear (fun x => Value.add (f x) t) p (Value.add s t) :=
+  ⟨fun x => by
+    rw [h.equation]
+    rcases s with _ | c <;> rcases t with _ | d <;> simp only [Value.add, Option.some.injEq]
+    ring⟩
+
+theorem Linear.add_right {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ} (t : Option ℝ)
+    (h : Linear f p s) : Linear (fun x => Value.add t (f x)) p (Value.add t s) :=
+  ⟨fun x => by
+    rw [h.equation]
+    rcases s with _ | c <;> rcases t with _ | d <;> simp only [Value.add, Option.some.injEq]
+    ring⟩
+
+/-- Two summands of degree one. -/
+theorem Linear.add {f g : ℝ → Option ℝ} {p q : ℚ} {s t : Option ℝ} (hf : Linear f p s)
+    (hg : Linear g q t) : Linear (fun x => Value.add (f x) (g x)) (p + q) (Value.add s t) :=
+  ⟨fun x => by
+    rw [hf.equation, hg.equation]
+    rcases s with _ | c <;> rcases t with _ | d <;> simp only [Value.add, Option.some.injEq]
+    push_cast
+    ring⟩
+
+private theorem slope_inverse {p κ : ℚ} (h : p * κ = 1) : ((κ : ℚ) : ℝ) = ((p : ℚ) : ℝ)⁻¹ := by
+  have h' : (p : ℝ) * (κ : ℝ) = 1 := by exact_mod_cast h
+  exact eq_inv_of_mul_eq_one_right h'
+
+private theorem slope_positive {p κ : ℚ} (h : p * κ = 1) (hκ : 0 < κ) : (0 : ℝ) < (p : ℝ) := by
+  have hp : 0 < p := by
+    rcases lt_trichotomy p 0 with hn | hz | hp
+    · have : p * κ < 0 := mul_neg_of_neg_of_pos hn hκ
+      rw [h] at this
+      exact absurd this (by norm_num)
+    · rw [hz, zero_mul] at h
+      exact absurd h (by norm_num)
+    · exact hp
+  exact_mod_cast hp
+
+private theorem slope_negative {p κ : ℚ} (h : p * κ = 1) (hκ : κ < 0) : (p : ℝ) < 0 := by
+  have hp : p < 0 := by
+    rcases lt_trichotomy p 0 with hn | hz | hp
+    · exact hn
+    · rw [hz, zero_mul] at h
+      exact absurd h (by norm_num)
+    · have : p * κ < 0 := mul_neg_of_pos_of_neg hp hκ
+      rw [h] at this
+      exact absurd this (by norm_num)
+  exact_mod_cast hp
+
+private theorem solved_value (r c : ℝ) (κ : ℚ) :
+    Value.mul (Value.add (some r) (Value.mul (some (Numeric.denote (s := .real) (-1 : ℚ))) (some c)))
+        (some (Numeric.denote (s := .real) κ)) = some ((r - c) * (κ : ℝ)) := by
+  simp only [Value.add, Value.mul, Numeric.denote, Option.some.injEq]
+  push_cast
+  ring
+
+private theorem solved_missing {r s : Option ℝ} (m k : Option ℝ) (h : r = none ∨ s = none) :
+    Value.mul (Value.add r (Value.mul m s)) k = none := by
+  rcases h with rfl | rfl
+  · rfl
+  · rcases r with _ | r <;> rcases m with _ | m <;> rfl
+
+/-- The side of degree one on the left of a comparison, with a positive
+slope: an upper bound of the axis. -/
+theorem solve_left (σ : Bool) {f : ℝ → Option ℝ} {p : ℚ} {s m k : Option ℝ} (r : Option ℝ) (κ : ℚ)
+    (hf : Linear f p s) (hκ : decide (p * κ = 1 ∧ 0 < κ) = true)
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ)) (x : ℝ) :
+    compare σ (f x) r = compare σ (some x) (Value.mul (Value.add r (Value.mul m s)) k) := by
+  obtain ⟨hpk, hpos⟩ := of_decide_eq_true hκ
+  subst hm hk
+  rw [hf.equation]
+  rcases s with _ | c
+  · rw [solved_missing _ _ (Or.inr rfl), compare_missing_right]
+    exact compare_missing_left σ r
+  rcases r with _ | r
+  · rw [solved_missing _ _ (Or.inl rfl), compare_missing_right, compare_missing_right]
+  rw [solved_value, slope_inverse hpk]
+  have hp := slope_positive hpk hpos
+  show compare σ (some ((p : ℝ) * x + c)) (some r) = _
+  rw [compare_real, compare_real]
+  congr 1
+  apply decide_eq_decide.2
+  cases σ <;> simp only [holds, Bool.false_eq_true, if_false, if_true]
+  · rw [← div_eq_mul_inv, le_div_iff₀ hp]
+    constructor <;> intro h <;> linarith
+  · rw [← div_eq_mul_inv, lt_div_iff₀ hp]
+    constructor <;> intro h <;> linarith
+
+/-- With a negative slope: a lower bound. -/
+theorem solve_left_neg (σ : Bool) {f : ℝ → Option ℝ} {p : ℚ} {s m k : Option ℝ} (r : Option ℝ)
+    (κ : ℚ) (hf : Linear f p s) (hκ : decide (p * κ = 1 ∧ κ < 0) = true)
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ)) (x : ℝ) :
+    compare σ (f x) r = compare σ (Value.mul (Value.add r (Value.mul m s)) k) (some x) := by
+  obtain ⟨hpk, hneg⟩ := of_decide_eq_true hκ
+  subst hm hk
+  rw [hf.equation]
+  rcases s with _ | c
+  · rw [solved_missing _ _ (Or.inr rfl), compare_missing_left]
+    exact compare_missing_left σ r
+  rcases r with _ | r
+  · rw [solved_missing _ _ (Or.inl rfl), compare_missing_left, compare_missing_right]
+  rw [solved_value, slope_inverse hpk]
+  have hp := slope_negative hpk hneg
+  show compare σ (some ((p : ℝ) * x + c)) (some r) = _
+  rw [compare_real, compare_real]
+  congr 1
+  apply decide_eq_decide.2
+  cases σ <;> simp only [holds, Bool.false_eq_true, if_false, if_true]
+  · rw [← div_eq_mul_inv, div_le_iff_of_neg hp]
+    constructor <;> intro h <;> linarith
+  · rw [← div_eq_mul_inv, div_lt_iff_of_neg hp]
+    constructor <;> intro h <;> linarith
+
+/-- The side of degree one on the right, with a positive slope: a lower
+bound of the axis. -/
+theorem solve_right (σ : Bool) {f : ℝ → Option ℝ} {p : ℚ} {s m k : Option ℝ} (l : Option ℝ) (κ : ℚ)
+    (hf : Linear f p s) (hκ : decide (p * κ = 1 ∧ 0 < κ) = true)
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ)) (x : ℝ) :
+    compare σ l (f x) = compare σ (Value.mul (Value.add l (Value.mul m s)) k) (some x) := by
+  obtain ⟨hpk, hpos⟩ := of_decide_eq_true hκ
+  subst hm hk
+  rw [hf.equation]
+  rcases s with _ | c
+  · rw [solved_missing _ _ (Or.inr rfl), compare_missing_left]
+    exact compare_missing_right σ l
+  rcases l with _ | l
+  · rw [solved_missing _ _ (Or.inl rfl), compare_missing_left, compare_missing_left]
+  rw [solved_value, slope_inverse hpk]
+  have hp := slope_positive hpk hpos
+  show compare σ (some l) (some ((p : ℝ) * x + c)) = _
+  rw [compare_real, compare_real]
+  congr 1
+  apply decide_eq_decide.2
+  cases σ <;> simp only [holds, Bool.false_eq_true, if_false, if_true]
+  · rw [← div_eq_mul_inv, div_le_iff₀ hp]
+    constructor <;> intro h <;> linarith
+  · rw [← div_eq_mul_inv, div_lt_iff₀ hp]
+    constructor <;> intro h <;> linarith
+
+/-- With a negative slope: an upper bound. -/
+theorem solve_right_neg (σ : Bool) {f : ℝ → Option ℝ} {p : ℚ} {s m k : Option ℝ} (l : Option ℝ)
+    (κ : ℚ) (hf : Linear f p s) (hκ : decide (p * κ = 1 ∧ κ < 0) = true)
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ)) (x : ℝ) :
+    compare σ l (f x) = compare σ (some x) (Value.mul (Value.add l (Value.mul m s)) k) := by
+  obtain ⟨hpk, hneg⟩ := of_decide_eq_true hκ
+  subst hm hk
+  rw [hf.equation]
+  rcases s with _ | c
+  · rw [solved_missing _ _ (Or.inr rfl), compare_missing_right]
+    exact compare_missing_right σ l
+  rcases l with _ | l
+  · rw [solved_missing _ _ (Or.inl rfl), compare_missing_right, compare_missing_left]
+  rw [solved_value, slope_inverse hpk]
+  have hp := slope_negative hpk hneg
+  show compare σ (some l) (some ((p : ℝ) * x + c)) = _
+  rw [compare_real, compare_real]
+  congr 1
+  apply decide_eq_decide.2
+  cases σ <;> simp only [holds, Bool.false_eq_true, if_false, if_true]
+  · rw [← div_eq_mul_inv, le_div_iff_of_neg hp]
+    constructor <;> intro h <;> linarith
+  · rw [← div_eq_mul_inv, lt_div_iff_of_neg hp]
+    constructor <;> intro h <;> linarith
+
 end QSym.Distribution.StepSource
 
 namespace QSym.Distribution.DensityProgram

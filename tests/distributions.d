@@ -1508,8 +1508,26 @@ private Case[] cases(){
 	Case("CompetingCurvature","∫dx [0≤x]*[x≤1]*[x≤a]*exp(-c*x^2)*λ[x]","ℝ"),
 	Case("CompetingPole","∫dx [0≤x]*[x≤1]*[x≤a]*(1/x)*λ[x]","ℝ"),
 	Case("CompetingSum","∫dx [0≤x]*[x≤1]*[x≤a]*(x+[x≤1/2])*λ[x]","ℝ"),
-	Case("CompetingUnsolved","∫dx [0≤x]*[x≤1]*[2*x≤a]*λ[x]","ℝ"),
 	Case("CompetingUnbounded","∫dx [0≤x]*[a≤x]*λ[x]","ℝ"),
+	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
+	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
+	Case("SolvedOffset","∫dx [0≤x]*[x+1≤a]*λ[x]","ℝ","[1≤a]·(a-1)"),
+	Case("SolvedNegative","∫dy [0≤y]*[0≤x-y]*λ[y]","ℝ","[0≤x]·x"),
+	Case("SolvedNegativeLeft","∫dx [1-x≤a]*[x≤1]*λ[x]","ℝ","[0≤a]·a"),
+	Case("SolvedRight","∫dx [a≤2*x+1]*[x≤1]*x*λ[x]","ℝ","[a≤3]·(-(a·(1/4)-1/4)·(a·(1/2)-1/2)+1/2)"),
+	Case("SolvedRightNegative","∫dx [0≤x]*[a≤3-2*x]*x*λ[x]","ℝ","[a≤3]·((-a·(1/2)+3/2)·(-a·(1/4)+3/4))"),
+	Case("SolvedTerms","∫dx [0≤x]*[3*x-a≤b+1]*x*λ[x]","ℝ","[-1/3≤a·(1/3)+b·(1/3)]·((a·(1/6)+b·(1/6)+1/6)·(a·(1/3)+b·(1/3)+1/3))"),
+	Case("SolvedHalf","∫dx [x/2+b≤a]*[0≤x]*exp(x)*λ[x]","ℝ","[0≤-2·b+2·a]·(exp(-2·b+2·a)-1)"),
+	Case("SolvedDomain","∫dx [0≤x]*[2*x≤a]*(1/c)*λ[x]","ℝ","[0≤a]·(guard(c≠0,a·c⁻¹·(1/2)))"),
+	Case("SolvedCompeting","∫dx [0≤x]*[x≤1]*[2*x≤a]*λ[x]","ℝ","[a<2∧0≤a]·(a·(1/2))+[2≤a]"),
+	Case("SolvedConvolution","∫dy [0≤y]*[y≤1]*[0≤x-y]*[x-y≤1]*λ[y]","ℝ","[x<1∧0≤x]·x+[1≤x]·([1<x∧x≤2]·(-x+2)+[x≤1])"),
+	Case("SolvedFunction","λ(t:ℝ).∫dx [0≤x]*[2*x≤t]*λ[x]","ℝ→ℝ","λ(t:ℝ). [0≤t]·(t·(1/2))"),
+	Case("SolvedFunctionSum","λ(t:ℝ).∫dx [0≤x]*[2*x+t+3*x≤1]*λ[x]","ℝ→ℝ","λ(t:ℝ). [t≤1]·(-t·(1/5)+1/5)"),
+	Case("SolvedNested","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x+y≤1]*λ[x]*λ[y]","ℝ","1/2"),
+	Case("SolvedNestedSum","∫dy [0≤y]*[y≤1]*λ[y]*∫dx [0≤x]*[x+y+x≤1]*λ[x]","ℝ","1/4"),
+	Case("SolvedBothSides","∫dx [0≤x]*[x≤1]*[x+a≤2*x+b]*λ[x]","ℝ"),
+	Case("SolvedSlope","∫dx [0≤x]*[x≤1]*[a*x≤1]*λ[x]","ℝ"),
+	Case("SolvedSquare","∫dx [0≤x]*[x≤1]*[x^2≤a]*λ[x]","ℝ"),
 	Case("QuotientPoleTwo","∫dx [1≤x≤2]*(1/(x+1)+1/x)*λ[x]","ℝ"),
 	Case("QuotientPoleQuadratic","∫dx [1≤x≤2]*(1/(x^2+1))*λ[x]","ℝ","atan(2)-1/4·π"),
 	Case("QuotientScale","∫dx [1≤x≤2]*c/x*λ[x]","ℝ","c·log(2)"),
@@ -3100,13 +3118,12 @@ private void run(string directory){
 		// the cast of a bracket, or a mask under the guard of its domain.
 		// A case that has no closed form keeps the whole integral: a
 		// curvature that is a term, a pole between the bounds, a sum with a
-		// bound of its own, a bound that is not solved for the axis, a
-		// half-line of infinite length.
+		// bound of its own, a half-line of infinite length.
 		if(c.name.indexOf("Competing")==0){
 			enum program="Distribution.DensityProgram.",src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(evidence)>=0; }
-			bool retained=among("CompetingCurvature","CompetingPole","CompetingSum","CompetingUnsolved","CompetingUnbounded");
+			bool retained=among("CompetingCurvature","CompetingPole","CompetingSum","CompetingUnbounded");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			bool sameLower=among("CompetingHalfLine","CompetingSameSideLower","CompetingDomainHalfLine","CompetingRateHalfLine","CompetingFunctionHalfLine");
 			bool sameUpper=among("CompetingBelow","CompetingSameSide","CompetingSameSideUnit","CompetingDomainSameSide");
@@ -3131,6 +3148,41 @@ private void run(string directory){
 				enforce(has(src~"Masks.mask ("~src~"Conjunction.one "),c.name~" masks of masks");
 			enforce(has(src~"Conjunction.cons ")!=(retained||domain||among("CompetingFunctionHalfLine")),c.name~" conjunction nested to the right");
 			enforce(has(program~"mass_guard ")==among("CompetingGuard"),c.name~" guard that does not mention the axis");
+		}
+		// A comparison that is not solved for the axis: one side is of
+		// degree one in the axis, a rational multiple of the axis plus terms
+		// that do not mention it, and the other side does not mention it.
+		// The comparison is a bound of the axis by the difference of the
+		// other side and those terms, times the inverse of the slope, from
+		// the other side where the slope is negative; both are missing
+		// exactly where a term is, so the weight with the bound is the same
+		// at every point. The step is taken only if the observation then has
+		// a closed form, by whatever rule: a bound that competes with
+		// others, also below a binder. The domain of a value takes the
+		// negation of the comparison along, and that is solved with it. A
+		// comparison with the axis on both sides, a slope that is a term and
+		// a power of the axis keep their integral.
+		if(c.name.indexOf("Solved")==0){
+			enum src="Distribution.StepSource.";
+			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
+			bool retained=among("SolvedBothSides","SolvedSlope","SolvedSquare");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce(has("Linear.axis ")!=retained,c.name~" axis");
+			bool rightNegative=among("SolvedNegative","SolvedRightNegative","SolvedConvolution");
+			bool leftNegative=among("SolvedNegativeLeft","SolvedConvolution");
+			enforce(has("solve_left ")==(!retained&&!leftNegative&&!rightNegative&&!among("SolvedRight")),c.name~" upper bound from the left");
+			enforce(has("solve_left_neg ")==leftNegative,c.name~" lower bound from the left");
+			enforce(has("solve_right ")==among("SolvedRight","SolvedDomain"),c.name~" lower bound from the right");
+			enforce(has("solve_right_neg ")==rightNegative,c.name~" upper bound from the right");
+			enforce(has("solve_left true ")==among("SolvedStrict"),c.name~" strict comparison");
+			enforce(has("solve_right true ")==among("SolvedDomain"),c.name~" negation in the domain");
+			enforce(has("Linear.add ")==among("SolvedFunctionSum","SolvedNestedSum"),c.name~" axis in two summands");
+			if(among("Solved")) enforce(has("Linear.scaled "),c.name~" literal behind the axis");
+			if(among("SolvedNegativeLeft")) enforce(has("Linear.scale "),c.name~" literal in front of the axis");
+			if(among("SolvedOffset")) enforce(has("Linear.add_left "),c.name~" term behind the axis");
+			if(among("SolvedNegative")) enforce(has("Linear.add_right "),c.name~" term in front of the axis");
+			enforce((certificate.indexOf("Distribution.DensityProgram.mass_third_")>=0)==among("SolvedCompeting","SolvedConvolution","SolvedNested"),c.name~" competing bounds");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;
