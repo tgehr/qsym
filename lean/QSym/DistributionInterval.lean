@@ -1041,6 +1041,77 @@ end QSym.Distribution.StepSource
 
 namespace QSym.Distribution.DensityProgram
 
+/-- A product distributes over a sum, for every definedness pattern. -/
+theorem _root_.QSym.Value.add_mul (a b c : Option ℝ) :
+    Value.mul (Value.add a b) c = Value.add (Value.mul a c) (Value.mul b c) := by
+  cases a <;> cases b <;> cases c <;> simp [Value.add, Value.mul, _root_.add_mul]
+
+theorem _root_.QSym.Value.mul_add (a b c : Option ℝ) :
+    Value.mul a (Value.add b c) = Value.add (Value.mul a b) (Value.mul a c) := by
+  cases a <;> cases b <;> cases c <;> simp [Value.add, Value.mul, _root_.mul_add]
+
+/-- A mask distributes over a sum: it is not strict, and the masked sum
+vanishes where the masked summands do. -/
+theorem _root_.QSym.Value.mask_add (g : Option Bool) (a b : Option ℝ) :
+    Value.mask g (Value.add a b) = Value.add (Value.mask g a) (Value.mask g b) := by
+  rcases g with _ | _ | _ <;> simp [Value.mask, Value.add]
+
+/-- Summands, some under the guard of their domain: the sum, the guards in
+order, and the sum of the bare summands. -/
+inductive GuardedSum : Option ℝ → List (Option Bool) → Option ℝ → Prop
+  | bare (v : Option ℝ) : GuardedSum v [] v
+  | guard (d : Option Bool) (v : Option ℝ) : GuardedSum (Binding.guardValue d v) [d] v
+  | add {a b x y : Option ℝ} {ds es : List (Option Bool)} (ha : GuardedSum a ds x)
+      (hb : GuardedSum b es y) : GuardedSum (Value.add a b) (ds ++ es) (Value.add x y)
+
+theorem foldr_guard (ds : List (Option Bool)) (x : Option ℝ) :
+    ds.foldr Binding.guardValue x = if ∀ d ∈ ds, d = some true then x else none := by
+  induction ds with
+  | nil => simp
+  | cons d ds ih =>
+    rw [List.foldr_cons, ih]
+    by_cases hd : d = some true
+    · subst hd
+      by_cases hr : ∀ d ∈ ds, d = some true
+      · simp [Binding.guardValue, hr]
+      · simp [Binding.guardValue, hr]
+    · have hn : ¬ ∀ e ∈ d :: ds, e = some true := fun h => hd (h d (List.mem_cons_self))
+      rw [if_neg hn]
+      rcases d with _ | _ | _
+      · rfl
+      · rfl
+      · exact absurd rfl hd
+
+/-- The guards leave a sum together: it is missing where one of them fails. -/
+theorem GuardedSum.sound {a x : Option ℝ} {ds : List (Option Bool)} (h : GuardedSum a ds x) :
+    a = ds.foldr Binding.guardValue x := by
+  induction h with
+  | bare v => rfl
+  | guard d v => rfl
+  | add ha hb iha ihb =>
+    rw [iha, ihb, foldr_guard, foldr_guard, foldr_guard]
+    rename_i ds es
+    by_cases h1 : ∀ d ∈ ds, d = some true
+    · by_cases h2 : ∀ d ∈ es, d = some true
+      · have h3 : ∀ d ∈ ds ++ es, d = some true := fun d hd =>
+          (List.mem_append.1 hd).elim (h1 d) (h2 d)
+        rw [if_pos h1, if_pos h2, if_pos h3]
+      · have h3 : ¬ ∀ d ∈ ds ++ es, d = some true := fun h =>
+          h2 fun d hd => h d (List.mem_append.2 (Or.inr hd))
+        rw [if_pos h1, if_neg h2, if_neg h3]
+        rename_i x y
+        cases x <;> rfl
+    · have h3 : ¬ ∀ d ∈ ds ++ es, d = some true := fun h =>
+        h1 fun d hd => h d (List.mem_append.2 (Or.inl hd))
+      rw [if_neg h1, if_neg h3]
+      rfl
+
+/-- Weights that agree at every point have the same mass. -/
+theorem mass_pointwise {w v : ℝ → Option ℝ} (h : ∀ x, w x = v x) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      massValue (DensityProgram.weight v .lebesgue).presentation := by
+  rw [funext h]
+
 /-- The mass of a weight that is such an observation, as of a sum of them. -/
 theorem presentation_mass_pieces {w f : ℝ → Option ℝ} {out : Option ℝ}
     (h : StepSource.Piece f out) (hw : ∀ x, w x = f x) :

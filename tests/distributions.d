@@ -621,8 +621,25 @@ private Case[] cases(){ return [
 	Case("PiecesGuarded","∫dx [c≤d]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","[c≤d]·2"),
 	Case("PiecesNested","λ(t:ℝ).∫dx ([x≤0]*exp(x)+[0≤x]*[x≤t]*exp(-x))*λ[x]","ℝ→ℝ","λ(t:ℝ). [0≤t]·(-exp(-t)+1)+1"),
 	Case("PiecesGrowing","∫dx ([x≤0]*exp(x)+[0≤x]*exp(x))*λ[x]","ℝ"),
-	Case("PiecesFactor","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*x^2*λ[x]","ℝ"),
 	Case("PiecesWhole","∫dx ([x≤0]*exp(x)+exp(-x^2))*λ[x]","ℝ"),
+	Case("SpreadMoment","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*x^2*λ[x]","ℝ","4"),
+	Case("SpreadMean","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]*x","ℝ","0"),
+	Case("SpreadScaled","∫dx c*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","2·c"),
+	Case("SpreadDomain","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))/a*λ[x]","ℝ","guard(a≠0,2·a⁻¹)"),
+	Case("SpreadRoot","∫dx sqrt(b)*([x≤0]*exp(x)+[0≤x]*exp(-x))*x^2*λ[x]","ℝ","guard(0≤b,4·sqrt(b))"),
+	Case("SpreadNested","∫dx x*([x≤0]*exp(x)+[0≤x]*exp(-x))*(x+1)/2*λ[x]","ℝ","2"),
+	Case("SpreadSummand","∫dx (([x≤0]*exp(x)+[0≤x]*exp(-x))*x+[1≤x]*exp(-x))*λ[x]","ℝ","exp(-1)"),
+	Case("SpreadThree","∫dx ([x≤-1]*exp(x)+[-1≤x≤1]+[1≤x]*exp(-x))*x^2*λ[x]","ℝ","10·exp(-1)+2/3"),
+	Case("SpreadGuarded","∫dx [c≤d]*([x≤0]*exp(x)+[0≤x]*exp(-x))*x^2*λ[x]","ℝ","[c≤d]·4"),
+	Case("SpreadAbsolute","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*abs(x)*λ[x]","ℝ","2"),
+	Case("SpreadMask","∫dx [x≤1]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","-exp(-1)+2"),
+	Case("SpreadMaskInterval","∫dx [-1≤x≤1]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","-2·exp(-1)+2"),
+	Case("SpreadMaskPolynomial","∫dx [0≤x]*([x≤1]*x+[1≤x]*exp(1-x))*x*λ[x]","ℝ","7/3"),
+	Case("SpreadGrowing","∫dx ([x≤0]*exp(x)+[0≤x]*exp(x))*x^2*λ[x]","ℝ"),
+	Case("SpreadGaussian","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*exp(-x^2)*λ[x]","ℝ"),
+	Case("SpreadSymbolicBound","∫dx [x≤t]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ"),
+	Case("SpreadPower","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))^2*λ[x]","ℝ"),
+	Case("SpreadAxisDomain","∫dx (([x≤0]*exp(x)+[0≤x]*exp(-x))/a+[1≤x]*exp(-x)*sqrt(b))*λ[x]","ℝ"),
 	Case("GaussianSymbolic","∫dx exp(-(x-m)^2)*λ[x]","ℝ","sqrt(π)"),
 	Case("GaussianSymbolicOffset","∫dx exp(-x^2+a)*λ[x]","ℝ","sqrt(π)·exp(a)"),
 	Case("GaussianSymbolicMean","∫dx x*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","m"),
@@ -1216,10 +1233,9 @@ private void run(string directory){
 		// A sum of observations between bounds, each with bounds of its own:
 		// every summand is integrable or missing somewhere, so the observation
 		// of the sum is the sum of the observations. A summand that cannot be
-		// observed, a factor of the sum and a summand on the whole line keep
-		// their integral.
+		// observed and a summand on the whole line keep their integral.
 		if(c.name.indexOf("Pieces")==0){
-			bool retained=c.name=="PiecesGrowing"||c.name=="PiecesFactor"||c.name=="PiecesWhole";
+			bool retained=c.name=="PiecesGrowing"||c.name=="PiecesWhole";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0&&certificate.indexOf("Distribution.StepSource.Piece.add")>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			if(!retained){
@@ -1233,6 +1249,27 @@ private void run(string directory){
 			if(c.name=="PiecesVertex") enforce(certificate.indexOf("Distribution.StepSource.HalfLineTerms.gaussian")>=0,c.name~" vertex");
 			if(c.name=="PiecesScaled") enforce(certificate.indexOf("Distribution.StepSource.HalfLineTerms.scaled")>=0&&certificate.indexOf("Distribution.StepSource.UpperTerms.scaled")>=0,c.name~" scale");
 			if(c.name=="PiecesGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+		}
+		// A factor or a mask of such a sum goes under it, where every summand is
+		// then such an observation: a product and a mask distribute over a sum
+		// for every definedness pattern, and each summand takes its normal
+		// form by itself, the guards of the domains around the sum. A summand
+		// that is then not observed, a power of the sum and a domain that
+		// mentions the axis keep their integral.
+		if(c.name.indexOf("Spread")==0){
+			bool retained=c.name=="SpreadGrowing"||c.name=="SpreadGaussian"||c.name=="SpreadSymbolicBound"||c.name=="SpreadPower"||c.name=="SpreadAxisDomain";
+			bool mask=c.name.indexOf("SpreadMask")==0,guarded=c.name=="SpreadDomain"||c.name=="SpreadRoot";
+			enforce((certificate.indexOf("Distribution.DensityProgram.mass_pointwise")>=0)!=retained,c.name~" certificate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(!retained){
+				enforce((certificate.indexOf("Value.mask_add")>=0)==mask,c.name~" mask of a sum");
+				enforce(certificate.indexOf("Value.add_mul")>=0||certificate.indexOf("Value.mul_add")>=0||mask,c.name~" factor of a sum");
+				enforce((certificate.indexOf("Distribution.DensityProgram.GuardedSum.sound")>=0)==guarded,c.name~" domains");
+				enforce(certificate.indexOf("Binding.preserveDomain")>=0,c.name~" normal forms");
+				enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0,c.name~" observations");
+			}
+			if(c.name=="SpreadNested") enforce(certificate.indexOf("Value.add_mul")>=0&&certificate.indexOf("Value.mul_add")>=0,c.name~" both sides");
+			if(c.name=="SpreadGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		// A strict guard that does not mention the axis leaves the observation,
 		// from the top of a weight or of a factor of it, whether or not the
