@@ -203,6 +203,15 @@ inductive IntervalTerms (a b m : Option ℝ) : (ℝ → Option ℝ) → Option �
   | add {v w : ℝ → Option ℝ} {s t : Option ℝ} :
       IntervalTerms a b m v s → IntervalTerms a b m w t →
       IntervalTerms a b m (fun x => Value.add (v x) (w x)) (Value.add s t)
+  /-- Any continuous value with an antiderivative, and the same under a scale. -/
+  | primitive {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {g F : ℝ → ℝ}
+      (hv : ∀ x, v x = some (g x)) (hG : ∀ t, G (some t) = some (F t)) (hc : Continuous g)
+      (hd : ∀ x, HasDerivAt F (g x) x) :
+      IntervalTerms a b m v (Value.add (G b) (Value.mul m (G a)))
+  | scaledPrimitive {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {c : Option ℝ} {g F : ℝ → ℝ}
+      (hv : ∀ x, v x = Value.mul c (some (g x))) (hG : ∀ t, G (some t) = some (F t))
+      (hc : Continuous g) (hd : ∀ x, HasDerivAt F (g x) x) :
+      IntervalTerms a b m v (Value.mul c (Value.add (G b) (Value.mul m (G a))))
 
 private theorem difference {G : Option ℝ → Option ℝ} {P p : List ℚ} {r s : ℚ}
     (hG : ExpPolynomial (fun t => G (some t)) P s) (hd : expPrimitive P p r s = true)
@@ -247,6 +256,22 @@ theorem IntervalTerms.sound {a b m : Option ℝ} {v : ℝ → Option ℝ} {out :
     · refine Or.inr ⟨fun x => ?_, by rw [hs]; rfl⟩
       show Value.add (v x) (w x) = _
       rw [hv x]; rfl
+  | @primitive v G g F hv hG hc hd =>
+    refine Or.inl ⟨g, hc, hv, ?_⟩
+    rw [hG u, hG l, intervalIntegral.integral_eq_sub_of_hasDerivAt (fun x _ => hd x)
+      (hc.intervalIntegrable _ _)]
+    simp only [Value.mul, Value.add, Option.some.injEq]
+    ring
+  | @scaledPrimitive v G c g F hv hG hc hd =>
+    cases c with
+    | none => exact Or.inr ⟨fun x => by rw [hv x]; rfl, rfl⟩
+    | some c =>
+      refine Or.inl ⟨fun x => c * g x, continuous_const.mul hc, fun x => by rw [hv x]; rfl, ?_⟩
+      rw [hG u, hG l, intervalIntegral.integral_const_mul,
+        intervalIntegral.integral_eq_sub_of_hasDerivAt (fun x _ => hd x)
+          (hc.intervalIntegrable _ _)]
+      simp only [Value.mul, Value.add, Option.some.injEq]
+      ring
 
 private theorem and_some (p q : Bool) : Value.and (some p) (some q) = some (p && q) := by
   cases p <;> rfl
@@ -488,6 +513,19 @@ inductive HalfLineTerms (a m : Option ℝ) : (ℝ → Option ℝ) → Option ℝ
   | add {v w : ℝ → Option ℝ} {s t : Option ℝ} :
       HalfLineTerms a m v s → HalfLineTerms a m w t →
       HalfLineTerms a m (fun x => Value.add (v x) (w x)) (Value.add s t)
+  /-- Any value that is integrable above every bound with an antiderivative
+  that vanishes at infinity and is strict in the bound, and the same under a
+  scale. -/
+  | primitive {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {g F : ℝ → ℝ}
+      (hv : ∀ x, v x = some (g x)) (hG : ∀ t, G (some t) = some (F t)) (h0 : G none = none)
+      (hi : ∀ l, IntegrableOn g (Ioi l) volume) (hd : ∀ x, HasDerivAt F (g x) x)
+      (ht : Filter.Tendsto F Filter.atTop (nhds 0)) :
+      HalfLineTerms a m v (Value.mul m (G a))
+  | scaledPrimitive {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {c : Option ℝ} {g F : ℝ → ℝ}
+      (hv : ∀ x, v x = Value.mul c (some (g x))) (hG : ∀ t, G (some t) = some (F t))
+      (h0 : G none = none) (hi : ∀ l, IntegrableOn g (Ioi l) volume)
+      (hd : ∀ x, HasDerivAt F (g x) x) (ht : Filter.Tendsto F Filter.atTop (nhds 0)) :
+      HalfLineTerms a m v (Value.mul c (Value.mul m (G a)))
 
 theorem HalfLineTerms.missing {a m : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
     (h : HalfLineTerms a m v out) (ha : a = none) : out = none := by
@@ -496,6 +534,8 @@ theorem HalfLineTerms.missing {a m : Option ℝ} {v : ℝ → Option ℝ} {out :
   | pure _ _ h0 _ _ => rw [h0]; cases m <;> rfl
   | @scaled v G c p P r s _ _ h0 _ _ => rw [h0]; cases m <;> cases c <;> rfl
   | add _ _ ih₁ _ => rw [ih₁]; rfl
+  | primitive _ _ h0 _ _ _ => rw [h0]; cases m <;> rfl
+  | @scaledPrimitive v G c g F _ _ h0 _ _ _ => rw [h0]; cases m <;> cases c <;> rfl
 
 theorem HalfLineTerms.sound {a m : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
     (h : HalfLineTerms a m v out) (hm : m = some (-1 : ℝ)) {l : ℝ} (ha : a = some l) :
@@ -534,6 +574,20 @@ theorem HalfLineTerms.sound {a m : Option ℝ} {v : ℝ → Option ℝ} {out : O
     · refine Or.inr ⟨fun x => ?_, by rw [hs]; rfl⟩
       show Value.add (v x) (w x) = _
       rw [hv x]; rfl
+  | @primitive v G g F hv hG _ hi hd ht =>
+    refine Or.inl ⟨g, hi l, hv, ?_⟩
+    rw [integral_Ioi_of_hasDerivAt_of_tendsto' (fun x _ => hd x) (hi l) ht, hG l]
+    simp only [Value.mul, Option.some.injEq]
+    ring
+  | @scaledPrimitive v G c g F hv hG _ hi hd ht =>
+    cases c with
+    | none => exact Or.inr ⟨fun x => by rw [hv x]; rfl, rfl⟩
+    | some c =>
+      refine Or.inl ⟨fun x => c * g x, (hi l).const_mul c, fun x => by rw [hv x]; rfl, ?_⟩
+      rw [integral_const_mul, integral_Ioi_of_hasDerivAt_of_tendsto' (fun x _ => hd x) (hi l) ht,
+        hG l]
+      simp only [Value.mul, Option.some.injEq]
+      ring
 
 /-- The observation of a guarded value above one partial bound. -/
 theorem halfline_integral (strict : Bool) (a m : Option ℝ)

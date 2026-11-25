@@ -632,6 +632,24 @@ private Case[] cases(){ return [
 	Case("LimitOffsetBottom","lim[x→-∞] x*exp(a+b+3*x)","ℝ","0"),
 	Case("LimitOffsetGrowing","lim[x→∞] exp(a+x)","ℝ"),
 	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
+	Case("CurveHalfLine","∫dx [0≤x]*x*exp(-x^2)*λ[x]","ℝ","1/2"),
+	Case("CurveInterval","∫dx [0≤x≤1]*x*exp(-x^2)*λ[x]","ℝ","-1/2·exp(-1)+1/2"),
+	Case("CurveSymbolicBound","∫dx [a≤x]*x*exp(-x^2)*λ[x]","ℝ","1/2·exp(-a^2)"),
+	Case("CurveSymbolicBounds","∫dx [a≤x≤b]*x*exp(-x^2/2)*λ[x]","ℝ","[a≤b]·(exp(-1/2·a^2)-exp(-1/2·b^2))"),
+	Case("CurveGrowing","∫dx [0≤x≤1]*(2*x+1)*exp(x^2+x)*λ[x]","ℝ","exp(2)-1"),
+	Case("CurveMoment","∫dx [0≤x]*x^3*exp(-x^2)*λ[x]","ℝ","1/2"),
+	Case("CurveCubic","∫dx [0≤x]*x^2*exp(-x^3)*λ[x]","ℝ","1/3"),
+	Case("CurveScaled","∫dx [0≤x]*c*x*exp(-x^2)*λ[x]","ℝ","c·(1/2)"),
+	Case("CurveTwoScales","∫dx [0<x]*[x<1]*c*x*exp(x^2)*d*λ[x]","ℝ","c·d·(1/2·e-1/2)"),
+	Case("CurveSum","∫dx [0≤x]*(x*exp(-x^2)+exp(-x))*λ[x]","ℝ","3/2"),
+	Case("CurveConstant","∫dx [0≤x]*x*exp(-x^2+1)*λ[x]","ℝ","1/2·e"),
+	Case("CurveCdf","λ(a:ℝ).∫dx [0≤x]*[x≤a]*2*x*exp(-x^2)*λ[x]","ℝ→ℝ","λ(a:ℝ). [0≤a]·(-exp(-a^2)+1)"),
+	Case("CurveGuarded","∫dx [c≤d]*[0≤x]*x*exp(-x^2)*λ[x]","ℝ","[c≤d]·(1/2)"),
+	Case("CurveLaw","∫dx ([0≤x]*2*x*exp(-x^2)*λ[x])*x^2","ℝ","1"),
+	Case("CurveEven","∫dx [0≤x]*x^2*exp(-x^2)*λ[x]","ℝ"),
+	Case("CurveHalfLineGrowing","∫dx [0≤x]*x*exp(x^2)*λ[x]","ℝ"),
+	Case("CurveUpper","∫dx [x≤0]*x*exp(-x^2)*λ[x]","ℝ"),
+	Case("CurveOffset","∫dx [0≤x]*x*exp(-x^2+a)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
 	Case("SymbolicIntervalSine","∫dx [a≤x≤b]*sin(x)*λ[x]","ℝ"),
@@ -1012,6 +1030,21 @@ private void run(string directory){
 			bool retained=c.name=="HalfLineGrowing"||c.name=="HalfLineUpper"||c.name=="HalfLineOffsetGrowing";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_halfline")>=0)!=retained,c.name~" half-line certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
+		// A polynomial times the exponential of a polynomial is integrated
+		// between bounds and above a bound where an antiderivative has the same
+		// shape: R'+E'·R=P has a polynomial solution. Above a bound the exponent
+		// must descend. Without such a solution, with an exponent that grows
+		// above a bound, below an upper bound alone and with a constant part of
+		// the exponent that is not a number the integral stays.
+		if(c.name.indexOf("Curve")==0){
+			bool retained=c.name=="CurveEven"||c.name=="CurveHalfLineGrowing"||c.name=="CurveUpper"||c.name=="CurveOffset";
+			bool half=c.name!="CurveInterval"&&c.name!="CurveSymbolicBounds"&&c.name!="CurveGrowing"&&c.name!="CurveTwoScales"&&c.name!="CurveCdf";
+			bool scaled=c.name=="CurveScaled"||c.name=="CurveTwoScales";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_"~(half?"halfline":"interval"))>=0)!=retained,c.name~" certificate");
+			enforce((certificate.indexOf("Distribution.StepSource."~(half?"HalfLineTerms":"IntervalTerms")~(scaled?".scaledCurve ":".curve "))>=0)!=retained,c.name~" antiderivative");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(c.name=="CurveSum") enforce(certificate.indexOf("HalfLineTerms.pure")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" terms");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;

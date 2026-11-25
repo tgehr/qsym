@@ -66,7 +66,10 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 }
 // One summand below an interval guard: a polynomial in the axis with an
 // optional factor that does not mention the axis, and its antiderivative.
-private struct IntervalTerm{ uint value,primitive=uint.max; bool scaled; }
+// With `curved` the summand is a polynomial times the exponential of a
+// polynomial; above a single bound that exponent stays below the linear
+// `rate`, and their difference has degree `order`.
+private struct IntervalTerm{ uint value,primitive=uint.max; bool scaled,curved; Rational rate; uint order; }
 private struct IntervalData{
 	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne;
 	bool swap,strictLower,strictUpper,nested,half;
@@ -3116,11 +3119,45 @@ final class Bindings{
 				Rational[] w; Rational rate; if(!axisExponential(id,w,rate)) return BoundTerm.init;
 				outer=polyProduct(outer,w); outerRate=outerRate+rate; if(outer.length>64) return BoundTerm.init;
 			}
+			// A polynomial P times the exponential of a polynomial E that is not
+			// constant has an antiderivative R·exp(E) exactly when R'+E'·R=P
+			// has a polynomial solution: its coefficients follow from the
+			// highest down, and then the equations of the lowest degrees must
+			// hold. Above a single bound the exponent must descend, with the
+			// rate and the order of its decay. Only without further weights.
+			bool curve(Rational[] p,Rational[] exponent,out Rational[] R,out Rational[] E,out Rational rate,out size_t order){
+				if(solution.from.length!=1) return false;
+				E=exponent.dup;
+				while(E.length&&E[$-1].zero) E.length=E.length-1;
+				while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(E.length<2||!p.length) return false;
+				auto slope=new Rational[](E.length-1);
+				foreach(j,ref c;slope) c=Rational(cast(long)j+1)*E[j+1];
+				auto top=slope.length-1;
+				if(p.length<=top) return false;
+				R=new Rational[](p.length-top);
+				foreach(ref c;R) c=Rational(0);
+				Rational at(size_t k){ return k<R.length?R[k]:Rational(0); }
+				foreach_reverse(n;top..p.length){
+					auto rest=p[n]-Rational(cast(long)n+1)*at(n+1);
+					foreach(j;0..top) if(n>=j) rest=rest-slope[j]*at(n-j);
+					R[n-top]=rest/slope[top];
+					if(R[n-top].words>128) return false;
+				}
+				foreach(n;0..top){
+					auto sum=Rational(cast(long)n+1)*at(n+1);
+					foreach(j;0..n+1) sum=sum+slope[j]*at(n-j);
+					if(!(sum==p[n])) return false;
+				}
+				bool zero;
+				return !d.half||vanishing(R,E,false,zero,rate,order)&&!zero;
+			}
 			// Decide before building anything: a refused integral leaves no
 			// terms behind. Above a single bound every term must decay.
 			bool admissible(uint id,uint depth){
-				Rational[] p; Rational rate; bool scaled;
+				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order;
 				if(scaledExponential(id,p,rate,scaled)) return !d.half||rate+outerRate<Rational(0);
+				if(tailExponential(id,false,p,exponent,scaled,false)) return curve(p,exponent,R,E,rate,order);
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
@@ -3164,9 +3201,27 @@ final class Bindings{
 				if(r.scaled) result=primitive(mulOp,[exponentialScale(r.value),result]);
 				d.terms~=r; return result;
 			}
+			// The same for a polynomial times the exponential of a polynomial,
+			// both in Horner form below the axis binder.
+			BoundTerm curveDifference(IntervalTerm r,Rational[] p,Rational[] exponent){
+				Rational[] R,E; size_t order;
+				if(!curve(p,exponent,R,E,r.rate,order)) return BoundTerm.init;
+				r.order=cast(uint)order; r.curved=true;
+				BoundTerm horner(Rational[] c){
+					auto x=variable(inner,0),h=scalar(inner,arena.real_(c[$-1]));
+					foreach_reverse(k;0..c.length-1) h=primitive(addOp,[scalar(inner,arena.real_(c[k])),primitive(mulOp,[x,h])]);
+					return h;
+				}
+				auto primitive_=primitive(mulOp,[horner(R),primitive(arena.call(Builtin.expR,[arena.real_(0)]),[horner(E)])]); r.primitive=primitive_.id;
+				auto result=d.half?primitive(mulOp,[minusOne,evaluate(primitive_,lower)]):
+					primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
+				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false),result]);
+				d.terms~=r; return result;
+			}
 			BoundTerm build(uint id,uint depth){
-				IntervalTerm r; Rational[] p; Rational rate; r.value=id;
+				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
 				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
+				if(tailExponential(id,false,p,exponent,r.scaled,false)) return curveDifference(r,p,exponent);
 				// A sum is integrated term by term only without further weights.
 				auto q=nodes[id];
 				if(depth>16||d.terms.length>16||solution.from.length!=1||!isOp(q,Op.add)) return BoundTerm.init;
@@ -6744,6 +6799,13 @@ final class Bindings{
 				}
 				++next;
 				auto primitive_="(G := fun o : Option ℝ => "~name(r.primitive)~".eval ξ (Binding.Env.cons (a := .scalar .real) o ρ)) ";
+				if(r.curved){
+					// The term and its antiderivative everywhere, the derivative,
+					// and on a half-line strictness in the bound and the decay.
+					enum whole="(⊤ : Filter ℝ)";bool scaled,unused;
+					auto hv=cert.exponentialTail(id,whole,false,false,scaled),hG=cert.exponentialTail(r.primitive,whole,false,false,unused);
+					return "("~termsName~"."~(scaled?"scaledCurve ":"curve ")~(d.half?cert.q(r.rate)~" "~to!string(r.order)~" ":"")~primitive_~hv~" "~hG~(d.half?" rfl rfl)":" rfl)");
+				}
 				// On a half-line: strict in the bound, a derivative, and decay.
 				auto derivative=" "~exponential(r.primitive).proof~(d.half?" rfl rfl rfl)":" rfl)");
 				if(!r.scaled){

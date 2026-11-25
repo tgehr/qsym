@@ -19,6 +19,7 @@ import QSym.LimitExponential
 import QSym.LimitStep
 import QSym.LimitContinuous
 import QSym.LimitQuotient
+import QSym.DistributionExponentialInterval
 import QSym.DistributionFibreCertificate
 import QSym.DistributionPartialModel
 import QSym.DistributionPartialSequential
