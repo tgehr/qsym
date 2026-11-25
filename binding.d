@@ -3474,8 +3474,40 @@ final class Bindings{
 				BellParts found;
 				if(!bellParts(id,found,false)||!found.exponent||found.symbolic) return false;
 				auto p=found.p,c=found.c; while(p.length&&p[$-1].zero) p.length=p.length-1;
-				if(p.length!=1||!c[1].present||!c[2].present||!c[2].closed||!(c[2].value<Rational(0))) return false;
+				if(!p.length||p.length>17||!c[1].present||!c[2].present||!c[2].closed||!(c[2].value<Rational(0))) return false;
 				GaussianData g; g.symbolic=true; g.constant=p[0]; g.c2=c[2].value;
+				if(p.length>1){
+					// A polynomial in front: `P = κ + R' + (c₁+2·c₂·x)·R` for a rest
+					// `R` and a constant `κ` that are polynomials in the linear
+					// coefficient. The coefficient of `xʲ` in `R` follows from
+					// those above it, and `κ` from the lowest two; the rest is
+					// kept as its rows in the powers of the linear coefficient.
+					auto n=p.length-1,twice=Rational(2)*g.c2;
+					auto R=new Rational[][](n);
+					// `top - factor·above - c₁·here`, as polynomials in `c₁`.
+					Rational[] combine(Rational[] top,Rational factor,Rational[] above,Rational[] here){
+						auto sum=top.dup;
+						void add(size_t i,Rational x){ while(sum.length<=i) sum~=Rational(0); sum[i]=sum[i]+x; }
+						foreach(i,x;above) add(i,Rational(0)-factor*x);
+						foreach(i,x;here) add(i+1,Rational(0)-x);
+						return sum;
+					}
+					foreach_reverse(j;0..n){
+						R[j]=combine([p[j+1]],Rational(cast(long)j+2),j+2<n?R[j+2]:null,j+1<n?R[j+1]:null);
+						foreach(ref x;R[j]){ x=x/twice; if(x.words>128) return false; }
+					}
+					auto kappa=combine([p[0]],Rational(1),n>1?R[1]:null,R[0]);
+					while(kappa.length>1&&kappa[$-1].zero) kappa.length=kappa.length-1;
+					foreach(x;kappa) if(x.words>128) return false;
+					size_t degree; foreach(j;0..n) if(R[j].length>degree) degree=R[j].length;
+					auto rows=new Rational[][](degree);
+					foreach(i,ref row;rows){
+						foreach(j;0..n) row~=i<R[j].length?R[j][i]:Rational(0);
+						while(row.length>1&&row[$-1].zero) row.length=row.length-1;
+					}
+					while(rows.length>1&&rows[$-1].length==1&&rows[$-1][0].zero) rows.length=rows.length-1;
+					g.rows=rows; g.moments=kappa; g.constant=Rational(1);
+				}
 				g.vertex=Rational(-1)/(Rational(4)*g.c2); g.width=Rational(-1)/g.c2;
 				r.point=Rational(1)/(Rational(2)*g.c2); r.half=g.constant/Rational(2); r.offset=d.below?Rational(0)-r.point:r.point;
 				foreach(x;[g.constant,g.vertex,g.width,r.half,r.point]) if(x.words>128) return false;
@@ -3692,7 +3724,52 @@ final class Bindings{
 					auto tail=primitive(mulOp,[front,apply1(d.half?Builtin.erfcR:Builtin.erfR,primitive(mulOp,[root,argument]))]);
 					return d.half&&!d.below?primitive(mulOp,[unit,tail]):tail;
 				}
-				auto result=d.below?at_(upper):d.half?primitive(mulOp,[minusOne,at_(lower)]):primitive(addOp,[at_(upper),primitive(mulOp,[minusOne,at_(lower)])]);
+				BoundTerm result;
+				if(!r.bell.rows.length) result=d.below?at_(upper):d.half?primitive(mulOp,[minusOne,at_(lower)]):primitive(addOp,[at_(upper),primitive(mulOp,[minusOne,at_(lower)])]);
+				else{
+					// Under a polynomial: the rest at the bounds, each time times
+					// the exponential of the quadratic there, and the polynomial
+					// of the constant at the linear coefficient times the
+					// antiderivative of the exponential.
+					auto curvature=built.c[2].term;
+					BoundTerm balanced(BoundTerm[] xs){ return xs.length==1?xs[0]:primitive(addOp,[balanced(xs[0..$/2]),balanced(xs[$/2..$])]); }
+					BoundTerm power(BoundTerm x,size_t i){ return i==1?x:primitive(arena.pow(arena.real_(0),cast(uint)i),[x]); }
+					BoundTerm[] parts;
+					foreach(i,c;r.bell.moments){
+						if(i&&c.zero){ r.bell.literals~=uint.max; continue; }
+						auto coefficient=scalar(ctx,arena.real_(c)); r.bell.literals~=coefficient.id;
+						parts~=!i?coefficient:primitive(mulOp,[coefficient,power(linear,i)]);
+					}
+					auto kappa=balanced(parts);
+					// A row is under its power of the linear coefficient. Its
+					// constant always stands, a later monomial where its
+					// coefficient is not zero and the bound not a closed zero.
+					BoundTerm rest(size_t e,BoundTerm o){
+						Rational point; Term closed; auto zero=closedRational(o,point,closed)&&point.zero;
+						r.ends[e].zero=zero;
+						BoundTerm[] terms;
+						foreach(i,row;r.bell.rows){
+							uint[] literals;
+							if(row.length>1||!row[0].zero) foreach(j,c;row){
+								if(j&&(c.zero||zero)){ literals~=uint.max; continue; }
+								auto coefficient=scalar(ctx,arena.real_(c)); literals~=coefficient.id;
+								auto monomial=!j?coefficient:primitive(mulOp,[coefficient,power(o,j)]);
+								terms~=!i?monomial:primitive(mulOp,[power(linear,i),monomial]);
+							}
+							r.ends[e].rows~=literals;
+						}
+						auto quadratic=primitive(addOp,[constant,primitive(addOp,[primitive(mulOp,[linear,o]),primitive(mulOp,[curvature,primitive(mulOp,[o,o])])])]);
+						return primitive(mulOp,[balanced(terms),apply1(Builtin.expR,quadratic)]);
+					}
+					BoundTerm tail(BoundTerm o){ return primitive(mulOp,[front,apply1(Builtin.erfcR,primitive(mulOp,[root,primitive(addOp,[o,shift])]))]); }
+					if(d.below) result=primitive(addOp,[rest(0,upper),primitive(mulOp,[kappa,at_(upper)])]);
+					else if(d.half) result=primitive(addOp,[primitive(mulOp,[unit,rest(1,lower)]),primitive(mulOp,[kappa,tail(lower)])]);
+					else{
+						auto above=rest(0,upper),below=rest(1,lower);
+						result=primitive(addOp,[primitive(addOp,[above,primitive(mulOp,[minusOne,below])]),
+							primitive(mulOp,[kappa,primitive(addOp,[at_(upper),primitive(mulOp,[minusOne,at_(lower)])])])]);
+					}
+				}
 				if(built.scaled) result=primitive(mulOp,[built.scale,result]);
 				d.terms~=r; return result;
 			}
@@ -7873,6 +7950,45 @@ final class Bindings{
 					auto hv=cert.bell(id,exponent,poly);
 					string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
 					if(g.zero0!=uint.max)exponent="(Distribution.StepSource.Quadratic.fill0 "~literal(g.zero0,Rational(0))~" "~exponent~")";
+					if(g.rows.length){
+						// Under a polynomial: the kernel checks the rest and the
+						// polynomial of the constant against it. At each bound
+						// the rows of the rest meet their powers of the linear
+						// coefficient, the first of them none, and the
+						// polynomial of the constant is a row of its own. The
+						// statement evaluates the table, which is elaborated to
+						// its end first.
+						enum src="Distribution.StepSource.";
+						string list(Rational[] row){string t="[";foreach(i,c;row)t~=(i?", ":"")~cert.q(c);return t~"]";}
+						string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
+						size_t count;string vanish;
+						string rowProof(Rational[] row,uint[] literals){
+							enforce(literals.length==row.length&&literals[0]!=uint.max,"bad row of a rest");
+							string h=src~"RowTerms.done";
+							foreach_reverse(i,c;row){
+								if(literals[i]!=uint.max){++count;h="("~src~"RowTerms.term "~cert.q(c)~" "~literal(literals[i],c)~" "~h~")";}
+								else h=vanish.length?"("~src~"RowTerms.vanish "~vanish~" "~h~")":"("~src~"RowTerms.zero "~h~")";
+							}
+							return h;
+						}
+						string moments(size_t e){
+							auto end=r.ends[e];enforce(end.rows.length==g.rows.length,"bad literals of a rest");
+							vanish=end.zero?cert.closedProof(at(e?d.lower:d.upper),Rational(0)):"";count=0;
+							string monomials=src~"MomentTerms.done";
+							foreach_reverse(i,row;g.rows){
+								auto present=row.length>1||!row[0].zero;
+								monomials="("~src~"MomentTerms."~(!present?"absent "~list(row):(i?"present ":"bare ")~rowProof(row,end.rows[i]))~" "~monomials~")";
+							}
+							return monomials~" "~sums(count)~" ";
+						}
+						string table;foreach_reverse(row;g.rows)table=list(row)~(table.length?", ":"")~table;
+						auto above=d.half&&!d.below?"":moments(0),below=d.below?"":moments(1);
+						vanish="";count=0;auto constant=rowProof(g.moments,g.literals);
+						return "("~termsName~".symbolicErfPolynomial (["~table~"] :) ("~list(g.moments)~" :) "~cert.q(g.c2)~" "~cert.q(g.vertex)~" "~cert.q(g.width)~" "~cert.q(r.point)~" "~
+							cert.q(Rational(0)-g.c2)~" "~cert.q(r.offset)~" "~hv~" "~exponent~" "~cert.closedProof(at(g.curvature),g.c2)~" rfl rfl "~above~below~constant~" "~sums(count)~" "~
+							(d.half?literal(r.unit,Rational(-1))~" ":"")~literal(g.factor,r.half)~" "~literal(g.exponent,g.vertex)~" "~literal(g.scale,g.width)~" rfl "~
+							literal(r.sigma,Rational(0)-g.c2)~" "~literal(r.offsetLiteral,r.offset)~")";
+					}
 					return "("~termsName~".symbolicErf "~cert.q(g.constant)~" "~cert.q(g.c2)~" "~cert.q(g.vertex)~" "~cert.q(g.width)~" "~cert.q(r.point)~" "~cert.q(r.half)~" "~
 						cert.q(Rational(0)-g.c2)~" "~cert.q(r.offset)~" "~hv~" "~exponent~" "~cert.closedProof(at(g.curvature),g.c2)~" rfl "~
 						(d.half?literal(r.unit,Rational(-1))~" ":"")~literal(g.factor,r.half)~" "~literal(g.exponent,g.vertex)~" "~literal(g.scale,g.width)~" rfl "~

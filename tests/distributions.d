@@ -634,7 +634,12 @@ private Case[] cases(){ return [
 	Case("ErfSymbolicSum","∫dx [0≤x]*(exp(-(x-m)^2)+exp(-x))*λ[x]","ℝ","1/2·sqrt(π)·erfc(-m)+1"),
 	Case("ErfSymbolicUndefined","∫dx [x≤t]*exp(-(x-1/m)^2)/c*λ[x]","ℝ","guard(m≠0∧c≠0,c⁻¹·(1/2)·sqrt(π)·erfc(-t+m⁻¹))"),
 	Case("ErfSymbolicFunction","λ(t:ℝ).∫dx [x<t]*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ→ℝ","λ(t:ℝ). 1/2·erfc((m-t)·(1/2)·sqrt(2))"),
-	Case("ErfSymbolicPolynomial","∫dx [0≤x≤1]*x*exp(-(x-m)^2)*λ[x]","ℝ"),
+	Case("ErfSymbolicPolynomial","∫dx [0≤x≤1]*x*exp(-(x-m)^2)*λ[x]","ℝ","m·(1/2·sqrt(π)·erf(-m+1)-1/2·sqrt(π)·erf(-m))-1/2·exp(-m^2+2·m-1)+1/2·exp(-m^2)"),
+	Case("ErfSymbolicPositive","∫dx [0≤x]*x*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","(m·(1/2)·sqrt(2·π)·erfc(-m·(1/2)·sqrt(2))+exp(-1/2·m^2))·sqrt(2·π)⁻¹"),
+	Case("ErfSymbolicSecond","∫dx [x≤t]*x^2*exp(-(x-m)^2/2)*λ[x]","ℝ","(m^2+1)·(1/2)·sqrt(2·π)·erfc((-t+m)·(1/2)·sqrt(2))+(-t-m)·exp(-1/2·t^2+t·m-1/2·m^2)"),
+	Case("ErfSymbolicQuadratic","∫dx [a≤x≤b]*(x^2+1)*exp(c+m*x-x^2)*λ[x]","ℝ",
+		"[a≤b]·(-(-a·(1/2)-m·(1/4))·exp(-a^2+a·m+c)+(-b·(1/2)-m·(1/4))·exp(-b^2+b·m+c)+(1/4·m^2+3/2)·(-1/2·sqrt(π)·exp(1/4·m^2+c)·erf(a-m·(1/2))+1/2·sqrt(π)·exp(1/4·m^2+c)·erf(b-m·(1/2))))"),
+	Case("ErfSymbolicDegree","∫dx [0≤x≤1]*x^17*exp(-(x-m)^2)*λ[x]","ℝ"),
 	Case("ErfSymbolicCurvature","∫dx [0≤x≤1]*exp(-a*x^2)*λ[x]","ℝ"),
 	Case("PiecesLaplace","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","2"),
 	Case("PiecesShifted","∫dx ([0≤x]*exp(-x)+[1≤x]*exp(-2*x))*λ[x]","ℝ","1/2·exp(-2)+1"),
@@ -1507,23 +1512,34 @@ private void run(string directory){
 		// Between two bounds it has the error function itself, beyond a single
 		// bound its complement, which vanishes at that end, below a bound with
 		// the argument reflected. The constant and linear coefficients of the
-		// exponent may be terms that do not mention the axis, under a constant:
-		// the exponent is then a quadratic by its structure, the vertex a
-		// multiple of the linear coefficient, and a coefficient that is
-		// undefined leaves the observation undefined. A curvature that is not
-		// negative or a term, another exponent and a polynomial in front of
+		// exponent may be terms that do not mention the axis: the exponent is
+		// then a quadratic by its structure, the vertex a multiple of the
+		// linear coefficient, and a coefficient that is undefined leaves the
+		// observation undefined. A curvature that is not negative or a term,
+		// another exponent and a polynomial of too high a degree in front of
 		// such coefficients keep their integral.
 		if(c.name.indexOf("Erf")==0){
-			bool retained=c.name=="ErfGrowing"||c.name=="ErfQuartic"||c.name=="ErfSymbolicCurvature"||c.name=="ErfSymbolicPolynomial";
+			bool retained=c.name=="ErfGrowing"||c.name=="ErfQuartic"||c.name=="ErfSymbolicCurvature"||c.name=="ErfSymbolicDegree";
 			bool symbolic=c.name.indexOf("ErfSymbolic")==0&&c.name!="ErfSymbolicBounds"&&!retained;
+			// Under a polynomial the rest of the antiderivative stands beside
+			// the error function: a polynomial in the bound and in the linear
+			// coefficient times the exponential of the quadratic, at each bound.
+			bool polynomial=c.name=="ErfSymbolicPolynomial"||c.name=="ErfSymbolicPositive"||c.name=="ErfSymbolicSecond"||c.name=="ErfSymbolicQuadratic";
 			bool above=c.name=="ErfAbove"||c.name=="ErfNormalTail"||c.name=="ErfAboveScaled"||c.name=="ErfVertexSum"||c.name=="ErfGuarded"||
-				c.name=="ErfSymbolicTail"||c.name=="ErfSymbolicSum";
-			bool below=c.name.indexOf("ErfBelow")==0||c.name=="ErfNormalCdf"||c.name=="ErfSymbolicCdf"||c.name=="ErfSymbolicUndefined"||c.name=="ErfSymbolicFunction";
+				c.name=="ErfSymbolicTail"||c.name=="ErfSymbolicSum"||c.name=="ErfSymbolicPositive";
+			bool below=c.name.indexOf("ErfBelow")==0||c.name=="ErfNormalCdf"||c.name=="ErfSymbolicCdf"||c.name=="ErfSymbolicUndefined"||c.name=="ErfSymbolicFunction"||
+				c.name=="ErfSymbolicSecond";
 			bool scaled=c.name=="ErfNormalTail"||c.name=="ErfNormalCdf"||c.name=="ErfNormalInterval"||c.name=="ErfScaled"||c.name=="ErfAboveScaled"||c.name=="ErfBelowScaled"||
 				c.name=="ErfOffset"||c.name=="ErfDomain";
-			auto terms="Distribution.StepSource."~(below?"UpperTerms":above?"HalfLineTerms":"IntervalTerms")~(symbolic?".symbolicErf ":scaled?".scaledErf ":".erf ");
+			auto terms="Distribution.StepSource."~(below?"UpperTerms":above?"HalfLineTerms":"IntervalTerms")~
+				(polynomial?".symbolicErfPolynomial ":symbolic?".symbolicErf ":scaled?".scaledErf ":".erf ");
 			enforce((certificate.indexOf(terms)>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			// The table of the rest is elaborated to its end, and its first
+			// row has no power of the linear coefficient in front.
+			enforce((certificate.indexOf(".symbolicErfPolynomial ([[")>=0)==polynomial,c.name~" rest");
+			enforce((certificate.indexOf("]] :) ([")>=0)==polynomial,c.name~" table elaborated to its end");
+			if(polynomial) enforce(certificate.indexOf("Distribution.StepSource.MomentTerms.bare")>=0,c.name~" first row");
 			// An exponent without a constant part has a zero in its place.
 			if(symbolic) enforce((certificate.indexOf("Distribution.StepSource.Quadratic.fill0")>=0)==(c.name=="ErfSymbolicScaled"),c.name~" constant part");
 			if(c.name=="ErfSymbolicSum") enforce(certificate.indexOf("HalfLineTerms.pure")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" terms");

@@ -1887,6 +1887,383 @@ theorem IntervalTerms.rateTerms {a b m : Option ℝ} {v : ℝ → Option ℝ} {S
       left
       ring
 
+/-! A polynomial in front of the exponential of a quadratic whose constant and
+linear coefficients do not mention the axis. With `Q` the quadratic,
+`P = κ + R' + Q'·R` for a polynomial `R` in the axis and a constant `κ` that
+are both polynomials in the linear coefficient. Then `R·exp(Q)` and `κ` times
+the antiderivative of the exponential, with the error function, are together
+an antiderivative of `P·exp(Q)`. `R` is the list of its rows in the powers of
+the linear coefficient, polynomials in the axis. -/
+
+/-- A polynomial in the second value alone. -/
+def poly2Const (κ : List ℚ) : List (List ℚ) := κ.map fun k => [k]
+
+theorem poly2Eval_const (κ : List ℚ) (x c : ℝ) :
+    poly2Eval (poly2Const κ) x c = polyEval κ c := by
+  induction κ with
+  | nil => rfl
+  | cons k κ ih =>
+    have ih' : poly2Eval (List.map (fun k => [k]) κ) x c = polyEval κ c := ih
+    simp [poly2Const, poly2Eval, polyEval, ih']
+
+/-- `P = κ + R' + (c₁ + 2·q₂·x)·R`, as polynomials in the axis and in the
+linear coefficient. -/
+def symErfRowsCheck (P : List ℚ) (K : List (List ℚ)) (κ : List ℚ) (q2 : ℚ) : Bool :=
+  poly2Zero (poly2Add [P] (poly2Scale (-1)
+    (poly2Add (poly2Const κ) (poly2Add (K.map polyDerivative)
+      (poly2Add ([] :: K) (poly2Scale (2 * q2) (poly2Shift K)))))))
+
+theorem symErfRows_identity {P : List ℚ} {K : List (List ℚ)} {κ : List ℚ} {q2 : ℚ}
+    (h : symErfRowsCheck P K κ q2 = true) (x c : ℝ) :
+    polyEval P x = polyEval κ c + poly2Eval (K.map polyDerivative) x c +
+      (c + 2 * q2 * x) * poly2Eval K x c := by
+  have h0 := poly2Eval_zero h x c
+  simp only [poly2Eval_add, poly2Eval_scale, poly2Eval_const, poly2Eval_shift, poly2Eval,
+    polyEval] at h0
+  push_cast at h0
+  linear_combination h0
+
+/-- The derivative of the rest times the exponential. -/
+theorem symErfRest_deriv (K : List (List ℚ)) (a b q x : ℝ) :
+    HasDerivAt (fun t : ℝ => poly2Eval K t b * Real.exp (a + b * t + q * t ^ 2))
+      ((poly2Eval (K.map polyDerivative) x b + (b + 2 * q * x) * poly2Eval K x b) *
+        Real.exp (a + b * x + q * x ^ 2)) x := by
+  have hq : HasDerivAt (fun t : ℝ => a + b * t + q * t ^ 2) (b + 2 * q * x) x := by
+    have h1 := ((hasDerivAt_id x).const_mul b).const_add a
+    have h2 := (hasDerivAt_pow 2 x).const_mul q
+    refine (h1.add h2).congr_deriv ?_
+    simp
+    ring
+  refine ((poly2Eval_hasDerivAt K b x).mul hq.exp).congr_deriv ?_
+  ring
+
+private theorem poly_gaussian_tendsto {l : Filter ℝ} {Q : ℝ → ℝ}
+    (hpow : ∀ n : ℕ, Tendsto (fun x : ℝ => x ^ n * Real.exp (Q x)) l (𝓝 0)) (p : List ℚ) :
+    ∀ n : ℕ, Tendsto (fun x : ℝ => x ^ n * polyEval p x * Real.exp (Q x)) l (𝓝 0) := by
+  induction p with
+  | nil => intro n; simpa [polyEval] using (tendsto_const_nhds : Tendsto (fun _ : ℝ => (0 : ℝ)) l (𝓝 0))
+  | cons c p ih =>
+    intro n
+    have h := ((hpow n).const_mul (c : ℝ)).add (ih (n + 1))
+    simp only [mul_zero, add_zero] at h
+    refine h.congr fun x => ?_
+    simp only [polyEval]
+    ring
+
+/-- The rest times the exponential vanishes wherever every power times the
+exponential does. -/
+private theorem poly2_gaussian_tendsto {l : Filter ℝ} {Q : ℝ → ℝ}
+    (hpow : ∀ n : ℕ, Tendsto (fun x : ℝ => x ^ n * Real.exp (Q x)) l (𝓝 0)) (b : ℝ)
+    (K : List (List ℚ)) : Tendsto (fun x : ℝ => poly2Eval K x b * Real.exp (Q x)) l (𝓝 0) := by
+  induction K with
+  | nil => simpa [poly2Eval] using (tendsto_const_nhds : Tendsto (fun _ : ℝ => (0 : ℝ)) l (𝓝 0))
+  | cons p K ih =>
+    have h := (poly_gaussian_tendsto hpow p 0).add (ih.const_mul b)
+    simp only [mul_zero, add_zero] at h
+    refine h.congr fun x => ?_
+    simp only [poly2Eval, pow_zero, one_mul]
+    ring
+
+/-- The value below the mask: undefined everywhere where the scale or a
+coefficient is, and the polynomial times the exponential of the quadratic
+under the scale otherwise. -/
+private theorem symErfPoly_value {v : ℝ → Option ℝ} {S : Option (Option ℝ)} {P : List ℚ}
+    {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} {q2 : ℚ} (hv : Bell v S none P (some E))
+    (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2)) :
+    ((S = some none ∨ c0 = none ∨ c1 = none) → ∀ x, v x = none) ∧
+      ∀ a b : ℝ, S ≠ some none → c0 = some a → c1 = some b →
+        ∀ x, v x = some (scaleReal S * (polyEval P x * Real.exp (a + b * x + q2 * x ^ 2))) := by
+  have hvx : ∀ x, v x = scaleBy S (Value.mul (some (polyEval P x)) (Functions.expR.apply (E x))) :=
+    fun x => hv.plain x
+  refine ⟨fun hm x => ?_, fun a b hS ha hb x => ?_⟩
+  · rw [hvx]
+    rcases hm with rfl | rfl | rfl
+    · rfl
+    · rw [hE.missing (Or.inl rfl) x]
+      rcases S with _ | _ | s <;> rfl
+    · rw [hE.missing (Or.inr (Or.inl rfl)) x]
+      rcases S with _ | _ | s <;> rfl
+  · subst ha hb
+    have hEx : E x = some (a + b * x + q2 * x ^ 2) := by
+      rw [hE.equation, h2]
+      simp [coefValue, Value.add, Value.mul, Numeric.denote]
+      ring
+    rw [hvx, hEx]
+    rcases S with _ | _ | s
+    · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
+    · exact absurd rfl hS
+    · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
+
+/-- The sum of the monomials of a table at a point, each row under its power
+of a value. -/
+private theorem table_sum {a h k : Option ℝ} {K : List (List ℚ)} {ms : List (Option ℝ)}
+    (hm : MomentTerms a (curvatureCoefs h K 0) K ms) (hk : Sums ms k) (l β : ℝ)
+    (ha : a = some l) (hh : h = some β) : k = some (poly2Eval K l β) := by
+  subst ha hh
+  rw [hk.value, hm.value l rfl (curvatureCoefs_defined _ K 0), momentValue_curvature]
+  simp
+
+/-- The exponential of the quadratic at a bound. -/
+noncomputable def symErfExp (c0 c1 c2 o : Option ℝ) : Option ℝ :=
+  Functions.expR.apply (Value.add c0 (Value.add (Value.mul c1 o) (Value.mul c2 (Value.mul o o))))
+
+private theorem symErfExp_some (a b : ℝ) (q2 : ℚ) (t : ℝ) :
+    symErfExp (some a) (some b) (some (Numeric.denote (s := .real) q2)) (some t) =
+      some (Real.exp (a + b * t + q2 * t ^ 2)) := by
+  simp [symErfExp, Value.add, Value.mul, Function1.apply, Functions.expR, Numeric.denote]
+  ring
+
+/-- It is undefined where a coefficient is, and at a bound that is. -/
+private theorem symErfExp_missing {c0 c1 : Option ℝ} (c2 o : Option ℝ)
+    (h : c0 = none ∨ c1 = none ∨ o = none) : symErfExp c0 c1 c2 o = none := by
+  rcases h with rfl | rfl | rfl
+  · rfl
+  · cases c0 <;> rfl
+  · cases c0 <;> cases c1 <;> rfl
+
+/-- Above a bound: the constant times the complement of the error function. -/
+noncomputable def symErfTail (c0 c1 k g d pi s n o : Option ℝ) : Option ℝ :=
+  Value.mul (symErfConstant c0 c1 k g d pi)
+    (Functions.erfcR.apply (Value.mul (Functions.sqrtR.apply s) (Value.add o (Value.mul n c1))))
+
+/-- Between two bounds, under the scale, with `R` the rest at a bound and `κ`
+the polynomial of the constant at the linear coefficient:
+`R(b)·exp(Q(b)) - R(a)·exp(Q(a)) + κ·(G(b) - G(a))`, where `G` is the
+antiderivative of the exponential with the error function. -/
+theorem IntervalTerms.symbolicErfPolynomial {a b m : Option ℝ} {v : ℝ → Option ℝ}
+    {S : Option (Option ℝ)} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
+    (K : List (List ℚ)) (κ : List ℚ) (q2 γ δ w σ ν : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : symErfCheck false [1] 1 q2 γ δ w (1 / 2) σ ν = true)
+    (hR : symErfRowsCheck P K κ q2 = true)
+    {kb ka kk k g d pi s n : Option ℝ} {msb msa msk : List (Option ℝ)}
+    (hmb : MomentTerms b (curvatureCoefs c1 K 0) K msb) (hkb : Sums msb kb)
+    (hma : MomentTerms a (curvatureCoefs c1 K 0) K msa) (hka : Sums msa ka)
+    (hmk : RowTerms none c1 κ 0 [] msk) (hkk : Sums msk kk)
+    (hk : k = some (Numeric.denote (s := .real) (1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) (hs : s = some (Numeric.denote (s := .real) σ))
+    (hn : n = some (Numeric.denote (s := .real) ν)) :
+    IntervalTerms a b m v (scaleBy S (Value.add
+      (Value.add (Value.mul kb (symErfExp c0 c1 c2 b))
+        (Value.mul m (Value.mul ka (symErfExp c0 c1 c2 a))))
+      (Value.mul kk (Value.add (symErfBetween c0 c1 k g d pi s n b)
+        (Value.mul m (symErfBetween c0 c1 k g d pi s n a)))))) := by
+  obtain ⟨hmiss, hval⟩ := symErfPoly_value hv hE h2
+  by_cases hu : S = some none ∨ c0 = none ∨ c1 = none
+  · have hout : scaleBy S (Value.add
+        (Value.add (Value.mul kb (symErfExp c0 c1 c2 b))
+          (Value.mul m (Value.mul ka (symErfExp c0 c1 c2 a))))
+        (Value.mul kk (Value.add (symErfBetween c0 c1 k g d pi s n b)
+          (Value.mul m (symErfBetween c0 c1 k g d pi s n a))))) = none := by
+      rcases hu with rfl | hm
+      · rfl
+      · rw [symErfExp_missing c2 b (hm.imp_right Or.inl)]
+        have h1 : Value.add (Value.mul kb none)
+            (Value.mul m (Value.mul ka (symErfExp c0 c1 c2 a))) = none := by cases kb <;> rfl
+        rw [h1]
+        rcases S with _ | _ | s' <;> rfl
+    rw [hout]
+    exact IntervalTerms.undefined (hmiss hu)
+  simp only [not_or] at hu
+  obtain ⟨hS', h0, h1⟩ := hu
+  obtain ⟨a0, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨b1, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  subst h2
+  obtain ⟨hK, hSq, hN⟩ := symErf_literals h a0 b1 hk hg hd hpi hs hn
+  have hval' := hval a0 b1 hS' rfl rfl
+  have hcP : Continuous fun x : ℝ => polyEval P x * Real.exp (a0 + b1 * x + q2 * x ^ 2) :=
+    (polyEval_continuous P).mul (Real.continuous_exp.comp (by fun_prop))
+  refine IntervalTerms.value hval' (continuous_const.mul hcP) fun l u ha hb hm => ?_
+  subst ha hb hm
+  have hD := fun x : ℝ => ((symErfRest_deriv K a0 b1 q2 x).add
+    ((symErf_deriv h a0 b1 x).const_mul (polyEval κ b1))).congr_deriv (show _ =
+      polyEval P x * Real.exp (a0 + b1 * x + q2 * x ^ 2) by
+        rw [symErfRows_identity hR x b1]
+        push_cast
+        ring)
+  have hG : ∀ t, symErfBetween (some a0) (some b1) k g d pi s n (some t) =
+      some (((1 / 2 : ℚ) : ℝ) * (Real.exp (a0 + γ * (b1 * b1)) * √(Real.pi * δ)) *
+        Functions.erfR.value (√(σ : ℝ) * (t + ν * b1))) := fun t => by
+    rw [symErfBetween, hK, hSq, hN]
+    show Value.mul (some _) (Functions.erfR.apply (some _)) = _
+    rw [erf_apply]
+    rfl
+  rw [intervalIntegral.integral_const_mul,
+    intervalIntegral.integral_eq_sub_of_hasDerivAt (fun x _ => hD x) (hcP.intervalIntegrable _ _),
+    table_sum hmb hkb u b1 rfl rfl, table_sum hma hka l b1 rfl rfl, flat_sum hmk hkk b1 rfl,
+    hG u, hG l, symErfExp_some, symErfExp_some]
+  rcases S with _ | _ | s'
+  · simp only [scaleBy, scaleReal, Value.add, Value.mul, Option.some.injEq]
+    ring
+  · exact absurd rfl hS'
+  · simp only [scaleBy, scaleReal, Value.add, Value.mul, Option.some.injEq]
+    ring
+
+/-- Above a bound: `-R(a)·exp(Q(a)) + κ·C·erfc(…)`, under the scale. -/
+theorem HalfLineTerms.symbolicErfPolynomial {a m : Option ℝ} {v : ℝ → Option ℝ}
+    {S : Option (Option ℝ)} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
+    (K : List (List ℚ)) (κ : List ℚ) (q2 γ δ w σ ν : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : symErfCheck false [1] 1 q2 γ δ w (1 / 2) σ ν = true)
+    (hR : symErfRowsCheck P K κ q2 = true)
+    {ka kk u k g d pi s n : Option ℝ} {msa msk : List (Option ℝ)}
+    (hma : MomentTerms a (curvatureCoefs c1 K 0) K msa) (hka : Sums msa ka)
+    (hmk : RowTerms none c1 κ 0 [] msk) (hkk : Sums msk kk)
+    (hu : u = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) (1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) (hs : s = some (Numeric.denote (s := .real) σ))
+    (hn : n = some (Numeric.denote (s := .real) ν)) :
+    HalfLineTerms a m v (scaleBy S (Value.add
+      (Value.mul u (Value.mul ka (symErfExp c0 c1 c2 a)))
+      (Value.mul kk (symErfTail c0 c1 k g d pi s n a)))) := by
+  obtain ⟨hmiss, hval⟩ := symErfPoly_value hv hE h2
+  have hU : u = some (-1 : ℝ) := by rw [hu]; simp [Numeric.denote]
+  subst hU
+  have hgone : ∀ o, (c0 = none ∨ c1 = none ∨ o = none) → scaleBy S (Value.add
+      (Value.mul (some (-1 : ℝ)) (Value.mul ka (symErfExp c0 c1 c2 o)))
+      (Value.mul kk (symErfTail c0 c1 k g d pi s n o))) = none := fun o hm => by
+    rw [symErfExp_missing c2 o hm]
+    have h1 : Value.add (Value.mul (some (-1 : ℝ)) (Value.mul ka none))
+        (Value.mul kk (symErfTail c0 c1 k g d pi s n o)) = none := by cases ka <;> rfl
+    rw [h1]
+    rcases S with _ | _ | s' <;> rfl
+  by_cases hund : S = some none ∨ c0 = none ∨ c1 = none
+  · have hout : scaleBy S (Value.add
+        (Value.mul (some (-1 : ℝ)) (Value.mul ka (symErfExp c0 c1 c2 a)))
+        (Value.mul kk (symErfTail c0 c1 k g d pi s n a))) = none := by
+      rcases hund with rfl | hm
+      · rfl
+      · exact hgone a (hm.imp_right Or.inl)
+    rw [hout]
+    exact HalfLineTerms.undefined (hmiss hund)
+  simp only [not_or] at hund
+  obtain ⟨hS', h0, h1⟩ := hund
+  obtain ⟨a0, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨b1, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  have hnone := hgone
+  subst h2
+  obtain ⟨hK, hSq, hN⟩ := symErf_literals h a0 b1 hk hg hd hpi hs hn
+  obtain ⟨hq, _⟩ := symErf_facts h a0 b1
+  obtain ⟨hDc, hTc⟩ := symErfc_deriv h a0 b1
+  have hval' := hval a0 b1 hS' rfl rfl
+  have hI : ∀ l : ℝ, IntegrableOn
+      (fun x : ℝ => polyEval P x * Real.exp (a0 + b1 * x + q2 * x ^ 2)) (Ioi l) volume :=
+    fun l => (gaussian_moments2 a0 b1 hq P).1.integrableOn
+  have hD := fun x : ℝ => ((symErfRest_deriv K a0 b1 q2 x).add
+    ((hDc x).const_mul (polyEval κ b1))).congr_deriv (show _ =
+      polyEval P x * Real.exp (a0 + b1 * x + q2 * x ^ 2) by
+        rw [symErfRows_identity hR x b1]
+        push_cast
+        ring)
+  have hT := (poly2_gaussian_tendsto (Q := fun x : ℝ => a0 + b1 * x + q2 * x ^ 2)
+    (fun n => pow_gaussian_atTop a0 b1 hq n) b1 K).add (hTc.const_mul (polyEval κ b1))
+  simp only [mul_zero, add_zero] at hT
+  have hG : ∀ t, symErfTail (some a0) (some b1) k g d pi s n (some t) =
+      some (((1 / 2 : ℚ) : ℝ) * (Real.exp (a0 + γ * (b1 * b1)) * √(Real.pi * δ)) *
+        Functions.erfcR.value (√(σ : ℝ) * (t + ν * b1))) := fun t => by
+    rw [symErfTail, hK, hSq, hN]
+    show Value.mul (some _) (Functions.erfcR.apply (some _)) = _
+    rw [erfc_apply]
+    rfl
+  refine HalfLineTerms.value hval' (fun l => (hI l).const_mul _)
+    (fun ha => hnone none (Or.inr (Or.inr rfl)) |>.trans rfl |> (ha ▸ ·)) fun l ha => ?_
+  subst ha
+  rw [integral_const_mul,
+    integral_Ioi_of_hasDerivAt_of_tendsto' (fun x _ => hD x) (hI l) hT,
+    table_sum hma hka l b1 rfl rfl, flat_sum hmk hkk b1 rfl, hG l, symErfExp_some]
+  rcases S with _ | _ | s'
+  · simp only [scaleBy, scaleReal, Value.add, Value.mul, Option.some.injEq]
+    ring
+  · exact absurd rfl hS'
+  · simp only [scaleBy, scaleReal, Value.add, Value.mul, Option.some.injEq]
+    ring
+
+/-- Below a bound: `R(b)·exp(Q(b)) + κ·C·erfc(…)` of the reflected argument,
+under the scale. -/
+theorem UpperTerms.symbolicErfPolynomial {b : Option ℝ} {v : ℝ → Option ℝ}
+    {S : Option (Option ℝ)} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
+    (K : List (List ℚ)) (κ : List ℚ) (q2 γ δ w σ ν : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : symErfCheck true [1] 1 q2 γ δ w (1 / 2) σ ν = true)
+    (hR : symErfRowsCheck P K κ q2 = true)
+    {kb kk u k g d pi s n : Option ℝ} {msb msk : List (Option ℝ)}
+    (hmb : MomentTerms b (curvatureCoefs c1 K 0) K msb) (hkb : Sums msb kb)
+    (hmk : RowTerms none c1 κ 0 [] msk) (hkk : Sums msk kk)
+    (hu : u = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) (1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) (hs : s = some (Numeric.denote (s := .real) σ))
+    (hn : n = some (Numeric.denote (s := .real) ν)) :
+    UpperTerms b v (scaleBy S (Value.add (Value.mul kb (symErfExp c0 c1 c2 b))
+      (Value.mul kk (symErfBelow c0 c1 u k g d pi s n b)))) := by
+  obtain ⟨hmiss, hval⟩ := symErfPoly_value hv hE h2
+  have hU : u = some (-1 : ℝ) := by rw [hu]; simp [Numeric.denote]
+  subst hU
+  have hgone : ∀ o, (c0 = none ∨ c1 = none ∨ o = none) → scaleBy S (Value.add
+      (Value.mul kb (symErfExp c0 c1 c2 o))
+      (Value.mul kk (symErfBelow c0 c1 (some (-1 : ℝ)) k g d pi s n o))) = none := fun o hm => by
+    rw [symErfExp_missing c2 o hm]
+    have h1 : Value.add (Value.mul kb none)
+        (Value.mul kk (symErfBelow c0 c1 (some (-1 : ℝ)) k g d pi s n o)) = none := by
+      cases kb <;> rfl
+    rw [h1]
+    rcases S with _ | _ | s' <;> rfl
+  by_cases hund : S = some none ∨ c0 = none ∨ c1 = none
+  · have hout : scaleBy S (Value.add (Value.mul kb (symErfExp c0 c1 c2 b))
+        (Value.mul kk (symErfBelow c0 c1 (some (-1 : ℝ)) k g d pi s n b))) = none := by
+      rcases hund with rfl | hm
+      · rfl
+      · exact hgone b (hm.imp_right Or.inl)
+    rw [hout]
+    exact UpperTerms.undefined (hmiss hund)
+  simp only [not_or] at hund
+  obtain ⟨hS', h0, h1⟩ := hund
+  obtain ⟨a0, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨b1, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  have hnone := hgone
+  subst h2
+  obtain ⟨hK, hSq, hN⟩ := symErf_literals h a0 b1 hk hg hd hpi hs hn
+  obtain ⟨hq, _⟩ := symErf_facts h a0 b1
+  obtain ⟨hDc, hTc⟩ := symErfc_reflected_deriv h a0 b1
+  have hval' := hval a0 b1 hS' rfl rfl
+  have hI : ∀ t : ℝ, IntegrableOn
+      (fun x : ℝ => polyEval P x * Real.exp (a0 + b1 * x + q2 * x ^ 2)) (Iic t) volume :=
+    fun t => (gaussian_moments2 a0 b1 hq P).1.integrableOn
+  have hD := fun x : ℝ => ((symErfRest_deriv K a0 b1 q2 x).add
+    ((hDc x).const_mul (polyEval κ b1))).congr_deriv (show _ =
+      polyEval P x * Real.exp (a0 + b1 * x + q2 * x ^ 2) by
+        rw [symErfRows_identity hR x b1]
+        push_cast
+        ring)
+  have hT := (poly2_gaussian_tendsto (Q := fun x : ℝ => a0 + b1 * x + q2 * x ^ 2)
+    (fun n => pow_gaussian_atBot a0 b1 hq n) b1 K).add (hTc.const_mul (polyEval κ b1))
+  simp only [mul_zero, add_zero] at hT
+  have hG : ∀ t, symErfBelow (some a0) (some b1) (some (-1 : ℝ)) k g d pi s n (some t) =
+      some (((1 / 2 : ℚ) : ℝ) * (Real.exp (a0 + γ * (b1 * b1)) * √(Real.pi * δ)) *
+        Functions.erfcR.value (√(σ : ℝ) * (ν * b1 + -1 * t))) := fun t => by
+    rw [symErfBelow, hK, hSq, hN]
+    show Value.mul (some _) (Functions.erfcR.apply (some _)) = _
+    rw [erfc_apply]
+    rfl
+  refine UpperTerms.value hval' (fun t => (hI t).const_mul _)
+    (fun hb => hnone none (Or.inr (Or.inr rfl)) |>.trans rfl |> (hb ▸ ·)) fun t hb => ?_
+  subst hb
+  rw [integral_const_mul,
+    integral_Iic_of_hasDerivAt_of_tendsto' (fun x _ => hD x) (hI t) hT,
+    table_sum hmb hkb t b1 rfl rfl, flat_sum hmk hkk b1 rfl, hG t, symErfExp_some]
+  rcases S with _ | _ | s'
+  · simp only [scaleBy, scaleReal, Value.add, Value.mul, Option.some.injEq]
+    ring
+  · exact absurd rfl hS'
+  · simp only [scaleBy, scaleReal, Value.add, Value.mul, Option.some.injEq]
+    ring
+
 /-! A curvature that does not mention the axis and cannot vanish. Beyond a
 single bound the exponential of the quadratic is integrable exactly where the
 curvature is negative, and the closed form with the complement of the error
