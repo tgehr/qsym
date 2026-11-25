@@ -479,7 +479,22 @@ private Case[] cases(){ return [
 	Case("HalfLineGuarded","∫dx [c≤d]*[0≤x]*exp(-x)*λ[x]","ℝ","[c≤d]"),
 	Case("HalfLineNested","∫dx [0≤x]*λ[x]*exp(-x)*∫dy [0≤y]*[y≤x]*λ[y]","ℝ","1"),
 	Case("HalfLineGrowing","∫dx [0≤x]*exp(x)*λ[x]","ℝ"),
-	Case("HalfLineUpper","∫dx [x≤0]*exp(x)*λ[x]","ℝ"),
+	Case("UpperExponential","∫dx [x≤0]*exp(x)*λ[x]","ℝ","1"),
+	Case("UpperSymbolicBound","∫dx [x≤a]*exp(x)*λ[x]","ℝ","exp(a)"),
+	Case("UpperStrictScaled","∫dx [x<a]*c*exp(3*x)*x*λ[x]","ℝ","c·(a·(1/3)-1/9)·exp(3·a)"),
+	Case("UpperSum","∫dx [x≤0]*(exp(x)+exp(2*x))*λ[x]","ℝ","3/2"),
+	Case("UpperOffset","∫dx [x≤0]*exp(a+x)*λ[x]","ℝ","exp(a)"),
+	Case("UpperDomain","∫dx [x≤0]*exp(x)/a*λ[x]","ℝ","guard(a≠0,a⁻¹)"),
+	Case("UpperGuarded","∫dx [c≤d]*[x≤0]*exp(x)*λ[x]","ℝ","[c≤d]"),
+	Case("UpperBoundVariable","λ(a:ℝ).∫dx [x≤a]*exp(x)*λ[x]","ℝ→ℝ","λ(a:ℝ). exp(a)"),
+	Case("UpperLawMean","∫dx ([x≤0]*exp(x)*λ[x])*x","ℝ","-1"),
+	Case("UpperCurve","∫dx [x≤0]*x*exp(-x^2)*λ[x]","ℝ","-1/2"),
+	Case("UpperCurveBound","∫dx [x≤a]*x*exp(-x^2)*λ[x]","ℝ","-1/2·exp(-a^2)"),
+	Case("UpperCurveCubic","∫dx [x≤0]*x^2*exp(x^3)*λ[x]","ℝ","1/3"),
+	Case("UpperCurveScaled","∫dx [x≤0]*x*exp(b-x^2)*c*λ[x]","ℝ","-c·(1/2)·exp(b)"),
+	Case("UpperGrowing","∫dx [x≤0]*exp(-x)*λ[x]","ℝ"),
+	Case("UpperCurveGrowing","∫dx [x≤0]*x*exp(x^2)*λ[x]","ℝ"),
+	Case("UpperBracket","∫dx [x≤0]*λ[x]","ℝ"),
 	Case("LimitDecay","lim[x→∞] exp(-x)*x^2","ℝ","0"),
 	Case("LimitBottom","lim[x→-∞] x^3*exp(x/2)","ℝ","0"),
 	Case("LimitConstant","lim[x→∞] 1/a","ℝ","a⁻¹"),
@@ -648,7 +663,6 @@ private Case[] cases(){ return [
 	Case("CurveLaw","∫dx ([0≤x]*2*x*exp(-x^2)*λ[x])*x^2","ℝ","1"),
 	Case("CurveEven","∫dx [0≤x]*x^2*exp(-x^2)*λ[x]","ℝ"),
 	Case("CurveHalfLineGrowing","∫dx [0≤x]*x*exp(x^2)*λ[x]","ℝ"),
-	Case("CurveUpper","∫dx [x≤0]*x*exp(-x^2)*λ[x]","ℝ"),
 	Case("CurveOffset","∫dx [0≤x]*x*exp(-x^2+a)*λ[x]","ℝ","1/2·exp(a)"),
 	Case("CurveOffsetInterval","∫dx [0≤x≤1]*x*exp(b-x^2)*c*λ[x]","ℝ","c·(-1/2·exp(-1)+1/2)·exp(b)"),
 	Case("CurveOffsetShift","∫dx [1≤x]*(x-1)*exp(a-(x-1)^2)*λ[x]","ℝ","1/2·exp(a)"),
@@ -1045,12 +1059,26 @@ private void run(string directory){
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
 		// Above one lower bound every term must decay; the antiderivative
-		// then vanishes at infinity. A growing term and an upper half-line
-		// keep their integral.
+		// then vanishes at infinity. A growing term keeps its integral.
 		if(c.name.indexOf("HalfLine")==0){
-			bool retained=c.name=="HalfLineGrowing"||c.name=="HalfLineUpper"||c.name=="HalfLineOffsetGrowing";
+			bool retained=c.name=="HalfLineGrowing"||c.name=="HalfLineOffsetGrowing";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_halfline")>=0)!=retained,c.name~" half-line certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
+		// Below one upper bound, the mirror image: every term must decay at
+		// minus infinity, where the antiderivative then vanishes, so the result
+		// is its value at the bound. A term that grows there and a bracket
+		// alone keep their integral.
+		if(c.name.indexOf("Upper")==0){
+			bool retained=c.name=="UpperGrowing"||c.name=="UpperCurveGrowing"||c.name=="UpperBracket";
+			bool curved=c.name.indexOf("UpperCurve")==0,scaled=c.name=="UpperStrictScaled"||c.name=="UpperOffset"||c.name=="UpperDomain"||c.name=="UpperCurveScaled";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_upper")>=0)!=retained,c.name~" certificate");
+			enforce((certificate.indexOf("Distribution.StepSource.UpperTerms."~(curved?scaled?"scaledCurve ":"curve ":scaled?"scaled ":"pure "))>=0)!=retained,c.name~" antiderivative");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(c.name=="UpperSum") enforce(certificate.indexOf("Distribution.StepSource.UpperTerms.add")>=0,c.name~" terms");
+			if(c.name=="UpperDomain") enforce(certificate.indexOf("Distribution.StepSource.UpperTerms.guard")>=0&&certificate.indexOf("Distribution.StepSource.MaskDomain.last")>=0,c.name~" domain");
+			if(c.name=="UpperGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+			if(c.name=="UpperOffset") enforce(certificate.indexOf("Distribution.StepSource.scaled_exp_offset")>=0,c.name~" offset");
 		}
 		// A polynomial times the exponential of a polynomial is integrated
 		// between bounds and above a bound where an antiderivative has the same
@@ -1058,10 +1086,10 @@ private void run(string directory){
 		// must descend. The constant part of an exponent of degree at most two
 		// may be a term that does not mention the axis: its exponential is a
 		// scale. Without such a solution, with an exponent that grows above a
-		// bound, below an upper bound alone and with a mean or a curvature
-		// that is such a term the integral stays.
+		// bound and with a mean or a curvature that is such a term the
+		// integral stays.
 		if(c.name.indexOf("Curve")==0){
-			bool retained=c.name=="CurveEven"||c.name=="CurveHalfLineGrowing"||c.name=="CurveUpper"||c.name=="CurveMean"||c.name=="CurveCurvature";
+			bool retained=c.name=="CurveEven"||c.name=="CurveHalfLineGrowing"||c.name=="CurveMean"||c.name=="CurveCurvature";
 			bool half=c.name!="CurveInterval"&&c.name!="CurveSymbolicBounds"&&c.name!="CurveGrowing"&&c.name!="CurveTwoScales"&&c.name!="CurveCdf"&&
 				c.name!="CurveOffsetInterval"&&c.name!="CurveOffsetBounds";
 			bool shifted=c.name.indexOf("CurveOffset")==0,scaled=c.name=="CurveScaled"||c.name=="CurveTwoScales"||shifted;

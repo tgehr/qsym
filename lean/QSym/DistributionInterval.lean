@@ -727,9 +727,139 @@ theorem halfline_integral (strict : Bool) (a m : Option ℝ)
         split_ifs <;> linarith
       rw [if_pos hc]
 
+/-- The value below the mask of one upper bound and its integral: the mirror
+image of a lower bound. Every antiderivative vanishes at minus infinity and
+is strict in the bound, so the result is its value there. -/
+inductive UpperTerms (b : Option ℝ) : (ℝ → Option ℝ) → Option ℝ → Prop
+  | add {v w : ℝ → Option ℝ} {s t : Option ℝ} :
+      UpperTerms b v s → UpperTerms b w t →
+      UpperTerms b (fun x => Value.add (v x) (w x)) (Value.add s t)
+  /-- A strict guard that does not mention the axis. -/
+  | guard {v : ℝ → Option ℝ} {out : Option ℝ} (q : Option Bool) :
+      UpperTerms b v out →
+      UpperTerms b (fun x => Binding.guardValue q (v x)) (Binding.guardValue q out)
+  /-- Any value that is integrable below every bound with an antiderivative
+  that vanishes at minus infinity and is strict in the bound, and the same
+  under a scale. -/
+  | primitive {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {g F : ℝ → ℝ}
+      (hv : ∀ x, v x = some (g x)) (hG : ∀ t, G (some t) = some (F t)) (h0 : G none = none)
+      (hi : ∀ u, IntegrableOn g (Iic u) volume) (hd : ∀ x, HasDerivAt F (g x) x)
+      (ht : Filter.Tendsto F Filter.atBot (nhds 0)) :
+      UpperTerms b v (G b)
+  | scaledPrimitive {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {c : Option ℝ} {g F : ℝ → ℝ}
+      (hv : ∀ x, v x = Value.mul c (some (g x))) (hG : ∀ t, G (some t) = some (F t))
+      (h0 : G none = none) (hi : ∀ u, IntegrableOn g (Iic u) volume)
+      (hd : ∀ x, HasDerivAt F (g x) x) (ht : Filter.Tendsto F Filter.atBot (nhds 0)) :
+      UpperTerms b v (Value.mul c (G b))
+
+theorem UpperTerms.missing {b : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
+    (h : UpperTerms b v out) (hb : b = none) : out = none := by
+  subst hb
+  induction h with
+  | add _ _ ih₁ _ => rw [ih₁]; rfl
+  | guard q _ ih => rw [ih]; simp [Binding.guardValue]
+  | primitive _ _ h0 _ _ _ => exact h0
+  | @scaledPrimitive v G c g F _ _ h0 _ _ _ => rw [h0]; cases c <;> rfl
+
+theorem UpperTerms.sound {b : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
+    (h : UpperTerms b v out) {u : ℝ} (hb : b = some u) :
+    (∃ g : ℝ → ℝ, IntegrableOn g (Iic u) volume ∧ (∀ x, v x = some (g x)) ∧
+        out = some (∫ x in Iic u, g x)) ∨ ((∀ x, v x = none) ∧ out = none) := by
+  subst hb
+  induction h with
+  | @add v w s t _ _ ih₁ ih₂ =>
+    rcases ih₁ with ⟨g, hg, hv, hs⟩ | ⟨hv, hs⟩
+    · rcases ih₂ with ⟨k, hk, hw, ht⟩ | ⟨hw, ht⟩
+      · refine Or.inl ⟨fun x => g x + k x, hg.add hk, fun x => ?_, ?_⟩
+        · show Value.add (v x) (w x) = _
+          rw [hv x, hw x]; rfl
+        · rw [hs, ht, integral_add hg hk]
+          rfl
+      · refine Or.inr ⟨fun x => ?_, by rw [hs, ht]; rfl⟩
+        show Value.add (v x) (w x) = _
+        rw [hv x, hw x]; rfl
+    · refine Or.inr ⟨fun x => ?_, by rw [hs]; rfl⟩
+      show Value.add (v x) (w x) = _
+      rw [hv x]; rfl
+  | @guard v out q _ ih =>
+    by_cases hq : q = some true
+    · subst hq
+      exact ih
+    · exact Or.inr ⟨fun x => by simp [Binding.guardValue, hq], by simp [Binding.guardValue, hq]⟩
+  | @primitive v G g F hv hG _ hi hd ht =>
+    refine Or.inl ⟨g, hi u, hv, ?_⟩
+    rw [integral_Iic_of_hasDerivAt_of_tendsto' (fun x _ => hd x) (hi u) ht, hG u, sub_zero]
+  | @scaledPrimitive v G c g F hv hG _ hi hd ht =>
+    cases c with
+    | none => exact Or.inr ⟨fun x => by rw [hv x]; rfl, rfl⟩
+    | some c =>
+      refine Or.inl ⟨fun x => c * g x, (hi u).const_mul c, fun x => by rw [hv x]; rfl, ?_⟩
+      rw [integral_const_mul, integral_Iic_of_hasDerivAt_of_tendsto' (fun x _ => hd x) (hi u) ht,
+        hG u, sub_zero]
+      rfl
+
+/-- The observation of a guarded value below one partial bound. -/
+theorem upper_integral (strict : Bool) (b : Option ℝ) {f v : ℝ → Option ℝ} {out : Option ℝ}
+    (hf : Masked f (fun x => compare strict (some x) b) v) (ht : UpperTerms b v out) :
+    partialIntegral volume f = out := by
+  have missing : ∀ y, f y = none → partialIntegral volume f = none := by
+    intro y hy
+    apply if_neg
+    intro hd
+    obtain ⟨r, hr⟩ := hd.1 y
+    rw [hy] at hr
+    cases hr
+  cases b with
+  | none =>
+    rw [ht.missing rfl]
+    exact missing 0 (by rw [hf.equation]; cases strict <;> rfl)
+  | some u =>
+    have hg : ∀ x, compare strict (some x) (some u) =
+        some (decide (if strict = true then x < u else x ≤ u)) := fun x => compare_defined strict x u
+    rcases ht.sound rfl with ⟨g, hi, hv, ho⟩ | ⟨hv, ho⟩
+    · have total : ∀ x, Value.Defined (f x) := by
+        intro x
+        rw [hf.equation, hg, hv, mask_decide]
+        split_ifs <;> exact ⟨_, rfl⟩
+      have he : (fun x => (f x).getD 0) =ᵐ[volume] (Iic u).indicator g := by
+        filter_upwards [ae_away [u]] with x hx
+        have hu : x ≠ u := hx u (by simp)
+        rw [hf.equation, hg, hv, mask_decide]
+        by_cases hin : x ∈ Iic u
+        · have hc : (if strict = true then x < u else x ≤ u) := by
+            split_ifs
+            · exact lt_of_le_of_ne hin hu
+            · exact hin
+          rw [if_pos hc, Set.indicator_of_mem hin, Option.getD_some]
+        · have hc : ¬(if strict = true then x < u else x ≤ u) := by
+            intro h
+            apply hin
+            split_ifs at h
+            · exact le_of_lt h
+            · exact h
+          rw [if_neg hc, Set.indicator_of_not_mem hin, Option.getD_some]
+      have hint : Integrable ((Iic u).indicator g) volume :=
+        (integrable_indicator_iff measurableSet_Iic).mpr hi
+      rw [partialIntegral_valid volume f total ((integrable_congr he).mpr hint),
+        integral_congr_ae he, integral_indicator measurableSet_Iic, ho]
+    · rw [ho]
+      refine missing (u - 1) ?_
+      rw [hf.equation, hg, hv, mask_decide]
+      have hc : (if strict = true then u - 1 < u else u - 1 ≤ u) := by
+        split_ifs <;> linarith
+      rw [if_pos hc]
+
 end QSym.Distribution.StepSource
 
 namespace QSym.Distribution.DensityProgram
+
+theorem presentation_mass_upper (p : DensityProgram) (strict : Bool) (b : Option ℝ)
+    {v : ℝ → Option ℝ} {out : Option ℝ}
+    (hf : StepSource.Masked p.density (fun x => StepSource.compare strict (some x) b) v)
+    (ht : StepSource.UpperTerms b v out) :
+    massValue p.presentation = out := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  exact StepSource.upper_integral strict b hf ht
 
 theorem presentation_mass_halfline (p : DensityProgram) (strict : Bool) (a m : Option ℝ)
     {v : ℝ → Option ℝ} {out : Option ℝ} (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))

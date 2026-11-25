@@ -72,10 +72,11 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 private struct IntervalTerm{ uint value,primitive=uint.max; bool scaled,curved; Rational rate; uint order; }
 // With `domain` the value is under a strict guard that does not mention the
 // axis; with `hoisted` that guard stands around the mask, after the negations
-// of the comparisons of the mask.
+// of the comparisons of the mask. With `half` there is a single bound: a
+// lower one, or with `below` an upper one.
 private struct IntervalData{
 	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max;
-	bool swap,strictLower,strictUpper,nested,half,hoisted;
+	bool swap,strictLower,strictUpper,nested,half,below,hoisted;
 	IntervalTerm[] terms;
 }
 // A Gaussian integral. With `symbolic` the constant and linear coefficients of
@@ -3139,7 +3140,7 @@ final class Bindings{
 			}else if(isOp(body,Op.mask)){ d.guard=body.a; d.value=body.b; }
 			else return BoundTerm.init;
 			// Below a binder the two guards stay nested masks: their conjunction.
-			// A single lower bound is a half-line.
+			// A single bound is a half-line.
 			uint first=d.guard,second=uint.max;
 			if(isOp(nodes[d.guard],Op.and_)){ first=nodes[d.guard].a; second=nodes[d.guard].b; }
 			else if(d.unit==uint.max&&isOp(nodes[d.value],Op.mask)){ d.nested=true; second=nodes[d.value].a; d.value=nodes[d.value].b; }
@@ -3154,7 +3155,7 @@ final class Bindings{
 			}
 			bool lower1,strict1,lower2,strict2; uint term1,term2;
 			if(!bound(first,lower1,strict1,term1)) return BoundTerm.init;
-			if(d.half){ if(!lower1) return BoundTerm.init; term2=term1; }
+			if(d.half){ d.below=!lower1; term2=term1; }
 			else if(!bound(second,lower2,strict2,term2)||lower1==lower2) return BoundTerm.init;
 			d.swap=!lower1; d.strictLower=lower1?strict1:strict2; d.strictUpper=lower1?strict2:strict1;
 			// A value that may be missing where a term that does not mention the
@@ -3176,11 +3177,14 @@ final class Bindings{
 				Rational[] w; Rational rate; if(!axisExponential(id,w,rate)) return BoundTerm.init;
 				outer=polyProduct(outer,w); outerRate=outerRate+rate; if(outer.length>64) return BoundTerm.init;
 			}
+			// Beyond a single bound an exponential must decay: above a lower
+			// bound with a negative rate, below an upper one with a positive rate.
+			bool decays(Rational rate){ return d.below?Rational(0)<rate:rate<Rational(0); }
 			// A polynomial P times the exponential of a polynomial E that is not
 			// constant has an antiderivative R·exp(E) exactly when R'+E'·R=P
 			// has a polynomial solution: its coefficients follow from the
 			// highest down, and then the equations of the lowest degrees must
-			// hold. Above a single bound the exponent must descend, with the
+			// hold. Beyond a single bound the exponent must descend, with the
 			// rate and the order of its decay. Only without further weights.
 			bool curve(Rational[] p,Rational[] exponent,out Rational[] R,out Rational[] E,out Rational rate,out size_t order){
 				if(solution.from.length!=1) return false;
@@ -3207,18 +3211,18 @@ final class Bindings{
 					if(!(sum==p[n])) return false;
 				}
 				bool zero;
-				return !d.half||vanishing(R,E,false,zero,rate,order)&&!zero;
+				return !d.half||vanishing(R,E,d.below,zero,rate,order)&&!zero;
 			}
 			// Decide before building anything: a refused integral leaves no
-			// terms behind. Above a single bound every term must decay.
+			// terms behind. Beyond a single bound every term must decay.
 			bool admissible(uint id,uint depth){
 				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order;
-				if(scaledExponential(id,p,rate,scaled)) return !d.half||rate+outerRate<Rational(0);
+				if(scaledExponential(id,p,rate,scaled)) return !d.half||decays(rate+outerRate);
 				if(tailExponential(id,false,p,exponent,scaled,false,0,true)) return curve(p,exponent,R,E,rate,order);
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
-			if(d.unit!=uint.max?d.half&&!(outerRate<Rational(0)):!admissible(d.value,0)) return BoundTerm.init;
+			if(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0)) return BoundTerm.init;
 			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
 			auto addOp=arena.add(arena.real_(0),arena.real_(0),true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
 			auto minusOne=scalar(ctx,arena.real_(Rational(-1)));
@@ -3249,11 +3253,11 @@ final class Bindings{
 				p=polyProduct(p,outer); rate=rate+outerRate;
 				foreach(c;p) if(c.words>128) return BoundTerm.init;
 				if(rate.words>128) return BoundTerm.init;
-				// Above a single bound every term must decay; its antiderivative
-				// then vanishes at infinity.
-				if(d.half&&!(rate<Rational(0))) return BoundTerm.init;
+				// Beyond a single bound every term must decay; its antiderivative
+				// then vanishes at that end.
+				if(d.half&&!decays(rate)) return BoundTerm.init;
 				auto primitive_=antiderivative(p,rate); r.primitive=primitive_.id;
-				auto result=d.half?primitive(mulOp,[minusOne,evaluate(primitive_,lower)]):
+				auto result=d.below?evaluate(primitive_,upper):d.half?primitive(mulOp,[minusOne,evaluate(primitive_,lower)]):
 					primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
 				if(r.scaled) result=primitive(mulOp,[exponentialScale(r.value),result]);
 				d.terms~=r; return result;
@@ -3270,7 +3274,7 @@ final class Bindings{
 					return h;
 				}
 				auto primitive_=primitive(mulOp,[horner(R),primitive(arena.call(Builtin.expR,[arena.real_(0)]),[horner(E)])]); r.primitive=primitive_.id;
-				auto result=d.half?primitive(mulOp,[minusOne,evaluate(primitive_,lower)]):
+				auto result=d.below?evaluate(primitive_,upper):d.half?primitive(mulOp,[minusOne,evaluate(primitive_,lower)]):
 					primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
 				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false,true),result]);
 				d.terms~=r; return result;
@@ -6835,10 +6839,12 @@ final class Bindings{
 			string ev(uint id){return "("~name(id)~".eval ξ ρ)";}
 			string truth(bool b){return b?"true":"false";}
 			auto a=ev(d.lower),b=ev(d.upper),m=ev(d.minusOne);
-			auto flags=d.half?truth(d.strictLower)~" "~a~" "~m:truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~" "~a~" "~b~" "~m;
-			auto guard=d.half?"(fun x : ℝ => Distribution.StepSource.compare "~truth(d.strictLower)~" "~a~" (some x))":
+			auto flags=d.below?truth(d.strictUpper)~" "~b:d.half?truth(d.strictLower)~" "~a~" "~m:
+				truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~" "~a~" "~b~" "~m;
+			auto guard=d.below?"(fun x : ℝ => Distribution.StepSource.compare "~truth(d.strictUpper)~" (some x) "~b~")":
+				d.half?"(fun x : ℝ => Distribution.StepSource.compare "~truth(d.strictLower)~" "~a~" (some x))":
 				"(Distribution.StepSource.intervalGuard "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~" "~a~" "~b~")";
-			auto termsName="Distribution.StepSource."~(d.half?"HalfLineTerms":"IntervalTerms");
+			auto termsName="Distribution.StepSource."~(d.below?"UpperTerms":d.half?"HalfLineTerms":"IntervalTerms");
 			// The first weight is the guard around the value, by evaluation.
 			auto body=s.from[0],value=d.unit!=uint.max?"(fun _ : ℝ => some (1 : ℝ))":functionAt(d.value);
 			// A value under the strict guard of its domain. Around the mask that
@@ -6901,7 +6907,7 @@ final class Bindings{
 			auto total=terms(d.unit!=uint.max?uint.max:d.value);
 			if(d.domain!=uint.max)total="("~termsName~".guard ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) "~total~")";
 			auto minus="(Numeric.calculate_sound ξ n"~to!string(nodes[d.minusOne].data)~" (-1 : ℚ) rfl)";
-			return "Distribution.DensityProgram.presentation_mass_"~(d.half?"halfline":"interval")~" "~program~" "~flags~" "~minus~" "~masked~" "~total;
+			return "Distribution.DensityProgram.presentation_mass_"~(d.below?"upper":d.half?"halfline":"interval")~" "~program~" "~flags~(d.below?"":" "~minus)~" "~masked~" "~total;
 		}
 		auto cuts=s.exceptions;enforce(cuts.length,"empty step grid");
 		string density(){

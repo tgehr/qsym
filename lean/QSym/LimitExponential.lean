@@ -11,11 +11,11 @@ namespace QSym.Limit
 open Filter Topology Polynomial
 open QSym.Distribution.StepSource
 
-private def polyReflect : List ℚ → List ℚ
+def polyReflect : List ℚ → List ℚ
   | [] => []
   | c :: p => c :: polyScale (-1) (polyReflect p)
 
-private theorem polyEval_reflect (p : List ℚ) (x : ℝ) :
+theorem polyEval_reflect (p : List ℚ) (x : ℝ) :
     polyEval (polyReflect p) x = polyEval p (-x) := by
   induction p with
   | nil => rfl
