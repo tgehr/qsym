@@ -158,6 +158,10 @@ private struct CoordinateAffine{ Term coefficient; bool right,scale; }
 private struct IntervalData{
 	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max,axis=uint.max,both=uint.max,axisClosed=uint.max;
 	ubyte joined; Rational axisPoint; bool axisPositive;
+	// The cast of a bracket masks the literal `unit` of a rational number
+	// `unitValue` below `unitCasts` casts: a natural number below all three,
+	// an integer below two, a rational below one.
+	Rational unitValue; ubyte unitCasts;
 	// Between two bounds the value may be a summand `constant` that does not
 	// mention the axis plus a quotient or a logarithm `inner`.
 	uint constant=uint.max,inner=uint.max;
@@ -1726,10 +1730,15 @@ final class Bindings{
 		auto body=nodes[id];
 		// The domain of a value that may be missing is a guard around the mask.
 		if(body.op==BoundOp.guard){ bounds.around=body.a; body=nodes[body.b]; if(!isOp(body,Op.mask)) return false; }
-		if(call(body,Builtin.castQR)&&call(nodes[body.a],Builtin.castZQ)&&call(nodes[nodes[body.a].a],Builtin.castNZ)){
-			auto bracket=nodes[nodes[nodes[body.a].a].a];
-			if(!isOp(bracket,Op.mask)||nodes[bracket.b].op!=BoundOp.scalar||arena.at(nodes[bracket.b].data)!=arena.natural_(1)) return false;
-			d.guard=bracket.a; d.unit=bracket.b;
+		if(bounds.around==uint.max&&call(body,Builtin.castQR)){
+			// The cast of a bracket of a rational number other than zero.
+			auto bracket=nodes[body.a]; d.unitCasts=1;
+			if(call(bracket,Builtin.castZQ)){ bracket=nodes[bracket.a]; d.unitCasts=2; }
+			if(d.unitCasts==2&&call(bracket,Builtin.castNZ)){ bracket=nodes[bracket.a]; d.unitCasts=3; }
+			if(!isOp(bracket,Op.mask)||nodes[bracket.b].op!=BoundOp.scalar||!arena.isNumber(arena.at(nodes[bracket.b].data))) return false;
+			auto number=arena.number(arena.at(nodes[bracket.b].data));
+			if(!number.im.zero||number.re.zero||number.re.words>64) return false;
+			d.guard=bracket.a; d.unit=bracket.b; d.unitValue=number.re;
 		}else if(isOp(body,Op.mask)){ d.guard=body.a; d.value=body.b; }
 		else return false;
 		// Below a binder the two guards stay nested masks: their conjunction.
@@ -1827,14 +1836,20 @@ final class Bindings{
 			shape="(fun _ => Distribution.StepSource.mask_domain_split "~(strictComparison(guard)?"true":"false")~" _ _ _ _ _)";
 			return true;
 		}
-		if(call(body,Builtin.castQR)&&call(nodes[body.a],Builtin.castZQ)&&call(nodes[nodes[body.a].a],Builtin.castNZ)){
-			casts=[bodies[0],body.a,nodes[body.a].a]; body=nodes[nodes[nodes[body.a].a].a];
+		if(call(body,Builtin.castQR)){
+			// A rational number below one cast, an integer below two, a
+			// natural number below all three.
+			casts=[bodies[0]]; auto inside=body.a;
+			if(call(nodes[inside],Builtin.castZQ)){ casts~=inside; inside=nodes[inside].a; }
+			if(casts.length==2&&call(nodes[inside],Builtin.castNZ)){ casts~=inside; inside=nodes[inside].a; }
+			body=nodes[inside];
 		}
 		if(!isOp(body,Op.mask)) return false;
 		if(!casts.length&&!depends(at(body.a),0)){ guard=body.a; rest=at(body.b); shape="(fun _ => rfl)"; }
 		else if(isOp(nodes[body.a],Op.and_)&&!depends(at(nodes[body.a].a),0)){
 			guard=nodes[body.a].a; rest=primitive(arena.at(body.data),[at(nodes[body.a].b),at(body.b)]);
-			shape=casts.length?"(fun _ => Distribution.StepSource.cast_mask_and _ _ _)":"(fun _ => (Distribution.StepSource.mask_mask _ _ _).symm)";
+			enum lemmas=["cast_mask_and_rational","cast_mask_and_integer","cast_mask_and"];
+			shape=casts.length?"(fun _ => Distribution.StepSource."~lemmas[casts.length-1]~" _ _ _)":"(fun _ => (Distribution.StepSource.mask_mask _ _ _).symm)";
 		}else return false;
 		foreach_reverse(c;casts) rest=primitive(arena.at(nodes[c].data),[rest]);
 		return true;
@@ -1950,6 +1965,7 @@ final class Bindings{
 		bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
 		bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
 		enum src="Distribution.StepSource.";
+		enum brackets=["Masks.bracket_rational","Masks.bracket_integer","Masks.bracket"];
 		string under(uint id){ return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
 		uint[] chain,casts,negations,domains; uint value=uint.max,around=uint.max; bool many; string whole; Term maskOp;
 		string conjunction(uint id){
@@ -1975,10 +1991,15 @@ final class Bindings{
 				chain~=c; negations~=o.a; domains~=d;
 				if(last){ domains~=o.b; break; }
 			}
-		}else if(call(top,Builtin.castQR)&&call(nodes[top.a],Builtin.castZQ)&&call(nodes[nodes[top.a].a],Builtin.castNZ)){
-			auto bracket=nodes[nodes[nodes[top.a].a].a]; if(!isOp(bracket,Op.mask)) return false;
-			casts=[weight,top.a,nodes[top.a].a]; maskOp=arena.at(bracket.data); value=bracket.b;
-			whole="("~src~"Masks.bracket "~conjunction(bracket.a)~" "~under(value)~")";
+		}else if(call(top,Builtin.castQR)){
+			// A rational number below one cast, an integer below two, a
+			// natural number below all three.
+			casts=[weight]; auto inside=top.a;
+			if(call(nodes[inside],Builtin.castZQ)){ casts~=inside; inside=nodes[inside].a; }
+			if(casts.length==2&&call(nodes[inside],Builtin.castNZ)){ casts~=inside; inside=nodes[inside].a; }
+			auto bracket=nodes[inside]; if(!isOp(bracket,Op.mask)) return false;
+			maskOp=arena.at(bracket.data); value=bracket.b;
+			whole="("~src~brackets[casts.length-1]~" "~conjunction(bracket.a)~" "~under(value)~")";
 		}else{
 			if(!isOp(top,Op.mask)) return false;
 			maskOp=arena.at(top.data); whole=masks(weight);
@@ -2021,14 +2042,16 @@ final class Bindings{
 			}
 			auto g="("~src~"Conjunction.one "~under(guards[$-1])~")";
 			foreach_reverse(c;guards[0..$-1]) g="("~src~"Conjunction.cons "~under(c)~" "~g~")";
-			return casts.length?"("~src~"Masks.bracket "~g~" "~under(value)~")":"("~src~"Masks.mask "~g~" ("~src~"Masks.value "~under(value)~"))";
+			return casts.length?"("~src~brackets[casts.length-1]~" "~g~" "~under(value)~")":"("~src~"Masks.mask "~g~" ("~src~"Masks.value "~under(value)~"))";
 		}
 		size_t[] kept=s.third?[0,1]:[0],changed=!s.third?[1]:s.first?[2,1]:[0,2];
 		uint[] select(size_t[] front){ uint[] r; foreach(i;front) r~=chain[i]; return r~chain[count..$]; }
 		s.kept=rebuilt(select(kept),kept); s.changed=rebuilt(select(changed),changed);
 		s.whole=around!=uint.max?evidence(chain):whole; s.one=evidence(select(kept)); s.other=evidence(select(changed));
 		s.rest=under(value);
-		if(casts.length) s.rest="(Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply "~s.rest~")))";
+		if(casts.length==3) s.rest="(Functions.castNZ.apply "~s.rest~")";
+		if(casts.length>=2) s.rest="(Functions.castZQ.apply "~s.rest~")";
+		if(casts.length) s.rest="(Functions.castQR.apply "~s.rest~")";
 		if(around!=uint.max) s.rest="(Binding.guardValue "~under(domains[$-1])~" "~s.rest~")";
 		foreach_reverse(c;chain[count..$]) s.rest="(Value.mask "~under(c)~" "~s.rest~")";
 		return true;
@@ -5371,7 +5394,8 @@ final class Bindings{
 			IntervalData d; AxisBounds bounds;
 			if(!whole){
 				if(!intervalMask(nodes[w.a].a,d,bounds)||bounds.around!=uint.max) return BoundTerm.init;
-				if(d.unit==uint.max&&(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
+				if(d.unit!=uint.max?(d.unitCasts!=3||!d.unitValue.one):
+					(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
 					return BoundTerm.init;
 			}
 			turningCoordinate(nodes[row.a].a,d);
@@ -6311,7 +6335,7 @@ final class Bindings{
 			}
 			auto subject=d.inner!=uint.max?d.inner:d.value;
 			auto total=d.direct?(whole.logTerm?logDifference(whole,subject):whole.ratioTerm?quotientDifference(whole,subject):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
-				d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
+				d.unit!=uint.max?difference(IntervalTerm(uint.max),[d.unitValue],Rational(0)):build(d.value,0);
 			if(total==BoundTerm.init) return BoundTerm.init;
 			if(d.constant!=uint.max) total=primitive(addOp,[total,primitive(mulOp,[dropIndex(at(d.constant)),primitive(addOp,[upper,primitive(mulOp,[minusOne,lower])])])]);
 			if(d.domain!=uint.max) total=guard(dropIndex(at(d.domain)),total);
@@ -11478,7 +11502,16 @@ final class Bindings{
 				"(Distribution.StepSource.intervalGuard "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~" "~a~" "~b~")";
 			auto termsName="Distribution.StepSource."~(d.below?"UpperTerms":d.half?"HalfLineTerms":"IntervalTerms");
 			// The first weight is the guard around the value, by evaluation.
-			auto body=q.from[0],value=d.unit!=uint.max?"(fun _ : ℝ => some (1 : ℝ))":functionAt(d.value);
+			// A bracket of one below its three casts keeps the spelling it had
+			// before other numbers were brackets.
+			bool one=d.unit!=uint.max&&d.unitCasts==3&&d.unitValue==Rational(1);
+			auto body=q.from[0],value=d.unit==uint.max?functionAt(d.value):one?"(fun _ : ℝ => some (1 : ℝ))":"(fun _ : ℝ => some ("~cert.q(d.unitValue)~" : ℝ))";
+			string bracket(){
+				if(one)return "(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")";
+				auto integer="("~to!string(d.unitValue.numerator)~")";
+				if(d.unitCasts==1)return "(fun _ => Distribution.StepSource.bracket_rational _ _ "~cert.q(d.unitValue)~" "~numericProof(d.unit,Rational(0),cert.q(d.unitValue))~")";
+				return "(fun _ => Distribution.StepSource.bracket_"~(d.unitCasts==3?"natural":"integer")~" _ _ "~integer~" "~cert.q(d.unitValue)~" "~numericProof(d.unit,Rational(0),integer)~" rfl)";
+			}
 			// A value under the strict guard of its domain. Around the mask that
 			// guard follows the negations of the comparisons of the mask.
 			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
@@ -11505,7 +11538,7 @@ final class Bindings{
 				}else if(d.joined) domain=d.nested?"(fun x => (Distribution.StepSource.mask_mask _ _ _).trans "~regroup~")":"(fun x => "~regroup~")";
 			}
 			auto shape=save("∀ x : ℝ, "~functionAt(body)~" x = Value.mask ("~guard~" x) ("~value~" x)",
-				d.unit!=uint.max?"(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")":
+				d.unit!=uint.max?bracket():
 				domain.length?domain:d.nested?"(fun _ => Distribution.StepSource.mask_mask _ _ _)":"(fun _ => rfl)");
 			auto program="(Distribution.DensityProgram.weight "~functionAt(body)~" Distribution.DensityProgram.lebesgue)";
 			auto masked=summand?save("Distribution.StepSource.Masked "~functionAt(body)~" "~guard~" "~value,"(Distribution.StepSource.Masked.mk "~shape~")"):
@@ -11883,7 +11916,7 @@ final class Bindings{
 				// On a half-line: strict in the bound, a derivative, and decay.
 				auto derivative=" "~exponential(r.primitive).proof~(d.half?" rfl rfl rfl)":" rfl)");
 				if(!r.scaled){
-					auto hv=id==uint.max?app("exp_polynomial",app("polynomial_unit",everywhere)):exponential(id).proof;
+					auto hv=id!=uint.max?exponential(id).proof:app("exp_polynomial",one?app("polynomial_unit",everywhere):app("polynomial_constant",everywhere~" (some ("~cert.q(d.unitValue)~" : ℝ)) "~cert.q(d.unitValue)~" rfl"));
 					foreach(w;factors)hv=app("exp_mul",hv~" "~w);
 					return "("~termsName~".pure "~primitive_~hv~derivative;
 				}

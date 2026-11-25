@@ -1508,6 +1508,19 @@ private Case[] cases(){
 	Case("CompetingCurvature","∫dx [0≤x]*[x≤1]*[x≤a]*exp(-c*x^2)*λ[x]","ℝ"),
 	Case("CompetingPole","∫dx [0≤x]*[x≤1]*[x≤a]*(1/x)*λ[x]","ℝ"),
 	Case("CompetingUnbounded","∫dx [0≤x]*[a≤x]*λ[x]","ℝ"),
+	Case("BracketNatural","∫dx [0≤x]*[x≤a]*2*λ[x]","ℝ","[0≤a]·(2·a)"),
+	Case("BracketInteger","∫dx [0≤x]*[x≤a]*(-3)*λ[x]","ℝ","[0≤a]·(-3·a)"),
+	Case("BracketRational","∫dx [0≤x]*[x≤a]*(1/2)*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
+	Case("BracketStrict","∫dx [a<x]*[x<b]*(3/4)*λ[x]","ℝ","[a<b]·(-a·(3/4)+b·(3/4))"),
+	Case("BracketGuard","∫dx [1≤c]*[0≤x]*[x≤a]*2*λ[x]","ℝ","[1≤c∧0≤a]·(2·a)"),
+	Case("BracketGuardInteger","∫dx [1≤c]*[0≤x]*[x≤a]*(-3)*λ[x]","ℝ","[1≤c∧0≤a]·(-3·a)"),
+	Case("BracketGuardRational","∫dx [1≤c]*[0≤x]*[x≤a]*(1/2)*λ[x]","ℝ","[1≤c∧0≤a]·(a·(1/2))"),
+	Case("BracketCompeting","∫dx [0≤x]*[x≤2]*(1/2)*[x≤t]*λ[x]","ℝ","[t<2∧0≤t]·(t·(1/2))+[2≤t]"),
+	Case("BracketCompetingNatural","∫dx [0≤x]*[x≤a]*[x≤b]*2*λ[x]","ℝ"),
+	Case("BracketCompetingInteger","∫dx [0≤x]*[x≤a]*[x≤b]*(-3)*λ[x]","ℝ"),
+	Case("BracketSolved","∫dx [0≤x]*[2*x≤a]*3*λ[x]","ℝ","[0≤a]·(a·(3/2))"),
+	Case("BracketFunction","λ(t:ℝ).∫dx [0≤x]*[x≤t]*2*λ[x]","ℝ→ℝ","λ(t:ℝ). [0≤t]·(2·t)"),
+	Case("BracketUnbounded","∫dx [a≤x]*2*λ[x]","ℝ"),
 	Case("PieceCases","∫dx [0≤x]*[x≤1]*([x≤a]*x+[a<x]*a)*λ[x]","ℝ","[a<1∧0≤a]·(1/2·a^2)+[0≤a∧a<1]·(a·(-a+1))+[a<0]·a+[1≤a]·(1/2)"),
 	Case("PieceCasesSpread","∫dx [0≤x]*[x≤1]*[x≤a]*(x+[x≤1/2])*λ[x]","ℝ","[a<1∧0≤a]·(1/2·a^2)+[0≤a]·([a≤1/2]·a+[1/2<a]·(1/2))+[1≤a]·(1/2)"),
 	Case("PieceCasesHalfLine","∫dx [0≤x]*([x≤a]*exp(-x)+[a<x]*exp(-2*x))*λ[x]","ℝ","[0≤a]·(1/2·exp(-2·a)-exp(-a)+1)+[a<0]·(1/2)"),
@@ -3159,6 +3172,36 @@ private void run(string directory){
 				enforce(has(src~"Masks.mask ("~src~"Conjunction.one "),c.name~" masks of masks");
 			enforce(has(src~"Conjunction.cons ")!=(retained||domain||among("CompetingFunctionHalfLine")),c.name~" conjunction nested to the right");
 			enforce(has(program~"mass_guard ")==among("CompetingGuard"),c.name~" guard that does not mention the axis");
+		}
+		// The cast of a bracket of a rational number: the simplifier keeps a
+		// constant under a mask in the least sort that has it, a natural
+		// number below all three casts to the reals, an integer below two
+		// and a rational below one. Each is the real mask of that number, a
+		// constant polynomial, and is observed as a polynomial is between
+		// two bounds. The rules that take a comparison out of a guard see
+		// through the casts that are there. Below a binder the mask is real
+		// and was observed before. Beyond a single bound nothing is observed.
+		if(c.name.indexOf("Bracket")==0){
+			enum src="Distribution.StepSource.";
+			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
+			bool retained=among("BracketUnbounded");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			bool natural=among("BracketNatural","BracketGuard","BracketCompetingNatural","BracketSolved");
+			bool integer=among("BracketInteger","BracketGuardInteger","BracketCompetingInteger");
+			bool rational=among("BracketRational","BracketStrict","BracketGuardRational","BracketCompeting");
+			enforce(has("bracket_natural ")==natural,c.name~" natural number below three casts");
+			enforce(has("bracket_integer ")==integer,c.name~" integer below two casts");
+			enforce(has("bracket_rational ")==rational,c.name~" rational below one cast");
+			enforce(has("polynomial_constant ")!=retained,c.name~" constant polynomial");
+			enforce(has("cast_mask_and ")==among("BracketGuard"),c.name~" guard out of three casts");
+			enforce(has("cast_mask_and_integer ")==among("BracketGuardInteger"),c.name~" guard out of two casts");
+			enforce(has("cast_mask_and_rational ")==among("BracketGuardRational"),c.name~" guard out of one cast");
+			enforce(has("Masks.bracket ")==among("BracketCompetingNatural"),c.name~" bounds that compete below three casts");
+			enforce(has("Masks.bracket_integer ")==among("BracketCompetingInteger"),c.name~" bounds that compete below two casts");
+			enforce(has("Masks.bracket_rational ")==among("BracketCompeting"),c.name~" bounds that compete below one cast");
+			enforce(has("solve_left ")==among("BracketSolved"),c.name~" comparison solved below the casts");
+			if(among("BracketFunction")) enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0,c.name~" real mask below a binder");
 		}
 		// A summand of a sum of observations with several bounds on one side:
 		// the two cases of the order of two of its bounds, each such a summand

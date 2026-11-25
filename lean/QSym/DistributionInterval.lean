@@ -235,6 +235,56 @@ theorem cast_mask_and (p q : Option Bool) (n : Option ℕ) :
         (Functions.castNZ.apply (Value.mask q n)))) := by
   rw [← mask_mask, cast_mask]
 
+/-- The same for an integer below two casts and a rational below one. -/
+theorem cast_mask_integer (p : Option Bool) (z : Option ℤ) :
+    Functions.castQR.apply (Functions.castZQ.apply (Value.mask p z)) =
+      Value.mask p (Functions.castQR.apply (Functions.castZQ.apply z)) := by
+  rcases p with _ | _ | _ <;>
+    simp [Value.mask, Function1.apply, Functions.castZQ, Functions.castQR]
+
+theorem cast_mask_rational (p : Option Bool) (q : Option ℚ) :
+    Functions.castQR.apply (Value.mask p q) = Value.mask p (Functions.castQR.apply q) := by
+  rcases p with _ | _ | _ <;> simp [Value.mask, Function1.apply, Functions.castQR]
+
+theorem cast_mask_and_integer (p q : Option Bool) (z : Option ℤ) :
+    Functions.castQR.apply (Functions.castZQ.apply (Value.mask (Value.and p q) z)) =
+      Value.mask p (Functions.castQR.apply (Functions.castZQ.apply (Value.mask q z))) := by
+  rw [← mask_mask, cast_mask_integer]
+
+theorem cast_mask_and_rational (p q : Option Bool) (r : Option ℚ) :
+    Functions.castQR.apply (Value.mask (Value.and p q) r) =
+      Value.mask p (Functions.castQR.apply (Value.mask q r)) := by
+  rw [← mask_mask, cast_mask_rational]
+
+/-- A cast bracket of a number is a real mask of that number: a natural
+number below all three casts, an integer below two, a rational below one. -/
+theorem bracket_natural (g : Option Bool) (k : Option ℕ) (n : ℕ) (q : ℚ)
+    (h : k = some (Numeric.denote (s := .natural) n)) (hq : decide ((n : ℚ) = q) = true) :
+    Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply (Value.mask g k))) =
+      Value.mask g (some ((q : ℚ) : ℝ)) := by
+  subst h
+  have hq := of_decide_eq_true hq
+  subst hq
+  rcases g with _ | _ | _ <;>
+    simp [Value.mask, Function1.apply, Functions.castNZ, Functions.castZQ, Functions.castQR,
+      Numeric.denote]
+
+theorem bracket_integer (g : Option Bool) (k : Option ℤ) (z : ℤ) (q : ℚ)
+    (h : k = some (Numeric.denote (s := .integer) z)) (hq : decide ((z : ℚ) = q) = true) :
+    Functions.castQR.apply (Functions.castZQ.apply (Value.mask g k)) =
+      Value.mask g (some ((q : ℚ) : ℝ)) := by
+  subst h
+  have hq := of_decide_eq_true hq
+  subst hq
+  rcases g with _ | _ | _ <;>
+    simp [Value.mask, Function1.apply, Functions.castZQ, Functions.castQR, Numeric.denote]
+
+theorem bracket_rational (g : Option Bool) (k : Option ℚ) (q : ℚ)
+    (h : k = some (Numeric.denote (s := .rational) q)) :
+    Functions.castQR.apply (Value.mask g k) = Value.mask g (some ((q : ℚ) : ℝ)) := by
+  subst h
+  rcases g with _ | _ | _ <;> simp [Value.mask, Function1.apply, Functions.castQR, Numeric.denote]
+
 /-- The density of a program is a mask of the guard. -/
 structure Masked (f : ℝ → Option ℝ) (g : ℝ → Option Bool) (v : ℝ → Option ℝ) : Prop where
   equation : ∀ x, f x = Value.mask (g x) (v x)

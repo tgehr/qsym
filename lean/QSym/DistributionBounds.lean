@@ -259,6 +259,33 @@ theorem Masks.bracket {g : Option Bool} {ps : List (Option Bool)} (hg : Conjunct
       Value.mask p _
     rw [cast_mask, ih]
 
+/-- The same for the bracket of an integer below two casts and of a rational
+below one. -/
+theorem Masks.bracket_integer {g : Option Bool} {ps : List (Option Bool)}
+    (hg : Conjunction g ps) (z : Option ℤ) :
+    Masks (Functions.castQR.apply (Functions.castZQ.apply (Value.mask g z)))
+      ps (Functions.castQR.apply (Functions.castZQ.apply z)) := by
+  unfold Masks
+  rw [hg.mask]
+  clear hg
+  induction ps with
+  | nil => rfl
+  | cons p ps ih =>
+    show Functions.castQR.apply (Functions.castZQ.apply (Value.mask p _)) = Value.mask p _
+    rw [cast_mask_integer, ih]
+
+theorem Masks.bracket_rational {g : Option Bool} {ps : List (Option Bool)}
+    (hg : Conjunction g ps) (q : Option ℚ) :
+    Masks (Functions.castQR.apply (Value.mask g q)) ps (Functions.castQR.apply q) := by
+  unfold Masks
+  rw [hg.mask]
+  clear hg
+  induction ps with
+  | nil => rfl
+  | cons p ps ih =>
+    show Functions.castQR.apply (Value.mask p _) = Value.mask p _
+    rw [cast_mask_rational, ih]
+
 /-- A mask under the guard of its domain: a comparison takes its negation
 along, around the mask of the rest under the rest of the domain. -/
 theorem Masks.under (s : Bool) (a b : Option ℝ) {g d : Option Bool} {v r : Option ℝ}
