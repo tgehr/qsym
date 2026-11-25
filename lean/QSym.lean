@@ -21,6 +21,7 @@ import QSym.LimitContinuous
 import QSym.LimitQuotient
 import QSym.DistributionExponentialInterval
 import QSym.DistributionGaussianInterval
+import QSym.DistributionRatio
 import QSym.DistributionFibreCertificate
 import QSym.DistributionPartialModel
 import QSym.DistributionPartialSequential

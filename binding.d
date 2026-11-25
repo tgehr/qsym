@@ -97,6 +97,12 @@ private struct IntervalTerm{
 	// the lower bound. Under a polynomial whose coefficients are terms `bell`
 	// has a table for each of them, and `primitives` the antiderivatives.
 	bool rateTerm,boundZero; uint rateZero=uint.max; RateEnd[2] ends; Rational[][] primitives;
+	// A polynomial over a power of the axis between two bounds on one side of
+	// zero. Its antiderivative is a polynomial, the `primitive` of `bell`,
+	// plus another one, the `moments` of `bell`, over the power `ratioShift`
+	// of the bound, plus the `constant` of `bell` times the logarithm of the
+	// absolute value of the bound.
+	bool ratioTerm; uint ratioShift;
 	// The exponential of a quadratic whose curvature is a term that cannot
 	// vanish, beyond a single bound: the literal of the factor of the linear
 	// coefficient over the curvature in the argument.
@@ -1353,6 +1359,34 @@ final class Bindings{
 			p=op.op==Op.add?polySum(a,b):polyProduct(a,b);
 		}
 		if(p.length>64) return false;
+		foreach(c;p) if(c.words>128) return false;
+		return true;
+	}
+	// A polynomial in the innermost variable over a power of it: sums and
+	// products of polynomials and of inverses of monomials. With the power
+	// zero it is a polynomial.
+	private bool axisRatio(uint id,out Rational[] p,out size_t power,uint depth=0){
+		if(depth>64) return false;
+		if(axisPolynomial(id,p)) return true;
+		auto q=nodes[id];
+		if(q.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(q.data));
+		if(op.op==Op.inv){
+			Rational[] m; if(!axisPolynomial(q.a,m)) return false;
+			while(m.length&&m[$-1].zero) m.length=m.length-1;
+			if(m.length<2) return false;
+			foreach(c;m[0..$-1]) if(!c.zero) return false;
+			p=[Rational(1)/m[$-1]]; power=m.length-1; return p[0].words<=128;
+		}
+		if(op.op!=Op.add&&op.op!=Op.mul) return false;
+		Rational[] a,b; size_t n,m;
+		if(!axisRatio(q.a,a,n,depth+1)||!axisRatio(q.b,b,m,depth+1)) return false;
+		static Rational[] shift(Rational[] x,size_t k){ Rational[] r; foreach(i;0..k) r~=Rational(0); return r~x; }
+		if(op.op==Op.mul){ p=polyProduct(a,b); power=n+m; }
+		else if(n&&m){ p=polySum(shift(a,m),shift(b,n)); power=n+m; }
+		else if(n){ p=polySum(a,shift(b,n)); power=n; }
+		else{ p=polySum(shift(a,m),b); power=m; }
+		if(p.length>64||power>32) return false;
 		foreach(c;p) if(c.words>128) return false;
 		return true;
 	}
@@ -3598,8 +3632,31 @@ final class Bindings{
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
+			// Between two bounds, a polynomial over a power of the axis of which
+			// a negative power is left. It is undefined at zero and not
+			// integrable next to it, so it is observed exactly between bounds
+			// on one side of zero: the difference of its antiderivative stands
+			// under the guard of that. With `M` the power minus one, or one,
+			// the antiderivative is `A(x) + C(x)/x^M + κ·log|x|`.
+			bool axisQuotient(uint id,ref IntervalTerm r){
+				if(d.half||d.unit!=uint.max||d.domain!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
+				Rational[] p; size_t power;
+				if(!axisRatio(id,p,power)||!power) return false;
+				bool left; foreach(k;0..power) if(k<p.length&&!p[k].zero) left=true;
+				if(!left) return false;
+				Rational at_(size_t k){ return k<p.length?p[k]:Rational(0); }
+				auto A=[Rational(0)]; Rational[] C;
+				foreach(k;power..p.length) A~=p[k]/Rational(cast(long)(k-power)+1);
+				foreach(k;0..power-1) C~=at_(k)/(Rational(cast(long)k+1)-Rational(cast(long)power));
+				if(!C.length) C=[Rational(0)];
+				while(A.length>1&&A[$-1].zero) A.length=A.length-1;
+				while(C.length>1&&C[$-1].zero) C.length=C.length-1;
+				foreach(c;A~C) if(c.words>128) return false;
+				r.bell.primitive=A; r.bell.moments=C; r.bell.constant=at_(power-1);
+				r.ratioShift=cast(uint)(power>1?power-1:1); r.ratioTerm=true; return true;
+			}
 			IntervalTerm whole;
-			d.direct=d.unit==uint.max&&!admissible(d.value,0)&&(symbolicRate(d.value,whole)||symbolicCurvature(d.value,whole));
+			d.direct=d.unit==uint.max&&!admissible(d.value,0)&&(symbolicRate(d.value,whole)||symbolicCurvature(d.value,whole)||axisQuotient(d.value,whole));
 			if(!d.direct&&(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0))) return BoundTerm.init;
 			if(!construct) return t;
 			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
@@ -3937,7 +3994,35 @@ final class Bindings{
 				}
 				d.terms~=r; return value;
 			}
-			auto total=d.direct?(whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
+			// `guard(0<a ∨ b<0, F(b) - F(a))` with that antiderivative `F`: its
+			// polynomials as the sums of their monomials at the bound, the
+			// constant always and a later one where its coefficient is not zero.
+			BoundTerm quotientDifference(IntervalTerm r,uint id){
+				auto zero=scalar(ctx,arena.real_(0)),k=scalar(ctx,arena.real_(r.bell.constant)),literal=arena.real_(0),truth=arena.boolean(true);
+				r.rateZero=zero.id; r.bell.factor=k.id; r.value=id;
+				BoundTerm balanced(BoundTerm[] xs){ return xs.length==1?xs[0]:primitive(addOp,[balanced(xs[0..$/2]),balanced(xs[$/2..$])]); }
+				BoundTerm power(BoundTerm x,size_t i){ return i==1?x:primitive(arena.pow(arena.real_(0),cast(uint)i),[x]); }
+				BoundTerm row(Rational[] coefficients,BoundTerm o,ref uint[] literals){
+					BoundTerm[] terms;
+					foreach(i,c;coefficients){
+						if(i&&c.zero){ literals~=uint.max; continue; }
+						auto coefficient=scalar(ctx,arena.real_(c)); literals~=coefficient.id;
+						terms~=!i?coefficient:primitive(mulOp,[coefficient,power(o,i)]);
+					}
+					return balanced(terms);
+				}
+				BoundTerm at_(size_t e,BoundTerm o){
+					auto polynomial=row(r.bell.primitive,o,r.ends[e].primitive);
+					uint[] literals; auto over=row(r.bell.moments,o,literals); r.ends[e].rows=[literals];
+					auto quotient=primitive(mulOp,[over,primitive(arena.inv(arena.real_(1)),[power(o,r.ratioShift)])]);
+					auto logarithm=primitive(arena.call(Builtin.logR,[literal]),[primitive(arena.abs(literal),[o])]);
+					return primitive(addOp,[primitive(addOp,[polynomial,quotient]),primitive(mulOp,[k,logarithm])]);
+				}
+				auto above=at_(0,upper),below=at_(1,lower);
+				auto side=primitive(arena.or_(truth,truth),[primitive(arena.lt(literal,literal),[zero,lower]),primitive(arena.lt(literal,literal),[upper,zero])]);
+				d.terms~=r; return guard(side,primitive(addOp,[above,primitive(mulOp,[minusOne,below])]));
+			}
+			auto total=d.direct?(whole.ratioTerm?quotientDifference(whole,d.value):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
 				d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
 			if(total==BoundTerm.init) return BoundTerm.init;
 			if(d.domain!=uint.max) total=guard(dropIndex(at(d.domain)),total);
@@ -7762,6 +7847,37 @@ final class Bindings{
 			return "Distribution.DensityProgram.presentation_mass_gaussian"~(scaled?"_scaled ":" ")~program~" (R := "~list~") "~q(d.constant)~" "~q(d.c0)~" "~q(d.c1)~" "~q(d.c2)~" "~
 				q(d.vertex)~" "~q(d.width)~" "~evidence~" rfl "~literal(d.factor,d.constant)~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
 		}
+		// A polynomial over a power of the axis, by its structure: a
+		// polynomial, the inverse of a monomial, and sums and products of
+		// such. The polynomial stays symbolic; Lean computes it where the
+		// certificate compares it.
+		struct Quotient{string proof,poly;size_t power;}
+		Quotient quotient(uint id){
+			enum src="Distribution.StepSource.";
+			Rational[] p;
+			if(axisPolynomial(id,p)){auto w=cert.piece(id,cert.everywhere,"",Rational(0));return Quotient(w.proof,w.poly,0);}
+			auto n=nodes[id];enforce(n.op==BoundOp.primitive,"unsupported quotient");
+			auto op=arena.view(arena.at(n.data));Quotient r;
+			string monomial(size_t k){return "("~src~"polyMonomial 1 "~to!string(k)~")";}
+			if(op.op==Op.inv){
+				Rational[] m;enforce(axisPolynomial(n.a,m),"inverse of another expression");
+				while(m.length&&m[$-1].zero)m.length=m.length-1;
+				enforce(m.length>=2,"inverse of a constant");
+				auto inner=cert.piece(n.a,cert.everywhere,"",Rational(0));
+				r.power=m.length-1;r.poly="[("~cert.q(m[$-1])~")⁻¹]";
+				r.proof="("~src~"ratio_inv "~inner.proof~" "~cert.q(m[$-1])~" "~to!string(r.power)~" rfl)";
+			}else{
+				enforce(op.op==Op.add||op.op==Op.mul,"unsupported quotient operation");
+				auto a=quotient(n.a),b=quotient(n.b);bool add=op.op==Op.add,both=a.power&&b.power;
+				r.power=add&&!both?(a.power?a.power:b.power):a.power+b.power;
+				if(!add)r.poly="("~src~"polyMul "~a.poly~" "~b.poly~")";
+				else r.poly="("~src~"polyAdd "~(b.power?"("~src~"polyMul "~a.poly~" "~monomial(b.power)~")":a.poly)~" "~
+					(a.power?"("~src~"polyMul "~b.poly~" "~monomial(a.power)~")":b.poly)~")";
+				r.proof="("~src~"ratio_"~(add?"add":"mul")~(both?"":a.power?"_right":"_left")~" "~a.proof~" "~b.proof~")";
+			}
+			r.proof=save(src~"RatioOn "~functionAt(id)~" "~r.poly~" "~to!string(r.power),r.proof);
+			return r;
+		}
 		// An observation between bounds, above or below one; as a summand in
 		// the form that adds, of its weight by itself.
 		string between(IntegralSolution q,bool summand){
@@ -7812,10 +7928,37 @@ final class Bindings{
 				// exponent by its structure, with the coefficients the rule built:
 				// the observation is the integral of its mask, under the strict
 				// guard of its domain where it has one.
-				enforce(!summand&&d.terms.length==1&&(d.terms[0].rateTerm||d.terms[0].curvatureTerm)&&q.from.length==1,"bad direct observation");
+				enforce(!summand&&d.terms.length==1&&(d.terms[0].rateTerm||d.terms[0].curvatureTerm||d.terms[0].ratioTerm)&&q.from.length==1,"bad direct observation");
 				auto r=d.terms[0],g=r.bell;string exponent;AxisCoefficient[] poly;
-				auto hv=cert.bell(d.value,exponent,poly);
 				string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
+				if(r.ratioTerm){
+					// The value as a polynomial over a power of the axis, by its
+					// structure. The kernel checks the antiderivative against
+					// it; at each bound its two polynomials are rows.
+					enum src="Distribution.StepSource.";
+					enforce(!d.half&&d.domain==uint.max,"bad quotient between bounds");
+					auto evidence=quotient(d.value);
+					string list(Rational[] row){string t="[";foreach(i,c;row)t~=(i?", ":"")~cert.q(c);return t~"]";}
+					string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
+					string row(Rational[] coefficients,uint[] literals){
+						enforce(literals.length==coefficients.length&&literals[0]!=uint.max,"bad row of a quotient");
+						size_t count;string h=src~"RowTerms.done";
+						foreach_reverse(i,c;coefficients){
+							if(literals[i]!=uint.max){++count;h="("~src~"RowTerms.term "~cert.q(c)~" "~literal(literals[i],c)~" "~h~")";}
+							else h="("~src~"RowTerms.zero "~h~")";
+						}
+						return h~" "~sums(count);
+					}
+					string rows;
+					foreach(e;0..2){
+						enforce(r.ends[e].rows.length==1,"bad literals of a quotient");
+						rows~=" "~row(g.primitive,r.ends[e].primitive)~" "~row(g.moments,r.ends[e].rows[0]);
+					}
+					return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" ("~src~"ratio_between "~truth(d.swap)~" "~truth(d.strictLower)~" "~
+						truth(d.strictUpper)~" "~to!string(r.ratioShift)~" "~list(g.primitive)~" "~list(g.moments)~" "~cert.q(g.constant)~" "~evidence.proof~" rfl "~
+						literal(r.rateZero,Rational(0))~" "~literal(d.minusOne,Rational(-1))~" "~literal(g.factor,g.constant)~rows~")";
+				}
+				auto hv=cert.bell(d.value,exponent,poly);
 				if(g.zero0!=uint.max)exponent="(Distribution.StepSource.Quadratic.fill0 "~literal(g.zero0,Rational(0))~" "~exponent~")";
 				if(g.zero1!=uint.max)exponent="(Distribution.StepSource.Quadratic.fill1 "~literal(g.zero1,Rational(0))~" "~exponent~")";
 				enforce(g.nonzero==uint.max||nonvanishing(g.nonzero),"scale may vanish");

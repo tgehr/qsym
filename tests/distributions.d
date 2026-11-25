@@ -875,7 +875,27 @@ private Case[] cases(){ return [
 	Case("DomainGuardedStrict","∫dx [c<d]*[0≤x≤1]*sqrt(a)*x*λ[x]","ℝ","([c<d]·(guard(0≤a,1/2·sqrt(a))):ℝ)"),
 	Case("DomainTwoGuards","∫dx [c≤d]*[e<f]*[0≤x]*exp(-x)/a*λ[x]","ℝ","([c≤d]·([e<f]·(guard(a≠0,a⁻¹))):ℝ)"),
 	Case("DomainNested","λ(t:ℝ).∫dx [0≤x]*[x≤t]*exp(-x)/a*λ[x]","ℝ→ℝ","λ(t:ℝ). ([0≤t]·(guard(a≠0,(-exp(-t)+1)·a⁻¹)):ℝ)"),
-	Case("DomainAxis","∫dx [1≤x≤2]*(1/x)*λ[x]","ℝ"),
+	Case("DomainAxis","∫dx [1≤x≤2]*(1/x)*λ[x]","ℝ","log(2)"),
+	Case("DomainAxisRoot","∫dx [1≤x≤2]*sqrt(x)*λ[x]","ℝ"),
+	Case("Quotient","∫dx [1≤x≤2]*x^(-2)*λ[x]","ℝ","1/2"),
+	Case("QuotientSum","∫dx [1≤x≤2]*(1/x+x)*λ[x]","ℝ","log(2)+3/2"),
+	Case("QuotientProduct","∫dx [1≤x≤2]*(x+1)^2/x^3*λ[x]","ℝ","log(2)+11/8"),
+	Case("QuotientScaled","∫dx [1/2≤x≤3]*(x^2+1)/(2*x^4)*λ[x]","ℝ","175/81"),
+	Case("QuotientDifference","∫dx [1<x<2]*(2/x^2-1/x)*λ[x]","ℝ","-log(2)+1"),
+	Case("QuotientMinus","∫dx [1≤x≤2]*(1/x-x^2)*λ[x]","ℝ","log(2)-7/3"),
+	Case("QuotientFactors","∫dx [1≤x≤2]*(1/x+1)*(1/x+2)*λ[x]","ℝ","3·log(2)+5/2"),
+	Case("QuotientNegative","∫dx [-2≤x≤-1]*(1/x)*λ[x]","ℝ","-log(2)"),
+	Case("QuotientAcross","∫dx [-1≤x≤1]*(1/x)*λ[x]","ℝ","undefined(ℝ)"),
+	Case("QuotientEdge","∫dx [0<x≤1]*(1/x^2)*λ[x]","ℝ","undefined(ℝ)"),
+	Case("QuotientUpper","∫dx [1≤x≤t]*(1/x)*λ[x]","ℝ","[1≤t]·log(t)"),
+	Case("QuotientLower","∫dx [a≤x≤1]*(1/x)*λ[x]","ℝ","([a≤1]·(guard(0<a,-log(abs(a)))):ℝ)"),
+	Case("QuotientBounds","∫dx [a≤x≤b]*(1/x^2)*λ[x]","ℝ","([a≤b]·(guard(0<a∧b≠0∨b<0∧a≠0,-b⁻¹+a⁻¹)):ℝ)"),
+	Case("QuotientFunction","λ(t:ℝ).∫dx [1≤x≤t]*(1/x^2)*λ[x]","ℝ→ℝ","λ(t:ℝ). [1≤t]·(1-t⁻¹)"),
+	Case("QuotientGuarded","∫dx [c≤d]*[1≤x≤2]*(1/x)*λ[x]","ℝ","[c≤d]·log(2)"),
+	Case("QuotientHalfLine","∫dx [1≤x]*(1/x^2)*λ[x]","ℝ"),
+	Case("QuotientShifted","∫dx [1≤x≤2]*1/(x+1)*λ[x]","ℝ"),
+	Case("QuotientTerm","∫dx [1≤x≤2]*c/x*λ[x]","ℝ"),
+	Case("QuotientExponential","∫dx [1≤x≤2]*(1/x)*exp(x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
 	Case("SymbolicIntervalSine","∫dx [a≤x≤b]*sin(x)*λ[x]","ℝ"),
@@ -1302,9 +1322,10 @@ private void run(string directory){
 		// domain, so the result is under that guard, inside the test of the
 		// bounds. A comparison that does not mention the axis leaves the
 		// observation with its negation. Below a binder the value itself is
-		// under the guard. A domain that mentions the axis keeps the integral.
-		if(c.name.indexOf("Domain")==0){
-			bool retained=c.name=="DomainAxis";
+		// under the guard. A domain that mentions the axis keeps the integral,
+		// unless the value is a quotient by a power of the axis: see below.
+		if(c.name.indexOf("Domain")==0&&c.name!="DomainAxis"){
+			bool retained=c.name=="DomainAxisRoot";
 			bool half=c.name=="DomainHalfLine"||c.name=="DomainRoot"||c.name=="DomainLogarithm"||c.name=="DomainSum"||c.name=="DomainGuarded"||c.name=="DomainTwoGuards";
 			bool guarded=c.name.indexOf("DomainGuarded")==0||c.name=="DomainTwoGuards",nested=c.name=="DomainNested";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_"~(half?"halfline":"interval"))>=0)!=retained,c.name~" certificate");
@@ -1314,6 +1335,36 @@ private void run(string directory){
 			enforce((certificate.indexOf("Distribution.StepSource.mask_domain_split")>=0)==guarded,c.name~" comparison free of the axis");
 			if(guarded) enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
+		// A polynomial over a power of the axis between two bounds: sums and
+		// products of polynomials and of inverses of monomials, of which a
+		// negative power is left. It is undefined at zero and not integrable
+		// next to it, so the difference of its antiderivative stands under
+		// the guard that both bounds are on one side of zero, inside the test
+		// of the bounds: with zero between them or next to them the
+		// observation is missing. The antiderivative has a polynomial, a
+		// polynomial over a power of the bound and a logarithm of its absolute
+		// value; the certificate has the value as such a quotient by its
+		// structure, and the kernel differentiates. A single bound, another
+		// denominator, a factor that is a term and an exponential keep
+		// their integral.
+		if(c.name.indexOf("Quotient")==0||c.name=="DomainAxis"){
+			bool retained=c.name=="QuotientHalfLine"||c.name=="QuotientShifted"||c.name=="QuotientTerm"||c.name=="QuotientExponential";
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_between ")>=0)!=retained,c.name~" quotient between bounds");
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_direct")>=0)!=retained,c.name~" certificate");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_inv ")>=0)!=retained,c.name~" inverse of a monomial");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			// The evidence follows the structure of the value.
+			bool difference=c.name=="QuotientDifference",factors=c.name=="QuotientFactors";
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_left ")>=0)==(c.name=="QuotientSum"||factors),c.name~" polynomial and quotient");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_right ")>=0)==(c.name=="QuotientMinus"),c.name~" quotient and polynomial");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_add ")>=0)==difference,c.name~" sum of quotients");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_left ")>=0)==(c.name=="QuotientScaled"||difference),c.name~" polynomial times quotient");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_right ")>=0)==(c.name=="QuotientProduct"),c.name~" quotient times polynomial");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul ")>=0)==factors,c.name~" product of quotients");
+			// Zero between the bounds or next to them: nothing is observed.
+			enforce((text=="undefined(ℝ)")==(c.name=="QuotientAcross"||c.name=="QuotientEdge"),c.name~": "~text);
+			if(c.name=="QuotientGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;

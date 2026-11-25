@@ -522,6 +522,84 @@ theorem interval_integral (swap sl su : Bool) (a b m : Option ℝ)
 rate. The antiderivative then vanishes at infinity, so the result is its
 value at the bound with the opposite sign, and no limit is left behind. -/
 
+/-! A value that need only be defined where the guard holds, between two real
+bounds. The terms above are continuous everywhere; a quotient is not defined
+at a zero of its denominator. -/
+
+/-- Where the comparison of the bounds fails the guard holds nowhere. -/
+theorem interval_observation_empty (swap sl su : Bool) (l u : ℝ) {f v : ℝ → Option ℝ}
+    (hf : Masked f (intervalGuard swap sl su (some l) (some u)) v)
+    (hT : ¬(if (sl || su) = true then l < u else l ≤ u)) :
+    partialIntegral volume f = some 0 := by
+  refine zero_integral f fun x => ?_
+  rw [hf.equation, guard_defined, mask_decide, if_neg (region_empty sl su hT x)]
+
+/-- A value that is undefined at a point of the guard is not observed. -/
+theorem interval_observation_missing (swap sl su : Bool) (l u : ℝ) {f v : ℝ → Option ℝ}
+    (hf : Masked f (intervalGuard swap sl su (some l) (some u)) v) {x : ℝ}
+    (hx : (if sl = true then l < x else l ≤ x) ∧ (if su = true then x < u else x ≤ u))
+    (hv : v x = none) : partialIntegral volume f = none := by
+  apply if_neg
+  intro hd
+  obtain ⟨r, hr⟩ := hd.1 x
+  rw [hf.equation, guard_defined, mask_decide, if_pos hx, hv] at hr
+  cases hr
+
+/-- A value that is a real function wherever the guard holds is observed as
+the integral of that function between the bounds where it is integrable
+there, and not at all otherwise. -/
+theorem interval_observation_value (swap sl su : Bool) (l u : ℝ) {f v : ℝ → Option ℝ}
+    (hf : Masked f (intervalGuard swap sl su (some l) (some u)) v) {g : ℝ → ℝ}
+    (hg : ∀ x, ((if sl = true then l < x else l ≤ x) ∧ (if su = true then x < u else x ≤ u)) →
+      v x = some (g x)) :
+    (IntegrableOn g (Ioo l u) volume →
+        partialIntegral volume f = some (∫ x in Ioo l u, g x)) ∧
+      (¬ IntegrableOn g (Ioo l u) volume → partialIntegral volume f = none) := by
+  have total : ∀ x, Value.Defined (f x) := by
+    intro x
+    rw [hf.equation, guard_defined, mask_decide]
+    by_cases h : (if sl = true then l < x else l ≤ x) ∧ (if su = true then x < u else x ≤ u)
+    · rw [if_pos h]
+      exact ⟨_, hg x h⟩
+    · rw [if_neg h]
+      exact ⟨_, rfl⟩
+  have he : (fun x => (f x).getD 0) =ᵐ[volume] (Ioo l u).indicator g := by
+    filter_upwards [ae_away [l, u]] with x hx
+    have hl : x ≠ l := hx l (by simp)
+    have hu : x ≠ u := hx u (by simp)
+    rw [hf.equation, guard_defined, mask_decide]
+    by_cases hi : x ∈ Ioo l u
+    · have hin : (if sl = true then l < x else l ≤ x) ∧
+          (if su = true then x < u else x ≤ u) := by
+        constructor
+        · split_ifs
+          · exact hi.1
+          · exact le_of_lt hi.1
+        · split_ifs
+          · exact hi.2
+          · exact le_of_lt hi.2
+      rw [if_pos hin, hg x hin, Set.indicator_of_mem hi, Option.getD_some]
+    · have hout : ¬((if sl = true then l < x else l ≤ x) ∧
+          (if su = true then x < u else x ≤ u)) := by
+        rintro ⟨h1, h2⟩
+        apply hi
+        constructor
+        · split_ifs at h1
+          · exact h1
+          · exact lt_of_le_of_ne h1 (Ne.symm hl)
+        · split_ifs at h2
+          · exact h2
+          · exact lt_of_le_of_ne h2 hu
+      rw [if_neg hout, Set.indicator_of_not_mem hi, Option.getD_some]
+  refine ⟨fun hi => ?_, fun hn => ?_⟩
+  · have hI : Integrable ((Ioo l u).indicator g) volume :=
+      (integrable_indicator_iff measurableSet_Ioo).mpr hi
+    rw [partialIntegral_valid volume f total ((integrable_congr he).mpr hI),
+      integral_congr_ae he, integral_indicator measurableSet_Ioo]
+  · apply if_neg
+    rintro ⟨_, hint⟩
+    exact hn ((integrable_indicator_iff measurableSet_Ioo).mp ((integrable_congr he).mp hint))
+
 open Filter Asymptotics Topology in
 theorem polyEval_isBigO_exp (p : List ℚ) {b : ℝ} (hb : 0 < b) :
     (polyEval p) =O[atTop] fun x => Real.exp (b * x) := by
