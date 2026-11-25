@@ -571,8 +571,28 @@ private Case[] cases(){ return [
 	Case("GaussianTwoWeights","∫dx exp(-x^2)*λ[x]*x^2","ℝ","1/2·sqrt(π)"),
 	Case("GaussianGrowing","∫dx exp(x^2)*λ[x]","ℝ"),
 	Case("GaussianQuartic","∫dx exp(-x^4)*λ[x]","ℝ"),
-	Case("GaussianSymbolic","∫dx exp(-(x-m)^2)*λ[x]","ℝ"),
 	Case("GaussianHalfLine","∫dx [0≤x]*exp(-x^2)*λ[x]","ℝ"),
+	Case("GaussianSymbolic","∫dx exp(-(x-m)^2)*λ[x]","ℝ","sqrt(π)"),
+	Case("GaussianSymbolicOffset","∫dx exp(-x^2+a)*λ[x]","ℝ","sqrt(π)·exp(a)"),
+	Case("GaussianSymbolicMean","∫dx x*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","m"),
+	Case("GaussianSymbolicSecond","∫dx x^2*exp(-(x-m)^2/2)*λ[x]","ℝ","(m^2+1)·sqrt(2·π)"),
+	Case("GaussianSymbolicCubic","∫dx (x^3+2*x)*exp(-(x-m)^2)*λ[x]","ℝ","2·m·(1/2·m^2+7/4)·sqrt(π)"),
+	Case("GaussianSymbolicTilt","∫dx exp(-x^2+b*x)*λ[x]","ℝ","sqrt(π)·exp(1/4·b^2)"),
+	Case("GaussianSymbolicMixed","∫dx exp(a+2*x-x^2)*λ[x]","ℝ","sqrt(π)·exp(a+1)"),
+	Case("GaussianSymbolicSlope","∫dx exp(-(2*x-m)^2)*λ[x]","ℝ","sqrt(1/4·π)"),
+	Case("GaussianSymbolicProduct","∫dx exp(-(x-a)*(x-b))*λ[x]","ℝ","sqrt(π)·exp(-a·b+1/4·(a+b)^2)"),
+	Case("GaussianSymbolicConvolution","∫dx exp(-x^2)*exp(-(y-x)^2)*λ[x]","ℝ","sqrt(1/2·π)·exp(-1/2·y^2)"),
+	Case("GaussianSymbolicPosterior","∫dx x*exp(-(x-m)^2/2)*exp(-(y-x)^2/2)/(2*π)*λ[x]","ℝ"),
+	Case("GaussianSymbolicNested","∫dy (∫dx exp(-x^2-y^2)*λ[x])*λ[y]","ℝ","π"),
+	Case("GaussianSymbolicFunction","λ(m:ℝ). ∫dx exp(-(x-m)^2)*λ[x]","ℝ→ℝ","λ(m:ℝ). sqrt(π)"),
+	Case("GaussianSymbolicScaled","∫dx b*x*exp(-(x-m)^2)*a*λ[x]","ℝ","b·m·a·sqrt(π)"),
+	Case("GaussianSymbolicGuarded","∫dx [c≤d]*exp(-(x-m)^2)*λ[x]","ℝ","[c≤d]·sqrt(π)"),
+	Case("GaussianSymbolicTwoWeights","∫dx exp(-x^2)*λ[x]*exp(a*x)","ℝ","sqrt(π)·exp(1/4·a^2)"),
+	Case("GaussianSymbolicPartial","∫dx exp(-x^2+1/a)*λ[x]","ℝ","sqrt(π)·exp(a⁻¹)"),
+	Case("GaussianSymbolicCurvature","∫dx exp(a*x^2)*λ[x]","ℝ"),
+	Case("GaussianSymbolicVariance","∫dx exp(-(x-m)^2/(2*v))*λ[x]","ℝ"),
+	Case("GaussianSymbolicLinear","∫dx exp(a*x)*λ[x]","ℝ"),
+	Case("GaussianSymbolicPrefactor","∫dx (x-m)^2*exp(-(x-m)^2/2)*λ[x]","ℝ"),
 	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ"),
 	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
@@ -956,14 +976,31 @@ private void run(string directory){
 		}
 		// The whole line under a polynomial times the exponential of a quadratic
 		// with negative curvature: the polynomial is a constant up to a
-		// derivative that vanishes at both ends. Other exponents, symbolic
-		// coefficients and half-lines keep their integral.
+		// derivative that vanishes at both ends. The constant and linear
+		// coefficients of the exponent may be terms that do not mention the
+		// axis: the exponent is then a quadratic by its structure, and the
+		// moments of the polynomial are a polynomial in the linear coefficient.
+		// Other exponents, a curvature or a polynomial with such coefficients
+		// and half-lines keep their integral.
 		if(c.name.indexOf("Gaussian")==0){
-			bool retained=c.name=="GaussianGrowing"||c.name=="GaussianQuartic"||c.name=="GaussianSymbolic"||c.name=="GaussianHalfLine";
-			auto scaled=c.name=="GaussianNormal"||c.name=="GaussianVariance"||c.name=="GaussianMean"||c.name=="GaussianCentral"||c.name=="GaussianScaled"||c.name=="GaussianPartialScale";
+			bool symbolic=c.name.indexOf("GaussianSymbolic")==0;
+			bool retained=c.name=="GaussianGrowing"||c.name=="GaussianQuartic"||c.name=="GaussianHalfLine"||c.name=="GaussianSymbolicCurvature"||
+				c.name=="GaussianSymbolicVariance"||c.name=="GaussianSymbolicLinear"||c.name=="GaussianSymbolicPrefactor";
+			auto scaled=c.name=="GaussianNormal"||c.name=="GaussianVariance"||c.name=="GaussianMean"||c.name=="GaussianCentral"||c.name=="GaussianScaled"||c.name=="GaussianPartialScale"||
+				c.name=="GaussianSymbolicNested";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian")>=0)!=retained,c.name~" Gaussian certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			if(!retained) enforce((certificate.indexOf("presentation_mass_gaussian_scaled")>=0)==scaled,c.name~" scale");
+			if(!retained) enforce((certificate.indexOf("presentation_mass_gaussian_symbolic")>=0&&certificate.indexOf("Distribution.StepSource.Quadratic.")>=0)==symbolic,c.name~" coefficients");
+			if(symbolic&&!retained){
+				// The lemma of every shape of an exponent is exercised.
+				auto shape=c.name=="GaussianSymbolicProduct"?"Quadratic.product":c.name=="GaussianSymbolicTilt"||c.name=="GaussianSymbolicTwoWeights"?"Quadratic.scale ":
+					c.name=="GaussianSymbolicOffset"||c.name=="GaussianSymbolicNested"||c.name=="GaussianSymbolicPartial"?"Quadratic.fill1":c.name=="GaussianSymbolicMixed"?"Quadratic.add":"Quadratic.square";
+				enforce(certificate.indexOf("Distribution.StepSource."~shape)>=0,c.name~" "~shape);
+				if(c.name=="GaussianSymbolicCubic") enforce(certificate.indexOf("Distribution.StepSource.Horner.step")>=0,c.name);
+				if(c.name=="GaussianSymbolicScaled") enforce(certificate.indexOf("Distribution.StepSource.bell_constant")>=0,c.name);
+				if(c.name=="GaussianSymbolicGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name);
+			}
 			if(c.name=="GaussianGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name);
 			if(c.name=="GaussianPartialScale") enforce(text.indexOf("a≠0")>=0&&text.indexOf("sqrt(π)")>=0,c.name~": "~text);
 		}

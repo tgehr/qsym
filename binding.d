@@ -72,7 +72,15 @@ private struct IntervalData{
 	bool swap,strictLower,strictUpper,nested,half;
 	IntervalTerm[] terms;
 }
-private struct GaussianData{ Rational[] primitive; Rational constant,c0,c1,c2,vertex,width; uint factor,exponent,scale,circle; }
+// A Gaussian integral. With `symbolic` the constant and linear coefficients of
+// the exponent are terms: `vertex` is `-1/(4·c₂)`, `moments` is the polynomial
+// in the linear coefficient with its literals `horner`, `curvature` is the
+// term of the quadratic coefficient, and `zero0`, `zero1` stand for an absent
+// constant or linear coefficient.
+private struct GaussianData{
+	Rational[] primitive; Rational constant,c0,c1,c2,vertex,width; uint factor,exponent,scale,circle;
+	bool symbolic; Rational[] moments; uint[] horner; uint curvature=uint.max,zero0=uint.max,zero1=uint.max;
+}
 private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell; }
 private struct PolynomialGrid{
 	Rational[] cuts,points;
@@ -1202,6 +1210,121 @@ final class Bindings{
 		if(left==BoundTerm.init) return right;
 		if(right==BoundTerm.init) return left;
 		return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[left,right]);
+	}
+	// The rational value of a closed term made of real literals by sums,
+	// products and powers.
+	private bool closedValue(uint id,out Rational q,uint depth=0){
+		if(depth>32) return false;
+		auto n=nodes[id];
+		if(n.op==BoundOp.scalar){
+			auto leaf=arena.at(n.data);
+			if(!arena.isNumber(leaf)||arena.sort(leaf)!=Sort.real_||!arena.number(leaf).im.zero) return false;
+			q=arena.number(leaf).re; return true;
+		}
+		if(n.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(n.data)); Rational a,b;
+		if(op.op!=Op.add&&op.op!=Op.mul&&op.op!=Op.pow||!closedValue(n.a,a,depth+1)) return false;
+		if(op.op==Op.pow){
+			if(op.value>16) return false;
+			q=Rational(1); foreach(i;0..op.value){ q=q*a; if(q.words>128) return false; }
+		}else{
+			if(!closedValue(n.b,b,depth+1)) return false;
+			q=op.op==Op.add?a+b:a*b;
+		}
+		return q.words<=128;
+	}
+	// A coefficient of a polynomial in the innermost variable that does not
+	// mention it: absent, or a term outside the binder, with its value where
+	// that is a closed rational. Terms exist only once the rule builds them.
+	private struct AxisCoefficient{ bool present,closed; Rational value; BoundTerm term; }
+	private AxisCoefficient coefficientSum(AxisCoefficient a,AxisCoefficient b,bool build){
+		if(!a.present) return b;
+		if(!b.present) return a;
+		AxisCoefficient r; r.present=true; r.closed=a.closed&&b.closed;
+		if(r.closed) r.value=a.value+b.value;
+		if(build) r.term=primitive(arena.add(arena.real_(0),arena.real_(0),true),[a.term,b.term]);
+		return r;
+	}
+	private AxisCoefficient coefficientProduct(AxisCoefficient a,AxisCoefficient b,bool build){
+		AxisCoefficient r; if(!a.present||!b.present) return r;
+		r.present=true; r.closed=a.closed&&b.closed;
+		if(r.closed) r.value=a.value*b.value;
+		if(build) r.term=primitive(arena.mul(arena.real_(1),arena.real_(1),true),[a.term,b.term]);
+		return r;
+	}
+	private static size_t coefficientDegree(AxisCoefficient[3] c){ return c[2].present?2:c[1].present?1:0; }
+	// A polynomial of degree at most two in the innermost variable whose
+	// coefficients do not mention it, by its structure: sums, products with
+	// a factor free of the variable, and products and squares of polynomials
+	// of degree one. A coefficient is a sum of products of the parts that
+	// are free of the variable, in the order of the certificate lemmas.
+	private bool axisQuadratic(uint id,out AxisCoefficient[3] c,bool build,uint depth=0){
+		if(depth>32||type(at(id))!=scalarType(Sort.real_)) return false;
+		auto n=nodes[id];
+		if(!depends(at(id),0)){
+			c[0].present=true; c[0].closed=closedValue(id,c[0].value);
+			if(build) c[0].term=dropIndex(at(id));
+			return true;
+		}
+		if(n.op==BoundOp.variable){
+			c[1].present=true; c[1].closed=true; c[1].value=Rational(1);
+			if(build) c[1].term=scalar(Scope(this,contexts[n.context].parent),arena.real_(1));
+			return true;
+		}
+		if(n.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(n.data)); AxisCoefficient[3] a,b;
+		if(op.op!=Op.add&&op.op!=Op.mul&&(op.op!=Op.pow||op.value!=2)||!axisQuadratic(n.a,a,build,depth+1)) return false;
+		if(op.op==Op.pow){ if(coefficientDegree(a)!=1) return false; b=a; }
+		else if(!axisQuadratic(n.b,b,build,depth+1)) return false;
+		auto left=coefficientDegree(a),right=coefficientDegree(b);
+		if(op.op==Op.add) foreach(i;0..3) c[i]=coefficientSum(a[i],b[i],build);
+		else if(op.op==Op.mul&&!left) foreach(i;0..3) c[i]=coefficientProduct(a[0],b[i],build);
+		else if(op.op==Op.mul&&!right) foreach(i;0..3) c[i]=coefficientProduct(a[i],b[0],build);
+		else if(left==1&&right==1){
+			c[0]=coefficientProduct(a[0],b[0],build);
+			c[1]=coefficientSum(coefficientProduct(a[0],b[1],build),coefficientProduct(a[1],b[0],build),build);
+			c[2]=coefficientProduct(a[1],b[1],build);
+		}else return false;
+		foreach(x;c) if(x.closed&&x.value.words>128) return false;
+		return true;
+	}
+	// A factor of a density that is a polynomial times the exponential of
+	// such a quadratic: a polynomial with rational coefficients, the
+	// exponential of a quadratic, a factor free of the variable, or a
+	// product of these.
+	private enum BellFactor:ubyte{ none,polynomial,exponential,scale,product }
+	private BellFactor bellFactor(uint id,out Rational[] p){
+		if(axisPolynomial(id,p)) return BellFactor.polynomial;
+		auto n=nodes[id]; bool free=!depends(at(id),0);
+		if(n.op!=BoundOp.primitive) return free?BellFactor.scale:BellFactor.none;
+		auto op=arena.view(arena.at(n.data)); AxisCoefficient[3] c;
+		if(op.op==Op.builtin&&op.value==Builtin.expR&&axisQuadratic(n.a,c,false)) return BellFactor.exponential;
+		return free?BellFactor.scale:op.op==Op.mul?BellFactor.product:BellFactor.none;
+	}
+	// The parts of such a factor: its polynomial, the coefficients of its
+	// exponent where it has one, and its scale outside the binder.
+	private struct BellParts{ Rational[] p; AxisCoefficient[3] c; bool exponent,scaled; BoundTerm scale; }
+	private bool bellJoin(BellParts x,BellParts y,out BellParts r,bool build){
+		r.p=polyProduct(x.p,y.p); r.exponent=x.exponent||y.exponent; r.scaled=x.scaled||y.scaled;
+		if(r.p.length>64) return false;
+		foreach(q;r.p) if(q.words>128) return false;
+		if(x.exponent&&y.exponent){ foreach(i;0..3) r.c[i]=coefficientSum(x.c[i],y.c[i],build); }
+		else r.c=x.exponent?x.c:y.c;
+		foreach(q;r.c) if(q.closed&&q.value.words>128) return false;
+		if(build) r.scale=!x.scaled?y.scale:!y.scaled?x.scale:primitive(arena.mul(arena.real_(1),arena.real_(1),true),[x.scale,y.scale]);
+		return true;
+	}
+	private bool bellParts(uint id,out BellParts r,bool build,uint depth=0){
+		if(depth>16) return false;
+		final switch(bellFactor(id,r.p)){
+			case BellFactor.none:return false;
+			case BellFactor.polynomial:return true;
+			case BellFactor.exponential:r.p=[Rational(1)]; r.exponent=true; return axisQuadratic(nodes[id].a,r.c,build);
+			case BellFactor.scale:r.p=[Rational(1)]; r.scaled=true; if(build) r.scale=dropIndex(at(id)); return true;
+			case BellFactor.product:
+				BellParts x,y;
+				return bellParts(nodes[id].a,x,build,depth+1)&&bellParts(nodes[id].b,y,build,depth+1)&&bellJoin(x,y,r,build);
+		}
 	}
 	// A comparison of rational affine expressions of the innermost variable
 	// is constant beyond its cut: the cut and the truth value on that side.
@@ -2931,9 +3054,62 @@ final class Bindings{
 			solution.bounds=d; solution.interval=true; solution.piecewise=true; solution.output=result.id;
 			return result;
 		}
-		// A guard that does not mention the axis leaves the observation. The
-		// mask is not strict, so this is an equation even where the inner
-		// observation is missing. Used only if the rest can then be observed.
+		// The whole line under a polynomial times the exponential of a quadratic
+		// whose constant and linear coefficients do not mention the axis and
+		// need not be numbers; its curvature is a negative rational. The
+		// moments of the polynomial relative to the Gaussian integral are a
+		// polynomial `κ` in the linear coefficient `c₁`: the result is
+		// `κ(c₁)·exp(c₀ - c₁²/(4·c₂))·sqrt(π·(-1/c₂))`, times the factors that
+		// do not mention the axis. An absent coefficient is a zero. Every
+		// coefficient is strict in the exponent and in the result.
+		BoundTerm integrateSymbolicGaussian(BoundTerm t,ref IntegralSolution solution){
+			bool parts(out BellParts total,bool build){
+				total.p=[Rational(1)];
+				foreach(id;solution.from){
+					BellParts weight,joined;
+					if(!bellParts(id,weight,build)||!bellJoin(total,weight,joined,build)) return false;
+					total=joined;
+				}
+				return true;
+			}
+			BellParts found;
+			if(!parts(found,false)||!found.exponent||!found.c[2].present||!found.c[2].closed||!(found.c[2].value<Rational(0))) return BoundTerm.init;
+			GaussianData d; d.symbolic=true; d.c2=found.c[2].value;
+			// The moment of degree j+1 is h·(c₁·μⱼ + j·μⱼ₋₁) for h = -1/(2·c₂).
+			auto half=Rational(-1)/(Rational(2)*d.c2); Rational[] moment=[Rational(1)],previous;
+			foreach(j,a;found.p){
+				d.moments=polySum(d.moments,polyProduct([a],moment));
+				auto next=polyProduct([half],polySum([Rational(0)]~moment,polyProduct([Rational(cast(long)j)],previous)));
+				previous=moment; moment=next;
+				foreach(c;moment) if(c.words>128) return BoundTerm.init;
+			}
+			while(d.moments.length>1&&d.moments[$-1].zero) d.moments.length=d.moments.length-1;
+			if(!d.moments.length) d.moments=[Rational(0)];
+			d.vertex=Rational(-1)/(Rational(4)*d.c2); d.width=Rational(-1)/d.c2;
+			foreach(c;d.moments~[d.vertex,d.width]) if(c.words>128) return BoundTerm.init;
+			BellParts built; parts(built,true);
+			auto ctx=context(t),product=arena.mul(arena.real_(1),arena.real_(1),true),sum=arena.add(arena.real_(0),arena.real_(0),true);
+			BoundTerm coefficient(size_t i,ref uint zero){
+				if(built.c[i].present) return built.c[i].term;
+				auto filled=scalar(ctx,arena.real_(0)); zero=filled.id; return filled;
+			}
+			auto constant=coefficient(0,d.zero0),linear=coefficient(1,d.zero1);
+			d.curvature=built.c[2].term.id;
+			// κ(c₁) by Horner's rule.
+			BoundTerm factor;
+			foreach_reverse(c;d.moments){
+				auto literal=scalar(ctx,arena.real_(c)); d.horner=literal.id~d.horner;
+				factor=factor==BoundTerm.init?literal:primitive(sum,[literal,primitive(product,[linear,factor])]);
+			}
+			auto vertex=scalar(ctx,arena.real_(d.vertex)),scale=scalar(ctx,arena.real_(d.width)),circle=scalar(ctx,arena.call(Builtin.pi,[]));
+			d.exponent=vertex.id; d.scale=scale.id; d.circle=circle.id;
+			auto exponent=primitive(sum,[constant,primitive(product,[vertex,primitive(product,[linear,linear])])]);
+			auto bell=primitive(product,[primitive(arena.call(Builtin.expR,[arena.real_(0)]),[exponent]),
+				primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[primitive(product,[circle,scale])])]);
+			auto result=primitive(product,[factor,bell]);
+			if(built.scaled) result=primitive(product,[built.scale,result]);
+			solution.bell=d; solution.gaussian=true; solution.piecewise=true; solution.output=result.id; return result;
+		}
 		// The whole line under a polynomial times the exponential of a
 		// quadratic with rational coefficients and negative curvature, with
 		// optional factors that do not mention the axis. The polynomial is a
@@ -2943,15 +3119,16 @@ final class Bindings{
 		// an equation of partial values.
 		BoundTerm integrateGaussian(BoundTerm t,out IntegralSolution solution){
 			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||!solution.from.length) return BoundTerm.init;
-			Rational[] p=[Rational(1)],q; bool scaled;
+			Rational[] p=[Rational(1)],q; bool scaled,closed=true;
 			foreach(id;solution.from){
 				Rational[] a,r; bool part;
-				if(!tailExponential(id,false,a,r,part,false)) return BoundTerm.init;
+				if(!tailExponential(id,false,a,r,part,false)){ closed=false; break; }
 				p=polyProduct(p,a); q=polySum(q,r); scaled=scaled||part;
 				if(p.length>64) return BoundTerm.init;
 			}
 			while(q.length&&q[$-1].zero) q.length=q.length-1;
-			if(q.length!=3||!(q[2]<Rational(0))) return BoundTerm.init;
+			if(!closed||q.length!=3) return integrateSymbolicGaussian(t,solution);
+			if(!(q[2]<Rational(0))) return BoundTerm.init;
 			GaussianData d; d.c0=q[0]; d.c1=q[1]; d.c2=q[2];
 			// R' + Q'·R + κ = P, from the highest coefficient down.
 			auto m=p.length; auto primitive_=new Rational[](m?m-1:0);
@@ -2978,6 +3155,9 @@ final class Bindings{
 			}
 			solution.bell=d; solution.gaussian=true; solution.piecewise=true; solution.output=result.id; return result;
 		}
+		// A guard that does not mention the axis leaves the observation. The
+		// mask is not strict, so this is an equation even where the inner
+		// observation is missing. Used only if the rest can then be observed.
 		BoundTerm massGuard(BoundTerm t,uint depth){
 			uint guard; BoundTerm rest; string shape;
 			if(depth>8||!axisFreeGuard(t.id,guard,rest,shape)) return BoundTerm.init;
@@ -6193,6 +6373,55 @@ final class Bindings{
 			}
 			enforce(proof.length,"missing step tail witness");return proof;
 		}
+		if(s.gaussian&&s.bell.symbolic){
+			// The density is a scale times a polynomial times the exponential of
+			// a quadratic, weight by weight; the exponent is a quadratic by its
+			// structure, with the coefficients the rule built. The kernel checks
+			// the polynomial of the moments and evaluates the curvature.
+			auto d=s.bell;enum src="Distribution.StepSource.";
+			string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~q(value)~" rfl)";}
+			string constant(uint id){return "("~name(dropIndex(at(id)).id)~".eval ξ ρ)";}
+			string quadratic(uint id){
+				if(!depends(at(id),0))return "("~src~"Quadratic.constant "~constant(id)~")";
+				auto n=nodes[id];
+				if(n.op==BoundOp.variable)return "("~src~"Quadratic.variable "~literal(scalar(Scope(this,contexts[n.context].parent),arena.real_(1)).id,Rational(1))~")";
+				auto op=arena.view(arena.at(n.data)).op;auto a=quadratic(n.a);
+				if(op==Op.pow)return "("~src~"Quadratic.square "~a~")";
+				auto b=quadratic(n.b);
+				if(op==Op.add)return "("~src~"Quadratic.add "~a~" "~b~")";
+				AxisCoefficient[3] x,y;axisQuadratic(n.a,x,false);axisQuadratic(n.b,y,false);
+				return "("~src~"Quadratic."~(!coefficientDegree(x)?"scale":!coefficientDegree(y)?"scaled":"product")~" "~a~" "~b~")";
+			}
+			string join(string a,string b){return a.length&&b.length?"("~src~"Quadratic.add "~a~" "~b~")":a.length?a:b;}
+			string bell(uint id,out string exponent){
+				Rational[] p;
+				final switch(bellFactor(id,p)){
+					case BellFactor.none:enforce(0,"unsupported Gaussian factor");assert(0);
+					case BellFactor.polynomial:return "("~src~"bell_polynomial "~piece(id,SourceCertificates.everywhere,"",Rational(0)).proof~")";
+					case BellFactor.exponential:exponent=quadratic(nodes[id].a);return "("~src~"bell_exp "~functionAt(nodes[id].a)~")";
+					case BellFactor.scale:return "("~src~"bell_constant "~constant(id)~")";
+					case BellFactor.product:
+						string left,right;auto a=bell(nodes[id].a,left),b=bell(nodes[id].b,right);
+						exponent=join(left,right);return "("~src~"bell_mul "~a~" "~b~")";
+				}
+			}
+			auto program="Distribution.DensityProgram.lebesgue";string exponent;
+			auto evidence="("~src~"bell_polynomial ("~src~"polynomial_one "~SourceCertificates.everywhere~"))";
+			foreach(id;s.from){
+				string part;auto w=bell(id,part);
+				program="(Distribution.DensityProgram.weight "~functionAt(id)~" "~program~")";
+				evidence="("~src~"bell_mul "~evidence~" "~w~")";exponent=join(exponent,part);
+			}
+			if(d.zero0!=uint.max)exponent="("~src~"Quadratic.fill0 "~literal(d.zero0,Rational(0))~" "~exponent~")";
+			if(d.zero1!=uint.max)exponent="("~src~"Quadratic.fill1 "~literal(d.zero1,Rational(0))~" "~exponent~")";
+			Rational value;Term term;enforce(closedRational(at(d.curvature),value,term)&&value==d.c2,"Gaussian curvature is not the closed rational");
+			cert.numericTerms~=term;
+			string horner;
+			foreach_reverse(i,c;d.moments)horner="("~src~"Horner."~(horner.length?"step ":"last ")~q(c)~" "~literal(d.horner[i],c)~(horner.length?" "~horner:"")~")";
+			string list="[";foreach(i,c;d.moments)list~=(i?", ":"")~q(c);list~="]";
+			return "Distribution.DensityProgram.presentation_mass_gaussian_symbolic "~program~" "~list~" "~q(d.c2)~" "~q(d.vertex)~" "~q(d.width)~" "~evidence~" "~exponent~
+				" (Numeric.calculate_sound ξ n"~to!string(term.id)~" "~q(d.c2)~" rfl) rfl "~horner~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
+		}
 		if(s.gaussian){
 			// The density is a polynomial times the exponential of a quadratic
 			// everywhere, weight by weight; the kernel checks the antiderivative.
@@ -6554,7 +6783,7 @@ final class Bindings{
 			if(c.inverse!=uint.max) stack~=c.inverse;
 			if(c.powerDegree) stack~=[c.derivativeNumerator,c.derivativeDenominator];
 		}
-		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) stack~=r.primitive; }
+		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) stack~=r.primitive; if(s.bell.curvature!=uint.max) stack~=s.bell.curvature; }
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd||p.rule==BindingRule.distributionCoverAffine) stack~=p.extra;
 		while(stack.length){

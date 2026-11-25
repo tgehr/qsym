@@ -74,7 +74,7 @@ private theorem vanishes_quadratic (top : Bool) (p : List ℚ) {c0 c1 c2 : ℚ} 
     simp [descends, polyAdd, polyZero, h]
 
 /-- A continuous function that vanishes at both ends is bounded. -/
-private theorem bounded_of_vanishing {g : ℝ → ℝ} (hc : Continuous g)
+theorem bounded_of_vanishing {g : ℝ → ℝ} (hc : Continuous g)
     (ht : Tendsto g atTop (𝓝 0)) (hb : Tendsto g atBot (𝓝 0)) : ∃ M, ∀ x, |g x| ≤ M := by
   obtain ⟨A, hA⟩ := (ht.eventually (Metric.ball_mem_nhds (0 : ℝ) one_pos)).exists_forall_of_atTop
   obtain ⟨B, hB⟩ := (hb.eventually (Metric.ball_mem_nhds (0 : ℝ) one_pos)).exists_forall_of_atBot
