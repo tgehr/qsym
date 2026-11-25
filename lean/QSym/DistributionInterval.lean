@@ -600,6 +600,80 @@ theorem interval_observation_value (swap sl su : Bool) (l u : ℝ) {f v : ℝ �
     rintro ⟨_, hint⟩
     exact hn ((integrable_indicator_iff measurableSet_Ioo).mp ((integrable_congr he).mp hint))
 
+/-- The same above one real bound. -/
+theorem above_observation_value (strict : Bool) (l : ℝ) {v : ℝ → Option ℝ} {g : ℝ → ℝ}
+    (hg : ∀ x, (if strict = true then l < x else l ≤ x) → v x = some (g x)) :
+    (IntegrableOn g (Ioi l) volume →
+        partialIntegral volume (fun x => Value.mask (compare strict (some l) (some x)) (v x)) =
+          some (∫ x in Ioi l, g x)) ∧
+      (¬ IntegrableOn g (Ioi l) volume →
+        partialIntegral volume (fun x => Value.mask (compare strict (some l) (some x)) (v x)) =
+          none) := by
+  have total : ∀ x, Value.Defined (Value.mask (compare strict (some l) (some x)) (v x)) := by
+    intro x
+    rw [compare_defined, mask_decide]
+    by_cases h : (if strict = true then l < x else l ≤ x)
+    · rw [if_pos h]
+      exact ⟨_, hg x h⟩
+    · rw [if_neg h]
+      exact ⟨_, rfl⟩
+  have he : (fun x => (Value.mask (compare strict (some l) (some x)) (v x)).getD 0) =ᵐ[volume]
+      (Ioi l).indicator g := by
+    filter_upwards [ae_away [l]] with x hx
+    have hl : x ≠ l := hx l (by simp)
+    rw [compare_defined, mask_decide]
+    by_cases hi : x ∈ Ioi l
+    · have hin : (if strict = true then l < x else l ≤ x) := test_of_lt strict hi
+      rw [if_pos hin, hg x hin, Set.indicator_of_mem hi, Option.getD_some]
+    · have hout : ¬(if strict = true then l < x else l ≤ x) := fun h1 =>
+        hi (lt_of_le_of_ne (le_of_test strict h1) (Ne.symm hl))
+      rw [if_neg hout, Set.indicator_of_not_mem hi, Option.getD_some]
+  refine ⟨fun hi => ?_, fun hn => ?_⟩
+  · have hI : Integrable ((Ioi l).indicator g) volume :=
+      (integrable_indicator_iff measurableSet_Ioi).mpr hi
+    rw [partialIntegral_valid volume _ total ((integrable_congr he).mpr hI),
+      integral_congr_ae he, integral_indicator measurableSet_Ioi]
+  · apply if_neg
+    rintro ⟨_, hint⟩
+    exact hn ((integrable_indicator_iff measurableSet_Ioi).mp ((integrable_congr he).mp hint))
+
+/-- And below one. -/
+theorem below_observation_value (strict : Bool) (u : ℝ) {v : ℝ → Option ℝ} {g : ℝ → ℝ}
+    (hg : ∀ x, (if strict = true then x < u else x ≤ u) → v x = some (g x)) :
+    (IntegrableOn g (Iio u) volume →
+        partialIntegral volume (fun x => Value.mask (compare strict (some x) (some u)) (v x)) =
+          some (∫ x in Iio u, g x)) ∧
+      (¬ IntegrableOn g (Iio u) volume →
+        partialIntegral volume (fun x => Value.mask (compare strict (some x) (some u)) (v x)) =
+          none) := by
+  have total : ∀ x, Value.Defined (Value.mask (compare strict (some x) (some u)) (v x)) := by
+    intro x
+    rw [compare_defined, mask_decide]
+    by_cases h : (if strict = true then x < u else x ≤ u)
+    · rw [if_pos h]
+      exact ⟨_, hg x h⟩
+    · rw [if_neg h]
+      exact ⟨_, rfl⟩
+  have he : (fun x => (Value.mask (compare strict (some x) (some u)) (v x)).getD 0) =ᵐ[volume]
+      (Iio u).indicator g := by
+    filter_upwards [ae_away [u]] with x hx
+    have hu : x ≠ u := hx u (by simp)
+    rw [compare_defined, mask_decide]
+    by_cases hi : x ∈ Iio u
+    · have hin : (if strict = true then x < u else x ≤ u) := test_of_lt strict hi
+      rw [if_pos hin, hg x hin, Set.indicator_of_mem hi, Option.getD_some]
+    · have hout : ¬(if strict = true then x < u else x ≤ u) := fun h1 =>
+        hi (lt_of_le_of_ne (le_of_test strict h1) hu)
+      rw [if_neg hout, Set.indicator_of_not_mem hi, Option.getD_some]
+  refine ⟨fun hi => ?_, fun hn => ?_⟩
+  · have hI : Integrable ((Iio u).indicator g) volume :=
+      (integrable_indicator_iff measurableSet_Iio).mpr hi
+    rw [partialIntegral_valid volume _ total ((integrable_congr he).mpr hI),
+      integral_congr_ae he, integral_indicator measurableSet_Iio]
+  · apply if_neg
+    rintro ⟨_, hint⟩
+    exact hn ((integrable_indicator_iff measurableSet_Iio).mp ((integrable_congr he).mp hint))
+
 open Filter Asymptotics Topology in
 theorem polyEval_isBigO_exp (p : List ℚ) {b : ℝ} (hb : 0 < b) :
     (polyEval p) =O[atTop] fun x => Real.exp (b * x) := by

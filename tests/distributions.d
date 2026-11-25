@@ -892,7 +892,23 @@ private Case[] cases(){ return [
 	Case("QuotientBounds","∫dx [a≤x≤b]*(1/x^2)*λ[x]","ℝ","([a≤b]·(guard(0<a∧b≠0∨b<0∧a≠0,-b⁻¹+a⁻¹)):ℝ)"),
 	Case("QuotientFunction","λ(t:ℝ).∫dx [1≤x≤t]*(1/x^2)*λ[x]","ℝ→ℝ","λ(t:ℝ). [1≤t]·(1-t⁻¹)"),
 	Case("QuotientGuarded","∫dx [c≤d]*[1≤x≤2]*(1/x)*λ[x]","ℝ","[c≤d]·log(2)"),
-	Case("QuotientHalfLine","∫dx [1≤x]*(1/x^2)*λ[x]","ℝ"),
+	Case("QuotientAbove","∫dx [1≤x]*(1/x^2)*λ[x]","ℝ","1"),
+	Case("QuotientAboveTerm","∫dx [a≤x]*(1/x^2)*λ[x]","ℝ","guard(0<a,a⁻¹)"),
+	Case("QuotientAboveSum","∫dx [2≤x]*(1/x^3+3/x^2)*λ[x]","ℝ","13/8"),
+	Case("QuotientAboveZero","∫dx [0≤x]*(1/x^2)*λ[x]","ℝ","undefined(ℝ)"),
+	Case("QuotientAboveEdge","∫dx [0<x]*(1/x^2)*λ[x]","ℝ","undefined(ℝ)"),
+	Case("QuotientAboveFunction","λ(t:ℝ).∫dx [t≤x]*(1/x^3)*λ[x]","ℝ→ℝ","λ(t:{t:ℝ | 0<t}). (t^2)⁻¹·(1/2)"),
+	Case("QuotientAboveGuarded","∫dx [c≤d]*[1≤x]*(1/x^2)*λ[x]","ℝ","[c≤d]"),
+	Case("QuotientAbovePolynomial","∫dx [1≤x]*(1/x^2+1)*λ[x]","ℝ"),
+	Case("QuotientBelow","∫dx [x≤-1]*(1/x^2)*λ[x]","ℝ","1"),
+	Case("QuotientBelowLowest","∫dx [x<b]*(2/x^3-1/x^4)*λ[x]","ℝ","guard(b<0,(-b+1/3)·(b^3)⁻¹)"),
+	Case("QuotientDiverges","∫dx [1≤x]*(1/x)*λ[x]","ℝ"),
+	Case("QuotientDomain","∫dx [a≤x≤b]*(1/x+x)*λ[x]","ℝ","([a≤b]·(guard(0<a∧b≠0∨b<0∧a≠0,-1/2·a^2+1/2·b^2-log(abs(a))+log(abs(b)))):ℝ)"),
+	Case("QuotientDomainStrict","∫dx [a<x≤b]*(x+1)/x^4*λ[x]","ℝ","([a<b]·(guard(0<a∧b≠0∨b<0∧a≠0,(-b·(1/2)-1/3)·(b^3)⁻¹-(-a·(1/2)-1/3)·(a^3)⁻¹)):ℝ)"),
+	Case("QuotientDomainAbove","∫dx [a<x]*(x+1)/x^4*λ[x]","ℝ","guard(0<a,-(-a·(1/2)-1/3)·(a^3)⁻¹)"),
+	Case("QuotientDomainBelow","∫dx [x≤b]*(x+1)/x^4*λ[x]","ℝ","guard(b<0,(-b·(1/2)-1/3)·(b^3)⁻¹)"),
+	Case("QuotientDomainCancelled","∫dx [a≤x]*x^2/x^5*λ[x]","ℝ","guard(0<a,(a^2)⁻¹·(1/2))"),
+	Case("QuotientRemovable","∫dx [a≤x≤b]*x^3/x*λ[x]","ℝ"),
 	Case("QuotientShifted","∫dx [1≤x≤2]*1/(x+1)*λ[x]","ℝ"),
 	Case("QuotientTerm","∫dx [1≤x≤2]*c/x*λ[x]","ℝ"),
 	Case("QuotientExponential","∫dx [1≤x≤2]*(1/x)*exp(x)*λ[x]","ℝ"),
@@ -1343,28 +1359,45 @@ private void run(string directory){
 		// the guard that both bounds are on one side of zero, inside the test
 		// of the bounds: with zero between them or next to them the
 		// observation is missing. The antiderivative has a polynomial, a
-		// polynomial over a power of the bound and a logarithm of its absolute
-		// value; the certificate has the value as such a quotient by its
-		// structure, and the kernel differentiates. A single bound, another
-		// denominator, a factor that is a term and an exponential keep
-		// their integral.
+		// polynomial over a power of the bound, in lowest terms, and a
+		// logarithm of its absolute value; the certificate has the value as
+		// such a quotient by its structure, and the kernel differentiates.
+		// Beyond one bound a quotient with no power above the inverse square
+		// is observed on that side of zero, by the polynomial over the power
+		// alone; any other one is not integrable out there and keeps its
+		// integral. Bounds that are terms leave the mask under the guard of
+		// its domain, that the axis is not zero: the quotient is undefined
+		// there anyway. A polynomial under that guard, another denominator, a
+		// factor that is a term and an exponential keep their integral.
 		if(c.name.indexOf("Quotient")==0||c.name=="DomainAxis"){
-			bool retained=c.name=="QuotientHalfLine"||c.name=="QuotientShifted"||c.name=="QuotientTerm"||c.name=="QuotientExponential";
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_between ")>=0)!=retained,c.name~" quotient between bounds");
+			bool retained=c.name=="QuotientDiverges"||c.name=="QuotientAbovePolynomial"||c.name=="QuotientRemovable"||c.name=="QuotientShifted"||
+				c.name=="QuotientTerm"||c.name=="QuotientExponential";
+			bool domain=c.name.indexOf("QuotientDomain")==0;
+			bool above=c.name.indexOf("QuotientAbove")==0||c.name=="QuotientDomainAbove"||c.name=="QuotientDomainCancelled";
+			bool below=c.name.indexOf("QuotientBelow")==0||c.name=="QuotientDomainBelow";
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_between ")>=0)==(!retained&&!above&&!below),c.name~" quotient between bounds");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_above ")>=0)==(!retained&&above),c.name~" quotient above a bound");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_below ")>=0)==(!retained&&below),c.name~" quotient below a bound");
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_direct")>=0)!=retained,c.name~" certificate");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_inv ")>=0)!=retained,c.name~" inverse of a monomial");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			// The evidence follows the structure of the value.
 			bool difference=c.name=="QuotientDifference",factors=c.name=="QuotientFactors";
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_left ")>=0)==(c.name=="QuotientSum"||factors),c.name~" polynomial and quotient");
+			bool sums=difference||c.name=="QuotientAboveSum"||c.name=="QuotientBelowLowest";
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_left ")>=0)==(c.name=="QuotientSum"||factors||c.name=="QuotientDomain"),c.name~" polynomial and quotient");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_right ")>=0)==(c.name=="QuotientMinus"),c.name~" quotient and polynomial");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_add ")>=0)==difference,c.name~" sum of quotients");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_left ")>=0)==(c.name=="QuotientScaled"||difference),c.name~" polynomial times quotient");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_right ")>=0)==(c.name=="QuotientProduct"),c.name~" quotient times polynomial");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_add ")>=0)==sums,c.name~" sum of quotients");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_left ")>=0)==(c.name=="QuotientScaled"||sums),c.name~" polynomial times quotient");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_right ")>=0)==(c.name=="QuotientProduct"||c.name=="QuotientDomainStrict"||
+				c.name=="QuotientDomainAbove"||c.name=="QuotientDomainBelow"),c.name~" quotient times polynomial");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul ")>=0)==factors,c.name~" product of quotients");
-			// Zero between the bounds or next to them: nothing is observed.
-			enforce((text=="undefined(ℝ)")==(c.name=="QuotientAcross"||c.name=="QuotientEdge"),c.name~": "~text);
-			if(c.name=="QuotientGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+			// Under the guard of its domain around the mask it is the same quotient.
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_guard ")>=0)==domain,c.name~" guard of the domain");
+			enforce((certificate.indexOf("Distribution.StepSource.MaskDomain.mask ")>=0)==domain,c.name~" domain around the mask");
+			// Zero between the bounds, next to them or beyond the only one:
+			// nothing is observed.
+			enforce((text=="undefined(ℝ)")==(c.name=="QuotientAcross"||c.name=="QuotientEdge"||c.name=="QuotientAboveZero"||c.name=="QuotientAboveEdge"),c.name~": "~text);
+			if(c.name=="QuotientGuarded"||c.name=="QuotientAboveGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;

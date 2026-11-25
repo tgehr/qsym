@@ -3,11 +3,12 @@ import Mathlib.Analysis.SpecialFunctions.NonIntegrable
 import Mathlib.Analysis.SpecialFunctions.Integrals
 
 /-!
-A polynomial over a power of the axis, between two bounds. Such a quotient is
-undefined at zero and, where a negative power is left, not integrable next
-to it. So it is observed exactly between bounds on one side of zero, and
-its antiderivative has a polynomial, a polynomial over a power of the axis
-and a logarithm of the absolute value.
+A polynomial over a power of the axis, between two bounds and beyond one.
+Such a quotient is undefined at zero and, where a negative power is left, not
+integrable next to it. So it is observed exactly between bounds on one side
+of zero, and its antiderivative has a polynomial, a polynomial over a power
+of the axis and a logarithm of the absolute value. Beyond one bound on that
+side it is observed where it has no power above the inverse square.
 -/
 
 namespace QSym.Distribution.StepSource
@@ -152,6 +153,23 @@ theorem ratio_add {f g : ℝ → Option ℝ} {p q : List ℚ} {n m : ℕ}
     rw [hf.undefined]
     rfl⟩
 
+/-- The axis is not zero: the domain of a quotient. -/
+theorem axis_nonzero (x : ℝ) (hx : x ≠ 0) : Value.nonzero (some x) = some true := by
+  simp [Value.nonzero, hx]
+
+/-- Under the guard of its domain a quotient is the same quotient: the guard
+holds away from zero, and at zero the quotient is undefined anyway. -/
+theorem ratio_guard {v : ℝ → Option ℝ} {p : List ℚ} {N : ℕ} {q : ℝ → Option Bool}
+    (hv : RatioOn v p N) (hq : ∀ x : ℝ, x ≠ 0 → q x = some true) :
+    RatioOn (fun x => Binding.guardValue (q x) (v x)) p N :=
+  ⟨fun x hx => by
+    show Binding.guardValue (q x) (v x) = _
+    rw [hq x hx, hv.equation x hx]
+    rfl, by
+    show Binding.guardValue (q 0) (v 0) = none
+    rw [hv.undefined]
+    simp [Binding.guardValue]⟩
+
 /-! Next to zero the quotient is not integrable where a negative power is
 left: times a power of the axis it is the lowest coefficient over the axis
 plus a polynomial, and the inverse is not integrable there. -/
@@ -241,22 +259,23 @@ private theorem inv_not_integrableOn_Ioo_left {l : ℝ} (hl : l < 0) :
 /-! The antiderivative `A(x) + C(x)/x^M + κ·log|x|`. -/
 
 /-- The checks of an antiderivative: a negative power is left, and
-`x^(M+1)·A' + x·C' - M·C + κ·x^M = p·x^(M+1-N)`, which says that the
+`x^N·(x^(M+1)·A' + x·C' - M·C + κ·x^M) = p·x^(M+1)`, which says that the
 derivative is the quotient. -/
 def ratioCheck (p : List ℚ) (N M : ℕ) (A C : List ℚ) (κ : ℚ) : Bool :=
-  decide (0 < N) && decide (0 < M) && decide (N ≤ M + 1) && !polyZero (p.take N) &&
+  decide (0 < N) && decide (0 < M) && !polyZero (p.take N) &&
     polyZero (polyAdd
-      (polyAdd (polyAdd (polyMul (polyMonomial 1 (M + 1)) (polyDerivative A))
-        (polyMul [0, 1] (polyDerivative C)))
-        (polyAdd (polyScale (-(M : ℚ)) C) (polyMonomial κ M)))
-      (polyScale (-1) (polyMul p (polyMonomial 1 (M + 1 - N)))))
+      (polyMul (polyMonomial 1 N)
+        (polyAdd (polyAdd (polyMul (polyMonomial 1 (M + 1)) (polyDerivative A))
+          (polyMul [0, 1] (polyDerivative C)))
+          (polyAdd (polyScale (-(M : ℚ)) C) (polyMonomial κ M))))
+      (polyScale (-1) (polyMul p (polyMonomial 1 (M + 1)))))
 
 theorem ratio_hasDerivAt {p : List ℚ} {N M : ℕ} {A C : List ℚ} {κ : ℚ}
     (h : ratioCheck p N M A C κ = true) {x : ℝ} (hx : x ≠ 0) :
     HasDerivAt (fun t : ℝ => polyEval A t + polyEval C t * (t ^ M)⁻¹ + κ * Real.log t)
       (polyEval p x * (x⁻¹) ^ N) x := by
   simp only [ratioCheck, Bool.and_eq_true, decide_eq_true_eq] at h
-  obtain ⟨⟨⟨⟨_, hM⟩, hNM⟩, _⟩, hz⟩ := h
+  obtain ⟨⟨⟨_, hM⟩, _⟩, hz⟩ := h
   have hid := polyEval_zero hz x
   simp only [polyEval_add, polyEval_mul, polyEval_scale, polyEval_monomial, polyEval] at hid
   push_cast at hid
@@ -266,16 +285,8 @@ theorem ratio_hasDerivAt {p : List ℚ} {N M : ℕ} {A C : List ℚ} {κ : ℚ}
     ((Real.hasDerivAt_log hx).const_mul (κ : ℝ))
   refine hF.congr_deriv ?_
   obtain ⟨M', rfl⟩ : ∃ M', M = M' + 1 := Nat.exists_eq_succ_of_ne_zero (Nat.pos_iff_ne_zero.mp hM)
-  have hX : x ^ (M' + 1 + 1) ≠ 0 := pow_ne_zero _ hx
-  have hN : (x⁻¹) ^ N * x ^ (M' + 1 + 1) = x ^ (M' + 1 + 1 - N) := by
-    have hsplit : x ^ (M' + 1 + 1) = x ^ (M' + 1 + 1 - N) * x ^ N := by
-      rw [← pow_add, Nat.sub_add_cancel hNM]
-    rw [hsplit, inv_pow]
-    field_simp
+  have hX : x ^ (M' + 1 + 1) * x ^ N ≠ 0 := mul_ne_zero (pow_ne_zero _ hx) (pow_ne_zero _ hx)
   apply mul_right_cancel₀ hX
-  have hgoal : polyEval p x * (x⁻¹) ^ N * x ^ (M' + 1 + 1) =
-      polyEval p x * x ^ (M' + 1 + 1 - N) := by rw [mul_assoc, hN]
-  rw [hgoal]
   simp only [Nat.add_sub_cancel]
   have hy : (x ^ (M' + 1))⁻¹ * x ^ (M' + 1) = 1 := inv_mul_cancel₀ (pow_ne_zero _ hx)
   have hyx : (x ^ (M' + 1))⁻¹ * x ^ (M' + 1 + 1) = x := by
@@ -286,9 +297,11 @@ theorem ratio_hasDerivAt {p : List ℚ} {N M : ℕ} {A C : List ℚ} {κ : ℚ}
       -((M' : ℝ) + 1) := by
     field_simp
     ring
+  have hNW : (x⁻¹) ^ N * x ^ N = 1 := by rw [← mul_pow, inv_mul_cancel₀ hx, one_pow]
   push_cast at hid hdiv ⊢
-  linear_combination hid + polyEval (polyDerivative C) x * hyx + polyEval C x * hdiv +
-    (κ : ℝ) * hxX
+  linear_combination hid + (polyEval (polyDerivative C) x * x ^ N) * hyx +
+    (polyEval C x * x ^ N) * hdiv + ((κ : ℝ) * x ^ N) * hxX -
+    (polyEval p x * x ^ (M' + 1 + 1)) * hNW
 
 /-- The antiderivative at a bound: a polynomial, another over a power of the
 bound, and a constant times the logarithm of its absolute value. -/
@@ -486,5 +499,287 @@ theorem ratio_between (swap sl su : Bool) {a b : Option ℝ} {v : ℝ → Option
               cases hnz
       · rw [interval_observation_empty swap sl su l u hf hT, decide_eq_false hT]
         rfl
+
+/-! Beyond one bound. A quotient with no power above the inverse square is
+integrable out to infinity on one side of zero, and its antiderivative
+`C(x)/x^M`, with `C` of degree below `M`, vanishes there. Every other
+quotient is not integrable out to infinity. -/
+
+/-- Coefficients that are zero from a degree on can be dropped. -/
+theorem polyEval_take {n : ℕ} : ∀ {p : List ℚ}, polyZero (p.drop n) = true → ∀ x : ℝ,
+    polyEval p x = polyEval (p.take n) x := by
+  induction n with
+  | zero =>
+    intro p h x
+    simpa [polyEval] using polyEval_zero h x
+  | succ n ih =>
+    intro p h x
+    cases p with
+    | nil => rfl
+    | cons c q =>
+      simp only [List.drop_succ_cons] at h
+      simp only [List.take_succ_cons, polyEval, ih h x]
+
+private theorem inv_pow_integrableOn_Ioi {l : ℝ} (hl : 0 < l) {K : ℕ} (hK : 2 ≤ K) :
+    IntegrableOn (fun x : ℝ => (x⁻¹) ^ K) (Ioi l) volume := by
+  have hK' : (2 : ℝ) ≤ K := by exact_mod_cast hK
+  have h := integrableOn_Ioi_rpow_of_lt (a := -(K : ℝ)) (by linarith) hl
+  refine h.congr_fun (fun x hx => ?_) measurableSet_Ioi
+  have hx0 : (0 : ℝ) < x := hl.trans hx
+  show x ^ (-(K : ℝ)) = (x⁻¹) ^ K
+  rw [Real.rpow_neg hx0.le, Real.rpow_natCast, inv_pow]
+
+private theorem inv_pow_integrableOn_Iio {u : ℝ} (hu : u < 0) {K : ℕ} (hK : 2 ≤ K) :
+    IntegrableOn (fun x : ℝ => (x⁻¹) ^ K) (Iio u) volume := by
+  have h : IntegrableOn (fun x : ℝ => ((-x)⁻¹) ^ K) (Iio u) volume :=
+    (inv_pow_integrableOn_Ioi (l := -u) (by linarith) hK).comp_neg_Iio
+  have he : (fun x : ℝ => (x⁻¹) ^ K) = fun x => (-1 : ℝ) ^ K * ((-x)⁻¹) ^ K := by
+    funext x
+    rw [inv_neg, neg_pow x⁻¹ K, ← mul_assoc, ← mul_pow]
+    norm_num
+  rw [he]
+  exact h.const_mul _
+
+/-- On a set away from zero on which every inverse power from the square on
+is integrable, so is a polynomial of degree below `K - 1` over the power
+`K`. -/
+private theorem tail_integrableOn {s : Set ℝ} (hs : MeasurableSet s) (h0 : ∀ x ∈ s, x ≠ 0)
+    (hpow : ∀ K : ℕ, 2 ≤ K → IntegrableOn (fun x : ℝ => (x⁻¹) ^ K) s volume) :
+    ∀ (q : List ℚ) (K : ℕ), q.length + 1 ≤ K →
+      IntegrableOn (fun x : ℝ => polyEval q x * (x⁻¹) ^ K) s volume := by
+  intro q
+  induction q with
+  | nil =>
+    intro K _
+    simp only [polyEval, zero_mul]
+    exact integrableOn_zero
+  | cons c q ih =>
+    intro K hK
+    simp only [List.length_cons] at hK
+    obtain ⟨K', rfl⟩ : ∃ K', K = K' + 1 := ⟨K - 1, by omega⟩
+    have hq := ih K' (by omega)
+    have hc := (hpow (K' + 1) (by omega)).const_mul (c : ℝ)
+    have hsum : IntegrableOn
+        (fun x : ℝ => (c : ℝ) * (x⁻¹) ^ (K' + 1) + polyEval q x * (x⁻¹) ^ K') s volume :=
+      hc.add hq
+    refine hsum.congr_fun (fun x hx => ?_) hs
+    have h2 : x * x⁻¹ = 1 := mul_inv_cancel₀ (h0 x hx)
+    simp only [polyEval, pow_succ]
+    linear_combination (-(polyEval q x * (x⁻¹) ^ K')) * h2
+
+/-- A polynomial of degree below `M` over the power `M` vanishes where the
+inverse does. -/
+private theorem tail_tendsto {l : Filter ℝ} (hinv : Tendsto (fun x : ℝ => x⁻¹) l (𝓝 0))
+    (hne : ∀ᶠ x in l, x ≠ 0) :
+    ∀ (C : List ℚ) (M : ℕ), C.length ≤ M →
+      Tendsto (fun x : ℝ => polyEval C x * (x ^ M)⁻¹) l (𝓝 0) := by
+  intro C
+  induction C with
+  | nil =>
+    intro M _
+    simp only [polyEval, zero_mul]
+    exact tendsto_const_nhds
+  | cons c q ih =>
+    intro M hM
+    simp only [List.length_cons] at hM
+    obtain ⟨M', rfl⟩ : ∃ M', M = M' + 1 := ⟨M - 1, by omega⟩
+    have hq := ih M' (by omega)
+    have hc : Tendsto (fun x : ℝ => (c : ℝ) * (x ^ (M' + 1))⁻¹) l (𝓝 0) := by
+      simpa using (hinv.pow (M' + 1)).const_mul (c : ℝ)
+    have hsum := hc.add hq
+    rw [add_zero] at hsum
+    refine hsum.congr' ?_
+    filter_upwards [hne] with x hx
+    have h2 : x * x⁻¹ = 1 := mul_inv_cancel₀ hx
+    simp only [polyEval, pow_succ, mul_inv]
+    linear_combination (-(polyEval q x * (x ^ M')⁻¹)) * h2
+
+/-- The checks of an antiderivative beyond one bound: there is no polynomial
+and no logarithm in it, the quotient has no power above the inverse square,
+and `C` is of degree below `M`. -/
+def ratioTailCheck (p : List ℚ) (N M : ℕ) (C : List ℚ) : Bool :=
+  ratioCheck p N M [0] C 0 && polyZero (p.drop (N - 1)) && decide (C.length ≤ M)
+
+private theorem ratioTail_hasDerivAt {p : List ℚ} {N M : ℕ} {C : List ℚ}
+    (h : ratioCheck p N M [0] C 0 = true) {x : ℝ} (hx : x ≠ 0) :
+    HasDerivAt (fun t : ℝ => polyEval C t * (t ^ M)⁻¹) (polyEval p x * (x⁻¹) ^ N) x := by
+  have hD := ratio_hasDerivAt h hx
+  have he : (fun t : ℝ => polyEval [0] t + polyEval C t * (t ^ M)⁻¹ +
+      ((0 : ℚ) : ℝ) * Real.log t) = fun t => polyEval C t * (t ^ M)⁻¹ := by
+    funext t
+    simp [polyEval]
+  rwa [he] at hD
+
+private theorem ratioTail_integrableOn {p : List ℚ} {N M : ℕ} {C : List ℚ}
+    (h : ratioCheck p N M [0] C 0 = true) (hdrop : polyZero (p.drop (N - 1)) = true)
+    {s : Set ℝ} (hs : MeasurableSet s) (h0 : ∀ x ∈ s, x ≠ 0)
+    (hpow : ∀ K : ℕ, 2 ≤ K → IntegrableOn (fun x : ℝ => (x⁻¹) ^ K) s volume) :
+    IntegrableOn (fun x : ℝ => polyEval p x * (x⁻¹) ^ N) s volume := by
+  simp only [ratioCheck, Bool.and_eq_true, decide_eq_true_eq] at h
+  have hN : 0 < N := h.1.1.1
+  have hi := tail_integrableOn hs h0 hpow (p.take (N - 1)) N (by
+    have := List.length_take_le (N - 1) p
+    omega)
+  have he : (fun x : ℝ => polyEval p x * (x⁻¹) ^ N) =
+      fun x => polyEval (p.take (N - 1)) x * (x⁻¹) ^ N := by
+    funext x
+    rw [polyEval_take hdrop x]
+  rw [he]
+  exact hi
+
+private theorem ratio_nonzero {p : List ℚ} {N M : ℕ} {A C : List ℚ} {κ : ℚ}
+    (h : ratioCheck p N M A C κ = true) : polyZero (p.take N) = false := by
+  simp only [ratioCheck, Bool.and_eq_true, Bool.not_eq_true'] at h
+  exact h.1.2
+
+/-- Above a bound: `guard(0 < a, -C(a)/a^M)`. A bound that is not positive
+has zero in the guard, where the quotient is undefined, or next to it, where
+it is not integrable. -/
+theorem ratio_above (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {p : List ℚ} {N : ℕ}
+    (M : ℕ) (C : List ℚ) (hv : RatioOn v p N) (hc : ratioTailCheck p N M C = true)
+    {z m ca : Option ℝ} {msca : List (Option ℝ)}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hca : RowTerms none a C 0 [] msca) (hsca : Sums msca ca) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
+      Binding.guardValue (Value.lt z a)
+        (Value.mul m (Value.mul ca (Value.inv (curvaturePower a M)))) := by
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  have hMinus : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  subst hZ hMinus
+  simp only [ratioTailCheck, Bool.and_eq_true, decide_eq_true_eq] at hc
+  obtain ⟨⟨hr, hdrop⟩, hlen⟩ := hc
+  cases a with
+  | none =>
+    have hn : partialIntegral volume
+        (fun x => Value.mask (compare strict none (some x)) (v x)) = none := by
+      apply if_neg
+      intro hd
+      obtain ⟨r, hr'⟩ := hd.1 0
+      cases strict <;> cases hr'
+    rw [hn]
+    rfl
+  | some l =>
+    by_cases hl : 0 < l
+    · have hne : ∀ x : ℝ, l ≤ x → x ≠ 0 := fun x hx => (hl.trans_le hx).ne'
+      have hg : ∀ x : ℝ, (if strict = true then l < x else l ≤ x) →
+          v x = some (polyEval p x * (x⁻¹) ^ N) := fun x hx =>
+        hv.equation x (hne x (by
+          split_ifs at hx
+          · exact hx.le
+          · exact hx))
+      have hint := ratioTail_integrableOn hr hdrop (s := Ioi l) measurableSet_Ioi
+        (fun x hx => hne x (le_of_lt hx)) fun K hK => inv_pow_integrableOn_Ioi hl hK
+      rw [(above_observation_value strict l hg).1 hint,
+        integral_Ioi_of_hasDerivAt_of_tendsto'
+          (fun x hx => ratioTail_hasDerivAt hr (hne x hx)) hint
+          (tail_tendsto tendsto_inv_atTop_zero (eventually_ne_atTop 0) C M hlen),
+        row_sum hca hsca l rfl, curvaturePower_some]
+      have hinv : Value.inv (some (l ^ M)) = some ((l ^ M)⁻¹) := by
+        simp [Value.inv, pow_ne_zero M hl.ne']
+      rw [hinv]
+      simp [Binding.guardValue, Value.lt, hl, Value.mul]
+    · have hguard : Binding.guardValue (Value.lt (some (0 : ℝ)) (some l))
+          (Value.mul (some (-1 : ℝ)) (Value.mul ca (Value.inv (curvaturePower (some l) M)))) =
+          none := by
+        simp [Binding.guardValue, Value.lt, hl]
+      rw [hguard]
+      by_cases h0 : (if strict = true then l < 0 else l ≤ 0)
+      · apply if_neg
+        intro hd
+        obtain ⟨r, hr'⟩ := hd.1 0
+        have hr'' : Value.mask (compare strict (some l) (some 0)) (v 0) = some r := hr'
+        rw [compare_some, decide_eq_true h0, hv.undefined] at hr''
+        cases hr''
+      · have hstrict : strict = true ∧ l = 0 := by
+          cases strict with
+          | false => exact absurd (not_lt.1 hl) h0
+          | true =>
+            have h0' : ¬ l < 0 := h0
+            exact ⟨rfl, le_antisymm (not_lt.1 hl) (not_lt.1 h0')⟩
+        obtain ⟨rfl, rfl⟩ := hstrict
+        have hg : ∀ x : ℝ, (if true = true then (0 : ℝ) < x else 0 ≤ x) →
+            v x = some (polyEval p x * (x⁻¹) ^ N) := fun x hx => by
+          have hx0 : (0 : ℝ) < x := hx
+          exact hv.equation x hx0.ne'
+        refine (above_observation_value true 0 hg).2 fun hi => ?_
+        have := ratio_not_integrableOn measurableSet_Ioo (Metric.isBounded_Ioo _ _)
+          (fun h : (0 : ℝ) ∈ Ioo 0 1 => lt_irrefl _ h.1)
+          (inv_not_integrableOn_Ioo_right one_pos) N p (hi.mono_set Ioo_subset_Ioi_self)
+        rw [ratio_nonzero hr] at this
+        cases this
+
+/-- Below a bound: `guard(b < 0, C(b)/b^M)`. -/
+theorem ratio_below (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {p : List ℚ} {N : ℕ}
+    (M : ℕ) (C : List ℚ) (hv : RatioOn v p N) (hc : ratioTailCheck p N M C = true)
+    {z cb : Option ℝ} {mscb : List (Option ℝ)}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (hcb : RowTerms none b C 0 [] mscb) (hscb : Sums mscb cb) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
+      Binding.guardValue (Value.lt b z) (Value.mul cb (Value.inv (curvaturePower b M))) := by
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  subst hZ
+  simp only [ratioTailCheck, Bool.and_eq_true, decide_eq_true_eq] at hc
+  obtain ⟨⟨hr, hdrop⟩, hlen⟩ := hc
+  cases b with
+  | none =>
+    have hn : partialIntegral volume
+        (fun x => Value.mask (compare strict (some x) none) (v x)) = none := by
+      apply if_neg
+      intro hd
+      obtain ⟨r, hr'⟩ := hd.1 0
+      cases strict <;> cases hr'
+    rw [hn]
+    rfl
+  | some u =>
+    by_cases hu : u < 0
+    · have hne : ∀ x : ℝ, x ≤ u → x ≠ 0 := fun x hx => (lt_of_le_of_lt hx hu).ne
+      have hg : ∀ x : ℝ, (if strict = true then x < u else x ≤ u) →
+          v x = some (polyEval p x * (x⁻¹) ^ N) := fun x hx =>
+        hv.equation x (hne x (by
+          split_ifs at hx
+          · exact hx.le
+          · exact hx))
+      have hint := ratioTail_integrableOn hr hdrop (s := Iio u) measurableSet_Iio
+        (fun x hx => hne x (le_of_lt hx)) fun K hK => inv_pow_integrableOn_Iio hu hK
+      rw [(below_observation_value strict u hg).1 hint, ← integral_Iic_eq_integral_Iio,
+        integral_Iic_of_hasDerivAt_of_tendsto'
+          (fun x hx => ratioTail_hasDerivAt hr (hne x hx))
+          (integrableOn_Iic_iff_integrableOn_Iio.2 hint)
+          (tail_tendsto tendsto_inv_atBot_zero (eventually_ne_atBot 0) C M hlen),
+        row_sum hcb hscb u rfl, curvaturePower_some]
+      have hinv : Value.inv (some (u ^ M)) = some ((u ^ M)⁻¹) := by
+        simp [Value.inv, pow_ne_zero M hu.ne]
+      rw [hinv]
+      simp [Binding.guardValue, Value.lt, hu, Value.mul]
+    · have hguard : Binding.guardValue (Value.lt (some u) (some (0 : ℝ)))
+          (Value.mul cb (Value.inv (curvaturePower (some u) M))) = none := by
+        simp [Binding.guardValue, Value.lt, hu]
+      rw [hguard]
+      by_cases h0 : (if strict = true then (0 : ℝ) < u else 0 ≤ u)
+      · apply if_neg
+        intro hd
+        obtain ⟨r, hr'⟩ := hd.1 0
+        have hr'' : Value.mask (compare strict (some 0) (some u)) (v 0) = some r := hr'
+        rw [compare_some, decide_eq_true h0, hv.undefined] at hr''
+        cases hr''
+      · have hstrict : strict = true ∧ u = 0 := by
+          cases strict with
+          | false => exact absurd (not_lt.1 hu) h0
+          | true =>
+            have h0' : ¬ (0 : ℝ) < u := h0
+            exact ⟨rfl, le_antisymm (not_lt.1 h0') (not_lt.1 hu)⟩
+        obtain ⟨rfl, rfl⟩ := hstrict
+        have hg : ∀ x : ℝ, (if true = true then x < (0 : ℝ) else x ≤ 0) →
+            v x = some (polyEval p x * (x⁻¹) ^ N) := fun x hx => by
+          have hx0 : x < (0 : ℝ) := hx
+          exact hv.equation x hx0.ne
+        refine (below_observation_value true 0 hg).2 fun hi => ?_
+        have := ratio_not_integrableOn measurableSet_Ioo (Metric.isBounded_Ioo _ _)
+          (fun h : (0 : ℝ) ∈ Ioo (-1) 0 => lt_irrefl _ h.2)
+          (inv_not_integrableOn_Ioo_left (by norm_num : (-1 : ℝ) < 0)) N p
+          (hi.mono_set Ioo_subset_Iio_self)
+        rw [ratio_nonzero hr] at this
+        cases this
 
 end QSym.Distribution.StepSource
