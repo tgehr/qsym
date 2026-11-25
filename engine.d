@@ -222,7 +222,11 @@ package final class Engine{
 			if(numeric.after!=a.boolean(true)) return false;
 			result=numeric; remember(truths,k,result); return true;
 		}
-		if(proving.get(k,false)) return false;
+		// A premise may ask for another through a known fact, and a chain of
+		// such questions need not repeat a goal: from `x-1≤y` and `y≤x`,
+		// `1<x` asks for `1<y`, that for `1<x-1`, which is `2<x`, and so on.
+		// Like the other searches, this one is bounded in depth.
+		if(proving.get(k,false)||premiseDepth>=128) return false;
 		proving.set(k,true); ++premiseDepth;
 		scope(exit){ proving.set(k,false); --premiseDepth; }
 		// Check a bounded polynomial identity before asking root/guard solvers

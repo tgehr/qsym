@@ -99,7 +99,11 @@ Example[] examples(){
 		Example("CosUnitEndpoint","cos(1)≠0","true"),
 		Example("CosPartialBound","cos(x)≠0","cos(x)≠0",["x≤1"]),
 		Example("CosOutsideUnit","cos(2*sin(x))≠0","cos(2*sin(x))≠0"),
-		Example("MaskPartialBody","[p]*log(-1)≠0","p∧log(-1)≠0")
+		Example("MaskPartialBody","[p]*log(-1)≠0","p∧log(-1)≠0"),
+		// Bounds that differ by a constant: a premise about one asks for the
+		// same about the other, moved by that constant, without end.
+		Example("OffsetChain","[0≤y]*[y≤x]*[x-1≤y]","[0≤y∧(y≤x∧x-1≤y)]"),
+		Example("OffsetChainUpper","[y≤1]*[y≤x]*[x-1≤y]","[y≤1∧(y≤x∧x-1≤y)]")
 	];
 }
 private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,t:ℝ,z:ℂ,p:𝔹,q:𝔹"); return s; }
