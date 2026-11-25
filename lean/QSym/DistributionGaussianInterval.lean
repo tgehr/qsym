@@ -967,74 +967,250 @@ theorem UpperTerms.symbolicErf {b : Option ℝ} {v : ℝ → Option ℝ} {S : Op
   · exact .scaledPrimitive (G := symErfBelow (some a0) (some b1) u k g d pi s n)
       (hval a0 b1 rfl rfl) hG h0 hi hD hT
 
-/-! A rate that does not mention the axis. Beyond a single bound the
-exponential of a linear exponent is integrable exactly where its rate has the
-sign of decay, so the observation stands under the guard of that sign: where
-the rate has the other sign, or is zero, the integrand is defined and not
-integrable. Under a scale that may vanish the integrand is zero where the
-scale is, whatever the rate. -/
+/-! A rate that does not mention the axis. Beyond a single bound a polynomial
+times the exponential of a linear exponent is integrable exactly where its
+rate has the sign of decay, so the observation stands under the guard of that
+sign: where the rate has the other sign, or is zero, the integrand is defined
+and not integrable. The antiderivative is the exponential times a polynomial
+in the axis and in the inverse of the rate. Under a scale that may vanish the
+integrand is zero where the scale is, whatever the rate. -/
 
-/-- The exponential of a linear exponent with a negative rate above a bound. -/
-theorem exp_linear_Ioi (α : ℝ) {β : ℝ} (hβ : β < 0) (l : ℝ) :
-    IntegrableOn (fun x : ℝ => Real.exp (α + β * x)) (Ioi l) volume ∧
-      ∫ x in Ioi l, Real.exp (α + β * x) = -(β⁻¹ * Real.exp (α + β * l)) := by
-  have he : (fun x : ℝ => Real.exp (α + β * x)) = fun x => Real.exp α * Real.exp (β * x) := by
+/-- The rows of that polynomial in the powers of the inverse rate from the
+first on, `P, -P', P'', …`: each is the opposite of the derivative of the one
+before, and the derivative of the last vanishes. -/
+def rateRowsCheck : List ℚ → List (List ℚ) → Bool
+  | P, [] => polyZero P
+  | P, r :: R =>
+    polyZero (polyAdd r (polyScale (-1) P)) &&
+      rateRowsCheck (polyScale (-1) (polyDerivative P)) R
+
+/-- Coefficient lists with the same values have derivatives with the same
+values. -/
+private theorem polyDerivative_congr {p q : List ℚ} (h : ∀ x : ℝ, polyEval p x = polyEval q x)
+    (x : ℝ) : polyEval (polyDerivative p) x = polyEval (polyDerivative q) x := by
+  have hf : polyEval p = polyEval q := funext h
+  exact (polyEval_hasDerivAt p x).unique (hf ▸ polyEval_hasDerivAt q x)
+
+/-- The derivative of a polynomial in two values in the first. -/
+theorem poly2Eval_hasDerivAt (K : List (List ℚ)) (h x : ℝ) :
+    HasDerivAt (fun t : ℝ => poly2Eval K t h) (poly2Eval (K.map polyDerivative) x h) x := by
+  induction K with
+  | nil => simpa [poly2Eval] using hasDerivAt_const x (0 : ℝ)
+  | cons p K ih =>
+    simp only [poly2Eval, List.map_cons]
+    exact (polyEval_hasDerivAt p x).add (ih.const_mul h)
+
+/-- Those rows `B` satisfy `B + h·B' = P`. -/
+theorem rateRows_identity (h : ℝ) :
+    ∀ (R : List (List ℚ)) (P : List ℚ), rateRowsCheck P R = true → ∀ x : ℝ,
+      poly2Eval R x h + h * poly2Eval (R.map polyDerivative) x h = polyEval P x := by
+  intro R
+  induction R with
+  | nil =>
+    intro P hP x
+    simp only [rateRowsCheck] at hP
+    simp [poly2Eval, polyEval_zero hP]
+  | cons r R ih =>
+    intro P hP x
+    simp only [rateRowsCheck, Bool.and_eq_true] at hP
+    obtain ⟨hr, hR⟩ := hP
+    have hrP : ∀ y : ℝ, polyEval r y = polyEval P y := fun y => by
+      have h0 := polyEval_zero hr y
+      rw [polyEval_add, polyEval_scale] at h0
+      push_cast at h0
+      linarith
+    have hd := polyDerivative_congr hrP x
+    have hih := ih _ hR x
+    rw [polyEval_scale] at hih
+    push_cast at hih
+    simp only [poly2Eval, List.map_cons]
+    rw [hrP x, hd]
+    linear_combination h * hih
+
+/-- The checks of the table of an antiderivative: the polynomial is not zero,
+the row without a power of the inverse rate is, and the others are those rows
+for the polynomial times a sign. -/
+def rateTableCheck (s : ℚ) (P : List ℚ) : List (List ℚ) → Bool
+  | [] => false
+  | z :: R => !polyZero P && polyZero z && rateRowsCheck (polyScale s P) R
+
+theorem rateTable_nonzero {s : ℚ} {P : List ℚ} {K : List (List ℚ)}
+    (hK : rateTableCheck s P K = true) : polyZero P = false := by
+  rcases K with _ | ⟨z, R⟩
+  · simp [rateTableCheck] at hK
+  · simp only [rateTableCheck, Bool.and_eq_true, Bool.not_eq_true'] at hK
+    exact hK.1.1
+
+/-- The exponential times the table at the inverse rate is an antiderivative
+of the sign times the polynomial times the exponential. -/
+theorem rateTable_deriv {s : ℚ} {P : List ℚ} {K : List (List ℚ)}
+    (hK : rateTableCheck s P K = true) (α : ℝ) {β : ℝ} (hβ : β ≠ 0) (x : ℝ) :
+    HasDerivAt (fun t : ℝ => Real.exp (α + β * t) * poly2Eval K t β⁻¹)
+      (s * (polyEval P x * Real.exp (α + β * x))) x := by
+  rcases K with _ | ⟨z, R⟩
+  · simp [rateTableCheck] at hK
+  simp only [rateTableCheck, Bool.and_eq_true, Bool.not_eq_true'] at hK
+  obtain ⟨⟨_, hz⟩, hR⟩ := hK
+  have hid := rateRows_identity β⁻¹ R _ hR x
+  rw [polyEval_scale] at hid
+  have hz0 : ∀ y : ℝ, polyEval z y = 0 := fun y => polyEval_zero hz y
+  have hzd : polyEval (polyDerivative z) x = 0 := by
+    have h0 := polyDerivative_congr (p := z) (q := []) (fun y => by rw [hz0]; rfl) x
+    simpa [polyDerivative, polyEval] using h0
+  have he : HasDerivAt (fun t : ℝ => Real.exp (α + β * t)) (Real.exp (α + β * x) * (β * 1)) x :=
+    (((hasDerivAt_id x).const_mul β).const_add α).exp
+  refine (he.mul (poly2Eval_hasDerivAt (z :: R) β⁻¹ x)).congr_deriv ?_
+  simp only [poly2Eval, List.map_cons, hz0, hzd]
+  have hβi : β * β⁻¹ = 1 := mul_inv_cancel₀ hβ
+  linear_combination Real.exp (α + β * x) * hid +
+    Real.exp (α + β * x) * poly2Eval R x β⁻¹ * hβi
+
+/-- With a negative rate that antiderivative vanishes at infinity. -/
+theorem poly2_exp_tendsto_atTop (K : List (List ℚ)) (h α : ℝ) {β : ℝ} (hβ : β < 0) :
+    Tendsto (fun t : ℝ => Real.exp (α + β * t) * poly2Eval K t h) atTop (𝓝 0) := by
+  induction K with
+  | nil => simp [poly2Eval]
+  | cons p K ih =>
+    have h3 := ((expPolynomial_tendsto p hβ).const_mul (Real.exp α)).add (ih.const_mul h)
+    simp only [mul_zero, add_zero] at h3
+    refine h3.congr fun t => ?_
+    simp only [poly2Eval]
+    rw [Real.exp_add]
+    ring
+
+/-- With a positive rate at minus infinity. -/
+theorem poly2_exp_tendsto_atBot (K : List (List ℚ)) (h α : ℝ) {β : ℝ} (hβ : 0 < β) :
+    Tendsto (fun t : ℝ => Real.exp (α + β * t) * poly2Eval K t h) atBot (𝓝 0) := by
+  induction K with
+  | nil => simp [poly2Eval]
+  | cons p K ih =>
+    have h3 := ((expPolynomial_tendsto_atBot p hβ).const_mul (Real.exp α)).add (ih.const_mul h)
+    simp only [mul_zero, add_zero] at h3
+    refine h3.congr fun t => ?_
+    simp only [poly2Eval]
+    rw [Real.exp_add]
+    ring
+
+theorem poly_exp_linear_integrableOn_Ioi (P : List ℚ) (α : ℝ) {β : ℝ} (hβ : β < 0) (l : ℝ) :
+    IntegrableOn (fun x : ℝ => polyEval P x * Real.exp (α + β * x)) (Ioi l) volume := by
+  have hc : Continuous fun x : ℝ => polyEval P x * Real.exp (β * x) :=
+    (polyEval_continuous P).mul (Real.continuous_exp.comp (continuous_const.mul continuous_id))
+  have hi : IntegrableOn (fun x : ℝ => polyEval P x * Real.exp (β * x)) (Ioi l) volume :=
+    integrable_of_isBigO_exp_neg (show (0 : ℝ) < -β / 2 by linarith) hc.continuousOn
+      (expPolynomial_isBigO P hβ)
+  have he : (fun x : ℝ => polyEval P x * Real.exp (α + β * x)) =
+      fun x => Real.exp α * (polyEval P x * Real.exp (β * x)) := by
     funext x
     rw [Real.exp_add]
-  have hne : β ≠ 0 := hβ.ne
+    ring
   rw [he]
-  refine ⟨(integrableOn_exp_mul_Ioi hβ l).const_mul _, ?_⟩
-  rw [integral_const_mul, integral_exp_mul_Ioi hβ l, Real.exp_add]
-  field_simp
+  exact hi.const_mul _
 
-/-- With a positive rate below one. -/
-theorem exp_linear_Iic (α : ℝ) {β : ℝ} (hβ : 0 < β) (u : ℝ) :
-    IntegrableOn (fun x : ℝ => Real.exp (α + β * x)) (Iic u) volume ∧
-      ∫ x in Iic u, Real.exp (α + β * x) = β⁻¹ * Real.exp (α + β * u) := by
-  have he : (fun x : ℝ => Real.exp (α + β * x)) = fun x => Real.exp α * Real.exp (β * x) := by
+theorem poly_exp_linear_integrableOn_Iic (P : List ℚ) (α : ℝ) {β : ℝ} (hβ : 0 < β) (u : ℝ) :
+    IntegrableOn (fun x : ℝ => polyEval P x * Real.exp (α + β * x)) (Iic u) volume := by
+  have hc : Continuous fun x : ℝ => polyEval P x * Real.exp (β * x) :=
+    (polyEval_continuous P).mul (Real.continuous_exp.comp (continuous_const.mul continuous_id))
+  have hi : IntegrableOn (fun x : ℝ => polyEval P x * Real.exp (β * x)) (Iic u) volume :=
+    (hc.locallyIntegrable.locallyIntegrableOn _).integrableOn_of_isBigO_atBot
+      (expPolynomial_isBigO_atBot P hβ)
+      ⟨Iic 0, Iic_mem_atBot 0, integrableOn_exp_mul_Iic (half_pos hβ) 0⟩
+  have he : (fun x : ℝ => polyEval P x * Real.exp (α + β * x)) =
+      fun x => Real.exp α * (polyEval P x * Real.exp (β * x)) := by
     funext x
     rw [Real.exp_add]
-  have hne : β ≠ 0 := hβ.ne'
+    ring
   rw [he]
-  refine ⟨(integrableOn_exp_mul_Iic hβ u).const_mul _, ?_⟩
-  rw [integral_const_mul, integral_exp_mul_Iic hβ u, Real.exp_add]
-  field_simp
+  exact hi.const_mul _
 
-/-- With a rate that is not negative it is not integrable above a bound: it
-stays above its value there. -/
-theorem exp_linear_not_integrableOn_Ioi (α : ℝ) {β : ℝ} (hβ : 0 ≤ β) (l : ℝ) {k : ℝ}
-    (hk : k ≠ 0) : ¬ IntegrableOn (fun x : ℝ => k * Real.exp (α + β * x)) (Ioi l) volume := by
+/-- The integral above a bound, with a negative rate. -/
+theorem rateTable_integral_Ioi {P : List ℚ} {K : List (List ℚ)}
+    (hK : rateTableCheck (-1) P K = true) (α : ℝ) {β : ℝ} (hβ : β < 0) (l : ℝ) :
+    ∫ x in Ioi l, polyEval P x * Real.exp (α + β * x) =
+      Real.exp (α + β * l) * poly2Eval K l β⁻¹ := by
+  have hD : ∀ x : ℝ, HasDerivAt (fun t : ℝ => -(Real.exp (α + β * t) * poly2Eval K t β⁻¹))
+      (polyEval P x * Real.exp (α + β * x)) x := fun x => by
+    refine (rateTable_deriv hK α hβ.ne x).neg.congr_deriv ?_
+    push_cast
+    ring
+  have hT : Tendsto (fun t : ℝ => -(Real.exp (α + β * t) * poly2Eval K t β⁻¹)) atTop (𝓝 0) := by
+    simpa using (poly2_exp_tendsto_atTop K β⁻¹ α hβ).neg
+  rw [integral_Ioi_of_hasDerivAt_of_tendsto' (fun x _ => hD x)
+    (poly_exp_linear_integrableOn_Ioi P α hβ l) hT]
+  ring
+
+/-- Below a bound, with a positive rate. -/
+theorem rateTable_integral_Iic {P : List ℚ} {K : List (List ℚ)}
+    (hK : rateTableCheck 1 P K = true) (α : ℝ) {β : ℝ} (hβ : 0 < β) (u : ℝ) :
+    ∫ x in Iic u, polyEval P x * Real.exp (α + β * x) =
+      Real.exp (α + β * u) * poly2Eval K u β⁻¹ := by
+  have hD : ∀ x : ℝ, HasDerivAt (fun t : ℝ => Real.exp (α + β * t) * poly2Eval K t β⁻¹)
+      (polyEval P x * Real.exp (α + β * x)) x := fun x => by
+    refine (rateTable_deriv hK α hβ.ne' x).congr_deriv ?_
+    push_cast
+    ring
+  rw [integral_Iic_of_hasDerivAt_of_tendsto' (fun x _ => hD x)
+    (poly_exp_linear_integrableOn_Iic P α hβ u) (poly2_exp_tendsto_atBot K β⁻¹ α hβ)]
+  ring
+
+/-- With a rate that is not negative a polynomial that is not zero times the
+exponential is not integrable above a bound: far enough the polynomial stays
+away from zero and the exponential above its value. -/
+theorem poly_exp_linear_not_integrableOn_Ioi {P : List ℚ} (hP : polyZero P = false) (α : ℝ)
+    {β : ℝ} (hβ : 0 ≤ β) (l : ℝ) {k : ℝ} (hk : k ≠ 0) :
+    ¬ IntegrableOn (fun x : ℝ => k * (polyEval P x * Real.exp (α + β * x))) (Ioi l) volume := by
   intro hi
-  have hs : IntegrableOn (fun _ : ℝ => |k| * Real.exp (α + β * l)) (Ioi l) volume := by
-    refine Integrable.mono' hi.norm aestronglyMeasurable_const ?_
+  obtain ⟨δ, hδ, hev⟩ := eval_eventually_away (QSym.Limit.toPoly_ne_zero hP)
+  obtain ⟨M, hM⟩ := Filter.eventually_atTop.1 hev
+  have hs : IntegrableOn (fun _ : ℝ => |k| * (δ * Real.exp (α + β * max M l))) (Ioi (max M l))
+      volume := by
+    refine Integrable.mono' (hi.mono_set (Ioi_subset_Ioi (le_max_right _ _))).norm
+      aestronglyMeasurable_const ?_
     refine (ae_restrict_iff' measurableSet_Ioi).2 (Filter.Eventually.of_forall fun x hx => ?_)
-    have hx' : l < x := hx
-    rw [Real.norm_of_nonneg (mul_nonneg (abs_nonneg k) (Real.exp_pos _).le), norm_mul,
-      Real.norm_eq_abs, Real.norm_of_nonneg (Real.exp_pos _).le]
-    exact mul_le_mul_of_nonneg_left
-      (Real.exp_le_exp.2 (by nlinarith [mul_nonneg hβ (sub_nonneg.2 hx'.le)])) (abs_nonneg k)
+    have hx' : max M l < x := hx
+    have h1 := hM x (le_trans (le_max_left _ _) hx'.le)
+    rw [QSym.Limit.eval_toPoly] at h1
+    rw [Real.norm_of_nonneg (mul_nonneg (abs_nonneg k) (mul_nonneg hδ.le (Real.exp_pos _).le)),
+      norm_mul, norm_mul, Real.norm_eq_abs, Real.norm_eq_abs,
+      Real.norm_of_nonneg (Real.exp_pos _).le]
+    exact mul_le_mul_of_nonneg_left (mul_le_mul h1
+      (Real.exp_le_exp.2 (by nlinarith [mul_nonneg hβ (sub_nonneg.2 hx'.le)]))
+      (Real.exp_pos _).le (abs_nonneg _)) (abs_nonneg k)
   rw [integrableOn_const] at hs
   rcases hs with h0 | hfin
-  · exact (mul_pos (abs_pos.2 hk) (Real.exp_pos _)).ne' h0
+  · exact (mul_pos (abs_pos.2 hk) (mul_pos hδ (Real.exp_pos _))).ne' h0
   · rw [Real.volume_Ioi] at hfin
     exact lt_irrefl _ hfin
 
-/-- With a rate that is not positive it is not integrable below one. -/
-theorem exp_linear_not_integrableOn_Iic (α : ℝ) {β : ℝ} (hβ : β ≤ 0) (u : ℝ) {k : ℝ}
-    (hk : k ≠ 0) : ¬ IntegrableOn (fun x : ℝ => k * Real.exp (α + β * x)) (Iic u) volume := by
+/-- With a rate that is not positive, below one. -/
+theorem poly_exp_linear_not_integrableOn_Iic {P : List ℚ} (hP : polyZero P = false) (α : ℝ)
+    {β : ℝ} (hβ : β ≤ 0) (u : ℝ) {k : ℝ} (hk : k ≠ 0) :
+    ¬ IntegrableOn (fun x : ℝ => k * (polyEval P x * Real.exp (α + β * x))) (Iic u) volume := by
   intro hi
-  have hs : IntegrableOn (fun _ : ℝ => |k| * Real.exp (α + β * u)) (Iic u) volume := by
-    refine Integrable.mono' hi.norm aestronglyMeasurable_const ?_
+  have hq : (QSym.Limit.toPoly P).comp (-Polynomial.X) ≠ 0 := fun h0 =>
+    QSym.Limit.toPoly_ne_zero hP (by
+      have h1 := congrArg (fun r : Polynomial ℝ => r.comp (-Polynomial.X)) h0
+      simpa [Polynomial.comp_assoc] using h1)
+  obtain ⟨δ, hδ, hev⟩ := eval_eventually_away hq
+  obtain ⟨M, hM⟩ := Filter.eventually_atTop.1 hev
+  have hs : IntegrableOn (fun _ : ℝ => |k| * (δ * Real.exp (α + β * min (-M) u)))
+      (Iic (min (-M) u)) volume := by
+    refine Integrable.mono' (hi.mono_set (Iic_subset_Iic.2 (min_le_right _ _))).norm
+      aestronglyMeasurable_const ?_
     refine (ae_restrict_iff' measurableSet_Iic).2 (Filter.Eventually.of_forall fun x hx => ?_)
-    have hx' : x ≤ u := hx
-    rw [Real.norm_of_nonneg (mul_nonneg (abs_nonneg k) (Real.exp_pos _).le), norm_mul,
-      Real.norm_eq_abs, Real.norm_of_nonneg (Real.exp_pos _).le]
-    exact mul_le_mul_of_nonneg_left
+    have hx' : x ≤ min (-M) u := hx
+    have hxM : M ≤ -x := by linarith [le_trans hx' (min_le_left _ _)]
+    have h1 := hM (-x) hxM
+    rw [Polynomial.eval_comp, Polynomial.eval_neg, Polynomial.eval_X, neg_neg,
+      QSym.Limit.eval_toPoly] at h1
+    rw [Real.norm_of_nonneg (mul_nonneg (abs_nonneg k) (mul_nonneg hδ.le (Real.exp_pos _).le)),
+      norm_mul, norm_mul, Real.norm_eq_abs, Real.norm_eq_abs,
+      Real.norm_of_nonneg (Real.exp_pos _).le]
+    exact mul_le_mul_of_nonneg_left (mul_le_mul h1
       (Real.exp_le_exp.2 (by nlinarith [mul_nonneg_of_nonpos_of_nonpos hβ (sub_nonpos.2 hx')]))
-      (abs_nonneg k)
+      (Real.exp_pos _).le (abs_nonneg _)) (abs_nonneg k)
   rw [integrableOn_const] at hs
   rcases hs with h0 | hfin
-  · exact (mul_pos (abs_pos.2 hk) (Real.exp_pos _)).ne' h0
+  · exact (mul_pos (abs_pos.2 hk) (mul_pos hδ (Real.exp_pos _))).ne' h0
   · rw [Real.volume_Iic] at hfin
     exact lt_irrefl _ hfin
 
@@ -1043,24 +1219,16 @@ def rateCheck (P : List ℚ) (κ : ℚ) : Bool :=
   polyZero (polyAdd P (polyScale (-1) [κ])) && decide (κ ≠ 0)
 
 /-- The value below the mask: undefined everywhere where a coefficient or the
-scale is, and the constant times the exponential under the scale otherwise. -/
+scale is, and the polynomial times the exponential under the scale otherwise. -/
 private theorem rate_value {v : ℝ → Option ℝ} {S : Option (Option ℝ)} {P : List ℚ}
-    {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} {κ : ℚ} (hv : Bell v S none P (some E))
-    (hE : Quadratic E (some c0) (some c1) none) (hP : rateCheck P κ = true) :
-    (κ : ℝ) ≠ 0 ∧ ((S = some none ∨ c0 = none ∨ c1 = none) → ∀ x, v x = none) ∧
+    {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (hv : Bell v S none P (some E))
+    (hE : Quadratic E (some c0) (some c1) none) :
+    ((S = some none ∨ c0 = none ∨ c1 = none) → ∀ x, v x = none) ∧
       ∀ α β : ℝ, S ≠ some none → c0 = some α → c1 = some β →
-        ∀ x, v x = some (scaleReal S * (κ * Real.exp (α + β * x))) := by
-  simp only [rateCheck, Bool.and_eq_true, decide_eq_true_eq] at hP
-  obtain ⟨hz, hκ⟩ := hP
-  have hPx : ∀ x : ℝ, polyEval P x = κ := fun x => by
-    have h0 := polyEval_zero hz x
-    rw [polyEval_add, polyEval_scale] at h0
-    simp only [polyEval] at h0
-    push_cast at h0
-    linarith
+        ∀ x, v x = some (scaleReal S * (polyEval P x * Real.exp (α + β * x))) := by
   have hvx : ∀ x, v x = scaleBy S (Value.mul (some (polyEval P x)) (Functions.expR.apply (E x))) :=
     fun x => hv.plain x
-  refine ⟨by exact_mod_cast hκ, fun hm x => ?_, fun α β hS h0 h1 x => ?_⟩
+  refine ⟨fun hm x => ?_, fun α β hS h0 h1 x => ?_⟩
   · rw [hvx]
     rcases hm with rfl | rfl | rfl
     · rfl
@@ -1074,7 +1242,7 @@ private theorem rate_value {v : ℝ → Option ℝ} {S : Option (Option ℝ)} {P
     have hEx : E x = some (α + β * x) := by
       rw [hE.equation]
       simp [coefValue, Value.add, Value.mul]
-    rw [hvx, hEx, hPx]
+    rw [hvx, hEx]
     rcases S with _ | _ | s
     · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
     · exact absurd rfl hS
@@ -1108,30 +1276,43 @@ private theorem below_undefined (strict : Bool) (b : Option ℝ) {v : ℝ → Op
     simp only [hn] at hr
     cases hr
 
-/-- Above a bound: `guard(c₁ < 0, -κ·exp(c₀ + c₁·a)/c₁)` under the scale. -/
+/-- The sum of the monomials of a table at a bound and at the inverse of a
+rate that is not zero. -/
+private theorem rate_sum {a c1 k : Option ℝ} {K : List (List ℚ)} {ms : List (Option ℝ)}
+    (hm : MomentTerms a (curvatureCoefs (Value.inv c1) K 0) K ms) (hk : Sums ms k) (l : ℝ)
+    {β : ℝ} (hβ : β ≠ 0) (ha : a = some l) (hc : c1 = some β) :
+    k = some (poly2Eval K l β⁻¹) := by
+  subst ha hc
+  have hi : Value.inv (some β) = some β⁻¹ := by simp [Value.inv, hβ]
+  rw [hi] at hm
+  rw [hk.value, hm.value l rfl (curvatureCoefs_defined _ K 0), momentValue_curvature]
+  simp
+
+/-- Above a bound: `guard(c₁ < 0, k·exp(c₀ + c₁·a))` under the scale, where
+`k` is the table at the bound and at the inverse of the rate. -/
 theorem rate_above (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
-    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (κ : ℚ)
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (K : List (List ℚ))
     (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
-    (hP : rateCheck P κ = true) (hS : scaleNonvanishing S) {m k z : Option ℝ}
-    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
-    (hk : k = some (Numeric.denote (s := .real) κ))
-    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    (hK : rateTableCheck (-1) P K = true) (hS : scaleNonvanishing S) {k z : Option ℝ}
+    {ms : List (Option ℝ)} (hm : MomentTerms a (curvatureCoefs (Value.inv c1) K 0) K ms)
+    (hk : Sums ms k) (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
     partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
-      Binding.guardValue (Value.lt c1 z) (scaleBy S (Value.mul m (Value.mul k
-        (Value.mul (Value.inv c1) (Functions.expR.apply (Value.add c0 (Value.mul c1 a))))))) := by
-  obtain ⟨hκ, hmiss, hval⟩ := rate_value hv hE hP
-  have hM : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
-  have hK : k = some (κ : ℝ) := by rw [hk]; simp [Numeric.denote]
+      Binding.guardValue (Value.lt c1 z) (scaleBy S (Value.mul k
+        (Functions.expR.apply (Value.add c0 (Value.mul c1 a))))) := by
+  obtain ⟨hmiss, hval⟩ := rate_value hv hE
+  have hP := rateTable_nonzero hK
   have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
   have hnone : scaleBy S none = none := by
     rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  have hmul : ∀ X : Option ℝ, X = none → Binding.guardValue (Value.lt c1 z)
+      (scaleBy S (Value.mul k X)) = none := fun X hX => by
+    subst hX
+    cases k <;> simp [Value.mul, hnone, Binding.guardValue]
   by_cases hu : S = some none ∨ c0 = none ∨ c1 = none
   · rw [above_undefined strict a (hmiss hu)]
     rcases hu with rfl | rfl | rfl
     · simp [scaleBy, Value.mul, Binding.guardValue]
-    · have : Functions.expR.apply (Value.add (none : Option ℝ) (Value.mul c1 a)) = none := rfl
-      rw [this, hM, hK]
-      cases Value.inv c1 <;> simp [Value.mul, hnone, Binding.guardValue]
+    · exact (hmul _ rfl).symm
     · simp [Value.lt, Binding.guardValue]
   simp only [not_or] at hu
   obtain ⟨hS', h0, h1⟩ := hu
@@ -1148,40 +1329,37 @@ theorem rate_above (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {S 
         none from if_neg fun hd => by
           obtain ⟨r, hr⟩ := hd.1 0
           cases strict <;> cases hr]
-    have : Functions.expR.apply (Value.add (some α) (Value.mul (some β) none)) = none := rfl
-    rw [this, hM, hK]
-    cases Value.inv (some β) <;> simp [Value.mul, hnone, Binding.guardValue]
+    exact (hmul _ rfl).symm
   have hcmp : ∀ x : ℝ, l < x → compare strict (some l) (some x) = some true := fun x hx => by
     cases strict <;> simp [compare, Value.lt, Value.le, hx, hx.le]
   by_cases hβ : β < 0
-  · obtain ⟨hi, hint⟩ := exp_linear_Ioi α hβ l
-    have hI : ∀ l' : ℝ, IntegrableOn (fun x : ℝ => scaleReal S * (κ * Real.exp (α + β * x)))
-        (Ioi l') volume := fun l' =>
-      (((exp_linear_Ioi α hβ l').1.const_mul _).const_mul _)
-    rw [halfline_integral strict (some l) m hm ⟨fun _ => rfl⟩
-      (HalfLineTerms.value hg hI (fun h => by cases h) fun l' hl => by
+  · have hI : ∀ l' : ℝ, IntegrableOn
+        (fun x : ℝ => scaleReal S * (polyEval P x * Real.exp (α + β * x))) (Ioi l') volume :=
+      fun l' => (poly_exp_linear_integrableOn_Ioi P α hβ l').const_mul _
+    rw [halfline_integral strict (some l) (some (Numeric.denote (s := .real) (-1 : ℚ))) rfl
+      ⟨fun _ => rfl⟩ (HalfLineTerms.value hg hI (fun h => by cases h) fun l' hl => by
         cases hl
         rfl)]
-    have hne : β ≠ 0 := hβ.ne
-    rw [integral_const_mul, integral_const_mul, hint, hM, hK, hZ]
+    rw [integral_const_mul, rateTable_integral_Ioi hK α hβ l, rate_sum hm hk l hβ.ne rfl rfl, hZ]
     rcases S with _ | _ | s
-    · simp [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add, Value.inv,
-        hne, Function1.apply, Functions.expR]
+    · simp only [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add,
+        Function1.apply, Functions.expR]
+      simp [hβ, mul_comm]
     · exact absurd rfl hS'
-    · simp [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add, Value.inv,
-        hne, Function1.apply, Functions.expR]
+    · simp only [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add,
+        Function1.apply, Functions.expR]
+      simp [hβ, mul_comm]
   · have hn : partialIntegral volume
         (fun x => Value.mask (compare strict (some l) (some x)) (v x)) = none := by
       apply if_neg
       rintro ⟨_, hint⟩
-      have hon : IntegrableOn (fun x : ℝ => scaleReal S * κ * Real.exp (α + β * x)) (Ioi l)
-          volume := by
+      have hon : IntegrableOn
+          (fun x : ℝ => scaleReal S * (polyEval P x * Real.exp (α + β * x))) (Ioi l) volume := by
         refine (hint.integrableOn (s := Ioi l)).congr_fun (fun x hx => ?_) measurableSet_Ioi
         show (Value.mask (compare strict (some l) (some x)) (v x)).getD 0 = _
         rw [hcmp x hx, hg]
-        show scaleReal S * (κ * Real.exp (α + β * x)) = _
-        ring
-      exact exp_linear_not_integrableOn_Ioi α (not_lt.1 hβ) l (mul_ne_zero hσ hκ) hon
+        rfl
+      exact poly_exp_linear_not_integrableOn_Ioi hP α (not_lt.1 hβ) l hσ hon
     rw [hn, hZ]
     simp [Value.lt, hβ, Binding.guardValue]
 
@@ -1189,18 +1367,17 @@ theorem rate_above (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {S 
 its mask and the guard of that or the sign of the rate, after the scale, the
 bound and the coefficients of the exponent. -/
 theorem rate_above_masked (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {c : Option ℝ}
-    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (κ : ℚ)
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (K : List (List ℚ))
     (hv : Bell v (some c) none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
-    (hP : rateCheck P κ = true) {m k z : Option ℝ}
-    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
-    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hK : rateTableCheck (-1) P K = true) {k z : Option ℝ} {ms : List (Option ℝ)}
+    (hm : MomentTerms a (curvatureCoefs (Value.inv c1) K 0) K ms) (hk : Sums ms k)
     (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
     partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
       after [c, a, c0, c1] (Binding.guardValue
         (Value.or (Value.not (Value.nonzero c)) (Value.lt c1 z))
-        (Value.mask (Value.nonzero c) (Value.mul c (Value.mul m (Value.mul k
-          (Value.mul (Value.inv c1) (Functions.expR.apply (Value.add c0 (Value.mul c1 a))))))))) := by
-  obtain ⟨_, hmiss, hval⟩ := rate_value hv hE hP
+        (Value.mask (Value.nonzero c) (Value.mul c (Value.mul k
+          (Functions.expR.apply (Value.add c0 (Value.mul c1 a))))))) := by
+  obtain ⟨hmiss, hval⟩ := rate_value hv hE
   rcases c with _ | s
   · rw [above_undefined strict a (hmiss (Or.inl rfl))]
     rfl
@@ -1225,31 +1402,33 @@ theorem rate_above_masked (strict : Bool) {a : Option ℝ} {v : ℝ → Option �
       | none => cases strict <;> simp [compare, Value.lt, Value.le] at hcmp
       | some t => cases t <;> simp [Value.mask, scaleReal]]
     simp [Value.nonzero, Value.not, Value.or, Value.mask, Binding.guardValue]
-  · rw [rate_above strict κ hv hE hP (fun t ht => by cases ht; exact hs) hm hk hz]
+  · rw [rate_above strict K hv hE hK (fun t ht => by cases ht; exact hs) hm hk hz]
     simp [Value.nonzero, hs, Value.not, Value.or, Value.mask, scaleBy]
 
-/-- Below a bound: `guard(0 < c₁, κ·exp(c₀ + c₁·b)/c₁)` under the scale. -/
+/-- Below a bound: `guard(0 < c₁, k·exp(c₀ + c₁·b))` under the scale. -/
 theorem rate_below (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
-    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (κ : ℚ)
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (K : List (List ℚ))
     (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
-    (hP : rateCheck P κ = true) (hS : scaleNonvanishing S) {k z : Option ℝ}
-    (hk : k = some (Numeric.denote (s := .real) κ))
-    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    (hK : rateTableCheck 1 P K = true) (hS : scaleNonvanishing S) {k z : Option ℝ}
+    {ms : List (Option ℝ)} (hm : MomentTerms b (curvatureCoefs (Value.inv c1) K 0) K ms)
+    (hk : Sums ms k) (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
     partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
       Binding.guardValue (Value.lt z c1) (scaleBy S (Value.mul k
-        (Value.mul (Value.inv c1) (Functions.expR.apply (Value.add c0 (Value.mul c1 b)))))) := by
-  obtain ⟨hκ, hmiss, hval⟩ := rate_value hv hE hP
-  have hK : k = some (κ : ℝ) := by rw [hk]; simp [Numeric.denote]
+        (Functions.expR.apply (Value.add c0 (Value.mul c1 b))))) := by
+  obtain ⟨hmiss, hval⟩ := rate_value hv hE
+  have hP := rateTable_nonzero hK
   have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
   have hnone : scaleBy S none = none := by
     rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  have hmul : ∀ X : Option ℝ, X = none → Binding.guardValue (Value.lt z c1)
+      (scaleBy S (Value.mul k X)) = none := fun X hX => by
+    subst hX
+    cases k <;> simp [Value.mul, hnone, Binding.guardValue]
   by_cases hu : S = some none ∨ c0 = none ∨ c1 = none
   · rw [below_undefined strict b (hmiss hu)]
     rcases hu with rfl | rfl | rfl
     · simp [scaleBy, Value.mul, Binding.guardValue]
-    · have : Functions.expR.apply (Value.add (none : Option ℝ) (Value.mul c1 b)) = none := rfl
-      rw [this, hK]
-      cases Value.inv c1 <;> simp [Value.mul, hnone, Binding.guardValue]
+    · exact (hmul _ rfl).symm
     · rw [hZ]
       simp [Value.lt, Binding.guardValue]
   simp only [not_or] at hu
@@ -1267,57 +1446,54 @@ theorem rate_below (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {S 
         none from if_neg fun hd => by
           obtain ⟨r, hr⟩ := hd.1 0
           cases strict <;> cases hr]
-    have : Functions.expR.apply (Value.add (some α) (Value.mul (some β) none)) = none := rfl
-    rw [this, hK]
-    cases Value.inv (some β) <;> simp [Value.mul, hnone, Binding.guardValue]
+    exact (hmul _ rfl).symm
   have hcmp : ∀ x : ℝ, x < u → compare strict (some x) (some u) = some true := fun x hx => by
     cases strict <;> simp [compare, Value.lt, Value.le, hx, hx.le]
   by_cases hβ : 0 < β
-  · obtain ⟨hi, hint⟩ := exp_linear_Iic α hβ u
-    have hI : ∀ u' : ℝ, IntegrableOn (fun x : ℝ => scaleReal S * (κ * Real.exp (α + β * x)))
-        (Iic u') volume := fun u' =>
-      (((exp_linear_Iic α hβ u').1.const_mul _).const_mul _)
+  · have hI : ∀ u' : ℝ, IntegrableOn
+        (fun x : ℝ => scaleReal S * (polyEval P x * Real.exp (α + β * x))) (Iic u') volume :=
+      fun u' => (poly_exp_linear_integrableOn_Iic P α hβ u').const_mul _
     rw [upper_integral strict (some u) ⟨fun _ => rfl⟩
       (UpperTerms.value hg hI (fun h => by cases h) fun u' hu' => by
         cases hu'
         rfl)]
-    have hne : β ≠ 0 := hβ.ne'
-    rw [integral_const_mul, integral_const_mul, hint, hK, hZ]
+    rw [integral_const_mul, rateTable_integral_Iic hK α hβ u, rate_sum hm hk u hβ.ne' rfl rfl, hZ]
     rcases S with _ | _ | s
-    · simp [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add, Value.inv,
-        hne, Function1.apply, Functions.expR]
+    · simp only [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add,
+        Function1.apply, Functions.expR]
+      simp [hβ, mul_comm]
     · exact absurd rfl hS'
-    · simp [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add, Value.inv,
-        hne, Function1.apply, Functions.expR]
+    · simp only [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add,
+        Function1.apply, Functions.expR]
+      simp [hβ, mul_comm]
   · have hn : partialIntegral volume
         (fun x => Value.mask (compare strict (some x) (some u)) (v x)) = none := by
       apply if_neg
       rintro ⟨_, hint⟩
-      have hon : IntegrableOn (fun x : ℝ => scaleReal S * κ * Real.exp (α + β * x)) (Iio u)
-          volume := by
+      have hon : IntegrableOn
+          (fun x : ℝ => scaleReal S * (polyEval P x * Real.exp (α + β * x))) (Iio u) volume := by
         refine (hint.integrableOn (s := Iio u)).congr_fun (fun x hx => ?_) measurableSet_Iio
         show (Value.mask (compare strict (some x) (some u)) (v x)).getD 0 = _
         rw [hcmp x hx, hg]
-        show scaleReal S * (κ * Real.exp (α + β * x)) = _
-        ring
-      exact exp_linear_not_integrableOn_Iic α (not_lt.1 hβ) u (mul_ne_zero hσ hκ)
+        rfl
+      exact poly_exp_linear_not_integrableOn_Iic hP α (not_lt.1 hβ) u hσ
         (integrableOn_Iic_iff_integrableOn_Iio.2 hon)
     rw [hn, hZ]
     simp [Value.lt, hβ, Binding.guardValue]
 
 /-- The same under a scale that may vanish. -/
 theorem rate_below_masked (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {c : Option ℝ}
-    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (κ : ℚ)
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (K : List (List ℚ))
     (hv : Bell v (some c) none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
-    (hP : rateCheck P κ = true) {k z : Option ℝ}
-    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hK : rateTableCheck 1 P K = true) {k z : Option ℝ} {ms : List (Option ℝ)}
+    (hm : MomentTerms b (curvatureCoefs (Value.inv c1) K 0) K ms) (hk : Sums ms k)
     (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
     partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
       after [c, b, c0, c1] (Binding.guardValue
         (Value.or (Value.not (Value.nonzero c)) (Value.lt z c1))
         (Value.mask (Value.nonzero c) (Value.mul c (Value.mul k
-          (Value.mul (Value.inv c1) (Functions.expR.apply (Value.add c0 (Value.mul c1 b)))))))) := by
-  obtain ⟨_, hmiss, hval⟩ := rate_value hv hE hP
+          (Functions.expR.apply (Value.add c0 (Value.mul c1 b))))))) := by
+  obtain ⟨hmiss, hval⟩ := rate_value hv hE
   rcases c with _ | s
   · rw [below_undefined strict b (hmiss (Or.inl rfl))]
     rfl
@@ -1342,7 +1518,7 @@ theorem rate_below_masked (strict : Bool) {b : Option ℝ} {v : ℝ → Option �
       | none => cases strict <;> simp [compare, Value.lt, Value.le] at hcmp
       | some t => cases t <;> simp [Value.mask, scaleReal]]
     simp [Value.nonzero, Value.not, Value.or, Value.mask, Binding.guardValue]
-  · rw [rate_below strict κ hv hE hP (fun t ht => by cases ht; exact hs) hk hz]
+  · rw [rate_below strict K hv hE hK (fun t ht => by cases ht; exact hs) hm hk hz]
     simp [Value.nonzero, hs, Value.not, Value.or, Value.mask, scaleBy]
 
 /-! A curvature that does not mention the axis and cannot vanish. Beyond a

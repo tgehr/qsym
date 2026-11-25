@@ -1080,7 +1080,7 @@ theorem exp_quadratic_not_integrable (a b : ℝ) {c : ℝ} (hc : 0 ≤ c) :
       exact lt_irrefl _ hfin
 
 /-- A polynomial that is not zero stays away from zero towards infinity. -/
-private theorem eval_eventually_away {q : Polynomial ℝ} (hq : q ≠ 0) :
+theorem eval_eventually_away {q : Polynomial ℝ} (hq : q ≠ 0) :
     ∃ δ : ℝ, 0 < δ ∧ ∀ᶠ x in atTop, δ ≤ |q.eval x| := by
   by_cases hd : 0 < q.degree
   · exact ⟨1, one_pos, (q.abs_tendsto_atTop hd).eventually_ge_atTop 1⟩
@@ -1167,10 +1167,10 @@ def curvatureCoefs (h : Option ℝ) : List (List ℚ) → ℕ → List (Option (
   | [], _ => []
   | κ :: K, l => (if polyZero κ then none else some (curvaturePower h l)) :: curvatureCoefs h K (l + 1)
 
-private theorem curvaturePower_some (h : ℝ) (l : ℕ) : curvaturePower (some h) l = some (h ^ l) := by
+theorem curvaturePower_some (h : ℝ) (l : ℕ) : curvaturePower (some h) l = some (h ^ l) := by
   rcases l with _ | _ | l <;> simp [curvaturePower]
 
-private theorem curvatureCoefs_defined (h : ℝ) (K : List (List ℚ)) (l : ℕ) :
+theorem curvatureCoefs_defined (h : ℝ) (K : List (List ℚ)) (l : ℕ) :
     some none ∉ curvatureCoefs (some h) K l := by
   induction K generalizing l with
   | nil => simp [curvatureCoefs]
@@ -1179,7 +1179,7 @@ private theorem curvatureCoefs_defined (h : ℝ) (K : List (List ℚ)) (l : ℕ)
     refine ⟨?_, ih (l + 1)⟩
     split_ifs <;> simp [curvaturePower_some]
 
-private theorem momentValue_curvature (b h : ℝ) (K : List (List ℚ)) (l : ℕ) :
+theorem momentValue_curvature (b h : ℝ) (K : List (List ℚ)) (l : ℕ) :
     momentValue b (curvatureCoefs (some h) K l) K = h ^ l * poly2Eval K b h := by
   induction K generalizing l with
   | nil => simp [curvatureCoefs, momentValue, poly2Eval]

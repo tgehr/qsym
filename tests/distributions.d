@@ -792,7 +792,22 @@ private Case[] cases(){ return [
 	Case("RateBelowMasked","∫dx [x<b]*c*exp(r*x)*λ[x]","ℝ","guard(c=0∨0<r,[c≠0]·(c·r⁻¹·exp(b·r)))"),
 	Case("RateSquare","∫dx [0≤x]*exp(-r^2*x)*λ[x]","ℝ","guard(r≠0,(r^2)⁻¹)"),
 	Case("RateGuarded","∫dx [c≤d]*[0≤x]*exp(-r*x)*λ[x]","ℝ","([c≤d]·(guard(0<r,r⁻¹)):ℝ)"),
-	Case("RatePolynomial","∫dx [0≤x]*x*exp(-r*x)*λ[x]","ℝ"),
+	Case("RatePolynomial","∫dx [0≤x]*x*exp(-r*x)*λ[x]","ℝ","guard(0<r,(r^2)⁻¹)"),
+	Case("RateMean","∫dx [0≤x]*x*r*exp(-r*x)*λ[x]","ℝ","guard(r=0∨0<r,[r≠0]·r⁻¹)"),
+	Case("RateSecond","∫dx [0≤x]*x^2*r*exp(-r*x)*λ[x]","ℝ","guard(r=0∨0<r,[r≠0]·(2·(r^2)⁻¹))"),
+	Case("RateShifted","∫dx [a≤x]*x^2*exp(-r*x)*λ[x]","ℝ","guard(0<r,(r⁻¹·a^2+2·a·(r^2)⁻¹+2·(r^3)⁻¹)·exp(-a·r))"),
+	Case("RateClosed","∫dx [1/2<x]*(2*x-1)^2*exp(-r*x)*λ[x]","ℝ","guard(0<r,8·(r^3)⁻¹·exp(-r·(1/2)))"),
+	Case("RateFraction","∫dx [0≤x]*(x/2-1/3)*exp(-r*x)*λ[x]","ℝ","guard(0<r,-r⁻¹·(1/3)+(r^2)⁻¹·(1/2))"),
+	Case("RateGamma","∫dx [0<x]*x^3*exp(-x/s)*λ[x]","ℝ","guard(0<s,6·s^4)"),
+	Case("RateFactorial","∫dx [0≤x]*x^16*exp(-r*x)*λ[x]","ℝ","guard(0<r,20922789888000·(r^17)⁻¹)"),
+	Case("RateInverse","∫dx [0≤x]*x^2*exp(-r*x-c)/b*λ[x]","ℝ","guard(b≠0∧0<r,2·b⁻¹·(r^3)⁻¹·exp(-c))"),
+	Case("RateBelowPolynomial","∫dx [x≤b]*(x+1)*exp(r*x)*λ[x]","ℝ","guard(0<r,(b·r⁻¹+r⁻¹-(r^2)⁻¹)·exp(b·r))"),
+	Case("RateBelowZero","∫dx [x<0]*x*exp(r*x)*λ[x]","ℝ","guard(0<r,-(r^2)⁻¹)"),
+	Case("RateBelowMean","∫dx [x≤b]*x*c*exp(r*x)*λ[x]","ℝ","guard(c=0∨0<r,[c≠0]·(c·(b·r⁻¹-(r^2)⁻¹)·exp(b·r)))"),
+	Case("RateMeanFunction","λ(t:ℝ).∫dx [t≤x]*x*r*exp(-r*x)*λ[x]","ℝ→ℝ","λ(t:{t:ℝ | r=0∨0<r}). [r≠0]·(r·(t·r⁻¹+(r^2)⁻¹)·exp(-r·t))"),
+	Case("RatePolynomialGuarded","∫dx [c≤d]*[1≤x]*x*exp(-r*x)*λ[x]","ℝ","([c≤d]·(guard(0<r,(r⁻¹+(r^2)⁻¹)·exp(-r))):ℝ)"),
+	Case("RateDegree","∫dx [0≤x]*x^17*exp(-r*x)*λ[x]","ℝ"),
+	Case("RateTerms","∫dx [0≤x]*(x+m)*exp(-r*x)*λ[x]","ℝ"),
 	Case("RateBetween","∫dx [0≤x≤1]*exp(-r*x)*λ[x]","ℝ"),
 	Case("RateSum","∫dx [0≤x]*(exp(-r*x)+exp(-x))*λ[x]","ℝ"),
 	Case("LimitOffset","lim[x→∞] exp(a-x)","ℝ","0"),
@@ -1521,28 +1536,43 @@ private void run(string directory){
 				enforce((certificate.indexOf("Distribution.StepSource.Quadratic.fill1")>=0)==(c.name=="CdfTail"||c.name=="CdfScale"),c.name~" linear part");
 			}
 		}
-		// Beyond a single bound, a constant times the exponential of a linear
-		// exponent whose rate is a term that does not mention the axis: it is
-		// integrable exactly where the rate has the sign of decay, and the
-		// value of the antiderivative at the bound stands under the guard of
-		// that sign. Where the rate has the other sign the integrand is
-		// defined and not integrable, so this is the integral of the mask
+		// Beyond a single bound, a rational polynomial times the exponential of
+		// a linear exponent whose rate is a term that does not mention the
+		// axis: it is integrable exactly where the rate has the sign of decay,
+		// and the value of the antiderivative at the bound stands under the
+		// guard of that sign. That value is the exponential times a polynomial
+		// in the bound and in the inverse of the rate: the certificate has its
+		// rows as a table, whose first row is zero, and the monomials of the
+		// others at the bound. Where the rate has the other sign the integrand
+		// is defined and not integrable, so this is the integral of the mask
 		// itself and not a term of an observation that adds. A scale that may
 		// vanish leaves the zero function: the guard then holds there too,
-		// around the mask of the scale. A polynomial in front, two bounds and
-		// a summand keep their integral.
+		// around the mask of the scale. A polynomial of too high a degree or
+		// with coefficients that are terms, two bounds and a summand keep
+		// their integral.
 		if(c.name.indexOf("Rate")==0){
-			bool retained=c.name=="RatePolynomial"||c.name=="RateBetween"||c.name=="RateSum";
-			bool below=c.name=="RateBelow"||c.name=="RateCircle"||c.name=="RateBelowMasked";
-			bool masked=c.name=="RateDensity"||c.name=="RateSurvival"||c.name=="RateBelowMasked";
+			bool retained=c.name=="RateBetween"||c.name=="RateSum"||c.name=="RateDegree"||c.name=="RateTerms";
+			bool below=c.name=="RateBelow"||c.name=="RateCircle"||c.name=="RateBelowMasked"||c.name=="RateBelowPolynomial"||c.name=="RateBelowZero"||c.name=="RateBelowMean";
+			bool masked=c.name=="RateDensity"||c.name=="RateSurvival"||c.name=="RateBelowMasked"||c.name=="RateMean"||c.name=="RateSecond"||c.name=="RateBelowMean"||
+				c.name=="RateMeanFunction";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_direct")>=0)!=retained,c.name~" certificate");
 			enforce((certificate.indexOf("Distribution.StepSource.rate_"~(below?"below":"above")~(masked?"_masked ":" "))>=0)!=retained,c.name~" rate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			// The table is elaborated to its end before the rows meet it, and
+			// its first row is absent. At a bound that is a closed zero only
+			// the constants of the rows stand; elsewhere a monomial is skipped
+			// where its coefficient is zero.
+			bool origin=c.name=="RatePolynomial"||c.name=="RateMean"||c.name=="RateSecond"||c.name=="RateFraction"||c.name=="RateGamma"||c.name=="RateFactorial"||
+				c.name=="RateInverse"||c.name=="RateBelowZero";
+			enforce((certificate.indexOf("]] :) ")>=0)!=retained,c.name~" table elaborated to its end");
+			enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.absent [(0 : ℚ)]")>=0)!=retained,c.name~" row without a power");
+			enforce((certificate.indexOf("Distribution.StepSource.RowTerms.vanish")>=0)==origin,c.name~" bound that is zero");
+			enforce((certificate.indexOf("Distribution.StepSource.RowTerms.zero")>=0)==(c.name=="RateShifted"),c.name~" coefficient that is zero");
 			// The lemma of a scale that cannot vanish is exercised, and the
 			// strict guard of the domain of the value.
-			enforce((certificate.indexOf("Distribution.StepSource.masked_guard_integral")>=0)==(c.name=="RateScale"),c.name~" domain");
-			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.")>=0)==(c.name=="RateScale"||c.name=="RateCircle"),c.name~" scale");
-			if(c.name=="RateGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+			enforce((certificate.indexOf("Distribution.StepSource.masked_guard_integral")>=0)==(c.name=="RateScale"||c.name=="RateGamma"||c.name=="RateInverse"),c.name~" domain");
+			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.")>=0)==(c.name=="RateScale"||c.name=="RateCircle"||c.name=="RateInverse"),c.name~" scale");
+			if(c.name=="RateGuarded"||c.name=="RatePolynomialGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		// A strict guard that does not mention the axis leaves the observation,
 		// from the top of a weight or of a factor of it, whether or not the
