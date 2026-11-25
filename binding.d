@@ -7460,6 +7460,12 @@ final class Bindings{
 			string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
 			string list(Rational[] row){string r="[";foreach(i,c;row)r~=(i?", ":"")~q(c);return r~"]";}
 			if(d.curved){
+				// The rows meet a table that the statement evaluates: which of
+				// its rows are zero decides the coefficients. A rational that is
+				// not a numeral is elaborated to its end only later, and until
+				// then such a row cannot be decided; a monomial that is skipped
+				// does not name it again. So the table stands as `(… :)`, which
+				// elaborates it to its end first.
 				enforce(d.nonzero==uint.max||nonvanishing(d.nonzero),"scale may vanish");
 				if(d.tables.length){
 					// Each coefficient that is present meets the rows of its table
@@ -7488,7 +7494,7 @@ final class Bindings{
 					// cannot, by their form.
 					auto factors=!d.maskScale&&!d.maskPolynomial?steady~" "~witness:
 						"("~src~"VanishMask."~(!d.maskPolynomial?"scale "~witness:d.maskScale?"both rfl":"polynomial "~steady~" rfl")~")";
-					return "Distribution.DensityProgram.presentation_mass_gaussian_curvature_moments"~(d.maskScale||d.maskPolynomial?"_masked ":" ")~program~" ["~tables~"] "~evidence~" "~exponent~" rfl rfl "~
+					return "Distribution.DensityProgram.presentation_mass_gaussian_curvature_moments"~(d.maskScale||d.maskPolynomial?"_masked ":" ")~program~" (["~tables~"] :) "~evidence~" "~exponent~" rfl rfl "~
 						factors~" "~monomials~" "~sums(count)~" "~literal(d.factor,Rational(-1)/Rational(2))~" "~
 						literal(d.exponent,Rational(-1)/Rational(4))~" "~literal(d.scale,Rational(-1))~" rfl";
 				}
@@ -7499,7 +7505,7 @@ final class Bindings{
 					monomials="("~src~"MomentTerms."~(!present?"absent "~list(row):(l?"present ":"bare ")~rowProof(row,d.rowLiterals[l]))~" "~monomials~")";
 					table=list(row)~(table.length?", ":"")~table;
 				}
-				return "Distribution.DensityProgram.presentation_mass_gaussian_curvature"~(d.maskScale?"_masked ":" ")~program~" ["~table~"] "~evidence~" "~exponent~" rfl "~
+				return "Distribution.DensityProgram.presentation_mass_gaussian_curvature"~(d.maskScale?"_masked ":" ")~program~" (["~table~"] :) "~evidence~" "~exponent~" rfl "~
 					(d.maskScale?"":(d.nonzero==uint.max?"trivial":nonzero(d.nonzero))~" ")~monomials~" "~sums(count)~" "~literal(d.factor,Rational(-1)/Rational(2))~" "~
 					literal(d.exponent,Rational(-1)/Rational(4))~" "~literal(d.scale,Rational(-1))~" rfl";
 			}

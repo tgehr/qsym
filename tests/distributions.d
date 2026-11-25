@@ -741,6 +741,9 @@ private Case[] cases(){ return [
 	Case("CurvatureSteady","∫dx (c*x+d)*exp(-a*x^2)/b*λ[x]","ℝ","guard(b≠0∧(d=0∧c=0)∨b≠0∧0<a,[d≠0∨c≠0]·(d·b⁻¹·sqrt(a⁻¹·π)))"),
 	Case("CurvatureBoth","∫dx b*(c*x+d)*exp(-a*x^2)*λ[x]","ℝ","[b≠0∧d≠0∨b≠0∧c≠0]·(b·d·sqrt(a⁻¹·π))"),
 	Case("CurvatureScaleMonic","∫dx b*(x+d)*exp(-a*x^2)*λ[x]","ℝ","[b≠0]·(b·d·sqrt(a⁻¹·π))"),
+	Case("CurvatureSkipped","∫dx (1-x/2)*exp(-a*x^2)*λ[x]","ℝ","sqrt(a⁻¹·π)"),
+	Case("CurvatureSkippedOdd","∫dx (-x)*exp(-a*x^2)*λ[x]","ℝ","0"),
+	Case("CurvatureSkippedTerms","∫dx (b+x)*(1-x/3)*exp(-a*x^2)*λ[x]","ℝ","(b-a⁻¹·(1/6))·sqrt(a⁻¹·π)"),
 	Case("GaussianSymbolicLinear","∫dx exp(a*x)*λ[x]","ℝ"),
 	Case("GaussianSymbolicPrefactor","∫dx (x-m)^2*exp(-(x-m)^2/2)*λ[x]","ℝ","sqrt(2·π)"),
 	Case("GaussianSymbolicPrefactorShift","∫dx (x+a)*exp(-x^2)*λ[x]","ℝ","a·sqrt(π)"),
@@ -1298,13 +1301,21 @@ private void run(string directory){
 				c.name=="CurvatureVanishing"||c.name=="CurvatureScaleMonic"||c.name=="CurvatureBoth";
 			bool maskPolynomial=c.name=="CurvatureEither"||c.name=="CurvatureSteady"||c.name=="CurvatureBoth";
 			bool terms=c.name=="CurvatureCentral"||c.name=="CurvatureShifted"||c.name=="CurvatureClosed"||c.name=="CurvatureForm"||c.name=="CurvatureAbsent"||
-				c.name=="CurvatureScaleMonic"||maskPolynomial;
+				c.name=="CurvatureScaleMonic"||c.name=="CurvatureSkippedTerms"||maskPolynomial;
 			// A row that is zero is absent; the first has no power of `h`, and
 			// stands under its coefficient where that is a term.
-			bool mixed=c.name=="CurvatureMixed";
+			bool mixed=c.name=="CurvatureMixed"||c.name=="CurvatureSkipped";
 			bool moments=c.name=="CurvaturePolynomial"||c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth"||c.name=="CurvatureOdd"||
-				c.name=="CurvatureLinear"||c.name=="CurvatureOddFunction"||c.name=="CurvatureVanishing"||terms;
+				c.name=="CurvatureLinear"||c.name=="CurvatureOddFunction"||c.name=="CurvatureVanishing"||c.name=="CurvatureSkippedOdd"||terms;
 			if(!retained){
+				// The statement evaluates the table to decide which rows are
+				// zero, so the table is elaborated to its end before the rows
+				// meet it. Without a linear coefficient the monomials after the
+				// constant are skipped and do not name their coefficients: a
+				// row that starts with a zero is then decided by a rational
+				// that only the table names, a negative one or a fraction in
+				// the last three cases.
+				enforce(certificate.indexOf("]] :) ")>=0,c.name~" table elaborated to its end");
 				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.bare")>=0)!=moments,c.name~" constant row");
 				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.present")>=0)==(moments||mixed),c.name~" rows of the powers");
 				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.absent")>=0)==moments,c.name~" rows that are zero");
