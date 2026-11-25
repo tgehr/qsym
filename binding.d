@@ -46,9 +46,14 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
+// Bounds that compete in a guard: whether a third follows a lower and an
+// upper one, and then whether it is on the side of the first; the side of
+// the first; the strictness and the terms in order; the weights of the two
+// cases; and the Lean terms of the rest and of the three shapes.
+private struct BoundSplit{ bool third,first,lower; bool[3] strict; uint[3] terms; BoundTerm kept,changed; string rest,whole,one,other; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct IntegralCell{ Rational lower,upper,sample; }
 // Rational coefficient lists, lowest degree first.
@@ -1830,6 +1835,106 @@ final class Bindings{
 			shape=casts.length?"(fun _ => Distribution.StepSource.cast_mask_and _ _ _)":"(fun _ => (Distribution.StepSource.mask_mask _ _ _).symm)";
 		}else return false;
 		foreach_reverse(c;casts) rest=primitive(arena.at(nodes[c].data),[rest]);
+		return true;
+	}
+	// Bounds of the axis that compete at the front of the guard of the only
+	// weight of a Lebesgue observation: two on one side, or a third after a
+	// lower and an upper one. The weights of the two cases, each with one
+	// bound less, and the evidence that the three weights are the masks of
+	// their comparisons around the same rest. The weight is a mask of a
+	// value, which may be such a mask again, or the cast of a bracket: the
+	// comparisons are those of the guards in the order of their evaluation,
+	// however the conjunctions are nested. Or it is a mask under the guard
+	// of its domain: the negations of its comparisons in their order, then
+	// the domain of the value. A bound has the axis by itself on one side
+	// and a term without it on the other.
+	private bool competingBounds(uint mass,out BoundSplit s){
+		auto n=nodes[mass]; uint[] bodies;
+		if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,bodies)||bodies.length!=1) return false;
+		bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
+		bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
+		enum src="Distribution.StepSource.";
+		string under(uint id){ return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
+		uint[] chain,casts,negations,domains; uint value=uint.max,around=uint.max; bool many; string whole; Term maskOp;
+		string conjunction(uint id){
+			auto q=nodes[id];
+			if(many||!isOp(q,Op.and_)){ chain~=id; many|=chain.length>6; return "("~src~"Conjunction.one "~under(id)~")"; }
+			if(!isOp(nodes[q.a],Op.and_)){ chain~=q.a; return "("~src~"Conjunction.cons "~under(q.a)~" "~conjunction(q.b)~")"; }
+			auto a=conjunction(q.a),b=conjunction(q.b);
+			return "("~src~"Conjunction.and "~a~" "~b~")";
+		}
+		string masks(uint id){
+			auto q=nodes[id];
+			if(many||!isOp(q,Op.mask)){ value=id; return "("~src~"Masks.value "~under(id)~")"; }
+			auto g=conjunction(q.a),inner=masks(q.b);
+			return "("~src~"Masks.mask "~g~" "~inner~")";
+		}
+		auto top=nodes[bodies[0]];
+		if(top.op==BoundOp.guard){
+			auto m=nodes[top.b]; if(!isOp(m,Op.mask)) return false;
+			around=top.a; maskOp=arena.at(m.data); value=m.b;
+			for(auto g=m.a,d=around;;g=nodes[g].b,d=nodes[d].b){
+				auto o=nodes[d]; bool last=!isOp(nodes[g],Op.and_); auto c=last?g:nodes[g].a;
+				if(chain.length>=6||!isOp(o,Op.or_)||!negatedComparison(o.a,c)) return false;
+				chain~=c; negations~=o.a; domains~=d;
+				if(last){ domains~=o.b; break; }
+			}
+		}else if(call(top,Builtin.castQR)&&call(nodes[top.a],Builtin.castZQ)&&call(nodes[nodes[top.a].a],Builtin.castNZ)){
+			auto bracket=nodes[nodes[nodes[top.a].a].a]; if(!isOp(bracket,Op.mask)) return false;
+			casts=[bodies[0],top.a,nodes[top.a].a]; maskOp=arena.at(bracket.data); value=bracket.b;
+			whole="("~src~"Masks.bracket "~conjunction(bracket.a)~" "~under(value)~")";
+		}else{
+			if(!isOp(top,Op.mask)) return false;
+			maskOp=arena.at(top.data); whole=masks(bodies[0]);
+		}
+		if(many||chain.length<2) return false;
+		bool bound(uint id,out bool lower,out bool strict,out uint term){
+			auto c=nodes[id]; if(!isOp(c,Op.le)&&!isOp(c,Op.lt)) return false;
+			strict=isOp(c,Op.lt);
+			bool axis(uint i){auto v=nodes[i];return v.op==BoundOp.variable&&v.data==0;}
+			if(axis(c.b)&&!depends(at(c.a),0)){ lower=true; term=c.a; return true; }
+			if(axis(c.a)&&!depends(at(c.b),0)){ term=c.b; return true; }
+			return false;
+		}
+		bool[3] lower;
+		if(!bound(chain[0],lower[0],s.strict[0],s.terms[0])||!bound(chain[1],lower[1],s.strict[1],s.terms[1])) return false;
+		s.lower=lower[0]; size_t count=2;
+		if(lower[0]!=lower[1]){
+			if(chain.length<3||!bound(chain[2],lower[2],s.strict[2],s.terms[2])) return false;
+			s.third=true; s.first=lower[2]==lower[0]; count=3;
+		}
+		// The weight with these positions of the guard in front of its rest:
+		// one mask of a conjunction nested to the right.
+		BoundTerm weight(uint[] guards,size_t[] front){
+			auto g=at(guards[$-1]),andOp=arena.and_(arena.boolean(true),arena.boolean(true));
+			foreach_reverse(c;guards[0..$-1]) g=primitive(andOp,[at(c),g]);
+			auto r=primitive(maskOp,[g,at(value)]);
+			foreach_reverse(c;casts) r=primitive(arena.at(nodes[c].data),[r]);
+			if(around==uint.max) return r;
+			auto domain=at(domains[count]);
+			foreach_reverse(i;front) domain=primitive(arena.at(nodes[around].data),[at(negations[i]),domain]);
+			return guard(domain,r);
+		}
+		string evidence(uint[] guards){
+			if(around!=uint.max){
+				string step(size_t j){
+					auto c=nodes[guards[j]]; auto head=(isOp(c,Op.lt)?"true ":"false ")~under(c.a)~" "~under(c.b);
+					return j+1==guards.length?"("~src~"Masks.under_last "~head~" "~under(domains[$-1])~" "~under(value)~")":"("~src~"Masks.under "~head~" "~step(j+1)~")";
+				}
+				return step(0);
+			}
+			auto g="("~src~"Conjunction.one "~under(guards[$-1])~")";
+			foreach_reverse(c;guards[0..$-1]) g="("~src~"Conjunction.cons "~under(c)~" "~g~")";
+			return casts.length?"("~src~"Masks.bracket "~g~" "~under(value)~")":"("~src~"Masks.mask "~g~" ("~src~"Masks.value "~under(value)~"))";
+		}
+		size_t[] kept=s.third?[0,1]:[0],changed=!s.third?[1]:s.first?[2,1]:[0,2];
+		uint[] select(size_t[] front){ uint[] r; foreach(i;front) r~=chain[i]; return r~chain[count..$]; }
+		s.kept=weight(select(kept),kept); s.changed=weight(select(changed),changed);
+		s.whole=around!=uint.max?evidence(chain):whole; s.one=evidence(select(kept)); s.other=evidence(select(changed));
+		s.rest=under(value);
+		if(casts.length) s.rest="(Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply "~s.rest~")))";
+		if(around!=uint.max) s.rest="(Binding.guardValue "~under(domains[$-1])~" "~s.rest~")";
+		foreach_reverse(c;chain[count..$]) s.rest="(Value.mask "~under(c)~" "~s.rest~")";
 		return true;
 	}
 	// The first strict guard that does not mention the innermost variable, at
@@ -6492,6 +6597,9 @@ final class Bindings{
 			auto ctx=context(t),weight=inheritHint(at(nodes[n.a].a),lambda(target));
 			return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
 		}
+		// The rule for several bounds on one side, below: the rest of the
+		// next rule may need it, and it that rule.
+		BoundTerm delegate(BoundTerm,uint) @safe splitLater;
 		// A guard that does not mention the axis leaves the observation. The
 		// mask is not strict, so this is an equation even where the inner
 		// observation is missing. Used only if the rest can then be observed.
@@ -6508,9 +6616,51 @@ final class Bindings{
 			if(!observed){ trial=IntegralSolution.init; observed=integrateMissingPoint(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integratePieces(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=distributeMass(inside,trial,false)!=BoundTerm.init; }
-			if(!observed&&massGuard(inside,depth+1)==BoundTerm.init) return BoundTerm.init;
+			if(!observed&&massGuard(inside,depth+1)==BoundTerm.init&&splitLater(inside,depth+1)==BoundTerm.init) return BoundTerm.init;
 			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[dropIndex(at(guard)),inside]);
 		}
+		// Several bounds of the axis on one side: a bound leaves the guard by a
+		// case distinction on the order of two terms. Two bounds on one side at
+		// the front: the observation is that with the first under the test
+		// that the first implies the second, plus that with the second under
+		// the negation. A third bound after a lower and an upper one: the same
+		// for it and the bound on its side, under the test that the first two
+		// leave a point, since otherwise the observation is a zero whatever the
+		// third term is. The guard is evaluated from the left, so these are
+		// equations of partial values. Used only if both cases can then be
+		// observed, each with one bound less.
+		BoundTerm splitBounds(BoundTerm t,uint depth) @safe {
+			BoundSplit s; if(depth>8||!competingBounds(t.id,s)) return BoundTerm.init;
+			auto ctx=context(t);
+			BoundTerm mass(BoundTerm body){
+				auto weight=inheritHint(at(nodes[node(t).a].a),lambda(body));
+				return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
+			}
+			bool observable(BoundTerm inside) @safe {
+				IntegralSolution trial; bool observed=integrateSteps(inside,trial)!=BoundTerm.init;
+				if(!observed){ trial=IntegralSolution.init; observed=integratePolynomials(inside,trial)!=BoundTerm.init; }
+				if(!observed){ trial=IntegralSolution.init; observed=integrateInterval(inside,trial)!=BoundTerm.init; }
+				if(!observed){ trial=IntegralSolution.init; observed=integrateGaussian(inside,trial)!=BoundTerm.init; }
+				if(!observed){ trial=IntegralSolution.init; observed=integratePieces(inside,trial)!=BoundTerm.init; }
+				if(!observed){ trial=IntegralSolution.init; observed=distributeMass(inside,trial,false)!=BoundTerm.init; }
+				return observed||massGuard(inside,depth+1)!=BoundTerm.init||splitBounds(inside,depth+1)!=BoundTerm.init;
+			}
+			auto kept=mass(s.kept),changed=mass(s.changed);
+			if(!observable(kept)||!observable(changed)) return BoundTerm.init;
+			auto zero=arena.real_(0);
+			BoundTerm term(size_t i){ return dropIndex(at(s.terms[i])); }
+			BoundTerm test(bool strict,BoundTerm a,BoundTerm b){ return primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[a,b]); }
+			BoundTerm masked(BoundTerm c,BoundTerm x){ return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[c,x]); }
+			// The two bounds on one side, in the order of the guard.
+			size_t i=s.third&&!s.first?1:0,j=s.third?2:1; bool lower=s.third&&!s.first?!s.lower:s.lower;
+			auto a=term(i),b=term(j); bool tight=!s.strict[i]&&s.strict[j];
+			auto implies=lower?test(tight,b,a):test(tight,a,b),implied=lower?test(!tight,a,b):test(!tight,b,a);
+			auto sum=primitive(arena.add(zero,zero,true),[masked(implies,kept),masked(implied,changed)]);
+			if(!s.third) return sum;
+			bool strict=s.strict[0]||s.strict[1];
+			return masked(s.lower?test(strict,term(0),term(1)):test(strict,term(1),term(0)),sum);
+		}
+		splitLater=&splitBounds;
 		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
 			bool call(BoundNode q,Builtin f){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.builtin&&arena.view(arena.at(q.data)).value==f;}
 			auto n=node(t);if(!call(n,Builtin.addN)||depends(at(n.b),0))return false;
@@ -8649,9 +8799,11 @@ final class Bindings{
 				if(evaluated==BoundTerm.init){
 					auto strict=unguardMass(at(result.output)),unguarded=strict==BoundTerm.init?massGuard(at(result.output),0):BoundTerm.init;
 					IntegralSolution sum; auto spread=strict==BoundTerm.init&&unguarded==BoundTerm.init?distributeMass(at(result.output),sum,true):BoundTerm.init;
+					auto bounds=strict==BoundTerm.init&&unguarded==BoundTerm.init&&spread==BoundTerm.init?splitBounds(at(result.output),0):BoundTerm.init;
 					if(strict!=BoundTerm.init){ next=strict; rule=BindingRule.distributionMassStrictGuard; }
 					else if(spread!=BoundTerm.init){ next=spread; rule=BindingRule.distributionMassSpread; extra=cast(uint)integrals.length; integrals~=sum; }
 					else if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
+					else if(bounds!=BoundTerm.init){ next=bounds; rule=BindingRule.distributionMassBounds; }
 					else{ solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution); }
 				}
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
@@ -14030,6 +14182,17 @@ final class Bindings{
 					auto equation=tail.length?"(Eq.trans "~spread.proof~" "~tail~")":spread.proof;
 					if(guarded)equation="(Eq.trans "~equation~" (Distribution.DensityProgram.GuardedSum.sound "~lift~"))";
 					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_pointwise (w := "~fn(s.from[0])~") (v := "~fn(s.to[0])~") (fun x => "~equation~"); h)"; break;
+				}
+				case BindingRule.distributionMassBounds:{
+					BoundSplit s;enforce(competingBounds(p.from,s),"missing bounds on one side");
+					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					auto count=s.third?3:2;
+					string arguments=s.lower?"true":"false";
+					foreach(k;0..count)arguments~=s.strict[k]?" true":" false";
+					foreach(k;0..count)arguments~=" ("~name(dropIndex(at(s.terms[k])).id)~".eval ξ ρ)";
+					auto lemma=!s.third?"mass_same_side":s.first?"mass_third_first":"mass_third_second";
+					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram."~lemma~" "~arguments~" (w := "~fn(nodes[nodes[n.a].a].a)~") (w₁ := "~fn(s.kept.id)~
+						") (w₂ := "~fn(s.changed.id)~") (fun x => "~s.rest~") (fun x => "~s.whole~") (fun x => "~s.one~") (fun x => "~s.other~"); h)"; break;
 				}
 				case BindingRule.distributionMassGuard:{
 					uint guard;BoundTerm rest;string shape;

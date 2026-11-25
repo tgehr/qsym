@@ -33,6 +33,7 @@ import QSym.DistributionExponentialInterval
 import QSym.DistributionGaussianInterval
 import QSym.DistributionRatio
 import QSym.DistributionLog
+import QSym.DistributionBounds
 import QSym.DistributionFibreCertificate
 import QSym.DistributionPartialModel
 import QSym.DistributionPartialSequential

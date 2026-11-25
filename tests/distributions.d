@@ -1475,6 +1475,41 @@ private Case[] cases(){
 	Case("SummandFunction","λ(t:ℝ).∫dx [1≤x]*[x≤t]*(log(x)+c)*λ[x]","ℝ→ℝ","λ(t:ℝ). [1≤t]·(c·(t-1)+t·log(t)-t+1)"),
 	Case("SummandAbove","∫dx [1≤x]*(1/x^2+c)*λ[x]","ℝ"),
 	Case("SummandNested","∫dx [1≤x≤2]*(log(2*x)+x)*λ[x]","ℝ"),
+	Case("Competing","∫dx [0≤x]*[x≤1]*[x≤a]*λ[x]","ℝ","[a<1∧0≤a]·a+[1≤a]"),
+	Case("CompetingLower","∫dx [0≤x]*[x≤1]*[a≤x]*λ[x]","ℝ","[0<a∧a≤1]·(-a+1)+[a≤0]"),
+	Case("CompetingStrict","∫dx [0<x]*[x<1]*[x<a]*λ[x]","ℝ","[a<1∧0<a]·a+[1≤a]"),
+	Case("CompetingStrictLower","∫dx [0≤x]*[x≤1]*[a<x]*x*λ[x]","ℝ","[0≤a∧a<1]·(-1/2·a^2+1/2)+[a<0]·(1/2)"),
+	Case("CompetingValue","∫dx [0≤x]*[x≤1]*[x≤a]*x*λ[x]","ℝ","[a<1∧0≤a]·(1/2·a^2)+[1≤a]·(1/2)"),
+	Case("CompetingUpperFirst","∫dx [x<a]*[b<x]*[x≤c]*x*λ[x]","ℝ","[b<a]·([c<a∧b<c]·(-1/2·b^2+1/2·c^2)+[a≤c]·(1/2·a^2-1/2·b^2))"),
+	Case("CompetingUpperFirstLower","∫dx [x<a]*[b<x]*[c≤x]*x*λ[x]","ℝ","[b<a]·([b<c∧c<a]·(1/2·a^2-1/2·c^2)+[c≤b]·(1/2·a^2-1/2·b^2))"),
+	Case("CompetingFour","∫dx [0≤x]*[x≤1]*[a≤x]*[x≤b]*λ[x]","ℝ","[0<a∧a≤1]·([b<1∧a≤b]·(-a+b)+[1≤b]·(-a+1))+[a≤0]·([b<1∧0≤b]·b+[1≤b])"),
+	Case("CompetingFourValue","∫dx [0≤x]*[x≤1]*[a≤x]*[x≤b]*x*λ[x]","ℝ","[0<a∧a≤1]·([b<1∧a≤b]·(-1/2·a^2+1/2·b^2)+[1≤b]·(-1/2·a^2+1/2))+[a≤0]·([b<1∧0≤b]·(1/2·b^2)+[1≤b]·(1/2))"),
+	Case("CompetingHalfLine","∫dx [0≤x]*[a≤x]*exp(-x)*λ[x]","ℝ","[0<a]·exp(-a)+[a≤0]"),
+	Case("CompetingBelow","∫dx [x≤1]*[x≤a]*exp(x)*λ[x]","ℝ","[a<1]·exp(a)+[1≤a]·e"),
+	Case("CompetingSameSide","∫dx [x≤a]*[x≤b]*[0≤x]*x*λ[x]","ℝ","[b<a∧0≤b]·(1/2·b^2)+[a≤b∧0≤a]·(1/2·a^2)"),
+	Case("CompetingSameSideUnit","∫dx [x≤a]*[x≤b]*[0≤x]*λ[x]","ℝ","[b<a∧0≤b]·b+[a≤b∧0≤a]·a"),
+	Case("CompetingSameSideLower","∫dx [a≤x]*[b≤x]*[x≤1]*x*λ[x]","ℝ","[a<b∧b≤1]·(-1/2·b^2+1/2)+[b≤a∧a≤1]·(-1/2·a^2+1/2)"),
+	Case("CompetingDomain","∫dx [0≤x]*[x≤1]*[x≤a]*(1/c)*λ[x]","ℝ","[a<1]·([0≤a]·(guard(c≠0,a·c⁻¹)))+[1≤a]·(guard(c≠0,c⁻¹))"),
+	Case("CompetingDomainSameSide","∫dx [x≤a]*[x≤b]*[0≤x]*(1/c)*x*λ[x]","ℝ","[b<a]·([0≤b]·(guard(c≠0,c⁻¹·(1/2)·b^2)))+[a≤b]·([0≤a]·(guard(c≠0,c⁻¹·(1/2)·a^2)))"),
+	Case("CompetingDomainFour","∫dx [0≤x]*[x≤1]*[a≤x]*[x≤b]*log(c)*x*λ[x]","ℝ"),
+	Case("CompetingDomainHalfLine","∫dx [a≤x]*[b≤x]*log(c)*exp(-x)*λ[x]","ℝ","[a<b]·(guard(0<c,exp(-b)·log(c)))+[b≤a]·(guard(0<c,exp(-a)·log(c)))"),
+	Case("CompetingGaussian","∫dx [0≤x]*[x≤1]*[x≤a]*exp(-x^2)*λ[x]","ℝ","[a<1∧0≤a]·(1/2·sqrt(π)·erf(a))+[1≤a]·(1/2·sqrt(π)·erf(1))"),
+	Case("CompetingQuotient","∫dx [1≤x]*[x≤a]*[x≤b]*(c/x)*λ[x]","ℝ","[1≤a]·([b<a∧1≤b]·(c·log(b))+[a≤b]·(c·log(a)))"),
+	Case("CompetingLogarithm","∫dx [1≤x]*[x≤a]*[x≤b]*log(x)*λ[x]","ℝ","[1≤a]·([b<a∧1≤b]·(b·log(b)-b+1)+[a≤b]·(a·log(a)-a+1))"),
+	Case("CompetingRate","∫dx [0≤x]*[x≤1]*[x≤a]*exp(c*x)*λ[x]","ℝ","[a<1∧0≤a]·([c≠0]·(c⁻¹·exp(a·c)-c⁻¹)+[c=0]·a)+[1≤a]·([c≠0]·(c⁻¹·exp(c)-c⁻¹)+[c=0])"),
+	Case("CompetingRateHalfLine","∫dx [0≤x]*[a≤x]*exp(-c*x)*λ[x]","ℝ","[0<a]·(guard(0<c,c⁻¹·exp(-a·c)))+[a≤0]·(guard(0<c,c⁻¹))"),
+	Case("CompetingGuard","∫dx [1≤c]*[0≤x]*[x≤1]*[x≤a]*x*λ[x]","ℝ","[1≤c]·([a<1∧0≤a]·(1/2·a^2)+[1≤a]·(1/2))"),
+	Case("CompetingFactor","∫dx c*[0≤x]*[x≤1]*[x≤a]*λ[x]","ℝ","[a<1∧0≤a]·(c·a)+[1≤a]·c"),
+	Case("CompetingFunction","λ(t:ℝ).∫dx [0≤x]*[x≤1]*[x≤t]*λ[x]","ℝ→ℝ","λ(t:ℝ). [t<1∧0≤t]·t+[1≤t]"),
+	Case("CompetingFunctionValue","λ(t:ℝ).∫dx [0≤x]*[x≤1]*[x≤t]*x*λ[x]","ℝ→ℝ","λ(t:ℝ). [t<1∧0≤t]·(1/2·t^2)+[1≤t]·(1/2)"),
+	Case("CompetingFunctionHalfLine","λ(t:ℝ).∫dx [0≤x]*[t≤x]*exp(-x)*λ[x]","ℝ→ℝ","λ(t:ℝ). [0<t]·exp(-t)+[t≤0]"),
+	Case("CompetingNested","∫dy [0≤y]*[y≤2]*λ[y]*∫dx [0≤x]*[x≤1]*[x≤y]*λ[x]","ℝ","3/2"),
+	Case("CompetingNestedValue","∫dy [0≤y]*[y≤1]*(∫dx [0≤x]*[x≤1]*[x≤y]*x*λ[x])*λ[y]","ℝ","1/6"),
+	Case("CompetingCurvature","∫dx [0≤x]*[x≤1]*[x≤a]*exp(-c*x^2)*λ[x]","ℝ"),
+	Case("CompetingPole","∫dx [0≤x]*[x≤1]*[x≤a]*(1/x)*λ[x]","ℝ"),
+	Case("CompetingSum","∫dx [0≤x]*[x≤1]*[x≤a]*(x+[x≤1/2])*λ[x]","ℝ"),
+	Case("CompetingUnsolved","∫dx [0≤x]*[x≤1]*[2*x≤a]*λ[x]","ℝ"),
+	Case("CompetingUnbounded","∫dx [0≤x]*[a≤x]*λ[x]","ℝ"),
 	Case("QuotientPoleTwo","∫dx [1≤x≤2]*(1/(x+1)+1/x)*λ[x]","ℝ"),
 	Case("QuotientPoleQuadratic","∫dx [1≤x≤2]*(1/(x^2+1))*λ[x]","ℝ","atan(2)-1/4·π"),
 	Case("QuotientScale","∫dx [1≤x≤2]*c/x*λ[x]","ℝ","c·log(2)"),
@@ -1501,7 +1536,7 @@ private Case[] cases(){
 	Case("QuotientScaleSum","∫dx [1≤x≤2]*(c/x+x)*λ[x]","ℝ"),
 	Case("QuotientScaleDiverges","∫dx [1≤x]*c/x*λ[x]","ℝ"),
 	Case("QuotientExponential","∫dx [1≤x≤2]*(1/x)*exp(x)*λ[x]","ℝ"),
-	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
+	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ","[a≤b]·([c<b∧a≤c]·(-a+c)+[b≤c]·(-a+b))"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
 	Case("SymbolicIntervalSine","∫dx [a≤x≤b]*sin(x)*λ[x]","ℝ"),
 	Case("WeightedAffineChart","Λx. ∫dy [0≤y≤1]*y*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(y·(1/4)-1/4))·λ[y]"),
@@ -2768,10 +2803,10 @@ private void run(string directory){
 			enforce(c.name=="StepNonconstant"||text.indexOf("∫")>=0,c.name~" must retain its unsupported integral");
 		}
 		// One lower and one upper bound around polynomial and exponential
-		// terms. More bounds, an open side and other integrands keep their
-		// integral.
+		// terms. An open side and other integrands keep their integral; a
+		// third bound is a case distinction with two such observations.
 		if(c.name.indexOf("SymbolicInterval")==0){
-			bool retained=c.name=="SymbolicIntervalThreeBounds"||c.name=="SymbolicIntervalUnbounded"||c.name=="SymbolicIntervalSine";
+			bool retained=c.name=="SymbolicIntervalUnbounded"||c.name=="SymbolicIntervalSine";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
@@ -3048,6 +3083,54 @@ private void run(string directory){
 			enforce(has("log_between ")==logarithm,c.name~" logarithm next to the term");
 			enforce(has("ratio_between ")==among("SummandQuotient","SummandQuotientBounds","SummandPole"),c.name~" quotient next to the term");
 			enforce(has("ratio_between_scaled_plain ")==among("SummandScale"),c.name~" quotient under a factor next to the term");
+		}
+		// Several bounds of the axis on one side. A guard is evaluated from
+		// the left, so a bound whose term is missing makes the weight
+		// missing only where the comparisons before it hold. Two bounds on
+		// one side at the front: the observation with the first under the
+		// test that the first implies the second, plus that with the second
+		// under the negation; a half-line is never empty. A third bound
+		// after a lower and an upper one: the same for it and the bound on
+		// its side, under the test that the first two leave a point, since
+		// otherwise the observation is a zero whatever the third term is.
+		// Each case has one bound less, and a guard with more bounds takes
+		// as many steps. The weights are the masks of their comparisons
+		// around the same rest, by the structure of the guard: a
+		// conjunction however it is nested, masks of masks below a binder,
+		// the cast of a bracket, or a mask under the guard of its domain.
+		// A case that has no closed form keeps the whole integral: a
+		// curvature that is a term, a pole between the bounds, a sum with a
+		// bound of its own, a bound that is not solved for the axis, a
+		// half-line of infinite length.
+		if(c.name.indexOf("Competing")==0){
+			enum program="Distribution.DensityProgram.",src="Distribution.StepSource.";
+			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(evidence)>=0; }
+			bool retained=among("CompetingCurvature","CompetingPole","CompetingSum","CompetingUnsolved","CompetingUnbounded");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			bool sameLower=among("CompetingHalfLine","CompetingSameSideLower","CompetingDomainHalfLine","CompetingRateHalfLine","CompetingFunctionHalfLine");
+			bool sameUpper=among("CompetingBelow","CompetingSameSide","CompetingSameSideUnit","CompetingDomainSameSide");
+			enforce(has(program~"mass_same_side true ")==sameLower,c.name~" two lower bounds");
+			enforce(has(program~"mass_same_side false ")==sameUpper,c.name~" two upper bounds");
+			bool upperFirst=among("CompetingUpperFirst","CompetingUpperFirstLower");
+			bool third=!retained&&!sameLower&&!sameUpper&&!upperFirst;
+			bool lowerThird=among("CompetingLower","CompetingStrictLower","CompetingFour","CompetingFourValue","CompetingDomainFour");
+			enforce(has(program~"mass_third_second true ")==(third&&!among("CompetingLower","CompetingStrictLower")),c.name~" third bound from above");
+			enforce(has(program~"mass_third_first true ")==lowerThird,c.name~" third bound from below");
+			enforce(has(program~"mass_third_second false ")==among("CompetingUpperFirstLower"),c.name~" third bound from below after an upper one");
+			enforce(has(program~"mass_third_first false ")==among("CompetingUpperFirst"),c.name~" third bound from above after an upper one");
+			bool bracket=among("Competing","CompetingLower","CompetingStrict","CompetingFour","CompetingSameSideUnit");
+			bool domain=among("CompetingDomain","CompetingDomainSameSide","CompetingDomainFour","CompetingDomainHalfLine");
+			enforce(has(src~"Masks.bracket ")==bracket,c.name~" cast of a bracket");
+			enforce(has(src~"Masks.under ")==domain,c.name~" mask under its domain");
+			enforce(has(src~"Masks.under_last ")==domain,c.name~" value under its domain");
+			enforce(has(src~"Masks.mask ")==(!retained&&!bracket&&!domain),c.name~" mask of a value");
+			bool nested=among("CompetingFunction","CompetingFunctionValue","CompetingFunctionHalfLine","CompetingNested","CompetingNestedValue");
+			enforce(has(src~"Conjunction.and ")==among("CompetingFunction","CompetingNested"),c.name~" conjunction nested to the left");
+			if(among("CompetingFunctionValue","CompetingFunctionHalfLine","CompetingNestedValue"))
+				enforce(has(src~"Masks.mask ("~src~"Conjunction.one "),c.name~" masks of masks");
+			enforce(has(src~"Conjunction.cons ")!=(retained||domain||among("CompetingFunctionHalfLine")),c.name~" conjunction nested to the right");
+			enforce(has(program~"mass_guard ")==among("CompetingGuard"),c.name~" guard that does not mention the axis");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;
