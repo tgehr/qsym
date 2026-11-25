@@ -605,8 +605,30 @@ private Case[] cases(){ return [
 	Case("VertexSum","∫dx [0≤x]*(exp(-x^2)+exp(-x))*λ[x]","ℝ","1/2·sqrt(π)+1"),
 	Case("VertexDomain","∫dx [0≤x]*exp(-x^2)/a*λ[x]","ℝ","guard(a≠0,a⁻¹·(1/2)·sqrt(π))"),
 	Case("VertexNormal","∫dx [0≤x]*exp(-x^2)/sqrt(π)*2*λ[x]","ℝ","1"),
-	Case("VertexAway","∫dx [1≤x]*exp(-x^2)*λ[x]","ℝ"),
-	Case("VertexInterval","∫dx [0≤x]*[x≤1]*exp(-x^2)*λ[x]","ℝ"),
+	Case("ErfInterval","∫dx [0≤x≤1]*exp(-x^2)*λ[x]","ℝ","1/2·sqrt(π)·erf(1)"),
+	Case("ErfAbove","∫dx [1≤x]*exp(-x^2)*λ[x]","ℝ","1/2·sqrt(π)·erfc(1)"),
+	Case("ErfBelow","∫dx [x≤1]*exp(-x^2)*λ[x]","ℝ","1/2·sqrt(π)·erfc(-1)"),
+	Case("ErfSymbolicBounds","∫dx [a≤x≤b]*exp(-x^2/2)*λ[x]","ℝ","[a≤b]·(-1/2·sqrt(2·π)·erf(a·(1/2)·sqrt(2))+1/2·sqrt(2·π)·erf(b·(1/2)·sqrt(2)))"),
+	Case("ErfPolynomial","∫dx [0≤x≤1]*x^2*exp(-x^2)*λ[x]","ℝ","1/4·sqrt(π)·erf(1)-1/2·exp(-1)"),
+	Case("ErfCubic","∫dx [0≤x≤2]*(x^3+1)*exp(-(x-1)^2)*λ[x]","ℝ","-7/4·sqrt(π)·erf(-1)+7/4·sqrt(π)·erf(1)-3·exp(-1)"),
+	Case("ErfNormalTail","∫dx [0≤x]*exp(-(x-1)^2/2)/sqrt(2*π)*λ[x]","ℝ","1/2·erfc(-1/2·sqrt(2))"),
+	Case("ErfNormalCdf","λ(t:ℝ).∫dx [x≤t]*exp(-x^2/2)/sqrt(2*π)*λ[x]","ℝ→ℝ","λ(t:ℝ). 1/2·erfc(-t·(1/2)·sqrt(2))"),
+	Case("ErfNormalInterval","∫dx [-1≤x≤1]*exp(-x^2/2)/sqrt(2*π)*λ[x]","ℝ","(-1/2·sqrt(2·π)·erf(-1/2·sqrt(2))+1/2·sqrt(2·π)·erf(1/2·sqrt(2)))·sqrt(2·π)⁻¹"),
+	Case("ErfScaled","∫dx [0≤x≤1]*c*exp(-x^2)*λ[x]","ℝ","c·(1/2)·sqrt(π)·erf(1)"),
+	Case("ErfAboveScaled","∫dx [1≤x]*c*exp(-x^2)*λ[x]","ℝ","c·(1/2)·sqrt(π)·erfc(1)"),
+	Case("ErfBelowScaled","∫dx [x≤1]*c*exp(-x^2)*λ[x]","ℝ","c·(1/2)·sqrt(π)·erfc(-1)"),
+	Case("ErfOffset","∫dx [0≤x≤1]*exp(a-x^2)*λ[x]","ℝ","1/2·sqrt(π)·exp(a)·erf(1)"),
+	Case("ErfBelowPolynomial","∫dx [x≤a]*x*exp(-(x-1)^2)*λ[x]","ℝ","1/2·sqrt(π)·erfc(-a+1)-1/2·exp(a·(-a+2)-1)"),
+	Case("ErfDomain","∫dx [0≤x≤1]*exp(-x^2)/a*λ[x]","ℝ","guard(a≠0,a⁻¹·(1/2)·sqrt(π)·erf(1))"),
+	Case("ErfSum","∫dx [0≤x≤1]*(exp(-x^2)+exp(-x))*λ[x]","ℝ","1/2·sqrt(π)·erf(1)-exp(-1)+1"),
+	Case("ErfVertexSum","∫dx [0≤x]*(exp(-x^2)+exp(-(x-1)^2))*λ[x]","ℝ","1/2·sqrt(π)·erfc(-1)+1/2·sqrt(π)"),
+	Case("ErfStrict","∫dx [0<x]*[x<1]*exp(-x^2)*λ[x]","ℝ","1/2·sqrt(π)·erf(1)"),
+	Case("ErfNested","λ(t:ℝ).∫dx [0≤x]*[x≤t]*exp(-x^2)*λ[x]","ℝ→ℝ","λ(t:ℝ). [0≤t]·(1/2·sqrt(π)·erf(t))"),
+	Case("ErfGuarded","∫dx [c≤d]*[1≤x]*exp(-x^2)*λ[x]","ℝ","[c≤d]·(1/2·sqrt(π)·erfc(1))"),
+	Case("ErfGrowing","∫dx [0≤x≤1]*exp(x^2)*λ[x]","ℝ"),
+	Case("ErfQuartic","∫dx [0≤x≤1]*exp(-x^4)*λ[x]","ℝ"),
+	Case("ErfSymbolicMean","∫dx [0≤x≤1]*exp(-(x-m)^2)*λ[x]","ℝ"),
+	Case("ErfSymbolicCurvature","∫dx [0≤x≤1]*exp(-a*x^2)*λ[x]","ℝ"),
 	Case("PiecesLaplace","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","2"),
 	Case("PiecesShifted","∫dx ([0≤x]*exp(-x)+[1≤x]*exp(-2*x))*λ[x]","ℝ","1/2·exp(-2)+1"),
 	Case("PiecesStrict","∫dx ([x≤0]*exp(x)+[0<x]*exp(-x))*λ[x]/2","ℝ","1"),
@@ -636,7 +658,7 @@ private Case[] cases(){ return [
 	Case("SpreadMaskInterval","∫dx [-1≤x≤1]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","-2·exp(-1)+2"),
 	Case("SpreadMaskPolynomial","∫dx [0≤x]*([x≤1]*x+[1≤x]*exp(1-x))*x*λ[x]","ℝ","7/3"),
 	Case("SpreadGrowing","∫dx ([x≤0]*exp(x)+[0≤x]*exp(x))*x^2*λ[x]","ℝ"),
-	Case("SpreadGaussian","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*exp(-x^2)*λ[x]","ℝ"),
+	Case("SpreadGaussian","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*exp(-x^2)*λ[x]","ℝ","sqrt(π)·exp(1/4)·erfc(1/2)"),
 	Case("SpreadSymbolicBound","∫dx [x≤t]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ"),
 	Case("SpreadPower","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))^2*λ[x]","ℝ"),
 	Case("SpreadAxisDomain","∫dx (([x≤0]*exp(x)+[0≤x]*exp(-x))/a+[1≤x]*exp(-x)*sqrt(b))*λ[x]","ℝ"),
@@ -1253,14 +1275,13 @@ private void run(string directory){
 		}
 		// A half-line that starts or ends at the vertex of a Gaussian: the
 		// exponential has half its integral on either side, and the polynomial
-		// is a constant up to a derivative that vanishes at the end. A bound
-		// away from the vertex and two bounds keep their integral.
+		// is a constant up to a derivative that vanishes at the end.
 		if(c.name.indexOf("Vertex")==0){
-			bool retained=c.name=="VertexAway"||c.name=="VertexInterval",upper=c.name.indexOf("VertexUpper")==0;
+			bool upper=c.name.indexOf("VertexUpper")==0;
 			bool scaled=c.name=="VertexScaled"||c.name=="VertexOffset"||c.name=="VertexDomain"||c.name=="VertexNormal";
-			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_"~(upper?"upper":"halfline"))>=0)!=retained,c.name~" certificate");
-			enforce((certificate.indexOf("Distribution.StepSource."~(upper?"UpperTerms":"HalfLineTerms")~(scaled?".scaledGaussian ":".gaussian "))>=0)!=retained,c.name~" vertex");
-			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_"~(upper?"upper":"halfline"))>=0,c.name~" certificate");
+			enforce(certificate.indexOf("Distribution.StepSource."~(upper?"UpperTerms":"HalfLineTerms")~(scaled?".scaledGaussian ":".gaussian "))>=0,c.name~" vertex");
+			enforce(text.indexOf("∫")<0,c.name~": "~text);
 			if(c.name=="VertexSum") enforce(certificate.indexOf("HalfLineTerms.pure")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" terms");
 			if(c.name=="VertexOffset") enforce(certificate.indexOf("Limit.EventualScaled.exp_curve")>=0,c.name~" offset");
 			if(c.name=="VertexDomain") enforce(certificate.indexOf("HalfLineTerms.guard")>=0,c.name~" domain");
@@ -1292,7 +1313,7 @@ private void run(string directory){
 		// that is then not observed, a power of the sum and a domain that
 		// mentions the axis keep their integral.
 		if(c.name.indexOf("Spread")==0){
-			bool retained=c.name=="SpreadGrowing"||c.name=="SpreadGaussian"||c.name=="SpreadSymbolicBound"||c.name=="SpreadPower"||c.name=="SpreadAxisDomain";
+			bool retained=c.name=="SpreadGrowing"||c.name=="SpreadSymbolicBound"||c.name=="SpreadPower"||c.name=="SpreadAxisDomain";
 			bool mask=c.name.indexOf("SpreadMask")==0,guarded=c.name=="SpreadDomain"||c.name=="SpreadRoot";
 			enforce((certificate.indexOf("Distribution.DensityProgram.mass_pointwise")>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
@@ -1305,6 +1326,27 @@ private void run(string directory){
 			}
 			if(c.name=="SpreadNested") enforce(certificate.indexOf("Value.add_mul")>=0&&certificate.indexOf("Value.mul_add")>=0,c.name~" both sides");
 			if(c.name=="SpreadGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+		}
+		// Other bounds of a Gaussian: an antiderivative with the error function
+		// around the vertex, after that of the polynomial up to its constant.
+		// Between two bounds it has the error function itself, beyond a single
+		// bound its complement, which vanishes at that end, below a bound with
+		// the argument reflected. A curvature that is not negative, another
+		// exponent and coefficients that are terms keep their integral.
+		if(c.name.indexOf("Erf")==0){
+			bool retained=c.name=="ErfGrowing"||c.name=="ErfQuartic"||c.name=="ErfSymbolicMean"||c.name=="ErfSymbolicCurvature";
+			bool above=c.name=="ErfAbove"||c.name=="ErfNormalTail"||c.name=="ErfAboveScaled"||c.name=="ErfVertexSum"||c.name=="ErfGuarded";
+			bool below=c.name.indexOf("ErfBelow")==0||c.name=="ErfNormalCdf";
+			bool scaled=c.name=="ErfNormalTail"||c.name=="ErfNormalCdf"||c.name=="ErfNormalInterval"||c.name=="ErfScaled"||c.name=="ErfAboveScaled"||c.name=="ErfBelowScaled"||
+				c.name=="ErfOffset"||c.name=="ErfDomain";
+			auto terms="Distribution.StepSource."~(below?"UpperTerms":above?"HalfLineTerms":"IntervalTerms")~(scaled?".scaledErf ":".erf ");
+			enforce((certificate.indexOf(terms)>=0)!=retained,c.name~" certificate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(c.name=="ErfSum") enforce(certificate.indexOf("IntervalTerms.pure")>=0&&certificate.indexOf("IntervalTerms.add")>=0,c.name~" terms");
+			if(c.name=="ErfVertexSum") enforce(certificate.indexOf("HalfLineTerms.gaussian")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" vertex");
+			if(c.name=="ErfOffset") enforce(certificate.indexOf("Limit.EventualScaled.exp_curve")>=0,c.name~" offset");
+			if(c.name=="ErfDomain") enforce(certificate.indexOf("IntervalTerms.guard")>=0,c.name~" domain");
+			if(c.name=="ErfGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		// A strict guard that does not mention the axis leaves the observation,
 		// from the top of a weight or of a factor of it, whether or not the

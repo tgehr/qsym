@@ -75,6 +75,9 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 private struct IntervalTerm{
 	uint value,primitive=uint.max; bool scaled,curved,vertex; Rational rate; uint order;
 	GaussianData bell; Rational point,half,rest; uint restLiteral=uint.max;
+	// With the error function: the offset of its argument, and the literals
+	// of the negated curvature, of that offset and of minus one.
+	bool erf; Rational offset; uint sigma=uint.max,offsetLiteral=uint.max,unit=uint.max;
 }
 // With `domain` the value is under a strict guard that does not mention the
 // axis; with `hoisted` that guard stands around the mask, after the negations
@@ -3347,12 +3350,33 @@ final class Bindings{
 				foreach(c;R~[g.constant,g.vertex,g.width,r.half,r.rest,bound]) if(c.words>128) return false;
 				r.bell=g; r.vertex=true; return true;
 			}
+			// The same between other bounds, with the error function around the
+			// vertex of the quadratic: R·exp(Q) and the constant times that are an
+			// antiderivative. Beyond a single bound the complement of the error
+			// function vanishes at that end, below a bound with its argument
+			// reflected.
+			bool erf(Rational[] p,Rational[] exponent,ref IntervalTerm r){
+				if(solution.from.length!=1) return false;
+				auto E=exponent.dup;
+				while(E.length&&E[$-1].zero) E.length=E.length-1;
+				while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(E.length!=3||!(E[2]<Rational(0))||!p.length) return false;
+				GaussianData g; g.c0=E[0]; g.c1=E[1]; g.c2=E[2];
+				auto R=new Rational[](p.length-1);
+				Rational at_(size_t i){ return i<R.length?R[i]:Rational(0); }
+				foreach_reverse(j;1..p.length) R[j-1]=(p[j]-Rational(cast(long)j+1)*at_(j+1)-g.c1*at_(j))/(Rational(2)*g.c2);
+				g.constant=p[0]-at_(1)-g.c1*at_(0); g.primitive=R.length?R:[Rational(0)];
+				g.vertex=g.c0-g.c1*g.c1/(Rational(4)*g.c2); g.width=Rational(-1)/g.c2;
+				r.point=Rational(0)-g.c1/(Rational(2)*g.c2); r.half=g.constant/Rational(2); r.offset=d.below?r.point:Rational(0)-r.point;
+				foreach(c;R~[g.constant,g.vertex,g.width,r.half,r.point]) if(c.words>128) return false;
+				r.bell=g; r.erf=true; return true;
+			}
 			// Decide before building anything: a refused integral leaves no
 			// terms behind. Beyond a single bound every term must decay.
 			bool admissible(uint id,uint depth){
 				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order;
 				if(scaledExponential(id,p,rate,scaled)) return !d.half||decays(rate+outerRate);
-				if(tailExponential(id,false,p,exponent,scaled,false,0,true)){ IntervalTerm r; return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r); }
+				if(tailExponential(id,false,p,exponent,scaled,false,0,true)){ IntervalTerm r; return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r)||erf(p,exponent,r); }
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
@@ -3427,12 +3451,41 @@ final class Bindings{
 				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false,true),result]);
 				d.terms~=r; return result;
 			}
+			// With the error function: the antiderivative of the rest, and the
+			// constant times the error function of the root of the negated
+			// curvature times the distance from the vertex.
+			BoundTerm erfDifference(IntervalTerm r,Rational[] p,Rational[] exponent){
+				if(!erf(p,exponent,r)) return BoundTerm.init;
+				BoundTerm horner(Rational[] c){
+					auto x=variable(inner,0),h=scalar(inner,arena.real_(c[$-1]));
+					foreach_reverse(k;0..c.length-1) h=primitive(addOp,[scalar(inner,arena.real_(c[k])),primitive(mulOp,[x,h])]);
+					return h;
+				}
+				BoundTerm apply1(Builtin f,BoundTerm x){ return primitive(arena.call(f,[arena.real_(0)]),[x]); }
+				auto g=r.bell,x=variable(inner,0);
+				auto rest=primitive(mulOp,[horner(g.primitive),apply1(Builtin.expR,horner([g.c0,g.c1,g.c2]))]); r.primitive=rest.id;
+				auto half=scalar(inner,arena.real_(r.half)),peak=scalar(inner,arena.real_(g.vertex)),width=scalar(inner,arena.real_(g.width));
+				auto circle=scalar(inner,arena.call(Builtin.pi,[])),sigma=scalar(inner,arena.real_(Rational(0)-g.c2));
+				auto offset=scalar(inner,arena.real_(r.offset)),unit=scalar(inner,arena.real_(Rational(-1)));
+				r.bell.factor=half.id; r.bell.exponent=peak.id; r.bell.scale=width.id; r.bell.circle=circle.id;
+				r.sigma=sigma.id; r.offsetLiteral=offset.id; r.unit=unit.id;
+				auto constant=primitive(mulOp,[half,primitive(mulOp,[apply1(Builtin.expR,peak),apply1(Builtin.sqrtR,primitive(mulOp,[circle,width]))])]);
+				auto argument=d.below?primitive(addOp,[offset,primitive(mulOp,[unit,x])]):primitive(addOp,[x,offset]);
+				auto tail=primitive(mulOp,[constant,apply1(d.half?Builtin.erfcR:Builtin.erfR,primitive(mulOp,[apply1(Builtin.sqrtR,sigma),argument]))]);
+				if(d.half&&!d.below) tail=primitive(mulOp,[unit,tail]);
+				auto primitive_=primitive(addOp,[rest,tail]);
+				auto result=d.below?evaluate(primitive_,upper):d.half?primitive(mulOp,[minusOne,evaluate(primitive_,lower)]):
+					primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
+				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false,true),result]);
+				d.terms~=r; return result;
+			}
 			BoundTerm build(uint id,uint depth){
 				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
 				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
 				if(tailExponential(id,false,p,exponent,r.scaled,false,0,true)){
 					auto curved=curveDifference(r,p,exponent);
-					return curved!=BoundTerm.init?curved:vertexDifference(r,p,exponent);
+					if(curved==BoundTerm.init) curved=vertexDifference(r,p,exponent);
+					return curved!=BoundTerm.init?curved:erfDifference(r,p,exponent);
 				}
 				// A sum is integrated term by term only without further weights.
 				auto q=nodes[id];
@@ -7180,6 +7233,20 @@ final class Bindings{
 					return "("~termsName~"."~(scaled?"scaledGaussian":"gaussian")~" (R := "~list~") "~cert.q(g.constant)~" "~cert.q(g.c0)~" "~cert.q(g.c1)~" "~cert.q(g.c2)~" "~
 						cert.q(g.vertex)~" "~cert.q(g.width)~" "~cert.q(r.point)~" "~cert.q(r.half)~" "~cert.q(r.rest)~" "~hv~" "~cert.closedProof(at(d.below?d.upper:d.lower),r.point)~" rfl "~
 						literal(g.factor,r.half)~" "~literal(r.restLiteral,r.rest)~" "~literal(g.exponent,g.vertex)~" "~literal(g.scale,g.width)~" rfl)";
+				}
+				if(r.erf){
+					// The term and the antiderivative of the rest everywhere, on a
+					// half-line strictness in the bound, the checks of the Gaussian
+					// integral and of the argument, and the literals of the result.
+					enum whole="(⊤ : Filter ℝ)";bool scaled,unused;auto g=r.bell;
+					auto hv=cert.exponentialTail(id,whole,false,false,scaled,true),hG=cert.exponentialTail(r.primitive,whole,false,false,unused);
+					string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
+					string list="[";foreach(i,c;g.primitive)list~=(i?", ":"")~cert.q(c);list~="]";
+					auto rest="(GR := fun o : Option ℝ => "~name(r.primitive)~".eval ξ (Binding.Env.cons (a := .scalar .real) o ρ))";
+					return "("~termsName~"."~(scaled?"scaledErf ":"erf ")~rest~" (R := "~list~") "~cert.q(g.constant)~" "~cert.q(g.c0)~" "~cert.q(g.c1)~" "~cert.q(g.c2)~" "~
+						cert.q(g.vertex)~" "~cert.q(g.width)~" "~cert.q(r.point)~" "~cert.q(r.half)~" "~cert.q(Rational(0)-g.c2)~" "~cert.q(r.offset)~" "~hv~" "~hG~(d.half?" rfl":"")~" rfl "~
+						(d.half?literal(r.unit,Rational(-1))~" ":"")~literal(g.factor,r.half)~" "~literal(g.exponent,g.vertex)~" "~literal(g.scale,g.width)~" rfl "~
+						literal(r.sigma,Rational(0)-g.c2)~" "~literal(r.offsetLiteral,r.offset)~")";
 				}
 				auto primitive_="(G := fun o : Option ℝ => "~name(r.primitive)~".eval ξ (Binding.Env.cons (a := .scalar .real) o ρ)) ";
 				if(r.curved){
