@@ -670,6 +670,199 @@ theorem gaussian_partialIntegral_symbolic {f : ℝ → Option ℝ} {S : Option (
   simp [Value.mul, Value.add, Function1.apply, Functions.expR, Functions.sqrtR, Functions.pi,
     Numeric.denote, hpos]
 
+/-- A partial value that is not zero where it is defined. -/
+def Nonvanishing (c : Option ℝ) : Prop := ∀ s, c = some s → s ≠ 0
+
+theorem Nonvanishing.inv (c : Option ℝ) : Nonvanishing (Value.inv c) := by
+  intro s hs
+  rcases c with _ | v
+  · cases hs
+  · by_cases hv : v = 0
+    · simp [Value.inv, hv] at hs
+    · have he : (some v⁻¹ : Option ℝ) = some s := by simpa [Value.inv, hv] using hs
+      rw [← Option.some.inj he]
+      exact inv_ne_zero hv
+
+theorem Nonvanishing.literal {c : Option ℝ} (q : ℚ)
+    (h : c = some (Numeric.denote (s := .real) q)) (hq : decide (q ≠ 0) = true) :
+    Nonvanishing c := by
+  intro s hs
+  rw [h] at hs
+  rw [← Option.some.inj hs]
+  have hr : (q : ℝ) ≠ 0 := by exact_mod_cast of_decide_eq_true hq
+  simpa [Numeric.denote] using hr
+
+theorem Nonvanishing.pi {c : Option ℝ} (h : c = some Functions.pi) : Nonvanishing c := by
+  intro s hs
+  rw [h] at hs
+  rw [← Option.some.inj hs]
+  exact Real.pi_pos.ne'
+
+theorem Nonvanishing.mul {a b : Option ℝ} (ha : Nonvanishing a) (hb : Nonvanishing b) :
+    Nonvanishing (Value.mul a b) := by
+  intro s hs
+  rcases a with _ | x
+  · cases hs
+  · rcases b with _ | y
+    · cases hs
+    · rw [← Option.some.inj hs]
+      exact mul_ne_zero (ha x rfl) (hb y rfl)
+
+/-- A scale that is absent, or not zero where it is defined. -/
+def scaleNonvanishing : Option (Option ℝ) → Prop
+  | none => True
+  | some c => Nonvanishing c
+
+/-- The exponential of a quadratic is not integrable over the line unless its
+curvature is negative: on a half-line it stays above a positive constant. -/
+theorem exp_quadratic_not_integrable (a b : ℝ) {c : ℝ} (hc : 0 ≤ c) :
+    ¬ Integrable (fun x : ℝ => Real.exp (a + b * x + c * x ^ 2)) volume := by
+  intro hi
+  have above : ∀ x : ℝ, 0 ≤ b * x → ‖Real.exp a‖ ≤ Real.exp (a + b * x + c * x ^ 2) := fun x hx => by
+    rw [Real.norm_of_nonneg (Real.exp_pos a).le]
+    apply Real.exp_le_exp.2
+    have h2 : 0 ≤ c * x ^ 2 := mul_nonneg hc (sq_nonneg x)
+    linarith
+  by_cases hb : 0 ≤ b
+  · have hs : IntegrableOn (fun _ : ℝ => Real.exp a) (Set.Ici 0) volume := by
+      refine Integrable.mono' hi.integrableOn aestronglyMeasurable_const ?_
+      exact (ae_restrict_iff' measurableSet_Ici).2
+        (Filter.Eventually.of_forall fun x hx => above x (mul_nonneg hb hx))
+    rw [integrableOn_const] at hs
+    rcases hs with h0 | hfin
+    · exact (Real.exp_pos a).ne' h0
+    · rw [Real.volume_Ici] at hfin
+      exact lt_irrefl _ hfin
+  · have hs : IntegrableOn (fun _ : ℝ => Real.exp a) (Set.Iic 0) volume := by
+      refine Integrable.mono' hi.integrableOn aestronglyMeasurable_const ?_
+      exact (ae_restrict_iff' measurableSet_Iic).2
+        (Filter.Eventually.of_forall fun x hx =>
+          above x (mul_nonneg_of_nonpos_of_nonpos (not_le.1 hb).le hx))
+    rw [integrableOn_const] at hs
+    rcases hs with h0 | hfin
+    · exact (Real.exp_pos a).ne' h0
+    · rw [Real.volume_Iic] at hfin
+      exact lt_irrefl _ hfin
+
+/-- The integral of the exponential of a quadratic whose curvature does not
+mention the variable either: `exp(c₀ - c₁²/(4·c₂))·√(-π/c₂)`, under a rational
+factor other than zero and a scale that is not zero where it is defined.
+Where the curvature is not negative the integrand is defined but not
+integrable, and the result is missing with it: the inverse at zero, the root
+above it. A factor that vanishes would leave the zero function there, which
+has an integral. -/
+theorem gaussian_partialIntegral_curvature {f : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ : ℚ)
+    (hf : Bell f S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hP : decide (P = [κ] ∧ κ ≠ 0) = true) (hS : scaleNonvanishing S) {k g m pi : Option ℝ}
+    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume f = scaleBy S (Value.mul k (Value.mul
+      (Functions.expR.apply
+        (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+      (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))) := by
+  obtain ⟨rfl, hκ⟩ := of_decide_eq_true hP
+  have hκR : (κ : ℝ) ≠ 0 := by exact_mod_cast hκ
+  have hkv : k = some (κ : ℝ) := by rw [hk]; simp [Numeric.denote]
+  have hfx : ∀ x, f x = scaleBy S (Value.mul (some (κ : ℝ)) (Functions.expR.apply (E x))) :=
+    fun x => by
+      rw [hf.plain, expPart]
+      simp [polyEval]
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  have undefined : (∀ x, E x = none) → partialIntegral volume f = none := fun hn => by
+    apply if_neg
+    intro hdef
+    obtain ⟨r, hr⟩ := hdef.1 0
+    rw [hfx, hn] at hr
+    have : Value.mul (some (κ : ℝ)) (Functions.expR.apply (none : Option ℝ)) = none := by
+      simp [Function1.apply, Value.mul]
+    rw [this, hnone] at hr
+    cases hr
+  rw [hkv]
+  rcases c0 with _ | a
+  · rw [undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add]]
+    simp [Value.add, Value.mul, Function1.apply, hnone]
+  rcases c1 with _ | b
+  · rw [undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add, Value.mul]]
+    have : Value.mul (Value.mul g (Value.inv c2)) (Value.mul (none : Option ℝ) none) = none := by
+      cases Value.mul g (Value.inv c2) <;> rfl
+    simp [this, Value.add, Value.mul, Function1.apply, hnone]
+  rcases c2 with _ | c
+  · rw [undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add, Value.mul]]
+    have : Value.mul g (Value.inv (none : Option ℝ)) = none := by cases g <;> rfl
+    simp [this, Value.inv, Value.add, Value.mul, Function1.apply, hnone]
+  have hE' : ∀ x, E x = some (a + b * x + c * x ^ 2) := fun x => by
+    rw [hE.equation]
+    show some (a + (b * x + c * x ^ 2)) = some (a + b * x + c * x ^ 2)
+    congr 1
+    ring
+  -- The result under a factor that is not zero.
+  have key : ∀ k : ℝ, k ≠ 0 → (∀ x, f x = some (k * Real.exp (a + b * x + c * x ^ 2))) →
+      partialIntegral volume f = Value.mul (some k) (Value.mul
+        (Functions.expR.apply (Value.add (some a)
+          (Value.mul (Value.mul g (Value.inv (some c))) (Value.mul (some b) (some b)))))
+        (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv (some c)))))) := by
+    intro k hk hfk
+    have he : (fun x => (f x).getD 0) = fun x => k * Real.exp (a + b * x + c * x ^ 2) := by
+      funext x
+      rw [hfk]
+      rfl
+    by_cases hc : c < 0
+    · have hi := (gaussian_integrable a b c hc).const_mul k
+      rw [partialIntegral_valid volume f (fun x => ⟨_, hfk x⟩) (by rw [he]; exact hi), he,
+        integral_const_mul, gaussian_integral a b c hc, hg, hm, hpi]
+      have hne : c ≠ 0 := hc.ne
+      have hinv : 0 < -c⁻¹ := by
+        have := inv_lt_zero.2 hc
+        linarith
+      have hpos : Real.pi * c⁻¹ ≤ 0 := by nlinarith [Real.pi_pos]
+      have h1 : a - b ^ 2 / (4 * c) = a + -1 / 4 * c⁻¹ * (b * b) := by
+        field_simp
+        ring
+      have h2 : Real.pi / -c = Real.pi * (-1 * c⁻¹) := by
+        rw [div_eq_mul_inv, inv_neg]
+        ring
+      rw [h1, h2]
+      simp [Value.mul, Value.add, Value.inv, hne, Function1.apply, Functions.expR,
+        Functions.sqrtR, Functions.pi, Numeric.denote, hpos]
+    · have hc' : 0 ≤ c := not_lt.1 hc
+      have hn : partialIntegral volume f = none := by
+        apply if_neg
+        rintro ⟨_, hi⟩
+        rw [he] at hi
+        have hi' := hi.const_mul k⁻¹
+        have he2 : (fun x => k⁻¹ * (k * Real.exp (a + b * x + c * x ^ 2))) =
+            fun x => Real.exp (a + b * x + c * x ^ 2) := by
+          funext x
+          rw [← mul_assoc, inv_mul_cancel₀ hk, one_mul]
+        rw [he2] at hi'
+        exact exp_quadratic_not_integrable a b hc' hi'
+      rw [hn, hg, hm, hpi]
+      rcases hc'.eq_or_lt with h0 | hpos
+      · subst h0
+        simp [Value.inv, Value.mul, Value.add, Function1.apply]
+      · have hneg : ¬ Real.pi * c⁻¹ ≤ 0 := not_le.2 (mul_pos Real.pi_pos (inv_pos.2 hpos))
+        simp [Value.inv, hpos.ne', Value.mul, Value.add, Function1.apply, Functions.expR,
+          Functions.sqrtR, Functions.pi, Numeric.denote, hneg]
+  rcases S with _ | _ | s
+  · exact key κ hκR fun x => by
+      rw [hfx, hE']
+      simp [scaleBy, Value.mul, Function1.apply, Functions.expR]
+  · apply if_neg
+    intro hdef
+    obtain ⟨r, hr⟩ := hdef.1 0
+    rw [hfx] at hr
+    simp [scaleBy, Value.mul] at hr
+  · have h := key (s * κ) (mul_ne_zero (hS s rfl) hκR) fun x => by
+      rw [hfx, hE']
+      simp [scaleBy, Value.mul, Function1.apply, Functions.expR, mul_assoc]
+    rw [h]
+    show Value.mul (some (s * (κ : ℝ))) _ = Value.mul (some s) (Value.mul (some (κ : ℝ)) _)
+    generalize Value.mul (Functions.expR.apply _) (Functions.sqrtR.apply _) = X
+    cases X <;> simp [Value.mul, mul_assoc]
+
 /-- The rows of moments: row `j` is the polynomial of the moments of `xʲ·P`. -/
 def momentRows (h : ℚ) (P : List ℚ) : List (List ℚ) → ℕ → List ℚ → List ℚ → Bool
   | [], _, _, _ => true
@@ -905,6 +1098,25 @@ theorem presentation_mass_gaussian_moments (p : DensityProgram) {S : Option (Opt
       (Functions.sqrtR.apply (Value.mul pi d)))) := by
   rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
   exact StepSource.gaussian_partialIntegral_moments κs q2 γ δ hf hE h2 h hm hk hg hd hpi
+
+/-- The mass of a density that is the exponential of a quadratic whose
+coefficients do not mention the variable, under a rational factor other than
+zero and an optional scale that is not zero where it is defined. It is missing
+where the curvature is not negative. -/
+theorem presentation_mass_gaussian_curvature (p : DensityProgram) {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ : ℚ)
+    (hf : StepSource.Bell p.density S none P (some E))
+    (hE : StepSource.Quadratic E (some c0) (some c1) (some c2))
+    (hP : decide (P = [κ] ∧ κ ≠ 0) = true) (hS : StepSource.scaleNonvanishing S)
+    {k g m pi : Option ℝ} (hk : k = some (Numeric.denote (s := .real) κ))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    massValue p.presentation = StepSource.scaleBy S (Value.mul k (Value.mul
+      (Functions.expR.apply
+        (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+      (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))) := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  exact StepSource.gaussian_partialIntegral_curvature κ hf hE hP hS hk hg hm hpi
 
 end QSym.Distribution.DensityProgram
 

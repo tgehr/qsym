@@ -97,6 +97,8 @@ private struct GaussianData{
 	Rational[] primitive; Rational constant,c0,c1,c2,vertex,width; uint factor,exponent,scale,circle;
 	bool symbolic; Rational[] moments; uint[] literals; uint curvature=uint.max,zero0=uint.max,zero1=uint.max;
 	Rational[][] rows; uint[][] rowLiterals;
+	// A curvature that is a term, and the scale that cannot vanish.
+	bool curved; uint nonzero=uint.max;
 }
 private struct IntegralSolution{
 	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell;
@@ -1714,6 +1716,23 @@ final class Bindings{
 	// that degree. The result is in the context of the binder.
 	// Nothing is claimed for a body outside this fragment: a limit that does
 	// not exist has no value. Without `build` this only recognizes the body.
+	// A term that is not zero where it is defined, by its form: a rational
+	// other than zero, π, an inverse, or a product of these. An exponential
+	// that does not mention the axis is part of the exponent.
+	private bool nonvanishingScalar(Term t){
+		auto v=arena.view(t);
+		if(arena.isNumber(t)) return arena.sort(t)==Sort.real_&&arena.number(t).im.zero&&!arena.number(t).re.zero;
+		if(v.op==Op.inv) return arena.sort(t)==Sort.real_;
+		if(v.op==Op.builtin) return v.value==Builtin.pi;
+		return v.op==Op.mul&&v.arity==2&&arena.sort(t)==Sort.real_&&nonvanishingScalar(arena.viewChild(t,0))&&nonvanishingScalar(arena.viewChild(t,1));
+	}
+	private bool nonvanishing(uint id){
+		auto n=nodes[id];
+		if(n.op==BoundOp.scalar) return nonvanishingScalar(arena.at(n.data));
+		if(n.op!=BoundOp.primitive||type(at(id))!=scalarType(Sort.real_)) return false;
+		auto v=arena.view(arena.at(n.data));
+		return v.op==Op.inv||v.op==Op.mul&&nonvanishing(n.a)&&nonvanishing(n.b);
+	}
 	// The parts of a density: those of its weights, joined from the measure
 	// outward.
 	private bool gaussianParts(uint[] weights,out BellParts total,bool build){
@@ -3432,6 +3451,38 @@ final class Bindings{
 			solution.bounds=d; solution.interval=true; solution.piecewise=true; solution.output=result.id;
 			return result;
 		}
+		// The exponential of a quadratic whose curvature is a term that does
+		// not mention the axis either: `exp(c₀-c₁²/(4·c₂))·√(-π/c₂)`. That is
+		// missing where the curvature is not negative, the inverse at zero and
+		// the root above it, as the observation is: the integrand is defined
+		// there and not integrable. Only under factors that cannot vanish: a
+		// rational other than zero, and a scale that is not zero where it is
+		// defined, by its form. A factor of zero leaves the zero function,
+		// which has an integral whatever the curvature is.
+		BoundTerm integrateCurvature(BoundTerm t,ref IntegralSolution solution,BellParts found){
+			auto p=found.p; while(p.length>1&&p[$-1].zero) p.length=p.length-1;
+			if(found.symbolic||p.length!=1||p[0].zero) return BoundTerm.init;
+			BellParts built; gaussianParts(solution.from,built,true);
+			if(built.scaled&&!nonvanishing(built.scale.id)) return BoundTerm.init;
+			GaussianData d; d.symbolic=true; d.curved=true; d.constant=p[0];
+			auto ctx=context(t),product=arena.mul(arena.real_(1),arena.real_(1),true),sum=arena.add(arena.real_(0),arena.real_(0),true);
+			BoundTerm coefficient(size_t i,ref uint zero){
+				if(built.c[i].present) return built.c[i].term;
+				auto filled=scalar(ctx,arena.real_(0)); zero=filled.id; return filled;
+			}
+			auto constant=coefficient(0,d.zero0),linear=coefficient(1,d.zero1),curvature=built.c[2].term;
+			d.curvature=curvature.id;
+			auto factor=scalar(ctx,arena.real_(d.constant)),quarter=scalar(ctx,arena.real_(Rational(-1)/Rational(4)));
+			auto minus=scalar(ctx,arena.real_(Rational(-1))),circle=scalar(ctx,arena.call(Builtin.pi,[]));
+			d.factor=factor.id; d.exponent=quarter.id; d.scale=minus.id; d.circle=circle.id;
+			auto inverse=primitive(arena.inv(arena.real_(1)),[curvature]);
+			auto exponent=primitive(sum,[constant,primitive(product,[primitive(product,[quarter,inverse]),primitive(product,[linear,linear])])]);
+			auto bell=primitive(product,[primitive(arena.call(Builtin.expR,[arena.real_(0)]),[exponent]),
+				primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[primitive(product,[circle,primitive(product,[minus,inverse])])])]);
+			auto result=primitive(product,[factor,bell]);
+			if(built.scaled){ d.nonzero=built.scale.id; result=primitive(product,[built.scale,result]); }
+			solution.bell=d; solution.gaussian=true; solution.piecewise=true; solution.output=result.id; return result;
+		}
 		// The whole line under a polynomial times the exponential of a quadratic
 		// whose constant and linear coefficients do not mention the axis and
 		// need not be numbers; its curvature is a negative rational. The
@@ -3442,7 +3493,9 @@ final class Bindings{
 		// coefficient is strict in the exponent and in the result.
 		BoundTerm integrateSymbolicGaussian(BoundTerm t,ref IntegralSolution solution){
 			BellParts found;
-			if(!gaussianParts(solution.from,found,false)||!found.exponent||!found.c[2].present||!found.c[2].closed||!(found.c[2].value<Rational(0))) return BoundTerm.init;
+			if(!gaussianParts(solution.from,found,false)||!found.exponent||!found.c[2].present) return BoundTerm.init;
+			if(!found.c[2].closed) return integrateCurvature(t,solution,found);
+			if(!(found.c[2].value<Rational(0))) return BoundTerm.init;
 			GaussianData d; d.symbolic=true; d.c2=found.c[2].value;
 			// The moment of degree j+1 is h·(c₁·μⱼ + j·μⱼ₋₁) for h = -1/(2·c₂).
 			// The polynomial of xʲ times the rational polynomial sums them
@@ -6999,6 +7052,25 @@ final class Bindings{
 			}
 			if(d.zero0!=uint.max)exponent="("~src~"Quadratic.fill0 "~literal(d.zero0,Rational(0))~" "~exponent~")";
 			if(d.zero1!=uint.max)exponent="("~src~"Quadratic.fill1 "~literal(d.zero1,Rational(0))~" "~exponent~")";
+			if(d.curved){
+				// The scale cannot vanish, by its form.
+				string scalarNonzero(Term t){
+					auto v=arena.view(t);string eval(Term x){return "(n"~to!string(x.id)~".eval ξ)";}
+					if(arena.isNumber(t))return "("~src~"Nonvanishing.literal "~q(arena.number(t).re)~" (Numeric.calculate_sound ξ n"~to!string(t.id)~" "~q(arena.number(t).re)~" rfl) rfl)";
+					if(v.op==Op.inv)return "("~src~"Nonvanishing.inv "~eval(arena.viewChild(t,0))~")";
+					if(v.op==Op.builtin)return "("~src~"Nonvanishing.pi rfl)";
+					return "("~src~"Nonvanishing.mul "~scalarNonzero(arena.viewChild(t,0))~" "~scalarNonzero(arena.viewChild(t,1))~")";
+				}
+				string nonzero(uint id){
+					auto n=nodes[id];if(n.op==BoundOp.scalar)return scalarNonzero(arena.at(n.data));
+					auto v=arena.view(arena.at(n.data));
+					if(v.op==Op.inv)return "("~src~"Nonvanishing.inv ("~name(n.a)~".eval ξ ρ))";
+					return "("~src~"Nonvanishing.mul "~nonzero(n.a)~" "~nonzero(n.b)~")";
+				}
+				enforce(d.nonzero==uint.max||nonvanishing(d.nonzero),"scale may vanish");
+				return "Distribution.DensityProgram.presentation_mass_gaussian_curvature "~program~" "~q(d.constant)~" "~evidence~" "~exponent~" rfl "~
+					(d.nonzero==uint.max?"trivial":nonzero(d.nonzero))~" "~literal(d.factor,d.constant)~" "~literal(d.exponent,Rational(-1)/Rational(4))~" "~literal(d.scale,Rational(-1))~" rfl";
+			}
 			// The monomials of a row, of which `count` are there, and the
 			// balanced sum of so many terms.
 			size_t count;
