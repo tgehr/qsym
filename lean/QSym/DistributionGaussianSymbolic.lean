@@ -1091,13 +1091,12 @@ private theorem eval_eventually_away {q : Polynomial ℝ} (hq : q ≠ 0) :
 
 /-- A polynomial that is not zero times the exponential of a quadratic is not
 integrable over the line unless the curvature is negative. -/
-theorem polynomial_exp_quadratic_not_integrable {P : List ℚ} (hP : polyZero P = false)
+theorem real_polynomial_exp_quadratic_not_integrable {q : Polynomial ℝ} (hq : q ≠ 0)
     (a b : ℝ) {c : ℝ} (hc : 0 ≤ c) :
-    ¬ Integrable (fun x : ℝ => polyEval P x * Real.exp (a + b * x + c * x ^ 2)) volume := by
+    ¬ Integrable (fun x : ℝ => q.eval x * Real.exp (a + b * x + c * x ^ 2)) volume := by
   intro hi
-  have hq := QSym.Limit.toPoly_ne_zero hP
-  have above : ∀ (δ x : ℝ), 0 ≤ δ → δ ≤ |polyEval P x| → 0 ≤ b * x →
-      ‖δ * Real.exp a‖ ≤ ‖polyEval P x * Real.exp (a + b * x + c * x ^ 2)‖ := fun δ x h0 hx hbx => by
+  have above : ∀ (δ x : ℝ), 0 ≤ δ → δ ≤ |q.eval x| → 0 ≤ b * x →
+      ‖δ * Real.exp a‖ ≤ ‖q.eval x * Real.exp (a + b * x + c * x ^ 2)‖ := fun δ x h0 hx hbx => by
     rw [norm_mul, norm_mul, Real.norm_of_nonneg h0, Real.norm_of_nonneg (Real.exp_pos a).le,
       Real.norm_eq_abs, Real.norm_of_nonneg (Real.exp_pos _).le]
     have h2 : 0 ≤ c * x ^ 2 := mul_nonneg hc (sq_nonneg x)
@@ -1109,15 +1108,14 @@ theorem polynomial_exp_quadratic_not_integrable {P : List ℚ} (hP : polyZero P 
       refine Integrable.mono' hi.norm.integrableOn aestronglyMeasurable_const ?_
       refine (ae_restrict_iff' measurableSet_Ici).2 (Filter.Eventually.of_forall fun x hx => ?_)
       have hx' : max M 0 ≤ x := hx
-      have h1 := hM x (le_trans (le_max_left _ _) hx')
-      rw [QSym.Limit.eval_toPoly] at h1
-      exact above δ x hδ.le h1 (mul_nonneg hb (le_trans (le_max_right _ _) hx'))
+      exact above δ x hδ.le (hM x (le_trans (le_max_left _ _) hx'))
+        (mul_nonneg hb (le_trans (le_max_right _ _) hx'))
     rw [integrableOn_const] at hs
     rcases hs with h0 | hfin
     · exact (mul_pos hδ (Real.exp_pos a)).ne' h0
     · rw [Real.volume_Ici] at hfin
       exact lt_irrefl _ hfin
-  · have hq' : (QSym.Limit.toPoly P).comp (-Polynomial.X) ≠ 0 := fun h0 => hq (by
+  · have hq' : q.comp (-Polynomial.X) ≠ 0 := fun h0 => hq (by
       have h1 := congrArg (fun r : Polynomial ℝ => r.comp (-Polynomial.X)) h0
       simpa [Polynomial.comp_assoc] using h1)
     obtain ⟨δ, hδ, hev⟩ := eval_eventually_away hq'
@@ -1128,8 +1126,7 @@ theorem polynomial_exp_quadratic_not_integrable {P : List ℚ} (hP : polyZero P 
       have hx' : x ≤ min (-M) 0 := hx
       have hxM : M ≤ -x := by linarith [le_trans hx' (min_le_left _ _)]
       have h1 := hM (-x) hxM
-      rw [Polynomial.eval_comp, Polynomial.eval_neg, Polynomial.eval_X, neg_neg,
-        QSym.Limit.eval_toPoly] at h1
+      rw [Polynomial.eval_comp, Polynomial.eval_neg, Polynomial.eval_X, neg_neg] at h1
       exact above δ x hδ.le h1
         (mul_nonneg_of_nonpos_of_nonpos (not_le.1 hb).le (le_trans hx' (min_le_right _ _)))
     rw [integrableOn_const] at hs
@@ -1137,6 +1134,13 @@ theorem polynomial_exp_quadratic_not_integrable {P : List ℚ} (hP : polyZero P 
     · exact (mul_pos hδ (Real.exp_pos a)).ne' h0
     · rw [Real.volume_Iic] at hfin
       exact lt_irrefl _ hfin
+
+/-- The same for a polynomial with rational coefficients. -/
+theorem polynomial_exp_quadratic_not_integrable {P : List ℚ} (hP : polyZero P = false)
+    (a b : ℝ) {c : ℝ} (hc : 0 ≤ c) :
+    ¬ Integrable (fun x : ℝ => polyEval P x * Real.exp (a + b * x + c * x ^ 2)) volume := by
+  have h := real_polynomial_exp_quadratic_not_integrable (QSym.Limit.toPoly_ne_zero hP) a b hc
+  simpa only [QSym.Limit.eval_toPoly] using h
 
 /-- Every row is zero. -/
 def poly2Zero : List (List ℚ) → Bool
@@ -1189,6 +1193,111 @@ private theorem momentValue_curvature (b h : ℝ) (K : List (List ℚ)) (l : ℕ
       simp only [coefReal]
       ring
 
+/-- A quadratic is undefined where a coefficient is. -/
+private theorem Quadratic.missing {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
+    (hE : Quadratic E (some c0) (some c1) (some c2)) (h : c0 = none ∨ c1 = none ∨ c2 = none)
+    (x : ℝ) : E x = none := by
+  rw [hE.equation]
+  rcases h with rfl | rfl | rfl
+  · simp [coefValue, Value.add]
+  · cases c0 <;> simp [coefValue, Value.add, Value.mul]
+  · cases c0 <;> cases c1 <;> simp [coefValue, Value.add, Value.mul]
+
+/-- So is the closed form: in the exponent or under the root. -/
+private theorem curvature_missing (S : Option (Option ℝ)) (k g m pi : Option ℝ)
+    {c0 c1 c2 : Option ℝ} (h : c0 = none ∨ c1 = none ∨ c2 = none) :
+    scaleBy S (Value.mul k (Value.mul
+      (Functions.expR.apply
+        (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+      (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))) = none := by
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  have right : ∀ X : Option ℝ, Value.mul k (Value.mul X none) = none := fun X => by
+    cases k <;> cases X <;> rfl
+  have left : ∀ X : Option ℝ, Value.mul k (Value.mul (Functions.expR.apply none) X) = none :=
+    fun X => by cases k <;> simp [Value.mul, Function1.apply]
+  rcases h with rfl | rfl | rfl
+  · have : Value.add (none : Option ℝ)
+        (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1)) = none := rfl
+    rw [this, left, hnone]
+  · have : Value.add c0
+        (Value.mul (Value.mul g (Value.inv c2)) (Value.mul (none : Option ℝ) none)) = none := by
+      cases c0 <;> cases Value.mul g (Value.inv c2) <;> rfl
+    rw [this, left, hnone]
+  · have : Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv (none : Option ℝ)))) =
+        none := by
+      cases pi <;> cases m <;> simp [Value.mul, Value.inv, Function1.apply]
+    rw [this, right, hnone]
+
+/-- A scale that is not zero times a real function times the exponential of a
+quadratic with real coefficients. Where the curvature is negative the function
+has the moment `k` relative to the Gaussian integral; elsewhere the product is
+not integrable, and the closed form is missing with the observation: the
+inverse at zero, the root above it. -/
+private theorem curvature_scaled {f : ℝ → Option ℝ} (Q : ℝ → ℝ) {a b c : ℝ}
+    {k g m pi : Option ℝ} {s : ℝ} (hs : s ≠ 0)
+    (hfs : ∀ x, f x = some (s * (Q x * Real.exp (a + b * x + c * x ^ 2))))
+    (hneg : c < 0 → ∃ κ : ℝ, k = some κ ∧
+      Integrable (fun x : ℝ => Q x * Real.exp (a + b * x + c * x ^ 2)) volume ∧
+      (∫ x : ℝ, Q x * Real.exp (a + b * x + c * x ^ 2)) =
+        κ * (Real.exp (a - b ^ 2 / (4 * c)) * √(Real.pi / (-c))))
+    (hpos : 0 ≤ c → ¬ Integrable (fun x : ℝ => Q x * Real.exp (a + b * x + c * x ^ 2)) volume)
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hmn : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume f = Value.mul (some s) (Value.mul k (Value.mul
+      (Functions.expR.apply (Value.add (some a)
+        (Value.mul (Value.mul g (Value.inv (some c))) (Value.mul (some b) (some b)))))
+      (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv (some c))))))) := by
+  have he : (fun x => (f x).getD 0) =
+      fun x => s * (Q x * Real.exp (a + b * x + c * x ^ 2)) := by
+    funext x
+    rw [hfs]
+    rfl
+  by_cases hc : c < 0
+  · obtain ⟨κ, hkv, hi0, hv⟩ := hneg hc
+    have hi := hi0.const_mul s
+    have hne : c ≠ 0 := hc.ne
+    rw [partialIntegral_valid volume f (fun x => ⟨_, hfs x⟩) (by rw [he]; exact hi), he,
+      integral_const_mul, hv, hkv, hg, hmn, hpi]
+    have hinv : 0 < -c⁻¹ := by
+      have := inv_lt_zero.2 hc
+      linarith
+    have hle : Real.pi * c⁻¹ ≤ 0 := by nlinarith [Real.pi_pos]
+    have h1 : a - b ^ 2 / (4 * c) = a + -1 / 4 * c⁻¹ * (b * b) := by
+      field_simp
+      ring
+    have h2 : Real.pi / -c = Real.pi * (-1 * c⁻¹) := by
+      rw [div_eq_mul_inv, inv_neg]
+      ring
+    rw [h1, h2]
+    simp [Value.mul, Value.add, Value.inv, hne, Function1.apply, Functions.expR,
+      Functions.sqrtR, Functions.pi, Numeric.denote, hle]
+  · have hc' : 0 ≤ c := not_lt.1 hc
+    have hn : partialIntegral volume f = none := by
+      apply if_neg
+      rintro ⟨_, hi⟩
+      rw [he] at hi
+      have hi' := hi.const_mul s⁻¹
+      have he2 : (fun x => s⁻¹ * (s * (Q x * Real.exp (a + b * x + c * x ^ 2)))) =
+          fun x => Q x * Real.exp (a + b * x + c * x ^ 2) := by
+        funext x
+        rw [← mul_assoc, inv_mul_cancel₀ hs, one_mul]
+      rw [he2] at hi'
+      exact hpos hc' hi'
+    have hroot : Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv (some c)))) =
+        none := by
+      rw [hmn, hpi]
+      rcases hc'.eq_or_lt with h0 | hlt
+      · subst h0
+        simp [Value.inv, Value.mul, Function1.apply]
+      · have hneg' : ¬ Real.pi * c⁻¹ ≤ 0 := not_le.2 (mul_pos Real.pi_pos (inv_pos.2 hlt))
+        simp [Value.inv, hlt.ne', Value.mul, Function1.apply, Functions.sqrtR, Functions.pi,
+          Numeric.denote, hneg']
+    have right : ∀ X : Option ℝ, Value.mul k (Value.mul X none) = none := fun X => by
+      cases k <;> cases X <;> rfl
+    rw [hn, hroot, right]
+    rfl
+
 /-- The checks of a Gaussian integral under a rational polynomial where the
 curvature is a term: the polynomial is not zero, and the rows are its moments
 as a polynomial in the linear coefficient and in `h = -1/(2·c₂)`. -/
@@ -1220,116 +1329,53 @@ theorem gaussian_partialIntegral_curvature {f : ℝ → Option ℝ} {S : Option 
   obtain ⟨hP, hKz⟩ := hK
   have hfx : ∀ x, f x = scaleBy S (Value.mul (some (polyEval P x)) (Functions.expR.apply (E x))) :=
     fun x => hf.plain x
-  have hnone : scaleBy S none = none := by
-    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
   have undefined : (∀ x, E x = none) → partialIntegral volume f = none := fun hn => by
     apply if_neg
     intro hdef
     obtain ⟨r, hr⟩ := hdef.1 0
     rw [hfx, hn] at hr
-    have : Value.mul (some (polyEval P 0)) (Functions.expR.apply (none : Option ℝ)) = none := by
-      simp [Function1.apply, Value.mul]
-    rw [this, hnone] at hr
-    cases hr
-  have right : ∀ X : Option ℝ, Value.mul k (Value.mul X none) = none := fun X => by
-    cases k <;> cases X <;> rfl
-  have left : ∀ X : Option ℝ, Value.mul k (Value.mul (Functions.expR.apply none) X) = none :=
-    fun X => by cases k <;> simp [Value.mul, Function1.apply]
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul, Function1.apply] at hr
   rcases c0 with _ | a
-  · rw [undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add]]
-    have : Value.add (none : Option ℝ)
-        (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1)) = none := rfl
-    rw [this, left, hnone]
+  · rw [undefined (hE.missing (Or.inl rfl)), curvature_missing S k g m pi (Or.inl rfl)]
   rcases c1 with _ | b
-  · rw [undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add, Value.mul]]
-    have : Value.add (some a)
-        (Value.mul (Value.mul g (Value.inv c2)) (Value.mul (none : Option ℝ) none)) = none := by
-      cases Value.mul g (Value.inv c2) <;> rfl
-    rw [this, left, hnone]
+  · rw [undefined (hE.missing (Or.inr (Or.inl rfl))),
+      curvature_missing S k g m pi (Or.inr (Or.inl rfl))]
   rcases c2 with _ | c
-  · rw [undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add, Value.mul]]
-    have : Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv (none : Option ℝ)))) =
-        none := by
-      cases pi <;> cases m <;> simp [Value.mul, Value.inv, Function1.apply]
-    rw [this, right, hnone]
+  · rw [undefined (hE.missing (Or.inr (Or.inr rfl))),
+      curvature_missing S k g m pi (Or.inr (Or.inr rfl))]
   have hE' : ∀ x, E x = some (a + b * x + c * x ^ 2) := fun x => by
     rw [hE.equation]
     show some (a + (b * x + c * x ^ 2)) = some (a + b * x + c * x ^ 2)
     congr 1
     ring
-  -- The result under a factor that is not zero.
-  have key : ∀ s : ℝ, s ≠ 0 →
-      (∀ x, f x = some (s * (polyEval P x * Real.exp (a + b * x + c * x ^ 2)))) →
-      partialIntegral volume f = Value.mul (some s) (Value.mul k (Value.mul
-        (Functions.expR.apply (Value.add (some a)
-          (Value.mul (Value.mul g (Value.inv (some c))) (Value.mul (some b) (some b)))))
-        (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv (some c))))))) := by
-    intro s hs hfs
-    have he : (fun x => (f x).getD 0) =
-        fun x => s * (polyEval P x * Real.exp (a + b * x + c * x ^ 2)) := by
-      funext x
-      rw [hfs]
-      rfl
-    by_cases hc : c < 0
-    · obtain ⟨hi0, hv⟩ := gaussian_moments2 a b hc P
-      have hi := hi0.const_mul s
-      have hne : c ≠ 0 := hc.ne
-      have hhv : Value.mul u (Value.inv (some c)) = some (-1 / (2 * c)) := by
-        rw [hu]
-        simp [Value.mul, Value.inv, hne, Numeric.denote]
-        field_simp
-      rw [hhv] at hm
-      have hkv : k = some (poly2Eval K b (-1 / (2 * c))) := by
-        rw [hk.value, hm.value b rfl (curvatureCoefs_defined _ K 0), momentValue_curvature]
-        simp
-      have hz := poly2Eval_zero hKz b (-1 / (2 * c))
-      rw [poly2Eval_add, poly2Eval_scale] at hz
-      have hK' : poly2Eval (gaussMoments2 P 0 [[1]] []) b (-1 / (2 * c)) =
-          poly2Eval K b (-1 / (2 * c)) := by
-        push_cast at hz
-        linarith
-      rw [partialIntegral_valid volume f (fun x => ⟨_, hfs x⟩) (by rw [he]; exact hi), he,
-        integral_const_mul, hv, hK', hkv, hg, hmn, hpi]
-      have hinv : 0 < -c⁻¹ := by
-        have := inv_lt_zero.2 hc
-        linarith
-      have hpos : Real.pi * c⁻¹ ≤ 0 := by nlinarith [Real.pi_pos]
-      have h1 : a - b ^ 2 / (4 * c) = a + -1 / 4 * c⁻¹ * (b * b) := by
-        field_simp
-        ring
-      have h2 : Real.pi / -c = Real.pi * (-1 * c⁻¹) := by
-        rw [div_eq_mul_inv, inv_neg]
-        ring
-      rw [h1, h2]
-      simp [Value.mul, Value.add, Value.inv, hne, Function1.apply, Functions.expR,
-        Functions.sqrtR, Functions.pi, Numeric.denote, hpos]
-    · have hc' : 0 ≤ c := not_lt.1 hc
-      have hn : partialIntegral volume f = none := by
-        apply if_neg
-        rintro ⟨_, hi⟩
-        rw [he] at hi
-        have hi' := hi.const_mul s⁻¹
-        have he2 : (fun x => s⁻¹ * (s * (polyEval P x * Real.exp (a + b * x + c * x ^ 2)))) =
-            fun x => polyEval P x * Real.exp (a + b * x + c * x ^ 2) := by
-          funext x
-          rw [← mul_assoc, inv_mul_cancel₀ hs, one_mul]
-        rw [he2] at hi'
-        exact polynomial_exp_quadratic_not_integrable hP a b hc' hi'
-      have hroot : Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv (some c)))) =
-          none := by
-        rw [hmn, hpi]
-        rcases hc'.eq_or_lt with h0 | hpos
-        · subst h0
-          simp [Value.inv, Value.mul, Function1.apply]
-        · have hneg : ¬ Real.pi * c⁻¹ ≤ 0 := not_le.2 (mul_pos Real.pi_pos (inv_pos.2 hpos))
-          simp [Value.inv, hpos.ne', Value.mul, Function1.apply, Functions.sqrtR, Functions.pi,
-            Numeric.denote, hneg]
-      rw [hn, hroot, right]
-      rfl
+  have hneg : c < 0 → ∃ κ : ℝ, k = some κ ∧
+      Integrable (fun x : ℝ => polyEval P x * Real.exp (a + b * x + c * x ^ 2)) volume ∧
+      (∫ x : ℝ, polyEval P x * Real.exp (a + b * x + c * x ^ 2)) =
+        κ * (Real.exp (a - b ^ 2 / (4 * c)) * √(Real.pi / (-c))) := fun hc => by
+    obtain ⟨hi, hv⟩ := gaussian_moments2 a b hc P
+    have hne : c ≠ 0 := hc.ne
+    have hhv : Value.mul u (Value.inv (some c)) = some (-1 / (2 * c)) := by
+      rw [hu]
+      simp [Value.mul, Value.inv, hne, Numeric.denote]
+      field_simp
+    rw [hhv] at hm
+    have hkv : k = some (poly2Eval K b (-1 / (2 * c))) := by
+      rw [hk.value, hm.value b rfl (curvatureCoefs_defined _ K 0), momentValue_curvature]
+      simp
+    have hz := poly2Eval_zero hKz b (-1 / (2 * c))
+    rw [poly2Eval_add, poly2Eval_scale] at hz
+    have hK' : poly2Eval (gaussMoments2 P 0 [[1]] []) b (-1 / (2 * c)) =
+        poly2Eval K b (-1 / (2 * c)) := by
+      push_cast at hz
+      linarith
+    exact ⟨_, hkv, hi, by rw [hv, hK']⟩
+  have hpos : 0 ≤ c →
+      ¬ Integrable (fun x : ℝ => polyEval P x * Real.exp (a + b * x + c * x ^ 2)) volume :=
+    fun hc => polynomial_exp_quadratic_not_integrable hP a b hc
   rcases S with _ | _ | s
-  · have h := key 1 one_ne_zero fun x => by
+  · have h := curvature_scaled (f := f) (fun x => polyEval P x) one_ne_zero (fun x => by
       rw [hfx, hE']
-      simp [scaleBy, Value.mul, Function1.apply, Functions.expR]
+      simp [scaleBy, Value.mul, Function1.apply, Functions.expR]) hneg hpos hg hmn hpi
     rw [h]
     exact Value.mul_one_left _
   · apply if_neg
@@ -1337,9 +1383,379 @@ theorem gaussian_partialIntegral_curvature {f : ℝ → Option ℝ} {S : Option 
     obtain ⟨r, hr⟩ := hdef.1 0
     rw [hfx] at hr
     simp [scaleBy, Value.mul] at hr
-  · exact key s (hS s rfl) fun x => by
+  · exact curvature_scaled (fun x => polyEval P x) (hS s rfl) (fun x => by
       rw [hfx, hE']
-      simp [scaleBy, Value.mul, Function1.apply, Functions.expR]
+      simp [scaleBy, Value.mul, Function1.apply, Functions.expR]) hneg hpos hg hmn hpi
+
+/-! The same under a polynomial whose coefficients do not mention the
+variable: the integral is linear in them, and each meets the moments of its
+power, a table of rows. -/
+
+/-- The polynomial of the real values of the coefficients. -/
+noncomputable def realPoly : List (Option (Option ℝ)) → Polynomial ℝ
+  | [] => 0
+  | c :: cs => Polynomial.C (coefReal c) + Polynomial.X * realPoly cs
+
+theorem eval_realPoly (cs : List (Option (Option ℝ))) (x : ℝ) :
+    (realPoly cs).eval x = realEval cs x := by
+  induction cs with
+  | nil => simp [realPoly, realEval]
+  | cons c cs ih => simp [realPoly, realEval, ih]
+
+/-- A coefficient that is present and not zero where it is defined. -/
+inductive SomeNonvanishing : List (Option (Option ℝ)) → Prop
+  | here {c : Option ℝ} {cs : List (Option (Option ℝ))} (h : Nonvanishing c) :
+      SomeNonvanishing (some c :: cs)
+  | later {c : Option (Option ℝ)} {cs : List (Option (Option ℝ))} (h : SomeNonvanishing cs) :
+      SomeNonvanishing (c :: cs)
+
+/-- Such a polynomial is not zero where its coefficients are defined. -/
+theorem SomeNonvanishing.realPoly_ne_zero {cs : List (Option (Option ℝ))}
+    (h : SomeNonvanishing cs) (hd : some none ∉ cs) : realPoly cs ≠ 0 := by
+  induction h with
+  | @here c cs hn =>
+    intro h0
+    rcases c with _ | v
+    · exact hd (by simp)
+    · have h1 := congrArg (fun p : Polynomial ℝ => p.coeff 0) h0
+      simp [realPoly, coefReal] at h1
+      exact hn v rfl h1
+  | @later c cs _ ih =>
+    intro h0
+    have hz : realPoly cs = 0 := by
+      ext n
+      have h1 := congrArg (fun p : Polynomial ℝ => p.coeff (n + 1)) h0
+      simpa [realPoly, Polynomial.coeff_C] using h1
+    exact ih (fun hm => hd (by simp [hm])) hz
+
+/-- The sum of the coefficients times their tables at the linear coefficient
+and at `h`. -/
+def momentValue2 (b h : ℝ) : List (Option (Option ℝ)) → List (List (List ℚ)) → ℝ
+  | c :: cs, K :: Ks => coefReal c * poly2Eval K b h + momentValue2 b h cs Ks
+  | _, _ => 0
+
+/-- The tables of moments: table `j` is the polynomial of the moments of
+`xʲ·P`, and it has a row that is not zero. -/
+def curvatureRows (P : List ℚ) : List (List (List ℚ)) → ℕ → List (List ℚ) → List (List ℚ) → Bool
+  | [], _, _, _ => true
+  | K :: Ks, j, μ, μ' =>
+    poly2Zero (poly2Add K (poly2Scale (-1) (gaussMoments2 P j μ μ'))) && !poly2Zero K &&
+      curvatureRows P Ks (j + 1) ([] :: poly2Add (poly2Shift μ) (poly2Scale j μ')) μ
+
+theorem curvatureRows_nonzero (P : List ℚ) :
+    ∀ (Ks : List (List (List ℚ))) (j : ℕ) (μ μ' : List (List ℚ)),
+      curvatureRows P Ks j μ μ' = true → ∀ K ∈ Ks, poly2Zero K = false := by
+  intro Ks
+  induction Ks with
+  | nil => intro _ _ _ _ K hK; simp at hK
+  | cons K Ks ih =>
+    intro j μ μ' h K' hK'
+    simp only [curvatureRows, Bool.and_eq_true, Bool.not_eq_true'] at h
+    rcases List.mem_cons.1 hK' with rfl | hmem
+    · exact h.1.2
+    · exact ih _ _ _ h.2 K' hmem
+
+/-- The moments of a polynomial with such coefficients times a rational one:
+coefficient by coefficient, each against its table. -/
+theorem curvatureRows_integral (c0 c1 : ℝ) {c2 : ℝ} (hc : c2 < 0) {h : ℝ}
+    (hh : h * (2 * c2) = -1) (G : ℝ) (P : List ℚ) :
+    ∀ (cs : List (Option (Option ℝ))) (Ks : List (List (List ℚ))) (j : ℕ) (μ μ' : List (List ℚ)),
+      cs.length = Ks.length → curvatureRows P Ks j μ μ' = true →
+      (∫ x : ℝ, x ^ j * Real.exp (c0 + c1 * x + c2 * x ^ 2)) = poly2Eval μ c1 h * G →
+      (j : ℝ) * (∫ x : ℝ, x ^ (j - 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
+        j * (poly2Eval μ' c1 h * G) →
+      Integrable (fun x : ℝ => x ^ j * realEval cs x * polyEval P x *
+          Real.exp (c0 + c1 * x + c2 * x ^ 2)) ∧
+        (∫ x : ℝ, x ^ j * realEval cs x * polyEval P x * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
+          momentValue2 c1 h cs Ks * G := by
+  intro cs
+  induction cs with
+  | nil =>
+    intro Ks j μ μ' _ _ _ _
+    simp [realEval, momentValue2]
+  | cons c cs ih =>
+    intro Ks j μ μ' hlen hrows h1 h2
+    cases Ks with
+    | nil => simp at hlen
+    | cons K Ks =>
+      simp only [curvatureRows, Bool.and_eq_true] at hrows
+      obtain ⟨⟨hK, _⟩, hrest⟩ := hrows
+      obtain ⟨hn1, hn2⟩ := moment_next2 c0 c1 hc hh G j μ μ' h1 h2
+      obtain ⟨hi, hv⟩ := ih Ks (j + 1) _ μ (by simpa using hlen) hrest hn1 hn2
+      obtain ⟨hpi, hpv⟩ := gaussMoments2_integral c0 c1 hc hh G P j μ μ' h1 h2
+      have hz := poly2Eval_zero hK c1 h
+      rw [poly2Eval_add, poly2Eval_scale] at hz
+      have hK' : poly2Eval (gaussMoments2 P j μ μ') c1 h = poly2Eval K c1 h := by
+        push_cast at hz
+        linarith
+      have hsplit : (fun x : ℝ => x ^ j * realEval (c :: cs) x * polyEval P x *
+          Real.exp (c0 + c1 * x + c2 * x ^ 2)) = fun x =>
+          coefReal c * (x ^ j * polyEval P x * Real.exp (c0 + c1 * x + c2 * x ^ 2)) +
+            x ^ (j + 1) * realEval cs x * polyEval P x * Real.exp (c0 + c1 * x + c2 * x ^ 2) := by
+        funext x
+        simp only [realEval]
+        ring
+      refine ⟨by rw [hsplit]; exact (hpi.const_mul _).add hi, ?_⟩
+      rw [hsplit, integral_add (hpi.const_mul _) hi, integral_const_mul, hpv, hv, hK']
+      simp only [momentValue2]
+      ring
+
+/-- A coefficient times the power of `h` in front of a row; the first row has
+none. -/
+def scaledPower (c h : Option ℝ) : ℕ → Option ℝ
+  | 0 => c
+  | l + 1 => Value.mul c (curvaturePower h (l + 1))
+
+/-- The coefficients of the rows of a table: its coefficient times the powers
+of `h`, absent in front of a row that is zero and where the coefficient is. -/
+def tableCoefs (h : Option ℝ) : Option (Option ℝ) → List (List ℚ) → ℕ → List (Option (Option ℝ))
+  | _, [], _ => []
+  | none, _ :: K, l => none :: tableCoefs h none K (l + 1)
+  | some c, κ :: K, l =>
+    (if polyZero κ then none else some (scaledPower c h l)) :: tableCoefs h (some c) K (l + 1)
+
+/-- The coefficients of the rows of all the tables, in order. -/
+def momentCoefs (h : Option ℝ) :
+    List (Option (Option ℝ)) → List (List (List ℚ)) → List (Option (Option ℝ))
+  | c :: cs, K :: Ks => tableCoefs h c K 0 ++ momentCoefs h cs Ks
+  | _, _ => []
+
+private theorem scaledPower_some (a h : ℝ) (l : ℕ) :
+    scaledPower (some a) (some h) l = some (a * h ^ l) := by
+  rcases l with _ | l
+  · simp [scaledPower]
+  · simp [scaledPower, curvaturePower_some, Value.mul]
+
+private theorem scaledPower_none (h : Option ℝ) (l : ℕ) : scaledPower none h l = none := by
+  rcases l with _ | l <;> rfl
+
+private theorem tableCoefs_length (h : Option ℝ) (c : Option (Option ℝ)) (K : List (List ℚ))
+    (l : ℕ) : (tableCoefs h c K l).length = K.length := by
+  induction K generalizing l with
+  | nil => cases c <;> rfl
+  | cons κ K ih => cases c <;> simp [tableCoefs, ih]
+
+private theorem momentValue_append (b : ℝ) {cs : List (Option (Option ℝ))} {κs : List (List ℚ)}
+    (hl : cs.length = κs.length) (cs' : List (Option (Option ℝ))) (κs' : List (List ℚ)) :
+    momentValue b (cs ++ cs') (κs ++ κs') = momentValue b cs κs + momentValue b cs' κs' := by
+  induction cs generalizing κs with
+  | nil =>
+    cases κs with
+    | nil => simp [momentValue]
+    | cons κ κs => simp at hl
+  | cons c cs ih =>
+    cases κs with
+    | nil => simp at hl
+    | cons κ κs =>
+      simp only [List.cons_append, momentValue, ih (by simpa using hl)]
+      ring
+
+private theorem momentValue_table (b h : ℝ) {c : Option (Option ℝ)} (hc : c ≠ some none)
+    (K : List (List ℚ)) (l : ℕ) :
+    momentValue b (tableCoefs (some h) c K l) K = coefReal c * (h ^ l * poly2Eval K b h) := by
+  induction K generalizing l with
+  | nil => cases c <;> simp [tableCoefs, momentValue, poly2Eval]
+  | cons κ K ih =>
+    rcases c with _ | _ | a
+    · simp [tableCoefs, momentValue, coefReal, ih]
+    · exact absurd rfl hc
+    · simp only [tableCoefs, momentValue, poly2Eval, ih (l + 1)]
+      by_cases hz : polyZero κ = true
+      · rw [if_pos hz, polyEval_zero hz]
+        simp only [coefReal]
+        ring
+      · rw [if_neg hz, scaledPower_some]
+        simp only [coefReal]
+        ring
+
+private theorem momentValue_coefs (b h : ℝ) :
+    ∀ (cs : List (Option (Option ℝ))) (Ks : List (List (List ℚ))), some none ∉ cs →
+      momentValue b (momentCoefs (some h) cs Ks) Ks.flatten = momentValue2 b h cs Ks := by
+  intro cs
+  induction cs with
+  | nil => intro Ks _; cases Ks <;> simp [momentCoefs, momentValue, momentValue2]
+  | cons c cs ih =>
+    intro Ks hd
+    cases Ks with
+    | nil => simp [momentCoefs, momentValue, momentValue2]
+    | cons K Ks =>
+      have hc : c ≠ some none := fun hc => hd (by simp [hc])
+      have hcs : some none ∉ cs := fun hm => hd (by simp [hm])
+      rw [momentCoefs, List.flatten_cons, momentValue_append b (tableCoefs_length _ _ _ _),
+        momentValue_table b h hc, ih Ks hcs]
+      simp [momentValue2]
+
+private theorem tableCoefs_defined (h : ℝ) {c : Option (Option ℝ)} (hc : c ≠ some none)
+    (K : List (List ℚ)) (l : ℕ) : some none ∉ tableCoefs (some h) c K l := by
+  induction K generalizing l with
+  | nil => cases c <;> simp [tableCoefs]
+  | cons κ K ih =>
+    rcases c with _ | _ | a
+    · simp only [tableCoefs, List.mem_cons, not_or]
+      exact ⟨by simp, ih (l + 1)⟩
+    · exact absurd rfl hc
+    · simp only [tableCoefs, List.mem_cons, not_or]
+      refine ⟨?_, ih (l + 1)⟩
+      split_ifs <;> simp [scaledPower_some]
+
+private theorem momentCoefs_defined (h : ℝ) :
+    ∀ (cs : List (Option (Option ℝ))) (Ks : List (List (List ℚ))), some none ∉ cs →
+      some none ∉ momentCoefs (some h) cs Ks := by
+  intro cs
+  induction cs with
+  | nil => intro Ks _; cases Ks <;> simp [momentCoefs]
+  | cons c cs ih =>
+    intro Ks hd
+    cases Ks with
+    | nil => simp [momentCoefs]
+    | cons K Ks =>
+      have hc : c ≠ some none := fun hc => hd (by simp [hc])
+      have hcs : some none ∉ cs := fun hm => hd (by simp [hm])
+      simp only [momentCoefs, List.mem_append, not_or]
+      exact ⟨tableCoefs_defined h hc K 0, ih Ks hcs⟩
+
+/-- An undefined coefficient is in front of a row of its table that is not
+zero. -/
+private theorem tableCoefs_undefined (h : Option ℝ) {K : List (List ℚ)}
+    (hK : poly2Zero K = false) (l : ℕ) : some none ∈ tableCoefs h (some none) K l := by
+  induction K generalizing l with
+  | nil => simp [poly2Zero] at hK
+  | cons κ K ih =>
+    simp only [tableCoefs, List.mem_cons]
+    by_cases hz : polyZero κ = true
+    · right
+      refine ih ?_ (l + 1)
+      simpa [poly2Zero, hz] using hK
+    · left
+      rw [if_neg hz, scaledPower_none]
+
+private theorem momentCoefs_undefined (h : Option ℝ) :
+    ∀ (cs : List (Option (Option ℝ))) (Ks : List (List (List ℚ))), cs.length = Ks.length →
+      (∀ K ∈ Ks, poly2Zero K = false) → some none ∈ cs → some none ∈ momentCoefs h cs Ks := by
+  intro cs
+  induction cs with
+  | nil => intro Ks _ _ hu; simp at hu
+  | cons c cs ih =>
+    intro Ks hl hK hu
+    cases Ks with
+    | nil => simp at hl
+    | cons K Ks =>
+      simp only [momentCoefs, List.mem_append]
+      rcases List.mem_cons.1 hu with hu | hu
+      · left
+        rw [← hu]
+        exact tableCoefs_undefined h (hK K (by simp)) 0
+      · right
+        exact ih Ks (by simpa using hl) (fun K' hK' => hK K' (by simp [hK'])) hu
+
+/-- The checks of a Gaussian integral under a polynomial whose coefficients do
+not mention the variable where the curvature is a term: the rational polynomial
+is not zero, and the tables are the moments of the powers times it. -/
+def curvatureMomentsCheck (P : List ℚ) (Ks : List (List (List ℚ))) : Bool :=
+  !polyZero P && curvatureRows P Ks 0 [[1]] []
+
+/-- The integral of a polynomial whose coefficients do not mention the
+variable times a rational one and the exponential of a quadratic whose
+curvature does not mention it either. One of the coefficients is not zero
+where it is defined, by its form, so the polynomial is not zero where they are
+all defined: where the curvature is not negative the integrand is then not
+integrable, and the result is missing with it. A coefficient that is undefined
+leaves the integrand undefined everywhere, and the sum with it. -/
+theorem gaussian_partialIntegral_curvature_moments {f : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {cs : List (Option (Option ℝ))} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
+    (Ks : List (List (List ℚ))) (hf : Bell f S (some cs) P (some E))
+    (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hK : curvatureMomentsCheck P Ks = true) (hl : cs.length = Ks.length)
+    (hS : scaleNonvanishing S) (hN : SomeNonvanishing cs)
+    {k g m u pi : Option ℝ} {ms : List (Option ℝ)}
+    (hm : MomentTerms c1 (momentCoefs (Value.mul u (Value.inv c2)) cs Ks) Ks.flatten ms)
+    (hk : Sums ms k)
+    (hu : u = some (Numeric.denote (s := .real) (-1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hmn : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume f = scaleBy S (Value.mul k (Value.mul
+      (Functions.expR.apply
+        (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+      (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))) := by
+  simp only [curvatureMomentsCheck, Bool.and_eq_true, Bool.not_eq_true'] at hK
+  obtain ⟨hP, hrows⟩ := hK
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  have missing : (∀ x, f x = none) → partialIntegral volume f = none := fun hn => by
+    apply if_neg
+    intro hdef
+    obtain ⟨v, hv⟩ := hdef.1 0
+    rw [hn] at hv
+    cases hv
+  have hfn : ∀ x, (symEval cs x = none ∨ E x = none) → f x = none := fun x hx => by
+    rw [hf.equation, symPart, expPart]
+    rcases hx with hx | hx <;> rw [hx] <;> rcases S with _ | _ | s <;>
+      simp [scaleBy, Value.mul, Function1.apply]
+  rcases c0 with _ | a
+  · rw [missing fun x => hfn x (Or.inr (hE.missing (Or.inl rfl) x)),
+      curvature_missing S k g m pi (Or.inl rfl)]
+  rcases c1 with _ | b
+  · rw [missing fun x => hfn x (Or.inr (hE.missing (Or.inr (Or.inl rfl)) x)),
+      curvature_missing S k g m pi (Or.inr (Or.inl rfl))]
+  rcases c2 with _ | c
+  · rw [missing fun x => hfn x (Or.inr (hE.missing (Or.inr (Or.inr rfl)) x)),
+      curvature_missing S k g m pi (Or.inr (Or.inr rfl))]
+  by_cases hd : some none ∈ cs
+  · have hk' : k = none := by
+      rw [hk.value, hm.undefined
+        (momentCoefs_undefined _ cs Ks hl (curvatureRows_nonzero P Ks 0 _ _ hrows) hd)]
+    rw [missing fun x => hfn x (Or.inl ((symEval_none_iff cs x).2 hd)), hk']
+    exact hnone.symm
+  have hE' : ∀ x, E x = some (a + b * x + c * x ^ 2) := fun x => by
+    rw [hE.equation]
+    show some (a + (b * x + c * x ^ 2)) = some (a + b * x + c * x ^ 2)
+    congr 1
+    ring
+  have hfx : ∀ x, f x = scaleBy S
+      (some (realEval cs x * polyEval P x * Real.exp (a + b * x + c * x ^ 2))) := fun x => by
+    rw [hf.equation, symPart, expPart, hE', symEval_real hd]
+    simp [Value.mul, Function1.apply, Functions.expR]
+  have hneg : c < 0 → ∃ κ : ℝ, k = some κ ∧
+      Integrable (fun x : ℝ => realEval cs x * polyEval P x *
+        Real.exp (a + b * x + c * x ^ 2)) volume ∧
+      (∫ x : ℝ, realEval cs x * polyEval P x * Real.exp (a + b * x + c * x ^ 2)) =
+        κ * (Real.exp (a - b ^ 2 / (4 * c)) * √(Real.pi / (-c))) := fun hc => by
+    have hne : c ≠ 0 := hc.ne
+    have hh : (-1 / (2 * c)) * (2 * c) = -1 := by field_simp
+    obtain ⟨hi, hv⟩ := curvatureRows_integral a b hc hh
+      (Real.exp (a - b ^ 2 / (4 * c)) * √(Real.pi / (-c))) P cs Ks 0 [[1]] [] hl hrows
+      (by simp [poly2Eval, polyEval, gaussian_integral a b c hc]) (by simp)
+    simp only [pow_zero, one_mul] at hi hv
+    have hhv : Value.mul u (Value.inv (some c)) = some (-1 / (2 * c)) := by
+      rw [hu]
+      simp [Value.mul, Value.inv, hne, Numeric.denote]
+      field_simp
+    rw [hhv] at hm
+    have hkv : k = some (momentValue2 b (-1 / (2 * c)) cs Ks) := by
+      rw [hk.value, hm.value b rfl (momentCoefs_defined _ cs Ks hd),
+        momentValue_coefs b _ cs Ks hd]
+    exact ⟨_, hkv, hi, hv⟩
+  have hpos : 0 ≤ c → ¬ Integrable (fun x : ℝ => realEval cs x * polyEval P x *
+      Real.exp (a + b * x + c * x ^ 2)) volume := fun hc hi => by
+    have hq : realPoly cs * QSym.Limit.toPoly P ≠ 0 :=
+      mul_ne_zero (hN.realPoly_ne_zero hd) (QSym.Limit.toPoly_ne_zero hP)
+    refine real_polynomial_exp_quadratic_not_integrable hq a b hc ?_
+    simpa only [Polynomial.eval_mul, eval_realPoly, QSym.Limit.eval_toPoly] using hi
+  rcases S with _ | _ | s
+  · have h := curvature_scaled (f := f) (fun x => realEval cs x * polyEval P x) one_ne_zero
+      (fun x => by
+        rw [hfx]
+        simp [scaleBy]) hneg hpos hg hmn hpi
+    rw [h]
+    exact Value.mul_one_left _
+  · apply if_neg
+    intro hdef
+    obtain ⟨r, hr⟩ := hdef.1 0
+    rw [hfx] at hr
+    simp [scaleBy, Value.mul] at hr
+  · exact curvature_scaled (fun x => realEval cs x * polyEval P x) (hS s rfl) (fun x => by
+      rw [hfx]
+      simp [scaleBy, Value.mul]) hneg hpos hg hmn hpi
 
 end QSym.Distribution.StepSource
 
@@ -1403,6 +1819,30 @@ theorem presentation_mass_gaussian_curvature (p : DensityProgram) {S : Option (O
       (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))) := by
   rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
   exact StepSource.gaussian_partialIntegral_curvature K hf hE hK hS hm hk hu hg hmn hpi
+
+/-- The same under a polynomial whose coefficients do not mention the
+variable, one of which is not zero where it is defined. -/
+theorem presentation_mass_gaussian_curvature_moments (p : DensityProgram)
+    {S : Option (Option ℝ)} {cs : List (Option (Option ℝ))} {P : List ℚ} {E : ℝ → Option ℝ}
+    {c0 c1 c2 : Option ℝ} (Ks : List (List (List ℚ)))
+    (hf : StepSource.Bell p.density S (some cs) P (some E))
+    (hE : StepSource.Quadratic E (some c0) (some c1) (some c2))
+    (hK : StepSource.curvatureMomentsCheck P Ks = true) (hl : cs.length = Ks.length)
+    (hS : StepSource.scaleNonvanishing S) (hN : StepSource.SomeNonvanishing cs)
+    {k g m u pi : Option ℝ} {ms : List (Option ℝ)}
+    (hm : StepSource.MomentTerms c1
+      (StepSource.momentCoefs (Value.mul u (Value.inv c2)) cs Ks) Ks.flatten ms)
+    (hk : StepSource.Sums ms k)
+    (hu : u = some (Numeric.denote (s := .real) (-1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hmn : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    massValue p.presentation = StepSource.scaleBy S (Value.mul k (Value.mul
+      (Functions.expR.apply
+        (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+      (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))) := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  exact StepSource.gaussian_partialIntegral_curvature_moments Ks hf hE hK hl hS hN hm hk hu hg hmn
+    hpi
 
 end QSym.Distribution.DensityProgram
 

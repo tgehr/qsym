@@ -722,7 +722,12 @@ private Case[] cases(){ return [
 	Case("CurvatureLinear","∫dx x^2*exp(-a*x^2-b*x)*λ[x]","ℝ","((a^2)⁻¹·(1/4)·b^2+a⁻¹·(1/2))·sqrt(a⁻¹·π)·exp(a⁻¹·(1/4)·b^2)"),
 	Case("CurvatureOddFunction","λ(a:ℝ).∫dx (x^3+x)*exp(-a*x^2)*λ[x]","ℝ→ℝ","λ(a:{a:ℝ | 0<a}). (0:ℝ)"),
 	Case("CurvatureDegree","∫dx x^17*exp(-a*x^2)*λ[x]","ℝ"),
-	Case("CurvatureCentral","∫dx (x-m)^2*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ"),
+	Case("CurvatureCentral","∫dx (x-m)^2*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ","guard(0<v,v)"),
+	Case("CurvatureShifted","∫dx (x-m)^2*exp(-a*x^2)*λ[x]","ℝ","(m^2+a⁻¹·(1/2))·sqrt(a⁻¹·π)"),
+	Case("CurvatureClosed","∫dx (a*x+1)^2*exp(-b*x^2)*λ[x]","ℝ","(b⁻¹·(1/2)·a^2+1)·sqrt(b⁻¹·π)"),
+	Case("CurvatureForm","∫dx (x/b+π*c)*x*exp(-a*x^2+x)*λ[x]","ℝ","guard(b≠0∧0<a,(c·a⁻¹·(1/2)·π+b⁻¹·a⁻¹·(1/2)+b⁻¹·(a^2)⁻¹·(1/4))·sqrt(a⁻¹·π)·exp(a⁻¹·(1/4)))"),
+	Case("CurvatureAbsent","∫dx (x^2+m)*exp(-a*x^2)*λ[x]","ℝ","(m+a⁻¹·(1/2))·sqrt(a⁻¹·π)"),
+	Case("CurvatureVanishing","∫dx (c*x)^2*exp(-a*x^2)*λ[x]","ℝ"),
 	Case("GaussianSymbolicLinear","∫dx exp(a*x)*λ[x]","ℝ"),
 	Case("GaussianSymbolicPrefactor","∫dx (x-m)^2*exp(-(x-m)^2/2)*λ[x]","ℝ","sqrt(2·π)"),
 	Case("GaussianSymbolicPrefactorShift","∫dx (x+a)*exp(-x^2)*λ[x]","ℝ","a·sqrt(π)"),
@@ -735,7 +740,6 @@ private Case[] cases(){ return [
 	Case("GaussianSymbolicPrefactorTilted","∫dx (c*x^2+d)*exp(-x^2+b*x)*λ[x]","ℝ","(c·(1/4)·b^2+c·(1/2)+d)·sqrt(π)·exp(1/4·b^2)"),
 	Case("GaussianSymbolicPrefactorScaled","∫dx (x-m)^2*exp(-(x-n)^2)*a*λ[x]","ℝ","a·(m^2-2·m·n+n^2+1/2)·sqrt(π)"),
 	Case("GaussianSymbolicPrefactorProduct","∫dx (x*(x-a)+b)*exp(-x^2)*λ[x]","ℝ","(b+1/2)·sqrt(π)"),
-	Case("GaussianSymbolicPrefactorCurvature","∫dx (x-m)^2*exp(-a*x^2)*λ[x]","ℝ"),
 	Case("GaussianSymbolicPrefactorDegree","∫dx (x-m)^17*exp(-x^2)*λ[x]","ℝ"),
 	Case("StrictGuardGaussian","∫dx exp(-(x-1/a)^2)*λ[x]*x","ℝ","guard(a≠0,a⁻¹·sqrt(π))"),
 	Case("StrictGuardTwo","∫dx x*λ[x]*exp(-(x-1/a)^2)*exp(-x^2+1/b)","ℝ","guard(b≠0∧a≠0,a⁻¹·(1/2)·sqrt(1/2·π)·exp(b⁻¹-(a^2)⁻¹·(1/2)))"),
@@ -1244,34 +1248,45 @@ private void run(string directory){
 		// missing where the curvature is not negative, as the observation is.
 		// Only under factors that cannot vanish, a polynomial that is not zero
 		// and a scale that is π, an inverse or a product of these: a factor of
-		// zero leaves the zero function, which has an integral. Another scale,
-		// a polynomial whose coefficients are terms and one of too high a
-		// degree keep their integral. A vanishing integral is missing where the
-		// curvature is not negative all the same: under a binder it keeps that
-		// domain.
+		// zero leaves the zero function, which has an integral. The
+		// coefficients of a polynomial may be terms where one of them cannot
+		// vanish, a closed rational other than zero or such a scale: the
+		// polynomial is then not zero where they are defined, and each
+		// coefficient meets the table of the moments of its power. Another
+		// scale, a polynomial whose coefficients may all vanish and one of too
+		// high a degree keep their integral. A vanishing integral is missing
+		// where the curvature is not negative all the same: under a binder it
+		// keeps that domain.
 		if(c.name.indexOf("Curvature")==0){
-			bool retained=c.name=="CurvatureScale"||c.name=="CurvatureRoot"||c.name=="CurvatureCentral"||c.name=="CurvatureDegree";
-			// A row that is zero is absent; the first has no power of `h`.
+			bool retained=c.name=="CurvatureScale"||c.name=="CurvatureRoot"||c.name=="CurvatureVanishing"||c.name=="CurvatureDegree";
+			bool terms=c.name=="CurvatureCentral"||c.name=="CurvatureShifted"||c.name=="CurvatureClosed"||c.name=="CurvatureForm"||c.name=="CurvatureAbsent";
+			// A row that is zero is absent; the first has no power of `h`, and
+			// stands under its coefficient where that is a term.
 			bool mixed=c.name=="CurvatureMixed";
 			bool moments=c.name=="CurvaturePolynomial"||c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth"||c.name=="CurvatureOdd"||
-				c.name=="CurvatureLinear"||c.name=="CurvatureOddFunction";
+				c.name=="CurvatureLinear"||c.name=="CurvatureOddFunction"||terms;
 			if(!retained){
 				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.bare")>=0)!=moments,c.name~" constant row");
 				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.present")>=0)==(moments||mixed),c.name~" rows of the powers");
 				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.absent")>=0)==moments,c.name~" rows that are zero");
 			}
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian_curvature")>=0)!=retained,c.name~" certificate");
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian_curvature_moments")>=0)==terms,c.name~" tables");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			// The coefficient that cannot vanish is the first or a later one.
+			enforce((certificate.indexOf("Distribution.StepSource.SomeNonvanishing.here")>=0)==terms,c.name~" coefficient that cannot vanish");
+			enforce((certificate.indexOf("Distribution.StepSource.SomeNonvanishing.later")>=0)==(terms&&c.name!="CurvatureClosed"),c.name~" its place");
 			// The lemma of every shape of a scale is exercised, in a scalar and
-			// under a binder.
+			// under a binder; such a coefficient is a closed rational or has one
+			// of these shapes.
 			bool inverse=c.name=="CurvatureNormal"||c.name=="CurvatureDeviation"||c.name=="CurvatureInverse"||c.name=="CurvatureInverses"||c.name=="CurvatureBound"||
-				c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth";
-			bool product=c.name=="CurvatureDeviation"||c.name=="CurvatureInverses"||c.name=="CurvatureCircle"||c.name=="CurvatureBound";
+				c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth"||c.name=="CurvatureCentral"||c.name=="CurvatureForm";
+			bool product=c.name=="CurvatureDeviation"||c.name=="CurvatureInverses"||c.name=="CurvatureCircle"||c.name=="CurvatureBound"||c.name=="CurvatureForm";
 			bool circle=c.name=="CurvatureCircle"||c.name=="CurvatureBound";
 			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.inv")>=0)==inverse,c.name~" inverse");
 			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.mul")>=0)==product,c.name~" product");
 			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.pi")>=0)==circle,c.name~" circle");
-			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.literal")>=0)==(c.name=="CurvatureCircle"),c.name~" literal");
+			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.literal")>=0)==(c.name=="CurvatureCircle"||terms),c.name~" literal");
 			if(c.name=="CurvatureGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		// The whole line under a polynomial times the exponential of a quadratic
@@ -1282,12 +1297,12 @@ private void run(string directory){
 		// moments of the polynomial are a polynomial in the linear coefficient,
 		// a sum of its monomials. So may the coefficients of a polynomial in
 		// front: the integral is linear in them, and each meets the moments of
-		// its power. Other exponents, such a polynomial under a curvature that
-		// is a term and a polynomial of too high a degree keep their integral.
+		// its power. Other exponents and a polynomial of too high a degree keep
+		// their integral.
 		if(c.name.indexOf("Gaussian")==0){
 			bool symbolic=c.name.indexOf("GaussianSymbolic")==0,prefactor=c.name.indexOf("GaussianSymbolicPrefactor")==0;
 			bool retained=c.name=="GaussianGrowing"||c.name=="GaussianQuartic"||
-				c.name=="GaussianSymbolicLinear"||c.name=="GaussianSymbolicPrefactorCurvature"||c.name=="GaussianSymbolicPrefactorDegree";
+				c.name=="GaussianSymbolicLinear"||c.name=="GaussianSymbolicPrefactorDegree";
 			auto scaled=c.name=="GaussianNormal"||c.name=="GaussianVariance"||c.name=="GaussianMean"||c.name=="GaussianCentral"||c.name=="GaussianScaled"||c.name=="GaussianPartialScale"||
 				c.name=="GaussianSymbolicNested";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian")>=0)!=retained,c.name~" Gaussian certificate");
