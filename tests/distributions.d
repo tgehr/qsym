@@ -713,7 +713,16 @@ private Case[] cases(){ return [
 	Case("CurvatureGuarded","∫dx [c≤d]*exp(-a*x^2)*λ[x]","ℝ","[c≤d]·sqrt(a⁻¹·π)"),
 	Case("CurvatureScale","∫dx c*exp(-a*x^2)*λ[x]","ℝ"),
 	Case("CurvatureRoot","∫dx sqrt(c)*exp(-a*x^2)*λ[x]","ℝ"),
-	Case("CurvaturePolynomial","∫dx x^2*exp(-a*x^2)*λ[x]","ℝ"),
+	Case("CurvaturePolynomial","∫dx x^2*exp(-a*x^2)*λ[x]","ℝ","a⁻¹·(1/2)·sqrt(a⁻¹·π)"),
+	Case("CurvatureMean","∫dx x*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ","guard(0<v,m)"),
+	Case("CurvatureSecond","∫dx x^2*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ","guard(0<v,m^2+v)"),
+	Case("CurvatureFourth","∫dx x^4*exp(-x^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ","guard(0<v,3·v^2)"),
+	Case("CurvatureOdd","∫dx (x^3+x)*exp(-a*x^2)*λ[x]","ℝ","0"),
+	Case("CurvatureMixed","∫dx (1+x^2)*exp(-a*x^2)*λ[x]","ℝ","(1+a⁻¹·(1/2))·sqrt(a⁻¹·π)"),
+	Case("CurvatureLinear","∫dx x^2*exp(-a*x^2-b*x)*λ[x]","ℝ","((a^2)⁻¹·(1/4)·b^2+a⁻¹·(1/2))·sqrt(a⁻¹·π)·exp(a⁻¹·(1/4)·b^2)"),
+	Case("CurvatureOddFunction","λ(a:ℝ).∫dx (x^3+x)*exp(-a*x^2)*λ[x]","ℝ→ℝ","λ(a:{a:ℝ | 0<a}). (0:ℝ)"),
+	Case("CurvatureDegree","∫dx x^17*exp(-a*x^2)*λ[x]","ℝ"),
+	Case("CurvatureCentral","∫dx (x-m)^2*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ"),
 	Case("GaussianSymbolicLinear","∫dx exp(a*x)*λ[x]","ℝ"),
 	Case("GaussianSymbolicPrefactor","∫dx (x-m)^2*exp(-(x-m)^2/2)*λ[x]","ℝ","sqrt(2·π)"),
 	Case("GaussianSymbolicPrefactorShift","∫dx (x+a)*exp(-x^2)*λ[x]","ℝ","a·sqrt(π)"),
@@ -1228,20 +1237,35 @@ private void run(string directory){
 			enforce((certificate.indexOf(limit?"Limit.EventualScaled.exp_offset":"Distribution.StepSource.scaled_exp_offset")>=0)!=retained,c.name~" offset evidence");
 			if(!retained) enforce(certificate.indexOf("Distribution.StepSource.Quadratic.")>=0,c.name~" exponent");
 		}
-		// The exponential of a quadratic whose curvature is a term that does
-		// not mention the axis either: the closed form is missing where the
-		// curvature is not negative, as the observation is. Only under factors
-		// that cannot vanish, a rational other than zero and a scale that is
-		// π, an inverse or a product of these: a factor of zero leaves the
-		// zero function, which has an integral. Another scale and a polynomial
-		// keep their integral.
+		// A rational polynomial times the exponential of a quadratic whose
+		// curvature is a term that does not mention the axis either: the
+		// moments are a polynomial in the linear coefficient and in
+		// `h = -1/(2·c₂)`, a row for each power of `h`, and the closed form is
+		// missing where the curvature is not negative, as the observation is.
+		// Only under factors that cannot vanish, a polynomial that is not zero
+		// and a scale that is π, an inverse or a product of these: a factor of
+		// zero leaves the zero function, which has an integral. Another scale,
+		// a polynomial whose coefficients are terms and one of too high a
+		// degree keep their integral. A vanishing integral is missing where the
+		// curvature is not negative all the same: under a binder it keeps that
+		// domain.
 		if(c.name.indexOf("Curvature")==0){
-			bool retained=c.name=="CurvatureScale"||c.name=="CurvatureRoot"||c.name=="CurvaturePolynomial";
+			bool retained=c.name=="CurvatureScale"||c.name=="CurvatureRoot"||c.name=="CurvatureCentral"||c.name=="CurvatureDegree";
+			// A row that is zero is absent; the first has no power of `h`.
+			bool mixed=c.name=="CurvatureMixed";
+			bool moments=c.name=="CurvaturePolynomial"||c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth"||c.name=="CurvatureOdd"||
+				c.name=="CurvatureLinear"||c.name=="CurvatureOddFunction";
+			if(!retained){
+				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.bare")>=0)!=moments,c.name~" constant row");
+				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.present")>=0)==(moments||mixed),c.name~" rows of the powers");
+				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.absent")>=0)==moments,c.name~" rows that are zero");
+			}
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian_curvature")>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			// The lemma of every shape of a scale is exercised, in a scalar and
 			// under a binder.
-			bool inverse=c.name=="CurvatureNormal"||c.name=="CurvatureDeviation"||c.name=="CurvatureInverse"||c.name=="CurvatureInverses"||c.name=="CurvatureBound";
+			bool inverse=c.name=="CurvatureNormal"||c.name=="CurvatureDeviation"||c.name=="CurvatureInverse"||c.name=="CurvatureInverses"||c.name=="CurvatureBound"||
+				c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth";
 			bool product=c.name=="CurvatureDeviation"||c.name=="CurvatureInverses"||c.name=="CurvatureCircle"||c.name=="CurvatureBound";
 			bool circle=c.name=="CurvatureCircle"||c.name=="CurvatureBound";
 			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.inv")>=0)==inverse,c.name~" inverse");
@@ -1258,8 +1282,8 @@ private void run(string directory){
 		// moments of the polynomial are a polynomial in the linear coefficient,
 		// a sum of its monomials. So may the coefficients of a polynomial in
 		// front: the integral is linear in them, and each meets the moments of
-		// its power. Other exponents, a polynomial under a curvature that is
-		// such a term and a polynomial of too high a degree keep their integral.
+		// its power. Other exponents, such a polynomial under a curvature that
+		// is a term and a polynomial of too high a degree keep their integral.
 		if(c.name.indexOf("Gaussian")==0){
 			bool symbolic=c.name.indexOf("GaussianSymbolic")==0,prefactor=c.name.indexOf("GaussianSymbolicPrefactor")==0;
 			bool retained=c.name=="GaussianGrowing"||c.name=="GaussianQuartic"||

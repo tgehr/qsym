@@ -3560,20 +3560,42 @@ final class Bindings{
 			solution.bounds=d; solution.interval=true; solution.piecewise=true; solution.output=result.id;
 			return result;
 		}
-		// The exponential of a quadratic whose curvature is a term that does
-		// not mention the axis either: `exp(c₀-c₁²/(4·c₂))·√(-π/c₂)`. That is
-		// missing where the curvature is not negative, the inverse at zero and
-		// the root above it, as the observation is: the integrand is defined
-		// there and not integrable. Only under factors that cannot vanish: a
-		// rational other than zero, and a scale that is not zero where it is
-		// defined, by its form. A factor of zero leaves the zero function,
-		// which has an integral whatever the curvature is.
+		// A rational polynomial times the exponential of a quadratic whose
+		// curvature is a term that does not mention the axis either. The
+		// moments of the polynomial relative to the Gaussian integral are a
+		// polynomial in the linear coefficient `c₁` and in `h = -1/(2·c₂)`, a
+		// row for each power of `h`: the moment of degree j+1 is
+		// h·(c₁·μⱼ + j·μⱼ₋₁). The result is that polynomial times
+		// `exp(c₀-c₁²/(4·c₂))·√(-π/c₂)`, which is missing where the curvature is
+		// not negative, the inverse at zero and the root above it, as the
+		// observation is: the integrand is defined there and not integrable.
+		// Only under factors that cannot vanish: a polynomial that is not zero,
+		// and a scale that is not zero where it is defined, by its form. A
+		// factor of zero leaves the zero function, which has an integral
+		// whatever the curvature is.
 		BoundTerm integrateCurvature(BoundTerm t,ref IntegralSolution solution,BellParts found){
-			auto p=found.p; while(p.length>1&&p[$-1].zero) p.length=p.length-1;
-			if(found.symbolic||p.length!=1||p[0].zero) return BoundTerm.init;
+			auto p=found.p; while(p.length&&p[$-1].zero) p.length=p.length-1;
+			if(found.symbolic||!p.length||p.length>17) return BoundTerm.init;
+			// Polynomials in `h` whose coefficients are polynomials in `c₁`.
+			alias Rows=Rational[][];
+			Rows add(Rows a,Rows b){ Rows r; foreach(i;0..a.length>b.length?a.length:b.length) r~=polySum(i<a.length?a[i]:null,i<b.length?b[i]:null); return r; }
+			Rows scale(Rational c,Rows a){ Rows r; foreach(row;a) r~=polyProduct([c],row); return r; }
+			Rows shift(Rows a){ Rows r; foreach(row;a) r~=Rational(0)~row; return r; }
+			Rows moments(Rational[] q,size_t j,Rows mu,Rows before){
+				if(!q.length) return null;
+				Rational[] none;
+				return add(scale(q[0],mu),moments(q[1..$],j+1,none~add(shift(mu),scale(Rational(cast(long)j),before)),mu));
+			}
+			auto rows=moments(p,0,[[Rational(1)]],null);
+			foreach(ref row;rows){
+				while(row.length>1&&row[$-1].zero) row.length=row.length-1;
+				if(!row.length) row=[Rational(0)];
+				foreach(c;row) if(c.words>128) return BoundTerm.init;
+			}
+			while(rows.length>1&&rows[$-1].length==1&&rows[$-1][0].zero) rows.length=rows.length-1;
 			BellParts built; gaussianParts(solution.from,built,true);
 			if(built.scaled&&!nonvanishing(built.scale.id)) return BoundTerm.init;
-			GaussianData d; d.symbolic=true; d.curved=true; d.constant=p[0];
+			GaussianData d; d.symbolic=true; d.curved=true; d.rows=rows;
 			auto ctx=context(t),product=arena.mul(arena.real_(1),arena.real_(1),true),sum=arena.add(arena.real_(0),arena.real_(0),true);
 			BoundTerm coefficient(size_t i,ref uint zero){
 				if(built.c[i].present) return built.c[i].term;
@@ -3581,14 +3603,34 @@ final class Bindings{
 			}
 			auto constant=coefficient(0,d.zero0),linear=coefficient(1,d.zero1),curvature=built.c[2].term;
 			d.curvature=curvature.id;
-			auto factor=scalar(ctx,arena.real_(d.constant)),quarter=scalar(ctx,arena.real_(Rational(-1)/Rational(4)));
+			auto half=scalar(ctx,arena.real_(Rational(-1)/Rational(2))),quarter=scalar(ctx,arena.real_(Rational(-1)/Rational(4)));
 			auto minus=scalar(ctx,arena.real_(Rational(-1))),circle=scalar(ctx,arena.call(Builtin.pi,[]));
-			d.factor=factor.id; d.exponent=quarter.id; d.scale=minus.id; d.circle=circle.id;
-			auto inverse=primitive(arena.inv(arena.real_(1)),[curvature]);
+			d.factor=half.id; d.exponent=quarter.id; d.scale=minus.id; d.circle=circle.id;
+			auto inverse=primitive(arena.inv(arena.real_(1)),[curvature]),width=primitive(product,[half,inverse]);
+			// The monomials of each row that is not zero, under its power of `h`:
+			// the constant term always, a later one where its coefficient is not
+			// zero and there is a linear coefficient.
+			BoundTerm[] terms;
+			foreach(l,row;rows){
+				uint[] literals;
+				if(row.length>1||!row[0].zero){
+					auto power=l==0?BoundTerm.init:l==1?width:primitive(arena.pow(arena.real_(0),cast(uint)l),[width]);
+					foreach(i,c;row){
+						if(i&&(c.zero||!built.c[1].present)){ literals~=uint.max; continue; }
+						auto literal=scalar(ctx,arena.real_(c)); literals~=literal.id;
+						auto monomial=!i?literal:primitive(product,[literal,i==1?linear:primitive(arena.pow(arena.real_(0),cast(uint)i),[linear])]);
+						terms~=power==BoundTerm.init?monomial:primitive(product,[power,monomial]);
+					}
+				}
+				d.rowLiterals~=literals;
+			}
+			// The row of the highest power is not zero.
+			assert(terms.length,"moments of a polynomial that is not zero");
+			BoundTerm balanced(BoundTerm[] xs){ return xs.length==1?xs[0]:primitive(sum,[balanced(xs[0..$/2]),balanced(xs[$/2..$])]); }
 			auto exponent=primitive(sum,[constant,primitive(product,[primitive(product,[quarter,inverse]),primitive(product,[linear,linear])])]);
 			auto bell=primitive(product,[primitive(arena.call(Builtin.expR,[arena.real_(0)]),[exponent]),
 				primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[primitive(product,[circle,primitive(product,[minus,inverse])])])]);
-			auto result=primitive(product,[factor,bell]);
+			auto result=primitive(product,[balanced(terms),bell]);
 			if(built.scaled){ d.nonzero=built.scale.id; result=primitive(product,[built.scale,result]); }
 			solution.bell=d; solution.gaussian=true; solution.piecewise=true; solution.output=result.id; return result;
 		}
@@ -7183,6 +7225,19 @@ final class Bindings{
 			}
 			if(d.zero0!=uint.max)exponent="("~src~"Quadratic.fill0 "~literal(d.zero0,Rational(0))~" "~exponent~")";
 			if(d.zero1!=uint.max)exponent="("~src~"Quadratic.fill1 "~literal(d.zero1,Rational(0))~" "~exponent~")";
+			// The monomials of a row, of which `count` are there, and the
+			// balanced sum of so many terms.
+			size_t count;
+			string rowProof(Rational[] row,uint[] literals){
+				string h=src~"RowTerms.done";
+				foreach_reverse(i,c;row){
+					if(literals[i]!=uint.max){++count;h="("~src~"RowTerms.term "~q(c)~" "~literal(literals[i],c)~" "~h~")";}
+					else h=d.zero1!=uint.max?"("~src~"RowTerms.vanish "~literal(d.zero1,Rational(0))~" "~h~")":"("~src~"RowTerms.zero "~h~")";
+				}
+				return h;
+			}
+			string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
+			string list(Rational[] row){string r="[";foreach(i,c;row)r~=(i?", ":"")~q(c);return r~"]";}
 			if(d.curved){
 				// The scale cannot vanish, by its form.
 				string scalarNonzero(Term t){
@@ -7199,22 +7254,17 @@ final class Bindings{
 					return "("~src~"Nonvanishing.mul "~nonzero(n.a)~" "~nonzero(n.b)~")";
 				}
 				enforce(d.nonzero==uint.max||nonvanishing(d.nonzero),"scale may vanish");
-				return "Distribution.DensityProgram.presentation_mass_gaussian_curvature "~program~" "~q(d.constant)~" "~evidence~" "~exponent~" rfl "~
-					(d.nonzero==uint.max?"trivial":nonzero(d.nonzero))~" "~literal(d.factor,d.constant)~" "~literal(d.exponent,Rational(-1)/Rational(4))~" "~literal(d.scale,Rational(-1))~" rfl";
-			}
-			// The monomials of a row, of which `count` are there, and the
-			// balanced sum of so many terms.
-			size_t count;
-			string rowProof(Rational[] row,uint[] literals){
-				string h=src~"RowTerms.done";
-				foreach_reverse(i,c;row){
-					if(literals[i]!=uint.max){++count;h="("~src~"RowTerms.term "~q(c)~" "~literal(literals[i],c)~" "~h~")";}
-					else h=d.zero1!=uint.max?"("~src~"RowTerms.vanish "~literal(d.zero1,Rational(0))~" "~h~")":"("~src~"RowTerms.zero "~h~")";
+				// A row that is not zero meets its power of `h`; the first has none.
+				string monomials=src~"MomentTerms.done",table;
+				foreach_reverse(l,row;d.rows){
+					auto present=row.length>1||!row[0].zero;
+					monomials="("~src~"MomentTerms."~(!present?"absent "~list(row):(l?"present ":"bare ")~rowProof(row,d.rowLiterals[l]))~" "~monomials~")";
+					table=list(row)~(table.length?", ":"")~table;
 				}
-				return h;
+				return "Distribution.DensityProgram.presentation_mass_gaussian_curvature "~program~" ["~table~"] "~evidence~" "~exponent~" rfl "~
+					(d.nonzero==uint.max?"trivial":nonzero(d.nonzero))~" "~monomials~" "~sums(count)~" "~literal(d.factor,Rational(-1)/Rational(2))~" "~
+					literal(d.exponent,Rational(-1)/Rational(4))~" "~literal(d.scale,Rational(-1))~" rfl";
 			}
-			string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
-			string list(Rational[] row){string r="[";foreach(i,c;row)r~=(i?", ":"")~q(c);return r~"]";}
 			if(d.rows.length){
 				// Each coefficient that is present meets the moments of its power.
 				enforce(poly.length==d.rows.length,"Gaussian coefficients changed");
@@ -7675,6 +7725,9 @@ final class Bindings{
 			if(s.interval&&!s.pieces.length){ stack~=[s.bounds.lower,s.bounds.upper]; if(!s.bounds.below) stack~=s.bounds.minusOne; }
 			// The masks of a split weight are named by its certificate.
 			if(s.split!=uint.max) stack~=s.split;
+			// So is the literal of `h` under a curvature that is a term, also
+			// where no row of the moments has a power of it.
+			if(s.gaussian&&s.bell.curved) stack~=s.bell.factor;
 			foreach(piece;s.pieces) integralRoots(piece);
 		}
 		foreach(s;result.integrals) integralRoots(s);
