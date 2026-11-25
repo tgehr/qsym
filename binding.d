@@ -1524,6 +1524,9 @@ final class Bindings{
 	// that degree. The result is in the context of the binder.
 	// Nothing is claimed for a body outside this fragment: a limit that does
 	// not exist has no value. Without `build` this only recognizes the body.
+	private bool gaussianTail(uint body,out BellParts bell,bool build){
+		return bellParts(body,bell,build)&&bell.exponent&&bell.c[2].present&&bell.c[2].closed&&bell.c[2].value<Rational(0);
+	}
 	private BoundTerm limitTerms(uint body,bool bottom,bool build=true,uint depth=0){
 		if(depth>64) return BoundTerm.init;
 		auto found=at(body);
@@ -1539,6 +1542,19 @@ final class Bindings{
 		size_t degree; Rational quotient;
 		if(quotientLimit(body,degree,quotient))
 			return build?scalar(Scope(this,contexts[context(found).index].parent),arena.real_(quotient)):found;
+		// A polynomial times the exponential of a quadratic with negative
+		// rational curvature vanishes at both ends, whatever its constant and
+		// linear coefficients are: zero under the factors that do not mention
+		// the variable, and after the coefficients, which must be defined.
+		BellParts bell;
+		if(gaussianTail(body,bell,false)){
+			if(!build) return found;
+			gaussianTail(body,bell,true);
+			auto result=scalar(Scope(this,contexts[context(found).index].parent),arena.real_(0));
+			if(bell.scaled) result=primitive(arena.mul(arena.real_(1),arena.real_(1),true),[bell.scale,result]);
+			if(bell.c[1].present) result=sequence(bell.c[1].term,result);
+			return bell.c[0].present?sequence(bell.c[0].term,result):result;
+		}
 		auto n=nodes[body]; if(n.op!=BoundOp.primitive&&n.op!=BoundOp.guard) return BoundTerm.init;
 		auto view=n.op==BoundOp.guard?arena.view(arena.boolean(true)):arena.view(arena.at(n.data)),op=view.op;
 		if(n.op==BoundOp.guard||op==Op.mask){
@@ -6245,6 +6261,21 @@ final class Bindings{
 			AxisCoefficient[3] x,y;axisQuadratic(n.a,x,false);axisQuadratic(n.b,y,false);
 			return app(!coefficientDegree(x)?"Quadratic.scale":!coefficientDegree(y)?"Quadratic.scaled":"Quadratic.product",a~" "~b);
 		}
+		// A factor as scale, polynomial and exponential, and the structure of
+		// its exponent where it has one.
+		string bell(uint id,out string exponent){
+			Rational[] p;
+			final switch(bellFactor(id,p)){
+				case BellFactor.none:enforce(0,"unsupported Gaussian factor");assert(0);
+				case BellFactor.polynomial:return app("bell_polynomial",piece(id,everywhere,"",Rational(0)).proof);
+				case BellFactor.exponential:exponent=quadratic(nodes[id].a);return app("bell_exp",functionAt(nodes[id].a));
+				case BellFactor.scale:return app("bell_constant",outside(id));
+				case BellFactor.product:
+					string left,right;auto a=bell(nodes[id].a,left),b=bell(nodes[id].b,right);
+					exponent=left.length&&right.length?app("Quadratic.add",left~" "~right):left.length?left:right;
+					return app("bell_mul",a~" "~b);
+			}
+		}
 		// The exponential of a rational slope with a constant part: the slope,
 		// the structure of the exponent, and the slope as a closed term.
 		string offsetProof(uint id,Rational slope){
@@ -6320,6 +6351,15 @@ final class Bindings{
 			size_t degree; Rational ratio;
 			if(quotientLimit(body,degree,ratio))
 				return "(Limit.Exact.quotient Limit.Infinite."~(s.bottom?"bottom":"top")~" "~quotient(body)~" "~to!string(degree)~" "~cert.q(ratio)~" rfl "~literal(output,cert.q(ratio))~")";
+			BellParts bell;
+			if(gaussianTail(body,bell,true)){
+				string quadratic; auto evidence=cert.bell(body,quadratic); auto zero=output;
+				if(bell.c[0].present) zero=nodes[zero].b;
+				if(bell.c[1].present) zero=nodes[zero].b;
+				if(bell.scaled) zero=nodes[zero].b;
+				return "(Limit.Exact.gaussian Limit.Infinite."~(s.bottom?"bottom":"top")~" "~cert.q(bell.c[2].value)~" "~evidence~" "~quadratic~" "~
+					cert.closedProof(bell.c[2].term,bell.c[2].value)~" rfl "~literal(zero,"(0 : ℚ)")~")";
+			}
 			auto n=nodes[body],o=nodes[output];
 			if(n.op==BoundOp.guard){
 				enforce(o.op==BoundOp.guard,"limit guard mismatch");
@@ -6491,20 +6531,8 @@ final class Bindings{
 			// the polynomial of the moments and evaluates the curvature.
 			auto d=s.bell;enum src="Distribution.StepSource.";
 			string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~q(value)~" rfl)";}
-			auto quadratic=&cert.quadratic,constant=&cert.outside;
 			string join(string a,string b){return a.length&&b.length?"("~src~"Quadratic.add "~a~" "~b~")":a.length?a:b;}
-			string bell(uint id,out string exponent){
-				Rational[] p;
-				final switch(bellFactor(id,p)){
-					case BellFactor.none:enforce(0,"unsupported Gaussian factor");assert(0);
-					case BellFactor.polynomial:return "("~src~"bell_polynomial "~piece(id,SourceCertificates.everywhere,"",Rational(0)).proof~")";
-					case BellFactor.exponential:exponent=quadratic(nodes[id].a);return "("~src~"bell_exp "~functionAt(nodes[id].a)~")";
-					case BellFactor.scale:return "("~src~"bell_constant "~constant(id)~")";
-					case BellFactor.product:
-						string left,right;auto a=bell(nodes[id].a,left),b=bell(nodes[id].b,right);
-						exponent=join(left,right);return "("~src~"bell_mul "~a~" "~b~")";
-				}
-			}
+			auto bell=&cert.bell;
 			auto program="Distribution.DensityProgram.lebesgue";string exponent;
 			auto evidence="("~src~"bell_polynomial ("~src~"polynomial_one "~SourceCertificates.everywhere~"))";
 			foreach(id;s.from){

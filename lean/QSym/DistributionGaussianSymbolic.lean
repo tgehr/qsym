@@ -547,7 +547,82 @@ theorem presentation_mass_gaussian_symbolic (p : DensityProgram) {S : Option (Op
 end QSym.Distribution.DensityProgram
 
 namespace QSym.Limit
-open QSym.Distribution.StepSource
+open QSym.Distribution.StepSource Filter Topology
+
+/-- A polynomial times the exponential of a quadratic with negative curvature
+vanishes at both ends. -/
+theorem polynomial_gaussian_tendsto {l : Filter ℝ} (hl : Infinite l) (c0 c1 : ℝ) {c2 : ℝ}
+    (h : c2 < 0) (P : List ℚ) :
+    Tendsto (fun x : ℝ => polyEval P x * Real.exp (c0 + c1 * x + c2 * x ^ 2)) l (𝓝 0) := by
+  have hpow : ∀ n : ℕ, Tendsto (fun x : ℝ => x ^ n * Real.exp (c0 + c1 * x + c2 * x ^ 2)) l (𝓝 0) :=
+    fun n => by
+      cases hl
+      · exact pow_gaussian_atTop c0 c1 h n
+      · exact pow_gaussian_atBot c0 c1 h n
+  have hall : ∀ (P : List ℚ) (j : ℕ),
+      Tendsto (fun x : ℝ => x ^ j * polyEval P x * Real.exp (c0 + c1 * x + c2 * x ^ 2)) l (𝓝 0) := by
+    intro P
+    induction P with
+    | nil => intro j; simpa [polyEval] using tendsto_const_nhds
+    | cons a P ih =>
+      intro j
+      have hs := ((hpow j).const_mul (a : ℝ)).add (ih (j + 1))
+      rw [mul_zero, add_zero] at hs
+      refine hs.congr fun x => ?_
+      simp only [polyEval]
+      ring
+  simpa using hall P 0
+
+/-- A coefficient that is present must be defined for the value after it. -/
+def seqCoef : Option (Option ℝ) → Option ℝ → Option ℝ
+  | none, v => v
+  | some c, v => c.bind fun _ => v
+
+/-- A scale times a polynomial times the exponential of a quadratic whose
+curvature is a negative rational tends to zero under the scale at both ends,
+whatever the other coefficients are; it is undefined with any of them. -/
+theorem Exact.gaussian {l : Filter ℝ} (hl : Infinite l) {v : ℝ → Option ℝ}
+    {S : Option (Option ℝ)} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option (Option ℝ)}
+    {c2 : Option ℝ} (q2 : ℚ) (hv : Bell v S P (some E)) (hE : Quadratic E c0 c1 (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2)) (hq : decide (q2 < 0) = true) {z : Option ℝ}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    Exact l v (seqCoef c0 (seqCoef c1 (scaleBy S z))) := by
+  have hq' : ((q2 : ℚ) : ℝ) < 0 := by exact_mod_cast of_decide_eq_true hq
+  have hz0 : z = some 0 := by rw [hz]; simp [Numeric.denote]
+  have undefined : (∀ x, E x = none) → Exact l v none := fun hn =>
+    Eventually.of_forall fun x => by
+      rw [hv.equation, expPart, hn]
+      rcases S with _ | _ | s <;> simp [scaleBy, Value.mul, Function1.apply]
+  have defined : ∀ a b : ℝ, (∀ x, E x = some (a + b * x + q2 * x ^ 2)) →
+      Exact l v (scaleBy S z) := fun a b he => by
+    have hlim := polynomial_gaussian_tendsto hl a b hq' P
+    have hvx : ∀ x, v x = scaleBy S (some (polyEval P x * Real.exp (a + b * x + q2 * x ^ 2))) :=
+      fun x => by
+        rw [hv.equation, expPart, he]
+        simp [Value.mul, Function1.apply, Functions.expR]
+    rw [hz0]
+    rcases S with _ | _ | s
+    · exact ⟨_, Eventually.of_forall hvx, hlim⟩
+    · exact Eventually.of_forall hvx
+    · refine ⟨fun x => s * (polyEval P x * Real.exp (a + b * x + q2 * x ^ 2)),
+        Eventually.of_forall hvx, ?_⟩
+      exact hlim.const_mul s
+  rw [h2] at hE
+  rcases c0 with _ | _ | a <;> rcases c1 with _ | _ | b
+  · exact defined 0 0 fun x => by
+      rw [hE.equation]; simp [coefValue, Value.add, Value.mul, Numeric.denote]
+  · exact undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add, Value.mul]
+  · exact defined 0 b fun x => by
+      rw [hE.equation]; simp [coefValue, Value.add, Value.mul, Numeric.denote]
+  · exact undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add]
+  · exact undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add]
+  · exact undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add]
+  · exact defined a 0 fun x => by
+      rw [hE.equation]; simp [coefValue, Value.add, Value.mul, Numeric.denote]
+  · exact undefined fun x => by rw [hE.equation]; simp [coefValue, Value.add, Value.mul]
+  · exact defined a b fun x => by
+      rw [hE.equation]; simp [coefValue, Value.add, Value.mul, Numeric.denote]
+      ring
 
 /-- The same along a filter. -/
 theorem EventualScaled.exp_offset (l : Filter ℝ) {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (r : ℚ)
