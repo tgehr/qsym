@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,distributionDefinedBinary,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -2244,6 +2244,39 @@ final class Bindings{
 		BoundTerm[] args; bool plain=true;
 		foreach(i;0..n.arity){ auto child=restoreBody(arena.viewChild(t,i),ctx,argument); args~=child; plain&=node(child).op==BoundOp.scalar; }
 		return plain?scalar(ctx,t):primitive(t,args);
+	}
+	// Observe a countdown without constructing each finite presentation.
+	// Every seed may be partial. A total literal ratio permits powRN even at n=0.
+	private BoundTerm countdownMass(BoundTerm mass){
+		auto application=nodes[node(mass).a];
+		if(application.op!=BoundOp.apply||nodes[application.a].op!=BoundOp.fixed) return BoundTerm.init;
+		auto f=at(application.a),signature=pool.view(type(f));
+		if(signature.fields[0]!=scalarType(Sort.natural)) return BoundTerm.init;
+		auto branch=nodes[nodes[node(f).a].a];
+		bool builtin(uint id,Builtin fn){
+			auto n=nodes[id];
+			if(n.op!=BoundOp.primitive) return false;
+			auto op=arena.view(arena.at(n.data)); return op.op==Op.builtin&&op.value==fn;
+		}
+		bool variableAt(uint id,uint i){ return nodes[id].op==BoundOp.variable&&nodes[id].data==i; }
+		if(branch.op!=BoundOp.conditional||!primitiveOp(branch.a,Op.not_)) return BoundTerm.init;
+		auto nz=nodes[branch.a].a;
+		if(!builtin(nz,Builtin.nonzeroZ)||!builtin(nodes[nz].a,Builtin.castNZ)||!variableAt(nodes[nodes[nz].a].a,0))
+			return BoundTerm.init;
+		auto scale=nodes[branch.c];
+		if(scale.op!=BoundOp.distributionScale||nodes[scale.a].op!=BoundOp.scalar) return BoundTerm.init;
+		auto ratio=arena.at(nodes[scale.a].data),call=nodes[scale.b];
+		if(!arena.isNumber(ratio)||call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
+		auto pred=nodes[call.b],one=nodes[pred.b],base=at(branch.b);
+		if(!variableAt(pred.a,0)||one.op!=BoundOp.scalar||arena.at(one.data)!=arena.natural_(1)||depends(base,0)||depends(base,1))
+			return BoundTerm.init;
+		auto ctx=context(mass),r=scalar(ctx,ratio);
+		BoundTerm[] env=[scalar(ctx,arena.natural_(0)),bottom(ctx,type(f))];
+		foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
+		auto seed=distribution(ctx,BoundOp.distributionMass,[substitute(base,ctx,env)]);
+		auto zero=arena.real_(0);
+		auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[r,at(application.b)]);
+		return primitive(arena.mul(zero,zero,true),[power,seed]);
 	}
 	private BoundTerm solveRecurrence(BoundTerm t,out RecurrenceSolution solution){
 		auto n=node(t),body=node(at(n.a)),ty=pool.view(type(t));
@@ -5955,6 +5988,15 @@ final class Bindings{
 			if(active.get(t.id,false)){ exhausted=true; return Result(t.id,emit(BindingRule.refl,t.id,t.id)); }
 			active.set(t.id,true);
 			auto n=node(t); Result result;
+			if(n.op==BoundOp.distributionMass&&steps<budget){
+				auto target=countdownMass(t);
+				if(target!=BoundTerm.init){
+					++steps;
+					auto proof=emit(BindingRule.distributionMassCountdown,t.id,target.id),tail=visit(target,depth+1);
+					result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,proof,tail.proof));
+					active.set(t.id,false); memo.set(t.id,result); return result;
+				}
+			}
 			if(n.op==BoundOp.distributionInverseCover&&steps<budget){
 				CoverStep step; auto chart=squareFromCover(t,step);
 				if(chart!=BoundTerm.init){
@@ -10476,6 +10518,13 @@ final class Bindings{
 				case BindingRule.distributionDefinedBinary:{
 					auto d=nodes[n.a],ctor=d.op==BoundOp.distributionAdd?"add":"scale";
 					proof=".ofEq (fun ξ ρ => Binding.defined_binary_data Distribution.Presentation."~ctor~" ("~name(d.a)~".eval ξ ρ) ("~name(d.b)~".eval ξ ρ))"; break;
+				}
+				case BindingRule.distributionMassCountdown:{
+					auto call=nodes[n.a],target=nodes[p.to],ratio=nodes[nodes[target.a].a];
+					auto literal=arena.at(ratio.data),q=SourceCertificates.q(arena.number(literal).re),f=to!string(call.a)~dimArg~" γ ξ ρ";
+					proof=".ofEq (fun ξ ρ => Distribution.mass_scale_countdown (rec"~f~") (fixed"~f~") ("~
+						name(nodes[target.b].a)~".eval ξ ρ) (n"~to!string(literal.id)~".eval ξ) (Numeric.calculate_sound ξ n"~
+						to!string(literal.id)~" "~q~" rfl) (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))"; break;
 				}
 				case BindingRule.distributionDefinedDirac:
 					proof=".ofEq (fun ξ ρ => congrArg some (Option.isSome_map' (f := Distribution.Presentation.dirac) (x := "~name(nodes[n.a].a)~".eval ξ ρ)))"; break;
