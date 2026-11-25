@@ -256,6 +256,31 @@ theorem cast_mask_and_rational (p q : Option Bool) (r : Option ℚ) :
       Value.mask p (Functions.castQR.apply (Value.mask q r)) := by
   rw [← mask_mask, cast_mask_rational]
 
+/-- The casts are additive for every definedness pattern: those of a sum of
+natural numbers, of integers and of rationals are the sum of the casts. -/
+theorem cast_add_natural (a b : Option ℕ) :
+    Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply
+        (Functions.addN.apply a b))) =
+      Value.add (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply a)))
+        (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply b))) := by
+  rcases a with _ | a <;> rcases b with _ | b <;>
+    simp [Value.add, Function1.apply, Function2.apply, Functions.addN, Functions.castNZ,
+      Functions.castZQ, Functions.castQR]
+
+theorem cast_add_integer (a b : Option ℤ) :
+    Functions.castQR.apply (Functions.castZQ.apply (Functions.addZ.apply a b)) =
+      Value.add (Functions.castQR.apply (Functions.castZQ.apply a))
+        (Functions.castQR.apply (Functions.castZQ.apply b)) := by
+  rcases a with _ | a <;> rcases b with _ | b <;>
+    simp [Value.add, Function1.apply, Function2.apply, Functions.addZ, Functions.castZQ,
+      Functions.castQR]
+
+theorem cast_add_rational (a b : Option ℚ) :
+    Functions.castQR.apply (Functions.addQ.apply a b) =
+      Value.add (Functions.castQR.apply a) (Functions.castQR.apply b) := by
+  rcases a with _ | a <;> rcases b with _ | b <;>
+    simp [Value.add, Function1.apply, Function2.apply, Functions.addQ, Functions.castQR]
+
 /-- A cast bracket of a number is a real mask of that number: a natural
 number below all three casts, an integer below two, a rational below one. -/
 theorem bracket_natural (g : Option Bool) (k : Option ℕ) (n : ℕ) (q : ℚ)

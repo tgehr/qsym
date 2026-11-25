@@ -1531,7 +1531,22 @@ private Case[] cases(){
 	Case("PieceCasesHat","∫dx [0≤x]*[x≤a]*([x≤1]*x+[1<x]*(2-x)*[x≤2])*λ[x]","ℝ","[1<a]·([a≤2]·(a·(-a·(1/2)+2)-3/2)+[2<a]·(1/2))+[0≤a]·([a≤1]·(1/2·a^2)+[1<a]·(1/2))"),
 	Case("PieceCasesAbsolute","∫dx [0≤x]*[x≤1]*[x≤a]*abs(x-1/2)*λ[x]","ℝ","[a<1∧1/2≤a]·(a·(a·(1/2)-1/2)+1/8)+[a<1/2∧0≤a]·(a·(-a·(1/2)+1/2))+[1≤a]·(1/8)+[1/2≤a]·(1/8)"),
 	Case("PieceCasesSolved","∫dx [0≤x]*[x≤1]*([2*x≤a]*x+[a<2*x]*x^2)*λ[x]","ℝ","[a<2∧0≤a]·(1/8·a^2)+[0≤a∧a<2]·(-1/24·a^3+1/3)+[a<0]·(1/3)+[2≤a]·(1/2)"),
-	Case("PieceCasesConstant","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)*λ[x]","ℝ"),
+	Case("CastSum","∫dx ([0≤x]*[x≤a]+[0≤x]*[x≤b]*2)*λ[x]","ℝ","[0≤a]·a+[0≤b]·(2·b)"),
+	Case("CastSumThree","∫dx ([0≤x]*[x≤a]+[1≤x]*[x≤b]*2+[2≤x]*[x≤c]*3)*λ[x]","ℝ","[0≤a]·a+[1≤b]·(2·b-2)+[2≤c]·(3·c-6)"),
+	Case("CastSumInteger","∫dx ([0≤x]*[x≤a]-[0≤x]*[x≤b]*2)*λ[x]","ℝ","[0≤a]·a+[0≤b]·(-2·b)"),
+	Case("CastSumRational","∫dx [0≤x]*[x≤1]*([x≤a]/2+[a<x]/3)*λ[x]","ℝ","[a<1∧0≤a]·(a·(1/2))+[0≤a∧a<1]·(-a·(1/3)+1/3)+[a<0]·(1/3)+[1≤a]·(1/2)"),
+	Case("CastSumCompeting","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)*λ[x]","ℝ","[a<1∧0≤a]·a+[0≤a∧a<1]·(-2·a+2)+[a<0]·2+[1≤a]"),
+	Case("CastSumCompetingInteger","∫dx [0≤x]*[x≤1]*([x≤a]-[a<x]*2)*λ[x]","ℝ","[a<1∧0≤a]·a+[0≤a∧a<1]·(2·a-2)+[a<0]·-2+[1≤a]"),
+	Case("CastSumClosed","∫dx ([0≤x]*[x≤1]+[1/2≤x]*[x≤a])*λ[x]","ℝ","[1/2≤a]·(a-1/2)+1"),
+	Case("CastSumMany","∫dx [0≤x]*[x≤1]*([x≤a]+[x≤b]+[x≤c])*λ[x]","ℝ","[a<1∧0≤a]·a+[b<1∧0≤b]·b+[c<1∧0≤c]·c+[1≤a]+[1≤b]+[1≤c]"),
+	Case("CastSumOne","∫dx [0≤x]*[x≤1]*([x≤a]+1)*λ[x]","ℝ","[a<1∧0≤a]·a+[1≤a]+1"),
+	Case("CastSumMixed","∫dx [0≤x]*[x≤1]*(([x≤a]+[a<x]*2)+([x≤b]-[b<x]*3)/2)*λ[x]","ℝ","[a<1∧0≤a]·a+[b<1∧0≤b]·(b·(1/2))+[0≤a∧a<1]·(-2·a+2)+[0≤b∧b<1]·(b·(3/2)-3/2)+[b<0]·(-3/2)+[1≤b]·(1/2)+[a<0]·2+[1≤a]"),
+	Case("CastSumBound","∫dx [0≤x]*[x≤1]*[x≤c]*([x≤a]+[a<x]*2)*λ[x]","ℝ","[c<1∧0≤c]·([a<c∧0≤a]·a+[0≤a∧a<c]·(2·c-2·a)+[a<0]·(2·c)+[c≤a]·c)+[1≤c]·([a<1∧0≤a]·a+[0≤a∧a<1]·(-2·a+2)+[a<0]·2+[1≤a])"),
+	Case("CastSumWeight","∫dx [0≤x]*[x≤1]*x*([x≤a]+[a<x]*2)*λ[x]","ℝ","[a<1∧0≤a]·(1/2·a^2)+[0≤a∧a<1]·(-a^2+1)+[1≤a]·(1/2)+[a<0]"),
+	Case("CastSumExponential","∫dx [0≤x]*[x≤2]*e^(-x)*([x≤1]+[1<x]*2)*λ[x]","ℝ","-2·exp(-2)+exp(-1)+1"),
+	Case("CastSumHalfLine","∫dx [0≤x]*e^(-x)*([x≤a]+[a<x]*2)*λ[x]","ℝ","[0≤a]·(exp(-a)+1)+[a<0]·2"),
+	Case("CastSumUnbounded","∫dx ([0≤x]*[x≤a]+[0≤x]*2)*λ[x]","ℝ"),
+	Case("CastSumProduct","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)*([x≤b]+[b<x]*3)*λ[x]","ℝ"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3203,6 +3218,33 @@ private void run(string directory){
 			enforce(has("solve_left ")==among("BracketSolved"),c.name~" comparison solved below the casts");
 			if(among("BracketFunction")) enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0,c.name~" real mask below a binder");
 		}
+		// A sum of brackets: the simplifier keeps it in the least sort that has
+		// its numbers, a sum of natural numbers below all three casts to the
+		// reals, of integers below two, of rationals below one, also under a
+		// mask that the summands share. The casts are additive and commute
+		// with a mask for every definedness pattern, so the weight is the sum
+		// of the casts of the summands at every point: the brackets of
+		// numbers, each an observation between bounds of its own. Under a
+		// common mask that mask goes under the sum first, and so does a factor
+		// of the sum; the bounds of a summand may then compete. A summand
+		// beyond a single bound keeps the integral, and so does a product of
+		// two such sums, which stays below the casts.
+		if(c.name.indexOf("CastSum")==0){
+			enum src="Distribution.StepSource.";
+			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
+			bool retained=among("CastSumUnbounded","CastSumProduct");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0)!=retained,c.name~" sum of observations");
+			enforce(has("cast_add_natural ")==among("CastSum","CastSumThree","CastSumCompeting","CastSumClosed","CastSumMany","CastSumOne","CastSumMixed","CastSumBound","CastSumWeight","CastSumExponential","CastSumHalfLine"),c.name~" sum of natural numbers below three casts");
+			enforce(has("cast_add_integer ")==among("CastSumInteger","CastSumCompetingInteger"),c.name~" sum of integers below two casts");
+			enforce(has("cast_add_rational ")==among("CastSumRational","CastSumMixed"),c.name~" sum of rationals below one cast");
+			bool common=!retained&&!among("CastSumThree","CastSumInteger","CastSumClosed");
+			enforce((certificate.indexOf("Distribution.DensityProgram.mass_pointwise")>=0)==common,c.name~" mask that the summands share");
+			enforce((certificate.indexOf("Value.mul_add ")>=0)==among("CastSumWeight","CastSumExponential","CastSumHalfLine"),c.name~" factor of the sum");
+			enforce(has("third_second_piece ")==among("CastSumRational","CastSumCompeting","CastSumCompetingInteger","CastSumMany","CastSumOne","CastSumMixed","CastSumBound","CastSumWeight"),c.name~" bounds of a summand that compete");
+			enforce(has("same_side_piece ")==among("CastSumHalfLine"),c.name~" bounds of a summand on one side");
+		}
 		// A summand of a sum of observations with several bounds on one side:
 		// the two cases of the order of two of its bounds, each such a summand
 		// with one bound less. Observations that add are integrable or
@@ -3211,14 +3253,13 @@ private void run(string directory){
 		// is missing somewhere. So a mask or a factor of a sum goes under the
 		// sum also where the bounds of a summand then compete with those of
 		// the whole, a sum of a masked and an unmasked summand included, and
-		// a comparison in a summand is solved for the axis first. A constant
-		// under the casts of a bracket and a domain around the whole sum keep
-		// their integral.
+		// a comparison in a summand is solved for the axis first. A domain
+		// around the whole sum keeps its integral.
 		if(c.name.indexOf("PieceCases")==0){
 			enum src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
-			bool retained=among("PieceCasesConstant","PieceCasesDomain");
+			bool retained=among("PieceCasesDomain");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0)!=retained,c.name~" sum of observations");
 			enforce(has("Piece.add ")!=retained,c.name~" observations that add");

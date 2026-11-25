@@ -204,6 +204,8 @@ private struct IntegralSolution{
 	// certificate of its normal form, if that differs. Before that the
 	// weight may be split where its absolute values change sign.
 	uint[] summands; Rational[] kinks; uint split=uint.max;
+	// After that the casts of a sum of a lesser sort may go to its summands.
+	uint lifted=uint.max;
 }
 private struct PolynomialGrid{
 	Rational[] cuts,points;
@@ -2147,6 +2149,78 @@ final class Bindings{
 		auto proof="(Value.split "~under(body)~" x "~SourceCertificates.q(kinks[0])~" "~literal(kinks[0])~")";
 		if(tail.proof.length) proof="(Eq.trans "~proof~" (congrArg₂ Value.add rfl "~tail.proof~"))";
 		return Spread(sum.id,proof);
+	}
+	// A sum of a lesser sort below its casts to the reals, also under masks:
+	// of natural numbers below all three casts, of integers below two, of
+	// rationals below one. The simplifier writes a sum of brackets so. The
+	// number of casts so far says which sum is meant.
+	private bool sumBelowCasts(uint x,size_t casts,uint depth=0){
+		bool call(uint i,Builtin f){ auto q=nodes[i]; if(q.op!=BoundOp.primitive) return false; auto v=arena.view(arena.at(q.data)); return v.op==Op.builtin&&v.value==f; }
+		if(depth>64||nodes[x].op!=BoundOp.primitive) return false;
+		auto q=nodes[x];
+		if(casts==1&&call(x,Builtin.castZQ)||casts==2&&call(x,Builtin.castNZ)) return sumBelowCasts(q.a,casts+1,depth+1);
+		if(arena.view(arena.at(q.data)).op==Op.mask) return sumBelowCasts(q.b,casts,depth+1);
+		return call(x,casts==3?Builtin.addN:casts==2?Builtin.addZ:Builtin.addQ);
+	}
+	// Whether a weight has such a sum. Decided without building anything.
+	private bool castsSum(uint id,uint depth=0){
+		auto q=nodes[id];
+		if(depth>64||q.op!=BoundOp.primitive&&q.op!=BoundOp.guard||!depends(at(id),0)) return false;
+		if(q.op==BoundOp.primitive){
+			auto v=arena.view(arena.at(q.data));
+			if(v.op==Op.builtin&&v.value==Builtin.castQR) return sumBelowCasts(q.a,1);
+		}
+		return castsSum(q.a,depth+1)||q.b!=uint.max&&castsSum(q.b,depth+1);
+	}
+	// The casts of such a sum go to its summands, through the masks around
+	// it: a cast is additive and commutes with a mask for every definedness
+	// pattern, so the weight is the same at every point. What remains below
+	// the casts is a bracket of a number, or whatever the sum has that is
+	// not such a sum. None where the weight has no such sum. With `under`,
+	// the evaluation of a subterm of the source at a point, the proof of the
+	// equation is built with it.
+	private Spread liftCasts(uint id,scope string delegate(uint) @safe under){
+		enum src="Distribution.StepSource.";
+		bool isOp(uint i,Op op){ auto q=nodes[i]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op; }
+		bool call(uint i,Builtin f){ return isOp(i,Op.builtin)&&arena.view(arena.at(nodes[i].data)).value==f; }
+		string congr(string f,string a,string b){ return a.length||b.length?"(congrArg₂ "~f~" "~(a.length?a:"rfl")~" "~(b.length?b:"rfl")~")":""; }
+		// The value `x` of a lesser sort below these casts, as a real term.
+		Spread push(uint[] casts,uint x,uint depth){
+			auto q=nodes[x]; enum kinds=["rational","integer","natural"]; auto kind=kinds[casts.length-1];
+			if(depth<64){
+				if(casts.length==1&&call(x,Builtin.castZQ)||casts.length==2&&call(x,Builtin.castNZ)) return push(casts~x,q.a,depth+1);
+				if(isOp(x,Op.mask)&&sumBelowCasts(q.b,casts.length)){
+					auto inner=push(casts,q.b,depth+1);
+					auto result=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[at(q.a),at(inner.id)]);
+					if(!under) return Spread(result.id);
+					auto proof="("~src~"cast_mask"~(casts.length==3?"":"_"~kind)~" "~under(q.a)~" "~under(q.b)~")";
+					if(inner.proof.length) proof="(Eq.trans "~proof~" (congrArg (Value.mask "~under(q.a)~") "~inner.proof~"))";
+					return Spread(result.id,proof);
+				}
+				if(call(x,casts.length==3?Builtin.addN:casts.length==2?Builtin.addZ:Builtin.addQ)){
+					auto a=push(casts,q.a,depth+1),b=push(casts,q.b,depth+1);
+					auto result=primitive(arena.add(arena.real_(0),arena.real_(0),true),[at(a.id),at(b.id)]);
+					if(!under) return Spread(result.id);
+					auto proof="("~src~"cast_add_"~kind~" "~under(q.a)~" "~under(q.b)~")",rest=congr("Value.add",a.proof,b.proof);
+					return Spread(result.id,rest.length?"(Eq.trans "~proof~" "~rest~")":proof);
+				}
+			}
+			auto leaf=at(x); foreach_reverse(c;casts) leaf=primitive(arena.at(nodes[c].data),[leaf]);
+			return Spread(leaf.id);
+		}
+		Spread visit(uint i,uint depth){
+			auto q=nodes[i];
+			if(depth>64||q.op!=BoundOp.primitive&&q.op!=BoundOp.guard||!depends(at(i),0)) return Spread(i);
+			if(call(i,Builtin.castQR)) return sumBelowCasts(q.a,1)?push([i],q.a,depth+1):Spread(i);
+			auto a=visit(q.a,depth+1),b=q.b==uint.max?Spread.init:visit(q.b,depth+1);
+			if(a.id==q.a&&(q.b==uint.max||b.id==q.b)) return Spread(i);
+			auto rebuilt=q.op==BoundOp.guard?guard(at(a.id),at(b.id)):primitive(arena.at(q.data),q.b==uint.max?[at(a.id)]:[at(a.id),at(b.id)]);
+			if(!under) return Spread(rebuilt.id);
+			return Spread(rebuilt.id,q.b==uint.max?"(congrArg "~valueOperation(q)~" "~a.proof~")":congr(valueOperation(q),a.proof,b.proof));
+		}
+		if(!castsSum(id)) return Spread.init;
+		auto r=visit(id,0);
+		return r.id==id?Spread.init:r;
 	}
 	// Whether a product or a mask in a weight has a sum with a masked
 	// summand to go under. Decided without building anything.
@@ -6658,12 +6732,15 @@ final class Bindings{
 			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
 			bool sum(uint id){ auto q=nodes[id]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.add; }
 			bool observed(uint id){ return summandObserved(t,id,0); }
+			// The simplifier writes a sum of brackets as a sum of a lesser sort
+			// below its casts: that is the sum of the casts of the summands.
+			auto lifted=liftCasts(solution.from[0],null); auto whole=lifted.id!=uint.max?lifted.id:solution.from[0];
 			size_t count;
 			bool admissible(uint id,uint depth){
 				if(observed(id)){ ++count; return count<=16; }
 				return depth<16&&sum(id)&&admissible(nodes[id].a,depth+1)&&admissible(nodes[id].b,depth+1);
 			}
-			if(!sum(solution.from[0])||!admissible(solution.from[0],0)||count<2) return BoundTerm.init;
+			if(!sum(whole)||!admissible(whole,0)||count<2) return BoundTerm.init;
 			IntegralSolution[] pieces; BoundTerm[] guards;
 			BoundTerm build(uint id){
 				if(observed(id)){
@@ -6680,10 +6757,10 @@ final class Bindings{
 				auto b=build(nodes[id].b); if(b==BoundTerm.init) return b;
 				return primitive(arena.add(arena.real_(0),arena.real_(0),true),[a,b]);
 			}
-			auto total=build(solution.from[0]);
+			auto total=build(whole);
 			if(total==BoundTerm.init) return BoundTerm.init;
 			foreach_reverse(g;guards) total=guard(g,total);
-			solution.pieces=pieces; solution.interval=true; solution.piecewise=true; solution.output=total.id;
+			solution.pieces=pieces; solution.interval=true; solution.piecewise=true; solution.output=total.id; solution.lifted=lifted.id;
 			return total;
 		}
 		// A strict guard that does not mention the axis leaves the observation:
@@ -6710,8 +6787,9 @@ final class Bindings{
 			auto n=node(t);
 			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
 			auto body=solution.from[0],kinks=absoluteKinks(body);
-			if(!kinks.length&&!spreadsSum(body)) return BoundTerm.init;
-			auto source=kinks.length?splitAt(body,kinks,null).id:body,spread=spreadProducts(source,16,null);
+			if(!kinks.length&&!spreadsSum(body)&&!castsSum(body)) return BoundTerm.init;
+			auto cut=kinks.length?splitAt(body,kinks,null).id:body,lifted=liftCasts(cut,null);
+			auto source=lifted.id!=uint.max?lifted.id:cut,spread=spreadProducts(source,16,null);
 			if(spread.id==uint.max||spread.id==body) return BoundTerm.init;
 			auto opts=Options(DensityMode.preserve,true),inner=context(at(body));
 			auto index=freshScalarIndex(body),argument=arena.variable(Sort.real_,index);
@@ -6752,7 +6830,8 @@ final class Bindings{
 			foreach_reverse(condition;conditions) target=guard(condition,target);
 			if(commit) scalarDomains~=checks;
 			solution.to=[target.id]; solution.summands=summands;
-			if(kinks.length){ solution.kinks=kinks; solution.split=source; }
+			if(kinks.length){ solution.kinks=kinks; solution.split=cut; }
+			solution.lifted=lifted.id;
 			auto ctx=context(t),weight=inheritHint(at(nodes[n.a].a),lambda(target));
 			return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
 		}
@@ -11959,8 +12038,15 @@ final class Bindings{
 				lift="("~lifted~"add "~la~" "~lb~")";
 				return "(Distribution.StepSource.Piece.add "~left~" "~right~")";
 			}
-			string lift;auto evidence=sum(s.from[0],lift);enforce(next==s.pieces.length,"missing summand");
-			auto mass="Distribution.DensityProgram.presentation_mass_pieces (w := "~functionAt(s.from[0])~") "~evidence~" (fun _ => rfl)";
+			// A sum of a lesser sort below its casts is the sum of the casts.
+			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+			auto whole=s.from[0];string shape="(fun _ => rfl)";
+			if(s.lifted!=uint.max){
+				auto casts=liftCasts(whole,&under);enforce(casts.id==s.lifted&&casts.proof.length,"missing casts of a sum of observations");
+				whole=s.lifted;shape="(fun x => "~casts.proof~")";
+			}
+			string lift;auto evidence=sum(whole,lift);enforce(next==s.pieces.length,"missing summand");
+			auto mass="Distribution.DensityProgram.presentation_mass_pieces (w := "~functionAt(s.from[0])~") "~evidence~" "~shape;
 			// The guards of the domains of the summands leave the sum together.
 			return guarded?"Eq.trans ("~mass~") (Distribution.DensityProgram.GuardedSum.sound "~lift~")":mass;
 		}
@@ -12310,6 +12396,8 @@ final class Bindings{
 			}
 			// The masks of a split weight are named by its certificate.
 			if(s.split!=uint.max) stack~=s.split;
+			// So are the summands below their casts.
+			if(s.lifted!=uint.max) stack~=s.lifted;
 			// So is the literal of `h` under a curvature that is a term, also
 			// where no row of the moments has a power of it.
 			if(s.gaussian&&s.bell.curved) stack~=s.bell.factor;
@@ -14334,6 +14422,11 @@ final class Bindings{
 					// The split at the changes of sign, then the factors under the sums.
 					auto source=s.from[0];string cut;
 					if(s.split!=uint.max){auto pieces=splitAt(source,s.kinks,&under);enforce(pieces.id==s.split,"missing split of a weight");cut=pieces.proof;source=s.split;}
+					// Then the casts of a sum of a lesser sort at its summands.
+					if(s.lifted!=uint.max){
+						auto lift=liftCasts(source,&under);enforce(lift.id==s.lifted&&lift.proof.length,"missing casts of a sum");
+						cut=cut.length?"(Eq.trans "~cut~" "~lift.proof~")":lift.proof;source=s.lifted;
+					}
 					auto spread=spreadProducts(source,16,&under);
 					enforce(spread.id!=uint.max&&(cut.length||spread.proof.length),"missing factor of a sum");
 					if(cut.length)spread.proof=spread.proof.length?"(Eq.trans "~cut~" "~spread.proof~")":cut;
