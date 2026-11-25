@@ -98,7 +98,11 @@ private struct GaussianData{
 	bool symbolic; Rational[] moments; uint[] literals; uint curvature=uint.max,zero0=uint.max,zero1=uint.max;
 	Rational[][] rows; uint[][] rowLiterals;
 }
-private struct IntegralSolution{ uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell; }
+private struct IntegralSolution{
+	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell;
+	// The summands of a sum of observations between bounds, each with its own.
+	IntegralSolution[] pieces;
+}
 private struct PolynomialGrid{
 	Rational[] cuts,points;
 	Rational[][] cells;
@@ -3131,8 +3135,11 @@ final class Bindings{
 		// rate, with optional factors that do not mention the axis. Bounds and factors may be missing; the theorem is an equation
 		// of partial values. Each antiderivative is evaluated at the two
 		// bounds, and the certificate differentiates it.
-		BoundTerm integrateInterval(BoundTerm t,out IntegralSolution solution){
-			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||!solution.from.length) return BoundTerm.init;
+		BoundTerm integrateInterval(BoundTerm t,out IntegralSolution solution,uint summand=uint.max,bool construct=true){
+			auto n=node(t); if(n.op!=BoundOp.distributionMass) return BoundTerm.init;
+			// A summand of the only weight is observed as a weight by itself.
+			if(summand!=uint.max) solution.from=[summand];
+			else if(!densityBodies(n.a,solution.from)||!solution.from.length) return BoundTerm.init;
 			auto ctx=context(t),inner=context(at(solution.from[0])); IntervalData d;
 			bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
 			bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
@@ -3252,6 +3259,7 @@ final class Bindings{
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
 			if(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0)) return BoundTerm.init;
+			if(!construct) return t;
 			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
 			auto addOp=arena.add(arena.real_(0),arena.real_(0),true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
 			auto minusOne=scalar(ctx,arena.real_(Rational(-1)));
@@ -3461,6 +3469,33 @@ final class Bindings{
 			}
 			solution.bell=d; solution.gaussian=true; solution.piecewise=true; solution.output=result.id; return result;
 		}
+		// A sum of observations between bounds, each with bounds of its own:
+		// every summand is observed by itself, and the results add. An integral
+		// is additive only where both parts exist; such an observation is
+		// integrable or undefined somewhere, so their sum is an equation of
+		// partial values. All summands are decided before any is built.
+		BoundTerm integratePieces(BoundTerm t,out IntegralSolution solution){
+			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
+			bool sum(uint id){ auto q=nodes[id]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.add; }
+			bool observed(uint id){ IntegralSolution trial; return integrateInterval(t,trial,id,false)!=BoundTerm.init; }
+			size_t count;
+			bool admissible(uint id,uint depth){
+				if(observed(id)){ ++count; return count<=16; }
+				return depth<16&&sum(id)&&admissible(nodes[id].a,depth+1)&&admissible(nodes[id].b,depth+1);
+			}
+			if(!sum(solution.from[0])||!admissible(solution.from[0],0)||count<2) return BoundTerm.init;
+			IntegralSolution[] pieces;
+			BoundTerm build(uint id){
+				if(observed(id)){ IntegralSolution piece; auto value=integrateInterval(t,piece,id); if(value!=BoundTerm.init) pieces~=piece; return value; }
+				auto a=build(nodes[id].a); if(a==BoundTerm.init) return a;
+				auto b=build(nodes[id].b); if(b==BoundTerm.init) return b;
+				return primitive(arena.add(arena.real_(0),arena.real_(0),true),[a,b]);
+			}
+			auto total=build(solution.from[0]);
+			if(total==BoundTerm.init) return BoundTerm.init;
+			solution.pieces=pieces; solution.interval=true; solution.piecewise=true; solution.output=total.id;
+			return total;
+		}
 		// A strict guard that does not mention the axis leaves the observation:
 		// where it does not hold the density is undefined everywhere, and so
 		// is the observation. This needs nothing of the inner observation.
@@ -3483,6 +3518,7 @@ final class Bindings{
 			if(!observed){ trial=IntegralSolution.init; observed=integratePolynomials(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integrateInterval(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integrateGaussian(inside,trial)!=BoundTerm.init; }
+			if(!observed){ trial=IntegralSolution.init; observed=integratePieces(inside,trial)!=BoundTerm.init; }
 			if(!observed&&massGuard(inside,depth+1)==BoundTerm.init) return BoundTerm.init;
 			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[dropIndex(at(guard)),inside]);
 		}
@@ -4981,6 +5017,7 @@ final class Bindings{
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePolynomials(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateInterval(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateGaussian(at(result.output),solution); }
+				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePieces(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){
 					auto strict=unguardMass(at(result.output)),unguarded=strict==BoundTerm.init?massGuard(at(result.output),0):BoundTerm.init;
 					if(strict!=BoundTerm.init){ next=strict; rule=BindingRule.distributionMassStrictGuard; }
@@ -6879,8 +6916,10 @@ final class Bindings{
 			return "Distribution.DensityProgram.presentation_mass_gaussian"~(scaled?"_scaled ":" ")~program~" (R := "~list~") "~q(d.constant)~" "~q(d.c0)~" "~q(d.c1)~" "~q(d.c2)~" "~
 				q(d.vertex)~" "~q(d.width)~" "~evidence~" rfl "~literal(d.factor,d.constant)~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
 		}
-		if(s.interval){
-			auto d=s.bounds;enum everywhere=SourceCertificates.everywhere;
+		// An observation between bounds, above or below one; as a summand in
+		// the form that adds, of its weight by itself.
+		string between(IntegralSolution q,bool summand){
+			auto d=q.bounds;enum everywhere=SourceCertificates.everywhere;
 			string ev(uint id){return "("~name(id)~".eval ξ ρ)";}
 			string truth(bool b){return b?"true":"false";}
 			auto a=ev(d.lower),b=ev(d.upper),m=ev(d.minusOne);
@@ -6891,7 +6930,7 @@ final class Bindings{
 				"(Distribution.StepSource.intervalGuard "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~" "~a~" "~b~")";
 			auto termsName="Distribution.StepSource."~(d.below?"UpperTerms":d.half?"HalfLineTerms":"IntervalTerms");
 			// The first weight is the guard around the value, by evaluation.
-			auto body=s.from[0],value=d.unit!=uint.max?"(fun _ : ℝ => some (1 : ℝ))":functionAt(d.value);
+			auto body=q.from[0],value=d.unit!=uint.max?"(fun _ : ℝ => some (1 : ℝ))":functionAt(d.value);
 			// A value under the strict guard of its domain. Around the mask that
 			// guard follows the negations of the comparisons of the mask.
 			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
@@ -6912,9 +6951,10 @@ final class Bindings{
 				d.unit!=uint.max?"(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")":
 				domain.length?domain:d.nested?"(fun _ => Distribution.StepSource.mask_mask _ _ _)":"(fun _ => rfl)");
 			auto program="(Distribution.DensityProgram.weight "~functionAt(body)~" Distribution.DensityProgram.lebesgue)";
-			auto masked=save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_first",shape));
+			auto masked=summand?save("Distribution.StepSource.Masked "~functionAt(body)~" "~guard~" "~value,"(Distribution.StepSource.Masked.mk "~shape~")"):
+				save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_first",shape));
 			string[] factors;
-			foreach(id;s.from[1..$]){
+			foreach(id;q.from[1..$]){
 				auto w=exponential(id);
 				program="(Distribution.DensityProgram.weight "~functionAt(id)~" "~program~")";
 				value="(fun x : ℝ => Value.mul ("~value~" x) ("~functionAt(id)~" x))";
@@ -6962,9 +7002,23 @@ final class Bindings{
 			}
 			auto total=terms(d.unit!=uint.max?uint.max:d.value);
 			if(d.domain!=uint.max)total="("~termsName~".guard ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) "~total~")";
-			auto minus="(Numeric.calculate_sound ξ n"~to!string(nodes[d.minusOne].data)~" (-1 : ℚ) rfl)";
-			return "Distribution.DensityProgram.presentation_mass_"~(d.below?"upper":d.half?"halfline":"interval")~" "~program~" "~flags~(d.below?"":" "~minus)~" "~masked~" "~total;
+			auto minus="(Numeric.calculate_sound ξ n"~to!string(nodes[d.minusOne].data)~" (-1 : ℚ) rfl)",kind=d.below?"upper":d.half?"halfline":"interval";
+			if(summand)return "(Distribution.StepSource."~kind~"_piece "~flags~(d.below?"":" "~minus)~" "~masked~" "~total~")";
+			return "Distribution.DensityProgram.presentation_mass_"~kind~" "~program~" "~flags~(d.below?"":" "~minus)~" "~masked~" "~total;
 		}
+		if(s.pieces.length){
+			// The summands in the order of the rule, with the sum around them.
+			size_t next;
+			string sum(uint id){
+				if(next<s.pieces.length&&s.pieces[next].from[0]==id)return between(s.pieces[next++],true);
+				auto n=nodes[id];enforce(n.op==BoundOp.primitive&&arena.view(arena.at(n.data)).op==Op.add,"bad sum of observations");
+				auto left=sum(n.a),right=sum(n.b);
+				return "(Distribution.StepSource.Piece.add "~left~" "~right~")";
+			}
+			auto evidence=sum(s.from[0]);enforce(next==s.pieces.length,"missing summand");
+			return "Distribution.DensityProgram.presentation_mass_pieces (w := "~functionAt(s.from[0])~") "~evidence~" (fun _ => rfl)";
+		}
+		if(s.interval)return between(s,false);
 		auto cuts=s.exceptions;enforce(cuts.length,"empty step grid");
 		string density(){
 			auto p="Distribution.DensityProgram.lebesgue";
@@ -7261,12 +7315,14 @@ final class Bindings{
 			if(c.inverse!=uint.max) stack~=c.inverse;
 			if(c.powerDegree) stack~=[c.derivativeNumerator,c.derivativeDenominator];
 		}
-		foreach(s;result.integrals){
+		void integralRoots(IntegralSolution s){
 			stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) if(r.primitive!=uint.max) stack~=r.primitive;
 			// The bounds and the literal of a difference are named by the theorem
 			// also where the result does not mention them.
-			if(s.interval){ stack~=[s.bounds.lower,s.bounds.upper]; if(!s.bounds.below) stack~=s.bounds.minusOne; }
+			if(s.interval&&!s.pieces.length){ stack~=[s.bounds.lower,s.bounds.upper]; if(!s.bounds.below) stack~=s.bounds.minusOne; }
+			foreach(piece;s.pieces) integralRoots(piece);
 		}
+		foreach(s;result.integrals) integralRoots(s);
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd||p.rule==BindingRule.distributionCoverAffine) stack~=p.extra;
 		while(stack.length){

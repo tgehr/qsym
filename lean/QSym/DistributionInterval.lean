@@ -887,9 +887,170 @@ theorem upper_integral (strict : Bool) (b : Option ℝ) {f v : ℝ → Option �
         split_ifs <;> linarith
       rw [if_pos hc]
 
+/-! Observations that add. An integral is additive only where both parts
+exist, and an observation is also missing where its density is defined but
+not integrable. The observations between bounds are never missing for that
+reason: their density is integrable, or undefined somewhere. -/
+
+/-- An observation with its value, in a form that adds: the density is
+defined everywhere and integrable with this integral, or it is undefined
+somewhere and the value with it. -/
+def Piece (f : ℝ → Option ℝ) (out : Option ℝ) : Prop :=
+  ((∀ x, Value.Defined (f x)) ∧ Integrable (fun x => (f x).getD 0) volume ∧
+      out = some (∫ x, (f x).getD 0)) ∨ ((∃ x, f x = none) ∧ out = none)
+
+theorem Piece.integral {f : ℝ → Option ℝ} {out : Option ℝ} (h : Piece f out) :
+    partialIntegral volume f = out := by
+  rcases h with ⟨hd, hi, ho⟩ | ⟨⟨x, hx⟩, ho⟩
+  · rw [ho]
+    exact partialIntegral_valid volume f hd hi
+  · rw [ho]
+    apply if_neg
+    intro hd
+    obtain ⟨r, hr⟩ := hd.1 x
+    rw [hx] at hr
+    cases hr
+
+/-- An observation that is missing only where its density is undefined
+somewhere. -/
+theorem Piece.of_integral {f : ℝ → Option ℝ} {out : Option ℝ}
+    (h : partialIntegral volume f = out) (hu : out = none → ∃ x, f x = none) : Piece f out := by
+  by_cases hc : (∀ x, Value.Defined (f x)) ∧ Integrable (fun x => (f x).getD 0) volume
+  · exact Or.inl ⟨hc.1, hc.2, by rw [← h]; exact partialIntegral_valid volume f hc.1 hc.2⟩
+  · have hn : out = none := by
+      rw [← h]
+      exact if_neg hc
+    exact Or.inr ⟨hu hn, hn⟩
+
+/-- The sum of two such observations is one, for every definedness pattern. -/
+theorem Piece.add {f g : ℝ → Option ℝ} {s t : Option ℝ} (hf : Piece f s) (hg : Piece g t) :
+    Piece (fun x => Value.add (f x) (g x)) (Value.add s t) := by
+  rcases hf with ⟨hfd, hfi, hs⟩ | ⟨⟨x, hx⟩, hs⟩
+  · rcases hg with ⟨hgd, hgi, ht⟩ | ⟨⟨x, hx⟩, ht⟩
+    · have he : (fun x => (Value.add (f x) (g x)).getD 0) =
+          fun x => (f x).getD 0 + (g x).getD 0 := by
+        funext x
+        obtain ⟨a, ha⟩ := hfd x
+        obtain ⟨b, hb⟩ := hgd x
+        rw [ha, hb]
+        rfl
+      refine Or.inl ⟨fun x => ?_, by rw [he]; exact hfi.add hgi, ?_⟩
+      · obtain ⟨a, ha⟩ := hfd x
+        obtain ⟨b, hb⟩ := hgd x
+        exact ⟨a + b, by show Value.add (f x) (g x) = _; rw [ha, hb]; rfl⟩
+      · rw [he, integral_add hfi hgi, hs, ht]
+        rfl
+    · refine Or.inr ⟨⟨x, ?_⟩, by rw [ht]; cases s <;> rfl⟩
+      show Value.add (f x) (g x) = none
+      rw [hx]
+      cases f x <;> rfl
+  · refine Or.inr ⟨⟨x, ?_⟩, by rw [hs]; rfl⟩
+    show Value.add (f x) (g x) = none
+    rw [hx]
+    rfl
+
+/-- Between two bounds a missing observation is undefined somewhere. -/
+theorem interval_undefined (swap sl su : Bool) (a b m : Option ℝ) {f v : ℝ → Option ℝ}
+    {out : Option ℝ} (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hf : Masked f (intervalGuard swap sl su a b) v) (ht : IntervalTerms a b m v out)
+    (hn : Value.mask (compare (sl || su) a b) out = none) : ∃ x, f x = none := by
+  have hm : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  cases a with
+  | none =>
+    cases b with
+    | none =>
+      exact ⟨0, by rw [hf.equation]; cases swap <;> cases sl <;> cases su <;> rfl⟩
+    | some u =>
+      refine ⟨u - 1, ?_⟩
+      rw [hf.equation]
+      cases swap <;> cases sl <;> cases su <;>
+        simp [intervalGuard, compare, Value.and, Value.lt, Value.le, Value.mask]
+  | some l =>
+    cases b with
+    | none =>
+      refine ⟨l + 1, ?_⟩
+      rw [hf.equation]
+      cases swap <;> cases sl <;> cases su <;>
+        simp [intervalGuard, compare, Value.and, Value.lt, Value.le, Value.mask]
+    | some u =>
+      have hg := guard_defined swap sl su l u
+      rw [compare_defined, mask_decide] at hn
+      by_cases hT : (if (sl || su) = true then l < u else l ≤ u)
+      · rw [if_pos hT] at hn
+        rcases ht.sound hm rfl rfl with ⟨g, _, _, ho⟩ | ⟨hv, _⟩
+        · rw [ho] at hn
+          cases hn
+        · obtain ⟨x, hx⟩ := region_nonempty sl su hT
+          exact ⟨x, by rw [hf.equation, hg, hv, mask_decide, if_pos hx]⟩
+      · rw [if_neg hT] at hn
+        cases hn
+
+theorem interval_piece (swap sl su : Bool) (a b m : Option ℝ) {f v : ℝ → Option ℝ}
+    {out : Option ℝ} (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hf : Masked f (intervalGuard swap sl su a b) v) (ht : IntervalTerms a b m v out) :
+    Piece f (Value.mask (compare (sl || su) a b) out) :=
+  .of_integral (interval_integral swap sl su a b m hm hf ht)
+    (interval_undefined swap sl su a b m hm hf ht)
+
+/-- Above one bound a missing observation is undefined somewhere. -/
+theorem halfline_undefined (strict : Bool) (a m : Option ℝ) {f v : ℝ → Option ℝ}
+    {out : Option ℝ} (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hf : Masked f (fun x => compare strict a (some x)) v) (ht : HalfLineTerms a m v out)
+    (hn : out = none) : ∃ x, f x = none := by
+  have hm : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  cases a with
+  | none => exact ⟨0, by rw [hf.equation]; cases strict <;> rfl⟩
+  | some l =>
+    rcases ht.sound hm rfl with ⟨g, _, _, ho⟩ | ⟨hv, _⟩
+    · rw [ho] at hn
+      cases hn
+    · refine ⟨l + 1, ?_⟩
+      rw [hf.equation, compare_defined, hv, mask_decide]
+      have hc : (if strict = true then l < l + 1 else l ≤ l + 1) := by
+        split_ifs <;> linarith
+      rw [if_pos hc]
+
+theorem halfline_piece (strict : Bool) (a m : Option ℝ) {f v : ℝ → Option ℝ} {out : Option ℝ}
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hf : Masked f (fun x => compare strict a (some x)) v) (ht : HalfLineTerms a m v out) :
+    Piece f out :=
+  .of_integral (halfline_integral strict a m hm hf ht) (halfline_undefined strict a m hm hf ht)
+
+/-- Below one bound a missing observation is undefined somewhere. -/
+theorem upper_undefined (strict : Bool) (b : Option ℝ) {f v : ℝ → Option ℝ} {out : Option ℝ}
+    (hf : Masked f (fun x => compare strict (some x) b) v) (ht : UpperTerms b v out)
+    (hn : out = none) : ∃ x, f x = none := by
+  cases b with
+  | none => exact ⟨0, by rw [hf.equation]; cases strict <;> rfl⟩
+  | some u =>
+    rcases ht.sound rfl with ⟨g, _, _, ho⟩ | ⟨hv, _⟩
+    · rw [ho] at hn
+      cases hn
+    · refine ⟨u - 1, ?_⟩
+      rw [hf.equation, compare_defined, hv, mask_decide]
+      have hc : (if strict = true then u - 1 < u else u - 1 ≤ u) := by
+        split_ifs <;> linarith
+      rw [if_pos hc]
+
+theorem upper_piece (strict : Bool) (b : Option ℝ) {f v : ℝ → Option ℝ} {out : Option ℝ}
+    (hf : Masked f (fun x => compare strict (some x) b) v) (ht : UpperTerms b v out) :
+    Piece f out :=
+  .of_integral (upper_integral strict b hf ht) (upper_undefined strict b hf ht)
+
 end QSym.Distribution.StepSource
 
 namespace QSym.Distribution.DensityProgram
+
+/-- The mass of a weight that is such an observation, as of a sum of them. -/
+theorem presentation_mass_pieces {w f : ℝ → Option ℝ} {out : Option ℝ}
+    (h : StepSource.Piece f out) (hw : ∀ x, w x = f x) :
+    massValue (DensityProgram.weight w .lebesgue).presentation = out := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  have he : (DensityProgram.weight w .lebesgue).density = f := by
+    funext x
+    simp only [DensityProgram.density, Value.mul_one_left, hw x]
+  rw [he]
+  exact h.integral
 
 theorem presentation_mass_upper (p : DensityProgram) (strict : Bool) (b : Option ℝ)
     {v : ℝ → Option ℝ} {out : Option ℝ}

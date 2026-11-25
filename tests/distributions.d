@@ -607,6 +607,22 @@ private Case[] cases(){ return [
 	Case("VertexNormal","∫dx [0≤x]*exp(-x^2)/sqrt(π)*2*λ[x]","ℝ","1"),
 	Case("VertexAway","∫dx [1≤x]*exp(-x^2)*λ[x]","ℝ"),
 	Case("VertexInterval","∫dx [0≤x]*[x≤1]*exp(-x^2)*λ[x]","ℝ"),
+	Case("PiecesLaplace","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","2"),
+	Case("PiecesShifted","∫dx ([0≤x]*exp(-x)+[1≤x]*exp(-2*x))*λ[x]","ℝ","1/2·exp(-2)+1"),
+	Case("PiecesStrict","∫dx ([x≤0]*exp(x)+[0<x]*exp(-x))*λ[x]/2","ℝ","1"),
+	Case("PiecesSymbolicBounds","∫dx ([x≤a]*exp(x)+[b≤x]*exp(-x))*λ[x]","ℝ","exp(a)+exp(-b)"),
+	Case("PiecesInterval","∫dx ([0≤x≤1]*exp(x)+[1≤x]*exp(-x))*λ[x]","ℝ","2·cosh(1)-1"),
+	Case("PiecesPolynomial","∫dx ([0≤x≤1]*x+[2≤x]*exp(-x))*λ[x]","ℝ","exp(-2)+1/2"),
+	Case("PiecesVertex","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x^2))*λ[x]","ℝ","1/2·sqrt(π)+1"),
+	Case("PiecesThree","∫dx ([x≤-1]*exp(x)+[-1≤x≤1]+[1≤x]*exp(-x))*λ[x]","ℝ","2·exp(-1)+2"),
+	Case("PiecesFour","∫dx (([x≤0]*exp(x)+[0≤x]*exp(-x))+([x≤-1]*exp(2*x)+[1≤x]*exp(-2*x)))*λ[x]","ℝ","exp(-2)+2"),
+	Case("PiecesScaled","∫dx ([x≤0]*c*exp(x)+[0≤x]*d*exp(-x))*λ[x]","ℝ","c+d"),
+	Case("PiecesMoment","∫dx ([x≤0]*exp(x)*x^2+[0≤x]*exp(-x)*x^2)*λ[x]","ℝ","4"),
+	Case("PiecesGuarded","∫dx [c≤d]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","[c≤d]·2"),
+	Case("PiecesNested","λ(t:ℝ).∫dx ([x≤0]*exp(x)+[0≤x]*[x≤t]*exp(-x))*λ[x]","ℝ→ℝ","λ(t:ℝ). [0≤t]·(-exp(-t)+1)+1"),
+	Case("PiecesGrowing","∫dx ([x≤0]*exp(x)+[0≤x]*exp(x))*λ[x]","ℝ"),
+	Case("PiecesFactor","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*x^2*λ[x]","ℝ"),
+	Case("PiecesWhole","∫dx ([x≤0]*exp(x)+exp(-x^2))*λ[x]","ℝ"),
 	Case("GaussianSymbolic","∫dx exp(-(x-m)^2)*λ[x]","ℝ","sqrt(π)"),
 	Case("GaussianSymbolicOffset","∫dx exp(-x^2+a)*λ[x]","ℝ","sqrt(π)·exp(a)"),
 	Case("GaussianSymbolicMean","∫dx x*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","m"),
@@ -1196,6 +1212,27 @@ private void run(string directory){
 			if(c.name=="VertexSum") enforce(certificate.indexOf("HalfLineTerms.pure")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" terms");
 			if(c.name=="VertexOffset") enforce(certificate.indexOf("Limit.EventualScaled.exp_curve")>=0,c.name~" offset");
 			if(c.name=="VertexDomain") enforce(certificate.indexOf("HalfLineTerms.guard")>=0,c.name~" domain");
+		}
+		// A sum of observations between bounds, each with bounds of its own:
+		// every summand is integrable or missing somewhere, so the observation
+		// of the sum is the sum of the observations. A summand that cannot be
+		// observed, a factor of the sum and a summand on the whole line keep
+		// their integral.
+		if(c.name.indexOf("Pieces")==0){
+			bool retained=c.name=="PiecesGrowing"||c.name=="PiecesFactor"||c.name=="PiecesWhole";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0&&certificate.indexOf("Distribution.StepSource.Piece.add")>=0)!=retained,c.name~" certificate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(!retained){
+				// The lemma of every kind of summand is exercised.
+				bool interval=c.name=="PiecesInterval"||c.name=="PiecesPolynomial"||c.name=="PiecesThree"||c.name=="PiecesNested";
+				bool above=c.name!="PiecesNested",below=c.name!="PiecesShifted"&&c.name!="PiecesInterval"&&c.name!="PiecesPolynomial";
+				enforce((certificate.indexOf("Distribution.StepSource.interval_piece")>=0)==interval,c.name~" between two bounds");
+				enforce((certificate.indexOf("Distribution.StepSource.halfline_piece")>=0)==above,c.name~" above a bound");
+				enforce((certificate.indexOf("Distribution.StepSource.upper_piece")>=0)==below,c.name~" below a bound");
+			}
+			if(c.name=="PiecesVertex") enforce(certificate.indexOf("Distribution.StepSource.HalfLineTerms.gaussian")>=0,c.name~" vertex");
+			if(c.name=="PiecesScaled") enforce(certificate.indexOf("Distribution.StepSource.HalfLineTerms.scaled")>=0&&certificate.indexOf("Distribution.StepSource.UpperTerms.scaled")>=0,c.name~" scale");
+			if(c.name=="PiecesGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		// A strict guard that does not mention the axis leaves the observation,
 		// from the top of a weight or of a factor of it, whether or not the
