@@ -1180,6 +1180,18 @@ final class Bindings{
 		if(build){ axisQuadratic(n.a,c,true); offset=c[0].term; }
 		return true;
 	}
+	// The same up to degree two: `exp(c + q(x)) = exp(c)·exp(q(x))` for a
+	// polynomial `q` without a constant whose coefficients are rational.
+	private bool curveOffset(uint id,out Rational[] exponent,out BoundTerm offset,bool build){
+		auto n=nodes[id]; if(n.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(n.data)); AxisCoefficient[3] c;
+		if(op.op!=Op.builtin||op.value!=Builtin.expR||!axisQuadratic(n.a,c,false)) return false;
+		if(!c[0].present||!c[1].present&&!c[2].present) return false;
+		foreach(x;c[1..$]) if(x.present&&(!x.closed||x.value.words>128)) return false;
+		exponent=[Rational(0),c[1].present?c[1].value:Rational(0),c[2].present?c[2].value:Rational(0)];
+		if(build){ axisQuadratic(n.a,c,true); offset=c[0].term; }
+		return true;
+	}
 	// A product of such factors and of factors that do not mention the
 	// innermost variable; these are the scale of the term, with the constant
 	// part of an exponential.
@@ -1234,30 +1246,33 @@ final class Bindings{
 	}
 	// A product of such factors and of factors that do not mention the
 	// variable, which are its scale: the polynomial and the exponent. Without
-	// `pieces` every factor is what it is on the whole line.
-	private bool tailExponential(uint id,bool bottom,out Rational[] p,out Rational[] exponent,out bool scaled,bool pieces=true,uint depth=0){
+	// `pieces` every factor is what it is on the whole line. With `offsets`
+	// the constant part of an exponent of degree at most two may be a term
+	// that does not mention the variable: its exponential is a scale.
+	private bool tailExponential(uint id,bool bottom,out Rational[] p,out Rational[] exponent,out bool scaled,bool pieces=true,uint depth=0,bool offsets=false){
 		if(depth>16) return false;
 		Rational cut;
 		if(tailFactor(id,bottom,p,exponent,cut,pieces)!=TailFactor.none) return true;
 		if(!depends(at(id),0)){ scaled=true; p=[Rational(1)]; return true; }
 		Rational rate; BoundTerm offset;
 		if(pieces&&offsetExponential(id,rate,offset,false)){ scaled=true; p=[Rational(1)]; exponent=[Rational(0),rate]; return true; }
+		if(offsets&&curveOffset(id,exponent,offset,false)){ scaled=true; p=[Rational(1)]; return true; }
 		auto q=nodes[id];
 		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
 		Rational[] a,b,r,t; bool left,right;
-		if(!tailExponential(q.a,bottom,a,r,left,pieces,depth+1)||!tailExponential(q.b,bottom,b,t,right,pieces,depth+1)) return false;
+		if(!tailExponential(q.a,bottom,a,r,left,pieces,depth+1,offsets)||!tailExponential(q.b,bottom,b,t,right,pieces,depth+1,offsets)) return false;
 		p=polyProduct(a,b); exponent=polySum(r,t); scaled=left||right;
 		if(p.length>64||exponent.length>64) return false;
 		foreach(c;p~exponent) if(c.words>128) return false;
 		return true;
 	}
 	// The scale of such a product outside the binder of the variable.
-	private BoundTerm tailScale(uint id,bool bottom,bool pieces=true){
+	private BoundTerm tailScale(uint id,bool bottom,bool pieces=true,bool offsets=false){
 		Rational[] p,exponent; Rational cut,rate; BoundTerm offset;
 		if(tailFactor(id,bottom,p,exponent,cut,pieces)!=TailFactor.none) return BoundTerm.init;
 		if(!depends(at(id),0)) return dropIndex(at(id));
-		if(pieces&&offsetExponential(id,rate,offset,true)) return primitive(arena.call(Builtin.expR,[arena.real_(0)]),[offset]);
-		auto q=nodes[id],left=tailScale(q.a,bottom,pieces),right=tailScale(q.b,bottom,pieces);
+		if(pieces&&offsetExponential(id,rate,offset,true)||offsets&&curveOffset(id,exponent,offset,true)) return primitive(arena.call(Builtin.expR,[arena.real_(0)]),[offset]);
+		auto q=nodes[id],left=tailScale(q.a,bottom,pieces,offsets),right=tailScale(q.b,bottom,pieces,offsets);
 		if(left==BoundTerm.init) return right;
 		if(right==BoundTerm.init) return left;
 		return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[left,right]);
@@ -3157,7 +3172,7 @@ final class Bindings{
 			bool admissible(uint id,uint depth){
 				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order;
 				if(scaledExponential(id,p,rate,scaled)) return !d.half||rate+outerRate<Rational(0);
-				if(tailExponential(id,false,p,exponent,scaled,false)) return curve(p,exponent,R,E,rate,order);
+				if(tailExponential(id,false,p,exponent,scaled,false,0,true)) return curve(p,exponent,R,E,rate,order);
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
@@ -3215,13 +3230,13 @@ final class Bindings{
 				auto primitive_=primitive(mulOp,[horner(R),primitive(arena.call(Builtin.expR,[arena.real_(0)]),[horner(E)])]); r.primitive=primitive_.id;
 				auto result=d.half?primitive(mulOp,[minusOne,evaluate(primitive_,lower)]):
 					primitive(addOp,[evaluate(primitive_,upper),primitive(mulOp,[minusOne,evaluate(primitive_,lower)])]);
-				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false),result]);
+				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false,true),result]);
 				d.terms~=r; return result;
 			}
 			BoundTerm build(uint id,uint depth){
 				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
 				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
-				if(tailExponential(id,false,p,exponent,r.scaled,false)) return curveDifference(r,p,exponent);
+				if(tailExponential(id,false,p,exponent,r.scaled,false,0,true)) return curveDifference(r,p,exponent);
 				// A sum is integrated term by term only without further weights.
 				auto q=nodes[id];
 				if(depth>16||d.terms.length>16||solution.from.length!=1||!isOp(q,Op.add)) return BoundTerm.init;
@@ -6354,7 +6369,7 @@ final class Bindings{
 		// the factors are polynomials, exponentials of polynomials, with
 		// `pieces` piecewise polynomials beyond their last cut at that end, or
 		// free of the variable; these are the scale.
-		string exponentialTail(uint id,string filter,bool bottom,bool pieces,out bool scaled){
+		string exponentialTail(uint id,string filter,bool bottom,bool pieces,out bool scaled,bool offsets=false){
 			Rational[] p,exponent; Rational cut;
 			final switch(tailFactor(id,bottom,p,exponent,cut,pieces)){
 				case TailFactor.polynomial:return "(Limit.EventualExp.polynomial "~piece(id,everywhere,"",Rational(0)).proof~")";
@@ -6369,8 +6384,15 @@ final class Bindings{
 			if(!depends(at(id),0)) return "(Limit.EventualScaled.constant "~filter~" ("~name(dropIndex(at(id)).id)~".eval ξ ρ))";
 			Rational rate; BoundTerm offset;
 			if(pieces&&offsetExponential(id,rate,offset,false)) return "(Limit.EventualScaled.exp_offset "~filter~" "~offsetProof(id,rate)~")";
+			if(offsets&&curveOffset(id,exponent,offset,false)){
+				// The coefficients above the constant at their rational values:
+				// one that is absent is a zero.
+				AxisCoefficient[3] c; axisQuadratic(nodes[id].a,c,true);
+				string closed(size_t i){ return c[i].present?closedProof(c[i].term,exponent[i]):"Distribution.StepSource.coefValue_absent"; }
+				return "(Limit.EventualScaled.exp_curve "~filter~" "~q(exponent[1])~" "~q(exponent[2])~" "~quadratic(nodes[id].a)~" "~closed(1)~" "~closed(2)~")";
+			}
 			bool left,right; auto product=nodes[id];
-			auto a=exponentialTail(product.a,filter,bottom,pieces,left),b=exponentialTail(product.b,filter,bottom,pieces,right); scaled=left||right;
+			auto a=exponentialTail(product.a,filter,bottom,pieces,left,offsets),b=exponentialTail(product.b,filter,bottom,pieces,right,offsets); scaled=left||right;
 			return scaled?"(Limit.EventualScaled."~(left&&right?"mul":left?"times":"after")~" "~a~" "~b~")":"(Limit.EventualExp.mul "~a~" "~b~")";
 		}
 		// Terms outside the binder that only the proof names: the export
@@ -6803,7 +6825,7 @@ final class Bindings{
 					// The term and its antiderivative everywhere, the derivative,
 					// and on a half-line strictness in the bound and the decay.
 					enum whole="(⊤ : Filter ℝ)";bool scaled,unused;
-					auto hv=cert.exponentialTail(id,whole,false,false,scaled),hG=cert.exponentialTail(r.primitive,whole,false,false,unused);
+					auto hv=cert.exponentialTail(id,whole,false,false,scaled,true),hG=cert.exponentialTail(r.primitive,whole,false,false,unused);
 					return "("~termsName~"."~(scaled?"scaledCurve ":"curve ")~(d.half?cert.q(r.rate)~" "~to!string(r.order)~" ":"")~primitive_~hv~" "~hG~(d.half?" rfl rfl)":" rfl)");
 				}
 				// On a half-line: strict in the bound, a derivative, and decay.

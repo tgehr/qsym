@@ -436,6 +436,10 @@ theorem Quadratic.fill1 {f : ℝ → Option ℝ} {z : Option ℝ} {c0 c2 : Optio
     Quadratic f c0 (some z) c2 :=
   ⟨fun x => by rw [h.equation, zero_of_literal hz]; rfl, by simp⟩
 
+/-- A coefficient that is absent is a literal zero. -/
+theorem coefValue_absent : coefValue none = some (Numeric.denote (s := .real) (0 : ℚ)) := by
+  simp [coefValue, Numeric.denote]
+
 /-- The exponential of a polynomial of degree one with a rational slope: the
 exponential of its constant coefficient is a scale. -/
 theorem scaled_exp_offset {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (r : ℚ)
@@ -992,5 +996,22 @@ theorem EventualScaled.exp_offset (l : Filter ℝ) {E : ℝ → Option ℝ} {c0 
     have h := (scaled_exp_offset r hE h1).equation x
     rw [show Functions.expR.apply (E x) = _ from h]
     simp [polyEval, mul_comm]
+
+/-- The same up to degree two: with rational coefficients above the constant
+the exponential of that constant is a scale. A coefficient that is absent is
+a zero. -/
+theorem EventualScaled.exp_curve (l : Filter ℝ) {E : ℝ → Option ℝ} {c0 : Option ℝ}
+    {c1 c2 : Option (Option ℝ)} (r1 r2 : ℚ) (hE : Quadratic E (some c0) c1 c2)
+    (h1 : coefValue c1 = some (Numeric.denote (s := .real) r1))
+    (h2 : coefValue c2 = some (Numeric.denote (s := .real) r2)) :
+    EventualScaled l (fun x => Functions.expR.apply (E x)) (Functions.expR.apply c0) [1]
+      [0, r1, r2] :=
+  Filter.Eventually.of_forall fun x => by
+    show Functions.expR.apply (E x) = _
+    rw [hE.equation, h1, h2]
+    cases c0 <;>
+      simp [coefValue, Value.add, Value.mul, Function1.apply, Functions.expR, polyEval,
+        Numeric.denote, ← Real.exp_add]
+    ring
 
 end QSym.Limit

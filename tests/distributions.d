@@ -649,7 +649,14 @@ private Case[] cases(){ return [
 	Case("CurveEven","∫dx [0≤x]*x^2*exp(-x^2)*λ[x]","ℝ"),
 	Case("CurveHalfLineGrowing","∫dx [0≤x]*x*exp(x^2)*λ[x]","ℝ"),
 	Case("CurveUpper","∫dx [x≤0]*x*exp(-x^2)*λ[x]","ℝ"),
-	Case("CurveOffset","∫dx [0≤x]*x*exp(-x^2+a)*λ[x]","ℝ"),
+	Case("CurveOffset","∫dx [0≤x]*x*exp(-x^2+a)*λ[x]","ℝ","1/2·exp(a)"),
+	Case("CurveOffsetInterval","∫dx [0≤x≤1]*x*exp(b-x^2)*c*λ[x]","ℝ","c·(-1/2·exp(-1)+1/2)·exp(b)"),
+	Case("CurveOffsetShift","∫dx [1≤x]*(x-1)*exp(a-(x-1)^2)*λ[x]","ℝ","1/2·exp(a)"),
+	Case("CurveOffsetLinear","∫dx [0≤x]*x*exp(a-x)*exp(-x^2+x)*λ[x]","ℝ","1/2·exp(a)"),
+	Case("CurveOffsetSum","∫dx [0≤x]*(x*exp(-x^2+a)+exp(b-x))*λ[x]","ℝ","1/2·exp(a)+exp(b)"),
+	Case("CurveOffsetBounds","∫dx [u≤x≤v]*(2*x+1)*exp(x^2+x+w)*λ[x]","ℝ","[u≤v]·((-exp(u·(u+1))+exp(v·(v+1)))·exp(w))"),
+	Case("CurveMean","∫dx [m≤x]*(x-m)*exp(-(x-m)^2)*λ[x]","ℝ"),
+	Case("CurveCurvature","∫dx [0≤x]*x*exp(-a*x^2)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
 	Case("SymbolicIntervalSine","∫dx [a≤x≤b]*sin(x)*λ[x]","ℝ"),
@@ -1034,17 +1041,24 @@ private void run(string directory){
 		// A polynomial times the exponential of a polynomial is integrated
 		// between bounds and above a bound where an antiderivative has the same
 		// shape: R'+E'·R=P has a polynomial solution. Above a bound the exponent
-		// must descend. Without such a solution, with an exponent that grows
-		// above a bound, below an upper bound alone and with a constant part of
-		// the exponent that is not a number the integral stays.
+		// must descend. The constant part of an exponent of degree at most two
+		// may be a term that does not mention the axis: its exponential is a
+		// scale. Without such a solution, with an exponent that grows above a
+		// bound, below an upper bound alone and with a mean or a curvature
+		// that is such a term the integral stays.
 		if(c.name.indexOf("Curve")==0){
-			bool retained=c.name=="CurveEven"||c.name=="CurveHalfLineGrowing"||c.name=="CurveUpper"||c.name=="CurveOffset";
-			bool half=c.name!="CurveInterval"&&c.name!="CurveSymbolicBounds"&&c.name!="CurveGrowing"&&c.name!="CurveTwoScales"&&c.name!="CurveCdf";
-			bool scaled=c.name=="CurveScaled"||c.name=="CurveTwoScales";
+			bool retained=c.name=="CurveEven"||c.name=="CurveHalfLineGrowing"||c.name=="CurveUpper"||c.name=="CurveMean"||c.name=="CurveCurvature";
+			bool half=c.name!="CurveInterval"&&c.name!="CurveSymbolicBounds"&&c.name!="CurveGrowing"&&c.name!="CurveTwoScales"&&c.name!="CurveCdf"&&
+				c.name!="CurveOffsetInterval"&&c.name!="CurveOffsetBounds";
+			bool shifted=c.name.indexOf("CurveOffset")==0,scaled=c.name=="CurveScaled"||c.name=="CurveTwoScales"||shifted;
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_"~(half?"halfline":"interval"))>=0)!=retained,c.name~" certificate");
 			enforce((certificate.indexOf("Distribution.StepSource."~(half?"HalfLineTerms":"IntervalTerms")~(scaled?".scaledCurve ":".curve "))>=0)!=retained,c.name~" antiderivative");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			if(c.name=="CurveSum") enforce(certificate.indexOf("HalfLineTerms.pure")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" terms");
+			enforce((certificate.indexOf("Limit.EventualScaled.exp_curve")>=0)==shifted,c.name~" offset evidence");
+			if(shifted) enforce(certificate.indexOf("Distribution.StepSource.Quadratic.")>=0,c.name~" exponent");
+			if(c.name=="CurveOffset") enforce(certificate.indexOf("Distribution.StepSource.coefValue_absent")>=0,c.name~" absent coefficient");
+			if(c.name=="CurveOffsetSum") enforce(certificate.indexOf("HalfLineTerms.scaled ")>=0&&certificate.indexOf("scaled_exp_offset")>=0,c.name~" terms");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;
