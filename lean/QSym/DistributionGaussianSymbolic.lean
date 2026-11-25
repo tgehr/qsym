@@ -1,4 +1,5 @@
 import QSym.DistributionGaussian
+import QSym.DistributionSymbolicPolynomial
 
 /-! Gaussian integrals whose exponent has coefficients that do not mention the
 variable. The constant and linear coefficients are partial values, the
@@ -108,6 +109,31 @@ def gaussMoments (h : ℚ) : List ℚ → ℕ → List ℚ → List ℚ → List
     polyAdd (polyScale a μ)
       (gaussMoments h P (j + 1) (polyScale h (polyAdd (polyMul [0, 1] μ) (polyScale j μ'))) μ)
 
+/-- The step of the moments: from degrees `j` and `j - 1` to `j + 1` and `j`. -/
+theorem moment_next (c0 c1 : ℝ) {c2 : ℝ} (hc : c2 < 0) {h : ℚ}
+    (hh : (h : ℝ) * (2 * c2) = -1) (G : ℝ) (j : ℕ) (μ μ' : List ℚ)
+    (h1 : (∫ x : ℝ, x ^ j * Real.exp (c0 + c1 * x + c2 * x ^ 2)) = polyEval μ c1 * G)
+    (h2 : (j : ℝ) * (∫ x : ℝ, x ^ (j - 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
+      j * (polyEval μ' c1 * G)) :
+    (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
+        polyEval (polyScale h (polyAdd (polyMul [0, 1] μ) (polyScale j μ'))) c1 * G ∧
+      ((j + 1 : ℕ) : ℝ) * (∫ x : ℝ, x ^ (j + 1 - 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
+        ((j + 1 : ℕ) : ℝ) * (polyEval μ c1 * G) := by
+  have hrec := pow_gaussian_recurrence c0 c1 hc j
+  refine ⟨?_, by rw [Nat.add_sub_cancel, h1]⟩
+  rw [polyEval_scale, polyEval_add, polyEval_mul, polyEval_scale]
+  simp only [polyEval, Rat.cast_zero, Rat.cast_one, mul_zero, add_zero, _root_.zero_add,
+    mul_one, Rat.cast_natCast]
+  have h3 : 2 * c2 * (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
+      -((j : ℝ) * (polyEval μ' c1 * G) + c1 * (polyEval μ c1 * G)) := by
+    rw [← h1, ← h2]; linarith
+  calc (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2))
+      = -((h : ℝ) * (2 * c2)) * (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) := by
+        rw [hh]; ring
+    _ = -(h : ℝ) * (2 * c2 * (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2))) := by
+        ring
+    _ = _ := by rw [h3]; ring
+
 /-- From the moments of degrees `j` and `j - 1` on, the polynomials `μ`, `μ'`
 are the moments relative to the integral `G`, and the list is the integral
 of `xʲ` times the polynomial. -/
@@ -128,25 +154,7 @@ theorem gaussMoments_integral (c0 c1 : ℝ) {c2 : ℝ} (hc : c2 < 0) {h : ℚ}
   | cons a P ih =>
     intro j μ μ' h1 h2
     have hI := pow_gaussian_integrable c0 c1 hc
-    have hrec := pow_gaussian_recurrence c0 c1 hc j
-    have hnext : (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
-        polyEval (polyScale h (polyAdd (polyMul [0, 1] μ) (polyScale j μ'))) c1 * G := by
-      rw [polyEval_scale, polyEval_add, polyEval_mul, polyEval_scale]
-      simp only [polyEval, Rat.cast_zero, Rat.cast_one, mul_zero, add_zero, _root_.zero_add,
-        mul_one, Rat.cast_natCast]
-      have h3 : 2 * c2 * (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
-          -((j : ℝ) * (polyEval μ' c1 * G) + c1 * (polyEval μ c1 * G)) := by
-        rw [← h1, ← h2]; linarith
-      calc (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2))
-          = -((h : ℝ) * (2 * c2)) * (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) := by
-            rw [hh]; ring
-        _ = -(h : ℝ) * (2 * c2 * (∫ x : ℝ, x ^ (j + 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2))) := by
-            ring
-        _ = _ := by rw [h3]; ring
-    have hprev : ((j + 1 : ℕ) : ℝ) *
-        (∫ x : ℝ, x ^ (j + 1 - 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
-          ((j + 1 : ℕ) : ℝ) * (polyEval μ c1 * G) := by
-      rw [Nat.add_sub_cancel, h1]
+    obtain ⟨hnext, hprev⟩ := moment_next c0 c1 hc hh G j μ μ' h1 h2
     obtain ⟨hi, hv⟩ := ih (j + 1) _ μ hnext hprev
     have hsplit : (fun x : ℝ => x ^ j * polyEval (a :: P) x * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
         fun x => (a : ℝ) * (x ^ j * Real.exp (c0 + c1 * x + c2 * x ^ 2)) +
@@ -198,23 +206,69 @@ def joinScale : Option (Option ℝ) → Option (Option ℝ) → Option (Option �
   | some c, none => some c
   | some c, some d => some (Value.mul c d)
 
-/-- A factor of a density: a scale, a polynomial with rational coefficients
-and an exponential, each of which may be absent. -/
-structure Bell (v : ℝ → Option ℝ) (S : Option (Option ℝ)) (p : List ℚ)
-    (E : Option (ℝ → Option ℝ)) : Prop where
-  equation : ∀ x, v x = scaleBy S (Value.mul (some (polyEval p x)) (expPart E x))
+/-- The polynomial of a factor whose coefficients do not mention the
+variable; a factor without one has none. -/
+def symPart : Option (List (Option (Option ℝ))) → ℝ → Option ℝ
+  | none, _ => some 1
+  | some cs, x => symEval cs x
+
+/-- The polynomials of two factors multiply. -/
+def joinSym : Option (List (Option (Option ℝ))) → Option (List (Option (Option ℝ))) →
+    Option (List (Option (Option ℝ)))
+  | none, a => a
+  | some a, none => some a
+  | some a, some b => some (symMul a b)
+
+/-- A polynomial that is there has a coefficient. -/
+def symPresent : Option (List (Option (Option ℝ))) → Bool
+  | none => true
+  | some cs => symSupport cs
+
+/-- A factor of a density: a scale, a polynomial whose coefficients do not
+mention the variable, a polynomial with rational coefficients and an
+exponential, each of which may be absent. -/
+structure Bell (v : ℝ → Option ℝ) (S : Option (Option ℝ))
+    (A : Option (List (Option (Option ℝ)))) (p : List ℚ) (E : Option (ℝ → Option ℝ)) : Prop where
+  equation : ∀ x, v x = scaleBy S
+    (Value.mul (Value.mul (symPart A x) (some (polyEval p x))) (expPart E x))
+  support : symPresent A = true
+
+/-- Without the first polynomial the factor is the rest. -/
+theorem Bell.plain {v : ℝ → Option ℝ} {S : Option (Option ℝ)} {p : List ℚ}
+    {E : Option (ℝ → Option ℝ)} (h : Bell v S none p E) (x : ℝ) :
+    v x = scaleBy S (Value.mul (some (polyEval p x)) (expPart E x)) := by
+  rw [h.equation]
+  simp [symPart, Value.mul]
 
 theorem bell_polynomial {v : ℝ → Option ℝ} {p : List ℚ}
-    (h : PolynomialOn (fun _ => True) v p) : Bell v none p none :=
-  ⟨fun x => by rw [h.equation x trivial]; simp [scaleBy, expPart, Value.mul]⟩
+    (h : PolynomialOn (fun _ => True) v p) : Bell v none none p none :=
+  ⟨fun x => by rw [h.equation x trivial]; simp [scaleBy, symPart, expPart, Value.mul], rfl⟩
 
-theorem bell_exp (g : ℝ → Option ℝ) : Bell (fun x => Functions.expR.apply (g x)) none [1] (some g) :=
+theorem bell_exp (g : ℝ → Option ℝ) :
+    Bell (fun x => Functions.expR.apply (g x)) none none [1] (some g) :=
   ⟨fun x => by
     show Functions.expR.apply (g x) = _
-    cases hg : g x <;> simp [scaleBy, expPart, Value.mul, polyEval, Function1.apply, Functions.expR, hg]⟩
+    cases hg : g x <;>
+      simp [scaleBy, symPart, expPart, Value.mul, polyEval, Function1.apply, Functions.expR, hg],
+    rfl⟩
 
-theorem bell_constant (c : Option ℝ) : Bell (fun _ => c) (some c) [1] none :=
-  ⟨fun x => by cases c <;> simp [scaleBy, expPart, Value.mul, polyEval]⟩
+theorem bell_constant (c : Option ℝ) : Bell (fun _ => c) (some c) none [1] none :=
+  ⟨fun x => by cases c <;> simp [scaleBy, symPart, expPart, Value.mul, polyEval], rfl⟩
+
+/-- A polynomial whose coefficients do not mention the variable. -/
+theorem bell_symbolic {v : ℝ → Option ℝ} {cs : List (Option (Option ℝ))} (h : Symbolic v cs) :
+    Bell v none (some cs) [1] none :=
+  ⟨fun x => by
+    rw [h.equation]
+    cases hs : symEval cs x <;> simp [scaleBy, symPart, expPart, Value.mul, polyEval, hs],
+    h.support⟩
+
+/-- The same factor with the coefficients of that polynomial written out. A
+certificate writes them out after a product of two such polynomials. -/
+theorem Bell.cast {v : ℝ → Option ℝ} {S : Option (Option ℝ)} {cs : List (Option (Option ℝ))}
+    {p : List ℚ} {E : Option (ℝ → Option ℝ)} (ds : List (Option (Option ℝ)))
+    (h : Bell v S (some cs) p E) (e : cs = ds) : Bell v S (some ds) p E :=
+  e ▸ h
 
 private theorem expPart_join (E E' : Option (ℝ → Option ℝ)) (x : ℝ) :
     expPart (joinExp E E') x = Value.mul (expPart E x) (expPart E' x) := by
@@ -235,34 +289,31 @@ private theorem scaleBy_join (S S' : Option (Option ℝ)) (a b : Option ℝ) :
   · cases a <;> cases b <;> cases c <;> cases d <;>
       (simp [joinScale, scaleBy, Value.mul]; first | done | ring)
 
+private theorem symPart_join {A A' : Option (List (Option (Option ℝ)))}
+    (hA : symPresent A = true) (hA' : symPresent A' = true) (x : ℝ) :
+    symPart (joinSym A A') x = Value.mul (symPart A x) (symPart A' x) := by
+  rcases A with _ | a <;> rcases A' with _ | b
+  · simp [joinSym, symPart, Value.mul]
+  · cases h : symEval b x <;> simp [joinSym, symPart, Value.mul, h]
+  · cases h : symEval a x <;> simp [joinSym, symPart, Value.mul, h]
+  · exact symEval_mul hA hA' x
+
 /-- Factors multiply part by part. -/
-theorem bell_mul {v w : ℝ → Option ℝ} {S S' : Option (Option ℝ)} {p p' : List ℚ}
-    {E E' : Option (ℝ → Option ℝ)} (hv : Bell v S p E) (hw : Bell w S' p' E') :
-    Bell (fun x => Value.mul (v x) (w x)) (joinScale S S') (polyMul p p') (joinExp E E') :=
-  ⟨fun x => by
-    show Value.mul (v x) (w x) = _
-    rw [hv.equation, hw.equation, ← scaleBy_join, expPart_join, polyEval_mul]
+theorem bell_mul {v w : ℝ → Option ℝ} {S S' : Option (Option ℝ)}
+    {A A' : Option (List (Option (Option ℝ)))} {p p' : List ℚ} {E E' : Option (ℝ → Option ℝ)}
+    (hv : Bell v S A p E) (hw : Bell w S' A' p' E') :
+    Bell (fun x => Value.mul (v x) (w x)) (joinScale S S') (joinSym A A') (polyMul p p')
+      (joinExp E E') := by
+  refine ⟨fun x => ?_, ?_⟩
+  · show Value.mul (v x) (w x) = _
+    rw [hv.equation, hw.equation, ← scaleBy_join, expPart_join,
+      symPart_join hv.support hw.support, polyEval_mul]
     congr 1
-    cases expPart E x <;> cases expPart E' x <;> simp [Value.mul]
-    ring⟩
-
-
-/-- A coefficient of a polynomial in the variable is a partial value that
-does not mention it, or is absent; then it counts as zero. -/
-def coefValue : Option (Option ℝ) → Option ℝ
-  | none => some 0
-  | some c => c
-
-/-- Sums and products of coefficients; an absent one is skipped in a sum and
-absorbs a product. -/
-def coefAdd : Option (Option ℝ) → Option (Option ℝ) → Option (Option ℝ)
-  | none, b => b
-  | some a, none => some a
-  | some a, some b => some (Value.add a b)
-
-def coefMul : Option (Option ℝ) → Option (Option ℝ) → Option (Option ℝ)
-  | some a, some b => some (Value.mul a b)
-  | _, _ => none
+    cases symPart A x <;> cases symPart A' x <;> cases expPart E x <;> cases expPart E' x <;>
+      (simp [Value.mul]; first | done | ring)
+  · have h1 := hv.support
+    have h2 := hw.support
+    rcases A with _ | a <;> rcases A' with _ | b <;> simp_all [joinSym, symPresent, symMul_support]
 
 /-- A polynomial of degree at most two in the variable with such
 coefficients, of which at least one is present. It is defined where every
@@ -280,10 +331,6 @@ theorem Quadratic.variable {one : Option ℝ}
     (h : one = some (Numeric.denote (s := .real) (1 : ℚ))) :
     Quadratic (fun x => some x) none (some one) none :=
   ⟨fun x => by rw [h]; simp [coefValue, Value.add, Value.mul, Numeric.denote], rfl⟩
-
-private theorem coefValue_add (a b : Option (Option ℝ)) :
-    coefValue (coefAdd a b) = Value.add (coefValue a) (coefValue b) := by
-  rcases a with _ | _ | a <;> rcases b with _ | _ | b <;> simp [coefValue, coefAdd, Value.add]
 
 theorem Quadratic.add {f g : ℝ → Option ℝ} {a0 a1 a2 b0 b1 b2 : Option (Option ℝ)}
     (hf : Quadratic f a0 a1 a2) (hg : Quadratic g b0 b1 b2) :
@@ -402,20 +449,114 @@ theorem scaled_exp_offset {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (r : ℚ
       simp [coefValue, Value.add, Value.mul, Function1.apply, Functions.expR, polyEval,
         Numeric.denote, Real.exp_add]⟩
 
-/-- A polynomial with rational coefficients at a partial value, by Horner's
-rule; its last coefficient stands alone. -/
-inductive Horner : Option ℝ → List ℚ → Option ℝ → Prop
-  | last {z c : Option ℝ} (q : ℚ) (hz : z = some (Numeric.denote (s := .real) q)) :
-      Horner z [q] c
-  | step {z k c : Option ℝ} {qs : List ℚ} (q : ℚ)
-      (hz : z = some (Numeric.denote (s := .real) q)) (h : Horner k qs c) :
-      Horner (Value.add z (Value.mul c k)) (q :: qs) c
+/-- A coefficient times a power of a partial value: `z`, `z·c` or `z·cⁱ`. -/
+def powerValue (c : Option ℝ) : ℕ → Option ℝ → Option ℝ
+  | 0, z => z
+  | 1, z => Value.mul z c
+  | i + 2, z => Value.mul z (Option.map (fun x : ℝ => x ^ (i + 2)) c)
 
-theorem Horner.value {k c : Option ℝ} {κ : List ℚ} (h : Horner k κ c) (v : ℝ)
-    (hc : c = some v) : k = some (polyEval κ v) := by
+/-- The same under a factor that may be absent. -/
+def monomial : Option (Option ℝ) → Option ℝ → Option ℝ
+  | none, v => v
+  | some a, v => Value.mul a v
+
+/-- The real value of a factor that may be absent. -/
+def factorReal : Option (Option ℝ) → ℝ
+  | none => 1
+  | some (some a) => a
+  | some none => 0
+
+/-- The value of a list of terms as a sum. -/
+def listSum : List (Option ℝ) → Option ℝ
+  | [] => some 0
+  | v :: vs => Value.add v (listSum vs)
+
+/-- A sum of the terms of a list in the shape of a tree. A certificate gives a
+balanced one: the sum of many terms is then shallow. -/
+inductive Sums : List (Option ℝ) → Option ℝ → Prop
+  | one {v : Option ℝ} : Sums [v] v
+  | add {l r : List (Option ℝ)} {a b : Option ℝ} (h1 : Sums l a) (h2 : Sums r b) :
+      Sums (l ++ r) (Value.add a b)
+
+private theorem listSum_append (l r : List (Option ℝ)) :
+    listSum (l ++ r) = Value.add (listSum l) (listSum r) := by
+  induction l with
+  | nil => cases h : listSum r <;> simp [listSum, Value.add, h]
+  | cons v l ih =>
+    simp only [List.cons_append, listSum, ih]
+    cases v <;> cases listSum l <;> cases listSum r <;> simp [Value.add, add_assoc]
+
+theorem Sums.value {l : List (Option ℝ)} {k : Option ℝ} (h : Sums l k) : k = listSum l := by
   induction h with
-  | last q hz => rw [hz]; simp [polyEval, Numeric.denote]
-  | step q hz _ ih => rw [hz, ih hc, hc]; simp [polyEval, Value.add, Value.mul, Numeric.denote]
+  | @one v => cases v <;> simp [listSum, Value.add]
+  | add _ _ ih1 ih2 => rw [listSum_append, ← ih1, ← ih2]
+
+/-- A polynomial with rational coefficients at a partial value, as the list
+of its monomials from a degree on, each under the factor, before the terms
+that follow. The first term is always there; a later one is skipped where
+its coefficient is zero, or where the value is a literal zero. -/
+inductive RowTerms (a : Option (Option ℝ)) (c : Option ℝ) :
+    List ℚ → ℕ → List (Option ℝ) → List (Option ℝ) → Prop
+  | done {rest : List (Option ℝ)} {i : ℕ} : RowTerms a c [] i rest rest
+  | zero {rest out : List (Option ℝ)} {qs : List ℚ} {i : ℕ}
+      (h : RowTerms a c qs (i + 2) rest out) : RowTerms a c (0 :: qs) (i + 1) rest out
+  | vanish {rest out : List (Option ℝ)} {q : ℚ} {qs : List ℚ} {i : ℕ}
+      (hc : c = some (Numeric.denote (s := .real) (0 : ℚ)))
+      (h : RowTerms a c qs (i + 2) rest out) : RowTerms a c (q :: qs) (i + 1) rest out
+  | term {rest out : List (Option ℝ)} {qs : List ℚ} {i : ℕ} {z : Option ℝ} (q : ℚ)
+      (hz : z = some (Numeric.denote (s := .real) q))
+      (h : RowTerms a c qs (i + 1) rest out) :
+      RowTerms a c (q :: qs) i rest (monomial a (powerValue c i z) :: out)
+
+private theorem powerValue_some (b : ℝ) (i : ℕ) (q : ℝ) :
+    powerValue (some b) i (some q) = some (q * b ^ i) := by
+  rcases i with _ | _ | i <;> simp [powerValue, Value.mul]
+
+theorem RowTerms.value {a : Option (Option ℝ)} {c : Option ℝ} {rest out : List (Option ℝ)}
+    {qs : List ℚ} {i : ℕ} (h : RowTerms a c qs i rest out) (b : ℝ) (hc : c = some b)
+    (ha : a ≠ some none) :
+    listSum out = Value.add (some (factorReal a * (b ^ i * polyEval qs b))) (listSum rest) := by
+  induction h with
+  | @done rest i => cases listSum rest <;> simp [polyEval, Value.add]
+  | zero _ ih =>
+    rw [ih]
+    congr 2
+    simp only [polyEval, Rat.cast_zero]
+    ring
+  | vanish h0 _ ih =>
+    have hb : b = 0 := by
+      rw [hc] at h0
+      simpa [Numeric.denote] using h0
+    rw [ih, hb]
+    congr 2
+    simp
+  | @term rest out qs i z q hz _ ih =>
+    rw [listSum, ih, hz, hc, powerValue_some]
+    rcases a with _ | _ | a
+    · cases listSum rest <;> simp [monomial, factorReal, polyEval, Value.add, Numeric.denote]
+      ring
+    · exact absurd rfl ha
+    · cases listSum rest <;> simp [monomial, factorReal, polyEval, Value.add, Value.mul,
+        Numeric.denote]
+      ring
+
+/-- Terms that follow and are undefined leave the sum undefined. -/
+theorem RowTerms.missing {a : Option (Option ℝ)} {c : Option ℝ} {rest out : List (Option ℝ)}
+    {qs : List ℚ} {i : ℕ} (h : RowTerms a c qs i rest out) (hu : listSum rest = none) :
+    listSum out = none := by
+  induction h with
+  | done => exact hu
+  | zero _ ih => exact ih hu
+  | vanish _ _ ih => exact ih hu
+  | @term rest out qs i z q hz _ ih =>
+    rw [listSum, ih hu]
+    cases monomial a (powerValue c i z) <;> rfl
+
+/-- An undefined factor leaves the sum undefined: its first term is there. -/
+theorem RowTerms.undefined {c : Option ℝ} {rest out : List (Option ℝ)} {q : ℚ} {qs : List ℚ}
+    (h : RowTerms (some none) c (q :: qs) 0 rest out) : listSum out = none := by
+  cases h with
+  | term q hz h => rfl
 
 /-- The integral of a scaled integrable function: the scale times its
 integral, and undefined with the scale. -/
@@ -449,9 +590,10 @@ coefficient that is undefined leaves the integrand undefined everywhere, and
 the exponential of the result undefined with it. -/
 theorem gaussian_partialIntegral_symbolic {f : ℝ → Option ℝ} {S : Option (Option ℝ)}
     {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ : List ℚ) (q2 γ δ : ℚ)
-    (hf : Bell f S P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hf : Bell f S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
     (h2 : c2 = some (Numeric.denote (s := .real) q2))
-    (h : symbolicCheck P κ q2 γ δ = true) {k g d pi : Option ℝ} (hk : Horner k κ c1)
+    (h : symbolicCheck P κ q2 γ δ = true) {k g d pi : Option ℝ}
+    {ms : List (Option ℝ)} (hm : RowTerms none c1 κ 0 [] ms) (hk : Sums ms k)
     (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
     (hpi : pi = some Functions.pi) :
     partialIntegral volume f = scaleBy S (Value.mul k (Value.mul
@@ -474,7 +616,7 @@ theorem gaussian_partialIntegral_symbolic {f : ℝ → Option ℝ} {S : Option (
     apply if_neg
     intro hdef
     obtain ⟨r, hr⟩ := hdef.1 0
-    rw [hf.equation, expPart, hn] at hr
+    rw [hf.plain, expPart, hn] at hr
     have : scaleBy S (Value.mul (some (polyEval P 0)) (Functions.expR.apply none)) = none := by
       rcases S with _ | _ | s <;> simp [scaleBy, Value.mul, Function1.apply]
     rw [this] at hr
@@ -491,7 +633,7 @@ theorem gaussian_partialIntegral_symbolic {f : ℝ → Option ℝ} {S : Option (
   obtain ⟨hi, hv⟩ := gaussian_moments a b hq P
   have hfx : ∀ x, f x = scaleBy S (some (polyEval P x * Real.exp (a + b * x + q2 * x ^ 2))) :=
     fun x => by
-      rw [hf.equation, expPart, hE']
+      rw [hf.plain, expPart, hE']
       simp [Value.mul, Function1.apply, Functions.expR]
   rw [partialIntegral_scaleBy hfx hi, hv]
   congr 1
@@ -517,7 +659,206 @@ theorem gaussian_partialIntegral_symbolic {f : ℝ → Option ℝ} {S : Option (
   have hpos : 0 ≤ Real.pi * (δ : ℝ) := by
     rw [← hδ']
     exact div_nonneg Real.pi_pos.le (by linarith)
-  rw [hκ', hγ', hδ', hk.value b rfl, hg, hd, hpi]
+  have hkv : k = some (polyEval κ b) := by
+    rw [hk.value, hm.value b rfl (by simp)]
+    simp [listSum, factorReal, Value.add]
+  rw [hκ', hγ', hδ', hkv, hg, hd, hpi]
+  simp [Value.mul, Value.add, Function1.apply, Functions.expR, Functions.sqrtR, Functions.pi,
+    Numeric.denote, hpos]
+
+/-- The rows of moments: row `j` is the polynomial of the moments of `xʲ·P`. -/
+def momentRows (h : ℚ) (P : List ℚ) : List (List ℚ) → ℕ → List ℚ → List ℚ → Bool
+  | [], _, _, _ => true
+  | κ :: κs, j, μ, μ' =>
+    polyZero (polyAdd κ (polyScale (-1) (gaussMoments h P j μ μ'))) &&
+      momentRows h P κs (j + 1) (polyScale h (polyAdd (polyMul [0, 1] μ) (polyScale j μ'))) μ
+
+/-- The sum of the coefficients times their rows at the linear coefficient. -/
+def momentValue (b : ℝ) : List (Option (Option ℝ)) → List (List ℚ) → ℝ
+  | c :: cs, κ :: κs => coefReal c * polyEval κ b + momentValue b cs κs
+  | _, _ => 0
+
+/-- The moments of a polynomial with such coefficients times a rational one:
+coefficient by coefficient, each against its row. -/
+theorem momentRows_integral (c0 c1 : ℝ) {c2 : ℝ} (hc : c2 < 0) {h : ℚ}
+    (hh : (h : ℝ) * (2 * c2) = -1) (G : ℝ) (P : List ℚ) :
+    ∀ (cs : List (Option (Option ℝ))) (κs : List (List ℚ)) (j : ℕ) (μ μ' : List ℚ),
+      cs.length = κs.length → momentRows h P κs j μ μ' = true →
+      (∫ x : ℝ, x ^ j * Real.exp (c0 + c1 * x + c2 * x ^ 2)) = polyEval μ c1 * G →
+      (j : ℝ) * (∫ x : ℝ, x ^ (j - 1) * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
+        j * (polyEval μ' c1 * G) →
+      Integrable (fun x : ℝ => x ^ j * realEval cs x * polyEval P x *
+          Real.exp (c0 + c1 * x + c2 * x ^ 2)) ∧
+        (∫ x : ℝ, x ^ j * realEval cs x * polyEval P x * Real.exp (c0 + c1 * x + c2 * x ^ 2)) =
+          momentValue c1 cs κs * G := by
+  intro cs
+  induction cs with
+  | nil =>
+    intro κs j μ μ' _ _ _ _
+    simp [realEval, momentValue]
+  | cons c cs ih =>
+    intro κs j μ μ' hlen hrows h1 h2
+    cases κs with
+    | nil => simp at hlen
+    | cons κ κs =>
+      simp only [momentRows, Bool.and_eq_true] at hrows
+      obtain ⟨hκ, hrest⟩ := hrows
+      obtain ⟨hn1, hn2⟩ := moment_next c0 c1 hc hh G j μ μ' h1 h2
+      obtain ⟨hi, hv⟩ := ih κs (j + 1) _ μ (by simpa using hlen) hrest hn1 hn2
+      obtain ⟨hpi, hpv⟩ := gaussMoments_integral c0 c1 hc hh G P j μ μ' h1 h2
+      have hz := polyEval_zero hκ c1
+      rw [polyEval_add, polyEval_scale] at hz
+      have hκ' : polyEval (gaussMoments h P j μ μ') c1 = polyEval κ c1 := by
+        push_cast at hz
+        linarith
+      have hsplit : (fun x : ℝ => x ^ j * realEval (c :: cs) x * polyEval P x *
+          Real.exp (c0 + c1 * x + c2 * x ^ 2)) = fun x =>
+          coefReal c * (x ^ j * polyEval P x * Real.exp (c0 + c1 * x + c2 * x ^ 2)) +
+            x ^ (j + 1) * realEval cs x * polyEval P x * Real.exp (c0 + c1 * x + c2 * x ^ 2) := by
+        funext x
+        simp only [realEval]
+        ring
+      refine ⟨by rw [hsplit]; exact (hpi.const_mul _).add hi, ?_⟩
+      rw [hsplit, integral_add (hpi.const_mul _) hi, integral_const_mul, hpv, hv, hκ']
+      simp only [momentValue]
+      ring
+
+/-- The monomials of the present coefficients times their rows at the linear
+coefficient, in order. -/
+inductive MomentTerms (c1 : Option ℝ) :
+    List (Option (Option ℝ)) → List (List ℚ) → List (Option ℝ) → Prop
+  | done : MomentTerms c1 [] [] []
+  | absent {out : List (Option ℝ)} {cs : List (Option (Option ℝ))} {κs : List (List ℚ)}
+      (κ : List ℚ) (h : MomentTerms c1 cs κs out) : MomentTerms c1 (none :: cs) (κ :: κs) out
+  | present {rest out : List (Option ℝ)} {cs : List (Option (Option ℝ))}
+      {κs : List (List ℚ)} {a : Option ℝ} {q : ℚ} {qs : List ℚ}
+      (hr : RowTerms (some a) c1 (q :: qs) 0 rest out) (h : MomentTerms c1 cs κs rest) :
+      MomentTerms c1 (some a :: cs) ((q :: qs) :: κs) out
+
+theorem MomentTerms.length {c1 : Option ℝ} {out : List (Option ℝ)}
+    {cs : List (Option (Option ℝ))} {κs : List (List ℚ)} (h : MomentTerms c1 cs κs out) :
+    cs.length = κs.length := by
+  induction h with
+  | done => rfl
+  | absent _ _ ih => simp [ih]
+  | present _ _ ih => simp [ih]
+
+/-- An undefined coefficient leaves the sum undefined. -/
+theorem MomentTerms.undefined {c1 : Option ℝ} {out : List (Option ℝ)}
+    {cs : List (Option (Option ℝ))} {κs : List (List ℚ)} (h : MomentTerms c1 cs κs out)
+    (hu : some none ∈ cs) : listSum out = none := by
+  induction h with
+  | done => simp at hu
+  | absent _ _ ih => exact ih (by simpa using hu)
+  | @present rest out cs κs a q qs hr _ ih =>
+    rcases List.mem_cons.1 hu with hu | hu
+    · have ha : a = none := by simpa using hu.symm
+      subst ha
+      exact hr.undefined
+    · exact hr.missing (ih hu)
+
+theorem MomentTerms.value {c1 : Option ℝ} {out : List (Option ℝ)}
+    {cs : List (Option (Option ℝ))} {κs : List (List ℚ)} (h : MomentTerms c1 cs κs out) (b : ℝ)
+    (hc : c1 = some b) (hd : some none ∉ cs) : listSum out = some (momentValue b cs κs) := by
+  induction h with
+  | done => rfl
+  | absent κ _ ih =>
+    rw [ih (fun hm => hd (by simp [hm]))]
+    simp [momentValue, coefReal]
+  | @present rest out cs κs a q qs hr _ ih =>
+    have ha : a ≠ none := fun ha => hd (by simp [ha])
+    rw [hr.value b hc (by simpa using ha), ih (fun hm => hd (by simp [hm]))]
+    rcases a with _ | a
+    · exact absurd rfl ha
+    · simp [momentValue, coefReal, factorReal, Value.add]
+
+/-- The checks of a Gaussian integral under a polynomial whose coefficients
+do not mention the variable: the curvature is negative, the rows are the
+moments of the powers times the rational polynomial, and `γ`, `δ` are
+`-1/(4·c₂)` and `-1/c₂`. -/
+def momentsCheck (P : List ℚ) (κs : List (List ℚ)) (q2 γ δ : ℚ) : Bool :=
+  decide (q2 < 0) && momentRows (-1 / (2 * q2)) P κs 0 [1] [] &&
+    decide (γ * (4 * q2) = -1) && decide (δ * q2 = -1)
+
+/-- The same under a polynomial whose coefficients do not mention the
+variable: the integral is linear in them, and each meets the moments of its
+power. A coefficient that is undefined leaves the integrand undefined
+everywhere, and the sum with it. -/
+theorem gaussian_partialIntegral_moments {f : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {cs : List (Option (Option ℝ))} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
+    (κs : List (List ℚ)) (q2 γ δ : ℚ) (hf : Bell f S (some cs) P (some E))
+    (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : momentsCheck P κs q2 γ δ = true) {k g d pi : Option ℝ}
+    {ms : List (Option ℝ)} (hm : MomentTerms c1 cs κs ms) (hk : Sums ms k)
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) :
+    partialIntegral volume f = scaleBy S (Value.mul k (Value.mul
+      (Functions.expR.apply (Value.add c0 (Value.mul g (Value.mul c1 c1))))
+      (Functions.sqrtR.apply (Value.mul pi d)))) := by
+  simp only [momentsCheck, Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨hq, hrows⟩, hγ⟩, hδ⟩ := h
+  have missing : (∀ x, f x = none) → ∀ r : Option ℝ, r = none →
+      partialIntegral volume f = scaleBy S r := fun hn r hr => by
+    have hs : scaleBy S none = none := by
+      rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+    rw [hr, hs]
+    apply if_neg
+    intro hdef
+    obtain ⟨v, hv⟩ := hdef.1 0
+    rw [hn] at hv
+    cases hv
+  have hfn : ∀ x, (symEval cs x = none ∨ E x = none) → f x = none := fun x hx => by
+    rw [hf.equation, symPart, expPart]
+    rcases hx with hx | hx <;> rw [hx] <;> rcases S with _ | _ | s <;>
+      simp [scaleBy, Value.mul, Function1.apply]
+  rcases c0 with _ | a
+  · exact missing (fun x => hfn x (Or.inr (by rw [hE.equation]; simp [coefValue, Value.add])))
+      _ (by cases k <;> cases g <;> cases c1 <;> simp [Value.mul, Value.add, Function1.apply])
+  rcases c1 with _ | b
+  · exact missing
+      (fun x => hfn x (Or.inr (by rw [hE.equation]; simp [coefValue, Value.add, Value.mul])))
+      _ (by cases k <;> cases g <;> simp [Value.mul, Value.add, Function1.apply])
+  by_cases hu : some none ∈ cs
+  · have hk' : k = none := by rw [hk.value, hm.undefined hu]
+    exact missing (fun x => hfn x (Or.inl ((symEval_none_iff cs x).2 hu))) _
+      (by rw [hk']; rfl)
+  have hE' : ∀ x, E x = some (a + b * x + q2 * x ^ 2) := fun x => by
+    rw [hE.equation, h2]
+    simp [coefValue, Value.add, Value.mul, Numeric.denote]
+    ring
+  have hcR : ((q2 : ℚ) : ℝ) < 0 := by exact_mod_cast hq
+  have hc : ((q2 : ℚ) : ℝ) ≠ 0 := hcR.ne
+  have hh : (((-1 / (2 * q2) : ℚ)) : ℝ) * (2 * (q2 : ℝ)) = -1 := by
+    push_cast
+    field_simp
+  obtain ⟨hi, hv⟩ := momentRows_integral a b hcR hh
+    (Real.exp (a - b ^ 2 / (4 * q2)) * √(Real.pi / (-q2))) P cs κs 0 [1] [] hm.length hrows
+    (by simp [polyEval, gaussian_integral a b (q2 : ℝ) hcR]) (by simp)
+  simp only [pow_zero, one_mul] at hi hv
+  have hfx : ∀ x, f x = scaleBy S
+      (some (realEval cs x * polyEval P x * Real.exp (a + b * x + q2 * x ^ 2))) := fun x => by
+    rw [hf.equation, symPart, expPart, hE', symEval_real hu]
+    simp [Value.mul, Function1.apply, Functions.expR]
+  rw [partialIntegral_scaleBy hfx hi, hv]
+  congr 1
+  have hkv : k = some (momentValue b cs κs) := by rw [hk.value, hm.value b rfl hu]
+  have hγR : (γ : ℝ) * (4 * q2) = -1 := by exact_mod_cast hγ
+  have hδR : (δ : ℝ) * q2 = -1 := by exact_mod_cast hδ
+  have hγ' : a - b ^ 2 / (4 * (q2 : ℝ)) = a + γ * (b * b) := by
+    have : (γ : ℝ) = -1 / (4 * q2) := by
+      rw [eq_div_iff (mul_ne_zero four_ne_zero hc)]
+      exact hγR
+    rw [this]; ring
+  have hδ' : Real.pi / (-(q2 : ℝ)) = Real.pi * δ := by
+    have : (δ : ℝ) = 1 / (-q2) := by
+      rw [eq_div_iff (neg_ne_zero.2 hc)]
+      linarith
+    rw [this]; ring
+  have hpos : 0 ≤ Real.pi * (δ : ℝ) := by
+    rw [← hδ']
+    exact div_nonneg Real.pi_pos.le (by linarith)
+  rw [hγ', hδ', hkv, hg, hd, hpi]
   simp [Value.mul, Value.add, Function1.apply, Functions.expR, Functions.sqrtR, Functions.pi,
     Numeric.denote, hpos]
 
@@ -531,18 +872,35 @@ quadratic whose constant and linear coefficients do not mention the variable
 and whose curvature is a negative rational, under an optional scale. -/
 theorem presentation_mass_gaussian_symbolic (p : DensityProgram) {S : Option (Option ℝ)}
     {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ : List ℚ) (q2 γ δ : ℚ)
-    (hf : StepSource.Bell p.density S P (some E))
+    (hf : StepSource.Bell p.density S none P (some E))
     (hE : StepSource.Quadratic E (some c0) (some c1) (some c2))
     (h2 : c2 = some (Numeric.denote (s := .real) q2))
     (h : StepSource.symbolicCheck P κ q2 γ δ = true) {k g d pi : Option ℝ}
-    (hk : StepSource.Horner k κ c1)
+    {ms : List (Option ℝ)} (hm : StepSource.RowTerms none c1 κ 0 [] ms) (hk : StepSource.Sums ms k)
     (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
     (hpi : pi = some Functions.pi) :
     massValue p.presentation = StepSource.scaleBy S (Value.mul k (Value.mul
       (Functions.expR.apply (Value.add c0 (Value.mul g (Value.mul c1 c1))))
       (Functions.sqrtR.apply (Value.mul pi d)))) := by
   rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
-  exact StepSource.gaussian_partialIntegral_symbolic κ q2 γ δ hf hE h2 h hk hg hd hpi
+  exact StepSource.gaussian_partialIntegral_symbolic κ q2 γ δ hf hE h2 h hm hk hg hd hpi
+
+/-- The same under a polynomial whose coefficients do not mention the
+variable. -/
+theorem presentation_mass_gaussian_moments (p : DensityProgram) {S : Option (Option ℝ)}
+    {cs : List (Option (Option ℝ))} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
+    (κs : List (List ℚ)) (q2 γ δ : ℚ) (hf : StepSource.Bell p.density S (some cs) P (some E))
+    (hE : StepSource.Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : StepSource.momentsCheck P κs q2 γ δ = true) {k g d pi : Option ℝ}
+    {ms : List (Option ℝ)} (hm : StepSource.MomentTerms c1 cs κs ms) (hk : StepSource.Sums ms k)
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) :
+    massValue p.presentation = StepSource.scaleBy S (Value.mul k (Value.mul
+      (Functions.expR.apply (Value.add c0 (Value.mul g (Value.mul c1 c1))))
+      (Functions.sqrtR.apply (Value.mul pi d)))) := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  exact StepSource.gaussian_partialIntegral_moments κs q2 γ δ hf hE h2 h hm hk hg hd hpi
 
 end QSym.Distribution.DensityProgram
 
@@ -583,7 +941,7 @@ curvature is a negative rational tends to zero under the scale at both ends,
 whatever the other coefficients are; it is undefined with any of them. -/
 theorem Exact.gaussian {l : Filter ℝ} (hl : Infinite l) {v : ℝ → Option ℝ}
     {S : Option (Option ℝ)} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option (Option ℝ)}
-    {c2 : Option ℝ} (q2 : ℚ) (hv : Bell v S P (some E)) (hE : Quadratic E c0 c1 (some c2))
+    {c2 : Option ℝ} (q2 : ℚ) (hv : Bell v S none P (some E)) (hE : Quadratic E c0 c1 (some c2))
     (h2 : c2 = some (Numeric.denote (s := .real) q2)) (hq : decide (q2 < 0) = true) {z : Option ℝ}
     (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
     Exact l v (seqCoef c0 (seqCoef c1 (scaleBy S z))) := by
@@ -591,14 +949,14 @@ theorem Exact.gaussian {l : Filter ℝ} (hl : Infinite l) {v : ℝ → Option �
   have hz0 : z = some 0 := by rw [hz]; simp [Numeric.denote]
   have undefined : (∀ x, E x = none) → Exact l v none := fun hn =>
     Eventually.of_forall fun x => by
-      rw [hv.equation, expPart, hn]
+      rw [hv.plain, expPart, hn]
       rcases S with _ | _ | s <;> simp [scaleBy, Value.mul, Function1.apply]
   have defined : ∀ a b : ℝ, (∀ x, E x = some (a + b * x + q2 * x ^ 2)) →
       Exact l v (scaleBy S z) := fun a b he => by
     have hlim := polynomial_gaussian_tendsto hl a b hq' P
     have hvx : ∀ x, v x = scaleBy S (some (polyEval P x * Real.exp (a + b * x + q2 * x ^ 2))) :=
       fun x => by
-        rw [hv.equation, expPart, he]
+        rw [hv.plain, expPart, he]
         simp [Value.mul, Function1.apply, Functions.expR]
     rw [hz0]
     rcases S with _ | _ | s

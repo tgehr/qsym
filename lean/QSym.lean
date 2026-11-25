@@ -10,6 +10,7 @@ import QSym.DistributionSum
 import QSym.DistributionPolynomialGrid
 import QSym.DistributionInterval
 import QSym.DistributionGaussian
+import QSym.DistributionSymbolicPolynomial
 import QSym.DistributionGaussianSymbolic
 import QSym.DistributionCoordinateGrid
 import QSym.DistributionWeightedAffine

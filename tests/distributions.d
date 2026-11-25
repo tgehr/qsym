@@ -582,7 +582,7 @@ private Case[] cases(){ return [
 	Case("GaussianSymbolicOffset","∫dx exp(-x^2+a)*λ[x]","ℝ","sqrt(π)·exp(a)"),
 	Case("GaussianSymbolicMean","∫dx x*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","m"),
 	Case("GaussianSymbolicSecond","∫dx x^2*exp(-(x-m)^2/2)*λ[x]","ℝ","(m^2+1)·sqrt(2·π)"),
-	Case("GaussianSymbolicCubic","∫dx (x^3+2*x)*exp(-(x-m)^2)*λ[x]","ℝ","2·m·(1/2·m^2+7/4)·sqrt(π)"),
+	Case("GaussianSymbolicCubic","∫dx (x^3+2*x)*exp(-(x-m)^2)*λ[x]","ℝ","(m^3+m·(7/2))·sqrt(π)"),
 	Case("GaussianSymbolicTilt","∫dx exp(-x^2+b*x)*λ[x]","ℝ","sqrt(π)·exp(1/4·b^2)"),
 	Case("GaussianSymbolicMixed","∫dx exp(a+2*x-x^2)*λ[x]","ℝ","sqrt(π)·exp(a+1)"),
 	Case("GaussianSymbolicSlope","∫dx exp(-(2*x-m)^2)*λ[x]","ℝ","sqrt(1/4·π)"),
@@ -598,7 +598,19 @@ private Case[] cases(){ return [
 	Case("GaussianSymbolicCurvature","∫dx exp(a*x^2)*λ[x]","ℝ"),
 	Case("GaussianSymbolicVariance","∫dx exp(-(x-m)^2/(2*v))*λ[x]","ℝ"),
 	Case("GaussianSymbolicLinear","∫dx exp(a*x)*λ[x]","ℝ"),
-	Case("GaussianSymbolicPrefactor","∫dx (x-m)^2*exp(-(x-m)^2/2)*λ[x]","ℝ"),
+	Case("GaussianSymbolicPrefactor","∫dx (x-m)^2*exp(-(x-m)^2/2)*λ[x]","ℝ","sqrt(2·π)"),
+	Case("GaussianSymbolicPrefactorShift","∫dx (x+a)*exp(-x^2)*λ[x]","ℝ","a·sqrt(π)"),
+	Case("GaussianSymbolicPrefactorSquare","∫dx (a*x+b)^2*exp(-x^2)*λ[x]","ℝ","(1/2·a^2+b^2)·sqrt(π)"),
+	Case("GaussianSymbolicPrefactorRoots","∫dx (x-m)*(x-n)*exp(-x^2)*λ[x]","ℝ","(m·n+1/2)·sqrt(π)"),
+	Case("GaussianSymbolicPrefactorKurtosis","∫dx (x-m)^4*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","3"),
+	Case("GaussianSymbolicPrefactorSkewness","∫dx (x-m)^3*exp(-(x-m)^2/2)*λ[x]","ℝ","0"),
+	Case("GaussianSymbolicPrefactorMixed","∫dx x*(x-m)*exp(-(x-m)^2)*λ[x]","ℝ","1/2·sqrt(π)"),
+	Case("GaussianSymbolicPrefactorPartial","∫dx (x+1/a)*exp(-x^2)*λ[x]","ℝ","a⁻¹·sqrt(π)"),
+	Case("GaussianSymbolicPrefactorTilted","∫dx (c*x^2+d)*exp(-x^2+b*x)*λ[x]","ℝ","(c·(1/4)·b^2+c·(1/2)+d)·sqrt(π)·exp(1/4·b^2)"),
+	Case("GaussianSymbolicPrefactorScaled","∫dx (x-m)^2*exp(-(x-n)^2)*a*λ[x]","ℝ","a·(m^2-2·m·n+n^2+1/2)·sqrt(π)"),
+	Case("GaussianSymbolicPrefactorProduct","∫dx (x*(x-a)+b)*exp(-x^2)*λ[x]","ℝ","(b+1/2)·sqrt(π)"),
+	Case("GaussianSymbolicPrefactorCurvature","∫dx (x-m)^2*exp(-a*x^2)*λ[x]","ℝ"),
+	Case("GaussianSymbolicPrefactorDegree","∫dx (x-m)^17*exp(-x^2)*λ[x]","ℝ"),
 	Case("StrictGuardGaussian","∫dx exp(-(x-1/a)^2)*λ[x]*x","ℝ","guard(a≠0,a⁻¹·sqrt(π))"),
 	Case("StrictGuardTwo","∫dx x*λ[x]*exp(-(x-1/a)^2)*exp(-x^2+1/b)","ℝ","guard(b≠0∧a≠0,a⁻¹·(1/2)·sqrt(1/2·π)·exp(b⁻¹-(a^2)⁻¹·(1/2)))"),
 	Case("StrictGuardSquare","∫dx (x*exp(-x^2+1/b))^2*λ[x]","ℝ","guard(b≠0,1/4·sqrt(1/2·π)·exp(2·b⁻¹))"),
@@ -1011,25 +1023,38 @@ private void run(string directory){
 		// derivative that vanishes at both ends. The constant and linear
 		// coefficients of the exponent may be terms that do not mention the
 		// axis: the exponent is then a quadratic by its structure, and the
-		// moments of the polynomial are a polynomial in the linear coefficient.
-		// Other exponents, a curvature or a polynomial with such coefficients
-		// and half-lines keep their integral.
+		// moments of the polynomial are a polynomial in the linear coefficient,
+		// a sum of its monomials. So may the coefficients of a polynomial in
+		// front: the integral is linear in them, and each meets the moments of
+		// its power. Other exponents, a curvature that is such a term, a
+		// polynomial of too high a degree and half-lines keep their integral.
 		if(c.name.indexOf("Gaussian")==0){
-			bool symbolic=c.name.indexOf("GaussianSymbolic")==0;
+			bool symbolic=c.name.indexOf("GaussianSymbolic")==0,prefactor=c.name.indexOf("GaussianSymbolicPrefactor")==0;
 			bool retained=c.name=="GaussianGrowing"||c.name=="GaussianQuartic"||c.name=="GaussianHalfLine"||c.name=="GaussianSymbolicCurvature"||
-				c.name=="GaussianSymbolicVariance"||c.name=="GaussianSymbolicLinear"||c.name=="GaussianSymbolicPrefactor";
+				c.name=="GaussianSymbolicVariance"||c.name=="GaussianSymbolicLinear"||c.name=="GaussianSymbolicPrefactorCurvature"||c.name=="GaussianSymbolicPrefactorDegree";
 			auto scaled=c.name=="GaussianNormal"||c.name=="GaussianVariance"||c.name=="GaussianMean"||c.name=="GaussianCentral"||c.name=="GaussianScaled"||c.name=="GaussianPartialScale"||
 				c.name=="GaussianSymbolicNested";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian")>=0)!=retained,c.name~" Gaussian certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			if(!retained) enforce((certificate.indexOf("presentation_mass_gaussian_scaled")>=0)==scaled,c.name~" scale");
-			if(!retained) enforce((certificate.indexOf("presentation_mass_gaussian_symbolic")>=0&&certificate.indexOf("Distribution.StepSource.Quadratic.")>=0)==symbolic,c.name~" coefficients");
-			if(symbolic&&!retained){
+			if(!retained) enforce((certificate.indexOf(prefactor?"presentation_mass_gaussian_moments":"presentation_mass_gaussian_symbolic")>=0&&certificate.indexOf("Distribution.StepSource.Quadratic.")>=0)==symbolic,c.name~" coefficients");
+			if(symbolic&&!retained) enforce(certificate.indexOf("Distribution.StepSource.RowTerms.term")>=0&&certificate.indexOf("Distribution.StepSource.Sums.one")>=0,c.name~" monomials");
+			if(prefactor&&!retained){
+				// The lemma of every shape of such a polynomial is exercised, and
+				// those of the monomials that are skipped.
+				auto shape=c.name=="GaussianSymbolicPrefactorRoots"?"Bell.cast":c.name=="GaussianSymbolicPrefactorProduct"?"Symbolic.mul":
+					c.name=="GaussianSymbolicPrefactorShift"||c.name=="GaussianSymbolicPrefactorPartial"?"RowTerms.vanish":c.name=="GaussianSymbolicPrefactorTilted"?"MomentTerms.absent":
+					c.name=="GaussianSymbolicPrefactorMixed"?"polynomial_variable":"Powers.step";
+				enforce(certificate.indexOf("Distribution.StepSource."~shape)>=0,c.name~" "~shape);
+				enforce(certificate.indexOf("Distribution.StepSource.Symbolic.cast")>=0&&certificate.indexOf("Distribution.StepSource.MomentTerms.present")>=0&&
+					certificate.indexOf("Distribution.StepSource.Sums.add")>=0,c.name~" polynomial");
+			}
+			if(symbolic&&!prefactor&&!retained){
 				// The lemma of every shape of an exponent is exercised.
 				auto shape=c.name=="GaussianSymbolicProduct"?"Quadratic.product":c.name=="GaussianSymbolicTilt"||c.name=="GaussianSymbolicTwoWeights"?"Quadratic.scale ":
 					c.name=="GaussianSymbolicOffset"||c.name=="GaussianSymbolicNested"||c.name=="GaussianSymbolicPartial"?"Quadratic.fill1":c.name=="GaussianSymbolicMixed"?"Quadratic.add":"Quadratic.square";
 				enforce(certificate.indexOf("Distribution.StepSource."~shape)>=0,c.name~" "~shape);
-				if(c.name=="GaussianSymbolicCubic") enforce(certificate.indexOf("Distribution.StepSource.Horner.step")>=0,c.name);
+				if(c.name=="GaussianSymbolicCubic") enforce(certificate.indexOf("Distribution.StepSource.RowTerms.zero")>=0&&certificate.indexOf("Distribution.StepSource.Sums.add")>=0,c.name);
 				if(c.name=="GaussianSymbolicScaled") enforce(certificate.indexOf("Distribution.StepSource.bell_constant")>=0,c.name);
 				if(c.name=="GaussianSymbolicGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name);
 			}
@@ -1045,7 +1070,7 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.DensityProgram.Hoists.here")>=0,c.name~" guard");
 			bool retained=c.name=="StrictGuardRetained"||c.name=="StrictGuardAxis";
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
-			if(!retained) enforce(certificate.indexOf("presentation_mass_gaussian_symbolic")>=0&&certificate.indexOf(".scalarSimplify ")>=0,c.name~" under the guard");
+			if(!retained) enforce(certificate.indexOf("presentation_mass_gaussian_")>=0&&certificate.indexOf(".scalarSimplify ")>=0,c.name~" under the guard");
 			if(c.name=="StrictGuardTwo") enforce(certificate.indexOf("Hoists.right")>=0,c.name~" factor");
 			if(c.name=="StrictGuardAxis") enforce(certificate.indexOf("Hoists.left")>=0&&text.indexOf("guard(a≠0,∫dx (guard(")==0,c.name~": "~text);
 		}
