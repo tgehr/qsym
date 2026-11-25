@@ -600,6 +600,14 @@ theorem interval_observation_value (swap sl su : Bool) (l u : ℝ) {f v : ℝ �
     rintro ⟨_, hint⟩
     exact hn ((integrable_indicator_iff measurableSet_Ioo).mp ((integrable_congr he).mp hint))
 
+/-- A value that is undefined is not observed where the guard holds
+somewhere. -/
+theorem interval_observation_undefined (swap sl su : Bool) (l u : ℝ) {f v : ℝ → Option ℝ}
+    (hf : Masked f (intervalGuard swap sl su (some l) (some u)) v) (hv : ∀ x, v x = none)
+    (hT : if (sl || su) = true then l < u else l ≤ u) : partialIntegral volume f = none := by
+  obtain ⟨x, hx⟩ := region_nonempty sl su hT
+  exact interval_observation_missing swap sl su l u hf hx (hv x)
+
 /-- The same above one real bound. -/
 theorem above_observation_value (strict : Bool) (l : ℝ) {v : ℝ → Option ℝ} {g : ℝ → ℝ}
     (hg : ∀ x, (if strict = true then l < x else l ≤ x) → v x = some (g x)) :

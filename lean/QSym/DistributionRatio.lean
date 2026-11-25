@@ -782,4 +782,820 @@ theorem ratio_below (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {p
         rw [ratio_nonzero hr] at this
         cases this
 
+/-! A factor that does not mention the axis, anywhere in a product with the
+quotient. A partial integral is not linear: under a factor of zero the
+product is zero wherever the quotient is defined, also where the quotient is
+not integrable, and under a factor that is undefined it is undefined. So
+the factor does not simply come out. -/
+
+/-- A polynomial over a power of the axis under an optional factor that does
+not depend on it. With `pole` the value is undefined at zero, and the
+equation is for the other points. -/
+structure Fraction (v : ℝ → Option ℝ) (S : Option (Option ℝ)) (p : List ℚ) (N : ℕ)
+    (pole : Bool) : Prop where
+  equation : ∀ x : ℝ, (pole = true → x ≠ 0) →
+    v x = scaleBy S (some (polyEval p x * (x⁻¹) ^ N))
+  undefined : pole = true → v 0 = none
+
+theorem Fraction.polynomial {f : ℝ → Option ℝ} {q : List ℚ}
+    (hf : PolynomialOn (fun _ => True) f q) : Fraction f none q 0 false :=
+  ⟨fun x _ => by
+    rw [hf.equation x trivial]
+    simp [scaleBy], fun h => by cases h⟩
+
+theorem Fraction.ratio {f : ℝ → Option ℝ} {p : List ℚ} {N : ℕ} (hf : RatioOn f p N) :
+    Fraction f none p N true :=
+  ⟨fun x hx => by
+    rw [hf.equation x (hx rfl)]
+    rfl, fun _ => hf.undefined⟩
+
+/-- A factor that does not depend on the axis. -/
+theorem Fraction.scale (c : Option ℝ) : Fraction (fun _ => c) (some c) [1] 0 false :=
+  ⟨fun x _ => by cases c <;> simp [scaleBy, Value.mul, polyEval], fun h => by cases h⟩
+
+/-- Products: the factors multiply in their order, and so do the quotients. -/
+theorem Fraction.mul {f g : ℝ → Option ℝ} {S T : Option (Option ℝ)} {p q : List ℚ} {n m : ℕ}
+    {b b' : Bool} (hf : Fraction f S p n b) (hg : Fraction g T q m b') :
+    Fraction (fun x => Value.mul (f x) (g x)) (joinScale S T) (polyMul p q) (n + m)
+      (b || b') :=
+  ⟨fun x hx => by
+    show Value.mul (f x) (g x) = _
+    rw [hf.equation x (fun h => hx (by simp [h])), hg.equation x (fun h => hx (by simp [h])),
+      polyEval_mul, pow_add]
+    rcases S with _ | _ | s <;> rcases T with _ | _ | t <;>
+      simp [scaleBy, joinScale, Value.mul] <;> ring, fun h => by
+    show Value.mul (f 0) (g 0) = none
+    cases b with
+    | true =>
+      rw [hf.undefined rfl]
+      rfl
+    | false =>
+      rw [hg.undefined (by simpa using h)]
+      cases f 0 <;> rfl⟩
+
+/-- Under the guard of its domain it is the same. -/
+theorem Fraction.guard {v : ℝ → Option ℝ} {S : Option (Option ℝ)} {p : List ℚ} {N : ℕ}
+    {q : ℝ → Option Bool} (hv : Fraction v S p N true)
+    (hq : ∀ x : ℝ, x ≠ 0 → q x = some true) :
+    Fraction (fun x => Binding.guardValue (q x) (v x)) S p N true :=
+  ⟨fun x hx => by
+    show Binding.guardValue (q x) (v x) = _
+    rw [hq x (hx rfl), hv.equation x hx]
+    rfl, fun _ => by
+    show Binding.guardValue (q 0) (v 0) = none
+    rw [hv.undefined rfl]
+    simp [Binding.guardValue]⟩
+
+/-- Under a factor the value is the factor times a quotient, strictly. -/
+private theorem Fraction.split {v : ℝ → Option ℝ} {c : Option ℝ} {p : List ℚ} {N : ℕ}
+    (hv : Fraction v (some c) p N true) :
+    ∃ r : ℝ → Option ℝ, RatioOn r p N ∧ ∀ x, v x = Value.mul c (r x) := by
+  classical
+  refine ⟨fun x => if x = 0 then none else some (polyEval p x * (x⁻¹) ^ N),
+    ⟨fun x hx => by simp [hx], by simp⟩, fun x => ?_⟩
+  by_cases hx : x = 0
+  · subst hx
+    rw [hv.undefined rfl]
+    cases c <;> simp [Value.mul]
+  · rw [hv.equation x (fun _ => hx)]
+    simp [scaleBy, hx]
+
+/-- A real factor that is not zero comes out of a partial integral. -/
+theorem partialIntegral_const_mul {γ : ℝ} (hγ : γ ≠ 0) (f : ℝ → Option ℝ) :
+    partialIntegral volume (fun x => Value.mul (some γ) (f x)) =
+      Value.mul (some γ) (partialIntegral volume f) := by
+  have hget : (fun x => (Value.mul (some γ) (f x)).getD 0) = fun x => γ * (f x).getD 0 := by
+    funext x
+    cases f x <;> simp [Value.mul]
+  have hdef : (∀ x, Value.Defined (Value.mul (some γ) (f x))) ↔ ∀ x, Value.Defined (f x) := by
+    constructor
+    · intro h x
+      obtain ⟨t, ht⟩ := h x
+      cases hfx : f x with
+      | none =>
+        rw [hfx] at ht
+        cases ht
+      | some s => exact ⟨s, rfl⟩
+    · intro h x
+      obtain ⟨t, ht⟩ := h x
+      exact ⟨γ * t, by rw [ht]; rfl⟩
+  by_cases h : (∀ x, Value.Defined (f x)) ∧ Integrable (fun x => (f x).getD 0) volume
+  · have hi : Integrable (fun x => (Value.mul (some γ) (f x)).getD 0) volume := by
+      rw [hget]
+      exact h.2.const_mul γ
+    rw [partialIntegral_valid volume f h.1 h.2, partialIntegral_valid volume _ (hdef.2 h.1) hi,
+      hget, integral_const_mul]
+    rfl
+  · have h' : ¬((∀ x, Value.Defined (Value.mul (some γ) (f x))) ∧
+        Integrable (fun x => (Value.mul (some γ) (f x)).getD 0) volume) := by
+      rintro ⟨h1, h2⟩
+      refine h ⟨hdef.1 h1, ?_⟩
+      rw [hget] at h2
+      refine (h2.const_mul γ⁻¹).congr (Eventually.of_forall fun x => ?_)
+      show γ⁻¹ * (γ * (f x).getD 0) = (f x).getD 0
+      rw [← mul_assoc, inv_mul_cancel₀ hγ, one_mul]
+    rw [show partialIntegral volume f = none from if_neg h,
+      show partialIntegral volume (fun x => Value.mul (some γ) (f x)) = none from if_neg h']
+    rfl
+
+/-- The observation of a masked value under a factor: under one that is
+undefined the value is undefined wherever the mask holds; under zero it is
+zero wherever the value is defined; and any other factor comes out. -/
+private theorem scaled_observation (g : ℝ → Option Bool) (r : ℝ → Option ℝ) (c : Option ℝ) :
+    partialIntegral volume (fun x => Value.mask (g x) (Value.mul c (r x))) =
+      match c with
+      | none => partialIntegral volume (fun x => Value.mask (g x) (none : Option ℝ))
+      | some γ => if γ = 0 then
+          partialIntegral volume (fun x => Value.mask (g x) ((r x).map fun _ => (0 : ℝ)))
+        else Value.mul (some γ) (partialIntegral volume (fun x => Value.mask (g x) (r x))) := by
+  cases c with
+  | none => rfl
+  | some γ =>
+    by_cases hγ : γ = 0
+    · subst hγ
+      have h0 : ∀ x, Value.mul (some (0 : ℝ)) (r x) = (r x).map fun _ => (0 : ℝ) := fun x => by
+        cases r x <;> simp [Value.mul]
+      simp only [h0, if_true]
+    · have hm : ∀ x, Value.mask (g x) (Value.mul (some γ) (r x)) =
+          Value.mul (some γ) (Value.mask (g x) (r x)) := fun x => by
+        rcases g x with _ | _ | _ <;> simp [Value.mask, Value.mul]
+      simp only [hm, if_neg hγ]
+      exact partialIntegral_const_mul hγ _
+
+private theorem compare_undefined (s : Bool) {a b : Option ℝ} (h : a = none ∨ b = none) :
+    compare s a b = none := by
+  rcases h with rfl | rfl
+  · cases s <;> rfl
+  · cases s <;> cases a <;> rfl
+
+/-- With a bound that is undefined the guard between them is undefined
+somewhere. -/
+private theorem between_bound_undefined (swap sl su : Bool) {a b : Option ℝ}
+    (h : a = none ∨ b = none) (w : ℝ → Option ℝ) :
+    partialIntegral volume (fun x => Value.mask (intervalGuard swap sl su a b x) (w x)) = none := by
+  have missing : ∀ (f : ℝ → Option ℝ) (y : ℝ), f y = none → partialIntegral volume f = none := by
+    intro f y hy
+    apply if_neg
+    intro hd
+    obtain ⟨t, ht⟩ := hd.1 y
+    rw [hy] at ht
+    cases ht
+  cases a with
+  | none =>
+    cases b with
+    | none => exact missing _ 0 (by cases swap <;> cases sl <;> cases su <;> rfl)
+    | some u =>
+      refine missing _ (u - 1) ?_
+      cases swap <;> cases sl <;> cases su <;>
+        simp [intervalGuard, compare, Value.and, Value.lt, Value.le, Value.mask]
+  | some l =>
+    cases b with
+    | none =>
+      refine missing _ (l + 1) ?_
+      cases swap <;> cases sl <;> cases su <;>
+        simp [intervalGuard, compare, Value.and, Value.lt, Value.le, Value.mask]
+    | some u => rcases h with h | h <;> cases h
+
+private theorem side_some (l u : ℝ) :
+    Value.or (Value.lt (some (0 : ℝ)) (some l)) (Value.lt (some u) (some (0 : ℝ))) =
+      some (decide (0 < l ∨ u < 0)) := by
+  by_cases h1 : 0 < l <;> by_cases h2 : u < 0 <;> simp [Value.or, Value.lt, h1, h2]
+
+/-- Zero is not in the guard: it is beyond a bound, or at one that is
+strict. -/
+private theorem outside_some (sl su : Bool) (l u : ℝ) :
+    Value.or (compare (!sl) (some (0 : ℝ)) (some l)) (compare (!su) (some u) (some (0 : ℝ))) =
+      some (decide ¬((if sl = true then l < 0 else l ≤ 0) ∧
+        (if su = true then (0 : ℝ) < u else 0 ≤ u))) := by
+  cases sl <;> cases su <;>
+    simp only [compare, Bool.not_true, Bool.not_false, Value.lt, Value.le, Option.bind_eq_bind,
+      Option.some_bind, Option.pure_def, if_true, Bool.false_eq_true, if_false]
+  · by_cases h1 : 0 < l <;> by_cases h2 : u < 0 <;> simp [Value.or, h1, h2]
+  · by_cases h1 : 0 < l <;> by_cases h2 : u ≤ 0 <;> simp [Value.or, h1, h2]
+  · by_cases h1 : 0 ≤ l <;> by_cases h2 : u < 0 <;> simp [Value.or, h1, h2]
+  · by_cases h1 : 0 ≤ l <;> by_cases h2 : u ≤ 0 <;> simp [Value.or, h1, h2]
+
+/-- Without a value the guard between two bounds leaves the zero function
+where it holds nowhere, and nothing otherwise. -/
+private theorem between_undefined (swap sl su : Bool) (a b : Option ℝ) :
+    partialIntegral volume
+        (fun x => Value.mask (intervalGuard swap sl su a b x) (none : Option ℝ)) =
+      Value.mask (compare (sl || su) a b) none := by
+  by_cases h : a = none ∨ b = none
+  · rw [between_bound_undefined swap sl su h, compare_undefined _ h]
+    rfl
+  · obtain ⟨l, rfl⟩ := Option.ne_none_iff_exists'.1 fun ha => h (Or.inl ha)
+    obtain ⟨u, rfl⟩ := Option.ne_none_iff_exists'.1 fun hb => h (Or.inr hb)
+    have hf : Masked
+        (fun x => Value.mask (intervalGuard swap sl su (some l) (some u) x) (none : Option ℝ))
+        (intervalGuard swap sl su (some l) (some u)) (fun _ => none) := ⟨fun _ => rfl⟩
+    rw [compare_some]
+    by_cases hT : (if (sl || su) = true then l < u else l ≤ u)
+    · rw [interval_observation_undefined swap sl su l u hf (fun _ => rfl) hT, decide_eq_true hT]
+      rfl
+    · rw [interval_observation_empty swap sl su l u hf hT, decide_eq_false hT]
+      rfl
+
+/-- Under a factor of zero a quotient is zero wherever it is defined: it is
+observed as zero where zero is not in the guard, and not at all otherwise. -/
+private theorem between_zero (swap sl su : Bool) (a b : Option ℝ) {r : ℝ → Option ℝ}
+    {p : List ℚ} {N : ℕ} (hr : RatioOn r p N) :
+    partialIntegral volume (fun x => Value.mask (intervalGuard swap sl su a b x)
+        ((r x).map fun _ => (0 : ℝ))) =
+      Value.mask (compare (sl || su) a b) (Binding.guardValue
+        (Value.or (compare (!sl) (some 0) a) (compare (!su) b (some 0))) (some 0)) := by
+  by_cases h : a = none ∨ b = none
+  · rw [between_bound_undefined swap sl su h, compare_undefined _ h]
+    rfl
+  · obtain ⟨l, rfl⟩ := Option.ne_none_iff_exists'.1 fun ha => h (Or.inl ha)
+    obtain ⟨u, rfl⟩ := Option.ne_none_iff_exists'.1 fun hb => h (Or.inr hb)
+    have hf : Masked (fun x => Value.mask (intervalGuard swap sl su (some l) (some u) x)
+        ((r x).map fun _ => (0 : ℝ))) (intervalGuard swap sl su (some l) (some u))
+        (fun x => (r x).map fun _ => (0 : ℝ)) := ⟨fun _ => rfl⟩
+    rw [outside_some, compare_some]
+    by_cases hT : (if (sl || su) = true then l < u else l ≤ u)
+    · rw [decide_eq_true hT]
+      by_cases hzero : (if sl = true then l < 0 else l ≤ 0) ∧
+          (if su = true then (0 : ℝ) < u else 0 ≤ u)
+      · rw [interval_observation_missing swap sl su l u hf hzero (by
+          show (r 0).map _ = none
+          rw [hr.undefined]
+          rfl), decide_eq_false (not_not.2 hzero)]
+        rfl
+      · have hg : ∀ x : ℝ, ((if sl = true then l < x else l ≤ x) ∧
+            (if su = true then x < u else x ≤ u)) →
+            (r x).map (fun _ => (0 : ℝ)) = some ((fun _ : ℝ => (0 : ℝ)) x) := fun x hx => by
+          have hx0 : x ≠ 0 := fun h0 => by
+            subst h0
+            exact hzero hx
+          rw [hr.equation x hx0]
+          rfl
+        rw [(interval_observation_value swap sl su l u hf hg).1 integrableOn_zero,
+          decide_eq_true hzero]
+        simp [Value.mask, Binding.guardValue]
+    · rw [interval_observation_empty swap sl su l u hf hT, decide_eq_false hT]
+      rfl
+
+private theorem above_none (strict : Bool) (a : Option ℝ) :
+    partialIntegral volume
+      (fun x => Value.mask (compare strict a (some x)) (none : Option ℝ)) = none := by
+  apply if_neg
+  intro hd
+  cases a with
+  | none =>
+    obtain ⟨t, ht⟩ := hd.1 0
+    cases strict <;> cases ht
+  | some l =>
+    obtain ⟨t, ht⟩ := hd.1 (l + 1)
+    have ht' : Value.mask (compare strict (some l) (some (l + 1))) (none : Option ℝ) = some t := ht
+    have hlt : (if strict = true then l < l + 1 else l ≤ l + 1) := by split_ifs <;> linarith
+    rw [compare_some, decide_eq_true hlt] at ht'
+    cases ht'
+
+private theorem below_none (strict : Bool) (b : Option ℝ) :
+    partialIntegral volume
+      (fun x => Value.mask (compare strict (some x) b) (none : Option ℝ)) = none := by
+  apply if_neg
+  intro hd
+  cases b with
+  | none =>
+    obtain ⟨t, ht⟩ := hd.1 0
+    cases strict <;> cases ht
+  | some u =>
+    obtain ⟨t, ht⟩ := hd.1 (u - 1)
+    have ht' : Value.mask (compare strict (some (u - 1)) (some u)) (none : Option ℝ) = some t := ht
+    have hlt : (if strict = true then u - 1 < u else u - 1 ≤ u) := by split_ifs <;> linarith
+    rw [compare_some, decide_eq_true hlt] at ht'
+    cases ht'
+
+/-- Above a bound, under a factor of zero. -/
+private theorem above_zero (strict : Bool) (a : Option ℝ) {r : ℝ → Option ℝ} {p : List ℚ}
+    {N : ℕ} (hr : RatioOn r p N) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x))
+        ((r x).map fun _ => (0 : ℝ))) =
+      Binding.guardValue (compare (!strict) (some 0) a) (some 0) := by
+  cases a with
+  | none =>
+    have hn : partialIntegral volume (fun x => Value.mask (compare strict none (some x))
+        ((r x).map fun _ => (0 : ℝ))) = none := by
+      apply if_neg
+      intro hd
+      obtain ⟨t, ht⟩ := hd.1 0
+      cases strict <;> cases ht
+    rw [hn, compare_undefined _ (Or.inr rfl)]
+    rfl
+  | some l =>
+    rw [compare_some]
+    by_cases h0 : (if strict = true then l < 0 else l ≤ 0)
+    · have hn : partialIntegral volume (fun x => Value.mask (compare strict (some l) (some x))
+          ((r x).map fun _ => (0 : ℝ))) = none := by
+        apply if_neg
+        intro hd
+        obtain ⟨t, ht⟩ := hd.1 0
+        have ht' : Value.mask (compare strict (some l) (some 0))
+            ((r 0).map fun _ => (0 : ℝ)) = some t := ht
+        rw [compare_some, decide_eq_true h0, hr.undefined] at ht'
+        cases ht'
+      have hout : ¬(if (!strict) = true then (0 : ℝ) < l else 0 ≤ l) := by
+        cases strict
+        · exact not_lt.2 h0
+        · exact not_le.2 h0
+      rw [hn, decide_eq_false hout]
+      rfl
+    · have hg : ∀ x : ℝ, (if strict = true then l < x else l ≤ x) →
+          (r x).map (fun _ => (0 : ℝ)) = some ((fun _ : ℝ => (0 : ℝ)) x) := fun x hx => by
+        have hx0 : x ≠ 0 := fun hx0 => by
+          subst hx0
+          exact h0 hx
+        rw [hr.equation x hx0]
+        rfl
+      have hout : (if (!strict) = true then (0 : ℝ) < l else 0 ≤ l) := by
+        cases strict
+        · exact not_le.1 h0
+        · exact not_lt.1 h0
+      rw [(above_observation_value strict l hg).1 integrableOn_zero, decide_eq_true hout]
+      simp [Binding.guardValue]
+
+/-- Below a bound, under a factor of zero. -/
+private theorem below_zero (strict : Bool) (b : Option ℝ) {r : ℝ → Option ℝ} {p : List ℚ}
+    {N : ℕ} (hr : RatioOn r p N) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b)
+        ((r x).map fun _ => (0 : ℝ))) =
+      Binding.guardValue (compare (!strict) b (some 0)) (some 0) := by
+  cases b with
+  | none =>
+    have hn : partialIntegral volume (fun x => Value.mask (compare strict (some x) none)
+        ((r x).map fun _ => (0 : ℝ))) = none := by
+      apply if_neg
+      intro hd
+      obtain ⟨t, ht⟩ := hd.1 0
+      cases strict <;> cases ht
+    rw [hn, compare_undefined _ (Or.inl rfl)]
+    rfl
+  | some u =>
+    rw [compare_some]
+    by_cases h0 : (if strict = true then (0 : ℝ) < u else 0 ≤ u)
+    · have hn : partialIntegral volume (fun x => Value.mask (compare strict (some x) (some u))
+          ((r x).map fun _ => (0 : ℝ))) = none := by
+        apply if_neg
+        intro hd
+        obtain ⟨t, ht⟩ := hd.1 0
+        have ht' : Value.mask (compare strict (some 0) (some u))
+            ((r 0).map fun _ => (0 : ℝ)) = some t := ht
+        rw [compare_some, decide_eq_true h0, hr.undefined] at ht'
+        cases ht'
+      have hout : ¬(if (!strict) = true then u < (0 : ℝ) else u ≤ 0) := by
+        cases strict
+        · exact not_lt.2 h0
+        · exact not_le.2 h0
+      rw [hn, decide_eq_false hout]
+      rfl
+    · have hg : ∀ x : ℝ, (if strict = true then x < u else x ≤ u) →
+          (r x).map (fun _ => (0 : ℝ)) = some ((fun _ : ℝ => (0 : ℝ)) x) := fun x hx => by
+        have hx0 : x ≠ 0 := fun hx0 => by
+          subst hx0
+          exact h0 hx
+        rw [hr.equation x hx0]
+        rfl
+      have hout : (if (!strict) = true then u < (0 : ℝ) else u ≤ 0) := by
+        cases strict
+        · exact not_le.1 h0
+        · exact not_lt.1 h0
+      rw [(below_observation_value strict u hg).1 integrableOn_zero, decide_eq_true hout]
+      simp [Binding.guardValue]
+
+private theorem mul_mask_guard (γ : ℝ) (t s : Option Bool) (D : Option ℝ) :
+    Value.mul (some γ) (Value.mask t (Binding.guardValue s D)) =
+      Value.mask t (Binding.guardValue s (Value.mul (some γ) D)) := by
+  rcases t with _ | _ | _ <;> rcases s with _ | _ | _ <;>
+    simp [Value.mask, Value.mul, Binding.guardValue]
+
+private theorem mul_guard (γ : ℝ) (s : Option Bool) (D : Option ℝ) :
+    Value.mul (some γ) (Binding.guardValue s D) =
+      Binding.guardValue s (Value.mul (some γ) D) := by
+  rcases s with _ | _ | _ <;> simp [Value.mul, Binding.guardValue]
+
+private theorem or_false (s : Option Bool) : Value.or s (some false) = s := by
+  rcases s with _ | _ | _ <;> rfl
+
+private theorem guard_undefined_factor (G : Option Bool) (X : Option ℝ) :
+    Binding.guardValue G (Value.mask (Value.nonzero (none : Option ℝ)) X) = none := by
+  simp [Value.nonzero, Value.mask, Binding.guardValue]
+
+private theorem nonzero_zero : Value.nonzero (some (0 : ℝ)) = some false := by
+  simp [Value.nonzero]
+
+private theorem nonzero_of_ne {γ : ℝ} (hγ : γ ≠ 0) : Value.nonzero (some γ) = some true := by
+  simp [Value.nonzero, hγ]
+
+/-- Between two bounds under a factor `c`: under the mask of their comparison
+and that of the factor, the factor times the difference of the
+antiderivative. The guard is that both bounds are on one side of zero, or
+that the factor is zero and zero is not in the guard: then the product is
+zero also next to zero. -/
+theorem ratio_between_scaled (swap sl su : Bool) {a b c : Option ℝ} {v : ℝ → Option ℝ}
+    {p : List ℚ} {N : ℕ} (M : ℕ) (A C : List ℚ) (κ : ℚ) (hv : Fraction v (some c) p N true)
+    (hc : ratioCheck p N M A C κ = true) {z m k ab aa cb ca : Option ℝ}
+    {msab msaa mscb msca : List (Option ℝ)}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hab : RowTerms none b A 0 [] msab) (hsab : Sums msab ab)
+    (hcb : RowTerms none b C 0 [] mscb) (hscb : Sums mscb cb)
+    (haa : RowTerms none a A 0 [] msaa) (hsaa : Sums msaa aa)
+    (hca : RowTerms none a C 0 [] msca) (hsca : Sums msca ca) :
+    partialIntegral volume (fun x => Value.mask (intervalGuard swap sl su a b x) (v x)) =
+      Value.mask (compare (sl || su) a b) (Binding.guardValue
+        (Value.or (Value.or (Value.lt z a) (Value.lt b z))
+          (Value.and (Value.not (Value.nonzero c))
+            (Value.or (compare (!sl) z a) (compare (!su) b z))))
+        (Value.mask (Value.nonzero c) (Value.mul c
+          (Value.add (ratioPrimitive M ab cb k b) (Value.mul m (ratioPrimitive M aa ca k a)))))) := by
+  obtain ⟨r, hr, hvr⟩ := hv.split
+  have hI := ratio_between swap sl su M A C κ hr hc hz hm hk hab hsab hcb hscb haa hsaa hca hsca
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  subst hZ
+  have hfun : (fun x => Value.mask (intervalGuard swap sl su a b x) (v x)) =
+      fun x => Value.mask (intervalGuard swap sl su a b x) (Value.mul c (r x)) :=
+    funext fun x => by rw [hvr x]
+  rw [hfun, scaled_observation]
+  cases c with
+  | none =>
+    show partialIntegral volume
+      (fun x => Value.mask (intervalGuard swap sl su a b x) (none : Option ℝ)) = _
+    rw [between_undefined, guard_undefined_factor]
+  | some γ =>
+    by_cases hγ : γ = 0
+    · subst hγ
+      show (if (0 : ℝ) = 0 then _ else _) = _
+      rw [if_pos rfl, between_zero swap sl su a b hr, nonzero_zero]
+      by_cases h : a = none ∨ b = none
+      · rw [compare_undefined _ h]
+        rfl
+      · obtain ⟨l, rfl⟩ := Option.ne_none_iff_exists'.1 fun ha => h (Or.inl ha)
+        obtain ⟨u, rfl⟩ := Option.ne_none_iff_exists'.1 fun hb => h (Or.inr hb)
+        show Value.mask _ (Binding.guardValue (Value.or (compare (!sl) (some 0) (some l))
+            (compare (!su) (some u) (some 0))) (some 0)) =
+          Value.mask _ (Binding.guardValue (Value.or
+            (Value.or (Value.lt (some 0) (some l)) (Value.lt (some u) (some 0)))
+            (Value.or (compare (!sl) (some 0) (some l)) (compare (!su) (some u) (some 0))))
+            (some 0))
+        rw [outside_some, side_some]
+        have himp : (0 < l ∨ u < 0) → ¬((if sl = true then l < 0 else l ≤ 0) ∧
+            (if su = true then (0 : ℝ) < u else 0 ≤ u)) := by
+          rintro (h1 | h1) ⟨h2, h3⟩
+          · split_ifs at h2 <;> linarith
+          · split_ifs at h3 <;> linarith
+        by_cases hP : 0 < l ∨ u < 0
+        · rw [decide_eq_true hP, decide_eq_true (himp hP)]
+          rfl
+        · rw [decide_eq_false hP]
+          rfl
+    · show (if γ = 0 then _ else _) = _
+      rw [if_neg hγ, hI, mul_mask_guard, nonzero_of_ne hγ]
+      show _ = Value.mask _ (Binding.guardValue
+        (Value.or (Value.or (Value.lt (some 0) a) (Value.lt b (some 0))) (some false))
+        (Value.mul (some γ) _))
+      rw [or_false]
+
+/-- The same without the mask of the factor, where no bound is strict or
+both are known to be on one side of zero: then zero is in the guard
+wherever they are not. -/
+theorem ratio_between_scaled_plain (swap sl su : Bool) {a b c : Option ℝ} {v : ℝ → Option ℝ}
+    {p : List ℚ} {N : ℕ} (M : ℕ) (A C : List ℚ) (κ : ℚ) (hv : Fraction v (some c) p N true)
+    (hc : ratioCheck p N M A C κ = true) {z m k ab aa cb ca : Option ℝ}
+    {msab msaa mscb msca : List (Option ℝ)}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hab : RowTerms none b A 0 [] msab) (hsab : Sums msab ab)
+    (hcb : RowTerms none b C 0 [] mscb) (hscb : Sums mscb cb)
+    (haa : RowTerms none a A 0 [] msaa) (hsaa : Sums msaa aa)
+    (hca : RowTerms none a C 0 [] msca) (hsca : Sums msca ca)
+    (hside : (sl || su) = false ∨ Value.or (Value.lt z a) (Value.lt b z) = some true) :
+    partialIntegral volume (fun x => Value.mask (intervalGuard swap sl su a b x) (v x)) =
+      Value.mask (compare (sl || su) a b) (Binding.guardValue
+        (Value.or (Value.lt z a) (Value.lt b z))
+        (Value.mul c
+          (Value.add (ratioPrimitive M ab cb k b) (Value.mul m (ratioPrimitive M aa ca k a))))) := by
+  rw [ratio_between_scaled swap sl su M A C κ hv hc hz hm hk hab hsab hcb hscb haa hsaa hca hsca]
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  have hMinus : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  subst hZ hMinus
+  by_cases h : a = none ∨ b = none
+  · rw [compare_undefined _ h]
+    rfl
+  obtain ⟨l, rfl⟩ := Option.ne_none_iff_exists'.1 fun ha => h (Or.inl ha)
+  obtain ⟨u, rfl⟩ := Option.ne_none_iff_exists'.1 fun hb => h (Or.inr hb)
+  rw [side_some] at hside
+  rw [outside_some, side_some, compare_some]
+  by_cases hT : (if (sl || su) = true then l < u else l ≤ u)
+  swap
+  · rw [decide_eq_false hT]
+    rfl
+  rw [decide_eq_true hT]
+  show Binding.guardValue _ _ = Binding.guardValue _ _
+  have hlu : l ≤ u := by
+    split_ifs at hT
+    · exact hT.le
+    · exact hT
+  cases c with
+  | none => simp [Value.nonzero, Value.mask, Value.mul, Binding.guardValue]
+  | some γ =>
+    by_cases hγ : γ = 0
+    · subst hγ
+      rw [nonzero_zero]
+      by_cases hP : 0 < l ∨ u < 0
+      · have hl0 : l ≠ 0 := by
+          rcases hP with h1 | h1
+          · exact h1.ne'
+          · exact (lt_of_le_of_lt hlu h1).ne
+        have hu0 : u ≠ 0 := by
+          rcases hP with h1 | h1
+          · exact (lt_of_lt_of_le h1 hlu).ne'
+          · exact h1.ne
+        rw [decide_eq_true hP, ratioPrimitive_some hab hsab hcb hscb hk rfl hu0,
+          ratioPrimitive_some haa hsaa hca hsca hk rfl hl0]
+        simp [Value.or, Value.mask, Value.mul, Value.add, Binding.guardValue]
+      · have hQ : ¬¬((if sl = true then l < 0 else l ≤ 0) ∧
+            (if su = true then (0 : ℝ) < u else 0 ≤ u)) := by
+          rcases hside with hs | hs
+          · obtain ⟨rfl, rfl⟩ : sl = false ∧ su = false := by simpa using hs
+            simp only [not_or, not_lt] at hP
+            exact not_not.2 ⟨hP.1, hP.2⟩
+          · rw [decide_eq_false hP] at hs
+            cases hs
+        rw [decide_eq_false hP, decide_eq_false hQ]
+        rfl
+    · rw [nonzero_of_ne hγ]
+      show Binding.guardValue (Value.or _ (some false)) _ = _
+      rw [or_false]
+      rfl
+
+/-- Above a bound under a factor `c`: under the mask of the factor, the
+factor times the value above. The guard is that the bound is positive, or
+that the factor is zero and zero is not in the guard. -/
+theorem ratio_above_scaled (strict : Bool) {a c : Option ℝ} {v : ℝ → Option ℝ} {p : List ℚ}
+    {N : ℕ} (M : ℕ) (C : List ℚ) (hv : Fraction v (some c) p N true)
+    (hc : ratioTailCheck p N M C = true) {z m ca : Option ℝ} {msca : List (Option ℝ)}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hca : RowTerms none a C 0 [] msca) (hsca : Sums msca ca) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
+      Binding.guardValue
+        (Value.or (Value.lt z a)
+          (Value.and (Value.not (Value.nonzero c)) (compare (!strict) z a)))
+        (Value.mask (Value.nonzero c) (Value.mul c
+          (Value.mul m (Value.mul ca (Value.inv (curvaturePower a M)))))) := by
+  obtain ⟨r, hr, hvr⟩ := hv.split
+  have hI := ratio_above strict M C hr hc hz hm hca hsca
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  subst hZ
+  have hfun : (fun x => Value.mask (compare strict a (some x)) (v x)) =
+      fun x => Value.mask (compare strict a (some x)) (Value.mul c (r x)) :=
+    funext fun x => by rw [hvr x]
+  rw [hfun, scaled_observation]
+  cases c with
+  | none =>
+    show partialIntegral volume
+      (fun x => Value.mask (compare strict a (some x)) (none : Option ℝ)) = _
+    rw [above_none, guard_undefined_factor]
+  | some γ =>
+    by_cases hγ : γ = 0
+    · subst hγ
+      show (if (0 : ℝ) = 0 then _ else _) = _
+      rw [if_pos rfl, above_zero strict a hr, nonzero_zero]
+      cases a with
+      | none =>
+        rw [compare_undefined _ (Or.inr rfl)]
+        rfl
+      | some l =>
+        show Binding.guardValue (compare (!strict) (some 0) (some l)) (some 0) =
+          Binding.guardValue (Value.or (Value.lt (some 0) (some l))
+            (compare (!strict) (some 0) (some l))) (some 0)
+        have hlt : Value.lt (some (0 : ℝ)) (some l) = some (decide (0 < l)) := rfl
+        rw [compare_some, hlt]
+        by_cases hP : 0 < l
+        · have hT : (if (!strict) = true then (0 : ℝ) < l else 0 ≤ l) := by
+            split_ifs
+            · exact hP
+            · exact hP.le
+          rw [decide_eq_true hP, decide_eq_true hT]
+          rfl
+        · rw [decide_eq_false hP]
+          rfl
+    · show (if γ = 0 then _ else _) = _
+      rw [if_neg hγ, hI, mul_guard, nonzero_of_ne hγ]
+      show _ = Binding.guardValue (Value.or (Value.lt (some 0) a) (some false))
+        (Value.mul (some γ) _)
+      rw [or_false]
+
+/-- The same without the mask of the factor, where the bound is not strict
+or known to be positive. -/
+theorem ratio_above_scaled_plain (strict : Bool) {a c : Option ℝ} {v : ℝ → Option ℝ}
+    {p : List ℚ} {N : ℕ} (M : ℕ) (C : List ℚ) (hv : Fraction v (some c) p N true)
+    (hc : ratioTailCheck p N M C = true) {z m ca : Option ℝ} {msca : List (Option ℝ)}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hca : RowTerms none a C 0 [] msca) (hsca : Sums msca ca)
+    (hside : strict = false ∨ Value.lt z a = some true) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
+      Binding.guardValue (Value.lt z a)
+        (Value.mul c (Value.mul m (Value.mul ca (Value.inv (curvaturePower a M))))) := by
+  rw [ratio_above_scaled strict M C hv hc hz hm hca hsca]
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  have hMinus : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  subst hZ hMinus
+  cases a with
+  | none => rfl
+  | some l =>
+    have hlt : Value.lt (some (0 : ℝ)) (some l) = some (decide (0 < l)) := rfl
+    rw [hlt] at hside
+    rw [compare_some, hlt]
+    cases c with
+    | none => simp [Value.nonzero, Value.mask, Value.mul, Binding.guardValue]
+    | some γ =>
+      by_cases hγ : γ = 0
+      · subst hγ
+        rw [nonzero_zero]
+        by_cases hP : 0 < l
+        · have hinv : Value.inv (some (l ^ M)) = some ((l ^ M)⁻¹) := by
+            simp [Value.inv, pow_ne_zero M hP.ne']
+          rw [decide_eq_true hP, row_sum hca hsca l rfl, curvaturePower_some, hinv]
+          simp [Value.or, Value.mask, Value.mul, Binding.guardValue]
+        · have hQ : ¬(if (!strict) = true then (0 : ℝ) < l else 0 ≤ l) := by
+            rcases hside with rfl | hs
+            · exact hP
+            · rw [decide_eq_false hP] at hs
+              cases hs
+          rw [decide_eq_false hP, decide_eq_false hQ]
+          rfl
+      · rw [nonzero_of_ne hγ]
+        show Binding.guardValue (Value.or _ (some false)) _ = _
+        rw [or_false]
+        rfl
+
+/-- Below a bound under a factor `c`. -/
+theorem ratio_below_scaled (strict : Bool) {b c : Option ℝ} {v : ℝ → Option ℝ} {p : List ℚ}
+    {N : ℕ} (M : ℕ) (C : List ℚ) (hv : Fraction v (some c) p N true)
+    (hc : ratioTailCheck p N M C = true) {z cb : Option ℝ} {mscb : List (Option ℝ)}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (hcb : RowTerms none b C 0 [] mscb) (hscb : Sums mscb cb) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
+      Binding.guardValue
+        (Value.or (Value.lt b z)
+          (Value.and (Value.not (Value.nonzero c)) (compare (!strict) b z)))
+        (Value.mask (Value.nonzero c) (Value.mul c
+          (Value.mul cb (Value.inv (curvaturePower b M))))) := by
+  obtain ⟨r, hr, hvr⟩ := hv.split
+  have hI := ratio_below strict M C hr hc hz hcb hscb
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  subst hZ
+  have hfun : (fun x => Value.mask (compare strict (some x) b) (v x)) =
+      fun x => Value.mask (compare strict (some x) b) (Value.mul c (r x)) :=
+    funext fun x => by rw [hvr x]
+  rw [hfun, scaled_observation]
+  cases c with
+  | none =>
+    show partialIntegral volume
+      (fun x => Value.mask (compare strict (some x) b) (none : Option ℝ)) = _
+    rw [below_none, guard_undefined_factor]
+  | some γ =>
+    by_cases hγ : γ = 0
+    · subst hγ
+      show (if (0 : ℝ) = 0 then _ else _) = _
+      rw [if_pos rfl, below_zero strict b hr, nonzero_zero]
+      cases b with
+      | none =>
+        rw [compare_undefined _ (Or.inl rfl)]
+        rfl
+      | some u =>
+        show Binding.guardValue (compare (!strict) (some u) (some 0)) (some 0) =
+          Binding.guardValue (Value.or (Value.lt (some u) (some 0))
+            (compare (!strict) (some u) (some 0))) (some 0)
+        have hlt : Value.lt (some u) (some (0 : ℝ)) = some (decide (u < 0)) := rfl
+        rw [compare_some, hlt]
+        by_cases hP : u < 0
+        · have hT : (if (!strict) = true then u < (0 : ℝ) else u ≤ 0) := by
+            split_ifs
+            · exact hP
+            · exact hP.le
+          rw [decide_eq_true hP, decide_eq_true hT]
+          rfl
+        · rw [decide_eq_false hP]
+          rfl
+    · show (if γ = 0 then _ else _) = _
+      rw [if_neg hγ, hI, mul_guard, nonzero_of_ne hγ]
+      show _ = Binding.guardValue (Value.or (Value.lt b (some 0)) (some false))
+        (Value.mul (some γ) _)
+      rw [or_false]
+
+/-- The same without the mask of the factor, where the bound is not strict
+or known to be negative. -/
+theorem ratio_below_scaled_plain (strict : Bool) {b c : Option ℝ} {v : ℝ → Option ℝ}
+    {p : List ℚ} {N : ℕ} (M : ℕ) (C : List ℚ) (hv : Fraction v (some c) p N true)
+    (hc : ratioTailCheck p N M C = true) {z cb : Option ℝ} {mscb : List (Option ℝ)}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (hcb : RowTerms none b C 0 [] mscb) (hscb : Sums mscb cb)
+    (hside : strict = false ∨ Value.lt b z = some true) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
+      Binding.guardValue (Value.lt b z)
+        (Value.mul c (Value.mul cb (Value.inv (curvaturePower b M)))) := by
+  rw [ratio_below_scaled strict M C hv hc hz hcb hscb]
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  subst hZ
+  cases b with
+  | none => rfl
+  | some u =>
+    have hlt : Value.lt (some u) (some (0 : ℝ)) = some (decide (u < 0)) := rfl
+    rw [hlt] at hside
+    rw [compare_some, hlt]
+    cases c with
+    | none => simp [Value.nonzero, Value.mask, Value.mul, Binding.guardValue]
+    | some γ =>
+      by_cases hγ : γ = 0
+      · subst hγ
+        rw [nonzero_zero]
+        by_cases hP : u < 0
+        · have hinv : Value.inv (some (u ^ M)) = some ((u ^ M)⁻¹) := by
+            simp [Value.inv, pow_ne_zero M hP.ne]
+          rw [decide_eq_true hP, row_sum hcb hscb u rfl, curvaturePower_some, hinv]
+          simp [Value.or, Value.mask, Value.mul, Binding.guardValue]
+        · have hQ : ¬(if (!strict) = true then u < (0 : ℝ) else u ≤ 0) := by
+            rcases hside with rfl | hs
+            · exact hP
+            · rw [decide_eq_false hP] at hs
+              cases hs
+          rw [decide_eq_false hP, decide_eq_false hQ]
+          rfl
+      · rw [nonzero_of_ne hγ]
+        show Binding.guardValue (Value.or _ (some false)) _ = _
+        rw [or_false]
+        rfl
+
+/-- The guard of a conjunction is the guard of each, in either order: only
+where both hold is the value there. -/
+theorem guard_and_left (n q : Option Bool) (y : Option ℝ) :
+    Binding.guardValue (Value.and n q) y = Binding.guardValue q (Binding.guardValue n y) := by
+  rcases n with _ | _ | _ <;> rcases q with _ | _ | _ <;> rfl
+
+theorem guard_and_right (n q : Option Bool) (y : Option ℝ) :
+    Binding.guardValue (Value.and q n) y = Binding.guardValue q (Binding.guardValue n y) := by
+  rcases n with _ | _ | _ <;> rcases q with _ | _ | _ <;> rfl
+
+/-- Between two bounds, a value under a strict guard that does not mention
+the axis: inside the mask of the bounds the observation is under that guard.
+Where the guard fails the value is undefined wherever the mask holds. -/
+theorem between_guard_integral (swap sl su : Bool) {a b : Option ℝ} (q : Option Bool)
+    {v : ℝ → Option ℝ} {X : Option ℝ}
+    (h : partialIntegral volume (fun x => Value.mask (intervalGuard swap sl su a b x) (v x)) =
+      Value.mask (compare (sl || su) a b) X) :
+    partialIntegral volume
+        (fun x => Value.mask (intervalGuard swap sl su a b x) (Binding.guardValue q (v x))) =
+      Value.mask (compare (sl || su) a b) (Binding.guardValue q X) := by
+  by_cases hq : q = some true
+  · subst hq
+    exact h
+  · have hv : ∀ x, Binding.guardValue q (v x) = none := fun x => by
+      simp [Binding.guardValue, hq]
+    have hout : Binding.guardValue q X = none := by simp [Binding.guardValue, hq]
+    simp only [hv, hout]
+    exact between_undefined swap sl su a b
+
+/-! Closed bounds on one side of zero, by a comparison of rationals. -/
+
+theorem side_closed {a b z : Option ℝ} {qa qb : ℚ}
+    (ha : a = some (Numeric.denote (s := .real) qa))
+    (hb : b = some (Numeric.denote (s := .real) qb))
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    (h : decide (0 < qa ∨ qb < 0) = true) :
+    Value.or (Value.lt z a) (Value.lt b z) = some true := by
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  subst ha hb hZ
+  have hq := of_decide_eq_true h
+  have hr : (0 : ℝ) < (qa : ℝ) ∨ ((qb : ℝ)) < 0 := by
+    rcases hq with h1 | h1
+    · exact Or.inl (by exact_mod_cast h1)
+    · exact Or.inr (by exact_mod_cast h1)
+  show Value.or (Value.lt (some (0 : ℝ)) (some (qa : ℝ))) (Value.lt (some (qb : ℝ)) (some 0)) = _
+  rw [side_some, decide_eq_true hr]
+
+theorem above_closed {a z : Option ℝ} {qa : ℚ} (ha : a = some (Numeric.denote (s := .real) qa))
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) (h : decide (0 < qa) = true) :
+    Value.lt z a = some true := by
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  subst ha hZ
+  have hr : (0 : ℝ) < (qa : ℝ) := by exact_mod_cast of_decide_eq_true h
+  show Value.lt (some (0 : ℝ)) (some (qa : ℝ)) = _
+  simp [Value.lt, hr]
+
+theorem below_closed {b z : Option ℝ} {qb : ℚ} (hb : b = some (Numeric.denote (s := .real) qb))
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) (h : decide (qb < 0) = true) :
+    Value.lt b z = some true := by
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  subst hb hZ
+  have hr : (qb : ℝ) < 0 := by exact_mod_cast of_decide_eq_true h
+  show Value.lt (some (qb : ℝ)) (some (0 : ℝ)) = _
+  simp [Value.lt, hr]
+
 end QSym.Distribution.StepSource

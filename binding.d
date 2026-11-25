@@ -102,8 +102,12 @@ private struct IntervalTerm{
 	// plus another one, the `moments` of `bell`, over the power `ratioShift`
 	// of the bound, plus the `constant` of `bell` times the logarithm of the
 	// absolute value of the bound. Beyond one bound only the second part is
-	// there.
-	bool ratioTerm; uint ratioShift;
+	// there. Factors that do not mention the axis are `ratioScale`, in their
+	// order with `uint.max` for the product of the last two; with
+	// `ratioPlain` their product stands in front without its mask, where no
+	// bound is strict or, with `ratioClosed`, the bounds are closed on one
+	// side of zero.
+	bool ratioTerm,ratioPlain,ratioClosed; uint ratioShift; uint[] ratioScale;
 	// The exponential of a quadratic whose curvature is a term that cannot
 	// vanish, beyond a single bound: the literal of the factor of the linear
 	// coefficient over the curvature in the argument.
@@ -114,9 +118,12 @@ private struct IntervalTerm{
 // of the comparisons of the mask. With `half` there is a single bound: a
 // lower one, or with `below` an upper one. With `axis` the guard around the
 // mask is, after those negations, that the axis is not zero: the domain of
-// a quotient by a power of it.
+// a quotient by a power of it. With `joined` it is the conjunction `both`
+// of that and of a `domain` that does not mention the axis, with the axis
+// first for 1 and last for 2.
 private struct IntervalData{
-	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max,axis=uint.max;
+	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max,axis=uint.max,both=uint.max;
+	ubyte joined;
 	bool swap,strictLower,strictUpper,nested,half,below,hoisted;
 	// With `direct` the only term is observed by the integral of the mask:
 	// it may be defined without being integrable.
@@ -1389,6 +1396,25 @@ final class Bindings{
 		else if(n&&m){ p=polySum(shift(a,m),shift(b,n)); power=n+m; }
 		else if(n){ p=polySum(a,shift(b,n)); power=n; }
 		else{ p=polySum(shift(a,m),b); power=m; }
+		if(p.length>64||power>32) return false;
+		foreach(c;p) if(c.words>128) return false;
+		return true;
+	}
+	// A product of such quotients and of factors that do not mention the
+	// innermost variable: the quotient, and those factors in their order,
+	// with `uint.max` for the product of the last two.
+	private bool axisFraction(uint id,out Rational[] p,out size_t power,ref uint[] scale,uint depth=0){
+		if(depth>64) return false;
+		if(axisRatio(id,p,power)) return true;
+		if(!depends(at(id),0)){ p=[Rational(1)]; scale~=id; return true; }
+		auto q=nodes[id];
+		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
+		Rational[] a,b; size_t n,m; auto before=scale.length;
+		if(!axisFraction(q.a,a,n,scale,depth+1)) return false;
+		auto middle=scale.length;
+		if(!axisFraction(q.b,b,m,scale,depth+1)) return false;
+		if(middle>before&&scale.length>middle) scale~=uint.max;
+		p=polyProduct(a,b); power=n+m;
 		if(p.length>64||power>32) return false;
 		foreach(c;p) if(c.words>128) return false;
 		return true;
@@ -3407,21 +3433,27 @@ final class Bindings{
 			// axis is: it is under a strict guard of its domain, or the mask is
 			// under the guard of its own domain, which holds wherever one of its
 			// comparisons fails: their negations in order, then that domain.
+			// The domain may also be that the axis is not zero, by itself or
+			// with one that does not mention the axis: only around a quotient,
+			// below.
+			bool domainOf(uint rest){
+				if(!depends(at(rest),0)){ d.domain=rest; return true; }
+				bool nonzeroAxis(uint id){ auto test=nodes[id]; return isOp(test,Op.nonzero)&&nodes[test.a].op==BoundOp.variable&&nodes[test.a].data==0; }
+				auto both=nodes[rest];
+				if(nonzeroAxis(rest)){ d.axis=rest; return true; }
+				if(!isOp(both,Op.and_)) return false;
+				if(nonzeroAxis(both.a)&&!depends(at(both.b),0)){ d.axis=both.a; d.domain=both.b; d.both=rest; d.joined=1; return true; }
+				if(nonzeroAxis(both.b)&&!depends(at(both.a),0)){ d.axis=both.b; d.domain=both.a; d.both=rest; d.joined=2; return true; }
+				return false;
+			}
 			if(around!=uint.max){
 				if(d.nested) return BoundTerm.init;
 				auto o=nodes[around]; if(!isOp(o,Op.or_)||!negatedComparison(o.a,first)) return BoundTerm.init;
 				auto rest=o.b;
 				if(!d.half){ o=nodes[rest]; if(!isOp(o,Op.or_)||!negatedComparison(o.a,second)) return BoundTerm.init; rest=o.b; }
-				if(depends(at(rest),0)){
-					// That the axis is not zero: only around a quotient, below.
-					auto test=nodes[rest];
-					if(!isOp(test,Op.nonzero)||nodes[test.a].op!=BoundOp.variable||nodes[test.a].data!=0) return BoundTerm.init;
-					d.axis=rest;
-				}else d.domain=rest;
+				if(!domainOf(rest)) return BoundTerm.init;
 				d.hoisted=true;
-			}else if(d.unit==uint.max&&nodes[d.value].op==BoundOp.guard&&!depends(at(nodes[d.value].a),0)){
-				d.domain=nodes[d.value].a; d.value=nodes[d.value].b;
-			}
+			}else if(d.unit==uint.max&&nodes[d.value].op==BoundOp.guard&&domainOf(nodes[d.value].a)) d.value=nodes[d.value].b;
 			auto outer=[Rational(1)],outerRate=Rational(0);
 			foreach(id;solution.from[1..$]){
 				Rational[] w; Rational rate; if(!axisExponential(id,w,rate)) return BoundTerm.init;
@@ -3648,14 +3680,17 @@ final class Bindings{
 			// `A(x) + C(x)/x^M + κ·log|x|`, the quotient in it in lowest terms.
 			// Beyond one bound the value is integrable out to infinity where
 			// it has no power above the inverse square: then `A` and `κ` are
-			// zero, and `C(x)/x^M` vanishes out there.
+			// zero, and `C(x)/x^M` vanishes out there. Factors that do not
+			// mention the axis may stand anywhere in a product with the
+			// quotient.
 			bool axisQuotient(uint id,ref IntervalTerm r){
-				if(d.unit!=uint.max||d.domain!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
-				Rational[] p; size_t power;
-				if(!axisRatio(id,p,power)||!power) return false;
+				if(d.unit!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
+				Rational[] p; size_t power; uint[] scale;
+				if(!axisFraction(id,p,power,scale)||!power) return false;
 				bool left; foreach(k;0..power) if(k<p.length&&!p[k].zero) left=true;
 				if(!left) return false;
 				if(d.half) foreach(k;power-1..p.length) if(!p[k].zero) return false;
+				r.ratioScale=scale;
 				Rational at_(size_t k){ return k<p.length?p[k]:Rational(0); }
 				auto A=[Rational(0)]; Rational[] C;
 				foreach(k;power..p.length) A~=p[k]/Rational(cast(long)(k-power)+1);
@@ -4015,7 +4050,13 @@ final class Bindings{
 			// polynomials as the sums of their monomials at the bound, the
 			// constant always and a later one where its coefficient is not zero.
 			// Above one bound it is `guard(0<a, -C(a)/a^M)`, and below one
-			// `guard(b<0, C(b)/b^M)`.
+			// `guard(b<0, C(b)/b^M)`. A factor `c` that does not mention the
+			// axis does not simply come out: where it is zero the product is
+			// zero wherever the quotient is defined, also next to zero. So
+			// the value is `[c≠0]·(c·V)` under the guard that holds also where
+			// `c` is zero and zero is not in the guard of the bounds. Where
+			// no bound is strict, or the bounds are closed on one side of
+			// zero, that is the same as `c·V` under the guard without `c`.
 			BoundTerm quotientDifference(IntervalTerm r,uint id){
 				auto zero=scalar(ctx,arena.real_(0)),k=scalar(ctx,arena.real_(r.bell.constant)),literal=arena.real_(0),truth=arena.boolean(true);
 				r.rateZero=zero.id; r.bell.factor=k.id; r.value=id;
@@ -4037,16 +4078,39 @@ final class Bindings{
 					auto logarithm=primitive(arena.call(Builtin.logR,[literal]),[primitive(arena.abs(literal),[o])]);
 					return primitive(addOp,[primitive(addOp,[polynomial,quotient]),primitive(mulOp,[k,logarithm])]);
 				}
+				BoundTerm compare(bool strict,BoundTerm x,BoundTerm y){ return primitive(strict?arena.lt(literal,literal):arena.le(literal,literal),[x,y]); }
+				Rational point; Term closed;
+				bool positive(BoundTerm x){ return closedRational(x,point,closed)&&Rational(0)<point; }
+				bool negative(BoundTerm x){ return closedRational(x,point,closed)&&point<Rational(0); }
+				// `side` is the guard without the factor, `outside` that zero
+				// is not in the guard of the bounds.
+				BoundTerm finish(BoundTerm side,lazy BoundTerm outside,BoundTerm value,bool strict,lazy bool closedSide){
+					if(!r.ratioScale.length){ d.terms~=r; return guard(side,value); }
+					BoundTerm[] stack;
+					foreach(x;r.ratioScale){
+						if(x==uint.max){ auto product=primitive(mulOp,[stack[$-2],stack[$-1]]); stack=stack[0..$-2]~product; }
+						else stack~=dropIndex(at(x));
+					}
+					auto c=stack[0],scaled=primitive(mulOp,[c,value]);
+					r.ratioClosed=strict&&closedSide; r.ratioPlain=!strict||r.ratioClosed;
+					d.terms~=r;
+					if(r.ratioPlain) return guard(side,scaled);
+					auto test=primitive(arena.nonzero(arena.real_(1)),[c]);
+					auto condition=primitive(arena.or_(truth,truth),[side,primitive(arena.and_(truth,truth),[primitive(arena.not_(truth),[test]),outside])]);
+					return guard(condition,primitive(arena.mask(truth,arena.real_(1)),[test,scaled]));
+				}
 				if(d.half){
-					auto bound=d.below?upper:lower; uint[] literals;
+					auto bound=d.below?upper:lower,strict=d.below?d.strictUpper:d.strictLower; uint[] literals;
 					auto over=row(r.bell.moments,bound,literals); r.ends[0].rows=[literals];
 					auto value=primitive(mulOp,[over,primitive(arena.inv(arena.real_(1)),[power(bound,r.ratioShift)])]);
 					if(!d.below) value=primitive(mulOp,[minusOne,value]);
-					d.terms~=r; return guard(primitive(arena.lt(literal,literal),d.below?[bound,zero]:[zero,bound]),value);
+					return finish(compare(true,d.below?bound:zero,d.below?zero:bound),compare(!strict,d.below?bound:zero,d.below?zero:bound),
+						value,strict,d.below?negative(bound):positive(bound));
 				}
 				auto above=at_(0,upper),below=at_(1,lower);
-				auto side=primitive(arena.or_(truth,truth),[primitive(arena.lt(literal,literal),[zero,lower]),primitive(arena.lt(literal,literal),[upper,zero])]);
-				d.terms~=r; return guard(side,primitive(addOp,[above,primitive(mulOp,[minusOne,below])]));
+				auto side=primitive(arena.or_(truth,truth),[compare(true,zero,lower),compare(true,upper,zero)]);
+				return finish(side,primitive(arena.or_(truth,truth),[compare(!d.strictLower,zero,lower),compare(!d.strictUpper,upper,zero)]),
+					primitive(addOp,[above,primitive(mulOp,[minusOne,below])]),d.strictLower||d.strictUpper,positive(lower)||negative(upper));
 			}
 			auto total=d.direct?(whole.ratioTerm?quotientDifference(whole,d.value):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
 				d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
@@ -7904,6 +7968,29 @@ final class Bindings{
 			r.proof=save(src~"RatioOn "~functionAt(id)~" "~r.poly~" "~to!string(r.power),r.proof);
 			return r;
 		}
+		// Such a quotient in a product with factors that do not mention the
+		// axis: each factor of the product is a quotient, a polynomial or
+		// such a factor, and the products follow its structure.
+		struct Part{string proof,scale,poly;size_t power;bool pole;}
+		Part fraction(uint id){
+			enum src="Distribution.StepSource.";
+			Rational[] p;size_t power;
+			if(axisRatio(id,p,power)){
+				auto w=quotient(id);
+				return Part("("~src~"Fraction."~(power?"ratio ":"polynomial ")~w.proof~")","none",w.poly,w.power,power!=0);
+			}
+			if(!depends(at(id),0)){
+				auto c=cert.outside(id);
+				return Part("("~src~"Fraction.scale "~c~")","(some "~c~")","[1]",0,false);
+			}
+			auto n=nodes[id];enforce(n.op==BoundOp.primitive&&arena.view(arena.at(n.data)).op==Op.mul,"unsupported factor of a quotient");
+			auto a=fraction(n.a),b=fraction(n.b);Part r;
+			r.poly="("~src~"polyMul "~a.poly~" "~b.poly~")";r.power=a.power+b.power;r.pole=a.pole||b.pole;
+			r.scale="("~src~"joinScale "~a.scale~" "~b.scale~")";
+			r.proof=save(src~"Fraction "~functionAt(id)~" "~r.scale~" "~r.poly~" "~to!string(r.power)~" "~(r.pole?"true":"false"),
+				"("~src~"Fraction.mul "~a.proof~" "~b.proof~")");
+			return r;
+		}
 		// An observation between bounds, above or below one; as a summand in
 		// the form that adds, of its weight by itself.
 		string between(IntegralSolution q,bool summand){
@@ -7924,10 +8011,15 @@ final class Bindings{
 			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
 			string domain;
 			// The guard that the axis is not zero stands there in the same way.
-			enforce(d.domain==uint.max||d.axis==uint.max,"two domains of a value");
-			auto guarded=d.domain!=uint.max?d.domain:d.axis;
+			// The conjunction of the two is the guard of each: of the domain
+			// around that of the axis.
+			enforce(d.joined?d.domain!=uint.max&&d.axis!=uint.max:d.domain==uint.max||d.axis==uint.max,"two domains of a value");
+			auto guarded=d.joined?d.both:d.domain!=uint.max?d.domain:d.axis;
 			if(guarded!=uint.max){
-				value="(fun x : ℝ => Binding.guardValue "~under(guarded)~" ("~value~" x))";
+				auto inner=value;
+				value=d.joined?"(fun x : ℝ => Binding.guardValue "~under(d.domain)~" (Binding.guardValue "~under(d.axis)~" ("~inner~" x)))":
+					"(fun x : ℝ => Binding.guardValue "~under(guarded)~" ("~inner~" x))";
+				auto regroup="(congrArg (Value.mask _) (Distribution.StepSource.guard_and_"~(d.joined==1?"left":"right")~" _ _ _))";
 				if(d.hoisted){
 					string comparison(uint id,string rest){
 						auto c=nodes[id];
@@ -7935,8 +8027,9 @@ final class Bindings{
 					}
 					auto conjunction=nodes[d.guard];
 					auto evidence=d.half?comparison(d.guard,""):comparison(conjunction.a,comparison(conjunction.b,""));
-					domain="(fun x => Distribution.StepSource.MaskDomain.mask (q := "~under(guarded)~") "~evidence~" "~under(d.value)~")";
-				}
+					auto around="Distribution.StepSource.MaskDomain.mask (q := "~under(guarded)~") "~evidence~" "~under(d.value);
+					domain=d.joined?"(fun x => ("~around~").trans "~regroup~")":"(fun x => "~around~")";
+				}else if(d.joined) domain=d.nested?"(fun x => (Distribution.StepSource.mask_mask _ _ _).trans "~regroup~")":"(fun x => "~regroup~")";
 			}
 			auto shape=save("∀ x : ℝ, "~functionAt(body)~" x = Value.mask ("~guard~" x) ("~value~" x)",
 				d.unit!=uint.max?"(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")":
@@ -7965,10 +8058,27 @@ final class Bindings{
 					// structure. The kernel checks the antiderivative against
 					// it; at each bound its two polynomials are rows.
 					enum src="Distribution.StepSource.";
-					enforce(d.domain==uint.max,"bad quotient between bounds");
-					auto evidence=quotient(d.value);
 					// Under the guard of its domain it is the same quotient.
-					if(d.axis!=uint.max) evidence.proof="("~src~"ratio_guard (q := fun x : ℝ => "~under(d.axis)~") "~evidence.proof~" "~src~"axis_nonzero)";
+					// With factors that do not mention the axis the theorem
+					// has their product; without its mask it wants to know
+					// that no bound is strict, or that the bounds are closed
+					// on one side of zero.
+					bool scaled=r.ratioScale.length!=0;
+					Quotient evidence;
+					if(scaled){
+						auto part=fraction(d.value);enforce(part.pole,"quotient without a pole");
+						evidence=Quotient(part.proof,part.poly,part.power);
+					}else evidence=quotient(d.value);
+					if(d.axis!=uint.max) evidence.proof="("~src~(scaled?"Fraction.guard":"ratio_guard")~" (q := fun x : ℝ => "~under(d.axis)~") "~evidence.proof~" "~src~"axis_nonzero)";
+					auto kind=scaled?(r.ratioPlain?"_scaled_plain ":"_scaled "):" ";
+					string known;
+					if(scaled&&r.ratioPlain){
+						auto zero=literal(r.rateZero,Rational(0));
+						Rational point;Term closed;
+						string bound(uint id){enforce(closedRational(at(id),point,closed),"bound is not closed");return cert.closedProof(at(id),point);}
+						known=!r.ratioClosed?" (Or.inl rfl)":" (Or.inr ("~src~(d.below?"below_closed "~bound(d.upper):d.half?"above_closed "~bound(d.lower):
+							"side_closed "~bound(d.lower)~" "~bound(d.upper))~" "~zero~" rfl))";
+					}
 					string list(Rational[] row){string t="[";foreach(i,c;row)t~=(i?", ":"")~cert.q(c);return t~"]";}
 					string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
 					string row(Rational[] coefficients,uint[] literals){
@@ -7984,18 +8094,26 @@ final class Bindings{
 						// Beyond one bound: the polynomial over the power of the
 						// bound alone, with the opposite sign above it.
 						enforce(r.ends[0].rows.length==1,"bad literals of a quotient");
-						return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" ("~src~"ratio_"~(d.below?"below ":"above ")~
+						auto observed="("~src~"ratio_"~(d.below?"below":"above")~kind~
 							truth(d.below?d.strictUpper:d.strictLower)~" "~to!string(r.ratioShift)~" "~list(g.moments)~" "~evidence.proof~" rfl "~
-							literal(r.rateZero,Rational(0))~(d.below?"":" "~literal(d.minusOne,Rational(-1)))~" "~row(g.moments,r.ends[0].rows[0])~")";
+							literal(r.rateZero,Rational(0))~(d.below?"":" "~literal(d.minusOne,Rational(-1)))~" "~row(g.moments,r.ends[0].rows[0])~known~")";
+						// Under the strict guard of a domain that does not
+						// mention the axis: the guard of the observation.
+						if(d.domain!=uint.max)observed="("~src~"masked_guard_integral ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) ("~src~"compare_"~(d.below?"upper":"lower")~"_cases _ _) "~observed~")";
+						return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" "~observed;
 					}
 					string rows;
 					foreach(e;0..2){
 						enforce(r.ends[e].rows.length==1,"bad literals of a quotient");
 						rows~=" "~row(g.primitive,r.ends[e].primitive)~" "~row(g.moments,r.ends[e].rows[0]);
 					}
-					return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" ("~src~"ratio_between "~truth(d.swap)~" "~truth(d.strictLower)~" "~
+					auto observed="("~src~"ratio_between"~kind~truth(d.swap)~" "~truth(d.strictLower)~" "~
 						truth(d.strictUpper)~" "~to!string(r.ratioShift)~" "~list(g.primitive)~" "~list(g.moments)~" "~cert.q(g.constant)~" "~evidence.proof~" rfl "~
-						literal(r.rateZero,Rational(0))~" "~literal(d.minusOne,Rational(-1))~" "~literal(g.factor,g.constant)~rows~")";
+						literal(r.rateZero,Rational(0))~" "~literal(d.minusOne,Rational(-1))~" "~literal(g.factor,g.constant)~rows~known~")";
+					// Between two bounds that guard stays inside their mask.
+					if(d.domain!=uint.max)observed="("~src~"between_guard_integral "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~
+						" ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) "~observed~")";
+					return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" "~observed;
 				}
 				auto hv=cert.bell(d.value,exponent,poly);
 				if(g.zero0!=uint.max)exponent="(Distribution.StepSource.Quadratic.fill0 "~literal(g.zero0,Rational(0))~" "~exponent~")";

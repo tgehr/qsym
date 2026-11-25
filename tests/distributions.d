@@ -910,7 +910,29 @@ private Case[] cases(){ return [
 	Case("QuotientDomainCancelled","∫dx [a≤x]*x^2/x^5*λ[x]","ℝ","guard(0<a,(a^2)⁻¹·(1/2))"),
 	Case("QuotientRemovable","∫dx [a≤x≤b]*x^3/x*λ[x]","ℝ"),
 	Case("QuotientShifted","∫dx [1≤x≤2]*1/(x+1)*λ[x]","ℝ"),
-	Case("QuotientTerm","∫dx [1≤x≤2]*c/x*λ[x]","ℝ"),
+	Case("QuotientScale","∫dx [1≤x≤2]*c/x*λ[x]","ℝ","c·log(2)"),
+	Case("QuotientScaleBounds","∫dx [a≤x≤b]*c/x*λ[x]","ℝ","([a≤b]·(guard(0<a∧b≠0∨b<0∧a≠0,c·(-log(abs(a))+log(abs(b))))):ℝ)"),
+	Case("QuotientScaleStrict","∫dx [a<x≤b]*c/x*λ[x]","ℝ","([a<b]·(guard(c=0∧0≤a∨(0<a∧b≠0∨b<0∧a≠0),[c≠0]·(c·(-log(abs(a))+log(abs(b)))))):ℝ)"),
+	Case("QuotientScaleClosed","∫dx [1<x<2]*c/x*λ[x]","ℝ","c·log(2)"),
+	Case("QuotientScaleFactors","∫dx [1≤x≤2]*c*(1/x+x)*d*λ[x]","ℝ","c·d·(log(2)+3/2)"),
+	Case("QuotientScaleEdge","∫dx [0<x≤1]*c/x*λ[x]","ℝ","guard(c=0,[c≠0]·(-c·log(0)))"),
+	Case("QuotientScaleAcross","∫dx [-1≤x≤1]*c/x*λ[x]","ℝ","undefined(ℝ)"),
+	Case("QuotientScaleFunction","λ(t:ℝ).∫dx [1≤x]*[x≤t]*c/x*λ[x]","ℝ→ℝ","λ(t:ℝ). [1≤t]·(c·log(t))"),
+	Case("QuotientScaleAbove","∫dx [1≤x]*c/x^2*λ[x]","ℝ","c"),
+	Case("QuotientScaleAboveTerm","∫dx [a≤x]*c/x^2*λ[x]","ℝ","guard(0<a,c·a⁻¹)"),
+	Case("QuotientScaleAboveStrict","∫dx [a<x]*c/x^2*λ[x]","ℝ","guard(0<a∨c=0∧0≤a,[c≠0]·(c·a⁻¹))"),
+	Case("QuotientScaleAboveClosed","∫dx [1<x]*(c+1)/x^2*λ[x]","ℝ","c+1"),
+	Case("QuotientScaleBelow","∫dx [x≤b]*c/x^2*λ[x]","ℝ","guard(b<0,-c·b⁻¹)"),
+	Case("QuotientScaleBelowStrict","∫dx [x<b]*c/x^2*λ[x]","ℝ","guard(b<0∨c=0∧b=0,[c≠0]·(-c·b⁻¹))"),
+	Case("QuotientScaleBelowClosed","∫dx [x<-1]*c/x^3*λ[x]","ℝ","-c·(1/2)"),
+	Case("QuotientScaleDomain","∫dx [1≤x≤2]*(1/x)/(b-a)*λ[x]","ℝ","guard(b≠a,(b-a)⁻¹·log(2))"),
+	Case("QuotientScaleUniform","∫dx [a≤x≤b]*(1/x)/log(b/a)*λ[x]","ℝ","([a≤b]·(guard(b≠a∧(0<a∧0<b)∨b≠a∧(b<0∧a<0),(-log(abs(a))+log(abs(b)))·log(b·a⁻¹)⁻¹)):ℝ)"),
+	Case("QuotientScaleDomainFirst","∫dx [a≤x≤b]*(1/sqrt(c))*((x+1)/x^2)*λ[x]","ℝ","([a≤b]·(guard(0<c∧(0<a∧b≠0)∨0<c∧(b<0∧a≠0),(-log(abs(a))+log(abs(b))-b⁻¹+a⁻¹)·sqrt(c)⁻¹)):ℝ)"),
+	Case("QuotientScaleDomainAbove","∫dx [a≤x]*(1/x^2)/sqrt(c)*λ[x]","ℝ","guard(0<c∧0<a,a⁻¹·sqrt(c)⁻¹)"),
+	Case("QuotientScaleDomainBelow","∫dx [x<b]*(1/x^2)/(d-c)*λ[x]","ℝ","guard(d≠c∧b<0,-b⁻¹·(d-c)⁻¹)"),
+	Case("QuotientScaleDomainNested","λ(t:ℝ).∫dx [1≤x]*[x≤t]*(1/x)/(b-a)*λ[x]","ℝ→ℝ","λ(t:ℝ). ([1≤t]·(guard(b≠a∧t≠0,(b-a)⁻¹·log(abs(t)))):ℝ)"),
+	Case("QuotientScaleSum","∫dx [1≤x≤2]*(c/x+x)*λ[x]","ℝ"),
+	Case("QuotientScaleDiverges","∫dx [1≤x]*c/x*λ[x]","ℝ"),
 	Case("QuotientExponential","∫dx [1≤x≤2]*(1/x)*exp(x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
@@ -1367,36 +1389,72 @@ private void run(string directory){
 		// alone; any other one is not integrable out there and keeps its
 		// integral. Bounds that are terms leave the mask under the guard of
 		// its domain, that the axis is not zero: the quotient is undefined
-		// there anyway. A polynomial under that guard, another denominator, a
-		// factor that is a term and an exponential keep their integral.
+		// there anyway. A polynomial under that guard, another denominator
+		// and an exponential keep their integral.
+		// Factors that do not mention the axis may stand anywhere in a
+		// product with the quotient. Their product `c` does not simply come
+		// out: where it is zero the product is zero also next to zero, where
+		// the quotient is not integrable. Where a bound is strict the value
+		// is under the mask `[c≠0]`, and its guard also holds where `c` is
+		// zero and zero is not in the guard of the bounds; where no bound is
+		// strict, or the bounds are closed on one side of zero, `c` stands
+		// in front. A domain of such a factor is a guard of the observation,
+		// inside the mask of two bounds; around the mask it may be joined
+		// with the domain of the quotient, in either order. A factor inside
+		// a sum and a tail that diverges keep their integral.
 		if(c.name.indexOf("Quotient")==0||c.name=="DomainAxis"){
 			bool retained=c.name=="QuotientDiverges"||c.name=="QuotientAbovePolynomial"||c.name=="QuotientRemovable"||c.name=="QuotientShifted"||
-				c.name=="QuotientTerm"||c.name=="QuotientExponential";
-			bool domain=c.name.indexOf("QuotientDomain")==0;
-			bool above=c.name.indexOf("QuotientAbove")==0||c.name=="QuotientDomainAbove"||c.name=="QuotientDomainCancelled";
-			bool below=c.name.indexOf("QuotientBelow")==0||c.name=="QuotientDomainBelow";
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_between ")>=0)==(!retained&&!above&&!below),c.name~" quotient between bounds");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_above ")>=0)==(!retained&&above),c.name~" quotient above a bound");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_below ")>=0)==(!retained&&below),c.name~" quotient below a bound");
+				c.name=="QuotientExponential"||c.name=="QuotientScaleSum"||c.name=="QuotientScaleDiverges";
+			bool domain=c.name.indexOf("QuotientDomain")==0,scaled=c.name.indexOf("QuotientScale")==0&&c.name!="QuotientScaled";
+			bool above=c.name.indexOf("QuotientAbove")==0||c.name=="QuotientDomainAbove"||c.name=="QuotientDomainCancelled"||
+				c.name.indexOf("QuotientScaleAbove")==0||c.name=="QuotientScaleDomainAbove";
+			bool below=c.name.indexOf("QuotientBelow")==0||c.name=="QuotientDomainBelow"||c.name.indexOf("QuotientScaleBelow")==0||c.name=="QuotientScaleDomainBelow";
+			// With a strict bound that is not closed on one side of zero the
+			// factor is under its mask.
+			bool masked=c.name=="QuotientScaleStrict"||c.name=="QuotientScaleEdge"||c.name=="QuotientScaleAboveStrict"||c.name=="QuotientScaleBelowStrict"||
+				c.name=="QuotientScaleDomainBelow";
+			auto kind=scaled?(masked?"_scaled ":"_scaled_plain "):" ";
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_between"~kind)>=0)==(!retained&&!above&&!below),c.name~" quotient between bounds");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_above"~kind)>=0)==(!retained&&above),c.name~" quotient above a bound");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_below"~kind)>=0)==(!retained&&below),c.name~" quotient below a bound");
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_direct")>=0)!=retained,c.name~" certificate");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_inv ")>=0)!=retained,c.name~" inverse of a monomial");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			// The evidence follows the structure of the value.
 			bool difference=c.name=="QuotientDifference",factors=c.name=="QuotientFactors";
 			bool sums=difference||c.name=="QuotientAboveSum"||c.name=="QuotientBelowLowest";
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_left ")>=0)==(c.name=="QuotientSum"||factors||c.name=="QuotientDomain"),c.name~" polynomial and quotient");
+			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_left ")>=0)==(c.name=="QuotientSum"||factors||c.name=="QuotientDomain"||
+				c.name=="QuotientScaleFactors"),c.name~" polynomial and quotient");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_right ")>=0)==(c.name=="QuotientMinus"),c.name~" quotient and polynomial");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_add ")>=0)==sums,c.name~" sum of quotients");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_left ")>=0)==(c.name=="QuotientScaled"||sums),c.name~" polynomial times quotient");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_right ")>=0)==(c.name=="QuotientProduct"||c.name=="QuotientDomainStrict"||
-				c.name=="QuotientDomainAbove"||c.name=="QuotientDomainBelow"),c.name~" quotient times polynomial");
+				c.name=="QuotientDomainAbove"||c.name=="QuotientDomainBelow"||c.name=="QuotientScaleDomainFirst"),c.name~" quotient times polynomial");
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul ")>=0)==factors,c.name~" product of quotients");
-			// Under the guard of its domain around the mask it is the same quotient.
+			enforce((certificate.indexOf("Distribution.StepSource.Fraction.mul ")>=0)==(scaled&&!retained),c.name~" product with a factor");
+			enforce((certificate.indexOf("Distribution.StepSource.Fraction.scale ")>=0)==(scaled&&!retained),c.name~" factor");
+			// Closed bounds on one side of zero, where one of them is strict.
+			enforce((certificate.indexOf("Distribution.StepSource.side_closed ")>=0)==(c.name=="QuotientScaleClosed"),c.name~" closed bounds");
+			enforce((certificate.indexOf("Distribution.StepSource.above_closed ")>=0)==(c.name=="QuotientScaleAboveClosed"),c.name~" closed lower bound");
+			enforce((certificate.indexOf("Distribution.StepSource.below_closed ")>=0)==(c.name=="QuotientScaleBelowClosed"),c.name~" closed upper bound");
+			// Under the guard of its domain around the mask it is the same
+			// quotient. The domain of a factor is a guard of the observation;
+			// the two may be joined.
+			bool first=c.name=="QuotientScaleDomainFirst",nested=c.name=="QuotientScaleDomainNested";
+			bool joined=c.name=="QuotientScaleUniform"||c.name=="QuotientScaleDomainAbove"||c.name=="QuotientScaleDomainBelow"||nested;
+			bool outer=c.name=="QuotientScaleDomain"||c.name=="QuotientScaleUniform"||first||nested;
 			enforce((certificate.indexOf("Distribution.StepSource.ratio_guard ")>=0)==domain,c.name~" guard of the domain");
-			enforce((certificate.indexOf("Distribution.StepSource.MaskDomain.mask ")>=0)==domain,c.name~" domain around the mask");
+			enforce((certificate.indexOf("Distribution.StepSource.Fraction.guard ")>=0)==(joined||first),c.name~" guard of the domain under a factor");
+			enforce((certificate.indexOf("Distribution.StepSource.MaskDomain.mask ")>=0)==(domain||c.name=="QuotientScaleDomain"||(joined||first)&&!nested),c.name~" domain around the mask");
+			enforce((certificate.indexOf("Distribution.StepSource.guard_and_left ")>=0)==joined,c.name~" domain of the axis first");
+			enforce((certificate.indexOf("Distribution.StepSource.guard_and_right ")>=0)==first,c.name~" domain of the factor first");
+			enforce((certificate.indexOf("Distribution.StepSource.between_guard_integral ")>=0)==outer,c.name~" guard inside the mask of the bounds");
+			enforce((certificate.indexOf("Distribution.StepSource.masked_guard_integral ")>=0)==(c.name=="QuotientScaleDomainAbove"||c.name=="QuotientScaleDomainBelow"),
+				c.name~" guard of the observation");
 			// Zero between the bounds, next to them or beyond the only one:
 			// nothing is observed.
-			enforce((text=="undefined(ℝ)")==(c.name=="QuotientAcross"||c.name=="QuotientEdge"||c.name=="QuotientAboveZero"||c.name=="QuotientAboveEdge"),c.name~": "~text);
+			enforce((text=="undefined(ℝ)")==(c.name=="QuotientAcross"||c.name=="QuotientEdge"||c.name=="QuotientAboveZero"||c.name=="QuotientAboveEdge"||
+				c.name=="QuotientScaleAcross"),c.name~": "~text);
 			if(c.name=="QuotientGuarded"||c.name=="QuotientAboveGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		if(offset){
