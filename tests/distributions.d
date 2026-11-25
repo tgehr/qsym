@@ -657,6 +657,20 @@ private Case[] cases(){ return [
 	Case("CurveOffsetBounds","∫dx [u≤x≤v]*(2*x+1)*exp(x^2+x+w)*λ[x]","ℝ","[u≤v]·((-exp(u·(u+1))+exp(v·(v+1)))·exp(w))"),
 	Case("CurveMean","∫dx [m≤x]*(x-m)*exp(-(x-m)^2)*λ[x]","ℝ"),
 	Case("CurveCurvature","∫dx [0≤x]*x*exp(-a*x^2)*λ[x]","ℝ"),
+	Case("DomainHalfLine","∫dx [0≤x]*exp(-x)/a*λ[x]","ℝ","guard(a≠0,a⁻¹)"),
+	Case("DomainInterval","∫dx [0≤x]*[x≤1]*exp(x)/a*λ[x]","ℝ","guard(a≠0,(e-1)·a⁻¹)"),
+	Case("DomainSwapped","∫dx [x≤1]*[0≤x]*exp(x)/a*λ[x]","ℝ","guard(a≠0,(e-1)·a⁻¹)"),
+	Case("DomainStrict","∫dx [0<x]*[x<1]*(x+1/a)*λ[x]","ℝ","guard(a≠0,1/2+a⁻¹)"),
+	Case("DomainRoot","∫dx [0≤x]*exp(-x)*sqrt(a)*λ[x]","ℝ","guard(0≤a,sqrt(a))"),
+	Case("DomainLogarithm","∫dx [0≤x]*exp(-x)*log(a)*λ[x]","ℝ","guard(0<a,log(a))"),
+	Case("DomainSum","∫dx [0≤x]*(x*exp(-x^2)/a+exp(-x)/b)*λ[x]","ℝ","guard(a≠0∧b≠0,b⁻¹+a⁻¹·(1/2))"),
+	Case("DomainOffset","∫dx [0≤x≤1]*x*exp(-x^2+1/a)*λ[x]","ℝ","guard(a≠0,(-1/2·exp(-1)+1/2)·exp(a⁻¹))"),
+	Case("DomainSymbolicBounds","∫dx [u≤x≤v]*exp(x)/a*λ[x]","ℝ","([u≤v]·(guard(a≠0,(-exp(u)+exp(v))·a⁻¹)):ℝ)"),
+	Case("DomainGuarded","∫dx [c≤d]*[0≤x]*exp(-x)/a*λ[x]","ℝ","([c≤d]·(guard(a≠0,a⁻¹)):ℝ)"),
+	Case("DomainGuardedStrict","∫dx [c<d]*[0≤x≤1]*sqrt(a)*x*λ[x]","ℝ","([c<d]·(guard(0≤a,1/2·sqrt(a))):ℝ)"),
+	Case("DomainTwoGuards","∫dx [c≤d]*[e<f]*[0≤x]*exp(-x)/a*λ[x]","ℝ","([c≤d]·([e<f]·(guard(a≠0,a⁻¹))):ℝ)"),
+	Case("DomainNested","λ(t:ℝ).∫dx [0≤x]*[x≤t]*exp(-x)/a*λ[x]","ℝ→ℝ","λ(t:ℝ). ([0≤t]·(guard(a≠0,(-exp(-t)+1)·a⁻¹)):ℝ)"),
+	Case("DomainAxis","∫dx [1≤x≤2]*(1/x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
 	Case("SymbolicIntervalSine","∫dx [a≤x≤b]*sin(x)*λ[x]","ℝ"),
@@ -1059,6 +1073,26 @@ private void run(string directory){
 			if(shifted) enforce(certificate.indexOf("Distribution.StepSource.Quadratic.")>=0,c.name~" exponent");
 			if(c.name=="CurveOffset") enforce(certificate.indexOf("Distribution.StepSource.coefValue_absent")>=0,c.name~" absent coefficient");
 			if(c.name=="CurveOffsetSum") enforce(certificate.indexOf("HalfLineTerms.scaled ")>=0&&certificate.indexOf("scaled_exp_offset")>=0,c.name~" terms");
+		}
+		// A value between bounds may be missing where a term that does not
+		// mention the axis is. The mask is then under the guard of its domain:
+		// the negations of its comparisons in order, then the domain of the
+		// value. That is the mask of the value under the guard of its own
+		// domain, so the result is under that guard, inside the test of the
+		// bounds. A comparison that does not mention the axis leaves the
+		// observation with its negation. Below a binder the value itself is
+		// under the guard. A domain that mentions the axis keeps the integral.
+		if(c.name.indexOf("Domain")==0){
+			bool retained=c.name=="DomainAxis";
+			bool half=c.name=="DomainHalfLine"||c.name=="DomainRoot"||c.name=="DomainLogarithm"||c.name=="DomainSum"||c.name=="DomainGuarded"||c.name=="DomainTwoGuards";
+			bool guarded=c.name.indexOf("DomainGuarded")==0||c.name=="DomainTwoGuards",nested=c.name=="DomainNested";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_"~(half?"halfline":"interval"))>=0)!=retained,c.name~" certificate");
+			enforce((certificate.indexOf("Distribution.StepSource."~(half?"HalfLineTerms":"IntervalTerms")~".guard ")>=0)!=retained,c.name~" guard of the result");
+			enforce((certificate.indexOf("Distribution.StepSource.MaskDomain.mask")>=0)!=(retained||nested),c.name~" domain of the mask");
+			enforce((certificate.indexOf("Distribution.StepSource.MaskDomain.cons")>=0)==(!half&&!retained&&!nested),c.name~" comparisons");
+			enforce((certificate.indexOf("Distribution.StepSource.mask_domain_split")>=0)==guarded,c.name~" comparison free of the axis");
+			if(guarded) enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;

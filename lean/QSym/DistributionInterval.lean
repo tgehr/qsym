@@ -156,6 +156,71 @@ theorem mask_mask {α : Type} [Zero α] (p q : Option Bool) (v : Option α) :
     Value.mask p (Value.mask q v) = Value.mask (Value.and p q) v := by
   rcases p with _ | _ | _ <;> rfl
 
+/-- The domain of a mask of comparisons: the negations of the comparisons of
+its guard, in their order, before the domain `q` of what it masks. -/
+inductive MaskDomain (q : Option Bool) : Option Bool → Option Bool → Prop
+  | last (s : Bool) (a b : Option ℝ) :
+      MaskDomain q (compare s a b) (Value.or (compare (!s) b a) q)
+  | cons (s : Bool) (a b : Option ℝ) {g d : Option Bool} (h : MaskDomain q g d) :
+      MaskDomain q (Value.and (compare s a b) g) (Value.or (compare (!s) b a) d)
+
+private theorem compare_none_left (s : Bool) (b : Option ℝ) : compare s none b = none := by
+  cases s <;> rfl
+
+private theorem compare_none_right (s : Bool) (a : Option ℝ) : compare s a none = none := by
+  cases s <;> cases a <;> rfl
+
+private theorem compare_negation (s : Bool) (x y : ℝ) :
+    ∃ t : Bool, compare s (some x) (some y) = some t ∧ compare (!s) (some y) (some x) = some (!t) := by
+  cases s
+  · refine ⟨decide (x ≤ y), rfl, ?_⟩
+    by_cases h : x ≤ y
+    · simp [compare, Value.lt, h, not_lt.2 h]
+    · simp [compare, Value.lt, h, not_le.1 h]
+  · refine ⟨decide (x < y), rfl, ?_⟩
+    by_cases h : x < y
+    · simp [compare, Value.le, h, not_le.2 h]
+    · simp [compare, Value.le, h, not_lt.1 h]
+
+/-- A mask under the guard of its domain is the mask of what it masks under
+the guard of the rest of that domain, for every definedness pattern: where a
+comparison fails the mask is a zero and its negation holds. -/
+theorem MaskDomain.mask {q g d : Option Bool} (h : MaskDomain q g d) (v : Option ℝ) :
+    Binding.guardValue d (Value.mask g v) = Value.mask g (Binding.guardValue q v) := by
+  induction h with
+  | last s a b =>
+    rcases a with _ | x
+    · rw [compare_none_left, compare_none_right]; rfl
+    rcases b with _ | y
+    · rw [compare_none_right, compare_none_left]; rfl
+    obtain ⟨t, h1, h2⟩ := compare_negation s x y
+    rw [h1, h2]
+    cases t <;> rfl
+  | cons s a b _ ih =>
+    rcases a with _ | x
+    · rw [compare_none_left, compare_none_right]; rfl
+    rcases b with _ | y
+    · rw [compare_none_right, compare_none_left]; rfl
+    obtain ⟨t, h1, h2⟩ := compare_negation s x y
+    rw [h1, h2]
+    cases t
+    · rfl
+    · exact ih
+
+/-- The first comparison of the guard of such a mask leaves it with its
+negation: what remains is the mask of the rest under the rest of the domain. -/
+theorem mask_domain_split (s : Bool) (a b : Option ℝ) (g d : Option Bool) (v : Option ℝ) :
+    Binding.guardValue (Value.or (compare (!s) b a) d)
+        (Value.mask (Value.and (compare s a b) g) v) =
+      Value.mask (compare s a b) (Binding.guardValue d (Value.mask g v)) := by
+  rcases a with _ | x
+  · rw [compare_none_left, compare_none_right]; rfl
+  rcases b with _ | y
+  · rw [compare_none_right, compare_none_left]; rfl
+  obtain ⟨t, h1, h2⟩ := compare_negation s x y
+  rw [h1, h2]
+  cases t <;> rfl
+
 /-- The casts of an Iverson bracket commute with its mask. -/
 theorem cast_mask (p : Option Bool) (n : Option ℕ) :
     Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply (Value.mask p n))) =
@@ -203,6 +268,11 @@ inductive IntervalTerms (a b m : Option ℝ) : (ℝ → Option ℝ) → Option �
   | add {v w : ℝ → Option ℝ} {s t : Option ℝ} :
       IntervalTerms a b m v s → IntervalTerms a b m w t →
       IntervalTerms a b m (fun x => Value.add (v x) (w x)) (Value.add s t)
+  /-- A strict guard that does not mention the axis: where it does not hold
+  the value is undefined everywhere, and so is the result. -/
+  | guard {v : ℝ → Option ℝ} {out : Option ℝ} (q : Option Bool) :
+      IntervalTerms a b m v out →
+      IntervalTerms a b m (fun x => Binding.guardValue q (v x)) (Binding.guardValue q out)
   /-- Any continuous value with an antiderivative, and the same under a scale. -/
   | primitive {v : ℝ → Option ℝ} {G : Option ℝ → Option ℝ} {g F : ℝ → ℝ}
       (hv : ∀ x, v x = some (g x)) (hG : ∀ t, G (some t) = some (F t)) (hc : Continuous g)
@@ -256,6 +326,11 @@ theorem IntervalTerms.sound {a b m : Option ℝ} {v : ℝ → Option ℝ} {out :
     · refine Or.inr ⟨fun x => ?_, by rw [hs]; rfl⟩
       show Value.add (v x) (w x) = _
       rw [hv x]; rfl
+  | @guard v out q _ ih =>
+    by_cases hq : q = some true
+    · subst hq
+      exact ih
+    · exact Or.inr ⟨fun x => by simp [Binding.guardValue, hq], by simp [Binding.guardValue, hq]⟩
   | @primitive v G g F hv hG hc hd =>
     refine Or.inl ⟨g, hc, hv, ?_⟩
     rw [hG u, hG l, intervalIntegral.integral_eq_sub_of_hasDerivAt (fun x _ => hd x)
@@ -513,6 +588,10 @@ inductive HalfLineTerms (a m : Option ℝ) : (ℝ → Option ℝ) → Option ℝ
   | add {v w : ℝ → Option ℝ} {s t : Option ℝ} :
       HalfLineTerms a m v s → HalfLineTerms a m w t →
       HalfLineTerms a m (fun x => Value.add (v x) (w x)) (Value.add s t)
+  /-- A strict guard that does not mention the axis. -/
+  | guard {v : ℝ → Option ℝ} {out : Option ℝ} (q : Option Bool) :
+      HalfLineTerms a m v out →
+      HalfLineTerms a m (fun x => Binding.guardValue q (v x)) (Binding.guardValue q out)
   /-- Any value that is integrable above every bound with an antiderivative
   that vanishes at infinity and is strict in the bound, and the same under a
   scale. -/
@@ -534,6 +613,7 @@ theorem HalfLineTerms.missing {a m : Option ℝ} {v : ℝ → Option ℝ} {out :
   | pure _ _ h0 _ _ => rw [h0]; cases m <;> rfl
   | @scaled v G c p P r s _ _ h0 _ _ => rw [h0]; cases m <;> cases c <;> rfl
   | add _ _ ih₁ _ => rw [ih₁]; rfl
+  | guard q _ ih => rw [ih]; simp [Binding.guardValue]
   | primitive _ _ h0 _ _ _ => rw [h0]; cases m <;> rfl
   | @scaledPrimitive v G c g F _ _ h0 _ _ _ => rw [h0]; cases m <;> cases c <;> rfl
 
@@ -574,6 +654,11 @@ theorem HalfLineTerms.sound {a m : Option ℝ} {v : ℝ → Option ℝ} {out : O
     · refine Or.inr ⟨fun x => ?_, by rw [hs]; rfl⟩
       show Value.add (v x) (w x) = _
       rw [hv x]; rfl
+  | @guard v out q _ ih =>
+    by_cases hq : q = some true
+    · subst hq
+      exact ih
+    · exact Or.inr ⟨fun x => by simp [Binding.guardValue, hq], by simp [Binding.guardValue, hq]⟩
   | @primitive v G g F hv hG _ hi hd ht =>
     refine Or.inl ⟨g, hi l, hv, ?_⟩
     rw [integral_Ioi_of_hasDerivAt_of_tendsto' (fun x _ => hd x) (hi l) ht, hG l]

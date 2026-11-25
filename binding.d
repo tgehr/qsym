@@ -70,9 +70,12 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 // polynomial; above a single bound that exponent stays below the linear
 // `rate`, and their difference has degree `order`.
 private struct IntervalTerm{ uint value,primitive=uint.max; bool scaled,curved; Rational rate; uint order; }
+// With `domain` the value is under a strict guard that does not mention the
+// axis; with `hoisted` that guard stands around the mask, after the negations
+// of the comparisons of the mask.
 private struct IntervalData{
-	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne;
-	bool swap,strictLower,strictUpper,nested,half;
+	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max;
+	bool swap,strictLower,strictUpper,nested,half,hoisted;
 	IntervalTerm[] terms;
 }
 // A Gaussian integral. With `symbolic` the constant and linear coefficients of
@@ -965,15 +968,38 @@ final class Bindings{
 		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument); if(y==Term.init) return Term.init; args~=y; }
 		return arena.viewRebuild(arena.at(n.data),args,true);
 	}
+	// The negation of a comparison: the other comparison of its operands in
+	// the other order. Both are primitives, or both scalars.
+	private bool negatedComparison(uint id,uint comparison){
+		auto x=nodes[id],y=nodes[comparison];
+		if(x.op!=y.op||x.op!=BoundOp.primitive&&x.op!=BoundOp.scalar) return false;
+		auto p=arena.at(x.data),q=arena.at(y.data); auto f=arena.view(p).op,g=arena.view(q).op;
+		if(!(g==Op.le&&f==Op.lt||g==Op.lt&&f==Op.le)) return false;
+		if(x.op==BoundOp.primitive) return x.a==y.b&&x.b==y.a;
+		return arena.viewChild(p,0)==arena.viewChild(q,1)&&arena.viewChild(p,1)==arena.viewChild(q,0);
+	}
+	private bool strictComparison(uint id){ return arena.view(arena.at(nodes[id].data)).op==Op.lt; }
 	// A guard that does not mention the axis around the only weight of a
 	// Lebesgue observation: the guard, the weight body without it, and the
-	// lemma that relates the two spellings.
+	// lemma that relates the two spellings. Where the value may be missing
+	// the mask is under the guard of its domain: a comparison that leaves
+	// takes its negation along, and the rest of the domain stays around the
+	// rest of the mask.
 	private bool axisFreeGuard(uint mass,out uint guard,out BoundTerm rest,out string shape){
 		auto n=nodes[mass]; uint[] bodies;
 		if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,bodies)||bodies.length!=1) return false;
 		bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
 		bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
 		auto body=nodes[bodies[0]]; uint[] casts;
+		if(body.op==BoundOp.guard){
+			auto o=nodes[body.a],m=nodes[body.b];
+			if(!isOp(o,Op.or_)||!isOp(m,Op.mask)||!isOp(nodes[m.a],Op.and_)) return false;
+			guard=nodes[m.a].a;
+			if(depends(at(guard),0)||!negatedComparison(o.a,guard)) return false;
+			rest=this.guard(at(o.b),primitive(arena.at(m.data),[at(nodes[m.a].b),at(m.b)]));
+			shape="(fun _ => Distribution.StepSource.mask_domain_split "~(strictComparison(guard)?"true":"false")~" _ _ _ _ _)";
+			return true;
+		}
 		if(call(body,Builtin.castQR)&&call(nodes[body.a],Builtin.castZQ)&&call(nodes[nodes[body.a].a],Builtin.castNZ)){
 			casts=[bodies[0],body.a,nodes[body.a].a]; body=nodes[nodes[nodes[body.a].a].a];
 		}
@@ -3103,7 +3129,9 @@ final class Bindings{
 			auto ctx=context(t),inner=context(at(solution.from[0])); IntervalData d;
 			bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
 			bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
-			auto body=nodes[solution.from[0]];
+			auto body=nodes[solution.from[0]]; uint around=uint.max;
+			// The domain of a value that may be missing is a guard around the mask.
+			if(body.op==BoundOp.guard){ around=body.a; body=nodes[body.b]; if(!isOp(body,Op.mask)) return BoundTerm.init; }
 			if(call(body,Builtin.castQR)&&call(nodes[body.a],Builtin.castZQ)&&call(nodes[nodes[body.a].a],Builtin.castNZ)){
 				auto bracket=nodes[nodes[nodes[body.a].a].a];
 				if(!isOp(bracket,Op.mask)||nodes[bracket.b].op!=BoundOp.scalar||arena.at(nodes[bracket.b].data)!=arena.natural_(1)) return BoundTerm.init;
@@ -3129,6 +3157,20 @@ final class Bindings{
 			if(d.half){ if(!lower1) return BoundTerm.init; term2=term1; }
 			else if(!bound(second,lower2,strict2,term2)||lower1==lower2) return BoundTerm.init;
 			d.swap=!lower1; d.strictLower=lower1?strict1:strict2; d.strictUpper=lower1?strict2:strict1;
+			// A value that may be missing where a term that does not mention the
+			// axis is: it is under a strict guard of its domain, or the mask is
+			// under the guard of its own domain, which holds wherever one of its
+			// comparisons fails: their negations in order, then that domain.
+			if(around!=uint.max){
+				if(d.nested) return BoundTerm.init;
+				auto o=nodes[around]; if(!isOp(o,Op.or_)||!negatedComparison(o.a,first)) return BoundTerm.init;
+				auto rest=o.b;
+				if(!d.half){ o=nodes[rest]; if(!isOp(o,Op.or_)||!negatedComparison(o.a,second)) return BoundTerm.init; rest=o.b; }
+				if(depends(at(rest),0)) return BoundTerm.init;
+				d.domain=rest; d.hoisted=true;
+			}else if(d.unit==uint.max&&nodes[d.value].op==BoundOp.guard&&!depends(at(nodes[d.value].a),0)){
+				d.domain=nodes[d.value].a; d.value=nodes[d.value].b;
+			}
 			auto outer=[Rational(1)],outerRate=Rational(0);
 			foreach(id;solution.from[1..$]){
 				Rational[] w; Rational rate; if(!axisExponential(id,w,rate)) return BoundTerm.init;
@@ -3246,6 +3288,7 @@ final class Bindings{
 			}
 			auto total=d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
 			if(total==BoundTerm.init) return BoundTerm.init;
+			if(d.domain!=uint.max) total=guard(dropIndex(at(d.domain)),total);
 			auto zero=arena.real_(0),strict=d.strictLower||d.strictUpper;
 			auto test=primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[lower,upper]);
 			auto result=d.half?total:primitive(arena.mask(arena.boolean(true),arena.real_(1)),[test,total]);
@@ -6798,9 +6841,25 @@ final class Bindings{
 			auto termsName="Distribution.StepSource."~(d.half?"HalfLineTerms":"IntervalTerms");
 			// The first weight is the guard around the value, by evaluation.
 			auto body=s.from[0],value=d.unit!=uint.max?"(fun _ : ℝ => some (1 : ℝ))":functionAt(d.value);
+			// A value under the strict guard of its domain. Around the mask that
+			// guard follows the negations of the comparisons of the mask.
+			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+			string domain;
+			if(d.domain!=uint.max){
+				value="(fun x : ℝ => Binding.guardValue "~under(d.domain)~" ("~value~" x))";
+				if(d.hoisted){
+					string comparison(uint id,string rest){
+						auto c=nodes[id];
+						return app("MaskDomain."~(rest.length?"cons ":"last ")~truth(strictComparison(id))~" "~under(c.a)~" "~under(c.b),rest);
+					}
+					auto conjunction=nodes[d.guard];
+					auto evidence=d.half?comparison(d.guard,""):comparison(conjunction.a,comparison(conjunction.b,""));
+					domain="(fun x => Distribution.StepSource.MaskDomain.mask (q := "~under(d.domain)~") "~evidence~" "~under(d.value)~")";
+				}
+			}
 			auto shape=save("∀ x : ℝ, "~functionAt(body)~" x = Value.mask ("~guard~" x) ("~value~" x)",
 				d.unit!=uint.max?"(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")":
-				d.nested?"(fun _ => Distribution.StepSource.mask_mask _ _ _)":"(fun _ => rfl)");
+				domain.length?domain:d.nested?"(fun _ => Distribution.StepSource.mask_mask _ _ _)":"(fun _ => rfl)");
 			auto program="(Distribution.DensityProgram.weight "~functionAt(body)~" Distribution.DensityProgram.lebesgue)";
 			auto masked=save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_first",shape));
 			string[] factors;
@@ -6840,6 +6899,7 @@ final class Bindings{
 				return "("~termsName~".scaled "~primitive_~hv~derivative;
 			}
 			auto total=terms(d.unit!=uint.max?uint.max:d.value);
+			if(d.domain!=uint.max)total="("~termsName~".guard ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) "~total~")";
 			auto minus="(Numeric.calculate_sound ξ n"~to!string(nodes[d.minusOne].data)~" (-1 : ℚ) rfl)";
 			return "Distribution.DensityProgram.presentation_mass_"~(d.half?"halfline":"interval")~" "~program~" "~flags~" "~minus~" "~masked~" "~total;
 		}
