@@ -119,6 +119,11 @@ private struct IntervalTerm{
 	// the bounds are moved by the literal `ratioMove` of its negation, and
 	// `ratioLower` and `ratioUpper` are the moved bounds.
 	Rational ratioPole; uint ratioMove=uint.max,ratioLower=uint.max,ratioUpper=uint.max;
+	// A polynomial times the logarithm of the axis minus that pole, plus a
+	// polynomial, between two bounds. With `y` for the axis minus the pole
+	// its antiderivative is `y·P₁(y)·log(y) + y·S₁(y)`: `P₁` is the
+	// `primitive` of `bell` and `S₁` its `moments`.
+	bool logTerm;
 	// The exponential of a quadratic whose curvature is a term that cannot
 	// vanish, beyond a single bound: the literal of the factor of the linear
 	// coefficient over the curvature in the argument.
@@ -133,10 +138,12 @@ private struct IntervalTerm{
 // of that and of a `domain` that does not mention the axis, with the axis
 // first for 1 and last for 2. The axis may also be kept away from another
 // point `axisPoint`: then the guard is that the sum of the axis and the
-// closed term `axisClosed` is not zero.
+// closed term `axisClosed` is not zero. With `axisPositive` the guard is
+// instead that the axis is above the closed term `axisClosed`, whose value
+// is `axisPoint`: the domain of a logarithm.
 private struct IntervalData{
 	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max,axis=uint.max,both=uint.max,axisClosed=uint.max;
-	ubyte joined; Rational axisPoint;
+	ubyte joined; Rational axisPoint; bool axisPositive;
 	bool swap,strictLower,strictUpper,nested,half,below,hoisted;
 	// With `direct` the only term is observed by the integral of the mask:
 	// it may be defined without being integrable.
@@ -1451,6 +1458,54 @@ final class Bindings{
 		}
 		if(op.op!=Op.add&&op.op!=Op.mul) return false;
 		return axisPole(q.a,pole,depth+1)||axisPole(q.b,pole,depth+1);
+	}
+	// The argument of a logarithm: the innermost variable, or its sum with
+	// a closed term, which is minus the pole, in either order.
+	private bool logArgument(uint id,out Rational pole,out uint closedTerm){
+		auto v=nodes[id]; closedTerm=uint.max;
+		bool variable_(uint i){ auto x=nodes[i]; return x.op==BoundOp.variable&&x.data==0; }
+		if(variable_(id)){ pole=Rational(0); return true; }
+		if(v.op!=BoundOp.primitive||arena.view(arena.at(v.data)).op!=Op.add) return false;
+		auto other=variable_(v.a)?v.b:variable_(v.b)?v.a:uint.max; Rational c; Term closed;
+		if(other==uint.max||nodes[other].op!=BoundOp.scalar||!closedRational(at(other),c,closed)||c.zero) return false;
+		pole=Rational(0)-c; closedTerm=other; return pole.words<=128;
+	}
+	// The pole of the first logarithm in a sum or product.
+	private bool axisLogPole(uint id,out Rational pole,uint depth=0){
+		if(depth>64||!depends(at(id),0)) return false;
+		auto q=nodes[id];
+		if(q.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(q.data));
+		if(op.op==Op.builtin){ uint closedTerm; return op.value==Builtin.logR&&logArgument(q.a,pole,closedTerm); }
+		if(op.op!=Op.add&&op.op!=Op.mul) return false;
+		return axisLogPole(q.a,pole,depth+1)||axisLogPole(q.b,pole,depth+1);
+	}
+	// A polynomial `p` times the logarithm of the innermost variable minus
+	// the pole, plus a polynomial `q`: sums and products of polynomials and
+	// of that logarithm in which no two logarithms are multiplied. Both
+	// polynomials are in the variable minus the pole. `found` says that
+	// there is a logarithm.
+	private bool axisLogarithm(uint id,out Rational[] p,out Rational[] q,Rational pole,out bool found,uint depth=0){
+		if(depth>64) return false;
+		bool small(Rational[] x){ if(x.length>64) return false; foreach(c;x) if(c.words>128) return false; return true; }
+		if(axisPolynomial(id,q)){ q=polyTranslate(q,pole); return small(q); }
+		auto n=nodes[id];
+		if(n.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(n.data));
+		if(op.op==Op.builtin){
+			Rational at_; uint closedTerm;
+			if(op.value!=Builtin.logR||!logArgument(n.a,at_,closedTerm)||!(at_==pole)) return false;
+			p=[Rational(1)]; q=[]; found=true; return true;
+		}
+		if(op.op!=Op.add&&op.op!=Op.mul) return false;
+		Rational[] p1,q1,p2,q2; bool f1,f2;
+		if(!axisLogarithm(n.a,p1,q1,pole,f1,depth+1)||!axisLogarithm(n.b,p2,q2,pole,f2,depth+1)) return false;
+		found=f1||f2;
+		if(op.op==Op.add){ p=polySum(p1,p2); q=polySum(q1,q2); }
+		else if(f1&&f2) return false;
+		else if(f1){ p=polyProduct(p1,q2); q=polyProduct(q1,q2); }
+		else{ p=polyProduct(q1,p2); q=polyProduct(q1,q2); }
+		return small(p)&&small(q);
 	}
 	// A polynomial in the innermost variable times the exponential of a
 	// rational multiple of it. A rate of zero is a polynomial.
@@ -3481,8 +3536,15 @@ final class Bindings{
 					if(!variable_(sum.a)||nodes[sum.b].op!=BoundOp.scalar||!closedRational(at(sum.b),c,closed)||c.zero) return false;
 					d.axisPoint=Rational(0)-c; d.axisClosed=sum.b; return true;
 				}
+				// The axis is above a closed term: the domain of a logarithm.
+				bool positiveAxis(uint id){
+					auto test=nodes[id]; if(!isOp(test,Op.lt)) return false;
+					auto x=nodes[test.b]; Rational c; Term closed;
+					if(x.op!=BoundOp.variable||x.data!=0||nodes[test.a].op!=BoundOp.scalar||!closedRational(at(test.a),c,closed)) return false;
+					d.axisPoint=c; d.axisClosed=test.a; d.axisPositive=true; return true;
+				}
 				auto both=nodes[rest];
-				if(nonzeroAxis(rest)){ d.axis=rest; return true; }
+				if(nonzeroAxis(rest)||positiveAxis(rest)){ d.axis=rest; return true; }
 				if(!isOp(both,Op.and_)) return false;
 				if(!depends(at(both.b),0)&&nonzeroAxis(both.a)){ d.axis=both.a; d.domain=both.b; d.both=rest; d.joined=1; return true; }
 				if(!depends(at(both.a),0)&&nonzeroAxis(both.b)){ d.axis=both.b; d.domain=both.a; d.both=rest; d.joined=2; return true; }
@@ -3730,7 +3792,7 @@ final class Bindings{
 				if(d.unit!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
 				Rational[] p; size_t power; uint[] scale; Rational pole;
 				if(!axisPole(id,pole)) pole=Rational(0);
-				if(d.axis!=uint.max&&!(pole==d.axisPoint)) return false;
+				if(d.axis!=uint.max&&(d.axisPositive||!(pole==d.axisPoint))) return false;
 				if(!axisFraction(id,p,power,scale,pole)||!power) return false;
 				r.ratioPole=pole;
 				bool left; foreach(k;0..power) if(k<p.length&&!p[k].zero) left=true;
@@ -3752,9 +3814,34 @@ final class Bindings{
 				r.bell.primitive=A; r.bell.moments=C; r.bell.constant=at_(power-1);
 				r.ratioShift=cast(uint)shift; r.ratioTerm=true; return true;
 			}
+			// Between two bounds, a polynomial times the logarithm of the axis
+			// minus a rational pole, plus a polynomial. The logarithm is
+			// defined above the pole only, so the value is observed exactly
+			// where the guard of the bounds is above it: the lower bound is,
+			// or it is the pole and strict. With `y` for the axis minus the
+			// pole the antiderivative is `y·P₁(y)·log(y) + y·S₁(y)`, where
+			// `(y·P₁)' = p` and `(y·S₁)' = q - P₁`.
+			bool axisLog(uint id,ref IntervalTerm r){
+				if(d.half||d.unit!=uint.max||d.domain!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
+				Rational pole; if(!axisLogPole(id,pole)) return false;
+				if(d.axis!=uint.max&&(!d.axisPositive||!(pole==d.axisPoint))) return false;
+				Rational[] p,q; bool found;
+				if(!axisLogarithm(id,p,q,pole,found)||!found) return false;
+				Rational[] P,S;
+				foreach(k,c;p) P~=c/Rational(cast(long)k+1);
+				auto n=q.length>P.length?q.length:P.length;
+				foreach(k;0..n) S~=((k<q.length?q[k]:Rational(0))-(k<P.length?P[k]:Rational(0)))/Rational(cast(long)k+1);
+				while(P.length>1&&P[$-1].zero) P.length=P.length-1;
+				while(S.length>1&&S[$-1].zero) S.length=S.length-1;
+				if(!P.length) P=[Rational(0)];
+				if(!S.length) S=[Rational(0)];
+				foreach(c;P~S) if(c.words>128) return false;
+				r.bell.primitive=P; r.bell.moments=S; r.ratioPole=pole; r.logTerm=true; return true;
+			}
 			IntervalTerm whole;
-			d.direct=d.unit==uint.max&&!admissible(d.value,0)&&(symbolicRate(d.value,whole)||symbolicCurvature(d.value,whole)||axisQuotient(d.value,whole));
-			if(d.axis!=uint.max&&!(d.direct&&whole.ratioTerm)) return BoundTerm.init;
+			d.direct=d.unit==uint.max&&!admissible(d.value,0)&&(symbolicRate(d.value,whole)||symbolicCurvature(d.value,whole)||axisQuotient(d.value,whole)||
+				axisLog(d.value,whole));
+			if(d.axis!=uint.max&&!(d.direct&&(whole.ratioTerm||whole.logTerm))) return BoundTerm.init;
 			if(!d.direct&&(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0))) return BoundTerm.init;
 			if(!construct) return t;
 			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
@@ -4166,7 +4253,42 @@ final class Bindings{
 				return finish(side,primitive(arena.or_(truth,truth),[compare(!d.strictLower,zero,low),compare(!d.strictUpper,high,zero)]),
 					primitive(addOp,[above,primitive(mulOp,[minusOne,below])]),d.strictLower||d.strictUpper,positive(low)||negative(high));
 			}
-			auto total=d.direct?(whole.ratioTerm?quotientDifference(whole,d.value):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
+			// `guard(0<a, F(b) - F(a))` with that antiderivative `F`, the
+			// bounds moved by the pole. Where the lower bound is strict the
+			// guard is `0≤a`, and the part of `F(a)` with the logarithm is
+			// under the mask `[a≠0]`: there the antiderivative continues
+			// with zero.
+			BoundTerm logDifference(IntervalTerm r,uint id){
+				auto zero=scalar(ctx,arena.real_(0)),literal=arena.real_(0),truth=arena.boolean(true);
+				r.rateZero=zero.id; r.value=id;
+				BoundTerm balanced(BoundTerm[] xs){ return xs.length==1?xs[0]:primitive(addOp,[balanced(xs[0..$/2]),balanced(xs[$/2..$])]); }
+				BoundTerm row(Rational[] coefficients,BoundTerm o,ref uint[] literals){
+					BoundTerm[] terms;
+					foreach(i,c;coefficients){
+						if(i&&c.zero){ literals~=uint.max; continue; }
+						auto coefficient=scalar(ctx,arena.real_(c)); literals~=coefficient.id;
+						terms~=!i?coefficient:primitive(mulOp,[coefficient,i==1?o:primitive(arena.pow(arena.real_(0),cast(uint)i),[o])]);
+					}
+					return balanced(terms);
+				}
+				BoundTerm moved(BoundTerm x){
+					if(r.ratioPole.zero) return x;
+					auto move=scalar(ctx,arena.real_(Rational(0)-r.ratioPole)); r.ratioMove=move.id;
+					return primitive(addOp,[x,move]);
+				}
+				BoundTerm at_(size_t e,BoundTerm o,bool masked){
+					auto first=row(r.bell.primitive,o,r.ends[e].primitive);
+					uint[] literals; auto second=row(r.bell.moments,o,literals); r.ends[e].rows=[literals];
+					auto logarithm=primitive(mulOp,[primitive(mulOp,[o,first]),primitive(arena.call(Builtin.logR,[literal]),[o])]);
+					if(masked) logarithm=primitive(arena.mask(truth,arena.real_(1)),[primitive(arena.nonzero(arena.real_(1)),[o]),logarithm]);
+					return primitive(addOp,[logarithm,primitive(mulOp,[o,second])]);
+				}
+				auto low=moved(lower),high=moved(upper); r.ratioLower=low.id; r.ratioUpper=high.id;
+				auto above=at_(0,high,false),below=at_(1,low,d.strictLower);
+				auto side=primitive(d.strictLower?arena.le(literal,literal):arena.lt(literal,literal),[zero,low]);
+				d.terms~=r; return guard(side,primitive(addOp,[above,primitive(mulOp,[minusOne,below])]));
+			}
+			auto total=d.direct?(whole.logTerm?logDifference(whole,d.value):whole.ratioTerm?quotientDifference(whole,d.value):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
 				d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
 			if(total==BoundTerm.init) return BoundTerm.init;
 			if(d.domain!=uint.max) total=guard(dropIndex(at(d.domain)),total);
@@ -8001,14 +8123,17 @@ final class Bindings{
 		string functionAround(uint id,Rational pole){
 			return pole.zero?functionAt(id):"(fun y : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some (y + (("~cert.q(pole)~" : ℚ) : ℝ))) ρ))";
 		}
+		// A polynomial, moved along the axis by a pole that is not zero.
+		Quotient polynomialAround(uint id,Rational pole){
+			enum src="Distribution.StepSource.";
+			auto w=cert.piece(id,cert.everywhere,"",Rational(0));
+			return pole.zero?Quotient(w.proof,w.poly,0):
+				Quotient("("~src~"polynomial_translate "~cert.q(pole)~" "~w.proof~")","("~src~"polyTranslate "~cert.q(pole)~" "~w.poly~")",0);
+		}
 		Quotient quotient(uint id,Rational pole){
 			enum src="Distribution.StepSource.";
 			Rational[] p;
-			Quotient polynomial(uint id){
-				auto w=cert.piece(id,cert.everywhere,"",Rational(0));
-				return pole.zero?Quotient(w.proof,w.poly,0):
-					Quotient("("~src~"polynomial_translate "~cert.q(pole)~" "~w.proof~")","("~src~"polyTranslate "~cert.q(pole)~" "~w.poly~")",0);
-			}
+			Quotient polynomial(uint id){return polynomialAround(id,pole);}
 			if(axisPolynomial(id,p))return polynomial(id);
 			auto n=nodes[id];enforce(n.op==BoundOp.primitive,"unsupported quotient");
 			auto op=arena.view(arena.at(n.data));Quotient r;
@@ -8054,6 +8179,41 @@ final class Bindings{
 			r.scale="("~src~"joinScale "~a.scale~" "~b.scale~")";
 			r.proof=save(src~"Fraction "~functionAround(id,pole)~" "~r.scale~" "~r.poly~" "~to!string(r.power)~" "~(r.pole?"true":"false"),
 				"("~src~"Fraction.mul "~a.proof~" "~b.proof~")");
+			return r;
+		}
+		// A polynomial times the logarithm of the axis minus a pole, plus a
+		// polynomial, by its structure: a polynomial, that logarithm, and
+		// sums and products of such in which a logarithm meets polynomials
+		// only. The two polynomials stay symbolic.
+		struct Logarithm{string proof,p,q;bool found;}
+		Logarithm logarithm(uint id,Rational pole){
+			enum src="Distribution.StepSource.";
+			Rational[] coefficients;
+			if(axisPolynomial(id,coefficients)){auto w=polynomialAround(id,pole);return Logarithm(w.proof,"[]",w.poly,false);}
+			auto n=nodes[id];enforce(n.op==BoundOp.primitive,"unsupported logarithm");
+			auto op=arena.view(arena.at(n.data));Logarithm r;r.found=true;
+			if(op.op==Op.builtin){
+				Rational at_;uint closedTerm;
+				enforce(op.value==Builtin.logR&&logArgument(n.a,at_,closedTerm)&&at_==pole,"logarithm of another argument");
+				r.p="[1]";r.q="[]";
+				// The closed term may stand on either side of the axis.
+				r.proof=pole.zero?src~"log_axis":"("~src~"log_axis_shifted"~(nodes[n.a].a==closedTerm?"' ":" ")~cert.q(pole)~
+					" (Numeric.calculate_sound ξ n"~to!string(nodes[closedTerm].data)~" "~cert.q(Rational(0)-pole)~" rfl))";
+			}else{
+				enforce(op.op==Op.add||op.op==Op.mul,"unsupported operation on a logarithm");
+				auto a=logarithm(n.a,pole),b=logarithm(n.b,pole);bool add=op.op==Op.add;
+				enforce(a.found||b.found,"polynomial that is not one");
+				string poly(string f,string x,string y){return "("~src~"poly"~f~" "~x~" "~y~")";}
+				if(add){
+					r.p=a.found&&b.found?poly("Add",a.p,b.p):a.found?a.p:b.p;r.q=poly("Add",a.q,b.q);
+					r.proof="("~src~"log_add"~(a.found&&b.found?"":a.found?"_right":"_left")~" "~a.proof~" "~b.proof~")";
+				}else{
+					enforce(!(a.found&&b.found),"product of logarithms");
+					r.p=a.found?poly("Mul",a.p,b.q):poly("Mul",a.q,b.p);r.q=poly("Mul",a.q,b.q);
+					r.proof="("~src~"log_mul"~(a.found?"_right":"_left")~" "~a.proof~" "~b.proof~")";
+				}
+			}
+			r.proof=save(src~"LogOn "~functionAround(id,pole)~" "~r.p~" "~r.q,r.proof);
 			return r;
 		}
 		// An observation between bounds, above or below one; as a summand in
@@ -8115,9 +8275,48 @@ final class Bindings{
 				// exponent by its structure, with the coefficients the rule built:
 				// the observation is the integral of its mask, under the strict
 				// guard of its domain where it has one.
-				enforce(!summand&&d.terms.length==1&&(d.terms[0].rateTerm||d.terms[0].curvatureTerm||d.terms[0].ratioTerm)&&q.from.length==1,"bad direct observation");
+				enforce(!summand&&d.terms.length==1&&(d.terms[0].rateTerm||d.terms[0].curvatureTerm||d.terms[0].ratioTerm||d.terms[0].logTerm)&&q.from.length==1,"bad direct observation");
 				auto r=d.terms[0],g=r.bell;string exponent;AxisCoefficient[] poly;
 				string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
+				if(r.logTerm){
+					// The value as a polynomial times the logarithm plus a
+					// polynomial, by its structure. The kernel checks the
+					// antiderivative against it; at each bound its two
+					// polynomials are rows. Around a pole that is not zero all
+					// of this is about the value at the axis plus the pole,
+					// between the bounds moved by it.
+					enum src="Distribution.StepSource.";
+					enforce(!d.half&&d.domain==uint.max,"bad logarithm between bounds");
+					auto pole=r.ratioPole;auto evidence=logarithm(d.value,pole);
+					if(d.axis!=uint.max){
+						enforce(d.axisPositive&&d.axisPoint==pole,"domain of another logarithm");
+						auto away="("~src~(pole.zero?"axis_positive ":"shifted_positive "~cert.q(pole)~" ")~literal(d.axisClosed,pole)~")";
+						auto test=pole.zero?"fun x : ℝ => "~under(d.axis):
+							"fun y : ℝ => "~name(d.axis)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some (y + (("~cert.q(pole)~" : ℚ) : ℝ))) ρ)";
+						evidence.proof="("~src~"log_guard (g := "~test~") "~evidence.proof~" "~away~")";
+					}
+					string list(Rational[] row){string t="[";foreach(i,c;row)t~=(i?", ":"")~cert.q(c);return t~"]";}
+					string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
+					string row(Rational[] coefficients,uint[] literals){
+						enforce(literals.length==coefficients.length&&literals[0]!=uint.max,"bad row of a logarithm");
+						size_t count;string h=src~"RowTerms.done";
+						foreach_reverse(i,c;coefficients){
+							if(literals[i]!=uint.max){++count;h="("~src~"RowTerms.term "~cert.q(c)~" "~literal(literals[i],c)~" "~h~")";}
+							else h="("~src~"RowTerms.zero "~h~")";
+						}
+						return h~" "~sums(count);
+					}
+					string rows;
+					foreach(e;0..2){
+						enforce(r.ends[e].rows.length==1,"bad literals of a logarithm");
+						rows~=" "~row(g.primitive,r.ends[e].primitive)~" "~row(g.moments,r.ends[e].rows[0]);
+					}
+					auto strictness=truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper);
+					auto observed="("~src~"log_between "~strictness~" "~list(g.primitive)~" "~list(g.moments)~" "~evidence.proof~" rfl "~
+						literal(r.rateZero,Rational(0))~" "~literal(d.minusOne,Rational(-1))~rows~")";
+					if(!pole.zero)observed="("~src~"shift_between "~strictness~" "~cert.q(pole)~" "~literal(r.ratioMove,Rational(0)-pole)~" "~observed~")";
+					return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" "~observed;
+				}
 				if(r.ratioTerm){
 					// The value as a polynomial over a power of the axis, by its
 					// structure. The kernel checks the antiderivative against
