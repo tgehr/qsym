@@ -165,6 +165,14 @@ private Case[] cases(){ return [
 	Case("CoverPairingMissingEndpoint","∫dy y⁻¹·λ[-sqrt(y),sqrt(y)]","ℝ","undefined(ℝ)"),
 	Case("CoverPairingGap","∫dy [0<y]·[y<0]·λ[-sqrt(y),sqrt(y)]","ℝ","0"),
 	Case("CoverPairingShifted","λ(t:ℝ→ℝ). ∫dy t(y)·λ[3-3·sqrt(y),3+3·sqrt(y)]","(ℝ→ℝ)→ℝ"),
+	Case("RestrictedSmoothMass","∫dy λ[2*y+1 | x. 0<x<1]","ℝ","1"),
+	Case("RestrictedSmoothSquare","densityAtD(Λy. λ[y² | x. x≤1],-1)","ℝ","2"),
+	Case("RestrictedCornerOff","densityAtD(Λy. λ[abs(y) | x. 0<x],0)","ℝ","0"),
+	Case("RestrictedCornerOn","densityAtD(Λy. λ[abs(y) | x. 0≤x],0)","ℝ","undefined(ℝ)"),
+	Case("RestrictedCornerMass","∫dy λ[abs(y) | x. 0<x<1]","ℝ","2"),
+	Case("RestrictedCornerPredicate","λ(p:ℝ→𝔹). Λy. λ[abs(y-1) | x. p(x)]","(ℝ→𝔹)→Distribution(ℝ)"),
+	Case("RestrictedCornerWithJump","densityAtD(Λy. λ[abs(y-1)+2*[2≤y] | x. 0<x<2],1)","ℝ","0"),
+	Case("RestrictedCornerJumpAtom","densityAtD(Λy. λ[abs(y-1)+2*[2≤y] | x. 0<x<2],2)","ℝ","undefined(ℝ)"),
 	Case("RestrictedJumpWindow","∫dy λ[2*[0≤y] | x. 0<x<1]","ℝ","1"),
 	Case("RestrictedJumpDescending","∫dy λ[2*[y<0] | x. 1/2≤x≤3/2]","ℝ","1"),
 	Case("RestrictedJumpDisjoint","∫dy λ[2*[0≤y] | x. 2<x]","ℝ","0"),
@@ -1119,6 +1127,8 @@ private void run(string directory){
 		import std.string:indexOf;
 		if(c.name=="JumpPartialRestriction") enforce(certificate.indexOf("Grid.restrictedJump")<0&&text.indexOf("∫")>=0,c.name);
 		if(c.name=="UnsplitAbsolute") enforce(text.indexOf("∫")>=0,c.name~": "~text);
+		if(c.name.indexOf("RestrictedSmooth")==0) enforce(certificate.indexOf("Grid.polynomialRestricted")>=0,c.name);
+		if(c.name.indexOf("RestrictedCorner")==0) enforce(certificate.indexOf("Grid.restrictedCorner")>=0,c.name);
 		if(c.name.indexOf("RestrictedJump")==0) enforce(certificate.indexOf("Grid.restrictedJump")>=0,c.name);
 		if(c.name.indexOf("Grid")==0){
 			auto compiled=certificate.indexOf("GraphFibre.Coordinates.Grid.cell ")>=0;

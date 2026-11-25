@@ -73,6 +73,17 @@ theorem polynomial {f w p} (h : Cell (fun _ => True) f w p) :
   singleton_length (smoothPoly p) (fun x => h.source.equation x trivial)
     (fun x => ((polyEval_hasDerivAt p x).deriv.symm ▸ h.weight x trivial))
 
+theorem polynomialRestricted {f w p} (pred : ℝ → Option Bool) (h : Cell (fun _ => True) f w p) :
+    restricted (some pred) (Tensor.consValue (some f) Tensor.nilValue) =
+      weightValue (some fun x => Value.mask ((f x).bind pred) (w x)) lebesgueValue := by
+  let c := VariationChart.smooth (polyEval p) (smoothPoly p)
+  refine (restricted_pieces_eq (singleton_displays c (fun x => h.source.equation x trivial)) pred).trans ?_
+  change weightValue (some fun x => Value.mask (pred (polyEval p x)) (some |deriv (polyEval p) x|)) _ = _
+  congr 2
+  funext x
+  rw [h.source.equation x trivial, h.weight x trivial, (polyEval_hasDerivAt p x).deriv]
+  rfl
+
 private structure Regular (f w : Scalar) (x : ℝ) : Prop where
   total : f x = some (coord f x)
   weight : w x = some |deriv (coord f) x|
@@ -354,6 +365,49 @@ theorem cornerTerm (a : ℚ) {v : Option ℝ} (hv : v = some (a:ℝ)) :
       (some fun x => Value.not (Value.nonzero (some x)))
       (some fun x : ℝ => Value.add ((some x).map (· ^ 2)) v) := by
   subst v; simp only [VariationChart.corner, funext zero_test]; rfl
+
+/-- The restriction at a continuous corner sees the common trace. This is
+an equality of presentations even if the predicate is undefined there. -/
+theorem restrictedCorner {f a p q} (pred : ℝ → Option Bool) (v : ℚ)
+    (g : Germ f a p q) (hv : f a = some (v:ℝ))
+    (hl : v = polyEvalQ p a) (hr : v = polyEvalQ q a) :
+    VariationChart.atCut (coord f) a (some pred) = VariationChart.corner a (pred v) := by
+  rw [VariationChart.atCut_of_limits (traceL g) (traceR g),
+    if_pos ((value_eq hl).symm.trans (value_eq hr))]
+  simp [coord, hv]
+
+theorem cornerGuarded (pred : ℝ → Option Bool) (a v : ℚ) {av vv : Option ℝ}
+    (ha : av = some (a:ℝ)) (hv : vv = some (v:ℝ)) :
+    VariationChart.corner a (pred v) = realPushforwardOnValue
+      (some fun x => Value.and (Value.not (Value.nonzero (some x))) (vv.bind pred))
+      (some fun x : ℝ => Value.add ((some x).map (· ^ 2)) av) := by
+  subst av; subst vv
+  have eq (x : ℝ) : (if x = 0 then pred v else some false) =
+      Value.and (Value.not (Value.nonzero (some x))) (pred v) := by
+    by_cases hx : x = 0 <;> simp [hx, Value.and, Value.not, Value.nonzero]
+  simp only [VariationChart.corner, funext eq]
+  rfl
+
+theorem cornerInactive (a : ℝ) {z : Option ℝ} (hz : z = some ((0:ℚ):ℝ)) :
+    VariationChart.corner a (some false) = weightValue (some fun _ => z) lebesgueValue := by
+  subst z
+  let f := fun x : ℝ => x^2 + a
+  let d := Presentation.density (fun _ : ℝ => some (0:ℝ)) (fun x => some (f x))
+  have hd (y : ℝ) : densityAt d y = some 0 := by
+    have e := pushforwardOn_density ∅ f (by dsimp [f]; fun_prop) y
+    have empty : y ∉ f '' ∅ := by simp
+    simpa [d, densityAtValue, pushforwardOnValue, marginalOn, fibreOn_of_notMem_image empty,
+      Value.mask, observe] using e
+  have chart : LebesgueChart d (fun _ => some 0) := by
+    refine ⟨funext hd, fun _ => ⟨0, rfl⟩, fun t => ?_⟩
+    change partialIntegral _ (fun x => some (0 * t (f x))) =
+      partialIntegral _ (fun x => some (0 * t x))
+    simp
+  have off (x : ℝ) : (if x = 0 then some false else some false) = some false := by simp
+  simp only [VariationChart.corner, funext off, Rat.cast_zero]
+  change some (inLebesgueCoordinates d) = _
+  rw [inLebesgueCoordinates_of_chart chart]
+  simp [weightValue, lebesgueValue, densityValue, weight, Value.mul]
 
 theorem cornerBare : VariationChart.corner (0:ℚ) (some true) = realPushforwardOnValue
     (some fun x => Value.not (Value.nonzero (some x))) (some fun x : ℝ => (some x).map (· ^ 2)) := by

@@ -188,11 +188,13 @@ private struct PolynomialGrid{
 	Rational[][] cells;
 }
 private enum JoinKind{ smooth,corner,jump }
+private enum CornerSelection { dynamic, active, inactive }
 private struct CoordinateJoin{
 	JoinKind kind;
 	Rational left,right,slope;
 	uint event=uint.max;
 	IntegralSolution* clipped;
+	CornerSelection selection;
 }
 private struct CoordinateGrid{
 	PolynomialGrid grid;
@@ -5333,12 +5335,14 @@ final class Bindings{
 			if(pred!=BoundTerm.init){
 				// Restrict a jump in its traversed coordinate. Only commit the
 				// rewrite when every exceptional contribution has a certificate.
-				bool hasJump;
 				cert.predicate=node(pred).a;
 				foreach(ref j;cert.joins){
-					if(j.kind==JoinKind.corner) return BoundTerm.init;
+					if(j.kind==JoinKind.corner&&gridNumerical(cert.predicate)){
+						Term v;
+						if(gridValue(cert.predicate,j.left,v)&&arena.view(v).op==Op.boolLit)
+							j.selection=v==arena.boolean(true)?CornerSelection.active:CornerSelection.inactive;
+					}
 					if(j.kind!=JoinKind.jump) continue;
-					hasJump=true;
 					auto lo=j.left<j.right?j.left:j.right,hi=j.left<j.right?j.right:j.left;
 					auto between=primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[
 						primitive(le,[scalar(inner,arena.real_(lo)),x]),primitive(le,[x,scalar(inner,arena.real_(hi))])]);
@@ -5349,7 +5353,6 @@ final class Bindings{
 					if(integratePolynomials(distribution(ctx,BoundOp.distributionMass,[d]),*j.clipped)==BoundTerm.init)
 						return BoundTerm.init;
 				}
-				if(!hasJump) return BoundTerm.init;
 			}
 			BoundTerm weight;
 			foreach(i,p;slopes){
@@ -5376,9 +5379,11 @@ final class Bindings{
 			}
 			if(weight==BoundTerm.init) weight=scalar(inner,zero);
 			cert.weight=weight.id;
+			BoundTerm localPred;
 			if(pred!=BoundTerm.init){
 				uint[] shift; foreach(i;0..contexts[ctx.index].length) shift~=i+1;
-				weight=primitive(mask,[apply(rename(pred,inner,shift),body),weight]);
+				localPred=rename(pred,inner,shift);
+				weight=primitive(mask,[apply(localPred,body),weight]);
 			}
 			auto result=distribution(ctx,BoundOp.distributionWeight,[inheritHint(fn,lambda(weight)),distribution(ctx,BoundOp.distributionLebesgue)]);
 			BoundTerm atom(Rational a,Rational height){
@@ -5399,7 +5404,22 @@ final class Bindings{
 					event=atom(a,k);
 				}
 				cert.joins[i].event=event.id;
-				if(pred!=BoundTerm.init) event=atom(a,join.clipped.value);
+				if(pred!=BoundTerm.init){
+					if(join.kind==JoinKind.jump) event=atom(a,join.clipped.value);
+					else final switch(join.selection){
+						case CornerSelection.active:break;
+						case CornerSelection.inactive:
+							event=distribution(ctx,BoundOp.distributionWeight,
+								[lambda(scalar(inner,zero)),distribution(ctx,BoundOp.distributionLebesgue)]);
+							break;
+						case CornerSelection.dynamic:
+							auto graph=node(event),test=at(nodes[graph.a].a);
+							auto active=apply(localPred,scalar(inner,arena.real_(join.left)));
+							auto guard=primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[test,active]);
+							event=distribution(ctx,BoundOp.distributionPushforwardOn,[lambda(guard),at(graph.b)]);
+							break;
+					}
+				}
 				result=distribution(ctx,BoundOp.distributionAdd,[event,result]);
 			}
 			cert.body=body.id;index=cast(uint)coordinates.length;coordinates~=cert;
@@ -8018,9 +8038,11 @@ final class Bindings{
 			auto proof=weight.active?weight.proof:app("magnitude_zero",weight.proof);
 			cells~=cert.save(grid~"Cell "~set~" "~f~" "~w~" "~src.poly,app("cell",src.proof~" "~proof~" rfl"));
 		}
-		if(!cuts.length) return app("polynomial",cells[0]);
+		bool restricted=c.predicate!=uint.max;
+		string pred;
+		if(restricted){ cert.roots~=c.weight; pred=cert.functionAt(c.predicate); }
+		if(!cuts.length) return restricted?app("polynomialRestricted",pred~" "~cells[0]):app("polynomial",cells[0]);
 		string events="([] : List "~grid~"Event)",selected="List.Forall₂.nil";
-		if(c.predicate!=uint.max) cert.roots~=c.weight;
 		auto tail=app("last","(a := "~q(cuts[$-1])~") "~cells[$-1]);
 		foreach_reverse(i,a;cuts){
 			auto j=c.joins[i],v=c.grid.points[i],lo=i?"(some "~q(cuts[i-1])~")":"none",hi=i+1<cuts.length?"(some "~q(cuts[i+1])~")":"none";
@@ -8044,9 +8066,26 @@ final class Bindings{
 					law=app("jump",point~"(l := "~q(j.left)~") (r := "~q(j.right)~") "~germs~" "~pv~" rfl rfl (of_decide_eq_true rfl) "~side~" "~zero);
 					eq=app("atomTerm",q(a)~" "~q(height)~" "~apos~" "~numeric(arena.real_(height),height));
 				}
-				if(c.predicate!=uint.max){
+				if(restricted) cert.roots~=j.event;
+				if(restricted&&j.kind==JoinKind.corner){
+					auto cut=app("restrictedCorner",pred~" "~q(v)~" "~germs~" "~pv~" rfl rfl");
+					string shape;
+					final switch(j.selection){
+						case CornerSelection.active:
+						case CornerSelection.inactive:
+							bool active=j.selection==CornerSelection.active;
+							auto h=cert.numericProof(c.predicate,v,active?"true":"false");
+							auto term=active?eq:app("cornerInactive",q(a)~" "~numeric(arena.real_(0),Rational(0)));
+							shape="(Eq.trans (congrArg (Distribution.GraphFibre.Coordinates.VariationChart.corner ("~q(a)~" : ℝ)) "~h~") "~term~")";
+							break;
+						case CornerSelection.dynamic:
+							shape=app("cornerGuarded",pred~" "~q(a)~" "~q(v)~" "~apos~" "~numeric(arena.real_(v),v));
+							break;
+					}
+					selected="(List.Forall₂.cons (Eq.trans "~cut~" "~shape~") "~selected~")";
+				}else if(restricted){
 					auto mass=*j.clipped;
-					cert.roots~=[j.event,mass.from[0]];
+					cert.roots~=mass.from[0];
 					string unused;
 					auto hm=stepGridProof(mass,cert,unused);
 					auto lower=j.left<j.right?j.left:j.right,upper=j.left<j.right?j.right:j.left;
@@ -8061,7 +8100,7 @@ final class Bindings{
 			}
 			tail=cert.save(grid~"Checked "~f~" "~w~" "~lo~" "~events,app(j.kind==JoinKind.smooth?"pass":"cut",bounds~"rfl "~cells[i]~" "~law~" "~tail));
 		}
-		return c.predicate==uint.max?app("finish",tail):app("finishRestricted",cert.functionAt(c.predicate)~" "~tail~" "~selected);
+		return restricted?app("finishRestricted",pred~" "~tail~" "~selected):app("finish",tail);
 	}
 	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof){
 		auto q=&cert.q,app=&cert.app,atPoint=&cert.atPoint,functionAt=&cert.functionAt;
