@@ -84,6 +84,97 @@ theorem polynomialRestricted {f w p} (pred : ℝ → Option Bool) (h : Cell (fun
   rw [h.source.equation x trivial, h.weight x trivial, (polyEval_hasDerivAt p x).deriv]
   rfl
 
+/-- A total smooth coordinate and its signed derivative, both described by
+source terms. The derivative stays signed until the outer coordinate rule. -/
+def Slope (f d : Scalar) : Prop :=
+  ∃ g dg : ℝ → ℝ, ContDiff ℝ 1 g ∧ (∀ x, HasDerivAt g (dg x) x) ∧
+    (∀ x, f x = some (g x)) ∧ (∀ x, d x = some (dg x))
+
+namespace Slope
+
+theorem polynomial {f d p q} (hf : PolynomialOn (fun _ => True) f p)
+    (hd : PolynomialOn (fun _ => True) d q)
+    (he : polyZero (polyAdd q (polyScale (-1) (polyDerivative p))) = true) : Slope f d :=
+  ⟨polyEval p, polyEval (polyDerivative p), smoothPoly p, polyEval_hasDerivAt p,
+    fun x => hf.equation x trivial,
+    fun x => (hd.equation x trivial).trans (congrArg some (samePoly he x))⟩
+
+theorem add {f d g e} (h : Slope f d) (k : Slope g e) :
+    Slope (fun x => Value.add (f x) (g x)) (fun x => Value.add (d x) (e x)) := by
+  obtain ⟨u, du, cu, hu, fu, fd⟩ := h
+  obtain ⟨v, dv, cv, hv, gv, gd⟩ := k
+  exact ⟨_, _, cu.add cv, fun x => (hu x).add (hv x),
+    fun x => by simp [fu, gv, Value.add], fun x => by simp [fd, gd, Value.add]⟩
+
+theorem mul {f d g e} (h : Slope f d) (k : Slope g e) :
+    Slope (fun x => Value.mul (f x) (g x))
+      (fun x => Value.add (Value.mul (d x) (g x)) (Value.mul (f x) (e x))) := by
+  obtain ⟨u, du, cu, hu, fu, fd⟩ := h
+  obtain ⟨v, dv, cv, hv, gv, gd⟩ := k
+  exact ⟨_, _, cu.mul cv, fun x => (hu x).mul (hv x),
+    fun x => by simp [fu, gv, Value.mul], fun x => by simp [fu, gv, fd, gd, Value.add, Value.mul]⟩
+
+theorem pow {f d} (n : ℕ) (h : Slope f d) :
+    Slope (fun x => (f x).map (fun y => y ^ n))
+      (fun x => Value.mul (Value.mul (some ((n : ℤ) : ℝ)) ((f x).map (fun y => y ^ (n-1)))) (d x)) := by
+  obtain ⟨u, du, cu, hu, fu, fd⟩ := h
+  exact ⟨_, _, cu.pow n, fun x => (hu x).pow n, fun x => by simp [fu],
+    fun x => by simp [fu, fd, Value.mul]⟩
+
+private theorem chain {f d} (h : Slope f d) (op jac : Option ℝ → Option ℝ)
+    (u du : ℝ → ℝ) (cu : ContDiff ℝ 1 u) (hu : ∀ x, HasDerivAt u (du x) x)
+    (ev : ∀ z, op (some z) = some (u z)) (ej : ∀ z, jac (some z) = some (du z)) :
+    Slope (fun x => op (f x)) (fun x => Value.mul (jac (f x)) (d x)) := by
+  obtain ⟨g, dg, cg, hg, eqf, eqd⟩ := h
+  exact ⟨u ∘ g, fun x => du (g x) * dg x, cu.comp cg, fun x => (hu _).comp x (hg x),
+    fun x => by simp [eqf, ev, Function.comp_def], fun x => by simp [eqf, ej, eqd, Value.mul]⟩
+
+theorem exp {f d} (h : Slope f d) :
+    Slope (fun x => Functions.expR.apply (f x)) (fun x => Value.mul (Functions.expR.apply (f x)) (d x)) :=
+  chain h Functions.expR.apply Functions.expR.apply Real.exp Real.exp Real.contDiff_exp Real.hasDerivAt_exp
+    (fun _ => by simp [Function1.apply, Functions.expR]) (fun _ => by simp [Function1.apply, Functions.expR])
+
+theorem sin {f d} (h : Slope f d) :
+    Slope (fun x => Functions.sinR.apply (f x)) (fun x => Value.mul (Functions.cosR.apply (f x)) (d x)) :=
+  chain h Functions.sinR.apply Functions.cosR.apply Real.sin Real.cos Real.contDiff_sin Real.hasDerivAt_sin
+    (fun _ => by simp [Function1.apply, Functions.sinR]) (fun _ => by simp [Function1.apply, Functions.cosR])
+
+theorem cos {f d} (h : Slope f d) :
+    Slope (fun x => Functions.cosR.apply (f x))
+      (fun x => Value.mul (Value.mul (some ((-1 : ℤ) : ℝ)) (Functions.sinR.apply (f x))) (d x)) :=
+  chain h Functions.cosR.apply (fun v => Value.mul (some ((-1 : ℤ) : ℝ)) (Functions.sinR.apply v))
+    Real.cos (fun z => -Real.sin z) Real.contDiff_cos Real.hasDerivAt_cos
+    (fun _ => by simp [Function1.apply, Functions.cosR]) (fun z => by simp [Function1.apply, Functions.sinR, Value.mul])
+
+theorem sinh {f d} (h : Slope f d) :
+    Slope (fun x => Functions.sinhR.apply (f x)) (fun x => Value.mul (Functions.coshR.apply (f x)) (d x)) :=
+  chain h Functions.sinhR.apply Functions.coshR.apply Real.sinh Real.cosh Real.contDiff_sinh Real.hasDerivAt_sinh
+    (fun _ => by simp [Function1.apply, Functions.sinhR]) (fun _ => by simp [Function1.apply, Functions.coshR])
+
+theorem cosh {f d} (h : Slope f d) :
+    Slope (fun x => Functions.coshR.apply (f x)) (fun x => Value.mul (Functions.sinhR.apply (f x)) (d x)) :=
+  chain h Functions.coshR.apply Functions.sinhR.apply Real.cosh Real.sinh Real.contDiff_cosh Real.hasDerivAt_cosh
+    (fun _ => by simp [Function1.apply, Functions.coshR]) (fun _ => by simp [Function1.apply, Functions.sinhR])
+
+theorem length {f d} (h : Slope f d) :
+    value (Tensor.consValue (some f) Tensor.nilValue) =
+      weightValue (some fun x => Value.abs (d x)) lebesgueValue := by
+  obtain ⟨g, dg, cg, hg, eqf, eqd⟩ := h
+  exact singleton_length cg eqf (fun x => by rw [eqd, (hg x).deriv]; rfl)
+
+theorem restricted {f d} (p : ℝ → Option Bool) (h : Slope f d) :
+    Coordinates.restricted (some p) (Tensor.consValue (some f) Tensor.nilValue) =
+      weightValue (some fun x => Value.mask ((f x).bind p) (Value.abs (d x))) lebesgueValue := by
+  obtain ⟨g, dg, cg, hg, eqf, eqd⟩ := h
+  refine (restricted_pieces_eq (singleton_displays (.smooth g cg) eqf) p).trans ?_
+  change weightValue (some fun x => Value.mask (p (g x)) (some |deriv g x|)) _ = _
+  congr 2
+  funext x
+  rw [eqf, eqd, (hg x).deriv]
+  rfl
+
+end Slope
+
 private structure Regular (f w : Scalar) (x : ℝ) : Prop where
   total : f x = some (coord f x)
   weight : w x = some |deriv (coord f) x|
