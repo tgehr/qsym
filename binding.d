@@ -193,7 +193,9 @@ private struct GaussianData{
 private struct IntegralSolution{
 	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max,missingWeight=uint.max; uint[] weightFunctions; IntervalData bounds; GaussianData bell; CauchyData cauchy;
 	// The summands of a sum of observations between bounds, each with its own.
-	IntegralSolution[] pieces;
+	// A summand with several bounds on one side is the two cases of the
+	// order of two of them, each such a summand with one bound less.
+	IntegralSolution[] pieces; bool competing;
 	// The summands of a weight with a factor under its sum: for each the
 	// certificate of its normal form, if that differs. Before that the
 	// weight may be split where its absolute values change sign.
@@ -1941,7 +1943,10 @@ final class Bindings{
 	// and a term without it on the other.
 	private bool competingBounds(uint mass,out BoundSplit s){
 		auto n=nodes[mass]; uint[] bodies;
-		if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,bodies)||bodies.length!=1) return false;
+		return n.op==BoundOp.distributionMass&&densityBodies(n.a,bodies)&&bodies.length==1&&competingBody(bodies[0],s);
+	}
+	// The same for a weight by itself, as a summand of a weight is one.
+	private bool competingBody(uint weight,out BoundSplit s){
 		bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
 		bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
 		enum src="Distribution.StepSource.";
@@ -1960,7 +1965,7 @@ final class Bindings{
 			auto g=conjunction(q.a),inner=masks(q.b);
 			return "("~src~"Masks.mask "~g~" "~inner~")";
 		}
-		auto top=nodes[bodies[0]];
+		auto top=nodes[weight];
 		if(top.op==BoundOp.guard){
 			auto m=nodes[top.b]; if(!isOp(m,Op.mask)) return false;
 			around=top.a; maskOp=arena.at(m.data); value=m.b;
@@ -1972,11 +1977,11 @@ final class Bindings{
 			}
 		}else if(call(top,Builtin.castQR)&&call(nodes[top.a],Builtin.castZQ)&&call(nodes[nodes[top.a].a],Builtin.castNZ)){
 			auto bracket=nodes[nodes[nodes[top.a].a].a]; if(!isOp(bracket,Op.mask)) return false;
-			casts=[bodies[0],top.a,nodes[top.a].a]; maskOp=arena.at(bracket.data); value=bracket.b;
+			casts=[weight,top.a,nodes[top.a].a]; maskOp=arena.at(bracket.data); value=bracket.b;
 			whole="("~src~"Masks.bracket "~conjunction(bracket.a)~" "~under(value)~")";
 		}else{
 			if(!isOp(top,Op.mask)) return false;
-			maskOp=arena.at(top.data); whole=masks(bodies[0]);
+			maskOp=arena.at(top.data); whole=masks(weight);
 		}
 		if(many||chain.length<2) return false;
 		bool bound(uint id,out bool lower,out bool strict,out uint term){
@@ -1996,7 +2001,7 @@ final class Bindings{
 		}
 		// The weight with these positions of the guard in front of its rest:
 		// one mask of a conjunction nested to the right.
-		BoundTerm weight(uint[] guards,size_t[] front){
+		BoundTerm rebuilt(uint[] guards,size_t[] front){
 			auto g=at(guards[$-1]),andOp=arena.and_(arena.boolean(true),arena.boolean(true));
 			foreach_reverse(c;guards[0..$-1]) g=primitive(andOp,[at(c),g]);
 			auto r=primitive(maskOp,[g,at(value)]);
@@ -2020,7 +2025,7 @@ final class Bindings{
 		}
 		size_t[] kept=s.third?[0,1]:[0],changed=!s.third?[1]:s.first?[2,1]:[0,2];
 		uint[] select(size_t[] front){ uint[] r; foreach(i;front) r~=chain[i]; return r~chain[count..$]; }
-		s.kept=weight(select(kept),kept); s.changed=weight(select(changed),changed);
+		s.kept=rebuilt(select(kept),kept); s.changed=rebuilt(select(changed),changed);
 		s.whole=around!=uint.max?evidence(chain):whole; s.one=evidence(select(kept)); s.other=evidence(select(changed));
 		s.rest=under(value);
 		if(casts.length) s.rest="(Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply "~s.rest~")))";
@@ -2120,19 +2125,19 @@ final class Bindings{
 		if(tail.proof.length) proof="(Eq.trans "~proof~" (congrArg₂ Value.add rfl "~tail.proof~"))";
 		return Spread(sum.id,proof);
 	}
-	// Whether a product or a mask in a weight has a sum of masked summands
-	// to go under. Decided without building anything.
+	// Whether a product or a mask in a weight has a sum with a masked
+	// summand to go under. Decided without building anything.
 	private bool spreadsSum(uint id){
 		auto real_=scalarType(Sort.real_);
 		bool isOp(uint i,Op op){ auto q=nodes[i]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op&&type(at(i))==real_; }
-		bool sum(uint i){ return isOp(i,Op.add)&&maskedSummand(nodes[i].a)&&maskedSummand(nodes[i].b); }
+		bool sum(uint i){ return isOp(i,Op.add)&&(maskedSummand(nodes[i].a)||maskedSummand(nodes[i].b)); }
 		auto q=nodes[id];
 		if(isOp(id,Op.add)) return spreadsSum(q.a)||spreadsSum(q.b);
 		if(isOp(id,Op.mul)) return sum(q.a)||sum(q.b)||spreadsSum(q.a)||spreadsSum(q.b);
 		return isOp(id,Op.mask)&&(sum(q.b)||spreadsSum(q.b));
 	}
-	// A product with a factor that is a sum of masked summands, as the sum of
-	// the products, and a mask of such a sum as the sum of the masks:
+	// A product with a factor that is a sum with a masked summand, as the sum
+	// of the products, and a mask of such a sum as the sum of the masks:
 	// `(a+b)·c = a·c+b·c` and `[g]·(a+b) = [g]·a+[g]·b` for all partial
 	// values, so the two are equal at every point. With `under`, the
 	// evaluation of a subterm of the source at a point, the proof of that
@@ -2141,7 +2146,7 @@ final class Bindings{
 	private Spread spreadProducts(uint id,size_t limit,scope string delegate(uint) @safe under){
 		auto real_=scalarType(Sort.real_);
 		bool isOp(uint i,Op op){ auto q=nodes[i]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op&&type(at(i))==real_; }
-		bool sum(uint i){ return isOp(i,Op.add)&&maskedSummand(nodes[i].a)&&maskedSummand(nodes[i].b); }
+		bool sum(uint i){ return isOp(i,Op.add)&&(maskedSummand(nodes[i].a)||maskedSummand(nodes[i].b)); }
 		auto addOp=arena.add(arena.real_(0),arena.real_(0),true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
 		auto maskOp=arena.mask(arena.boolean(true),arena.real_(1));
 		// The terms of the proof are written over the subterms of the source.
@@ -6588,10 +6593,47 @@ final class Bindings{
 		// is additive only where both parts exist; such an observation is
 		// integrable or undefined somewhere, so their sum is an equation of
 		// partial values. All summands are decided before any is built.
+		// The two cases of bounds that compete, under their tests: the first
+		// under the test that the bound that stays implies the one that
+		// leaves, the second under the negation, and both under the test
+		// that a lower and an upper bound before a third leave a point.
+		BoundTerm competingCases(ref BoundSplit s,BoundTerm kept,BoundTerm changed){
+			auto zero=arena.real_(0);
+			BoundTerm term(size_t i){ return dropIndex(at(s.terms[i])); }
+			BoundTerm test(bool strict,BoundTerm a,BoundTerm b){ return primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[a,b]); }
+			BoundTerm masked(BoundTerm c,BoundTerm x){ return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[c,x]); }
+			// The two bounds on one side, in the order of the guard.
+			size_t i=s.third&&!s.first?1:0,j=s.third?2:1; bool lower=s.third&&!s.first?!s.lower:s.lower;
+			auto a=term(i),b=term(j); bool tight=!s.strict[i]&&s.strict[j];
+			auto implies=lower?test(tight,b,a):test(tight,a,b),implied=lower?test(!tight,a,b):test(!tight,b,a);
+			auto sum=primitive(arena.add(zero,zero,true),[masked(implies,kept),masked(implied,changed)]);
+			if(!s.third) return sum;
+			bool strict=s.strict[0]||s.strict[1];
+			return masked(s.lower?test(strict,term(0),term(1)):test(strict,term(1),term(0)),sum);
+		}
+		// A summand of a sum of observations: an observation between bounds
+		// of its own, or a weight with several bounds on one side whose two
+		// cases are such summands. Decided without building the result.
+		bool summandObserved(BoundTerm t,uint id,uint depth){
+			IntegralSolution trial; if(integrateInterval(t,trial,id,false)!=BoundTerm.init) return true;
+			BoundSplit s;
+			return depth<4&&competingBody(id,s)&&summandObserved(t,s.kept.id,depth+1)&&summandObserved(t,s.changed.id,depth+1);
+		}
+		BoundTerm integrateSummand(BoundTerm t,uint id,out IntegralSolution piece,uint depth){
+			IntegralSolution trial;
+			if(integrateInterval(t,trial,id,false)!=BoundTerm.init) return integrateInterval(t,piece,id);
+			BoundSplit s; IntegralSolution first,second;
+			if(depth>=4||!competingBody(id,s)) return BoundTerm.init;
+			auto kept=integrateSummand(t,s.kept.id,first,depth+1); if(kept==BoundTerm.init) return kept;
+			auto changed=integrateSummand(t,s.changed.id,second,depth+1); if(changed==BoundTerm.init) return changed;
+			auto value=competingCases(s,kept,changed);
+			piece.from=[id]; piece.competing=true; piece.pieces=[first,second]; piece.output=value.id;
+			return value;
+		}
 		BoundTerm integratePieces(BoundTerm t,out IntegralSolution solution){
 			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
 			bool sum(uint id){ auto q=nodes[id]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.add; }
-			bool observed(uint id){ IntegralSolution trial; return integrateInterval(t,trial,id,false)!=BoundTerm.init; }
+			bool observed(uint id){ return summandObserved(t,id,0); }
 			size_t count;
 			bool admissible(uint id,uint depth){
 				if(observed(id)){ ++count; return count<=16; }
@@ -6601,12 +6643,13 @@ final class Bindings{
 			IntegralSolution[] pieces; BoundTerm[] guards;
 			BoundTerm build(uint id){
 				if(observed(id)){
-					IntegralSolution piece; auto value=integrateInterval(t,piece,id);
+					IntegralSolution piece; auto value=integrateSummand(t,id,piece,0);
 					if(value==BoundTerm.init) return value;
 					// Beyond a single bound the result is under the guard of its
 					// domain, which leaves the sum: a sum is missing where a
-					// summand is.
-					if(piece.bounds.half&&piece.bounds.domain!=uint.max){ guards~=at(node(value).a); value=at(node(value).b); }
+					// summand is. Not so inside the cases of bounds that compete:
+					// a case that does not apply hides what it is missing.
+					if(!piece.competing&&piece.bounds.half&&piece.bounds.domain!=uint.max){ guards~=at(node(value).a); value=at(node(value).b); }
 					pieces~=piece; return value;
 				}
 				auto a=build(nodes[id].a); if(a==BoundTerm.init) return a;
@@ -6629,15 +6672,16 @@ final class Bindings{
 			foreach(i,w;weights) d=distribution(ctx,BoundOp.distributionWeight,[i==position?inheritHint(at(w),lambda(rest)):at(w),d]);
 			return guard(dropIndex(at(condition)),distribution(ctx,BoundOp.distributionMass,[d]));
 		}
-		// A factor or a mask of a sum of masked summands goes under the sum: a
-		// product and a mask distribute over a sum for every definedness
+		// A factor or a mask of a sum with a masked summand goes under the sum:
+		// a product and a mask distribute over a sum for every definedness
 		// pattern. Before that a weight is split where the arguments of its
 		// absolute values change sign: under the mask of a side the absolute
 		// value is its argument or the opposite. Each summand then takes its
 		// normal form by itself, under the guard of its domain; that of the
 		// whole sum would put a common mask back in front. Only where every
-		// summand is then an observation between bounds of its own, under its
-		// domain where that mentions the axis.
+		// summand is then an observation between bounds of its own, or the
+		// cases of bounds of its own that compete, under its domain where
+		// that mentions the axis.
 		BoundTerm distributeMass(BoundTerm t,out IntegralSolution solution,bool commit){
 			auto n=node(t);
 			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
@@ -6649,7 +6693,7 @@ final class Bindings{
 			auto index=freshScalarIndex(body),argument=arena.variable(Sort.real_,index);
 			auto addOp=arena.add(arena.real_(0),arena.real_(0),true);
 			ScalarDomain[] checks; uint[] summands; BoundTerm[] conditions;
-			bool observed(BoundTerm x){ IntegralSolution trial; return integrateInterval(t,trial,x.id,false)!=BoundTerm.init; }
+			bool observed(BoundTerm x){ return summandObserved(t,x.id,0); }
 			BoundTerm normal(uint id){
 				auto q=nodes[id];
 				if(q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.add&&type(at(id))==scalarType(Sort.real_)){
@@ -6722,18 +6766,7 @@ final class Bindings{
 			}
 			auto kept=mass(s.kept),changed=mass(s.changed);
 			if(!observable(kept,depth+1)||!observable(changed,depth+1)) return BoundTerm.init;
-			auto zero=arena.real_(0);
-			BoundTerm term(size_t i){ return dropIndex(at(s.terms[i])); }
-			BoundTerm test(bool strict,BoundTerm a,BoundTerm b){ return primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[a,b]); }
-			BoundTerm masked(BoundTerm c,BoundTerm x){ return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[c,x]); }
-			// The two bounds on one side, in the order of the guard.
-			size_t i=s.third&&!s.first?1:0,j=s.third?2:1; bool lower=s.third&&!s.first?!s.lower:s.lower;
-			auto a=term(i),b=term(j); bool tight=!s.strict[i]&&s.strict[j];
-			auto implies=lower?test(tight,b,a):test(tight,a,b),implied=lower?test(!tight,a,b):test(!tight,b,a);
-			auto sum=primitive(arena.add(zero,zero,true),[masked(implies,kept),masked(implied,changed)]);
-			if(!s.third) return sum;
-			bool strict=s.strict[0]||s.strict[1];
-			return masked(s.lower?test(strict,term(0),term(1)):test(strict,term(1),term(0)),sum);
+			return competingCases(s,kept,changed);
 		}
 		// A comparison that is not solved for the axis: one side is of degree
 		// one in the axis with a rational slope, the other does not mention
@@ -11865,14 +11898,28 @@ final class Bindings{
 			return "Distribution.DensityProgram.presentation_mass_"~kind~" "~program~" "~flags~(d.below?"":" "~minus)~" "~masked~" "~total;
 		}
 		if(s.pieces.length){
+			// A summand between bounds of its own, or the two cases of bounds
+			// that compete, each such a summand.
+			string summand_(IntegralSolution piece){
+				if(!piece.competing)return between(piece,true);
+				BoundSplit b;
+				enforce(competingBody(piece.from[0],b)&&piece.pieces.length==2&&piece.pieces[0].from[0]==b.kept.id&&piece.pieces[1].from[0]==b.changed.id,
+					"missing bounds on one side of a summand");
+				auto count=b.third?3:2;string arguments=b.lower?"true":"false";
+				foreach(k;0..count)arguments~=b.strict[k]?" true":" false";
+				foreach(k;0..count)arguments~=" "~cert.outside(b.terms[k]);
+				auto lemma=!b.third?"same_side":b.first?"third_first":"third_second";
+				return "(Distribution.StepSource."~lemma~"_piece "~arguments~" (w := "~functionAt(piece.from[0])~") (w₁ := "~functionAt(b.kept.id)~") (w₂ := "~functionAt(b.changed.id)~
+					") (fun x => "~b.rest~") (fun x => "~b.whole~") (fun x => "~b.one~") (fun x => "~b.other~") "~summand_(piece.pieces[0])~" "~summand_(piece.pieces[1])~")";
+			}
 			// The summands in the order of the rule, with the sum around them.
 			size_t next;bool guarded;
 			string sum(uint id,out string lift){
 				enum lifted="Distribution.DensityProgram.GuardedSum.";
 				if(next<s.pieces.length&&s.pieces[next].from[0]==id){
-					auto piece=s.pieces[next++],domain=piece.bounds.half&&piece.bounds.domain!=uint.max;
+					auto piece=s.pieces[next++],domain=!piece.competing&&piece.bounds.half&&piece.bounds.domain!=uint.max;
 					guarded|=domain;lift="("~lifted~(domain?"guard _ _)":"bare _)");
-					return between(piece,true);
+					return summand_(piece);
 				}
 				auto n=nodes[id];enforce(n.op==BoundOp.primitive&&arena.view(arena.at(n.data)).op==Op.add,"bad sum of observations");
 				string la,lb;auto left=sum(n.a,la),right=sum(n.b,lb);

@@ -1172,7 +1172,7 @@ private Case[] cases(){
 	Case("SpreadMaskPolynomial","∫dx [0≤x]*([x≤1]*x+[1≤x]*exp(1-x))*x*λ[x]","ℝ","7/3"),
 	Case("SpreadGrowing","∫dx ([x≤0]*exp(x)+[0≤x]*exp(x))*x^2*λ[x]","ℝ"),
 	Case("SpreadGaussian","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*exp(-x^2)*λ[x]","ℝ","sqrt(π)·exp(1/4)·erfc(1/2)"),
-	Case("SpreadSymbolicBound","∫dx [x≤t]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ"),
+	Case("SpreadSymbolicBound","∫dx [x≤t]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","[0≤t]·(-exp(-t)+1)+[t≤0]·exp(t)+[0<t]"),
 	Case("SpreadPower","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))^2*λ[x]","ℝ"),
 	Case("SpreadAxisDomain","∫dx (([x≤0]*exp(x)+[0≤x]*exp(-x))/a+[1≤x]*exp(-x)*sqrt(b))*λ[x]","ℝ"),
 	Case("AbsoluteLaplace","∫dx exp(-abs(x))*λ[x]","ℝ","2"),
@@ -1507,8 +1507,19 @@ private Case[] cases(){
 	Case("CompetingNestedValue","∫dy [0≤y]*[y≤1]*(∫dx [0≤x]*[x≤1]*[x≤y]*x*λ[x])*λ[y]","ℝ","1/6"),
 	Case("CompetingCurvature","∫dx [0≤x]*[x≤1]*[x≤a]*exp(-c*x^2)*λ[x]","ℝ"),
 	Case("CompetingPole","∫dx [0≤x]*[x≤1]*[x≤a]*(1/x)*λ[x]","ℝ"),
-	Case("CompetingSum","∫dx [0≤x]*[x≤1]*[x≤a]*(x+[x≤1/2])*λ[x]","ℝ"),
 	Case("CompetingUnbounded","∫dx [0≤x]*[a≤x]*λ[x]","ℝ"),
+	Case("PieceCases","∫dx [0≤x]*[x≤1]*([x≤a]*x+[a<x]*a)*λ[x]","ℝ","[a<1∧0≤a]·(1/2·a^2)+[0≤a∧a<1]·(a·(-a+1))+[a<0]·a+[1≤a]·(1/2)"),
+	Case("PieceCasesSpread","∫dx [0≤x]*[x≤1]*[x≤a]*(x+[x≤1/2])*λ[x]","ℝ","[a<1∧0≤a]·(1/2·a^2)+[0≤a]·([a≤1/2]·a+[1/2<a]·(1/2))+[1≤a]·(1/2)"),
+	Case("PieceCasesHalfLine","∫dx [0≤x]*([x≤a]*exp(-x)+[a<x]*exp(-2*x))*λ[x]","ℝ","[0≤a]·(1/2·exp(-2·a)-exp(-a)+1)+[a<0]·(1/2)"),
+	Case("PieceCasesSameSide","∫dx ([a≤x]*[b≤x]*exp(-x)+[0≤x]*[x≤1]*x)*λ[x]","ℝ","[a<b]·exp(-b)+[b≤a]·exp(-a)+1/2"),
+	Case("PieceCasesUpperFirst","∫dx ([x<a]*[b<x]*[c≤x]*x+[0≤x]*[x≤1]*x^2)*λ[x]","ℝ","[b<a]·([b<c∧c<a]·(1/2·a^2-1/2·c^2)+[c≤b]·(1/2·a^2-1/2·b^2))+1/3"),
+	Case("PieceCasesUpperFirstUpper","∫dx ([x<a]*[b<x]*[x≤c]*x+[0≤x]*[x≤1]*x^2)*λ[x]","ℝ","[b<a]·([c<a∧b<c]·(-1/2·b^2+1/2·c^2)+[a≤c]·(1/2·a^2-1/2·b^2))+1/3"),
+	Case("PieceCasesNested","∫dy [0≤y]*[y≤a]*λ[y]*∫dx [0≤x]*[x≤1]*[x≤y]*λ[x]","ℝ","[0≤a]·([a<1]·(1/2·a^2)+[1≤a]·(1/2))+[1≤a]·(a-1)"),
+	Case("PieceCasesHat","∫dx [0≤x]*[x≤a]*([x≤1]*x+[1<x]*(2-x)*[x≤2])*λ[x]","ℝ","[1<a]·([a≤2]·(a·(-a·(1/2)+2)-3/2)+[2<a]·(1/2))+[0≤a]·([a≤1]·(1/2·a^2)+[1<a]·(1/2))"),
+	Case("PieceCasesAbsolute","∫dx [0≤x]*[x≤1]*[x≤a]*abs(x-1/2)*λ[x]","ℝ","[a<1∧1/2≤a]·(a·(a·(1/2)-1/2)+1/8)+[a<1/2∧0≤a]·(a·(-a·(1/2)+1/2))+[1≤a]·(1/8)+[1/2≤a]·(1/8)"),
+	Case("PieceCasesSolved","∫dx [0≤x]*[x≤1]*([2*x≤a]*x+[a<2*x]*x^2)*λ[x]","ℝ","[a<2∧0≤a]·(1/8·a^2)+[0≤a∧a<2]·(-1/24·a^3+1/3)+[a<0]·(1/3)+[2≤a]·(1/2)"),
+	Case("PieceCasesConstant","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)*λ[x]","ℝ"),
+	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
 	Case("SolvedOffset","∫dx [0≤x]*[x+1≤a]*λ[x]","ℝ","[1≤a]·(a-1)"),
@@ -3117,13 +3128,13 @@ private void run(string directory){
 		// conjunction however it is nested, masks of masks below a binder,
 		// the cast of a bracket, or a mask under the guard of its domain.
 		// A case that has no closed form keeps the whole integral: a
-		// curvature that is a term, a pole between the bounds, a sum with a
-		// bound of its own, a half-line of infinite length.
+		// curvature that is a term, a pole between the bounds, a half-line of
+		// infinite length.
 		if(c.name.indexOf("Competing")==0){
 			enum program="Distribution.DensityProgram.",src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(evidence)>=0; }
-			bool retained=among("CompetingCurvature","CompetingPole","CompetingSum","CompetingUnbounded");
+			bool retained=among("CompetingCurvature","CompetingPole","CompetingUnbounded");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			bool sameLower=among("CompetingHalfLine","CompetingSameSideLower","CompetingDomainHalfLine","CompetingRateHalfLine","CompetingFunctionHalfLine");
 			bool sameUpper=among("CompetingBelow","CompetingSameSide","CompetingSameSideUnit","CompetingDomainSameSide");
@@ -3148,6 +3159,36 @@ private void run(string directory){
 				enforce(has(src~"Masks.mask ("~src~"Conjunction.one "),c.name~" masks of masks");
 			enforce(has(src~"Conjunction.cons ")!=(retained||domain||among("CompetingFunctionHalfLine")),c.name~" conjunction nested to the right");
 			enforce(has(program~"mass_guard ")==among("CompetingGuard"),c.name~" guard that does not mention the axis");
+		}
+		// A summand of a sum of observations with several bounds on one side:
+		// the two cases of the order of two of its bounds, each such a summand
+		// with one bound less. Observations that add are integrable or
+		// missing somewhere, and that stays so under a case distinction: a
+		// weight that is a zero is integrable, and one whose test is missing
+		// is missing somewhere. So a mask or a factor of a sum goes under the
+		// sum also where the bounds of a summand then compete with those of
+		// the whole, a sum of a masked and an unmasked summand included, and
+		// a comparison in a summand is solved for the axis first. A constant
+		// under the casts of a bracket and a domain around the whole sum keep
+		// their integral.
+		if(c.name.indexOf("PieceCases")==0){
+			enum src="Distribution.StepSource.";
+			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
+			bool retained=among("PieceCasesConstant","PieceCasesDomain");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0)!=retained,c.name~" sum of observations");
+			enforce(has("Piece.add ")!=retained,c.name~" observations that add");
+			enforce(has("same_side_piece true ")==among("PieceCasesHalfLine","PieceCasesSameSide"),c.name~" two lower bounds of a summand");
+			enforce(has("third_second_piece true ")==among("PieceCases","PieceCasesSpread","PieceCasesNested","PieceCasesHat","PieceCasesAbsolute","PieceCasesSolved"),
+				c.name~" third bound of a summand from above");
+			enforce(has("third_first_piece true ")==among("PieceCases","PieceCasesSolved"),c.name~" third bound of a summand from below");
+			enforce(has("third_second_piece false ")==among("PieceCasesUpperFirst"),c.name~" third bound of a summand from below after an upper one");
+			enforce(has("third_first_piece false ")==among("PieceCasesUpperFirstUpper","PieceCasesHat","PieceCasesAbsolute"),
+				c.name~" third bound of a summand from above after an upper one");
+			if(among("PieceCasesSpread")) enforce(has("Masks.bracket ")&&certificate.indexOf("Value.mask_add")>=0,c.name~" mask of a sum with a bracket");
+			enforce(has("solve_left ")==among("PieceCasesSolved"),c.name~" comparison of a summand solved for the axis");
+			enforce((certificate.indexOf("Value.split")>=0)==among("PieceCasesAbsolute"),c.name~" split at a change of sign");
 		}
 		// A comparison that is not solved for the axis: one side is of
 		// degree one in the axis, a rational multiple of the axis plus terms
@@ -3340,8 +3381,8 @@ private void run(string directory){
 		// that is then not observed, a power of the sum and a domain that
 		// mentions the axis keep their integral.
 		if(c.name.indexOf("Spread")==0){
-			bool retained=c.name=="SpreadGrowing"||c.name=="SpreadSymbolicBound"||c.name=="SpreadPower"||c.name=="SpreadAxisDomain";
-			bool mask=c.name.indexOf("SpreadMask")==0,guarded=c.name=="SpreadDomain"||c.name=="SpreadRoot";
+			bool retained=c.name=="SpreadGrowing"||c.name=="SpreadPower"||c.name=="SpreadAxisDomain";
+			bool mask=c.name.indexOf("SpreadMask")==0||c.name=="SpreadSymbolicBound",guarded=c.name=="SpreadDomain"||c.name=="SpreadRoot";
 			enforce((certificate.indexOf("Distribution.DensityProgram.mass_pointwise")>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			if(!retained){

@@ -289,76 +289,100 @@ private theorem zero_observation (f : ℝ → Option ℝ) (h : ∀ x, f x = some
   rw [funext h, partialIntegral_valid volume _ (fun _ => ⟨0, rfl⟩) (by simp)]
   simp
 
-/-- A case distinction that does not mention the axis: the weight is one of
-two weights by a test and its negation, and missing somewhere where the test
-is missing. -/
-theorem integral_cases {w w₁ w₂ : ℝ → Option ℝ} {c₁ c₂ : Option Bool}
-    (hn : c₁ = none → ∃ x, w x = none)
-    (h₁ : c₁ = some true → c₂ = some false ∧ ∀ x, w x = w₁ x)
-    (h₂ : c₁ = some false → c₂ = some true ∧ ∀ x, w x = w₂ x) :
-    partialIntegral volume w =
-      Value.add (Value.mask c₁ (partialIntegral volume w₁))
-        (Value.mask c₂ (partialIntegral volume w₂)) := by
-  rcases c₁ with _ | _ | _
-  · obtain ⟨x, hx⟩ := hn rfl
-    rw [partialIntegral_missing hx]
-    rfl
-  · obtain ⟨hc, hw⟩ := h₂ rfl
-    rw [hc, funext hw]
-    exact (Value.add_zero_left _).symm
-  · obtain ⟨hc, hw⟩ := h₁ rfl
-    rw [hc, funext hw]
-    exact (Value.add_zero_right _).symm
+/-- A weight by a case distinction that does not mention the axis. Under a
+test it is one of two weights, by a second test and its negation. Where the
+first test fails it is a zero at every point, and where a test is missing it
+is missing at some point. -/
+structure Cases (w w₁ w₂ : ℝ → Option ℝ) (n c₁ c₂ : Option Bool) : Prop where
+  missing : n = none → ∃ x, w x = none
+  empty : n = some false → ∀ x, w x = some 0
+  undecided : n = some true → c₁ = none → ∃ x, w x = none
+  first : n = some true → c₁ = some true → c₂ = some false ∧ ∀ x, w x = w₁ x
+  second : n = some true → c₁ = some false → c₂ = some true ∧ ∀ x, w x = w₂ x
 
-/-- The same under a mask that hides every point where it fails. -/
-theorem integral_cases_within {w w₁ w₂ : ℝ → Option ℝ} {n c₁ c₂ : Option Bool}
-    (hu : n = none → ∃ x, w x = none)
-    (hz : n = some false → ∀ x, w x = some 0)
-    (hn : n = some true → c₁ = none → ∃ x, w x = none)
-    (h₁ : n = some true → c₁ = some true → c₂ = some false ∧ ∀ x, w x = w₁ x)
-    (h₂ : n = some true → c₁ = some false → c₂ = some true ∧ ∀ x, w x = w₂ x) :
+/-- The observation of such a weight is the observations of the two weights
+under their tests, whatever those observations are. -/
+theorem Cases.integral {w w₁ w₂ : ℝ → Option ℝ} {n c₁ c₂ : Option Bool}
+    (h : Cases w w₁ w₂ n c₁ c₂) :
     partialIntegral volume w =
       Value.mask n (Value.add (Value.mask c₁ (partialIntegral volume w₁))
         (Value.mask c₂ (partialIntegral volume w₂))) := by
   rcases n with _ | _ | _
-  · obtain ⟨x, hx⟩ := hu rfl
+  · obtain ⟨x, hx⟩ := h.missing rfl
     rw [partialIntegral_missing hx]
     rfl
-  · rw [zero_observation w (hz rfl)]
+  · rw [zero_observation w (h.empty rfl)]
     rfl
-  · exact integral_cases (hn rfl) (h₁ rfl) (h₂ rfl)
+  rcases c₁ with _ | _ | _
+  · obtain ⟨x, hx⟩ := h.undecided rfl rfl
+    rw [partialIntegral_missing hx]
+    rfl
+  · obtain ⟨hc, hw⟩ := h.second rfl rfl
+    rw [hc, funext hw]
+    exact (Value.add_zero_left _).symm
+  · obtain ⟨hc, hw⟩ := h.first rfl rfl
+    rw [hc, funext hw]
+    exact (Value.add_zero_right _).symm
+
+/-- Observations that add stay such under a case distinction: a weight that
+is a zero is integrable, and one that is missing somewhere is missing. -/
+theorem Cases.piece {w w₁ w₂ : ℝ → Option ℝ} {n c₁ c₂ : Option Bool} {o₁ o₂ : Option ℝ}
+    (h : Cases w w₁ w₂ n c₁ c₂) (p₁ : Piece w₁ o₁) (p₂ : Piece w₂ o₂) :
+    Piece w (Value.mask n (Value.add (Value.mask c₁ o₁) (Value.mask c₂ o₂))) := by
+  rcases n with _ | _ | _
+  · exact Or.inr ⟨h.missing rfl, rfl⟩
+  · have hw := h.empty rfl
+    refine Or.inl ⟨fun x => ⟨0, hw x⟩, ?_, ?_⟩
+    · rw [show (fun x => (w x).getD 0) = fun _ => (0 : ℝ) from funext fun x => by rw [hw x]; rfl]
+      exact integrable_zero ℝ ℝ volume
+    · rw [show (fun x => (w x).getD 0) = fun _ => (0 : ℝ) from funext fun x => by rw [hw x]; rfl]
+      simp [Value.mask]
+  rcases c₁ with _ | _ | _
+  · exact Or.inr ⟨h.undecided rfl rfl, rfl⟩
+  · obtain ⟨hc, hw⟩ := h.second rfl rfl
+    rw [hc, funext hw]
+    show Piece w₂ (Value.add (some 0) o₂)
+    rw [Value.add_zero_left]
+    exact p₂
+  · obtain ⟨hc, hw⟩ := h.first rfl rfl
+    rw [hc, funext hw]
+    show Piece w₁ (Value.add o₁ (some 0))
+    rw [Value.add_zero_right]
+    exact p₁
 
 /-- Two bounds on one side at the front of a guard: where the first implies
 the second the second leaves, and otherwise the first. A half-line is never
-empty, so a missing term makes both sides missing. -/
-theorem same_side_integral (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {w w₁ w₂ : ℝ → Option ℝ}
+empty, so a missing term makes the weight missing somewhere. -/
+theorem same_side_cases (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {w w₁ w₂ : ℝ → Option ℝ}
     (r : ℝ → Option ℝ)
     (h : ∀ x, w x =
       Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound lower s₂ t₂ x) (r x)))
     (h₁ : ∀ x, w₁ x = Value.mask (axisBound lower s₁ t₁ x) (r x))
     (h₂ : ∀ x, w₂ x = Value.mask (axisBound lower s₂ t₂ x) (r x)) :
-    partialIntegral volume w =
-      Value.add (Value.mask (boundImplies lower s₁ s₂ t₁ t₂) (partialIntegral volume w₁))
-        (Value.mask (boundImplied lower s₁ s₂ t₁ t₂) (partialIntegral volume w₂)) := by
-  rcases t₁ with _ | a
-  · refine integral_cases (fun _ => ⟨0, ?_⟩) (fun hc => ?_) (fun hc => ?_)
-    · rw [h, axisBound_missing]; rfl
-    · rw [boundImplies_missing_left] at hc; cases hc
-    · rw [boundImplies_missing_left] at hc; cases hc
-  rcases t₂ with _ | b
-  · refine integral_cases (fun _ => ?_) (fun hc => ?_) (fun hc => ?_)
+    Cases w w₁ w₂ (some true) (boundImplies lower s₁ s₂ t₁ t₂)
+      (boundImplied lower s₁ s₂ t₁ t₂) := by
+  refine ⟨fun hN => (by cases hN), fun hN => (by cases hN), fun _ hc => ?_, fun _ hc => ?_,
+    fun _ hc => ?_⟩
+  · rcases t₁ with _ | a
+    · exact ⟨0, by rw [h, axisBound_missing]; rfl⟩
+    rcases t₂ with _ | b
     · obtain ⟨x, hx⟩ := meets_beyond lower s₁ a
       exact ⟨x, by rw [h, axisBound_real, axisBound_missing, decide_eq_true hx]; rfl⟩
+    · rw [boundImplies_real] at hc; cases hc
+  · rcases t₁ with _ | a
+    · rw [boundImplies_missing_left] at hc; cases hc
+    rcases t₂ with _ | b
     · rw [boundImplies_missing_right] at hc; cases hc
-    · rw [boundImplies_missing_right] at hc; cases hc
-  refine integral_cases (fun hc => ?_) (fun hc => ?_) (fun hc => ?_)
-  · rw [boundImplies_real] at hc; cases hc
-  · rw [boundImplies_real] at hc
+    rw [boundImplies_real] at hc
     have hi : implies lower s₁ s₂ a b := of_decide_eq_true (Option.some.inj hc)
     refine ⟨by rw [boundImplied_real, decide_eq_true hi]; rfl, fun x => ?_⟩
     rw [h, h₁, axisBound_real, axisBound_real]
     exact mask_implied (meets_of_implies hi) _
-  · rw [boundImplies_real] at hc
+  · rcases t₁ with _ | a
+    · rw [boundImplies_missing_left] at hc; cases hc
+    rcases t₂ with _ | b
+    · rw [boundImplies_missing_right] at hc; cases hc
+    rw [boundImplies_real] at hc
     have hi : ¬ implies lower s₁ s₂ a b := of_decide_eq_false (Option.some.inj hc)
     refine ⟨by rw [boundImplied_real, decide_eq_false hi]; rfl, fun x => ?_⟩
     rw [h, h₂, axisBound_real, axisBound_real]
@@ -404,9 +428,8 @@ private theorem meet_point {lower s₁ s₂ : Bool} {t₁ t₂ : Option ℝ}
 
 /-- A third bound on the side of the second of a lower and an upper bound:
 where the second implies it it leaves, and otherwise the second. Where no
-point is between the first two the observation is a zero whatever the third
-is. -/
-theorem third_second_integral (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option ℝ)
+point is between the first two the weight is a zero whatever the third is. -/
+theorem third_second_cases (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option ℝ)
     {w w₁ w₂ : ℝ → Option ℝ} (r : ℝ → Option ℝ)
     (h : ∀ x, w x = Value.mask (axisBound lower s₁ t₁ x)
       (Value.mask (axisBound (!lower) s₂ t₂ x) (Value.mask (axisBound (!lower) s₃ t₃ x) (r x))))
@@ -414,12 +437,9 @@ theorem third_second_integral (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Op
       Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x)))
     (h₂ : ∀ x, w₂ x =
       Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₃ t₃ x) (r x))) :
-    partialIntegral volume w =
-      Value.mask (boundsMeet lower s₁ s₂ t₁ t₂)
-        (Value.add (Value.mask (boundImplies (!lower) s₂ s₃ t₂ t₃) (partialIntegral volume w₁))
-          (Value.mask (boundImplied (!lower) s₂ s₃ t₂ t₃) (partialIntegral volume w₂))) := by
-  refine integral_cases_within (fun hN => ?_) (fun hN x => ?_) (fun hN hc => ?_)
-    (fun hN hc => ?_) (fun hN hc => ?_)
+    Cases w w₁ w₂ (boundsMeet lower s₁ s₂ t₁ t₂) (boundImplies (!lower) s₂ s₃ t₂ t₃)
+      (boundImplied (!lower) s₂ s₃ t₂ t₃) := by
+  refine ⟨fun hN => ?_, fun hN x => ?_, fun hN hc => ?_, fun hN hc => ?_, fun hN hc => ?_⟩
   · obtain ⟨x, hx⟩ := meet_missing hN (fun x => Value.mask (axisBound (!lower) s₃ t₃ x) (r x))
     exact ⟨x, by rw [h]; exact hx⟩
   · rw [h]
@@ -450,7 +470,7 @@ theorem third_second_integral (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Op
 
 /-- A third bound on the side of the first: where the first implies it it
 leaves, and otherwise it takes the place of the first. -/
-theorem third_first_integral (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option ℝ)
+theorem third_first_cases (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option ℝ)
     {w w₁ w₂ : ℝ → Option ℝ} (r : ℝ → Option ℝ)
     (h : ∀ x, w x = Value.mask (axisBound lower s₁ t₁ x)
       (Value.mask (axisBound (!lower) s₂ t₂ x) (Value.mask (axisBound lower s₃ t₃ x) (r x))))
@@ -458,12 +478,9 @@ theorem third_first_integral (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Opt
       Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x)))
     (h₂ : ∀ x, w₂ x =
       Value.mask (axisBound lower s₃ t₃ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x))) :
-    partialIntegral volume w =
-      Value.mask (boundsMeet lower s₁ s₂ t₁ t₂)
-        (Value.add (Value.mask (boundImplies lower s₁ s₃ t₁ t₃) (partialIntegral volume w₁))
-          (Value.mask (boundImplied lower s₁ s₃ t₁ t₃) (partialIntegral volume w₂))) := by
-  refine integral_cases_within (fun hN => ?_) (fun hN x => ?_) (fun hN hc => ?_)
-    (fun hN hc => ?_) (fun hN hc => ?_)
+    Cases w w₁ w₂ (boundsMeet lower s₁ s₂ t₁ t₂) (boundImplies lower s₁ s₃ t₁ t₃)
+      (boundImplied lower s₁ s₃ t₁ t₃) := by
+  refine ⟨fun hN => ?_, fun hN x => ?_, fun hN hc => ?_, fun hN hc => ?_, fun hN hc => ?_⟩
   · obtain ⟨x, hx⟩ := meet_missing hN (fun x => Value.mask (axisBound lower s₃ t₃ x) (r x))
     exact ⟨x, by rw [h]; exact hx⟩
   · rw [h]
@@ -491,6 +508,47 @@ theorem third_first_integral (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Opt
     refine ⟨by rw [boundImplied_real, decide_eq_false hi]; rfl, fun y => ?_⟩
     rw [h, h₂, axisBound_real, axisBound_real, axisBound_real]
     exact mask_implying_far (meets_of_not_implies hi) _
+
+/-- The same as observations that add: a summand of a sum of observations
+with several bounds on one side. -/
+theorem same_side_piece (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {w w₁ w₂ : ℝ → Option ℝ}
+    (r : ℝ → Option ℝ)
+    (h : ∀ x, w x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound lower s₂ t₂ x) (r x)))
+    (h₁ : ∀ x, w₁ x = Value.mask (axisBound lower s₁ t₁ x) (r x))
+    (h₂ : ∀ x, w₂ x = Value.mask (axisBound lower s₂ t₂ x) (r x)) {o₁ o₂ : Option ℝ}
+    (p₁ : Piece w₁ o₁) (p₂ : Piece w₂ o₂) :
+    Piece w (Value.add (Value.mask (boundImplies lower s₁ s₂ t₁ t₂) o₁)
+      (Value.mask (boundImplied lower s₁ s₂ t₁ t₂) o₂)) :=
+  (same_side_cases lower s₁ s₂ t₁ t₂ r h h₁ h₂).piece p₁ p₂
+
+theorem third_second_piece (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option ℝ)
+    {w w₁ w₂ : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower s₁ t₁ x)
+      (Value.mask (axisBound (!lower) s₂ t₂ x) (Value.mask (axisBound (!lower) s₃ t₃ x) (r x))))
+    (h₁ : ∀ x, w₁ x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x)))
+    (h₂ : ∀ x, w₂ x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₃ t₃ x) (r x)))
+    {o₁ o₂ : Option ℝ} (p₁ : Piece w₁ o₁) (p₂ : Piece w₂ o₂) :
+    Piece w (Value.mask (boundsMeet lower s₁ s₂ t₁ t₂)
+      (Value.add (Value.mask (boundImplies (!lower) s₂ s₃ t₂ t₃) o₁)
+        (Value.mask (boundImplied (!lower) s₂ s₃ t₂ t₃) o₂))) :=
+  (third_second_cases lower s₁ s₂ s₃ t₁ t₂ t₃ r h h₁ h₂).piece p₁ p₂
+
+theorem third_first_piece (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option ℝ)
+    {w w₁ w₂ : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower s₁ t₁ x)
+      (Value.mask (axisBound (!lower) s₂ t₂ x) (Value.mask (axisBound lower s₃ t₃ x) (r x))))
+    (h₁ : ∀ x, w₁ x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x)))
+    (h₂ : ∀ x, w₂ x =
+      Value.mask (axisBound lower s₃ t₃ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x)))
+    {o₁ o₂ : Option ℝ} (p₁ : Piece w₁ o₁) (p₂ : Piece w₂ o₂) :
+    Piece w (Value.mask (boundsMeet lower s₁ s₂ t₁ t₂)
+      (Value.add (Value.mask (boundImplies lower s₁ s₃ t₁ t₃) o₁)
+        (Value.mask (boundImplied lower s₁ s₃ t₁ t₃) o₂))) :=
+  (third_first_cases lower s₁ s₂ s₃ t₁ t₂ t₃ r h h₁ h₂).piece p₁ p₂
 
 /-! A comparison of the axis that is not solved for it. One side is of
 degree one in the axis, a rational multiple of the axis plus terms that do
@@ -730,7 +788,7 @@ theorem mass_same_side (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {w w₁
         (Value.mask (StepSource.boundImplied lower s₁ s₂ t₁ t₂)
           (massValue (DensityProgram.weight w₂ .lebesgue).presentation)) := by
   rw [mass_weight, mass_weight, mass_weight]
-  exact StepSource.same_side_integral lower s₁ s₂ t₁ t₂ r h h₁ h₂
+  exact (StepSource.same_side_cases lower s₁ s₂ t₁ t₂ r h h₁ h₂).integral
 
 theorem mass_third_second (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option ℝ)
     {w w₁ w₂ : ℝ → Option ℝ} (r : ℝ → Option ℝ)
@@ -749,7 +807,7 @@ theorem mass_third_second (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option
           (Value.mask (StepSource.boundImplied (!lower) s₂ s₃ t₂ t₃)
             (massValue (DensityProgram.weight w₂ .lebesgue).presentation))) := by
   rw [mass_weight, mass_weight, mass_weight]
-  exact StepSource.third_second_integral lower s₁ s₂ s₃ t₁ t₂ t₃ r h h₁ h₂
+  exact (StepSource.third_second_cases lower s₁ s₂ s₃ t₁ t₂ t₃ r h h₁ h₂).integral
 
 theorem mass_third_first (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option ℝ)
     {w w₁ w₂ : ℝ → Option ℝ} (r : ℝ → Option ℝ)
@@ -768,6 +826,6 @@ theorem mass_third_first (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option 
           (Value.mask (StepSource.boundImplied lower s₁ s₃ t₁ t₃)
             (massValue (DensityProgram.weight w₂ .lebesgue).presentation))) := by
   rw [mass_weight, mass_weight, mass_weight]
-  exact StepSource.third_first_integral lower s₁ s₂ s₃ t₁ t₂ t₃ r h h₁ h₂
+  exact (StepSource.third_first_cases lower s₁ s₂ s₃ t₁ t₂ t₃ r h h₁ h₂).integral
 
 end QSym.Distribution.DensityProgram
