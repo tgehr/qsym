@@ -1194,7 +1194,7 @@ private theorem momentValue_curvature (b h : ℝ) (K : List (List ℚ)) (l : ℕ
       ring
 
 /-- A quadratic is undefined where a coefficient is. -/
-private theorem Quadratic.missing {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
+theorem Quadratic.missing {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ}
     (hE : Quadratic E (some c0) (some c1) (some c2)) (h : c0 = none ∨ c1 = none ∨ c2 = none)
     (x : ℝ) : E x = none := by
   rw [hE.equation]

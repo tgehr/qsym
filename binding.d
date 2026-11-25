@@ -76,8 +76,11 @@ private struct IntervalTerm{
 	uint value,primitive=uint.max; bool scaled,curved,vertex; Rational rate; uint order;
 	GaussianData bell; Rational point,half,rest; uint restLiteral=uint.max;
 	// With the error function: the offset of its argument, and the literals
-	// of the negated curvature, of that offset and of minus one.
-	bool erf; Rational offset; uint sigma=uint.max,offsetLiteral=uint.max,unit=uint.max;
+	// of the negated curvature, of that offset and of minus one. With
+	// `symbolic` the constant and linear coefficients of the exponent are
+	// terms: `point` is `1/(2·c₂)`, and `offset` the factor of the linear
+	// coefficient in the argument.
+	bool erf,symbolic; Rational offset; uint sigma=uint.max,offsetLiteral=uint.max,unit=uint.max;
 }
 // With `domain` the value is under a strict guard that does not mention the
 // axis; with `hoisted` that guard stands around the mask, after the negations
@@ -3436,12 +3439,29 @@ final class Bindings{
 				foreach(c;R~[g.constant,g.vertex,g.width,r.half,r.point]) if(c.words>128) return false;
 				r.bell=g; r.erf=true; return true;
 			}
+			// The same under a constant where the constant and linear coefficients
+			// of the exponent are terms that do not mention the axis: the exponent
+			// is a quadratic by its structure, with a curvature that is a negative
+			// rational, and its vertex is a multiple of the linear coefficient.
+			bool symbolicErf(uint id,ref IntervalTerm r){
+				if(solution.from.length!=1) return false;
+				BellParts found;
+				if(!bellParts(id,found,false)||!found.exponent||found.symbolic) return false;
+				auto p=found.p,c=found.c; while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(p.length!=1||!c[1].present||!c[2].present||!c[2].closed||!(c[2].value<Rational(0))) return false;
+				GaussianData g; g.symbolic=true; g.constant=p[0]; g.c2=c[2].value;
+				g.vertex=Rational(-1)/(Rational(4)*g.c2); g.width=Rational(-1)/g.c2;
+				r.point=Rational(1)/(Rational(2)*g.c2); r.half=g.constant/Rational(2); r.offset=d.below?Rational(0)-r.point:r.point;
+				foreach(x;[g.constant,g.vertex,g.width,r.half,r.point]) if(x.words>128) return false;
+				r.bell=g; r.erf=true; r.symbolic=true; return true;
+			}
 			// Decide before building anything: a refused integral leaves no
 			// terms behind. Beyond a single bound every term must decay.
 			bool admissible(uint id,uint depth){
-				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order;
+				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order; IntervalTerm r;
 				if(scaledExponential(id,p,rate,scaled)) return !d.half||decays(rate+outerRate);
-				if(tailExponential(id,false,p,exponent,scaled,false,0,true)){ IntervalTerm r; return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r)||erf(p,exponent,r); }
+				if(tailExponential(id,false,p,exponent,scaled,false,0,true)) return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r)||erf(p,exponent,r);
+				if(symbolicErf(id,r)) return true;
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
@@ -3544,6 +3564,35 @@ final class Bindings{
 				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false,true),result]);
 				d.terms~=r; return result;
 			}
+			// With coefficients that are terms the constant in front has the
+			// exponential of the value at the vertex, `c₀ + γ·c₁²`, and the
+			// argument the linear coefficient times its factor. Everything but
+			// the bound is outside the binder: the result is built at the bounds.
+			BoundTerm symbolicErfDifference(IntervalTerm r,uint id){
+				if(!symbolicErf(id,r)) return BoundTerm.init;
+				BellParts built; bellParts(id,built,true);
+				BoundTerm apply1(Builtin f,BoundTerm x){ return primitive(arena.call(f,[arena.real_(0)]),[x]); }
+				auto linear=built.c[1].term; BoundTerm constant;
+				if(built.c[0].present) constant=built.c[0].term;
+				else{ constant=scalar(ctx,arena.real_(0)); r.bell.zero0=constant.id; }
+				r.bell.curvature=built.c[2].term.id;
+				auto half=scalar(ctx,arena.real_(r.half)),peak=scalar(ctx,arena.real_(r.bell.vertex)),width=scalar(ctx,arena.real_(r.bell.width));
+				auto circle=scalar(ctx,arena.call(Builtin.pi,[])),sigma=scalar(ctx,arena.real_(Rational(0)-r.bell.c2));
+				auto offset=scalar(ctx,arena.real_(r.offset)),unit=scalar(ctx,arena.real_(Rational(-1)));
+				r.bell.factor=half.id; r.bell.exponent=peak.id; r.bell.scale=width.id; r.bell.circle=circle.id;
+				r.sigma=sigma.id; r.offsetLiteral=offset.id; r.unit=unit.id;
+				auto height=apply1(Builtin.expR,primitive(addOp,[constant,primitive(mulOp,[peak,primitive(mulOp,[linear,linear])])]));
+				auto front=primitive(mulOp,[half,primitive(mulOp,[height,apply1(Builtin.sqrtR,primitive(mulOp,[circle,width]))])]);
+				auto shift=primitive(mulOp,[offset,linear]),root=apply1(Builtin.sqrtR,sigma);
+				BoundTerm at_(BoundTerm o){
+					auto argument=d.below?primitive(addOp,[shift,primitive(mulOp,[unit,o])]):primitive(addOp,[o,shift]);
+					auto tail=primitive(mulOp,[front,apply1(d.half?Builtin.erfcR:Builtin.erfR,primitive(mulOp,[root,argument]))]);
+					return d.half&&!d.below?primitive(mulOp,[unit,tail]):tail;
+				}
+				auto result=d.below?at_(upper):d.half?primitive(mulOp,[minusOne,at_(lower)]):primitive(addOp,[at_(upper),primitive(mulOp,[minusOne,at_(lower)])]);
+				if(built.scaled) result=primitive(mulOp,[built.scale,result]);
+				d.terms~=r; return result;
+			}
 			BoundTerm build(uint id,uint depth){
 				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
 				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
@@ -3552,6 +3601,8 @@ final class Bindings{
 					if(curved==BoundTerm.init) curved=vertexDifference(r,p,exponent);
 					return curved!=BoundTerm.init?curved:erfDifference(r,p,exponent);
 				}
+				auto symbolic=symbolicErfDifference(r,id);
+				if(symbolic!=BoundTerm.init) return symbolic;
 				// A sum is integrated term by term only without further weights.
 				auto q=nodes[id];
 				if(depth>16||d.terms.length>16||solution.from.length!=1||!isOp(q,Op.add)) return BoundTerm.init;
@@ -7417,6 +7468,20 @@ final class Bindings{
 					return "("~termsName~"."~(scaled?"scaledGaussian":"gaussian")~" (R := "~list~") "~cert.q(g.constant)~" "~cert.q(g.c0)~" "~cert.q(g.c1)~" "~cert.q(g.c2)~" "~
 						cert.q(g.vertex)~" "~cert.q(g.width)~" "~cert.q(r.point)~" "~cert.q(r.half)~" "~cert.q(r.rest)~" "~hv~" "~cert.closedProof(at(d.below?d.upper:d.lower),r.point)~" rfl "~
 						literal(g.factor,r.half)~" "~literal(r.restLiteral,r.rest)~" "~literal(g.exponent,g.vertex)~" "~literal(g.scale,g.width)~" rfl)";
+				}
+				if(r.erf&&r.symbolic){
+					// The term as a scale, a constant and the exponential of a
+					// quadratic by its structure, with the coefficients the rule
+					// built; the kernel evaluates the curvature and checks the
+					// literals of the result.
+					auto g=r.bell;string exponent;AxisCoefficient[] poly;
+					auto hv=cert.bell(id,exponent,poly);
+					string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
+					if(g.zero0!=uint.max)exponent="(Distribution.StepSource.Quadratic.fill0 "~literal(g.zero0,Rational(0))~" "~exponent~")";
+					return "("~termsName~".symbolicErf "~cert.q(g.constant)~" "~cert.q(g.c2)~" "~cert.q(g.vertex)~" "~cert.q(g.width)~" "~cert.q(r.point)~" "~cert.q(r.half)~" "~
+						cert.q(Rational(0)-g.c2)~" "~cert.q(r.offset)~" "~hv~" "~exponent~" "~cert.closedProof(at(g.curvature),g.c2)~" rfl "~
+						(d.half?literal(r.unit,Rational(-1))~" ":"")~literal(g.factor,r.half)~" "~literal(g.exponent,g.vertex)~" "~literal(g.scale,g.width)~" rfl "~
+						literal(r.sigma,Rational(0)-g.c2)~" "~literal(r.offsetLiteral,r.offset)~")";
 				}
 				if(r.erf){
 					// The term and the antiderivative of the rest everywhere, on a

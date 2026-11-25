@@ -1,4 +1,4 @@
-import QSym.DistributionGaussian
+import QSym.DistributionGaussianSymbolic
 import QSym.DistributionExponentialInterval
 
 /-! A half-line that starts or ends at the vertex of a Gaussian. The
@@ -622,5 +622,349 @@ theorem UpperTerms.scaledErf {b : Option ℝ} {v : ℝ → Option ℝ} {c : Opti
   · show Value.add (GR none) _ = none
     rw [h0]
     rfl
+
+/-! Constant and linear coefficients that do not mention the axis. The
+exponent is a quadratic by its structure, with a curvature that is a negative
+rational: the vertex is a multiple of the linear coefficient, and the constant
+in front of the error function has the exponential of the value at the vertex,
+`c₀ + γ·c₁²`. A coefficient that is undefined leaves the value undefined
+everywhere, and that constant with it. -/
+
+/-- The checks of the antiderivative with the error function under a constant
+`κ`: the curvature `q₂` is negative, `γ = -1/(4·q₂)`, `δ = -1/q₂`,
+`w = 1/(2·q₂)`, half the constant, the negated curvature `σ`, and the factor
+`ν` of the linear coefficient in the argument, `-w` where it is reflected and
+`w` otherwise. -/
+def symErfCheck (reflected : Bool) (P : List ℚ) (κ q2 γ δ w half σ ν : ℚ) : Bool :=
+  polyZero (polyAdd P (polyScale (-1) [κ])) && decide (q2 < 0) && decide (γ * (4 * q2) = -1) &&
+    decide (δ * q2 = -1) && decide (w * (2 * q2) = 1) && decide (half * 2 = κ) &&
+    decide (σ = -q2) && decide (ν = (if reflected then -w else w))
+
+/-- What the checks say of the real functions, at real coefficients. -/
+private theorem symErf_facts {reflected : Bool} {P : List ℚ} {κ q2 γ δ w half σ ν : ℚ}
+    (h : symErfCheck reflected P κ q2 γ δ w half σ ν = true) (a b : ℝ) :
+    (q2 : ℝ) < 0 ∧ (0 : ℝ) < σ ∧ 0 ≤ Real.pi * (δ : ℝ) ∧ (∀ x : ℝ, polyEval P x = κ) ∧
+      (∀ t : ℝ, Real.exp (a + γ * (b * b)) * Real.exp (-(√(σ : ℝ) * (t + w * b)) ^ 2) =
+        Real.exp (a + b * t + q2 * t ^ 2)) ∧
+      (half : ℝ) * √(Real.pi * δ) * (2 / √Real.pi * √(σ : ℝ)) = κ ∧
+      (ν : ℝ) = (if reflected then -(w : ℝ) else w) := by
+  simp only [symErfCheck, Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨hP, hq⟩, hγ⟩, hδ⟩, hw⟩, hh⟩, hσ⟩, hν⟩ := h
+  have hcR : ((q2 : ℚ) : ℝ) < 0 := by exact_mod_cast hq
+  have hc : ((q2 : ℚ) : ℝ) ≠ 0 := hcR.ne
+  have hγR : (γ : ℝ) * (4 * q2) = -1 := by exact_mod_cast hγ
+  have hδR : (δ : ℝ) * q2 = -1 := by exact_mod_cast hδ
+  have hwR : (w : ℝ) * (2 * q2) = 1 := by exact_mod_cast hw
+  have hhR : (half : ℝ) * 2 = κ := by exact_mod_cast hh
+  have hσR : (σ : ℝ) = -q2 := by exact_mod_cast hσ
+  have hσpos : (0 : ℝ) < σ := by rw [hσR]; linarith
+  have hδpos : (0 : ℝ) < δ := by nlinarith
+  have hγ' : (γ : ℝ) = -(q2 * w ^ 2) := by
+    apply mul_right_cancel₀ (show (4 * (q2 : ℝ)) ≠ 0 from mul_ne_zero four_ne_zero hc)
+    linear_combination hγR + (2 * (q2 : ℝ) * w + 1) * hwR
+  refine ⟨hcR, hσpos, mul_nonneg Real.pi_pos.le hδpos.le, fun x => ?_, fun t => ?_, ?_, ?_⟩
+  · have hz := polyEval_zero hP x
+    rw [polyEval_add, polyEval_scale] at hz
+    simp only [polyEval] at hz
+    push_cast at hz
+    linarith
+  · rw [← Real.exp_add, mul_pow, Real.sq_sqrt hσpos.le, hγ', hσR]
+    congr 1
+    linear_combination (b * t) * hwR
+  · have hds : √(δ : ℝ) * √(σ : ℝ) = 1 := by
+      rw [← Real.sqrt_mul hδpos.le, hσR]
+      have : (δ : ℝ) * -q2 = 1 := by linarith
+      rw [this, Real.sqrt_one]
+    have hne : √Real.pi ≠ 0 := (Real.sqrt_pos.2 Real.pi_pos).ne'
+    rw [Real.sqrt_mul Real.pi_pos.le]
+    field_simp
+    linear_combination (2 * (half : ℝ) * √Real.pi) * hds + √Real.pi * hhR
+  · rw [hν]
+    cases reflected <;> simp
+
+/-- The antiderivative between two bounds. -/
+private theorem symErf_deriv {P : List ℚ} {κ q2 γ δ w half σ ν : ℚ}
+    (h : symErfCheck false P κ q2 γ δ w half σ ν = true) (a b x : ℝ) :
+    HasDerivAt (fun t : ℝ => half * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)) *
+        Functions.erfR.value (√(σ : ℝ) * (t + ν * b)))
+      (κ * Real.exp (a + b * x + q2 * x ^ 2)) x := by
+  obtain ⟨_, _, _, _, hC, hB, hν⟩ := symErf_facts h a b
+  simp only [Bool.false_eq_true, if_false] at hν
+  rw [hν]
+  have hin : HasDerivAt (fun t : ℝ => √(σ : ℝ) * (t + w * b)) (√(σ : ℝ) * 1) x :=
+    ((hasDerivAt_id x).add_const ((w : ℝ) * b)).const_mul _
+  have h2 := ((erf_hasDerivAt (√(σ : ℝ) * (x + w * b))).comp x hin).const_mul
+    ((half : ℝ) * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)))
+  refine h2.congr_deriv ?_
+  linear_combination
+    (Real.exp (a + γ * (b * b)) * Real.exp (-(√(σ : ℝ) * (x + w * b)) ^ 2)) * hB + (κ : ℝ) * hC x
+
+/-- The antiderivative above a bound: it vanishes at infinity. -/
+private theorem symErfc_deriv {P : List ℚ} {κ q2 γ δ w half σ ν : ℚ}
+    (h : symErfCheck false P κ q2 γ δ w half σ ν = true) (a b : ℝ) :
+    (∀ x : ℝ, HasDerivAt (fun t : ℝ => -1 * (half * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)) *
+        Functions.erfcR.value (√(σ : ℝ) * (t + ν * b))))
+      (κ * Real.exp (a + b * x + q2 * x ^ 2)) x) ∧
+    Tendsto (fun t : ℝ => -1 * (half * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)) *
+        Functions.erfcR.value (√(σ : ℝ) * (t + ν * b)))) atTop (𝓝 0) := by
+  obtain ⟨_, hσ, _, _, hC, hB, hν⟩ := symErf_facts h a b
+  simp only [Bool.false_eq_true, if_false] at hν
+  rw [hν]
+  refine ⟨fun x => ?_, ?_⟩
+  · have hin : HasDerivAt (fun t : ℝ => √(σ : ℝ) * (t + w * b)) (√(σ : ℝ) * 1) x :=
+      ((hasDerivAt_id x).add_const ((w : ℝ) * b)).const_mul _
+    have h2 := (((erfc_hasDerivAt (√(σ : ℝ) * (x + w * b))).comp x hin).const_mul
+      ((half : ℝ) * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)))).const_mul (-1 : ℝ)
+    refine h2.congr_deriv ?_
+    linear_combination
+      (Real.exp (a + γ * (b * b)) * Real.exp (-(√(σ : ℝ) * (x + w * b)) ^ 2)) * hB +
+        (κ : ℝ) * hC x
+  · have harg : Tendsto (fun t : ℝ => √(σ : ℝ) * (t + w * b)) atTop atTop :=
+      (tendsto_atTop_add_const_right atTop ((w : ℝ) * b) tendsto_id).const_mul_atTop
+        (Real.sqrt_pos.2 hσ)
+    have he := ((erfc_tendsto_atTop.comp harg).const_mul
+      ((half : ℝ) * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)))).const_mul (-1 : ℝ)
+    simpa using he
+
+/-- The antiderivative below a bound: it vanishes at minus infinity. -/
+private theorem symErfc_reflected_deriv {P : List ℚ} {κ q2 γ δ w half σ ν : ℚ}
+    (h : symErfCheck true P κ q2 γ δ w half σ ν = true) (a b : ℝ) :
+    (∀ x : ℝ, HasDerivAt (fun t : ℝ => half * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)) *
+        Functions.erfcR.value (√(σ : ℝ) * (ν * b + -1 * t)))
+      (κ * Real.exp (a + b * x + q2 * x ^ 2)) x) ∧
+    Tendsto (fun t : ℝ => half * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)) *
+        Functions.erfcR.value (√(σ : ℝ) * (ν * b + -1 * t))) atBot (𝓝 0) := by
+  obtain ⟨_, hσ, _, _, hC, hB, hν⟩ := symErf_facts h a b
+  simp only [if_true] at hν
+  rw [hν]
+  refine ⟨fun x => ?_, ?_⟩
+  · have hin : HasDerivAt (fun t : ℝ => √(σ : ℝ) * (-(w : ℝ) * b + -1 * t))
+        (√(σ : ℝ) * (-1 * 1)) x :=
+      (((hasDerivAt_id x).const_mul (-1 : ℝ)).const_add (-(w : ℝ) * b)).const_mul _
+    have h2 := ((erfc_hasDerivAt (√(σ : ℝ) * (-(w : ℝ) * b + -1 * x))).comp x hin).const_mul
+      ((half : ℝ) * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)))
+    refine h2.congr_deriv ?_
+    have hC' := hC x
+    rw [show (-(√(σ : ℝ) * (x + w * b)) ^ 2) = -(√(σ : ℝ) * (-(w : ℝ) * b + -1 * x)) ^ 2 by ring]
+      at hC'
+    linear_combination
+      (Real.exp (a + γ * (b * b)) * Real.exp (-(√(σ : ℝ) * (-(w : ℝ) * b + -1 * x)) ^ 2)) * hB +
+        (κ : ℝ) * hC'
+  · have harg : Tendsto (fun t : ℝ => √(σ : ℝ) * (-(w : ℝ) * b + -1 * t)) atBot atTop := by
+      have h1 : Tendsto (fun t : ℝ => -1 * t) atBot atTop := by
+        simpa using (tendsto_neg_atBot_atTop : Tendsto (Neg.neg : ℝ → ℝ) atBot atTop)
+      exact (tendsto_atTop_add_const_left atBot (-(w : ℝ) * b) h1).const_mul_atTop
+        (Real.sqrt_pos.2 hσ)
+    have he := (erfc_tendsto_atTop.comp harg).const_mul
+      ((half : ℝ) * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ)))
+    simpa using he
+
+/-- The constant in front of the error function:
+`k·(exp(c₀ + g·(c₁·c₁))·√(π·d))`. -/
+noncomputable def symErfConstant (c0 c1 k g d pi : Option ℝ) : Option ℝ :=
+  Value.mul k (Value.mul
+    (Functions.expR.apply (Value.add c0 (Value.mul g (Value.mul c1 c1))))
+    (Functions.sqrtR.apply (Value.mul pi d)))
+
+/-- Between two bounds: the constant times `erf(√s·(o + n·c₁))`. -/
+noncomputable def symErfBetween (c0 c1 k g d pi s n o : Option ℝ) : Option ℝ :=
+  Value.mul (symErfConstant c0 c1 k g d pi)
+    (Functions.erfR.apply (Value.mul (Functions.sqrtR.apply s) (Value.add o (Value.mul n c1))))
+
+/-- Above a bound: the complement, negated. -/
+noncomputable def symErfAbove (c0 c1 u k g d pi s n o : Option ℝ) : Option ℝ :=
+  Value.mul u (Value.mul (symErfConstant c0 c1 k g d pi)
+    (Functions.erfcR.apply (Value.mul (Functions.sqrtR.apply s) (Value.add o (Value.mul n c1)))))
+
+/-- Below a bound: the complement of the reflected argument. -/
+noncomputable def symErfBelow (c0 c1 u k g d pi s n o : Option ℝ) : Option ℝ :=
+  Value.mul (symErfConstant c0 c1 k g d pi)
+    (Functions.erfcR.apply
+      (Value.mul (Functions.sqrtR.apply s) (Value.add (Value.mul n c1) (Value.mul u o))))
+
+/-- That constant is undefined where a coefficient is. -/
+private theorem symErfConstant_missing {c0 c1 : Option ℝ} (k g d pi : Option ℝ)
+    (h : c0 = none ∨ c1 = none) : symErfConstant c0 c1 k g d pi = none := by
+  have hexp : Functions.expR.apply (Value.add c0 (Value.mul g (Value.mul c1 c1))) = none := by
+    rcases h with rfl | rfl
+    · rfl
+    · cases c0 <;> cases g <;> rfl
+  rw [symErfConstant, hexp]
+  cases k <;> rfl
+
+/-- The literals of such an antiderivative at real coefficients. -/
+private theorem symErf_literals {reflected : Bool} {P : List ℚ} {κ q2 γ δ w half σ ν : ℚ}
+    (h : symErfCheck reflected P κ q2 γ δ w half σ ν = true) (a b : ℝ) {k g d pi s n : Option ℝ}
+    (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) (hs : s = some (Numeric.denote (s := .real) σ))
+    (hn : n = some (Numeric.denote (s := .real) ν)) :
+    symErfConstant (some a) (some b) k g d pi =
+        some ((half : ℝ) * (Real.exp (a + γ * (b * b)) * √(Real.pi * δ))) ∧
+      Functions.sqrtR.apply s = some (√(σ : ℝ)) ∧ n = some ((ν : ℚ) : ℝ) := by
+  obtain ⟨_, hσ, hpos, _⟩ := symErf_facts h a b
+  refine ⟨?_, ?_, ?_⟩
+  · rw [symErfConstant, hk, hg, hd, hpi]
+    simp [Value.mul, Value.add, Function1.apply, Functions.expR, Functions.sqrtR, Functions.pi,
+      Numeric.denote, hpos]
+  · rw [hs]
+    simp [Function1.apply, Functions.sqrtR, Numeric.denote, hσ.le]
+  · rw [hn]
+    simp [Numeric.denote]
+
+/-- The value below the mask: undefined everywhere where a coefficient is,
+and the constant times the exponential of the quadratic under the scale
+otherwise. -/
+private theorem symErf_value {reflected : Bool} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} {κ q2 γ δ w half σ ν : ℚ}
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : symErfCheck reflected P κ q2 γ δ w half σ ν = true) :
+    ((c0 = none ∨ c1 = none) → ∀ x, v x = none) ∧
+      ∀ a b : ℝ, c0 = some a → c1 = some b →
+        ∀ x, v x = scaleBy S (some (κ * Real.exp (a + b * x + q2 * x ^ 2))) := by
+  have hvx : ∀ x, v x = scaleBy S (Value.mul (some (polyEval P x)) (Functions.expR.apply (E x))) :=
+    fun x => hv.plain x
+  refine ⟨fun hm x => ?_, fun a b ha hb x => ?_⟩
+  · have hEx : E x = none := by
+      rcases hm with rfl | rfl
+      · exact hE.missing (Or.inl rfl) x
+      · exact hE.missing (Or.inr (Or.inl rfl)) x
+    rw [hvx, hEx]
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul, Function1.apply]
+  · subst ha hb
+    obtain ⟨_, _, _, hP, _⟩ := symErf_facts h a b
+    have hEx : E x = some (a + b * x + q2 * x ^ 2) := by
+      rw [hE.equation, h2]
+      simp [coefValue, Value.add, Value.mul, Numeric.denote]
+      ring
+    rw [hvx, hEx, hP]
+    simp [Value.mul, Function1.apply, Functions.expR]
+
+/-- Between two bounds, with the error function around a vertex that does not
+mention the axis. -/
+theorem IntervalTerms.symbolicErf {a b m : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ q2 γ δ w half σ ν : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : symErfCheck false P κ q2 γ δ w half σ ν = true) {k g d pi s n : Option ℝ}
+    (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) (hs : s = some (Numeric.denote (s := .real) σ))
+    (hn : n = some (Numeric.denote (s := .real) ν)) :
+    IntervalTerms a b m v (scaleBy S (Value.add (symErfBetween c0 c1 k g d pi s n b)
+      (Value.mul m (symErfBetween c0 c1 k g d pi s n a)))) := by
+  obtain ⟨hmiss, hval⟩ := symErf_value hv hE h2 h
+  by_cases hm : c0 = none ∨ c1 = none
+  · have hout : scaleBy S (Value.add (symErfBetween c0 c1 k g d pi s n b)
+        (Value.mul m (symErfBetween c0 c1 k g d pi s n a))) = none := by
+      simp only [symErfBetween, symErfConstant_missing k g d pi hm]
+      rcases S with _ | _ | s' <;> rfl
+    rw [hout]
+    exact IntervalTerms.undefined (hmiss hm)
+  obtain ⟨a0, rfl⟩ : ∃ a0, c0 = some a0 := Option.ne_none_iff_exists'.1 fun h0 => hm (Or.inl h0)
+  obtain ⟨b1, rfl⟩ : ∃ b1, c1 = some b1 := Option.ne_none_iff_exists'.1 fun h0 => hm (Or.inr h0)
+  obtain ⟨hK, hS, hN⟩ := symErf_literals h a0 b1 hk hg hd hpi hs hn
+  have hG : ∀ t, symErfBetween (some a0) (some b1) k g d pi s n (some t) =
+      some ((half : ℝ) * (Real.exp (a0 + γ * (b1 * b1)) * √(Real.pi * δ)) *
+        Functions.erfR.value (√(σ : ℝ) * (t + ν * b1))) := fun t => by
+    rw [symErfBetween, hK, hS, hN]
+    show Value.mul (some _) (Functions.erfR.apply (some _)) = _
+    rw [erf_apply]
+    rfl
+  have hc : Continuous fun x : ℝ => (κ : ℝ) * Real.exp (a0 + b1 * x + q2 * x ^ 2) :=
+    continuous_const.mul (Real.continuous_exp.comp (by fun_prop))
+  rcases S with _ | c
+  · exact .primitive (G := symErfBetween (some a0) (some b1) k g d pi s n)
+      (hval a0 b1 rfl rfl) hG hc (symErf_deriv h a0 b1)
+  · exact .scaledPrimitive (G := symErfBetween (some a0) (some b1) k g d pi s n)
+      (hval a0 b1 rfl rfl) hG hc (symErf_deriv h a0 b1)
+
+/-- Above a bound, with the complement of the error function. -/
+theorem HalfLineTerms.symbolicErf {a m : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ q2 γ δ w half σ ν : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : symErfCheck false P κ q2 γ δ w half σ ν = true) {u k g d pi s n : Option ℝ}
+    (hu : u = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) (hs : s = some (Numeric.denote (s := .real) σ))
+    (hn : n = some (Numeric.denote (s := .real) ν)) :
+    HalfLineTerms a m v (scaleBy S (Value.mul m (symErfAbove c0 c1 u k g d pi s n a))) := by
+  obtain ⟨hmiss, hval⟩ := symErf_value hv hE h2 h
+  have hU : u = some (-1 : ℝ) := by rw [hu]; simp [Numeric.denote]
+  by_cases hm : c0 = none ∨ c1 = none
+  · have hout : scaleBy S (Value.mul m (symErfAbove c0 c1 u k g d pi s n a)) = none := by
+      simp only [symErfAbove, symErfConstant_missing k g d pi hm, hU]
+      rcases S with _ | _ | s' <;> cases m <;> rfl
+    rw [hout]
+    exact HalfLineTerms.undefined (hmiss hm)
+  obtain ⟨a0, rfl⟩ : ∃ a0, c0 = some a0 := Option.ne_none_iff_exists'.1 fun h0 => hm (Or.inl h0)
+  obtain ⟨b1, rfl⟩ : ∃ b1, c1 = some b1 := Option.ne_none_iff_exists'.1 fun h0 => hm (Or.inr h0)
+  obtain ⟨hK, hS, hN⟩ := symErf_literals h a0 b1 hk hg hd hpi hs hn
+  obtain ⟨hq, _⟩ := symErf_facts h a0 b1
+  obtain ⟨hD, hT⟩ := symErfc_deriv h a0 b1
+  have hG : ∀ t, symErfAbove (some a0) (some b1) u k g d pi s n (some t) =
+      some (-1 * ((half : ℝ) * (Real.exp (a0 + γ * (b1 * b1)) * √(Real.pi * δ)) *
+        Functions.erfcR.value (√(σ : ℝ) * (t + ν * b1)))) := fun t => by
+    rw [symErfAbove, hU, hK, hS, hN]
+    show Value.mul (some _) (Value.mul (some _) (Functions.erfcR.apply (some _))) = _
+    rw [erfc_apply]
+    rfl
+  have h0 : symErfAbove (some a0) (some b1) u k g d pi s n none = none := by
+    rw [symErfAbove, hU, hK, hS]
+    rfl
+  have hi : ∀ l : ℝ, IntegrableOn (fun x : ℝ => (κ : ℝ) * Real.exp (a0 + b1 * x + q2 * x ^ 2))
+      (Ioi l) volume := fun l => ((gaussian_integrable a0 b1 q2 hq).const_mul _).integrableOn
+  rcases S with _ | c
+  · exact .primitive (G := symErfAbove (some a0) (some b1) u k g d pi s n)
+      (hval a0 b1 rfl rfl) hG h0 hi hD hT
+  · exact .scaledPrimitive (G := symErfAbove (some a0) (some b1) u k g d pi s n)
+      (hval a0 b1 rfl rfl) hG h0 hi hD hT
+
+/-- Below a bound, with the complement of the error function of the reflected
+argument. -/
+theorem UpperTerms.symbolicErf {b : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (κ q2 γ δ w half σ ν : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (h2 : c2 = some (Numeric.denote (s := .real) q2))
+    (h : symErfCheck true P κ q2 γ δ w half σ ν = true) {u k g d pi s n : Option ℝ}
+    (hu : u = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) half))
+    (hg : g = some (Numeric.denote (s := .real) γ)) (hd : d = some (Numeric.denote (s := .real) δ))
+    (hpi : pi = some Functions.pi) (hs : s = some (Numeric.denote (s := .real) σ))
+    (hn : n = some (Numeric.denote (s := .real) ν)) :
+    UpperTerms b v (scaleBy S (symErfBelow c0 c1 u k g d pi s n b)) := by
+  obtain ⟨hmiss, hval⟩ := symErf_value hv hE h2 h
+  have hU : u = some (-1 : ℝ) := by rw [hu]; simp [Numeric.denote]
+  by_cases hm : c0 = none ∨ c1 = none
+  · have hout : scaleBy S (symErfBelow c0 c1 u k g d pi s n b) = none := by
+      simp only [symErfBelow, symErfConstant_missing k g d pi hm]
+      rcases S with _ | _ | s' <;> rfl
+    rw [hout]
+    exact UpperTerms.undefined (hmiss hm)
+  obtain ⟨a0, rfl⟩ : ∃ a0, c0 = some a0 := Option.ne_none_iff_exists'.1 fun h0 => hm (Or.inl h0)
+  obtain ⟨b1, rfl⟩ : ∃ b1, c1 = some b1 := Option.ne_none_iff_exists'.1 fun h0 => hm (Or.inr h0)
+  obtain ⟨hK, hS, hN⟩ := symErf_literals h a0 b1 hk hg hd hpi hs hn
+  obtain ⟨hq, _⟩ := symErf_facts h a0 b1
+  obtain ⟨hD, hT⟩ := symErfc_reflected_deriv h a0 b1
+  have hG : ∀ t, symErfBelow (some a0) (some b1) u k g d pi s n (some t) =
+      some ((half : ℝ) * (Real.exp (a0 + γ * (b1 * b1)) * √(Real.pi * δ)) *
+        Functions.erfcR.value (√(σ : ℝ) * (ν * b1 + -1 * t))) := fun t => by
+    rw [symErfBelow, hU, hK, hS, hN]
+    show Value.mul (some _) (Functions.erfcR.apply (some _)) = _
+    rw [erfc_apply]
+    rfl
+  have h0 : symErfBelow (some a0) (some b1) u k g d pi s n none = none := by
+    rw [symErfBelow, hU, hK, hS, hN]
+    rfl
+  have hi : ∀ l : ℝ, IntegrableOn (fun x : ℝ => (κ : ℝ) * Real.exp (a0 + b1 * x + q2 * x ^ 2))
+      (Iic l) volume := fun l => ((gaussian_integrable a0 b1 q2 hq).const_mul _).integrableOn
+  rcases S with _ | c
+  · exact .primitive (G := symErfBelow (some a0) (some b1) u k g d pi s n)
+      (hval a0 b1 rfl rfl) hG h0 hi hD hT
+  · exact .scaledPrimitive (G := symErfBelow (some a0) (some b1) u k g d pi s n)
+      (hval a0 b1 rfl rfl) hG h0 hi hD hT
 
 end QSym.Distribution.StepSource

@@ -887,6 +887,26 @@ theorem upper_integral (strict : Bool) (b : Option ℝ) {f v : ℝ → Option �
         split_ifs <;> linarith
       rw [if_pos hc]
 
+/-! A value that is undefined everywhere is observed as undefined between
+bounds and beyond one: the scale of the primitive that is zero is. -/
+
+theorem IntervalTerms.undefined {a b m : Option ℝ} {v : ℝ → Option ℝ} (hv : ∀ x, v x = none) :
+    IntervalTerms a b m v none :=
+  IntervalTerms.scaledPrimitive (c := none) (G := fun _ => some 0) (g := fun _ => 0)
+    (F := fun _ => 0) hv (fun _ => rfl) continuous_const (fun x => hasDerivAt_const x 0)
+
+theorem HalfLineTerms.undefined {a m : Option ℝ} {v : ℝ → Option ℝ} (hv : ∀ x, v x = none) :
+    HalfLineTerms a m v none :=
+  HalfLineTerms.scaledPrimitive (c := none) (G := fun o => o.map fun _ => 0) (g := fun _ => 0)
+    (F := fun _ => 0) hv (fun _ => rfl) rfl (fun _ => integrableOn_zero)
+    (fun x => hasDerivAt_const x 0) tendsto_const_nhds
+
+theorem UpperTerms.undefined {b : Option ℝ} {v : ℝ → Option ℝ} (hv : ∀ x, v x = none) :
+    UpperTerms b v none :=
+  UpperTerms.scaledPrimitive (c := none) (G := fun o => o.map fun _ => 0) (g := fun _ => 0)
+    (F := fun _ => 0) hv (fun _ => rfl) rfl (fun _ => integrableOn_zero)
+    (fun x => hasDerivAt_const x 0) tendsto_const_nhds
+
 /-! Observations that add. An integral is additive only where both parts
 exist, and an observation is also missing where its density is defined but
 not integrable. The observations between bounds are never missing for that

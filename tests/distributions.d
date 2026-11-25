@@ -627,7 +627,14 @@ private Case[] cases(){ return [
 	Case("ErfGuarded","∫dx [c≤d]*[1≤x]*exp(-x^2)*λ[x]","ℝ","[c≤d]·(1/2·sqrt(π)·erfc(1))"),
 	Case("ErfGrowing","∫dx [0≤x≤1]*exp(x^2)*λ[x]","ℝ"),
 	Case("ErfQuartic","∫dx [0≤x≤1]*exp(-x^4)*λ[x]","ℝ"),
-	Case("ErfSymbolicMean","∫dx [0≤x≤1]*exp(-(x-m)^2)*λ[x]","ℝ"),
+	Case("ErfSymbolicMean","∫dx [0≤x≤1]*exp(-(x-m)^2)*λ[x]","ℝ","1/2·sqrt(π)·erf(-m+1)-1/2·sqrt(π)·erf(-m)"),
+	Case("ErfSymbolicCdf","∫dx [x≤t]*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","1/2·erfc((-t+m)·(1/2)·sqrt(2))"),
+	Case("ErfSymbolicTail","∫dx [a≤x]*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","1/2·erfc((a-m)·(1/2)·sqrt(2))"),
+	Case("ErfSymbolicScaled","∫dx [a≤x≤b]*c*exp(m*x-x^2)*λ[x]","ℝ","[a≤b]·(c·(-1/2·sqrt(π)·exp(1/4·m^2)·erf(a-m·(1/2))+1/2·sqrt(π)·exp(1/4·m^2)·erf(b-m·(1/2))))"),
+	Case("ErfSymbolicSum","∫dx [0≤x]*(exp(-(x-m)^2)+exp(-x))*λ[x]","ℝ","1/2·sqrt(π)·erfc(-m)+1"),
+	Case("ErfSymbolicUndefined","∫dx [x≤t]*exp(-(x-1/m)^2)/c*λ[x]","ℝ","guard(m≠0∧c≠0,c⁻¹·(1/2)·sqrt(π)·erfc(-t+m⁻¹))"),
+	Case("ErfSymbolicFunction","λ(t:ℝ).∫dx [x<t]*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ→ℝ","λ(t:ℝ). 1/2·erfc((m-t)·(1/2)·sqrt(2))"),
+	Case("ErfSymbolicPolynomial","∫dx [0≤x≤1]*x*exp(-(x-m)^2)*λ[x]","ℝ"),
 	Case("ErfSymbolicCurvature","∫dx [0≤x≤1]*exp(-a*x^2)*λ[x]","ℝ"),
 	Case("PiecesLaplace","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","2"),
 	Case("PiecesShifted","∫dx ([0≤x]*exp(-x)+[1≤x]*exp(-2*x))*λ[x]","ℝ","1/2·exp(-2)+1"),
@@ -1412,17 +1419,28 @@ private void run(string directory){
 		// around the vertex, after that of the polynomial up to its constant.
 		// Between two bounds it has the error function itself, beyond a single
 		// bound its complement, which vanishes at that end, below a bound with
-		// the argument reflected. A curvature that is not negative, another
-		// exponent and coefficients that are terms keep their integral.
+		// the argument reflected. The constant and linear coefficients of the
+		// exponent may be terms that do not mention the axis, under a constant:
+		// the exponent is then a quadratic by its structure, the vertex a
+		// multiple of the linear coefficient, and a coefficient that is
+		// undefined leaves the observation undefined. A curvature that is not
+		// negative or a term, another exponent and a polynomial in front of
+		// such coefficients keep their integral.
 		if(c.name.indexOf("Erf")==0){
-			bool retained=c.name=="ErfGrowing"||c.name=="ErfQuartic"||c.name=="ErfSymbolicMean"||c.name=="ErfSymbolicCurvature";
-			bool above=c.name=="ErfAbove"||c.name=="ErfNormalTail"||c.name=="ErfAboveScaled"||c.name=="ErfVertexSum"||c.name=="ErfGuarded";
-			bool below=c.name.indexOf("ErfBelow")==0||c.name=="ErfNormalCdf";
+			bool retained=c.name=="ErfGrowing"||c.name=="ErfQuartic"||c.name=="ErfSymbolicCurvature"||c.name=="ErfSymbolicPolynomial";
+			bool symbolic=c.name.indexOf("ErfSymbolic")==0&&c.name!="ErfSymbolicBounds"&&!retained;
+			bool above=c.name=="ErfAbove"||c.name=="ErfNormalTail"||c.name=="ErfAboveScaled"||c.name=="ErfVertexSum"||c.name=="ErfGuarded"||
+				c.name=="ErfSymbolicTail"||c.name=="ErfSymbolicSum";
+			bool below=c.name.indexOf("ErfBelow")==0||c.name=="ErfNormalCdf"||c.name=="ErfSymbolicCdf"||c.name=="ErfSymbolicUndefined"||c.name=="ErfSymbolicFunction";
 			bool scaled=c.name=="ErfNormalTail"||c.name=="ErfNormalCdf"||c.name=="ErfNormalInterval"||c.name=="ErfScaled"||c.name=="ErfAboveScaled"||c.name=="ErfBelowScaled"||
 				c.name=="ErfOffset"||c.name=="ErfDomain";
-			auto terms="Distribution.StepSource."~(below?"UpperTerms":above?"HalfLineTerms":"IntervalTerms")~(scaled?".scaledErf ":".erf ");
+			auto terms="Distribution.StepSource."~(below?"UpperTerms":above?"HalfLineTerms":"IntervalTerms")~(symbolic?".symbolicErf ":scaled?".scaledErf ":".erf ");
 			enforce((certificate.indexOf(terms)>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			// An exponent without a constant part has a zero in its place.
+			if(symbolic) enforce((certificate.indexOf("Distribution.StepSource.Quadratic.fill0")>=0)==(c.name=="ErfSymbolicScaled"),c.name~" constant part");
+			if(c.name=="ErfSymbolicSum") enforce(certificate.indexOf("HalfLineTerms.pure")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" terms");
+			if(c.name=="ErfSymbolicUndefined") enforce(certificate.indexOf("UpperTerms.guard")>=0,c.name~" domain");
 			if(c.name=="ErfSum") enforce(certificate.indexOf("IntervalTerms.pure")>=0&&certificate.indexOf("IntervalTerms.add")>=0,c.name~" terms");
 			if(c.name=="ErfVertexSum") enforce(certificate.indexOf("HalfLineTerms.gaussian")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" vertex");
 			if(c.name=="ErfOffset") enforce(certificate.indexOf("Limit.EventualScaled.exp_curve")>=0,c.name~" offset");
