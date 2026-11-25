@@ -68,8 +68,14 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 // optional factor that does not mention the axis, and its antiderivative.
 // With `curved` the summand is a polynomial times the exponential of a
 // polynomial; above a single bound that exponent stays below the linear
-// `rate`, and their difference has degree `order`.
-private struct IntervalTerm{ uint value,primitive=uint.max; bool scaled,curved; Rational rate; uint order; }
+// `rate`, and their difference has degree `order`. With `vertex` the
+// exponent is a quadratic with its vertex at the single bound `point`: `bell`
+// is the Gaussian integral, of which `half` is half the constant, and `rest`
+// the value of the antiderivative at the vertex with the sign of the end.
+private struct IntervalTerm{
+	uint value,primitive=uint.max; bool scaled,curved,vertex; Rational rate; uint order;
+	GaussianData bell; Rational point,half,rest; uint restLiteral=uint.max;
+}
 // With `domain` the value is under a strict guard that does not mention the
 // axis; with `hoisted` that guard stands around the mask, after the negations
 // of the comparisons of the mask. With `half` there is a single bound: a
@@ -3213,12 +3219,35 @@ final class Bindings{
 				bool zero;
 				return !d.half||vanishing(R,E,d.below,zero,rate,order)&&!zero;
 			}
+			// A polynomial times the exponential of a quadratic with negative
+			// curvature beyond a single bound that is the vertex of the quadratic.
+			// The polynomial is a constant κ up to a derivative, P=κ+R'+Q'·R: the
+			// exponential has half its integral on either side of the vertex, and
+			// the antiderivative R·exp(Q) vanishes at the end.
+			bool vertex(Rational[] p,Rational[] exponent,ref IntervalTerm r){
+				if(!d.half||solution.from.length!=1) return false;
+				auto E=exponent.dup; Rational bound;
+				while(E.length&&E[$-1].zero) E.length=E.length-1;
+				while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(E.length!=3||!(E[2]<Rational(0))||!p.length||!closedValue(term1,bound)) return false;
+				if(!(bound*Rational(2)*E[2]==Rational(0)-E[1])) return false;
+				GaussianData g; g.c0=E[0]; g.c1=E[1]; g.c2=E[2];
+				auto R=new Rational[](p.length-1);
+				Rational at_(size_t i){ return i<R.length?R[i]:Rational(0); }
+				foreach_reverse(j;1..p.length) R[j-1]=(p[j]-Rational(cast(long)j+1)*at_(j+1)-g.c1*at_(j))/(Rational(2)*g.c2);
+				g.constant=p[0]-at_(1)-g.c1*at_(0); g.primitive=R;
+				g.vertex=g.c0-g.c1*g.c1/(Rational(4)*g.c2); g.width=Rational(-1)/g.c2;
+				auto value=Rational(0); foreach_reverse(c;R) value=value*bound+c;
+				r.point=bound; r.half=g.constant/Rational(2); r.rest=d.below?value:Rational(0)-value;
+				foreach(c;R~[g.constant,g.vertex,g.width,r.half,r.rest,bound]) if(c.words>128) return false;
+				r.bell=g; r.vertex=true; return true;
+			}
 			// Decide before building anything: a refused integral leaves no
 			// terms behind. Beyond a single bound every term must decay.
 			bool admissible(uint id,uint depth){
 				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order;
 				if(scaledExponential(id,p,rate,scaled)) return !d.half||decays(rate+outerRate);
-				if(tailExponential(id,false,p,exponent,scaled,false,0,true)) return curve(p,exponent,R,E,rate,order);
+				if(tailExponential(id,false,p,exponent,scaled,false,0,true)){ IntervalTerm r; return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r); }
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
@@ -3279,10 +3308,26 @@ final class Bindings{
 				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false,true),result]);
 				d.terms~=r; return result;
 			}
+			// At the vertex: half the Gaussian integral under half the constant,
+			// and the antiderivative there.
+			BoundTerm vertexDifference(IntervalTerm r,Rational[] p,Rational[] exponent){
+				if(!vertex(p,exponent,r)) return BoundTerm.init;
+				auto half=scalar(ctx,arena.real_(r.half)),rest=scalar(ctx,arena.real_(r.rest)),peak=scalar(ctx,arena.real_(r.bell.vertex));
+				auto width=scalar(ctx,arena.real_(r.bell.width)),circle=scalar(ctx,arena.call(Builtin.pi,[]));
+				r.bell.factor=half.id; r.restLiteral=rest.id; r.bell.exponent=peak.id; r.bell.scale=width.id; r.bell.circle=circle.id;
+				auto height=primitive(arena.call(Builtin.expR,[arena.real_(0)]),[peak]);
+				auto result=primitive(addOp,[primitive(mulOp,[half,primitive(mulOp,[height,
+					primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[primitive(mulOp,[circle,width])])])]),primitive(mulOp,[rest,height])]);
+				if(r.scaled) result=primitive(mulOp,[tailScale(r.value,false,false,true),result]);
+				d.terms~=r; return result;
+			}
 			BoundTerm build(uint id,uint depth){
 				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
 				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
-				if(tailExponential(id,false,p,exponent,r.scaled,false,0,true)) return curveDifference(r,p,exponent);
+				if(tailExponential(id,false,p,exponent,r.scaled,false,0,true)){
+					auto curved=curveDifference(r,p,exponent);
+					return curved!=BoundTerm.init?curved:vertexDifference(r,p,exponent);
+				}
 				// A sum is integrated term by term only without further weights.
 				auto q=nodes[id];
 				if(depth>16||d.terms.length>16||solution.from.length!=1||!isOp(q,Op.add)) return BoundTerm.init;
@@ -6885,6 +6930,17 @@ final class Bindings{
 					return "("~termsName~".add "~left~" "~right~")";
 				}
 				++next;
+				if(r.vertex){
+					// The term everywhere, the bound at the vertex, the checks of
+					// the Gaussian integral there, and the literals of the result.
+					enum whole="(⊤ : Filter ℝ)";bool scaled;auto g=r.bell;
+					auto hv=cert.exponentialTail(id,whole,false,false,scaled,true);
+					string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
+					string list="[";foreach(i,c;g.primitive)list~=(i?", ":"")~cert.q(c);list~="]";
+					return "("~termsName~"."~(scaled?"scaledGaussian":"gaussian")~" (R := "~list~") "~cert.q(g.constant)~" "~cert.q(g.c0)~" "~cert.q(g.c1)~" "~cert.q(g.c2)~" "~
+						cert.q(g.vertex)~" "~cert.q(g.width)~" "~cert.q(r.point)~" "~cert.q(r.half)~" "~cert.q(r.rest)~" "~hv~" "~cert.closedProof(at(d.below?d.upper:d.lower),r.point)~" rfl "~
+						literal(g.factor,r.half)~" "~literal(r.restLiteral,r.rest)~" "~literal(g.exponent,g.vertex)~" "~literal(g.scale,g.width)~" rfl)";
+				}
 				auto primitive_="(G := fun o : Option ℝ => "~name(r.primitive)~".eval ξ (Binding.Env.cons (a := .scalar .real) o ρ)) ";
 				if(r.curved){
 					// The term and its antiderivative everywhere, the derivative,
@@ -7205,7 +7261,12 @@ final class Bindings{
 			if(c.inverse!=uint.max) stack~=c.inverse;
 			if(c.powerDegree) stack~=[c.derivativeNumerator,c.derivativeDenominator];
 		}
-		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) stack~=r.primitive; }
+		foreach(s;result.integrals){
+			stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) if(r.primitive!=uint.max) stack~=r.primitive;
+			// The bounds and the literal of a difference are named by the theorem
+			// also where the result does not mention them.
+			if(s.interval){ stack~=[s.bounds.lower,s.bounds.upper]; if(!s.bounds.below) stack~=s.bounds.minusOne; }
+		}
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd||p.rule==BindingRule.distributionCoverAffine) stack~=p.extra;
 		while(stack.length){

@@ -605,6 +605,15 @@ inductive HalfLineTerms (a m : Option ℝ) : (ℝ → Option ℝ) → Option ℝ
       (h0 : G none = none) (hi : ∀ l, IntegrableOn g (Ioi l) volume)
       (hd : ∀ x, HasDerivAt F (g x) x) (ht : Filter.Tendsto F Filter.atTop (nhds 0)) :
       HalfLineTerms a m v (Value.mul c (Value.mul m (G a)))
+  /-- Any value that is integrable above every bound, with its integral above
+  this one, and the same under a scale. -/
+  | value {v : ℝ → Option ℝ} {g : ℝ → ℝ} {out : Option ℝ} (hv : ∀ x, v x = some (g x))
+      (hi : ∀ l, IntegrableOn g (Ioi l) volume) (h0 : a = none → out = none)
+      (ho : ∀ l, a = some l → out = some (∫ x in Ioi l, g x)) : HalfLineTerms a m v out
+  | scaledValue {v : ℝ → Option ℝ} {c : Option ℝ} {g : ℝ → ℝ} {out : Option ℝ}
+      (hv : ∀ x, v x = Value.mul c (some (g x))) (hi : ∀ l, IntegrableOn g (Ioi l) volume)
+      (h0 : a = none → out = none) (ho : ∀ l, a = some l → out = some (∫ x in Ioi l, g x)) :
+      HalfLineTerms a m v (Value.mul c out)
 
 theorem HalfLineTerms.missing {a m : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
     (h : HalfLineTerms a m v out) (ha : a = none) : out = none := by
@@ -616,6 +625,8 @@ theorem HalfLineTerms.missing {a m : Option ℝ} {v : ℝ → Option ℝ} {out :
   | guard q _ ih => rw [ih]; simp [Binding.guardValue]
   | primitive _ _ h0 _ _ _ => rw [h0]; cases m <;> rfl
   | @scaledPrimitive v G c g F _ _ h0 _ _ _ => rw [h0]; cases m <;> cases c <;> rfl
+  | value _ _ h0 _ => exact h0 rfl
+  | @scaledValue v c g out _ _ h0 _ => rw [h0 rfl]; cases c <;> rfl
 
 theorem HalfLineTerms.sound {a m : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
     (h : HalfLineTerms a m v out) (hm : m = some (-1 : ℝ)) {l : ℝ} (ha : a = some l) :
@@ -673,6 +684,14 @@ theorem HalfLineTerms.sound {a m : Option ℝ} {v : ℝ → Option ℝ} {out : O
         hG l]
       simp only [Value.mul, Option.some.injEq]
       ring
+  | @value v g out hv hi _ ho => exact Or.inl ⟨g, hi l, hv, ho l rfl⟩
+  | @scaledValue v c g out hv hi _ ho =>
+    cases c with
+    | none => exact Or.inr ⟨fun x => by rw [hv x]; rfl, rfl⟩
+    | some c =>
+      refine Or.inl ⟨fun x => c * g x, (hi l).const_mul c, fun x => by rw [hv x]; rfl, ?_⟩
+      rw [ho l rfl, integral_const_mul]
+      rfl
 
 /-- The observation of a guarded value above one partial bound. -/
 theorem halfline_integral (strict : Bool) (a m : Option ℝ)
@@ -751,6 +770,15 @@ inductive UpperTerms (b : Option ℝ) : (ℝ → Option ℝ) → Option ℝ → 
       (h0 : G none = none) (hi : ∀ u, IntegrableOn g (Iic u) volume)
       (hd : ∀ x, HasDerivAt F (g x) x) (ht : Filter.Tendsto F Filter.atBot (nhds 0)) :
       UpperTerms b v (Value.mul c (G b))
+  /-- Any value that is integrable below every bound, with its integral below
+  this one, and the same under a scale. -/
+  | value {v : ℝ → Option ℝ} {g : ℝ → ℝ} {out : Option ℝ} (hv : ∀ x, v x = some (g x))
+      (hi : ∀ u, IntegrableOn g (Iic u) volume) (h0 : b = none → out = none)
+      (ho : ∀ u, b = some u → out = some (∫ x in Iic u, g x)) : UpperTerms b v out
+  | scaledValue {v : ℝ → Option ℝ} {c : Option ℝ} {g : ℝ → ℝ} {out : Option ℝ}
+      (hv : ∀ x, v x = Value.mul c (some (g x))) (hi : ∀ u, IntegrableOn g (Iic u) volume)
+      (h0 : b = none → out = none) (ho : ∀ u, b = some u → out = some (∫ x in Iic u, g x)) :
+      UpperTerms b v (Value.mul c out)
 
 theorem UpperTerms.missing {b : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
     (h : UpperTerms b v out) (hb : b = none) : out = none := by
@@ -760,6 +788,8 @@ theorem UpperTerms.missing {b : Option ℝ} {v : ℝ → Option ℝ} {out : Opti
   | guard q _ ih => rw [ih]; simp [Binding.guardValue]
   | primitive _ _ h0 _ _ _ => exact h0
   | @scaledPrimitive v G c g F _ _ h0 _ _ _ => rw [h0]; cases c <;> rfl
+  | value _ _ h0 _ => exact h0 rfl
+  | @scaledValue v c g out _ _ h0 _ => rw [h0 rfl]; cases c <;> rfl
 
 theorem UpperTerms.sound {b : Option ℝ} {v : ℝ → Option ℝ} {out : Option ℝ}
     (h : UpperTerms b v out) {u : ℝ} (hb : b = some u) :
@@ -796,6 +826,14 @@ theorem UpperTerms.sound {b : Option ℝ} {v : ℝ → Option ℝ} {out : Option
       refine Or.inl ⟨fun x => c * g x, (hi u).const_mul c, fun x => by rw [hv x]; rfl, ?_⟩
       rw [integral_const_mul, integral_Iic_of_hasDerivAt_of_tendsto' (fun x _ => hd x) (hi u) ht,
         hG u, sub_zero]
+      rfl
+  | @value v g out hv hi _ ho => exact Or.inl ⟨g, hi u, hv, ho u rfl⟩
+  | @scaledValue v c g out hv hi _ ho =>
+    cases c with
+    | none => exact Or.inr ⟨fun x => by rw [hv x]; rfl, rfl⟩
+    | some c =>
+      refine Or.inl ⟨fun x => c * g x, (hi u).const_mul c, fun x => by rw [hv x]; rfl, ?_⟩
+      rw [ho u rfl, integral_const_mul]
       rfl
 
 /-- The observation of a guarded value below one partial bound. -/

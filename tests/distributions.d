@@ -592,7 +592,21 @@ private Case[] cases(){ return [
 	Case("GaussianTwoWeights","∫dx exp(-x^2)*λ[x]*x^2","ℝ","1/2·sqrt(π)"),
 	Case("GaussianGrowing","∫dx exp(x^2)*λ[x]","ℝ"),
 	Case("GaussianQuartic","∫dx exp(-x^4)*λ[x]","ℝ"),
-	Case("GaussianHalfLine","∫dx [0≤x]*exp(-x^2)*λ[x]","ℝ"),
+	Case("VertexHalfLine","∫dx [0≤x]*exp(-x^2)*λ[x]","ℝ","1/2·sqrt(π)"),
+	Case("VertexEven","∫dx [0≤x]*x^2*exp(-x^2)*λ[x]","ℝ","1/4·sqrt(π)"),
+	Case("VertexFourth","∫dx [0≤x]*x^4*exp(-x^2/2)*λ[x]","ℝ","3/2·sqrt(2·π)"),
+	Case("VertexShifted","∫dx [1≤x]*exp(-(x-1)^2)*λ[x]","ℝ","1/2·sqrt(π)"),
+	Case("VertexTilted","∫dx [1/2≤x]*exp(x-x^2)*λ[x]","ℝ","1/2·sqrt(π)·exp(1/4)"),
+	Case("VertexMixed","∫dx [0≤x]*(1+x)*exp(-(x^2))*λ[x]","ℝ","1/2·sqrt(π)+1/2"),
+	Case("VertexUpper","∫dx [x≤0]*exp(-x^2)*λ[x]","ℝ","1/2·sqrt(π)"),
+	Case("VertexUpperPolynomial","∫dx [x≤0]*(x+1)^2*exp(-x^2)*λ[x]","ℝ","3/4·sqrt(π)-1"),
+	Case("VertexScaled","∫dx [0≤x]*c*exp(-x^2/2)*λ[x]","ℝ","c·(1/2)·sqrt(2·π)"),
+	Case("VertexOffset","∫dx [0≤x]*exp(a-x^2)*λ[x]","ℝ","1/2·sqrt(π)·exp(a)"),
+	Case("VertexSum","∫dx [0≤x]*(exp(-x^2)+exp(-x))*λ[x]","ℝ","1/2·sqrt(π)+1"),
+	Case("VertexDomain","∫dx [0≤x]*exp(-x^2)/a*λ[x]","ℝ","guard(a≠0,a⁻¹·(1/2)·sqrt(π))"),
+	Case("VertexNormal","∫dx [0≤x]*exp(-x^2)/sqrt(π)*2*λ[x]","ℝ","1"),
+	Case("VertexAway","∫dx [1≤x]*exp(-x^2)*λ[x]","ℝ"),
+	Case("VertexInterval","∫dx [0≤x]*[x≤1]*exp(-x^2)*λ[x]","ℝ"),
 	Case("GaussianSymbolic","∫dx exp(-(x-m)^2)*λ[x]","ℝ","sqrt(π)"),
 	Case("GaussianSymbolicOffset","∫dx exp(-x^2+a)*λ[x]","ℝ","sqrt(π)·exp(a)"),
 	Case("GaussianSymbolicMean","∫dx x*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","m"),
@@ -661,7 +675,6 @@ private Case[] cases(){ return [
 	Case("CurveCdf","λ(a:ℝ).∫dx [0≤x]*[x≤a]*2*x*exp(-x^2)*λ[x]","ℝ→ℝ","λ(a:ℝ). [0≤a]·(-exp(-a^2)+1)"),
 	Case("CurveGuarded","∫dx [c≤d]*[0≤x]*x*exp(-x^2)*λ[x]","ℝ","[c≤d]·(1/2)"),
 	Case("CurveLaw","∫dx ([0≤x]*2*x*exp(-x^2)*λ[x])*x^2","ℝ","1"),
-	Case("CurveEven","∫dx [0≤x]*x^2*exp(-x^2)*λ[x]","ℝ"),
 	Case("CurveHalfLineGrowing","∫dx [0≤x]*x*exp(x^2)*λ[x]","ℝ"),
 	Case("CurveOffset","∫dx [0≤x]*x*exp(-x^2+a)*λ[x]","ℝ","1/2·exp(a)"),
 	Case("CurveOffsetInterval","∫dx [0≤x≤1]*x*exp(b-x^2)*c*λ[x]","ℝ","c·(-1/2·exp(-1)+1/2)·exp(b)"),
@@ -1085,11 +1098,11 @@ private void run(string directory){
 		// shape: R'+E'·R=P has a polynomial solution. Above a bound the exponent
 		// must descend. The constant part of an exponent of degree at most two
 		// may be a term that does not mention the axis: its exponential is a
-		// scale. Without such a solution, with an exponent that grows above a
-		// bound and with a mean or a curvature that is such a term the
-		// integral stays.
+		// scale. With an exponent that grows above a bound and with a mean or
+		// a curvature that is such a term the integral stays, and without such
+		// a solution away from the vertex of a Gaussian.
 		if(c.name.indexOf("Curve")==0){
-			bool retained=c.name=="CurveEven"||c.name=="CurveHalfLineGrowing"||c.name=="CurveMean"||c.name=="CurveCurvature";
+			bool retained=c.name=="CurveHalfLineGrowing"||c.name=="CurveMean"||c.name=="CurveCurvature";
 			bool half=c.name!="CurveInterval"&&c.name!="CurveSymbolicBounds"&&c.name!="CurveGrowing"&&c.name!="CurveTwoScales"&&c.name!="CurveCdf"&&
 				c.name!="CurveOffsetInterval"&&c.name!="CurveOffsetBounds";
 			bool shifted=c.name.indexOf("CurveOffset")==0,scaled=c.name=="CurveScaled"||c.name=="CurveTwoScales"||shifted;
@@ -1135,11 +1148,11 @@ private void run(string directory){
 		// moments of the polynomial are a polynomial in the linear coefficient,
 		// a sum of its monomials. So may the coefficients of a polynomial in
 		// front: the integral is linear in them, and each meets the moments of
-		// its power. Other exponents, a curvature that is such a term, a
-		// polynomial of too high a degree and half-lines keep their integral.
+		// its power. Other exponents, a curvature that is such a term and a
+		// polynomial of too high a degree keep their integral.
 		if(c.name.indexOf("Gaussian")==0){
 			bool symbolic=c.name.indexOf("GaussianSymbolic")==0,prefactor=c.name.indexOf("GaussianSymbolicPrefactor")==0;
-			bool retained=c.name=="GaussianGrowing"||c.name=="GaussianQuartic"||c.name=="GaussianHalfLine"||c.name=="GaussianSymbolicCurvature"||
+			bool retained=c.name=="GaussianGrowing"||c.name=="GaussianQuartic"||c.name=="GaussianSymbolicCurvature"||
 				c.name=="GaussianSymbolicVariance"||c.name=="GaussianSymbolicLinear"||c.name=="GaussianSymbolicPrefactorCurvature"||c.name=="GaussianSymbolicPrefactorDegree";
 			auto scaled=c.name=="GaussianNormal"||c.name=="GaussianVariance"||c.name=="GaussianMean"||c.name=="GaussianCentral"||c.name=="GaussianScaled"||c.name=="GaussianPartialScale"||
 				c.name=="GaussianSymbolicNested";
@@ -1169,6 +1182,20 @@ private void run(string directory){
 			}
 			if(c.name=="GaussianGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name);
 			if(c.name=="GaussianPartialScale") enforce(text.indexOf("a≠0")>=0&&text.indexOf("sqrt(π)")>=0,c.name~": "~text);
+		}
+		// A half-line that starts or ends at the vertex of a Gaussian: the
+		// exponential has half its integral on either side, and the polynomial
+		// is a constant up to a derivative that vanishes at the end. A bound
+		// away from the vertex and two bounds keep their integral.
+		if(c.name.indexOf("Vertex")==0){
+			bool retained=c.name=="VertexAway"||c.name=="VertexInterval",upper=c.name.indexOf("VertexUpper")==0;
+			bool scaled=c.name=="VertexScaled"||c.name=="VertexOffset"||c.name=="VertexDomain"||c.name=="VertexNormal";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_"~(upper?"upper":"halfline"))>=0)!=retained,c.name~" certificate");
+			enforce((certificate.indexOf("Distribution.StepSource."~(upper?"UpperTerms":"HalfLineTerms")~(scaled?".scaledGaussian ":".gaussian "))>=0)!=retained,c.name~" vertex");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(c.name=="VertexSum") enforce(certificate.indexOf("HalfLineTerms.pure")>=0&&certificate.indexOf("HalfLineTerms.add")>=0,c.name~" terms");
+			if(c.name=="VertexOffset") enforce(certificate.indexOf("Limit.EventualScaled.exp_curve")>=0,c.name~" offset");
+			if(c.name=="VertexDomain") enforce(certificate.indexOf("HalfLineTerms.guard")>=0,c.name~" domain");
 		}
 		// A strict guard that does not mention the axis leaves the observation,
 		// from the top of a weight or of a factor of it, whether or not the
