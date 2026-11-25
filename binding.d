@@ -108,6 +108,9 @@ private struct GaussianData{
 	// each of them, and one of them cannot vanish.
 	bool curved; uint nonzero=uint.max;
 	Rational[][][] tables; uint[][][] tableLiterals; uint witness=uint.max;
+	// A scale that may vanish, and a polynomial whose coefficients may all
+	// vanish: the result is under their mask.
+	bool maskScale,maskPolynomial;
 }
 private struct IntegralSolution{
 	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell;
@@ -3629,13 +3632,12 @@ final class Bindings{
 		// `exp(c₀-c₁²/(4·c₂))·√(-π/c₂)`, which is missing where the curvature is
 		// not negative, the inverse at zero and the root above it, as the
 		// observation is: the integrand is defined there and not integrable.
-		// Only under factors that cannot vanish: a polynomial that is not zero,
-		// and a scale that is not zero where it is defined, by its form. A
-		// factor of zero leaves the zero function, which has an integral
-		// whatever the curvature is. The coefficients of a polynomial may be
-		// terms that do not mention the axis where one of them cannot vanish
-		// either: the integral is linear in them, and each meets the moments
-		// of its power.
+		// The coefficients of a polynomial may be terms that do not mention the
+		// axis: the integral is linear in them, and each meets the moments of
+		// its power. A factor of zero leaves the zero function, which has an
+		// integral whatever the curvature is: a scale that may vanish, and a
+		// polynomial whose coefficients may all vanish, by their form, have the
+		// closed form under their mask.
 		BoundTerm integrateCurvature(BoundTerm t,ref IntegralSolution solution,BellParts found){
 			auto p=found.p; while(p.length&&p[$-1].zero) p.length=p.length-1;
 			auto count=found.symbolic?found.poly.length:1;
@@ -3666,11 +3668,11 @@ final class Bindings{
 				auto after=next(j,mu,before); before=mu; mu=after;
 			}
 			BellParts built; gaussianParts(solution.from,built,true);
-			if(built.scaled&&!nonvanishing(built.scale.id)) return BoundTerm.init;
 			GaussianData d; d.symbolic=true; d.curved=true;
+			d.maskScale=built.scaled&&!nonvanishing(built.scale.id);
 			if(found.symbolic){
 				foreach(j,c;built.poly) if(c.present&&nonvanishingCoefficient(c.term)){ d.witness=cast(uint)j; break; }
-				if(d.witness==uint.max) return BoundTerm.init;
+				d.maskPolynomial=d.witness==uint.max;
 				d.tables=tables;
 			}else d.rows=tables[0];
 			auto ctx=context(t),product=arena.mul(arena.real_(1),arena.real_(1),true),sum=arena.add(arena.real_(0),arena.real_(0),true);
@@ -3715,7 +3717,22 @@ final class Bindings{
 			auto bell=primitive(product,[primitive(arena.call(Builtin.expR,[arena.real_(0)]),[exponent]),
 				primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[primitive(product,[circle,primitive(product,[minus,inverse])])])]);
 			auto result=primitive(product,[balanced(terms),bell]);
-			if(built.scaled){ d.nonzero=built.scale.id; result=primitive(product,[built.scale,result]); }
+			if(built.scaled){ if(!d.maskScale) d.nonzero=built.scale.id; result=primitive(product,[built.scale,result]); }
+			if(d.maskScale||d.maskPolynomial){
+				// Under the mask of the factors that may vanish: a scale, the
+				// coefficients of a polynomial one after the other, or both. A
+				// mask that fails hides what is under it, so the result comes
+				// after everything the integrand is strict in.
+				BoundTerm nonzero(BoundTerm x){ return primitive(arena.nonzero(arena.real_(1)),[x]); }
+				auto truth=arena.boolean(true); BoundTerm condition;
+				if(d.maskPolynomial) foreach_reverse(c;built.poly) if(c.present)
+					condition=condition==BoundTerm.init?nonzero(c.term):primitive(arena.or_(truth,truth),[nonzero(c.term),condition]);
+				if(d.maskScale) condition=condition==BoundTerm.init?nonzero(built.scale):primitive(arena.and_(truth,truth),[nonzero(built.scale),condition]);
+				result=primitive(arena.mask(truth,arena.real_(1)),[condition,result]);
+				foreach_reverse(x;[constant,linear,curvature]) result=sequence(x,result);
+				if(found.symbolic) foreach_reverse(c;built.poly) if(c.present) result=sequence(c.term,result);
+				if(built.scaled) result=sequence(built.scale,result);
+			}
 			solution.bell=d; solution.gaussian=true; solution.piecewise=true; solution.output=result.id; return result;
 		}
 		// The whole line under a polynomial times the exponential of a quadratic
@@ -7353,12 +7370,20 @@ final class Bindings{
 						}
 						tables="["~table~"]"~(tables.length?", ":"")~tables;
 					}
-					enforce(d.witness<poly.length&&poly[d.witness].present&&nonvanishingCoefficient(poly[d.witness].term),"coefficient may vanish");
-					auto w=poly[d.witness].term;Rational value;Term term;
-					auto witness="("~src~"SomeNonvanishing.here "~(closedRational(w,value,term)?"("~src~"Nonvanishing.literal "~q(value)~" "~cert.closedProof(w,value)~" rfl)":nonzero(w.id))~")";
-					foreach(i;0..d.witness)witness="("~src~"SomeNonvanishing.later "~witness~")";
-					return "Distribution.DensityProgram.presentation_mass_gaussian_curvature_moments "~program~" ["~tables~"] "~evidence~" "~exponent~" rfl rfl "~
-						(d.nonzero==uint.max?"trivial":nonzero(d.nonzero))~" "~witness~" "~monomials~" "~sums(count)~" "~literal(d.factor,Rational(-1)/Rational(2))~" "~
+					string witness;
+					if(!d.maskPolynomial){
+						enforce(d.witness<poly.length&&poly[d.witness].present&&nonvanishingCoefficient(poly[d.witness].term),"coefficient may vanish");
+						auto w=poly[d.witness].term;Rational value;Term term;
+						witness="("~src~"SomeNonvanishing.here "~(closedRational(w,value,term)?"("~src~"Nonvanishing.literal "~q(value)~" "~cert.closedProof(w,value)~" rfl)":nonzero(w.id))~")";
+						foreach(i;0..d.witness)witness="("~src~"SomeNonvanishing.later "~witness~")";
+					}
+					auto steady=d.nonzero==uint.max?"trivial":nonzero(d.nonzero);
+					// The factors that may vanish are under the mask; the others
+					// cannot, by their form.
+					auto factors=!d.maskScale&&!d.maskPolynomial?steady~" "~witness:
+						"("~src~"VanishMask."~(!d.maskPolynomial?"scale "~witness:d.maskScale?"both rfl":"polynomial "~steady~" rfl")~")";
+					return "Distribution.DensityProgram.presentation_mass_gaussian_curvature_moments"~(d.maskScale||d.maskPolynomial?"_masked ":" ")~program~" ["~tables~"] "~evidence~" "~exponent~" rfl rfl "~
+						factors~" "~monomials~" "~sums(count)~" "~literal(d.factor,Rational(-1)/Rational(2))~" "~
 						literal(d.exponent,Rational(-1)/Rational(4))~" "~literal(d.scale,Rational(-1))~" rfl";
 				}
 				// A row that is not zero meets its power of `h`; the first has none.
@@ -7368,8 +7393,8 @@ final class Bindings{
 					monomials="("~src~"MomentTerms."~(!present?"absent "~list(row):(l?"present ":"bare ")~rowProof(row,d.rowLiterals[l]))~" "~monomials~")";
 					table=list(row)~(table.length?", ":"")~table;
 				}
-				return "Distribution.DensityProgram.presentation_mass_gaussian_curvature "~program~" ["~table~"] "~evidence~" "~exponent~" rfl "~
-					(d.nonzero==uint.max?"trivial":nonzero(d.nonzero))~" "~monomials~" "~sums(count)~" "~literal(d.factor,Rational(-1)/Rational(2))~" "~
+				return "Distribution.DensityProgram.presentation_mass_gaussian_curvature"~(d.maskScale?"_masked ":" ")~program~" ["~table~"] "~evidence~" "~exponent~" rfl "~
+					(d.maskScale?"":(d.nonzero==uint.max?"trivial":nonzero(d.nonzero))~" ")~monomials~" "~sums(count)~" "~literal(d.factor,Rational(-1)/Rational(2))~" "~
 					literal(d.exponent,Rational(-1)/Rational(4))~" "~literal(d.scale,Rational(-1))~" rfl";
 			}
 			if(d.rows.length){

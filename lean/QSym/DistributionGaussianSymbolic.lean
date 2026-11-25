@@ -1757,6 +1757,375 @@ theorem gaussian_partialIntegral_curvature_moments {f : ℝ → Option ℝ} {S :
       rw [hfx]
       simp [scaleBy, Value.mul]) hneg hpos hg hmn hpi
 
+/-! Factors that may vanish. Where a factor is zero the integrand is the zero
+function, which has an integral whatever the curvature is: the closed form
+stands under the mask of those factors. A mask that fails hides what is under
+it, so the result comes after everything the integrand is strict in. -/
+
+/-- After values that must be defined. -/
+def after : List (Option ℝ) → Option ℝ → Option ℝ
+  | [], y => y
+  | p :: ps, y => p.bind fun _ => after ps y
+
+theorem after_none {ps : List (Option ℝ)} (h : none ∈ ps) (y : Option ℝ) : after ps y = none := by
+  induction ps with
+  | nil => simp at h
+  | cons p ps ih =>
+    rcases p with _ | v
+    · rfl
+    · show after ps y = none
+      exact ih (by simpa using h)
+
+theorem after_defined {ps : List (Option ℝ)} (h : none ∉ ps) (y : Option ℝ) : after ps y = y := by
+  induction ps with
+  | nil => rfl
+  | cons p ps ih =>
+    rcases p with _ | v
+    · exact absurd (by simp) h
+    · show after ps y = y
+      exact ih fun hm => h (by simp [hm])
+
+/-- A function that is zero everywhere has the integral zero. -/
+theorem partialIntegral_zero {f : ℝ → Option ℝ} (h : ∀ x, f x = some 0) :
+    partialIntegral volume f = some 0 := by
+  have he : (fun x => (f x).getD 0) = fun _ : ℝ => (0 : ℝ) := by
+    funext x
+    rw [h]
+    rfl
+  rw [partialIntegral_valid volume f (fun x => ⟨_, h x⟩) (by rw [he]; exact integrable_zero _ _ _),
+    he]
+  simp
+
+/-- The same integral under a scale that may vanish: under the mask of the
+scale, after the scale and the coefficients of the exponent. -/
+theorem gaussian_partialIntegral_curvature_masked {f : ℝ → Option ℝ} {c : Option ℝ}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (K : List (List ℚ))
+    (hf : Bell f (some c) none P (some E)) (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hK : curvatureCheck P K = true) {k g m u pi : Option ℝ} {ms : List (Option ℝ)}
+    (hm : MomentTerms c1 (curvatureCoefs (Value.mul u (Value.inv c2)) K 0) K ms) (hk : Sums ms k)
+    (hu : u = some (Numeric.denote (s := .real) (-1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hmn : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume f = after [c, c0, c1, c2] (Value.mask (Value.nonzero c)
+      (Value.mul c (Value.mul k (Value.mul
+        (Functions.expR.apply
+          (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+        (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))))) := by
+  have hfx : ∀ x, f x =
+      Value.mul c (Value.mul (some (polyEval P x)) (Functions.expR.apply (E x))) :=
+    fun x => hf.plain x
+  have missing : (∀ x, f x = none) → partialIntegral volume f = none := fun hn => by
+    apply if_neg
+    intro hdef
+    obtain ⟨v, hv⟩ := hdef.1 0
+    rw [hn] at hv
+    cases hv
+  have hexp : ∀ x, E x = none → f x = none := fun x hx => by
+    rw [hfx, hx]
+    cases c <;> simp [Value.mul, Function1.apply]
+  rcases c with _ | s
+  · rw [missing fun x => by rw [hfx]; rfl]
+    rfl
+  rcases c0 with _ | a
+  · rw [missing fun x => hexp x (hE.missing (Or.inl rfl) x)]
+    rfl
+  rcases c1 with _ | b
+  · rw [missing fun x => hexp x (hE.missing (Or.inr (Or.inl rfl)) x)]
+    rfl
+  rcases c2 with _ | q
+  · rw [missing fun x => hexp x (hE.missing (Or.inr (Or.inr rfl)) x)]
+    rfl
+  show partialIntegral volume f = Value.mask (Value.nonzero (some s)) _
+  by_cases hs : s = 0
+  · subst hs
+    have hEx : ∀ x, E x = some (a + (b * x + q * x ^ 2)) := fun x => by
+      rw [hE.equation]
+      rfl
+    rw [partialIntegral_zero fun x => by
+      rw [hfx, hEx]
+      simp [Value.mul, Function1.apply, Functions.expR]]
+    simp [Value.nonzero, Value.mask]
+  · rw [gaussian_partialIntegral_curvature K hf hE hK (fun t ht => by cases ht; exact hs) hm hk hu
+      hg hmn hpi]
+    simp [Value.nonzero, hs, Value.mask, scaleBy]
+
+/-- The scale as a list of values. -/
+def scaleList : Option (Option ℝ) → List (Option ℝ)
+  | none => []
+  | some c => [c]
+
+/-- The coefficients that are present. -/
+def presentCoefs : List (Option (Option ℝ)) → List (Option ℝ)
+  | [] => []
+  | none :: cs => presentCoefs cs
+  | some c :: cs => c :: presentCoefs cs
+
+theorem mem_presentCoefs (cs : List (Option (Option ℝ))) (c : Option ℝ) :
+    c ∈ presentCoefs cs ↔ some c ∈ cs := by
+  induction cs with
+  | nil => simp [presentCoefs]
+  | cons d cs ih => rcases d with _ | d <;> simp [presentCoefs, ih]
+
+/-- The test that a coefficient that is present is not zero; none where none
+is present. -/
+noncomputable def anyNonzero : List (Option (Option ℝ)) → Option (Option Bool)
+  | [] => none
+  | none :: cs => anyNonzero cs
+  | some c :: cs =>
+    match anyNonzero cs with
+    | none => some (Value.nonzero c)
+    | some g => some (Value.or (Value.nonzero c) g)
+
+private theorem anyNonzero_absent :
+    ∀ cs : List (Option (Option ℝ)), anyNonzero cs = none → ∀ c : Option ℝ, some c ∉ cs := by
+  intro cs
+  induction cs with
+  | nil => intro _ c hc; simp at hc
+  | cons d cs ih =>
+    intro h c hc
+    rcases d with _ | d
+    · exact ih h c (by simpa using hc)
+    · simp only [anyNonzero] at h
+      split at h <;> cases h
+
+/-- Where the coefficients are defined that test says whether one of them is
+not zero. -/
+private theorem anyNonzero_value :
+    ∀ (cs : List (Option (Option ℝ))) (g : Option Bool), some none ∉ cs → anyNonzero cs = some g →
+      ∃ b : Bool, g = some b ∧ (b = true ↔ ∃ v : ℝ, some (some v) ∈ cs ∧ v ≠ 0) := by
+  intro cs
+  induction cs with
+  | nil => intro g _ h; cases h
+  | cons d cs ih =>
+    intro g hd h
+    have hcs : some none ∉ cs := fun hm => hd (by simp [hm])
+    rcases d with _ | _ | v0
+    · obtain ⟨b, hb, hiff⟩ := ih g hcs h
+      exact ⟨b, hb, by simpa using hiff⟩
+    · exact absurd (by simp) hd
+    · simp only [anyNonzero] at h
+      cases hrest : anyNonzero cs with
+      | none =>
+        rw [hrest] at h
+        refine ⟨decide (v0 ≠ 0), by rw [← Option.some.inj h]; simp [Value.nonzero], ?_⟩
+        constructor
+        · intro hv
+          exact ⟨v0, by simp, of_decide_eq_true hv⟩
+        · rintro ⟨v, hv, hv0⟩
+          rcases List.mem_cons.1 hv with he | hm
+          · have : v = v0 := by simpa using he
+            rw [← this]
+            exact decide_eq_true hv0
+          · exact absurd hm (anyNonzero_absent cs hrest (some v))
+      | some g' =>
+        rw [hrest] at h
+        obtain ⟨b, hb, hiff⟩ := ih g' hcs hrest
+        refine ⟨decide (v0 ≠ 0) || b, by
+          rw [← Option.some.inj h, hb]
+          by_cases hz : v0 = 0 <;> cases b <;> simp [Value.nonzero, Value.or, hz], ?_⟩
+        constructor
+        · intro hv
+          rcases Bool.or_eq_true_iff.1 hv with h1 | h1
+          · exact ⟨v0, by simp, of_decide_eq_true h1⟩
+          · obtain ⟨v, hv', hv0⟩ := hiff.1 h1
+            exact ⟨v, by simp [hv'], hv0⟩
+        · rintro ⟨v, hv, hv0⟩
+          rcases List.mem_cons.1 hv with he | hm
+          · have : v = v0 := by simpa using he
+            rw [← this]
+            simp [hv0]
+          · simp [hiff.2 ⟨v, hm, hv0⟩]
+
+theorem SomeNonvanishing.exists {cs : List (Option (Option ℝ))} (h : SomeNonvanishing cs)
+    (hd : some none ∉ cs) : ∃ v : ℝ, some (some v) ∈ cs ∧ v ≠ 0 := by
+  induction h with
+  | @here c cs hn =>
+    rcases c with _ | v
+    · exact absurd (by simp) hd
+    · exact ⟨v, by simp, hn v rfl⟩
+  | @later c cs _ ih =>
+    obtain ⟨v, hv, hv0⟩ := ih fun hm => hd (by simp [hm])
+    exact ⟨v, by simp [hv], hv0⟩
+
+theorem SomeNonvanishing.of_mem : ∀ {cs : List (Option (Option ℝ))} {v : ℝ},
+    some (some v) ∈ cs → v ≠ 0 → SomeNonvanishing cs := by
+  intro cs
+  induction cs with
+  | nil => intro v hv; simp at hv
+  | cons c cs ih =>
+    intro v hv hv0
+    rcases List.mem_cons.1 hv with he | hm
+    · rw [← he]
+      exact .here fun t ht => by cases ht; exact hv0
+    · exact .later (ih hm hv0)
+
+/-- A polynomial whose coefficients are all zero is zero. -/
+private theorem realEval_eq_zero {cs : List (Option (Option ℝ))}
+    (h : ∀ v : ℝ, some (some v) ∈ cs → v = 0) (x : ℝ) : realEval cs x = 0 := by
+  induction cs with
+  | nil => rfl
+  | cons c cs ih =>
+    have hc : coefReal c = 0 := by
+      rcases c with _ | _ | v
+      · rfl
+      · rfl
+      · exact h v (by simp)
+    simp only [realEval, hc, ih fun v hv => h v (by simp [hv])]
+    ring
+
+/-- The real value of a scale; one where there is none. -/
+def scaleReal : Option (Option ℝ) → ℝ
+  | some (some s) => s
+  | _ => 1
+
+/-- The mask of the factors that may vanish: a scale in front of a polynomial
+with a coefficient that cannot, the coefficients under a scale that cannot,
+or both. -/
+inductive VanishMask : Option (Option ℝ) → List (Option (Option ℝ)) → Option Bool → Prop
+  | scale {c : Option ℝ} {cs : List (Option (Option ℝ))} (h : SomeNonvanishing cs) :
+      VanishMask (some c) cs (Value.nonzero c)
+  | polynomial {S : Option (Option ℝ)} {cs : List (Option (Option ℝ))} {g : Option Bool}
+      (hS : scaleNonvanishing S) (h : anyNonzero cs = some g) : VanishMask S cs g
+  | both {c : Option ℝ} {cs : List (Option (Option ℝ))} {g : Option Bool}
+      (h : anyNonzero cs = some g) : VanishMask (some c) cs (Value.and (Value.nonzero c) g)
+
+/-- Where the scale and the coefficients are defined the mask says whether the
+scale and one of the coefficients are not zero. -/
+theorem VanishMask.value {S : Option (Option ℝ)} {cs : List (Option (Option ℝ))} {G : Option Bool}
+    (h : VanishMask S cs G) (hS : S ≠ some none) (hd : some none ∉ cs) :
+    ∃ b : Bool, G = some b ∧
+      (b = true ↔ scaleReal S ≠ 0 ∧ ∃ v : ℝ, some (some v) ∈ cs ∧ v ≠ 0) := by
+  cases h with
+  | @scale c _ hN =>
+    rcases c with _ | s
+    · exact absurd rfl hS
+    · refine ⟨decide (s ≠ 0), by simp [Value.nonzero], ?_⟩
+      constructor
+      · intro hs
+        exact ⟨of_decide_eq_true hs, hN.exists hd⟩
+      · rintro ⟨hs, _⟩
+        exact decide_eq_true hs
+  | polynomial hSn hg =>
+    obtain ⟨b, hb, hiff⟩ := anyNonzero_value cs G hd hg
+    refine ⟨b, hb, ?_⟩
+    have hs : scaleReal S ≠ 0 := by
+      rcases S with _ | _ | s
+      · simp [scaleReal]
+      · exact absurd rfl hS
+      · exact hSn s rfl
+    constructor
+    · intro hbt
+      exact ⟨hs, hiff.1 hbt⟩
+    · rintro ⟨_, hv⟩
+      exact hiff.2 hv
+  | @both c _ g hg =>
+    obtain ⟨b, hb, hiff⟩ := anyNonzero_value cs g hd hg
+    rcases c with _ | s
+    · exact absurd rfl hS
+    · refine ⟨decide (s ≠ 0) && b, by
+        rw [hb]
+        by_cases hz : s = 0 <;> cases b <;> simp [Value.nonzero, Value.and, hz], ?_⟩
+      constructor
+      · intro hbt
+        obtain ⟨h1, h2⟩ := Bool.and_eq_true_iff.1 hbt
+        exact ⟨of_decide_eq_true h1, hiff.1 h2⟩
+      · rintro ⟨hs, hv⟩
+        simp [scaleReal] at hs
+        simp [hs, hiff.2 hv]
+
+/-- The same under a polynomial whose coefficients may all vanish, or a scale
+that may: under the mask of those factors, after the scale, the coefficients
+and the coefficients of the exponent. -/
+theorem gaussian_partialIntegral_curvature_moments_masked {f : ℝ → Option ℝ}
+    {S : Option (Option ℝ)} {cs : List (Option (Option ℝ))} {P : List ℚ} {E : ℝ → Option ℝ}
+    {c0 c1 c2 : Option ℝ} (Ks : List (List (List ℚ))) (hf : Bell f S (some cs) P (some E))
+    (hE : Quadratic E (some c0) (some c1) (some c2))
+    (hK : curvatureMomentsCheck P Ks = true) (hl : cs.length = Ks.length)
+    {G : Option Bool} (hG : VanishMask S cs G)
+    {k g m u pi : Option ℝ} {ms : List (Option ℝ)}
+    (hm : MomentTerms c1 (momentCoefs (Value.mul u (Value.inv c2)) cs Ks) Ks.flatten ms)
+    (hk : Sums ms k)
+    (hu : u = some (Numeric.denote (s := .real) (-1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hmn : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    partialIntegral volume f = after (scaleList S ++ presentCoefs cs ++ [c0, c1, c2])
+      (Value.mask G (scaleBy S (Value.mul k (Value.mul
+        (Functions.expR.apply
+          (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+        (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))))) := by
+  have missing : (∀ x, f x = none) → partialIntegral volume f = none := fun hn => by
+    apply if_neg
+    intro hdef
+    obtain ⟨v, hv⟩ := hdef.1 0
+    rw [hn] at hv
+    cases hv
+  have hfn : ∀ x, (symEval cs x = none ∨ E x = none) → f x = none := fun x hx => by
+    rw [hf.equation, symPart, expPart]
+    rcases hx with hx | hx <;> rw [hx] <;> rcases S with _ | _ | s <;>
+      simp [scaleBy, Value.mul, Function1.apply]
+  by_cases hd : none ∈ scaleList S ++ presentCoefs cs ++ [c0, c1, c2]
+  · rw [after_none hd]
+    apply missing
+    intro x
+    simp only [List.mem_append, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false,
+      mem_presentCoefs] at hd
+    rcases hd with (hS | hcs) | h0 | h1 | h2
+    · rcases S with _ | _ | s
+      · simp [scaleList] at hS
+      · rw [hf.equation]
+        rfl
+      · simp [scaleList] at hS
+    · exact hfn x (Or.inl ((symEval_none_iff cs x).2 hcs))
+    · exact hfn x (Or.inr (hE.missing (Or.inl h0.symm) x))
+    · exact hfn x (Or.inr (hE.missing (Or.inr (Or.inl h1.symm)) x))
+    · exact hfn x (Or.inr (hE.missing (Or.inr (Or.inr h2.symm)) x))
+  rw [after_defined hd]
+  simp only [List.mem_append, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false,
+    mem_presentCoefs, not_or] at hd
+  obtain ⟨⟨hS, hcs⟩, h0, h1, h2⟩ := hd
+  have hS' : S ≠ some none := fun h => hS (by rw [h]; simp [scaleList])
+  obtain ⟨b, hGb, hb⟩ := hG.value hS' hcs
+  cases b with
+  | false =>
+    have hne : ¬(scaleReal S ≠ 0 ∧ ∃ v : ℝ, some (some v) ∈ cs ∧ v ≠ 0) := fun h => by
+      simpa using hb.2 h
+    obtain ⟨a, rfl⟩ : ∃ a, c0 = some a := Option.ne_none_iff_exists'.1 (Ne.symm h0)
+    obtain ⟨b1, rfl⟩ : ∃ b1, c1 = some b1 := Option.ne_none_iff_exists'.1 (Ne.symm h1)
+    obtain ⟨q, rfl⟩ : ∃ q, c2 = some q := Option.ne_none_iff_exists'.1 (Ne.symm h2)
+    have hzero : ∀ x, f x = some 0 := fun x => by
+      have hEx : E x = some (a + (b1 * x + q * x ^ 2)) := by
+        rw [hE.equation]
+        rfl
+      rw [hf.equation, symPart, expPart, hEx, symEval_real hcs]
+      by_cases hs0 : scaleReal S = 0
+      · rcases S with _ | _ | s
+        · simp [scaleReal] at hs0
+        · exact absurd rfl hS'
+        · simp only [scaleReal] at hs0
+          subst hs0
+          simp [scaleBy, Value.mul, Function1.apply, Functions.expR]
+      · have hall : ∀ v : ℝ, some (some v) ∈ cs → v = 0 := fun v hv =>
+          by_contra fun hv0 => hne ⟨hs0, v, hv, hv0⟩
+        rw [realEval_eq_zero hall]
+        rcases S with _ | _ | s
+        · simp [scaleBy, Value.mul, Function1.apply, Functions.expR]
+        · exact absurd rfl hS'
+        · simp [scaleBy, Value.mul, Function1.apply, Functions.expR]
+    rw [partialIntegral_zero hzero, hGb]
+    rfl
+  | true =>
+    obtain ⟨hs0, v, hv, hv0⟩ := hb.1 rfl
+    have hSn : scaleNonvanishing S := by
+      rcases S with _ | _ | s
+      · trivial
+      · exact absurd rfl hS'
+      · intro t ht
+        cases ht
+        simpa [scaleReal] using hs0
+    rw [gaussian_partialIntegral_curvature_moments Ks hf hE hK hl hSn
+      (SomeNonvanishing.of_mem hv hv0) hm hk hu hg hmn hpi, hGb]
+    rfl
+
 end QSym.Distribution.StepSource
 
 namespace QSym.Distribution.DensityProgram
@@ -1843,6 +2212,53 @@ theorem presentation_mass_gaussian_curvature_moments (p : DensityProgram)
   rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
   exact StepSource.gaussian_partialIntegral_curvature_moments Ks hf hE hK hl hS hN hm hk hu hg hmn
     hpi
+
+/-- The mass of such a density under a scale that may vanish: under the mask
+of the scale, after the scale and the coefficients of the exponent. -/
+theorem presentation_mass_gaussian_curvature_masked (p : DensityProgram) {c : Option ℝ}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 c2 : Option ℝ} (K : List (List ℚ))
+    (hf : StepSource.Bell p.density (some c) none P (some E))
+    (hE : StepSource.Quadratic E (some c0) (some c1) (some c2))
+    (hK : StepSource.curvatureCheck P K = true) {k g m u pi : Option ℝ} {ms : List (Option ℝ)}
+    (hm : StepSource.MomentTerms c1
+      (StepSource.curvatureCoefs (Value.mul u (Value.inv c2)) K 0) K ms)
+    (hk : StepSource.Sums ms k)
+    (hu : u = some (Numeric.denote (s := .real) (-1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hmn : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    massValue p.presentation = StepSource.after [c, c0, c1, c2] (Value.mask (Value.nonzero c)
+      (Value.mul c (Value.mul k (Value.mul
+        (Functions.expR.apply
+          (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+        (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))))) := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  exact StepSource.gaussian_partialIntegral_curvature_masked K hf hE hK hm hk hu hg hmn hpi
+
+/-- The same under a polynomial whose coefficients do not mention the variable
+where they may all vanish, or the scale may: under the mask of those factors. -/
+theorem presentation_mass_gaussian_curvature_moments_masked (p : DensityProgram)
+    {S : Option (Option ℝ)} {cs : List (Option (Option ℝ))} {P : List ℚ} {E : ℝ → Option ℝ}
+    {c0 c1 c2 : Option ℝ} (Ks : List (List (List ℚ)))
+    (hf : StepSource.Bell p.density S (some cs) P (some E))
+    (hE : StepSource.Quadratic E (some c0) (some c1) (some c2))
+    (hK : StepSource.curvatureMomentsCheck P Ks = true) (hl : cs.length = Ks.length)
+    {G : Option Bool} (hG : StepSource.VanishMask S cs G)
+    {k g m u pi : Option ℝ} {ms : List (Option ℝ)}
+    (hm : StepSource.MomentTerms c1
+      (StepSource.momentCoefs (Value.mul u (Value.inv c2)) cs Ks) Ks.flatten ms)
+    (hk : StepSource.Sums ms k)
+    (hu : u = some (Numeric.denote (s := .real) (-1 / 2 : ℚ)))
+    (hg : g = some (Numeric.denote (s := .real) (-1 / 4 : ℚ)))
+    (hmn : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (hpi : pi = some Functions.pi) :
+    massValue p.presentation =
+      StepSource.after (StepSource.scaleList S ++ StepSource.presentCoefs cs ++ [c0, c1, c2])
+        (Value.mask G (StepSource.scaleBy S (Value.mul k (Value.mul
+          (Functions.expR.apply
+            (Value.add c0 (Value.mul (Value.mul g (Value.inv c2)) (Value.mul c1 c1))))
+          (Functions.sqrtR.apply (Value.mul pi (Value.mul m (Value.inv c2)))))))) := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  exact StepSource.gaussian_partialIntegral_curvature_moments_masked Ks hf hE hK hl hG hm hk hu hg
+    hmn hpi
 
 end QSym.Distribution.DensityProgram
 

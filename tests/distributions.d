@@ -718,8 +718,10 @@ private Case[] cases(){ return [
 	Case("CurvatureFunction","λ(v:ℝ).∫dx exp(-x^2/(2*v))*λ[x]","ℝ→ℝ","λ(v:{v:ℝ | 0<v}). sqrt(2·v·π)"),
 	Case("CurvatureBound","λ(b:ℝ).∫dx exp(-a*x^2)*π/b*λ[x]","ℝ→ℝ","λ(b:{b:ℝ | b≠0∧0<a}). b⁻¹·sqrt(a⁻¹·π)·π"),
 	Case("CurvatureGuarded","∫dx [c≤d]*exp(-a*x^2)*λ[x]","ℝ","[c≤d]·sqrt(a⁻¹·π)"),
-	Case("CurvatureScale","∫dx c*exp(-a*x^2)*λ[x]","ℝ"),
-	Case("CurvatureRoot","∫dx sqrt(c)*exp(-a*x^2)*λ[x]","ℝ"),
+	Case("CurvatureScale","∫dx c*exp(-a*x^2)*λ[x]","ℝ","[c≠0]·(c·sqrt(a⁻¹·π))"),
+	Case("CurvatureRoot","∫dx sqrt(c)*exp(-a*x^2)*λ[x]","ℝ","guard(c=0∨0<c∧0<a,[c≠0]·sqrt(c·a⁻¹·π))"),
+	Case("CurvatureScaleFunction","λ(a:ℝ).∫dx c*exp(-a*x^2)*λ[x]","ℝ→ℝ","λ(a:{a:ℝ | c=0∨0<a}). [c≠0]·(c·sqrt(a⁻¹·π))"),
+	Case("CurvatureScaleNormal","∫dx c*exp(-x^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ","guard(0<v,[c≠0]·c)"),
 	Case("CurvaturePolynomial","∫dx x^2*exp(-a*x^2)*λ[x]","ℝ","a⁻¹·(1/2)·sqrt(a⁻¹·π)"),
 	Case("CurvatureMean","∫dx x*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ","guard(0<v,m)"),
 	Case("CurvatureSecond","∫dx x^2*exp(-(x-m)^2/(2*v))/sqrt(2*π*v)*λ[x]","ℝ","guard(0<v,m^2+v)"),
@@ -734,7 +736,11 @@ private Case[] cases(){ return [
 	Case("CurvatureClosed","∫dx (a*x+1)^2*exp(-b*x^2)*λ[x]","ℝ","(b⁻¹·(1/2)·a^2+1)·sqrt(b⁻¹·π)"),
 	Case("CurvatureForm","∫dx (x/b+π*c)*x*exp(-a*x^2+x)*λ[x]","ℝ","guard(b≠0∧0<a,(c·a⁻¹·(1/2)·π+b⁻¹·a⁻¹·(1/2)+b⁻¹·(a^2)⁻¹·(1/4))·sqrt(a⁻¹·π)·exp(a⁻¹·(1/4)))"),
 	Case("CurvatureAbsent","∫dx (x^2+m)*exp(-a*x^2)*λ[x]","ℝ","(m+a⁻¹·(1/2))·sqrt(a⁻¹·π)"),
-	Case("CurvatureVanishing","∫dx (c*x)^2*exp(-a*x^2)*λ[x]","ℝ"),
+	Case("CurvatureVanishing","∫dx (c*x)^2*exp(-a*x^2)*λ[x]","ℝ","[c≠0]·(a⁻¹·(1/2)·c^2·sqrt(a⁻¹·π))"),
+	Case("CurvatureEither","∫dx (c*x+d)*exp(-a*x^2)*λ[x]","ℝ","[d≠0∨c≠0]·(d·sqrt(a⁻¹·π))"),
+	Case("CurvatureSteady","∫dx (c*x+d)*exp(-a*x^2)/b*λ[x]","ℝ","guard(b≠0∧(d=0∧c=0)∨b≠0∧0<a,[d≠0∨c≠0]·(d·b⁻¹·sqrt(a⁻¹·π)))"),
+	Case("CurvatureBoth","∫dx b*(c*x+d)*exp(-a*x^2)*λ[x]","ℝ","[b≠0∧d≠0∨b≠0∧c≠0]·(b·d·sqrt(a⁻¹·π))"),
+	Case("CurvatureScaleMonic","∫dx b*(x+d)*exp(-a*x^2)*λ[x]","ℝ","[b≠0]·(b·d·sqrt(a⁻¹·π))"),
 	Case("GaussianSymbolicLinear","∫dx exp(a*x)*λ[x]","ℝ"),
 	Case("GaussianSymbolicPrefactor","∫dx (x-m)^2*exp(-(x-m)^2/2)*λ[x]","ℝ","sqrt(2·π)"),
 	Case("GaussianSymbolicPrefactorShift","∫dx (x+a)*exp(-x^2)*λ[x]","ℝ","a·sqrt(π)"),
@@ -1253,25 +1259,30 @@ private void run(string directory){
 		// moments are a polynomial in the linear coefficient and in
 		// `h = -1/(2·c₂)`, a row for each power of `h`, and the closed form is
 		// missing where the curvature is not negative, as the observation is.
-		// Only under factors that cannot vanish, a polynomial that is not zero
-		// and a scale that is π, an inverse or a product of these: a factor of
-		// zero leaves the zero function, which has an integral. The
-		// coefficients of a polynomial may be terms where one of them cannot
-		// vanish, a closed rational other than zero or such a scale: the
-		// polynomial is then not zero where they are defined, and each
-		// coefficient meets the table of the moments of its power. Another
-		// scale, a polynomial whose coefficients may all vanish and one of too
-		// high a degree keep their integral. A vanishing integral is missing
-		// where the curvature is not negative all the same: under a binder it
-		// keeps that domain.
+		// The coefficients of a polynomial may be terms: each meets the table
+		// of the moments of its power. That holds under factors that cannot
+		// vanish, a polynomial with a coefficient that is a closed rational
+		// other than zero and a scale that is π, an inverse or a product of
+		// these. A factor of zero leaves the zero function, which has an
+		// integral whatever the curvature is: a scale that may vanish and a
+		// polynomial whose coefficients may all vanish have the closed form
+		// under their mask, after everything the integrand is strict in. A
+		// polynomial of too high a degree keeps its integral. A vanishing
+		// integral is missing where the curvature is not negative all the
+		// same: under a binder it keeps that domain.
 		if(c.name.indexOf("Curvature")==0){
-			bool retained=c.name=="CurvatureScale"||c.name=="CurvatureRoot"||c.name=="CurvatureVanishing"||c.name=="CurvatureDegree";
-			bool terms=c.name=="CurvatureCentral"||c.name=="CurvatureShifted"||c.name=="CurvatureClosed"||c.name=="CurvatureForm"||c.name=="CurvatureAbsent";
+			bool retained=c.name=="CurvatureDegree";
+			// The factors that may vanish: a scale, the coefficients, or both.
+			bool maskScale=c.name=="CurvatureScale"||c.name=="CurvatureRoot"||c.name=="CurvatureScaleFunction"||c.name=="CurvatureScaleNormal"||
+				c.name=="CurvatureVanishing"||c.name=="CurvatureScaleMonic"||c.name=="CurvatureBoth";
+			bool maskPolynomial=c.name=="CurvatureEither"||c.name=="CurvatureSteady"||c.name=="CurvatureBoth";
+			bool terms=c.name=="CurvatureCentral"||c.name=="CurvatureShifted"||c.name=="CurvatureClosed"||c.name=="CurvatureForm"||c.name=="CurvatureAbsent"||
+				c.name=="CurvatureScaleMonic"||maskPolynomial;
 			// A row that is zero is absent; the first has no power of `h`, and
 			// stands under its coefficient where that is a term.
 			bool mixed=c.name=="CurvatureMixed";
 			bool moments=c.name=="CurvaturePolynomial"||c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth"||c.name=="CurvatureOdd"||
-				c.name=="CurvatureLinear"||c.name=="CurvatureOddFunction"||terms;
+				c.name=="CurvatureLinear"||c.name=="CurvatureOddFunction"||c.name=="CurvatureVanishing"||terms;
 			if(!retained){
 				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.bare")>=0)!=moments,c.name~" constant row");
 				enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.present")>=0)==(moments||mixed),c.name~" rows of the powers");
@@ -1279,21 +1290,28 @@ private void run(string directory){
 			}
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian_curvature")>=0)!=retained,c.name~" certificate");
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian_curvature_moments")>=0)==terms,c.name~" tables");
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian_curvature_masked")>=0)==(maskScale&&!terms),c.name~" mask of the scale");
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_gaussian_curvature_moments_masked")>=0)==(terms&&(maskScale||maskPolynomial)),c.name~" mask");
+			enforce((certificate.indexOf("Distribution.StepSource.VanishMask.scale")>=0)==(terms&&maskScale&&!maskPolynomial),c.name~" mask of a scale");
+			enforce((certificate.indexOf("Distribution.StepSource.VanishMask.polynomial")>=0)==(maskPolynomial&&!maskScale),c.name~" mask of the coefficients");
+			enforce((certificate.indexOf("Distribution.StepSource.VanishMask.both")>=0)==(maskPolynomial&&maskScale),c.name~" mask of both");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce((text.indexOf("≠0]")>=0)==(maskScale||maskPolynomial),c.name~": "~text);
 			// The coefficient that cannot vanish is the first or a later one.
-			enforce((certificate.indexOf("Distribution.StepSource.SomeNonvanishing.here")>=0)==terms,c.name~" coefficient that cannot vanish");
-			enforce((certificate.indexOf("Distribution.StepSource.SomeNonvanishing.later")>=0)==(terms&&c.name!="CurvatureClosed"),c.name~" its place");
+			bool witness=terms&&!maskPolynomial;
+			enforce((certificate.indexOf("Distribution.StepSource.SomeNonvanishing.here")>=0)==witness,c.name~" coefficient that cannot vanish");
+			enforce((certificate.indexOf("Distribution.StepSource.SomeNonvanishing.later")>=0)==(witness&&c.name!="CurvatureClosed"),c.name~" its place");
 			// The lemma of every shape of a scale is exercised, in a scalar and
 			// under a binder; such a coefficient is a closed rational or has one
 			// of these shapes.
 			bool inverse=c.name=="CurvatureNormal"||c.name=="CurvatureDeviation"||c.name=="CurvatureInverse"||c.name=="CurvatureInverses"||c.name=="CurvatureBound"||
-				c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth"||c.name=="CurvatureCentral"||c.name=="CurvatureForm";
+				c.name=="CurvatureMean"||c.name=="CurvatureSecond"||c.name=="CurvatureFourth"||c.name=="CurvatureCentral"||c.name=="CurvatureForm"||c.name=="CurvatureSteady";
 			bool product=c.name=="CurvatureDeviation"||c.name=="CurvatureInverses"||c.name=="CurvatureCircle"||c.name=="CurvatureBound"||c.name=="CurvatureForm";
 			bool circle=c.name=="CurvatureCircle"||c.name=="CurvatureBound";
 			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.inv")>=0)==inverse,c.name~" inverse");
 			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.mul")>=0)==product,c.name~" product");
 			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.pi")>=0)==circle,c.name~" circle");
-			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.literal")>=0)==(c.name=="CurvatureCircle"||terms),c.name~" literal");
+			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.literal")>=0)==(c.name=="CurvatureCircle"||witness),c.name~" literal");
 			if(c.name=="CurvatureGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		// The whole line under a polynomial times the exponential of a quadratic
