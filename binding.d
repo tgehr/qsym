@@ -81,6 +81,9 @@ private struct IntervalTerm{
 	// terms: `point` is `1/(2·c₂)`, and `offset` the factor of the linear
 	// coefficient in the argument.
 	bool erf,symbolic; Rational offset; uint sigma=uint.max,offsetLiteral=uint.max,unit=uint.max;
+	// The exponential of a linear exponent whose rate is a term, beyond a
+	// single bound: the literal of zero that the rate is compared with.
+	bool rateTerm; uint rateZero=uint.max;
 }
 // With `domain` the value is under a strict guard that does not mention the
 // axis; with `hoisted` that guard stands around the mask, after the negations
@@ -89,6 +92,9 @@ private struct IntervalTerm{
 private struct IntervalData{
 	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max;
 	bool swap,strictLower,strictUpper,nested,half,below,hoisted;
+	// With `direct` the only term is observed by the integral of the mask:
+	// it may be defined without being integrable.
+	bool direct;
 	IntervalTerm[] terms;
 }
 // A Gaussian integral. With `symbolic` the constant and linear coefficients of
@@ -3458,6 +3464,20 @@ final class Bindings{
 				foreach(x;[g.constant,g.vertex,g.width,r.half,r.point]) if(x.words>128) return false;
 				r.bell=g; r.erf=true; r.symbolic=true; return true;
 			}
+			// Beyond a single bound, a constant times the exponential of a linear
+			// exponent whose rate is a term that does not mention the axis. It is
+			// integrable exactly where the rate has the sign of decay: the value
+			// of the antiderivative at the bound stands under the guard of that
+			// sign. Only as the whole value, and not as a summand: where the
+			// rate has the other sign the value is defined and not integrable.
+			bool symbolicRate(uint id,ref IntervalTerm r){
+				if(!d.half||d.unit!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
+				BellParts found;
+				if(!bellParts(id,found,false)||!found.exponent||found.symbolic) return false;
+				auto p=found.p,c=found.c; while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(p.length!=1||c[2].present||!c[1].present||c[1].closed) return false;
+				r.bell.constant=p[0]; r.rateTerm=true; return true;
+			}
 			// Decide before building anything: a refused integral leaves no
 			// terms behind. Beyond a single bound every term must decay.
 			bool admissible(uint id,uint depth){
@@ -3468,7 +3488,9 @@ final class Bindings{
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
-			if(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0)) return BoundTerm.init;
+			IntervalTerm whole;
+			d.direct=d.unit==uint.max&&!admissible(d.value,0)&&symbolicRate(d.value,whole);
+			if(!d.direct&&(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0))) return BoundTerm.init;
 			if(!construct) return t;
 			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
 			auto addOp=arena.add(arena.real_(0),arena.real_(0),true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
@@ -3613,7 +3635,36 @@ final class Bindings{
 				auto b=build(q.b,depth+1); if(b==BoundTerm.init) return b;
 				return primitive(addOp,[a,b]);
 			}
-			auto total=d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
+			// `guard(c₁<0, -κ·exp(c₀+c₁·a)/c₁)` above a bound and
+			// `guard(0<c₁, κ·exp(c₀+c₁·b)/c₁)` below one, under the scale. A
+			// scale that may vanish leaves the zero function where it does: the
+			// guard then also holds there, around the mask of the scale and
+			// after everything the integrand is strict in.
+			BoundTerm rateDifference(IntervalTerm r,uint id){
+				BellParts built; bellParts(id,built,true);
+				auto linear=built.c[1].term,bound=d.below?upper:lower; BoundTerm constant;
+				if(built.c[0].present) constant=built.c[0].term;
+				else{ constant=scalar(ctx,arena.real_(0)); r.bell.zero0=constant.id; }
+				auto k=scalar(ctx,arena.real_(r.bell.constant)),zero=scalar(ctx,arena.real_(0)),literal=arena.real_(0),truth=arena.boolean(true);
+				r.bell.factor=k.id; r.rateZero=zero.id; r.value=id;
+				auto value=primitive(mulOp,[k,primitive(mulOp,[primitive(arena.inv(arena.real_(1)),[linear]),
+					primitive(arena.call(Builtin.expR,[literal]),[primitive(addOp,[constant,primitive(mulOp,[linear,bound])])])])]);
+				if(!d.below) value=primitive(mulOp,[minusOne,value]);
+				auto sign=primitive(arena.lt(literal,literal),d.below?[zero,linear]:[linear,zero]);
+				r.bell.maskScale=built.scaled&&!nonvanishing(built.scale.id);
+				BoundTerm result;
+				if(!r.bell.maskScale){
+					if(built.scaled){ r.bell.nonzero=built.scale.id; value=primitive(mulOp,[built.scale,value]); }
+					result=guard(sign,value);
+				}else{
+					auto test=primitive(arena.nonzero(arena.real_(1)),[built.scale]);
+					auto condition=primitive(arena.or_(truth,truth),[primitive(arena.not_(truth),[test]),sign]);
+					result=guard(condition,primitive(arena.mask(truth,arena.real_(1)),[test,primitive(mulOp,[built.scale,value])]));
+					foreach_reverse(x;[built.scale,bound,constant,linear]) result=sequence(x,result);
+				}
+				d.terms~=r; return result;
+			}
+			auto total=d.direct?rateDifference(whole,d.value):d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
 			if(total==BoundTerm.init) return BoundTerm.init;
 			if(d.domain!=uint.max) total=guard(dropIndex(at(d.domain)),total);
 			auto zero=arena.real_(0),strict=d.strictLower||d.strictUpper;
@@ -7250,6 +7301,22 @@ final class Bindings{
 		alias Linear=SourceCertificates.Linear;
 		alias Piece=SourceCertificates.Piece;
 		auto uniform=&cert.uniform,piece=&cert.piece,exponential=&cert.exponential;
+		// A scale that cannot vanish, by its form.
+		string scalarNonzero(Term t){
+			enum src="Distribution.StepSource.";
+			auto v=arena.view(t);string eval(Term x){return "(n"~to!string(x.id)~".eval ξ)";}
+			if(arena.isNumber(t))return "("~src~"Nonvanishing.literal "~q(arena.number(t).re)~" (Numeric.calculate_sound ξ n"~to!string(t.id)~" "~q(arena.number(t).re)~" rfl) rfl)";
+			if(v.op==Op.inv)return "("~src~"Nonvanishing.inv "~eval(arena.viewChild(t,0))~")";
+			if(v.op==Op.builtin)return "("~src~"Nonvanishing.pi rfl)";
+			return "("~src~"Nonvanishing.mul "~scalarNonzero(arena.viewChild(t,0))~" "~scalarNonzero(arena.viewChild(t,1))~")";
+		}
+		string nonzero(uint id){
+			enum src="Distribution.StepSource.";
+			auto n=nodes[id];if(n.op==BoundOp.scalar)return scalarNonzero(arena.at(n.data));
+			auto v=arena.view(arena.at(n.data));
+			if(v.op==Op.inv)return "("~src~"Nonvanishing.inv ("~name(n.a)~".eval ξ ρ))";
+			return "("~src~"Nonvanishing.mul "~nonzero(n.a)~" "~nonzero(n.b)~")";
+		}
 		string densityUniform(string region,Rational sample){
 			auto proof=app("uniform_const",region~" (some (1 : ℝ))"),program="Distribution.DensityProgram.lebesgue";
 			foreach(id;s.from){
@@ -7340,20 +7407,6 @@ final class Bindings{
 			string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
 			string list(Rational[] row){string r="[";foreach(i,c;row)r~=(i?", ":"")~q(c);return r~"]";}
 			if(d.curved){
-				// The scale cannot vanish, by its form.
-				string scalarNonzero(Term t){
-					auto v=arena.view(t);string eval(Term x){return "(n"~to!string(x.id)~".eval ξ)";}
-					if(arena.isNumber(t))return "("~src~"Nonvanishing.literal "~q(arena.number(t).re)~" (Numeric.calculate_sound ξ n"~to!string(t.id)~" "~q(arena.number(t).re)~" rfl) rfl)";
-					if(v.op==Op.inv)return "("~src~"Nonvanishing.inv "~eval(arena.viewChild(t,0))~")";
-					if(v.op==Op.builtin)return "("~src~"Nonvanishing.pi rfl)";
-					return "("~src~"Nonvanishing.mul "~scalarNonzero(arena.viewChild(t,0))~" "~scalarNonzero(arena.viewChild(t,1))~")";
-				}
-				string nonzero(uint id){
-					auto n=nodes[id];if(n.op==BoundOp.scalar)return scalarNonzero(arena.at(n.data));
-					auto v=arena.view(arena.at(n.data));
-					if(v.op==Op.inv)return "("~src~"Nonvanishing.inv ("~name(n.a)~".eval ξ ρ))";
-					return "("~src~"Nonvanishing.mul "~nonzero(n.a)~" "~nonzero(n.b)~")";
-				}
 				enforce(d.nonzero==uint.max||nonvanishing(d.nonzero),"scale may vanish");
 				if(d.tables.length){
 					// Each coefficient that is present meets the rows of its table
@@ -7473,6 +7526,22 @@ final class Bindings{
 				value="(fun x : ℝ => Value.mul ("~value~" x) ("~functionAt(id)~" x))";
 				masked=save("Distribution.StepSource.Masked (Distribution.DensityProgram.density "~program~") "~guard~" "~value,app("masked_times",masked~" "~w.proof));
 				factors~=w.proof;
+			}
+			if(d.direct){
+				// The value as a scale, a constant and the exponential of a linear
+				// exponent by its structure, with the coefficients the rule built:
+				// the observation is the integral of its mask, under the strict
+				// guard of its domain where it has one.
+				enforce(!summand&&d.terms.length==1&&d.terms[0].rateTerm&&q.from.length==1,"bad direct observation");
+				auto r=d.terms[0],g=r.bell;string exponent;AxisCoefficient[] poly;
+				auto hv=cert.bell(d.value,exponent,poly);
+				string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~cert.q(value)~" rfl)";}
+				if(g.zero0!=uint.max)exponent="(Distribution.StepSource.Quadratic.fill0 "~literal(g.zero0,Rational(0))~" "~exponent~")";
+				enforce(g.nonzero==uint.max||nonvanishing(g.nonzero),"scale may vanish");
+				auto direct="(Distribution.StepSource.rate_"~(d.below?"below":"above")~(g.maskScale?"_masked ":" ")~truth(d.below?d.strictUpper:d.strictLower)~" "~cert.q(g.constant)~" "~hv~" "~exponent~" rfl "~
+					(g.maskScale?"":(g.nonzero==uint.max?"trivial":nonzero(g.nonzero))~" ")~(d.below?"":literal(d.minusOne,Rational(-1))~" ")~literal(g.factor,g.constant)~" "~literal(r.rateZero,Rational(0))~")";
+				if(d.domain!=uint.max)direct="(Distribution.StepSource.masked_guard_integral ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) (Distribution.StepSource.compare_"~(d.below?"upper":"lower")~"_cases _ _) "~direct~")";
+				return "Distribution.DensityProgram.presentation_mass_direct "~program~" "~masked~" "~direct;
 			}
 			size_t next;
 			string terms(uint id){

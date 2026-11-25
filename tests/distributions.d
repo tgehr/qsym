@@ -771,6 +771,19 @@ private Case[] cases(){ return [
 	Case("HalfLineOffsetMoment","∫dx [0≤x]*x*exp(1-2*x)*λ[x]","ℝ","1/4·e"),
 	Case("HalfLineOffsetBound","∫dx [a≤x]*exp(b-x)*λ[x]","ℝ","exp(-a+b)"),
 	Case("HalfLineOffsetGrowing","∫dx [0≤x]*exp(a+x)*λ[x]","ℝ"),
+	Case("RateAbove","∫dx [0≤x]*exp(-r*x)*λ[x]","ℝ","guard(0<r,r⁻¹)"),
+	Case("RateDensity","∫dx [0≤x]*r*exp(-r*x)*λ[x]","ℝ","guard(r=0∨0<r,[r≠0])"),
+	Case("RateBound","∫dx [a≤x]*exp(-r*x)*λ[x]","ℝ","guard(0<r,r⁻¹·exp(-a·r))"),
+	Case("RateBelow","∫dx [x≤b]*exp(r*x+c)*λ[x]","ℝ","guard(0<r,r⁻¹·exp(b·r+c))"),
+	Case("RateScale","∫dx [0≤x]*exp(-x/s)/s*λ[x]","ℝ","guard(0<s,(1:ℝ))"),
+	Case("RateCircle","∫dx [x≤0]*2*exp(r*x)/π*λ[x]","ℝ","guard(0<r,2·r⁻¹·π⁻¹)"),
+	Case("RateSurvival","λ(t:ℝ).∫dx [t<x]*r*exp(-r*x)*λ[x]","ℝ→ℝ","λ(t:{t:ℝ | r=0∨0<r}). [r≠0]·exp(-r·t)"),
+	Case("RateBelowMasked","∫dx [x<b]*c*exp(r*x)*λ[x]","ℝ","guard(c=0∨0<r,[c≠0]·(c·r⁻¹·exp(b·r)))"),
+	Case("RateSquare","∫dx [0≤x]*exp(-r^2*x)*λ[x]","ℝ","guard(r≠0,(r^2)⁻¹)"),
+	Case("RateGuarded","∫dx [c≤d]*[0≤x]*exp(-r*x)*λ[x]","ℝ","([c≤d]·(guard(0<r,r⁻¹)):ℝ)"),
+	Case("RatePolynomial","∫dx [0≤x]*x*exp(-r*x)*λ[x]","ℝ"),
+	Case("RateBetween","∫dx [0≤x≤1]*exp(-r*x)*λ[x]","ℝ"),
+	Case("RateSum","∫dx [0≤x]*(exp(-r*x)+exp(-x))*λ[x]","ℝ"),
 	Case("LimitOffset","lim[x→∞] exp(a-x)","ℝ","0"),
 	Case("LimitOffsetBottom","lim[x→-∞] x*exp(a+b+3*x)","ℝ","0"),
 	Case("LimitOffsetGrowing","lim[x→∞] exp(a+x)","ℝ"),
@@ -1464,6 +1477,29 @@ private void run(string directory){
 			if(c.name=="ErfOffset") enforce(certificate.indexOf("Limit.EventualScaled.exp_curve")>=0,c.name~" offset");
 			if(c.name=="ErfDomain") enforce(certificate.indexOf("IntervalTerms.guard")>=0,c.name~" domain");
 			if(c.name=="ErfGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+		}
+		// Beyond a single bound, a constant times the exponential of a linear
+		// exponent whose rate is a term that does not mention the axis: it is
+		// integrable exactly where the rate has the sign of decay, and the
+		// value of the antiderivative at the bound stands under the guard of
+		// that sign. Where the rate has the other sign the integrand is
+		// defined and not integrable, so this is the integral of the mask
+		// itself and not a term of an observation that adds. A scale that may
+		// vanish leaves the zero function: the guard then holds there too,
+		// around the mask of the scale. A polynomial in front, two bounds and
+		// a summand keep their integral.
+		if(c.name.indexOf("Rate")==0){
+			bool retained=c.name=="RatePolynomial"||c.name=="RateBetween"||c.name=="RateSum";
+			bool below=c.name=="RateBelow"||c.name=="RateCircle"||c.name=="RateBelowMasked";
+			bool masked=c.name=="RateDensity"||c.name=="RateSurvival"||c.name=="RateBelowMasked";
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_direct")>=0)!=retained,c.name~" certificate");
+			enforce((certificate.indexOf("Distribution.StepSource.rate_"~(below?"below":"above")~(masked?"_masked ":" "))>=0)!=retained,c.name~" rate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			// The lemma of a scale that cannot vanish is exercised, and the
+			// strict guard of the domain of the value.
+			enforce((certificate.indexOf("Distribution.StepSource.masked_guard_integral")>=0)==(c.name=="RateScale"),c.name~" domain");
+			enforce((certificate.indexOf("Distribution.StepSource.Nonvanishing.")>=0)==(c.name=="RateScale"||c.name=="RateCircle"),c.name~" scale");
+			if(c.name=="RateGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		// A strict guard that does not mention the axis leaves the observation,
 		// from the top of a weight or of a factor of it, whether or not the

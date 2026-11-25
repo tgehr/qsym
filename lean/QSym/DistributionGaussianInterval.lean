@@ -967,4 +967,382 @@ theorem UpperTerms.symbolicErf {b : Option ℝ} {v : ℝ → Option ℝ} {S : Op
   · exact .scaledPrimitive (G := symErfBelow (some a0) (some b1) u k g d pi s n)
       (hval a0 b1 rfl rfl) hG h0 hi hD hT
 
+/-! A rate that does not mention the axis. Beyond a single bound the
+exponential of a linear exponent is integrable exactly where its rate has the
+sign of decay, so the observation stands under the guard of that sign: where
+the rate has the other sign, or is zero, the integrand is defined and not
+integrable. Under a scale that may vanish the integrand is zero where the
+scale is, whatever the rate. -/
+
+/-- The exponential of a linear exponent with a negative rate above a bound. -/
+theorem exp_linear_Ioi (α : ℝ) {β : ℝ} (hβ : β < 0) (l : ℝ) :
+    IntegrableOn (fun x : ℝ => Real.exp (α + β * x)) (Ioi l) volume ∧
+      ∫ x in Ioi l, Real.exp (α + β * x) = -(β⁻¹ * Real.exp (α + β * l)) := by
+  have he : (fun x : ℝ => Real.exp (α + β * x)) = fun x => Real.exp α * Real.exp (β * x) := by
+    funext x
+    rw [Real.exp_add]
+  have hne : β ≠ 0 := hβ.ne
+  rw [he]
+  refine ⟨(integrableOn_exp_mul_Ioi hβ l).const_mul _, ?_⟩
+  rw [integral_const_mul, integral_exp_mul_Ioi hβ l, Real.exp_add]
+  field_simp
+
+/-- With a positive rate below one. -/
+theorem exp_linear_Iic (α : ℝ) {β : ℝ} (hβ : 0 < β) (u : ℝ) :
+    IntegrableOn (fun x : ℝ => Real.exp (α + β * x)) (Iic u) volume ∧
+      ∫ x in Iic u, Real.exp (α + β * x) = β⁻¹ * Real.exp (α + β * u) := by
+  have he : (fun x : ℝ => Real.exp (α + β * x)) = fun x => Real.exp α * Real.exp (β * x) := by
+    funext x
+    rw [Real.exp_add]
+  have hne : β ≠ 0 := hβ.ne'
+  rw [he]
+  refine ⟨(integrableOn_exp_mul_Iic hβ u).const_mul _, ?_⟩
+  rw [integral_const_mul, integral_exp_mul_Iic hβ u, Real.exp_add]
+  field_simp
+
+/-- With a rate that is not negative it is not integrable above a bound: it
+stays above its value there. -/
+theorem exp_linear_not_integrableOn_Ioi (α : ℝ) {β : ℝ} (hβ : 0 ≤ β) (l : ℝ) {k : ℝ}
+    (hk : k ≠ 0) : ¬ IntegrableOn (fun x : ℝ => k * Real.exp (α + β * x)) (Ioi l) volume := by
+  intro hi
+  have hs : IntegrableOn (fun _ : ℝ => |k| * Real.exp (α + β * l)) (Ioi l) volume := by
+    refine Integrable.mono' hi.norm aestronglyMeasurable_const ?_
+    refine (ae_restrict_iff' measurableSet_Ioi).2 (Filter.Eventually.of_forall fun x hx => ?_)
+    have hx' : l < x := hx
+    rw [Real.norm_of_nonneg (mul_nonneg (abs_nonneg k) (Real.exp_pos _).le), norm_mul,
+      Real.norm_eq_abs, Real.norm_of_nonneg (Real.exp_pos _).le]
+    exact mul_le_mul_of_nonneg_left
+      (Real.exp_le_exp.2 (by nlinarith [mul_nonneg hβ (sub_nonneg.2 hx'.le)])) (abs_nonneg k)
+  rw [integrableOn_const] at hs
+  rcases hs with h0 | hfin
+  · exact (mul_pos (abs_pos.2 hk) (Real.exp_pos _)).ne' h0
+  · rw [Real.volume_Ioi] at hfin
+    exact lt_irrefl _ hfin
+
+/-- With a rate that is not positive it is not integrable below one. -/
+theorem exp_linear_not_integrableOn_Iic (α : ℝ) {β : ℝ} (hβ : β ≤ 0) (u : ℝ) {k : ℝ}
+    (hk : k ≠ 0) : ¬ IntegrableOn (fun x : ℝ => k * Real.exp (α + β * x)) (Iic u) volume := by
+  intro hi
+  have hs : IntegrableOn (fun _ : ℝ => |k| * Real.exp (α + β * u)) (Iic u) volume := by
+    refine Integrable.mono' hi.norm aestronglyMeasurable_const ?_
+    refine (ae_restrict_iff' measurableSet_Iic).2 (Filter.Eventually.of_forall fun x hx => ?_)
+    have hx' : x ≤ u := hx
+    rw [Real.norm_of_nonneg (mul_nonneg (abs_nonneg k) (Real.exp_pos _).le), norm_mul,
+      Real.norm_eq_abs, Real.norm_of_nonneg (Real.exp_pos _).le]
+    exact mul_le_mul_of_nonneg_left
+      (Real.exp_le_exp.2 (by nlinarith [mul_nonneg_of_nonpos_of_nonpos hβ (sub_nonpos.2 hx')]))
+      (abs_nonneg k)
+  rw [integrableOn_const] at hs
+  rcases hs with h0 | hfin
+  · exact (mul_pos (abs_pos.2 hk) (Real.exp_pos _)).ne' h0
+  · rw [Real.volume_Iic] at hfin
+    exact lt_irrefl _ hfin
+
+/-- The polynomial in front is a constant other than zero. -/
+def rateCheck (P : List ℚ) (κ : ℚ) : Bool :=
+  polyZero (polyAdd P (polyScale (-1) [κ])) && decide (κ ≠ 0)
+
+/-- The value below the mask: undefined everywhere where a coefficient or the
+scale is, and the constant times the exponential under the scale otherwise. -/
+private theorem rate_value {v : ℝ → Option ℝ} {S : Option (Option ℝ)} {P : List ℚ}
+    {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} {κ : ℚ} (hv : Bell v S none P (some E))
+    (hE : Quadratic E (some c0) (some c1) none) (hP : rateCheck P κ = true) :
+    (κ : ℝ) ≠ 0 ∧ ((S = some none ∨ c0 = none ∨ c1 = none) → ∀ x, v x = none) ∧
+      ∀ α β : ℝ, S ≠ some none → c0 = some α → c1 = some β →
+        ∀ x, v x = some (scaleReal S * (κ * Real.exp (α + β * x))) := by
+  simp only [rateCheck, Bool.and_eq_true, decide_eq_true_eq] at hP
+  obtain ⟨hz, hκ⟩ := hP
+  have hPx : ∀ x : ℝ, polyEval P x = κ := fun x => by
+    have h0 := polyEval_zero hz x
+    rw [polyEval_add, polyEval_scale] at h0
+    simp only [polyEval] at h0
+    push_cast at h0
+    linarith
+  have hvx : ∀ x, v x = scaleBy S (Value.mul (some (polyEval P x)) (Functions.expR.apply (E x))) :=
+    fun x => hv.plain x
+  refine ⟨by exact_mod_cast hκ, fun hm x => ?_, fun α β hS h0 h1 x => ?_⟩
+  · rw [hvx]
+    rcases hm with rfl | rfl | rfl
+    · rfl
+    · have : E x = none := by rw [hE.equation]; rfl
+      rw [this]
+      rcases S with _ | _ | s <;> simp [scaleBy, Value.mul, Function1.apply]
+    · have : E x = none := by rw [hE.equation]; cases c0 <;> rfl
+      rw [this]
+      rcases S with _ | _ | s <;> simp [scaleBy, Value.mul, Function1.apply]
+  · subst h0 h1
+    have hEx : E x = some (α + β * x) := by
+      rw [hE.equation]
+      simp [coefValue, Value.add, Value.mul]
+    rw [hvx, hEx, hPx]
+    rcases S with _ | _ | s
+    · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
+    · exact absurd rfl hS
+    · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
+
+/-- A value that is undefined everywhere is observed as undefined above a
+bound: at the points above it, or everywhere where the bound is undefined. -/
+private theorem above_undefined (strict : Bool) (a : Option ℝ) {v : ℝ → Option ℝ}
+    (hv : ∀ x, v x = none) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) = none := by
+  apply if_neg
+  intro hd
+  rcases compare_lower_cases strict a with ⟨y, hy⟩ | hn
+  · obtain ⟨r, hr⟩ := hd.1 y
+    simp only [hy, hv] at hr
+    cases hr
+  · obtain ⟨r, hr⟩ := hd.1 0
+    simp only [hn] at hr
+    cases hr
+
+private theorem below_undefined (strict : Bool) (b : Option ℝ) {v : ℝ → Option ℝ}
+    (hv : ∀ x, v x = none) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) = none := by
+  apply if_neg
+  intro hd
+  rcases compare_upper_cases strict b with ⟨y, hy⟩ | hn
+  · obtain ⟨r, hr⟩ := hd.1 y
+    simp only [hy, hv] at hr
+    cases hr
+  · obtain ⟨r, hr⟩ := hd.1 0
+    simp only [hn] at hr
+    cases hr
+
+/-- Above a bound: `guard(c₁ < 0, -κ·exp(c₀ + c₁·a)/c₁)` under the scale. -/
+theorem rate_above (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (κ : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
+    (hP : rateCheck P κ = true) (hS : scaleNonvanishing S) {m k z : Option ℝ}
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
+      Binding.guardValue (Value.lt c1 z) (scaleBy S (Value.mul m (Value.mul k
+        (Value.mul (Value.inv c1) (Functions.expR.apply (Value.add c0 (Value.mul c1 a))))))) := by
+  obtain ⟨hκ, hmiss, hval⟩ := rate_value hv hE hP
+  have hM : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  have hK : k = some (κ : ℝ) := by rw [hk]; simp [Numeric.denote]
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  by_cases hu : S = some none ∨ c0 = none ∨ c1 = none
+  · rw [above_undefined strict a (hmiss hu)]
+    rcases hu with rfl | rfl | rfl
+    · simp [scaleBy, Value.mul, Binding.guardValue]
+    · have : Functions.expR.apply (Value.add (none : Option ℝ) (Value.mul c1 a)) = none := rfl
+      rw [this, hM, hK]
+      cases Value.inv c1 <;> simp [Value.mul, hnone, Binding.guardValue]
+    · simp [Value.lt, Binding.guardValue]
+  simp only [not_or] at hu
+  obtain ⟨hS', h0, h1⟩ := hu
+  obtain ⟨α, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨β, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  have hg := hval α β hS' rfl rfl
+  have hσ : scaleReal S ≠ 0 := by
+    rcases S with _ | _ | s
+    · simp [scaleReal]
+    · exact absurd rfl hS'
+    · exact hS s rfl
+  rcases a with _ | l
+  · rw [show partialIntegral volume (fun x => Value.mask (compare strict none (some x)) (v x)) =
+        none from if_neg fun hd => by
+          obtain ⟨r, hr⟩ := hd.1 0
+          cases strict <;> cases hr]
+    have : Functions.expR.apply (Value.add (some α) (Value.mul (some β) none)) = none := rfl
+    rw [this, hM, hK]
+    cases Value.inv (some β) <;> simp [Value.mul, hnone, Binding.guardValue]
+  have hcmp : ∀ x : ℝ, l < x → compare strict (some l) (some x) = some true := fun x hx => by
+    cases strict <;> simp [compare, Value.lt, Value.le, hx, hx.le]
+  by_cases hβ : β < 0
+  · obtain ⟨hi, hint⟩ := exp_linear_Ioi α hβ l
+    have hI : ∀ l' : ℝ, IntegrableOn (fun x : ℝ => scaleReal S * (κ * Real.exp (α + β * x)))
+        (Ioi l') volume := fun l' =>
+      (((exp_linear_Ioi α hβ l').1.const_mul _).const_mul _)
+    rw [halfline_integral strict (some l) m hm ⟨fun _ => rfl⟩
+      (HalfLineTerms.value hg hI (fun h => by cases h) fun l' hl => by
+        cases hl
+        rfl)]
+    have hne : β ≠ 0 := hβ.ne
+    rw [integral_const_mul, integral_const_mul, hint, hM, hK, hZ]
+    rcases S with _ | _ | s
+    · simp [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add, Value.inv,
+        hne, Function1.apply, Functions.expR]
+    · exact absurd rfl hS'
+    · simp [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add, Value.inv,
+        hne, Function1.apply, Functions.expR]
+  · have hn : partialIntegral volume
+        (fun x => Value.mask (compare strict (some l) (some x)) (v x)) = none := by
+      apply if_neg
+      rintro ⟨_, hint⟩
+      have hon : IntegrableOn (fun x : ℝ => scaleReal S * κ * Real.exp (α + β * x)) (Ioi l)
+          volume := by
+        refine (hint.integrableOn (s := Ioi l)).congr_fun (fun x hx => ?_) measurableSet_Ioi
+        show (Value.mask (compare strict (some l) (some x)) (v x)).getD 0 = _
+        rw [hcmp x hx, hg]
+        show scaleReal S * (κ * Real.exp (α + β * x)) = _
+        ring
+      exact exp_linear_not_integrableOn_Ioi α (not_lt.1 hβ) l (mul_ne_zero hσ hκ) hon
+    rw [hn, hZ]
+    simp [Value.lt, hβ, Binding.guardValue]
+
+/-- The same under a scale that may vanish: zero where the scale is, under
+its mask and the guard of that or the sign of the rate, after the scale, the
+bound and the coefficients of the exponent. -/
+theorem rate_above_masked (strict : Bool) {a : Option ℝ} {v : ℝ → Option ℝ} {c : Option ℝ}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (κ : ℚ)
+    (hv : Bell v (some c) none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
+    (hP : rateCheck P κ = true) {m k z : Option ℝ}
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) =
+      after [c, a, c0, c1] (Binding.guardValue
+        (Value.or (Value.not (Value.nonzero c)) (Value.lt c1 z))
+        (Value.mask (Value.nonzero c) (Value.mul c (Value.mul m (Value.mul k
+          (Value.mul (Value.inv c1) (Functions.expR.apply (Value.add c0 (Value.mul c1 a))))))))) := by
+  obtain ⟨_, hmiss, hval⟩ := rate_value hv hE hP
+  rcases c with _ | s
+  · rw [above_undefined strict a (hmiss (Or.inl rfl))]
+    rfl
+  rcases a with _ | l
+  · rw [show partialIntegral volume (fun x => Value.mask (compare strict none (some x)) (v x)) =
+        none from if_neg fun hd => by
+          obtain ⟨r, hr⟩ := hd.1 0
+          cases strict <;> cases hr]
+    rfl
+  rcases c0 with _ | α
+  · rw [above_undefined strict (some l) (hmiss (Or.inr (Or.inl rfl)))]
+    rfl
+  rcases c1 with _ | β
+  · rw [above_undefined strict (some l) (hmiss (Or.inr (Or.inr rfl)))]
+    rfl
+  show _ = Binding.guardValue (Value.or (Value.not (Value.nonzero (some s))) (Value.lt (some β) z)) _
+  by_cases hs : s = 0
+  · subst hs
+    rw [partialIntegral_zero fun x => by
+      rw [hval α β (by simp) rfl rfl x]
+      cases hcmp : compare strict (some l) (some x) with
+      | none => cases strict <;> simp [compare, Value.lt, Value.le] at hcmp
+      | some t => cases t <;> simp [Value.mask, scaleReal]]
+    simp [Value.nonzero, Value.not, Value.or, Value.mask, Binding.guardValue]
+  · rw [rate_above strict κ hv hE hP (fun t ht => by cases ht; exact hs) hm hk hz]
+    simp [Value.nonzero, hs, Value.not, Value.or, Value.mask, scaleBy]
+
+/-- Below a bound: `guard(0 < c₁, κ·exp(c₀ + c₁·b)/c₁)` under the scale. -/
+theorem rate_below (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (κ : ℚ)
+    (hv : Bell v S none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
+    (hP : rateCheck P κ = true) (hS : scaleNonvanishing S) {k z : Option ℝ}
+    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
+      Binding.guardValue (Value.lt z c1) (scaleBy S (Value.mul k
+        (Value.mul (Value.inv c1) (Functions.expR.apply (Value.add c0 (Value.mul c1 b)))))) := by
+  obtain ⟨hκ, hmiss, hval⟩ := rate_value hv hE hP
+  have hK : k = some (κ : ℝ) := by rw [hk]; simp [Numeric.denote]
+  have hZ : z = some (0 : ℝ) := by rw [hz]; simp [Numeric.denote]
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  by_cases hu : S = some none ∨ c0 = none ∨ c1 = none
+  · rw [below_undefined strict b (hmiss hu)]
+    rcases hu with rfl | rfl | rfl
+    · simp [scaleBy, Value.mul, Binding.guardValue]
+    · have : Functions.expR.apply (Value.add (none : Option ℝ) (Value.mul c1 b)) = none := rfl
+      rw [this, hK]
+      cases Value.inv c1 <;> simp [Value.mul, hnone, Binding.guardValue]
+    · rw [hZ]
+      simp [Value.lt, Binding.guardValue]
+  simp only [not_or] at hu
+  obtain ⟨hS', h0, h1⟩ := hu
+  obtain ⟨α, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨β, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  have hg := hval α β hS' rfl rfl
+  have hσ : scaleReal S ≠ 0 := by
+    rcases S with _ | _ | s
+    · simp [scaleReal]
+    · exact absurd rfl hS'
+    · exact hS s rfl
+  rcases b with _ | u
+  · rw [show partialIntegral volume (fun x => Value.mask (compare strict (some x) none) (v x)) =
+        none from if_neg fun hd => by
+          obtain ⟨r, hr⟩ := hd.1 0
+          cases strict <;> cases hr]
+    have : Functions.expR.apply (Value.add (some α) (Value.mul (some β) none)) = none := rfl
+    rw [this, hK]
+    cases Value.inv (some β) <;> simp [Value.mul, hnone, Binding.guardValue]
+  have hcmp : ∀ x : ℝ, x < u → compare strict (some x) (some u) = some true := fun x hx => by
+    cases strict <;> simp [compare, Value.lt, Value.le, hx, hx.le]
+  by_cases hβ : 0 < β
+  · obtain ⟨hi, hint⟩ := exp_linear_Iic α hβ u
+    have hI : ∀ u' : ℝ, IntegrableOn (fun x : ℝ => scaleReal S * (κ * Real.exp (α + β * x)))
+        (Iic u') volume := fun u' =>
+      (((exp_linear_Iic α hβ u').1.const_mul _).const_mul _)
+    rw [upper_integral strict (some u) ⟨fun _ => rfl⟩
+      (UpperTerms.value hg hI (fun h => by cases h) fun u' hu' => by
+        cases hu'
+        rfl)]
+    have hne : β ≠ 0 := hβ.ne'
+    rw [integral_const_mul, integral_const_mul, hint, hK, hZ]
+    rcases S with _ | _ | s
+    · simp [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add, Value.inv,
+        hne, Function1.apply, Functions.expR]
+    · exact absurd rfl hS'
+    · simp [Value.lt, hβ, Binding.guardValue, scaleBy, scaleReal, Value.mul, Value.add, Value.inv,
+        hne, Function1.apply, Functions.expR]
+  · have hn : partialIntegral volume
+        (fun x => Value.mask (compare strict (some x) (some u)) (v x)) = none := by
+      apply if_neg
+      rintro ⟨_, hint⟩
+      have hon : IntegrableOn (fun x : ℝ => scaleReal S * κ * Real.exp (α + β * x)) (Iio u)
+          volume := by
+        refine (hint.integrableOn (s := Iio u)).congr_fun (fun x hx => ?_) measurableSet_Iio
+        show (Value.mask (compare strict (some x) (some u)) (v x)).getD 0 = _
+        rw [hcmp x hx, hg]
+        show scaleReal S * (κ * Real.exp (α + β * x)) = _
+        ring
+      exact exp_linear_not_integrableOn_Iic α (not_lt.1 hβ) u (mul_ne_zero hσ hκ)
+        (integrableOn_Iic_iff_integrableOn_Iio.2 hon)
+    rw [hn, hZ]
+    simp [Value.lt, hβ, Binding.guardValue]
+
+/-- The same under a scale that may vanish. -/
+theorem rate_below_masked (strict : Bool) {b : Option ℝ} {v : ℝ → Option ℝ} {c : Option ℝ}
+    {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (κ : ℚ)
+    (hv : Bell v (some c) none P (some E)) (hE : Quadratic E (some c0) (some c1) none)
+    (hP : rateCheck P κ = true) {k z : Option ℝ}
+    (hk : k = some (Numeric.denote (s := .real) κ))
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) =
+      after [c, b, c0, c1] (Binding.guardValue
+        (Value.or (Value.not (Value.nonzero c)) (Value.lt z c1))
+        (Value.mask (Value.nonzero c) (Value.mul c (Value.mul k
+          (Value.mul (Value.inv c1) (Functions.expR.apply (Value.add c0 (Value.mul c1 b)))))))) := by
+  obtain ⟨_, hmiss, hval⟩ := rate_value hv hE hP
+  rcases c with _ | s
+  · rw [below_undefined strict b (hmiss (Or.inl rfl))]
+    rfl
+  rcases b with _ | u
+  · rw [show partialIntegral volume (fun x => Value.mask (compare strict (some x) none) (v x)) =
+        none from if_neg fun hd => by
+          obtain ⟨r, hr⟩ := hd.1 0
+          cases strict <;> cases hr]
+    rfl
+  rcases c0 with _ | α
+  · rw [below_undefined strict (some u) (hmiss (Or.inr (Or.inl rfl)))]
+    rfl
+  rcases c1 with _ | β
+  · rw [below_undefined strict (some u) (hmiss (Or.inr (Or.inr rfl)))]
+    rfl
+  show _ = Binding.guardValue (Value.or (Value.not (Value.nonzero (some s))) (Value.lt z (some β))) _
+  by_cases hs : s = 0
+  · subst hs
+    rw [partialIntegral_zero fun x => by
+      rw [hval α β (by simp) rfl rfl x]
+      cases hcmp : compare strict (some x) (some u) with
+      | none => cases strict <;> simp [compare, Value.lt, Value.le] at hcmp
+      | some t => cases t <;> simp [Value.mask, scaleReal]]
+    simp [Value.nonzero, Value.not, Value.or, Value.mask, Binding.guardValue]
+  · rw [rate_below strict κ hv hE hP (fun t ht => by cases ht; exact hs) hk hz]
+    simp [Value.nonzero, hs, Value.not, Value.or, Value.mask, scaleBy]
+
 end QSym.Distribution.StepSource

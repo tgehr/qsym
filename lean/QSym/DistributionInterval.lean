@@ -887,6 +887,46 @@ theorem upper_integral (strict : Bool) (b : Option ℝ) {f v : ℝ → Option �
         split_ifs <;> linarith
       rw [if_pos hc]
 
+/-! An observation that is not one of the forms above is given by the
+integral of its mask. Under a strict guard that does not mention the axis it
+is undefined where the guard fails: the mask holds somewhere, and there the
+value is undefined. -/
+
+theorem masked_guard_integral {g : ℝ → Option Bool} {v : ℝ → Option ℝ} {out : Option ℝ}
+    (q : Option Bool) (hg : (∃ x, g x = some true) ∨ ∀ x, g x = none)
+    (h : partialIntegral volume (fun x => Value.mask (g x) (v x)) = out) :
+    partialIntegral volume (fun x => Value.mask (g x) (Binding.guardValue q (v x))) =
+      Binding.guardValue q out := by
+  by_cases hq : q = some true
+  · subst hq
+    exact h
+  · have hv : ∀ x, Binding.guardValue q (v x) = none := fun x => by simp [Binding.guardValue, hq]
+    have hout : Binding.guardValue q out = none := by simp [Binding.guardValue, hq]
+    rw [hout]
+    apply if_neg
+    intro hd
+    rcases hg with ⟨y, hy⟩ | hn
+    · obtain ⟨r, hr⟩ := hd.1 y
+      simp only [hy, hv] at hr
+      cases hr
+    · obtain ⟨r, hr⟩ := hd.1 0
+      simp only [hn] at hr
+      cases hr
+
+/-- Above a bound that is defined the mask holds somewhere. -/
+theorem compare_lower_cases (strict : Bool) (a : Option ℝ) :
+    (∃ x : ℝ, compare strict a (some x) = some true) ∨ ∀ x : ℝ, compare strict a (some x) = none := by
+  rcases a with _ | l
+  · exact Or.inr fun x => by cases strict <;> rfl
+  · exact Or.inl ⟨l + 1, by cases strict <;> simp [compare, Value.lt, Value.le]⟩
+
+/-- So it does below one. -/
+theorem compare_upper_cases (strict : Bool) (b : Option ℝ) :
+    (∃ x : ℝ, compare strict (some x) b = some true) ∨ ∀ x : ℝ, compare strict (some x) b = none := by
+  rcases b with _ | u
+  · exact Or.inr fun x => by cases strict <;> rfl
+  · exact Or.inl ⟨u - 1, by cases strict <;> simp [compare, Value.lt, Value.le]⟩
+
 /-! A value that is undefined everywhere is observed as undefined between
 bounds and beyond one: the scale of the primitive that is zero is. -/
 
@@ -1175,6 +1215,17 @@ theorem presentation_mass_pieces {w f : ℝ → Option ℝ} {out : Option ℝ}
     simp only [DensityProgram.density, Value.mul_one_left, hw x]
   rw [he]
   exact h.integral
+
+/-- The mass of a density that is a mask of a value, by the integral of the
+mask. -/
+theorem presentation_mass_direct (p : DensityProgram) {g : ℝ → Option Bool}
+    {v : ℝ → Option ℝ} {out : Option ℝ} (hf : StepSource.Masked p.density g v)
+    (h : partialIntegral MeasureTheory.volume (fun x => Value.mask (g x) (v x)) = out) :
+    massValue p.presentation = out := by
+  rw [mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
+  show partialIntegral MeasureTheory.volume p.density = out
+  rw [show p.density = fun x => Value.mask (g x) (v x) from funext hf.equation]
+  exact h
 
 theorem presentation_mass_upper (p : DensityProgram) (strict : Bool) (b : Option ℝ)
     {v : ℝ → Option ℝ} {out : Option ℝ}
