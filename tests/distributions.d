@@ -1109,6 +1109,15 @@ private Case[] cases(){ return [
 	Case("Capture","(λ(a:ℝ).Λ(x:ℝ).(a+x)*λ[x])(2)","Distribution(ℝ)"),
 	Case("Shadow","λ(x:ℝ).Λ(x:ℝ).x*λ[x]","ℝ→Distribution(ℝ)"),
 	Case("FormalIntegral","integralD(λ(x:ℝ).δ(x))","Distribution(ℝ)"),
+	Case("RecursiveScaledMass","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(3))","ℝ","1/8"),
+	Case("RecursiveScaledAtom","densityAtD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(3),0)","ℝ","undefined(ℝ)"),
+	Case("RecursiveMixtureMass","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else addD(δ((1:ℝ)),scaleD(1/2,f(n sub 1))))(2))","ℝ","7/4"),
+	Case("RecursiveStatePair","massD((μ(f:ℕ×𝔹→Distribution(ℝ)).λ(t:ℕ×𝔹).if get(t,0)=0 then δ((0:ℝ)) else scaleD(1/2,f((get(t,0) sub 1,get(t,1)))) )((2,true)))","ℝ","1/4"),
+	Case("RecursiveDistributionState","(μ(f:Distribution(ℝ)→ℝ).λ(d:Distribution(ℝ)).if massD(d)=1 then 4 else f(δ((0:ℝ))))(scaleD(2,δ((7:ℝ))))","ℝ","4"),
+	Case("RecursiveDistributionOutcome","(μ(f:ℕ→Distribution(Distribution(ℝ))).λ(n:ℕ).if n=0 then δ(δ((0:ℝ))) else f(n sub 1))(1)","Distribution(Distribution(ℝ))","δ(δ((0:ℝ)))"),
+	Case("RecursiveFunctionOutcome","(μ(f:ℕ→Distribution(ℕ→ℕ)).λ(n:ℕ).if n=0 then δ(λ(k:ℕ).k) else f(n sub 1))(1)","Distribution(ℕ→ℕ)","δ(λ(k:ℕ). k)"),
+	Case("RecursiveDistributionBottom","(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).f(n))(3)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("RecursivePartialArgument","defined((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else f(n sub 1))(0 sub 1))","𝔹","false"),
 	Case("RecursiveAtom","(μ(f:ℕ→ℝ).λ(n:ℕ).if n=0 then 0 else massD(δ(f(n sub 1))))(2)","ℝ"),
 	Case("RecursiveConstant","μ(f:ℕ→ℝ).λ(n:ℕ).massD(δ(1))","ℕ→ℝ")
 ]; }
@@ -2098,6 +2107,8 @@ private void run(string directory){
 		"Λ(x:ℕ).λ[x]", "Λ(x:ℝ).δ(x)[x]", "Λ(x:ℝ).λ[x]*λ[x]",
 		"Λx. ∑(q:ℚ). δ(q)[x]", "Λx. ∑_x δ(x)[x]", "sumD(λ(x:ℝ). δ(x))",
 		"Λ(x:ℝ).δ(2)[y]", "δ(2)=δ(2)", "(δ(2):Distribution(𝔹))",
+			"μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if defined(f(n)) then δ((0:ℝ)) else f(n)",
+		"μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).Λy. massD(f(n))*λ[y]",
 		"μ(f:ℕ→ℝ).λ(n:ℕ).massD(Λ(x:ℝ).f(n)*λ[x])",
 		"μ(f:ℕ→ℝ).λ(n:ℕ).densityAtD(Λ(x:ℝ).f(n)*λ[x],0)"
 	]) assertThrown(s.run(a,source),source);

@@ -273,6 +273,25 @@ theorem Expr.eval_beta (b : Expr (a :: Γ) c) (x : Expr Γ a) (ξ : QSym.Env) (�
     funext s w
     cases w <;> simp [Env.cons, Substitution.single, eval, h]
 
+/-- Apply the unfolding equation at the actual argument. Substituting both
+binders before simplification keeps recursive calls in untaken branches lazy. -/
+theorem Expr.eval_unroll_app (f : Expr Γ (.arrow a b)) (body : Expr (a :: .arrow a b :: Γ) b)
+    (x : Expr Γ a) (ξ : QSym.Env) (ρ : Env Γ) {g : a.denote → Option b.denote}
+    (hf : f.eval ξ ρ = some g)
+    (hu : f.eval ξ ρ = (Expr.app (.lam (.lam body)) f).eval ξ ρ) :
+    (Expr.app f x).eval ξ ρ = ((body.subst (Substitution.lift (Substitution.single f))).beta x).eval ξ ρ := by
+  have he := hu.trans (Expr.eval_beta (.lam body) f ξ ρ)
+  change f.eval ξ ρ = (f.eval ξ ρ).bind (fun _ =>
+    (Expr.lam (body.subst (Substitution.lift (Substitution.single f)))).eval ξ ρ) at he
+  rw [hf, Option.some_bind] at he
+  exact (congrArg (fun k : Option (a.denote → Option b.denote) =>
+    k.bind (fun v => (x.eval ξ ρ).bind v)) (hf.trans he)).trans
+      (Expr.eval_beta (body.subst (Substitution.lift (Substitution.single f))) x ξ ρ)
+
+theorem defined_binary_data (op : α → β → γ) (a : Option α) (b : Option β) :
+    definedValue (a.bind (fun x => b.map (op x))) = Value.and (definedValue a) (definedValue b) := by
+  cases a <;> cases b <;> rfl
+
 inductive Reduction : {Γ : List Ty} → {a : Ty} → Expr Γ a → Expr Γ a → Prop where
   | refl (e : Expr Γ a) : Reduction e e
   | ofEq {x y : Expr Γ a} : (∀ ξ ρ, x.eval ξ ρ = y.eval ξ ρ) → Reduction x y

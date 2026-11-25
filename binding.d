@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -806,17 +806,18 @@ final class Bindings{
 	BoundTerm fixed(BoundTerm body){
 		auto n=node(body),v=pool.view(type(body));
 		enforce(n.op==BoundOp.lambda&&n.context!=0&&contexts[n.context].type==n.type,"fixed-point body must be a lambda of the declared type");
-		bool resultType(TypeId t){
+		bool dataType(TypeId t){
 			auto shape=pool.view(t);
-			if(shape.kind>=TypeKind.boolean&&shape.kind<=TypeKind.complex) return true;
+			if(shape.kind<=TypeKind.complex||shape.kind==TypeKind.distribution) return true;
 			if(shape.kind!=TypeKind.tuple&&shape.kind!=TypeKind.vector) return false;
 			if(shape.kind==TypeKind.vector&&(!shape.dimension.constant||!shape.length||shape.length>256)) return false;
-			foreach(field;shape.fields) if(!resultType(field)) return false;
+			foreach(field;shape.fields) if(!dataType(field)) return false;
 			return true;
 		}
-		auto input=pool.view(v.fields[0]).kind;
-		enforce(input>=TypeKind.boolean&&input<=TypeKind.complex&&resultType(v.fields[1]),
-			"fixed points require scalar arguments and scalar or finite product results");
+		// A distribution is an ordinary value of the flat result domain.
+		// Its sample type is opaque to the recursion certificate.
+		enforce(dataType(v.fields[0])&&dataType(v.fields[1]),
+			"fixed points require first-order data arguments and results");
 		enforce(continuity(at(n.a))!=Continuity.unsupported,"recursive dependency crosses an operation without a continuity certificate");
 		checkProgram(at(n.a)); return intern(BoundNode(BoundOp.fixed,contexts[n.context].parent,n.type,body.id));
 	}
@@ -1051,6 +1052,17 @@ final class Bindings{
 		auto n=node(t); if(n.op!=BoundOp.scalar) return false;
 		foreach(id;arena.viewPostorder(arena.at(n.data))) if(arena.view(arena.at(id)).op==Op.variable) return false;
 		return true;
+	}
+	private bool closedFixedArgument(BoundTerm t){
+		auto n=node(t);
+		switch(n.op){
+			case BoundOp.scalar:return closedScalar(t);
+			case BoundOp.unit,BoundOp.vectorNil,BoundOp.distributionZero,BoundOp.distributionLebesgue:return true;
+			case BoundOp.distributionDirac:return closedFixedArgument(at(n.a));
+			case BoundOp.pair,BoundOp.vectorCons,BoundOp.distributionAdd,BoundOp.distributionScale:
+				return closedFixedArgument(at(n.a))&&closedFixedArgument(at(n.b));
+			default:return false;
+		}
 	}
 	private Term scalarBody(BoundTerm term,Term argument){
 		auto n=node(term);
@@ -6128,8 +6140,7 @@ final class Bindings{
 			if(n.a==uint.max) result=Result(t.id,emit(BindingRule.refl,t.id,t.id));
 			else{
 				Result x=Result(uint.max,uint.max);
-				bool applied=n.op==BoundOp.apply&&closedScalar(at(n.b));
-				if(domains&&applied&&nodes[n.a].op==BoundOp.fixed&&steps<budget){
+				if(domains&&n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.fixed&&steps<budget&&closedFixedArgument(at(n.b))){
 					RecurrenceSolution solution; auto function_=at(n.a),solved=solveRecurrence(function_,solution);
 					if(solved==BoundTerm.init) solved=solveAffineRecurrence(function_,solution);
 					if(solved==BoundTerm.init) solved=solveLinearRecurrence(function_,solution);
@@ -7157,14 +7168,23 @@ final class Bindings{
 			}else if(current.op==BoundOp.apply&&nodes[current.a].op==BoundOp.lambda){
 				if(steps<budget){ next=beta(at(nodes[current.a].a),at(current.b)); rule=BindingRule.beta; }
 				else exhausted=true;
-			}else if(domains&&current.op==BoundOp.apply&&nodes[current.a].op==BoundOp.fixed&&nodes[current.b].op==BoundOp.scalar){
-				if(closedScalar(at(current.b))){
+			}else if(domains&&current.op==BoundOp.apply&&nodes[current.a].op==BoundOp.fixed&&closedFixedArgument(at(current.b))){
+				if(nodes[current.b].op==BoundOp.scalar){
 					auto source=arena.at(nodes[current.b].data),d=simplifyDomain(arena,source,[],Options(DensityMode.preserve,true)); exhausted|=d.exhausted;
 					if(d.output==arena.boolean(false)){
 						extra=cast(uint)scalarDomains.length; scalarDomains~=ScalarDomain(source,d);
 						next=bottom(ctx,type(at(result.output))); rule=BindingRule.appScalarUndefined;
-					}else if(steps<budget&&depth<128&&fixedSteps<64){
-						++fixedSteps; next=apply(apply(lambda(at(nodes[current.a].a)),at(current.a)),at(current.b)); rule=BindingRule.fixedApp;
+					}
+				}
+				if(next==BoundTerm.init){
+					if(steps<budget&&depth<128&&fixedSteps<64){
+						// Substitute self and the argument before visiting the body.
+						// Normalizing the intermediate lambda can unfold a recursive
+						// call even when its enclosing branch will never be taken.
+						auto f=at(current.a); BoundTerm[] env=[f];
+						foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
+						auto fn=substitute(at(node(f).a),ctx,env);
+						++fixedSteps; next=beta(at(node(fn).a),at(current.b)); rule=BindingRule.fixedApp;
 					}else exhausted=true;
 				}
 			}else if(current.op==BoundOp.sequence){
@@ -7334,6 +7354,10 @@ final class Bindings{
 						auto child=nodes[current.a];
 						if(child.op==BoundOp.distributionDirac){
 							next=defined(at(child.a)); rule=BindingRule.distributionDefinedDirac;
+						}else if(child.op==BoundOp.distributionAdd||child.op==BoundOp.distributionScale){
+							next=both(defined(at(child.a)),defined(at(child.b))); rule=BindingRule.distributionDefinedBinary;
+						}else if(child.op==BoundOp.distributionZero||child.op==BoundOp.distributionLebesgue){
+							next=scalar(ctx,arena.boolean(true)); rule=BindingRule.seqTotal;
 						}else if(child.op==BoundOp.conditional){
 							next=holds(conditional(at(child.a),defined(at(child.b)),defined(at(child.c)))); rule=BindingRule.conditionalDefined;
 						}else if(child.op==BoundOp.pair||child.op==BoundOp.vectorCons){
@@ -10378,7 +10402,8 @@ final class Bindings{
 					proof=".appScalarUndefined "~name(n.a)~" n"~to!string(nodes[n.b].data)~" QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct"; break;
 				case BindingRule.definedFixed:proof=".ofEq (fun ξ ρ => congrArg Binding.definedValue (fixed"~to!string(n.a)~dimArg~" γ ξ ρ))"; break;
 				case BindingRule.fixedApp:
-					proof=".ofEq (fun ξ ρ => congrArg (fun f : Option ("~leanType(types[nodes[n.a].type])~" : Binding.Ty).denote => f.bind (fun g => ("~name(n.b)~".eval ξ ρ).bind g)) (unroll"~to!string(n.a)~dimArg~" γ ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => Binding.Expr.eval_unroll_app "~name(n.a)~" "~name(nodes[nodes[n.a].a].a)~" "~name(n.b)~
+						" ξ ρ (fixed"~to!string(n.a)~dimArg~" γ ξ ρ) (unroll"~to!string(n.a)~dimArg~" γ ξ ρ))"; break;
 				case BindingRule.fixedConstant:
 					proof=".ofEq (fun ξ ρ => Recursion.fixed_constant (fun x => "~name(nodes[p.to].a)~".eval ξ (ρ.cons (some x))))"; break;
 				case BindingRule.fixedIdentity:proof=".ofEq (fun _ _ => Recursion.fixed_identity)"; break;
@@ -10448,6 +10473,10 @@ final class Bindings{
 
 				case BindingRule.distributionMassZero:
 					proof=".ofEq (fun ξ ρ => Distribution.mass_zeroValue)"; break;
+				case BindingRule.distributionDefinedBinary:{
+					auto d=nodes[n.a],ctor=d.op==BoundOp.distributionAdd?"add":"scale";
+					proof=".ofEq (fun ξ ρ => Binding.defined_binary_data Distribution.Presentation."~ctor~" ("~name(d.a)~".eval ξ ρ) ("~name(d.b)~".eval ξ ρ))"; break;
+				}
 				case BindingRule.distributionDefinedDirac:
 					proof=".ofEq (fun ξ ρ => congrArg some (Option.isSome_map' (f := Distribution.Presentation.dirac) (x := "~name(nodes[n.a].a)~".eval ξ ρ)))"; break;
 				case BindingRule.distributionMassAdd:
