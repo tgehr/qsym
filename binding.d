@@ -1160,12 +1160,28 @@ final class Bindings{
 		foreach(c;p) if(c.words>128) return false;
 		return true;
 	}
+	// The exponential of a polynomial of degree one in the innermost
+	// variable with a rational slope and a constant coefficient that does not
+	// mention the variable: `exp(c + r·x) = exp(c)·exp(r·x)`. The slope, and
+	// that coefficient outside the binder once the rule builds it.
+	private bool offsetExponential(uint id,out Rational rate,out BoundTerm offset,bool build){
+		auto n=nodes[id]; if(n.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(n.data)); AxisCoefficient[3] c;
+		if(op.op!=Op.builtin||op.value!=Builtin.expR||!axisQuadratic(n.a,c,false)) return false;
+		if(c[2].present||!c[1].present||!c[1].closed||!c[0].present||c[1].value.words>128) return false;
+		rate=c[1].value;
+		if(build){ axisQuadratic(n.a,c,true); offset=c[0].term; }
+		return true;
+	}
 	// A product of such factors and of factors that do not mention the
-	// innermost variable; these are the scale of the term.
+	// innermost variable; these are the scale of the term, with the constant
+	// part of an exponential.
 	private bool scaledExponential(uint id,out Rational[] p,out Rational rate,out bool scaled,uint depth=0){
 		if(depth>16) return false;
 		if(axisExponential(id,p,rate)) return true;
 		if(!depends(at(id),0)){ scaled=true; p=[Rational(1)]; return true; }
+		BoundTerm offset;
+		if(offsetExponential(id,rate,offset,false)){ scaled=true; p=[Rational(1)]; return true; }
 		auto q=nodes[id];
 		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
 		Rational[] a,b; Rational r,t; bool left,right;
@@ -1177,9 +1193,10 @@ final class Bindings{
 	}
 	// The scale of such a product outside the binder of the axis.
 	private BoundTerm exponentialScale(uint id){
-		Rational[] p; Rational rate;
+		Rational[] p; Rational rate; BoundTerm offset;
 		if(axisExponential(id,p,rate)) return BoundTerm.init;
 		if(!depends(at(id),0)) return dropIndex(at(id));
+		if(offsetExponential(id,rate,offset,true)) return primitive(arena.call(Builtin.expR,[arena.real_(0)]),[offset]);
 		auto q=nodes[id],left=exponentialScale(q.a),right=exponentialScale(q.b);
 		if(left==BoundTerm.init) return right;
 		if(right==BoundTerm.init) return left;
@@ -1216,6 +1233,8 @@ final class Bindings{
 		Rational cut;
 		if(tailFactor(id,bottom,p,exponent,cut,pieces)!=TailFactor.none) return true;
 		if(!depends(at(id),0)){ scaled=true; p=[Rational(1)]; return true; }
+		Rational rate; BoundTerm offset;
+		if(pieces&&offsetExponential(id,rate,offset,false)){ scaled=true; p=[Rational(1)]; exponent=[Rational(0),rate]; return true; }
 		auto q=nodes[id];
 		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
 		Rational[] a,b,r,t; bool left,right;
@@ -1227,9 +1246,10 @@ final class Bindings{
 	}
 	// The scale of such a product outside the binder of the variable.
 	private BoundTerm tailScale(uint id,bool bottom,bool pieces=true){
-		Rational[] p,exponent; Rational cut;
+		Rational[] p,exponent; Rational cut,rate; BoundTerm offset;
 		if(tailFactor(id,bottom,p,exponent,cut,pieces)!=TailFactor.none) return BoundTerm.init;
 		if(!depends(at(id),0)) return dropIndex(at(id));
+		if(pieces&&offsetExponential(id,rate,offset,true)) return primitive(arena.call(Builtin.expR,[arena.real_(0)]),[offset]);
 		auto q=nodes[id],left=tailScale(q.a,bottom,pieces),right=tailScale(q.b,bottom,pieces);
 		if(left==BoundTerm.init) return right;
 		if(right==BoundTerm.init) return left;
@@ -1277,6 +1297,8 @@ final class Bindings{
 		return r;
 	}
 	private static size_t coefficientDegree(AxisCoefficient[3] c){ return c[2].present?2:c[1].present?1:0; }
+	// The coefficient of the variable itself: a literal one outside its binder.
+	private BoundTerm unitCoefficient(uint variable){ return scalar(Scope(this,contexts[nodes[variable].context].parent),arena.real_(1)); }
 	// A polynomial of degree at most two in the innermost variable whose
 	// coefficients do not mention it, by its structure: sums, products with
 	// a factor free of the variable, and products and squares of polynomials
@@ -1292,7 +1314,7 @@ final class Bindings{
 		}
 		if(n.op==BoundOp.variable){
 			c[1].present=true; c[1].closed=true; c[1].value=Rational(1);
-			if(build) c[1].term=scalar(Scope(this,contexts[n.context].parent),arena.real_(1));
+			if(build) c[1].term=unitCoefficient(id);
 			return true;
 		}
 		if(n.op!=BoundOp.primitive) return false;
@@ -6192,17 +6214,51 @@ final class Bindings{
 			}
 			scaled=true;
 			if(!depends(at(id),0)) return "(Limit.EventualScaled.constant "~filter~" ("~name(dropIndex(at(id)).id)~".eval ξ ρ))";
+			Rational rate; BoundTerm offset;
+			if(pieces&&offsetExponential(id,rate,offset,false)) return "(Limit.EventualScaled.exp_offset "~filter~" "~offsetProof(id,rate)~")";
 			bool left,right; auto product=nodes[id];
 			auto a=exponentialTail(product.a,filter,bottom,pieces,left),b=exponentialTail(product.b,filter,bottom,pieces,right); scaled=left||right;
 			return scaled?"(Limit.EventualScaled."~(left&&right?"mul":left?"times":"after")~" "~a~" "~b~")":"(Limit.EventualExp.mul "~a~" "~b~")";
 		}
+		// Terms outside the binder that only the proof names: the export
+		// keeps them.
+		uint[] roots;
+		string outside(uint id){auto t=dropIndex(at(id));roots~=t.id;return "("~name(t.id)~".eval ξ ρ)";}
+		// A closed term at its rational value, by the numeric calculator.
+		string closedProof(BoundTerm t,Rational expected){
+			Rational value;Term term;enforce(closedRational(t,value,term)&&value==expected,"coefficient is not the closed rational");
+			numericTerms~=term;roots~=t.id;return "(Numeric.calculate_sound ξ n"~to!string(term.id)~" "~q(expected)~" rfl)";
+		}
+		// A polynomial of degree at most two in the axis whose coefficients do
+		// not mention it, by its structure, with the coefficients the rule built.
+		string quadratic(uint id){
+			if(!depends(at(id),0))return app("Quadratic.constant",outside(id));
+			auto n=nodes[id];
+			if(n.op==BoundOp.variable){
+				auto one=unitCoefficient(id);roots~=one.id;
+				return app("Quadratic.variable","(Numeric.calculate_sound ξ n"~to!string(nodes[one.id].data)~" (1 : ℚ) rfl)");
+			}
+			auto op=arena.view(arena.at(n.data)).op;auto a=quadratic(n.a);
+			if(op==Op.pow)return app("Quadratic.square",a);
+			auto b=quadratic(n.b);
+			if(op==Op.add)return app("Quadratic.add",a~" "~b);
+			AxisCoefficient[3] x,y;axisQuadratic(n.a,x,false);axisQuadratic(n.b,y,false);
+			return app(!coefficientDegree(x)?"Quadratic.scale":!coefficientDegree(y)?"Quadratic.scaled":"Quadratic.product",a~" "~b);
+		}
+		// The exponential of a rational slope with a constant part: the slope,
+		// the structure of the exponent, and the slope as a closed term.
+		string offsetProof(uint id,Rational slope){
+			AxisCoefficient[3] c;axisQuadratic(nodes[id].a,c,true);
+			return q(slope)~" "~quadratic(nodes[id].a)~" "~closedProof(c[1].term,slope);
+		}
 		// Such a product with factors free of the axis: these are its scale,
 		// the others multiply.
 		string scaledFactor(uint factor,out bool scaled){
-			Rational[] coefficients;Rational rate;
+			Rational[] coefficients;Rational rate;BoundTerm offset;
 			if(axisExponential(factor,coefficients,rate))return exponential(factor).proof;
 			scaled=true;
 			if(!depends(at(factor),0))return app("scaled_constant","("~name(dropIndex(at(factor)).id)~".eval ξ ρ)");
+			if(offsetExponential(factor,rate,offset,false))return app("scaled_exp_offset",offsetProof(factor,rate));
 			bool left,right;auto product=nodes[factor];
 			auto a=scaledFactor(product.a,left),b=scaledFactor(product.b,right);
 			return app(left&&right?"scaled_mul":left?"scaled_times":"scaled_after",a~" "~b);
@@ -6435,18 +6491,7 @@ final class Bindings{
 			// the polynomial of the moments and evaluates the curvature.
 			auto d=s.bell;enum src="Distribution.StepSource.";
 			string literal(uint id,Rational value){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~q(value)~" rfl)";}
-			string constant(uint id){return "("~name(dropIndex(at(id)).id)~".eval ξ ρ)";}
-			string quadratic(uint id){
-				if(!depends(at(id),0))return "("~src~"Quadratic.constant "~constant(id)~")";
-				auto n=nodes[id];
-				if(n.op==BoundOp.variable)return "("~src~"Quadratic.variable "~literal(scalar(Scope(this,contexts[n.context].parent),arena.real_(1)).id,Rational(1))~")";
-				auto op=arena.view(arena.at(n.data)).op;auto a=quadratic(n.a);
-				if(op==Op.pow)return "("~src~"Quadratic.square "~a~")";
-				auto b=quadratic(n.b);
-				if(op==Op.add)return "("~src~"Quadratic.add "~a~" "~b~")";
-				AxisCoefficient[3] x,y;axisQuadratic(n.a,x,false);axisQuadratic(n.b,y,false);
-				return "("~src~"Quadratic."~(!coefficientDegree(x)?"scale":!coefficientDegree(y)?"scaled":"product")~" "~a~" "~b~")";
-			}
+			auto quadratic=&cert.quadratic,constant=&cert.outside;
 			string join(string a,string b){return a.length&&b.length?"("~src~"Quadratic.add "~a~" "~b~")":a.length?a:b;}
 			string bell(uint id,out string exponent){
 				Rational[] p;
@@ -6469,13 +6514,11 @@ final class Bindings{
 			}
 			if(d.zero0!=uint.max)exponent="("~src~"Quadratic.fill0 "~literal(d.zero0,Rational(0))~" "~exponent~")";
 			if(d.zero1!=uint.max)exponent="("~src~"Quadratic.fill1 "~literal(d.zero1,Rational(0))~" "~exponent~")";
-			Rational value;Term term;enforce(closedRational(at(d.curvature),value,term)&&value==d.c2,"Gaussian curvature is not the closed rational");
-			cert.numericTerms~=term;
 			string horner;
 			foreach_reverse(i,c;d.moments)horner="("~src~"Horner."~(horner.length?"step ":"last ")~q(c)~" "~literal(d.horner[i],c)~(horner.length?" "~horner:"")~")";
 			string list="[";foreach(i,c;d.moments)list~=(i?", ":"")~q(c);list~="]";
 			return "Distribution.DensityProgram.presentation_mass_gaussian_symbolic "~program~" "~list~" "~q(d.c2)~" "~q(d.vertex)~" "~q(d.width)~" "~evidence~" "~exponent~
-				" (Numeric.calculate_sound ξ n"~to!string(term.id)~" "~q(d.c2)~" rfl) rfl "~horner~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
+				" "~cert.closedProof(at(d.curvature),d.c2)~" rfl "~horner~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
 		}
 		if(s.gaussian){
 			// The density is a polynomial times the exponential of a quadratic
@@ -6750,14 +6793,15 @@ final class Bindings{
 		code~="namespace QSym.BindingCertificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
 		foreach(s;result.solutions) if(s.cfinite){ code~="attribute [local semireducible] Nat.div Nat.modCore\n"; break; }
 		Term[] stepNumerics;string stepDeclarations;string[] stepProofs=new string[result.integrals.length],stepOutputs=new string[result.integrals.length];
+		uint[] proofRoots;
 		foreach(i,s;result.integrals) if(s.piecewise||s.ae){
 			auto c=new SourceCertificates("step"~to!string(i)~"_",s.from[0]);
-			stepProofs[i]=stepGridProof(s,c,stepOutputs[i]);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
+			stepProofs[i]=stepGridProof(s,c,stepOutputs[i]);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
 		}
 		string[] limitProofs=new string[result.limits.length];
 		foreach(i,s;result.limits){
 			auto c=new SourceCertificates("limit"~to!string(i)~"_",s.body);
-			limitProofs[i]=limitProof(s,c);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
+			limitProofs[i]=limitProof(s,c);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
 		}
 		Table!(uint,string) squareWeights;
 		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionWeightedSquare&&p.left!=uint.max){
@@ -6828,7 +6872,7 @@ final class Bindings{
 				chartProofs[$-1]~=" "~c.functionAt(chart.borelPredicate)~" "~borelProof(chart.borelPredicate,c);
 			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
 		}
-		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id];
+		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id]~proofRoots;
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
 		foreach(witness;result.fibres) foreach(f;witness){ stack~=[f.source,f.charge,f.regular]; stack~=f.weights; }
@@ -6838,7 +6882,7 @@ final class Bindings{
 			if(c.inverse!=uint.max) stack~=c.inverse;
 			if(c.powerDegree) stack~=[c.derivativeNumerator,c.derivativeDenominator];
 		}
-		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) stack~=r.primitive; if(s.bell.curvature!=uint.max) stack~=s.bell.curvature; }
+		foreach(s;result.integrals){ stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) stack~=r.primitive; }
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
 		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd||p.rule==BindingRule.distributionCoverAffine) stack~=p.extra;
 		while(stack.length){

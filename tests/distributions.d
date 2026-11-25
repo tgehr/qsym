@@ -601,7 +601,18 @@ private Case[] cases(){ return [
 	Case("StrictGuardPower","∫dx λ[x]*(exp(-(x-1/b)^2)*x)^2","ℝ","guard(b≠0,(1/4+(b^2)⁻¹)·sqrt(1/2·π))"),
 	Case("StrictGuardRetained","∫dx exp(-(x-1/a)^4)*λ[x]*x","ℝ","guard(a≠0,∫dx (x·exp(-(x-a⁻¹)^4))·λ[x])"),
 	Case("StrictGuardAxis","∫dx (x+1/a)*λ[x]*[0≤x]*[x≤1]","ℝ"),
-	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ"),
+	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ","(e-1)·e"),
+	Case("ExponentialOffsetSum","∫dx [0≤x≤1]*exp(2*x+a+b)*λ[x]","ℝ","(1/2·exp(2)-1/2)·exp(a+b)"),
+	Case("ExponentialOffsetTerms","∫dx [0≤x≤1]*(x+exp(a+x))*λ[x]","ℝ","(e-1)·exp(a)+1/2"),
+	Case("ExponentialOffsetScaled","∫dx [0≤x≤1]*c*exp(x+1)*x*λ[x]","ℝ","c·e"),
+	Case("ExponentialOffsetWeight","∫dx [0≤x≤1]*exp(x+1)*λ[x]*exp(x)","ℝ","(1/2·exp(2)-1/2)·e"),
+	Case("HalfLineOffset","∫dx [0≤x]*exp(a-x)*λ[x]","ℝ","exp(a)"),
+	Case("HalfLineOffsetMoment","∫dx [0≤x]*x*exp(1-2*x)*λ[x]","ℝ","1/4·e"),
+	Case("HalfLineOffsetBound","∫dx [a≤x]*exp(b-x)*λ[x]","ℝ","exp(-a+b)"),
+	Case("HalfLineOffsetGrowing","∫dx [0≤x]*exp(a+x)*λ[x]","ℝ"),
+	Case("LimitOffset","lim[x→∞] exp(a-x)","ℝ","0"),
+	Case("LimitOffsetBottom","lim[x→-∞] x*exp(a+b+3*x)","ℝ","0"),
+	Case("LimitOffsetGrowing","lim[x→∞] exp(a+x)","ℝ"),
 	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
@@ -966,21 +977,28 @@ private void run(string directory){
 			enforce((text.indexOf("∫")>=0)==(c.name=="GuardedUnobserved"),c.name~": "~text);
 		}
 		// A polynomial times an exponential of rational rate has an
-		// antiderivative of the same kind. Shifted exponents and symbolic
-		// rates keep their integral.
+		// antiderivative of the same kind. A constant part of the exponent that
+		// does not mention the axis is a scale: its exponential leaves the
+		// integral. Symbolic rates keep their integral.
+		bool offset=c.name=="ExponentialShifted"||c.name.indexOf("ExponentialOffset")==0||c.name.indexOf("HalfLineOffset")==0||c.name.indexOf("LimitOffset")==0;
 		if(c.name.indexOf("Exponential")==0){
-			bool retained=c.name=="ExponentialShifted"||c.name=="ExponentialSymbolicRate";
+			bool retained=c.name=="ExponentialSymbolicRate";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
-			if(c.name!="ExponentialTwoScales") enforce((certificate.indexOf("StepSource.exp_affine")>=0)!=retained,c.name~" exponential evidence");
+			if(c.name!="ExponentialTwoScales"&&!offset) enforce((certificate.indexOf("StepSource.exp_affine")>=0)!=retained,c.name~" exponential evidence");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
 		// Above one lower bound every term must decay; the antiderivative
 		// then vanishes at infinity. A growing term and an upper half-line
 		// keep their integral.
 		if(c.name.indexOf("HalfLine")==0){
-			bool retained=c.name=="HalfLineGrowing"||c.name=="HalfLineUpper";
+			bool retained=c.name=="HalfLineGrowing"||c.name=="HalfLineUpper"||c.name=="HalfLineOffsetGrowing";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_halfline")>=0)!=retained,c.name~" half-line certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+		}
+		if(offset){
+			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;
+			enforce((certificate.indexOf(limit?"Limit.EventualScaled.exp_offset":"Distribution.StepSource.scaled_exp_offset")>=0)!=retained,c.name~" offset evidence");
+			if(!retained) enforce(certificate.indexOf("Distribution.StepSource.Quadratic.")>=0,c.name~" exponent");
 		}
 		// The whole line under a polynomial times the exponential of a quadratic
 		// with negative curvature: the polynomial is a constant up to a
@@ -1031,7 +1049,7 @@ private void run(string directory){
 			bool retained=c.name=="LimitGrowing"||c.name=="LimitPolynomial"||c.name=="LimitWrongEnd"||c.name=="LimitOscillating"||
 				c.name=="LimitGuardOscillating"||c.name=="LimitPiecewiseGrowing"||c.name=="LimitVisibleGrowth"||
 				c.name=="LimitReciprocalParameter"||c.name=="LimitInteriorBoundary"||c.name=="LimitQuotientLarger"||c.name=="LimitQuotientParameter"||
-				c.name=="LimitExponentCubicGrowing"||c.name=="LimitGaussianSymbolic";
+				c.name=="LimitExponentCubicGrowing"||c.name=="LimitGaussianSymbolic"||c.name=="LimitOffsetGrowing";
 			enforce((certificate.indexOf("Limit.Exact.sound")>=0)!=retained,c.name~" limit certificate");
 			enforce((text.indexOf("lim[")>=0)==retained,c.name~": "~text);
 			// A bracket or a guard is decided beyond its last cut, and a bound

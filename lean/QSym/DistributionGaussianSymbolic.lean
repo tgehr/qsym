@@ -389,6 +389,19 @@ theorem Quadratic.fill1 {f : ℝ → Option ℝ} {z : Option ℝ} {c0 c2 : Optio
     Quadratic f c0 (some z) c2 :=
   ⟨fun x => by rw [h.equation, zero_of_literal hz]; rfl, by simp⟩
 
+/-- The exponential of a polynomial of degree one with a rational slope: the
+exponential of its constant coefficient is a scale. -/
+theorem scaled_exp_offset {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (r : ℚ)
+    (hE : Quadratic E (some c0) (some c1) none)
+    (h1 : c1 = some (Numeric.denote (s := .real) r)) :
+    Scaled (fun x => Functions.expR.apply (E x)) (Functions.expR.apply c0) [1] r :=
+  ⟨fun x => by
+    show Functions.expR.apply (E x) = _
+    rw [hE.equation, h1]
+    cases c0 <;>
+      simp [coefValue, Value.add, Value.mul, Function1.apply, Functions.expR, polyEval,
+        Numeric.denote, Real.exp_add]⟩
+
 /-- A polynomial with rational coefficients at a partial value, by Horner's
 rule; its last coefficient stands alone. -/
 inductive Horner : Option ℝ → List ℚ → Option ℝ → Prop
@@ -532,3 +545,19 @@ theorem presentation_mass_gaussian_symbolic (p : DensityProgram) {S : Option (Op
   exact StepSource.gaussian_partialIntegral_symbolic κ q2 γ δ hf hE h2 h hk hg hd hpi
 
 end QSym.Distribution.DensityProgram
+
+namespace QSym.Limit
+open QSym.Distribution.StepSource
+
+/-- The same along a filter. -/
+theorem EventualScaled.exp_offset (l : Filter ℝ) {E : ℝ → Option ℝ} {c0 c1 : Option ℝ} (r : ℚ)
+    (hE : Quadratic E (some c0) (some c1) none)
+    (h1 : c1 = some (Numeric.denote (s := .real) r)) :
+    EventualScaled l (fun x => Functions.expR.apply (E x)) (Functions.expR.apply c0) [1] [0, r] :=
+  Filter.Eventually.of_forall fun x => by
+    show Functions.expR.apply (E x) = _
+    have h := (scaled_exp_offset r hE h1).equation x
+    rw [show Functions.expR.apply (E x) = _ from h]
+    simp [polyEval, mul_comm]
+
+end QSym.Limit
