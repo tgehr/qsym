@@ -593,6 +593,14 @@ private Case[] cases(){ return [
 	Case("GaussianSymbolicVariance","∫dx exp(-(x-m)^2/(2*v))*λ[x]","ℝ"),
 	Case("GaussianSymbolicLinear","∫dx exp(a*x)*λ[x]","ℝ"),
 	Case("GaussianSymbolicPrefactor","∫dx (x-m)^2*exp(-(x-m)^2/2)*λ[x]","ℝ"),
+	Case("StrictGuardGaussian","∫dx exp(-(x-1/a)^2)*λ[x]*x","ℝ","guard(a≠0,a⁻¹·sqrt(π))"),
+	Case("StrictGuardTwo","∫dx x*λ[x]*exp(-(x-1/a)^2)*exp(-x^2+1/b)","ℝ","guard(b≠0∧a≠0,a⁻¹·(1/2)·sqrt(1/2·π)·exp(b⁻¹-(a^2)⁻¹·(1/2)))"),
+	Case("StrictGuardSquare","∫dx (x*exp(-x^2+1/b))^2*λ[x]","ℝ","guard(b≠0,1/4·sqrt(1/2·π)·exp(2·b⁻¹))"),
+	Case("StrictGuardMasked","∫dx exp(-(x-1/a)^2)*λ[x]*x^2*[c≤d]","ℝ","guard(a≠0,[c≤d]·((1/2+(a^2)⁻¹)·sqrt(π)))"),
+	Case("StrictGuardLeft","∫dx λ[x]*exp(-(x-1/b)^2)*x","ℝ","guard(b≠0,b⁻¹·sqrt(π))"),
+	Case("StrictGuardPower","∫dx λ[x]*(exp(-(x-1/b)^2)*x)^2","ℝ","guard(b≠0,(1/4+(b^2)⁻¹)·sqrt(1/2·π))"),
+	Case("StrictGuardRetained","∫dx exp(-(x-1/a)^4)*λ[x]*x","ℝ","guard(a≠0,∫dx (x·exp(-(x-a⁻¹)^4))·λ[x])"),
+	Case("StrictGuardAxis","∫dx (x+1/a)*λ[x]*[0≤x]*[x≤1]","ℝ"),
 	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ"),
 	Case("ExponentialSymbolicRate","∫dx [0≤x≤1]*r*exp(-r*x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ"),
@@ -1003,6 +1011,19 @@ private void run(string directory){
 			}
 			if(c.name=="GaussianGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name);
 			if(c.name=="GaussianPartialScale") enforce(text.indexOf("a≠0")>=0&&text.indexOf("sqrt(π)")>=0,c.name~": "~text);
+		}
+		// A strict guard that does not mention the axis leaves the observation,
+		// from the top of a weight or of a factor of it, whether or not the
+		// rest is then observed; the scalar under it is simplified there. A
+		// guard that mentions the axis stays.
+		if(c.name.indexOf("StrictGuard")==0){
+			enforce(certificate.indexOf("Distribution.DensityProgram.mass_strict_guard")>=0,c.name~" strict guard certificate");
+			enforce(certificate.indexOf("Distribution.DensityProgram.Hoists.here")>=0,c.name~" guard");
+			bool retained=c.name=="StrictGuardRetained"||c.name=="StrictGuardAxis";
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(!retained) enforce(certificate.indexOf("presentation_mass_gaussian_symbolic")>=0&&certificate.indexOf(".scalarSimplify ")>=0,c.name~" under the guard");
+			if(c.name=="StrictGuardTwo") enforce(certificate.indexOf("Hoists.right")>=0,c.name~" factor");
+			if(c.name=="StrictGuardAxis") enforce(certificate.indexOf("Hoists.left")>=0&&text.indexOf("guard(a≠0,∫dx (guard(")==0,c.name~": "~text);
 		}
 		// A limit is evaluated by structure with evidence for every term. A
 		// body that has no limit, or one outside the fragment, keeps its binder.

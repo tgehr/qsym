@@ -635,4 +635,79 @@ theorem mass_guard (p : Option Bool) {w r : ℝ → Option ℝ}
     rw [he]
     rfl
 
+/-- The first function is the second under a strict guard. -/
+def Hoists (g : Option Bool) (w w' : ℝ → Option ℝ) : Prop :=
+  ∀ x, w x = Binding.guardValue g (w' x)
+
+theorem Hoists.here (g : Option Bool) (f : ℝ → Option ℝ) :
+    Hoists g (fun x => Binding.guardValue g (f x)) f := fun _ => rfl
+
+/-- A product is strict: it passes the guard of a factor on. -/
+theorem Hoists.left {g : Option Bool} {u u' : ℝ → Option ℝ} (v : ℝ → Option ℝ)
+    (h : Hoists g u u') :
+    Hoists g (fun x => Value.mul (u x) (v x)) (fun x => Value.mul (u' x) (v x)) :=
+  fun x => by
+    show Value.mul (u x) (v x) = Binding.guardValue g (Value.mul (u' x) (v x))
+    rw [h x]
+    unfold Binding.guardValue
+    split <;> rfl
+
+theorem Hoists.right {g : Option Bool} {v v' : ℝ → Option ℝ} (u : ℝ → Option ℝ)
+    (h : Hoists g v v') :
+    Hoists g (fun x => Value.mul (u x) (v x)) (fun x => Value.mul (u x) (v' x)) :=
+  fun x => by
+    show Value.mul (u x) (v x) = Binding.guardValue g (Value.mul (u x) (v' x))
+    rw [h x]
+    unfold Binding.guardValue
+    split
+    · rfl
+    · cases u x <;> rfl
+
+/-- One weight of the first program is that of the second under a guard. -/
+inductive Guarded (g : Option Bool) : DensityProgram → DensityProgram → Prop
+  | here {w w' : ℝ → Option ℝ} (h : Hoists g w w') (p : DensityProgram) :
+      Guarded g (.weight w p) (.weight w' p)
+  | there (w : ℝ → Option ℝ) {p q : DensityProgram} (h : Guarded g p q) :
+      Guarded g (.weight w p) (.weight w q)
+
+theorem Guarded.density {g : Option Bool} {p q : DensityProgram} (h : Guarded g p q) (x : ℝ) :
+    p.density x = Binding.guardValue g (q.density x) := by
+  induction h with
+  | here h p =>
+    show Value.mul (p.density x) _ = Binding.guardValue g (Value.mul (p.density x) _)
+    rw [h x]
+    unfold Binding.guardValue
+    split
+    · rfl
+    · cases p.density x <;> rfl
+  | there w h ih =>
+    show Value.mul _ (w x) = Binding.guardValue g (Value.mul _ (w x))
+    rw [ih]
+    unfold Binding.guardValue
+    split <;> rfl
+
+/-- A strict guard that does not mention the axis leaves the observation:
+where it does not hold the density is undefined everywhere, and so is the
+observation. Unlike a mask it needs nothing of the inner observation. -/
+theorem mass_strict_guard {g : Option Bool} {p q : DensityProgram} (h : Guarded g p q) :
+    massValue p.presentation = Binding.guardValue g (massValue q.presentation) := by
+  rw [mass_bridge, mass_bridge, DensityProgram.mass, DensityProgram.mass,
+    Model.densityMassValue_eq, Model.densityMassValue_eq, Option.some_bind, Option.some_bind]
+  have hd : p.density = fun x => Binding.guardValue g (q.density x) := funext h.density
+  rw [hd]
+  by_cases hg : g = some true
+  · subst hg
+    rfl
+  · have hn : ∀ v : Option ℝ, Binding.guardValue g v = none := fun v => by
+      unfold Binding.guardValue
+      rw [if_neg]
+      simpa using hg
+    rw [hn]
+    apply if_neg
+    intro hdef
+    obtain ⟨v, hv⟩ := hdef.1 0
+    have hz : Binding.guardValue g (q.density 0) = some v := hv
+    rw [hn] at hz
+    cases hz
+
 end QSym.Distribution.DensityProgram

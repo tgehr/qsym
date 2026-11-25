@@ -46,7 +46,7 @@ private enum BindingRule:ubyte{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms
+	limitTerms,distributionMassStrictGuard
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -978,6 +978,30 @@ final class Bindings{
 		}else return false;
 		foreach_reverse(c;casts) rest=primitive(arena.at(nodes[c].data),[rest]);
 		return true;
+	}
+	// The first strict guard that does not mention the innermost variable, at
+	// the top of a term or of a factor of it: its condition, and the term
+	// without it. A product is strict in both factors.
+	private bool axisFreeStrictGuard(uint id,out uint condition,out BoundTerm rest,uint depth=0){
+		if(depth>32) return false;
+		auto n=nodes[id]; BoundTerm inner;
+		if(n.op==BoundOp.guard&&!depends(at(n.a),0)){ condition=n.a; rest=at(n.b); return true; }
+		if(n.op!=BoundOp.primitive||arena.view(arena.at(n.data)).op!=Op.mul) return false;
+		if(axisFreeStrictGuard(n.a,condition,inner,depth+1)){ rest=primitive(arena.at(n.data),[inner,at(n.b)]); return true; }
+		if(!axisFreeStrictGuard(n.b,condition,inner,depth+1)) return false;
+		rest=primitive(arena.at(n.data),[at(n.a),inner]); return true;
+	}
+	// The weights of a Lebesgue observation from the measure outward, and
+	// the first with such a guard in its body.
+	private bool massStrictGuard(uint mass,out uint[] weights,out size_t position,out uint condition,out BoundTerm rest){
+		auto n=nodes[mass]; if(n.op!=BoundOp.distributionMass) return false;
+		for(auto id=n.a;nodes[id].op!=BoundOp.distributionLebesgue;id=nodes[id].b){
+			auto d=nodes[id];
+			if(d.op!=BoundOp.distributionWeight||nodes[d.a].op!=BoundOp.lambda) return false;
+			weights=d.a~weights;
+		}
+		foreach(i,w;weights) if(axisFreeStrictGuard(nodes[w].a,condition,rest)){ position=i; return true; }
+		return false;
 	}
 	// A singleton source parameter maps to a critical point at the offset.
 	private bool cornerChart(uint id,out Term offset,out bool swap){
@@ -3155,6 +3179,16 @@ final class Bindings{
 			}
 			solution.bell=d; solution.gaussian=true; solution.piecewise=true; solution.output=result.id; return result;
 		}
+		// A strict guard that does not mention the axis leaves the observation:
+		// where it does not hold the density is undefined everywhere, and so
+		// is the observation. This needs nothing of the inner observation.
+		BoundTerm unguardMass(BoundTerm t){
+			uint[] weights; size_t position; uint condition; BoundTerm rest;
+			if(!massStrictGuard(t.id,weights,position,condition,rest)) return BoundTerm.init;
+			auto ctx=context(t),d=distribution(ctx,BoundOp.distributionLebesgue);
+			foreach(i,w;weights) d=distribution(ctx,BoundOp.distributionWeight,[i==position?inheritHint(at(w),lambda(rest)):at(w),d]);
+			return guard(dropIndex(at(condition)),distribution(ctx,BoundOp.distributionMass,[d]));
+		}
 		// A guard that does not mention the axis leaves the observation. The
 		// mask is not strict, so this is an equation even where the inner
 		// observation is missing. Used only if the rest can then be observed.
@@ -4666,8 +4700,9 @@ final class Bindings{
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateInterval(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateGaussian(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){
-					auto unguarded=massGuard(at(result.output),0);
-					if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
+					auto strict=unguardMass(at(result.output)),unguarded=strict==BoundTerm.init?massGuard(at(result.output),0):BoundTerm.init;
+					if(strict!=BoundTerm.init){ next=strict; rule=BindingRule.distributionMassStrictGuard; }
+					else if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
 					else{ solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution); }
 				}
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
@@ -8122,6 +8157,24 @@ final class Bindings{
 				}
 				case BindingRule.limitTerms:
 					proof=".ofEq (fun ξ ρ => let h := "~limitProofs[p.extra]~"; h)"; break;
+				case BindingRule.distributionMassStrictGuard:{
+					uint[] weights;size_t position;uint condition;BoundTerm rest;
+					enforce(massStrictGuard(p.from,weights,position,condition,rest),"missing strict guard free of the axis");
+					enum program_="Distribution.DensityProgram.";
+					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					// The guard at the top or in a factor, by the path to it.
+					string hoist(uint id){
+						auto q=nodes[id];uint inside;BoundTerm without;
+						if(q.op==BoundOp.guard&&!depends(at(q.a),0))return "("~program_~"Hoists.here ("~name(nodes[p.to].a)~".eval ξ ρ) "~fn(q.b)~")";
+						if(axisFreeStrictGuard(q.a,inside,without))return "("~program_~"Hoists.left "~fn(q.b)~" "~hoist(q.a)~")";
+						return "("~program_~"Hoists.right "~fn(q.a)~" "~hoist(q.b)~")";
+					}
+					string program=program_~"lebesgue";
+					foreach(w;weights[0..position])program="("~program_~"weight "~fn(nodes[w].a)~" "~program~")";
+					auto evidence="("~program_~"Guarded.here "~hoist(nodes[weights[position]].a)~" "~program~")";
+					foreach(w;weights[position+1..$])evidence="("~program_~"Guarded.there "~fn(nodes[w].a)~" "~evidence~")";
+					proof=".ofEq (fun ξ ρ => "~program_~"mass_strict_guard "~evidence~")"; break;
+				}
 				case BindingRule.distributionMassGuard:{
 					uint guard;BoundTerm rest;string shape;
 					enforce(axisFreeGuard(p.from,guard,rest,shape),"missing guard free of the axis");
