@@ -5677,6 +5677,26 @@ final class Bindings{
 					active.set(t.id,false); memo.set(t.id,result); return result;
 				}
 			}
+			// A scalar under a guard is simplified there: its own domain joins
+			// the guard, so both sides are defined together. A total scalar was
+			// simplified as a leaf; this one is partial.
+			if(next==BoundTerm.init&&current.op==BoundOp.guard&&nodes[current.b].op==BoundOp.scalar&&steps<budget&&!arena.isNumber(arena.at(nodes[current.b].data))){
+				auto source=arena.at(nodes[current.b].data),value=simplify(arena,source,Options(DensityMode.preserve,true));
+				auto embedded=arena.castTo(value.output,arena.sort(source));
+				exhausted|=value.exhausted;
+				if(embedded!=source&&!value.exhausted){
+					auto d=simplifyDomain(arena,source,[],Options(DensityMode.preserve,true));
+					if(!d.exhausted){
+						auto inner=guard(scalar(ctx,d.output),scalar(ctx,embedded)),guarded=guard(at(current.a),inner);
+						auto index=cast(uint)scalarDomains.length; scalarDomains~=ScalarDomain(source,d,value); ++steps;
+						auto simplified=emit(BindingRule.scalarSimplify,current.b,inner.id,uint.max,uint.max,index);
+						auto step=emit(BindingRule.congr,result.output,guarded.id,emit(BindingRule.refl,current.a,current.a),simplified),tail=visit(guarded,depth+1);
+						auto rest=emit(BindingRule.trans,result.output,tail.output,step,tail.proof);
+						result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,result.proof,rest));
+						active.set(t.id,false); memo.set(t.id,result); return result;
+					}
+				}
+			}
 			if(next!=BoundTerm.init&&steps>=budget){ next=BoundTerm.init; exhausted=true; }
 			if(next!=BoundTerm.init){
 				if(node(next).op==current.op&&(current.op==BoundOp.lambda||current.op==BoundOp.set||current.op==BoundOp.fixed)) inheritHint(at(result.output),next);
