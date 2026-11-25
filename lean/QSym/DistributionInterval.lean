@@ -1056,6 +1056,39 @@ theorem _root_.QSym.Value.mask_add (g : Option Bool) (a b : Option ℝ) :
     Value.mask g (Value.add a b) = Value.add (Value.mask g a) (Value.mask g b) := by
   rcases g with _ | _ | _ <;> simp [Value.mask, Value.add]
 
+/-- A partial value is the sum of its masks on the two sides of a point that
+is defined: one of the two comparisons holds, and the other mask is zero. -/
+theorem _root_.QSym.Value.split (v : Option ℝ) (x : ℝ) {p : Option ℝ} (q : ℚ)
+    (hp : p = some (Numeric.denote (s := .real) q)) :
+    v = Value.add (Value.mask (Value.lt (some x) p) v) (Value.mask (Value.le p (some x)) v) := by
+  rw [hp]
+  by_cases h : x < Numeric.denote (s := .real) q
+  · have h' : ¬ Numeric.denote (s := .real) q ≤ x := not_le.2 h
+    cases v <;> simp [Value.lt, Value.le, Value.mask, Value.add, h, h']
+  · have h' : Numeric.denote (s := .real) q ≤ x := not_lt.1 h
+    cases v <;> simp [Value.lt, Value.le, Value.mask, Value.add, h, h']
+
+/-- From a point on, a partial value is the sum of its masks up to a later
+point and from there. -/
+theorem _root_.QSym.Value.split_between (v : Option ℝ) (x : ℝ) {p r : Option ℝ} (q s : ℚ)
+    (hp : p = some (Numeric.denote (s := .real) q)) (hr : r = some (Numeric.denote (s := .real) s))
+    (h : decide (q ≤ s) = true) :
+    Value.mask (Value.le p (some x)) v =
+      Value.add (Value.mask (Value.and (Value.le p (some x)) (Value.lt (some x) r)) v)
+        (Value.mask (Value.le r (some x)) v) := by
+  rw [hp, hr]
+  have hqs : Numeric.denote (s := .real) q ≤ Numeric.denote (s := .real) s := by
+    have : (q : ℝ) ≤ s := by exact_mod_cast of_decide_eq_true h
+    simpa [Numeric.denote] using this
+  by_cases h1 : Numeric.denote (s := .real) q ≤ x
+  · by_cases h2 : x < Numeric.denote (s := .real) s
+    · have h3 : ¬ Numeric.denote (s := .real) s ≤ x := not_le.2 h2
+      cases v <;> simp [Value.lt, Value.le, Value.and, Value.mask, Value.add, h1, h2, h3]
+    · have h3 : Numeric.denote (s := .real) s ≤ x := not_lt.1 h2
+      cases v <;> simp [Value.lt, Value.le, Value.and, Value.mask, Value.add, h1, h2, h3]
+  · have h3 : ¬ Numeric.denote (s := .real) s ≤ x := fun h3 => h1 (hqs.trans h3)
+    cases v <;> simp [Value.lt, Value.le, Value.and, Value.mask, Value.add, h1, h3]
+
 /-- Summands, some under the guard of their domain: the sum, the guards in
 order, and the sum of the bare summands. -/
 inductive GuardedSum : Option ℝ → List (Option Bool) → Option ℝ → Prop

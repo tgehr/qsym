@@ -108,8 +108,9 @@ private struct IntegralSolution{
 	// The summands of a sum of observations between bounds, each with its own.
 	IntegralSolution[] pieces;
 	// The summands of a weight with a factor under its sum: for each the
-	// certificate of its normal form, if that differs.
-	uint[] summands;
+	// certificate of its normal form, if that differs. Before that the
+	// weight may be split where its absolute values change sign.
+	uint[] summands; Rational[] kinks; uint split=uint.max;
 }
 private struct PolynomialGrid{
 	Rational[] cuts,points;
@@ -1067,6 +1068,61 @@ final class Bindings{
 		if(type(at(id))!=scalarType(Sort.real_)) return false;
 		if(v.op==Op.mul) return maskedSummand(q.a)||maskedSummand(q.b);
 		return v.op==Op.add&&maskedSummand(q.a)&&maskedSummand(q.b);
+	}
+	// The points where the argument of an absolute value in a weight changes
+	// its sign: an argument of degree one in the axis with rational
+	// coefficients. In order; none if there are more than three.
+	private Rational[] absoluteKinks(uint body){
+		Rational[] kinks; bool many;
+		void visit(uint id,uint depth){
+			auto q=nodes[id]; if(depth>64||q.op!=BoundOp.primitive&&q.op!=BoundOp.guard) return;
+			Rational[] p;
+			if(q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.abs&&type(at(id))==scalarType(Sort.real_)&&axisPolynomial(q.a,p)){
+				while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(p.length==2){
+					auto kink=Rational(0)-p[0]/p[1]; bool known;
+					foreach(k;kinks) known|=k==kink;
+					if(!known){ if(kink.words>128||kinks.length==3) many=true; else kinks~=kink; }
+				}
+			}
+			if(q.a!=uint.max) visit(q.a,depth+1);
+			if(q.b!=uint.max) visit(q.b,depth+1);
+		}
+		visit(body,0);
+		if(many) return [];
+		foreach(i;0..kinks.length) foreach(j;i+1..kinks.length) if(kinks[j]<kinks[i]){ auto k=kinks[i]; kinks[i]=kinks[j]; kinks[j]=k; }
+		return kinks;
+	}
+	// A weight as the sum of its masks on the pieces between such points:
+	// below the first, between two neighbours, and from the last on. A
+	// partial value is the sum of its masks on the two sides of a point, and
+	// from a point on that of its masks up to a later point and from there.
+	// With `under` the proof of the equation at a point of the axis is built.
+	private Spread splitAt(uint body,Rational[] kinks,scope string delegate(uint) @safe under){
+		auto inner=context(at(body)),x=variable(inner,0),zero=arena.real_(0);
+		auto addOp=arena.add(zero,zero,true),maskOp=arena.mask(arena.boolean(true),arena.real_(1));
+		auto andOp=arena.and_(arena.boolean(true),arena.boolean(true));
+		string literal(Rational q){ return "(Numeric.calculate_sound ξ n"~to!string(arena.real_(q).id)~" "~SourceCertificates.q(q)~" rfl)"; }
+		BoundTerm from(Rational q){ return primitive(arena.le(zero,zero),[scalar(inner,arena.real_(q)),x]); }
+		// The pieces from a point on: the sum, and the proof that the mask from
+		// that point on is that sum.
+		Spread rest(Rational[] points){
+			auto last=primitive(maskOp,[from(points[0]),at(body)]);
+			if(points.length==1) return Spread(last.id);
+			auto upto=primitive(arena.lt(zero,zero),[x,scalar(inner,arena.real_(points[1]))]);
+			auto tail=rest(points[1..$]);
+			auto sum=primitive(addOp,[primitive(maskOp,[primitive(andOp,[from(points[0]),upto]),at(body)]),at(tail.id)]);
+			if(!under) return Spread(sum.id);
+			auto proof="(Value.split_between "~under(body)~" x "~SourceCertificates.q(points[0])~" "~SourceCertificates.q(points[1])~" "~literal(points[0])~" "~literal(points[1])~" rfl)";
+			if(tail.proof.length) proof="(Eq.trans "~proof~" (congrArg₂ Value.add rfl "~tail.proof~"))";
+			return Spread(sum.id,proof);
+		}
+		auto below=primitive(arena.lt(zero,zero),[x,scalar(inner,arena.real_(kinks[0]))]),tail=rest(kinks);
+		auto sum=primitive(addOp,[primitive(maskOp,[below,at(body)]),at(tail.id)]);
+		if(!under) return Spread(sum.id);
+		auto proof="(Value.split "~under(body)~" x "~SourceCertificates.q(kinks[0])~" "~literal(kinks[0])~")";
+		if(tail.proof.length) proof="(Eq.trans "~proof~" (congrArg₂ Value.add rfl "~tail.proof~"))";
+		return Spread(sum.id,proof);
 	}
 	// Whether a product or a mask in a weight has a sum of masked summands
 	// to go under. Decided without building anything.
@@ -3669,15 +3725,24 @@ final class Bindings{
 				return depth<16&&sum(id)&&admissible(nodes[id].a,depth+1)&&admissible(nodes[id].b,depth+1);
 			}
 			if(!sum(solution.from[0])||!admissible(solution.from[0],0)||count<2) return BoundTerm.init;
-			IntegralSolution[] pieces;
+			IntegralSolution[] pieces; BoundTerm[] guards;
 			BoundTerm build(uint id){
-				if(observed(id)){ IntegralSolution piece; auto value=integrateInterval(t,piece,id); if(value!=BoundTerm.init) pieces~=piece; return value; }
+				if(observed(id)){
+					IntegralSolution piece; auto value=integrateInterval(t,piece,id);
+					if(value==BoundTerm.init) return value;
+					// Beyond a single bound the result is under the guard of its
+					// domain, which leaves the sum: a sum is missing where a
+					// summand is.
+					if(piece.bounds.half&&piece.bounds.domain!=uint.max){ guards~=at(node(value).a); value=at(node(value).b); }
+					pieces~=piece; return value;
+				}
 				auto a=build(nodes[id].a); if(a==BoundTerm.init) return a;
 				auto b=build(nodes[id].b); if(b==BoundTerm.init) return b;
 				return primitive(arena.add(arena.real_(0),arena.real_(0),true),[a,b]);
 			}
 			auto total=build(solution.from[0]);
 			if(total==BoundTerm.init) return BoundTerm.init;
+			foreach_reverse(g;guards) total=guard(g,total);
 			solution.pieces=pieces; solution.interval=true; solution.piecewise=true; solution.output=total.id;
 			return total;
 		}
@@ -3693,15 +3758,19 @@ final class Bindings{
 		}
 		// A factor or a mask of a sum of masked summands goes under the sum: a
 		// product and a mask distribute over a sum for every definedness
-		// pattern. Each summand then takes its normal form by itself, under
-		// the guard of its domain; that of the whole sum would put a common
-		// mask back in front. Only where every summand is then an observation
-		// between bounds of its own, and no domain mentions the axis.
+		// pattern. Before that a weight is split where the arguments of its
+		// absolute values change sign: under the mask of a side the absolute
+		// value is its argument or the opposite. Each summand then takes its
+		// normal form by itself, under the guard of its domain; that of the
+		// whole sum would put a common mask back in front. Only where every
+		// summand is then an observation between bounds of its own, under its
+		// domain where that mentions the axis.
 		BoundTerm distributeMass(BoundTerm t,out IntegralSolution solution,bool commit){
 			auto n=node(t);
 			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
-			auto body=solution.from[0]; if(!spreadsSum(body)) return BoundTerm.init;
-			auto spread=spreadProducts(body,16,null);
+			auto body=solution.from[0],kinks=absoluteKinks(body);
+			if(!kinks.length&&!spreadsSum(body)) return BoundTerm.init;
+			auto source=kinks.length?splitAt(body,kinks,null).id:body,spread=spreadProducts(source,16,null);
 			if(spread.id==uint.max||spread.id==body) return BoundTerm.init;
 			auto opts=Options(DensityMode.preserve,true),inner=context(at(body));
 			auto index=freshScalarIndex(body),argument=arena.variable(Sort.real_,index);
@@ -3716,16 +3785,24 @@ final class Bindings{
 					return primitive(addOp,[a,b]);
 				}
 				auto source=scalarBody(at(id),argument); if(source==Term.init) return BoundTerm.init;
-				auto value=simplify(arena,source,opts),domain=simplifyDomain(arena,source,[],opts);
+				// A summand that the simplifier cannot take leaves the weight as it is.
+				ScalarResult value,domain;
+				try{ value=simplify(arena,source,opts); domain=simplifyDomain(arena,source,[],opts); }
+				catch(Exception){ return BoundTerm.init; }
 				if(value.exhausted||domain.exhausted) return BoundTerm.init;
 				auto output=arena.castTo(value.output,arena.sort(source));
 				if(output==source){ summands~=uint.max; return observed(at(id))?at(id):BoundTerm.init; }
 				auto simplified=restoreBody(output,inner,argument);
-				if(!observed(simplified)) return BoundTerm.init;
 				summands~=cast(uint)(scalarDomains.length+checks.length); checks~=ScalarDomain(source,domain,value,index,Sort.real_,[],BoundOp.scalar);
-				if(domain.output==arena.boolean(true)) return simplified;
+				// A summand that vanishes, on a piece that its mask excludes, stays
+				// as the zero that it is.
+				bool vanishes=arena.isNumber(value.output)&&arena.number(value.output).re.zero&&arena.number(value.output).im.zero;
+				if(domain.output==arena.boolean(true)) return vanishes||observed(simplified)?simplified:BoundTerm.init;
+				// A domain that mentions the axis stays around its summand, which
+				// is observed under it; another leaves the sum.
 				auto condition=restoreBody(domain.output,inner,argument);
-				if(depends(condition,0)) return BoundTerm.init;
+				if(depends(condition,0)){ auto guarded=guard(condition,simplified); return observed(guarded)?guarded:BoundTerm.init; }
+				if(!observed(simplified)) return BoundTerm.init;
 				conditions~=condition; return simplified;
 			}
 			auto target=normal(spread.id);
@@ -3734,6 +3811,7 @@ final class Bindings{
 			foreach_reverse(condition;conditions) target=guard(condition,target);
 			if(commit) scalarDomains~=checks;
 			solution.to=[target.id]; solution.summands=summands;
+			if(kinks.length){ solution.kinks=kinks; solution.split=source; }
 			auto ctx=context(t),weight=inheritHint(at(nodes[n.a].a),lambda(target));
 			return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
 		}
@@ -7275,15 +7353,23 @@ final class Bindings{
 		}
 		if(s.pieces.length){
 			// The summands in the order of the rule, with the sum around them.
-			size_t next;
-			string sum(uint id){
-				if(next<s.pieces.length&&s.pieces[next].from[0]==id)return between(s.pieces[next++],true);
+			size_t next;bool guarded;
+			string sum(uint id,out string lift){
+				enum lifted="Distribution.DensityProgram.GuardedSum.";
+				if(next<s.pieces.length&&s.pieces[next].from[0]==id){
+					auto piece=s.pieces[next++],domain=piece.bounds.half&&piece.bounds.domain!=uint.max;
+					guarded|=domain;lift="("~lifted~(domain?"guard _ _)":"bare _)");
+					return between(piece,true);
+				}
 				auto n=nodes[id];enforce(n.op==BoundOp.primitive&&arena.view(arena.at(n.data)).op==Op.add,"bad sum of observations");
-				auto left=sum(n.a),right=sum(n.b);
+				string la,lb;auto left=sum(n.a,la),right=sum(n.b,lb);
+				lift="("~lifted~"add "~la~" "~lb~")";
 				return "(Distribution.StepSource.Piece.add "~left~" "~right~")";
 			}
-			auto evidence=sum(s.from[0]);enforce(next==s.pieces.length,"missing summand");
-			return "Distribution.DensityProgram.presentation_mass_pieces (w := "~functionAt(s.from[0])~") "~evidence~" (fun _ => rfl)";
+			string lift;auto evidence=sum(s.from[0],lift);enforce(next==s.pieces.length,"missing summand");
+			auto mass="Distribution.DensityProgram.presentation_mass_pieces (w := "~functionAt(s.from[0])~") "~evidence~" (fun _ => rfl)";
+			// The guards of the domains of the summands leave the sum together.
+			return guarded?"Eq.trans ("~mass~") (Distribution.DensityProgram.GuardedSum.sound "~lift~")":mass;
 		}
 		if(s.interval)return between(s,false);
 		auto cuts=s.exceptions;enforce(cuts.length,"empty step grid");
@@ -7587,6 +7673,8 @@ final class Bindings{
 			// The bounds and the literal of a difference are named by the theorem
 			// also where the result does not mention them.
 			if(s.interval&&!s.pieces.length){ stack~=[s.bounds.lower,s.bounds.upper]; if(!s.bounds.below) stack~=s.bounds.minusOne; }
+			// The masks of a split weight are named by its certificate.
+			if(s.split!=uint.max) stack~=s.split;
 			foreach(piece;s.pieces) integralRoots(piece);
 		}
 		foreach(s;result.integrals) integralRoots(s);
@@ -8931,8 +9019,12 @@ final class Bindings{
 					enforce(s.from.length==1&&s.to.length==1,"missing weight with a sum");
 					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
 					string fn(uint id){return "(fun x : ℝ => "~under(id)~")";}
-					auto spread=spreadProducts(s.from[0],16,&under);
-					enforce(spread.id!=uint.max&&spread.proof.length,"missing factor of a sum");
+					// The split at the changes of sign, then the factors under the sums.
+					auto source=s.from[0];string cut;
+					if(s.split!=uint.max){auto pieces=splitAt(source,s.kinks,&under);enforce(pieces.id==s.split,"missing split of a weight");cut=pieces.proof;source=s.split;}
+					auto spread=spreadProducts(source,16,&under);
+					enforce(spread.id!=uint.max&&(cut.length||spread.proof.length),"missing factor of a sum");
+					if(cut.length)spread.proof=spread.proof.length?"(Eq.trans "~cut~" "~spread.proof~")":cut;
 					// Each summand in its normal form, under the guard of its domain;
 					// then the guards around the sum.
 					size_t next;bool guarded;
@@ -8948,7 +9040,9 @@ final class Bindings{
 						auto d=result.domains[k],prefix="QSym.BindingScalar"~to!string(k);
 						auto env="({ ξ with real := fun i => if i = "~to!string(d.variable)~" then x else ξ.real i })";
 						auto value="(n"~to!string(arena.castTo(d.value.output,arena.sort(d.input)).id)~".eval "~env~")",domain="(n"~to!string(d.result.output.id)~".eval "~env~")";
-						if(d.result.output!=arena.boolean(true)){guarded=true;lift="("~sum~"guard "~domain~" "~value~")";}
+						// A domain that does not mention the axis leaves the sum.
+						bool axis;foreach(part;arena.viewPostorder(d.result.output))axis|=arena.at(part)==arena.variable(d.sort,d.variable);
+						if(d.result.output!=arena.boolean(true)&&!axis){guarded=true;lift="("~sum~"guard "~domain~" "~value~")";}
 						return "(Binding.preserveDomain (n"~to!string(d.input.id)~".eval "~env~") "~value~" "~domain~" ("~prefix~".DomainCertificate.domain_correct "~env~") ("~
 							prefix~".ValueCertificate.refinement "~env~"))";
 					}

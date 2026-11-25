@@ -653,7 +653,6 @@ private Case[] cases(){ return [
 	Case("SpreadSummand","∫dx (([x≤0]*exp(x)+[0≤x]*exp(-x))*x+[1≤x]*exp(-x))*λ[x]","ℝ","exp(-1)"),
 	Case("SpreadThree","∫dx ([x≤-1]*exp(x)+[-1≤x≤1]+[1≤x]*exp(-x))*x^2*λ[x]","ℝ","10·exp(-1)+2/3"),
 	Case("SpreadGuarded","∫dx [c≤d]*([x≤0]*exp(x)+[0≤x]*exp(-x))*x^2*λ[x]","ℝ","[c≤d]·4"),
-	Case("SpreadAbsolute","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*abs(x)*λ[x]","ℝ","2"),
 	Case("SpreadMask","∫dx [x≤1]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","-exp(-1)+2"),
 	Case("SpreadMaskInterval","∫dx [-1≤x≤1]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ","-2·exp(-1)+2"),
 	Case("SpreadMaskPolynomial","∫dx [0≤x]*([x≤1]*x+[1≤x]*exp(1-x))*x*λ[x]","ℝ","7/3"),
@@ -662,6 +661,27 @@ private Case[] cases(){ return [
 	Case("SpreadSymbolicBound","∫dx [x≤t]*([x≤0]*exp(x)+[0≤x]*exp(-x))*λ[x]","ℝ"),
 	Case("SpreadPower","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))^2*λ[x]","ℝ"),
 	Case("SpreadAxisDomain","∫dx (([x≤0]*exp(x)+[0≤x]*exp(-x))/a+[1≤x]*exp(-x)*sqrt(b))*λ[x]","ℝ"),
+	Case("AbsoluteLaplace","∫dx exp(-abs(x))*λ[x]","ℝ","2"),
+	Case("AbsoluteDensity","∫dx exp(-abs(x-1)/2)/4*λ[x]","ℝ","1"),
+	Case("AbsoluteSlope","∫dx exp(-abs(2*x-1))*λ[x]","ℝ","1"),
+	Case("AbsoluteTwo","∫dx exp(-abs(x-1)-abs(x+1))*λ[x]","ℝ","3·exp(-2)"),
+	Case("AbsoluteThree","∫dx exp(-abs(x)-2*abs(x-1)-abs(x-3))*λ[x]","ℝ","-1/4·exp(-7)-1/4·exp(-5)+exp(-3)"),
+	Case("AbsoluteMoment","∫dx x^2*exp(-abs(x))/2*λ[x]","ℝ","2"),
+	Case("AbsoluteFactor","∫dx abs(x)*exp(-abs(x))*λ[x]","ℝ","2"),
+	Case("AbsoluteGaussian","∫dx abs(x)*exp(-x^2)*λ[x]","ℝ","1"),
+	Case("AbsoluteNormal","∫dx abs(x)*exp(-x^2/2)/sqrt(2*π)*λ[x]","ℝ","2·sqrt(2·π)⁻¹"),
+	Case("AbsoluteErf","∫dx abs(x-1)*exp(-x^2)*λ[x]","ℝ","1/2·sqrt(π)·erfc(-1)-1/2·sqrt(π)·erfc(1)+exp(-1)"),
+	Case("AbsoluteProduct","∫dx abs(x)*abs(x-1)*abs(x-2)*exp(-x^2)*λ[x]","ℝ","-3/2·sqrt(π)·erf(1)+3/4·sqrt(π)·erf(2)-3/4·sqrt(π)·erfc(2)+3/4·sqrt(π)+exp(-4)-exp(-1)+3"),
+	Case("AbsoluteInterval","∫dx [0≤x≤3]*abs(x-1)*exp(-x)*λ[x]","ℝ","-3·exp(-3)+2·exp(-1)"),
+	Case("AbsoluteScaled","∫dx c*exp(-abs(x))*λ[x]","ℝ","2·c"),
+	Case("AbsoluteDomain","∫dx exp(-abs(x))/a*λ[x]","ℝ","guard(a≠0,2·a⁻¹)"),
+	Case("AbsoluteRoot","∫dx sqrt(b)*abs(x)*exp(-x^2)*λ[x]","ℝ","guard(0≤b,sqrt(b))"),
+	Case("AbsoluteGuarded","∫dx [c≤d]*exp(-abs(x))*λ[x]","ℝ","[c≤d]·2"),
+	Case("AbsolutePieces","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*abs(x)*λ[x]","ℝ","2"),
+	Case("AbsoluteSymbolic","∫dx exp(-abs(x-m))*λ[x]","ℝ"),
+	Case("AbsoluteSquare","∫dx exp(-abs(x^2-1))*λ[x]","ℝ"),
+	Case("AbsoluteGrowing","∫dx abs(x)*λ[x]","ℝ"),
+	Case("AbsoluteMany","∫dx exp(-abs(x)-abs(x-1)-abs(x-2)-abs(x-3))*λ[x]","ℝ"),
 	Case("GaussianSymbolic","∫dx exp(-(x-m)^2)*λ[x]","ℝ","sqrt(π)"),
 	Case("GaussianSymbolicOffset","∫dx exp(-x^2+a)*λ[x]","ℝ","sqrt(π)·exp(a)"),
 	Case("GaussianSymbolicMean","∫dx x*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","m"),
@@ -1326,6 +1346,28 @@ private void run(string directory){
 			}
 			if(c.name=="SpreadNested") enforce(certificate.indexOf("Value.add_mul")>=0&&certificate.indexOf("Value.mul_add")>=0,c.name~" both sides");
 			if(c.name=="SpreadGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+		}
+		// A weight with absolute values is first split where their arguments
+		// change sign: a partial value is the sum of its masks on the pieces
+		// between those points, and under the mask of a piece each absolute
+		// value is its argument or the opposite. The guards of the domains of
+		// the observations beyond a single bound leave their sum. An argument
+		// that is not of degree one with rational coefficients, more than
+		// three such points and a piece that is not observed keep the integral.
+		if(c.name.indexOf("Absolute")==0){
+			bool retained=c.name=="AbsoluteSymbolic"||c.name=="AbsoluteSquare"||c.name=="AbsoluteGrowing"||c.name=="AbsoluteMany";
+			bool several=c.name=="AbsoluteTwo"||c.name=="AbsoluteThree"||c.name=="AbsoluteProduct",domain=c.name=="AbsoluteDomain"||c.name=="AbsoluteRoot";
+			enforce((certificate.indexOf("Value.split ")>=0&&certificate.indexOf("Distribution.DensityProgram.mass_pointwise")>=0)!=retained,c.name~" certificate");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(!retained){
+				enforce((certificate.indexOf("Value.split_between")>=0)==several,c.name~" pieces between two points");
+				enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0,c.name~" observations");
+				enforce((certificate.indexOf("Distribution.DensityProgram.GuardedSum.sound")>=0)==domain,c.name~" domains");
+			}
+			if(c.name=="AbsoluteGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+			// A factor of a sum of pieces: the masks of the split go under the
+			// sum, and a summand on the other side vanishes.
+			if(c.name=="AbsolutePieces") enforce(certificate.indexOf("Value.mask_add")>=0&&certificate.indexOf("Value.mul_add")>=0,c.name~" factor of a sum");
 		}
 		// Other bounds of a Gaussian: an antiderivative with the error function
 		// around the vertex, after that of the polynomial up to its constant.
