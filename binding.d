@@ -74,8 +74,10 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 // the value of the antiderivative at the vertex with the sign of the end.
 // At one bound, the literals of the monomials of the rows of an antiderivative
 // and of those of an antiderivative of the polynomial (none for one that is
-// skipped), and whether the bound is a closed zero.
-private struct RateEnd{ uint[][] rows; uint[] primitive; bool zero; }
+// skipped), and whether the bound is a closed zero. Under a polynomial whose
+// coefficients are terms there is a table and an antiderivative for each of
+// them, with the literals of those that are present.
+private struct RateEnd{ uint[][] rows; uint[] primitive; bool zero; uint[][][] tables; uint[][] primitives; }
 private struct IntervalTerm{
 	uint value,primitive=uint.max; bool scaled,curved,vertex; Rational rate; uint order;
 	GaussianData bell; Rational point,half,rest; uint restLiteral=uint.max;
@@ -92,8 +94,9 @@ private struct IntervalTerm{
 	// `boundZero` the bound is a closed zero and only their constants stand.
 	// Between two bounds `bell` also has an antiderivative of the polynomial,
 	// for a rate that is zero, and `ends` the literals at the upper and at
-	// the lower bound.
-	bool rateTerm,boundZero; uint rateZero=uint.max; RateEnd[2] ends;
+	// the lower bound. Under a polynomial whose coefficients are terms `bell`
+	// has a table for each of them, and `primitives` the antiderivatives.
+	bool rateTerm,boundZero; uint rateZero=uint.max; RateEnd[2] ends; Rational[][] primitives;
 	// The exponential of a quadratic whose curvature is a term that cannot
 	// vanish, beyond a single bound: the literal of the factor of the linear
 	// coefficient over the curvature in the argument.
@@ -3513,18 +3516,28 @@ final class Bindings{
 			// integral is the difference of that antiderivative at the bounds.
 			// Where it is zero the exponential is that of the constant, in
 			// front of the difference of an antiderivative of the polynomial.
+			// The integral is linear in the coefficients of a polynomial that
+			// are terms: each meets the table and the antiderivative of its
+			// power times the rational polynomial.
 			bool symbolicRateBetween(uint id,ref IntervalTerm r){
 				if(d.half||d.unit!=uint.max||solution.from.length!=1) return false;
 				BellParts found;
-				if(!bellParts(id,found,false)||!found.exponent||found.symbolic) return false;
+				if(!bellParts(id,found,false)||!found.exponent) return false;
 				auto p=found.p,c=found.c; while(p.length&&p[$-1].zero) p.length=p.length-1;
-				if(!p.length||p.length>17||c[2].present||!c[1].present||c[1].closed) return false;
-				if(!rateRows(p,true,r.bell.rows)) return false;
-				r.bell.primitive=[Rational(0)];
-				foreach(i,x;p){
-					auto q=x/Rational(cast(long)i+1); if(q.words>128) return false;
-					r.bell.primitive~=q;
+				auto count=found.symbolic?found.poly.length:1;
+				if(!p.length||count+p.length>18||c[2].present||!c[1].present||c[1].closed) return false;
+				Rational[][][] tables; Rational[][] primitives;
+				foreach(j;0..count){
+					Rational[][] rows; if(!rateRows(p,true,rows)) return false;
+					auto antiderivative=[Rational(0)];
+					foreach(i,x;p){
+						auto q=x/Rational(cast(long)i+1); if(q.words>128) return false;
+						antiderivative~=q;
+					}
+					tables~=rows; primitives~=antiderivative; p=Rational(0)~p;
 				}
+				if(found.symbolic){ r.bell.tables=tables; r.primitives=primitives; }
+				else{ r.bell.rows=tables[0]; r.bell.primitive=primitives[0]; }
 				r.rateTerm=true; return true;
 			}
 			// Beyond a single bound, a constant times the exponential of a
@@ -3689,6 +3702,8 @@ final class Bindings{
 			// of the inverse rate, and `p` that of the monomials of the
 			// antiderivative of the polynomial. The first summand mentions the
 			// inverse of the rate, and its mask hides it where the rate is zero.
+			// Under a polynomial whose coefficients are terms the monomials of
+			// each table and antiderivative also stand under their coefficient.
 			BoundTerm rateBetweenDifference(IntervalTerm r,uint id){
 				if(!symbolicRateBetween(id,r)) return BoundTerm.init;
 				BellParts built; bellParts(id,built,true);
@@ -3716,14 +3731,28 @@ final class Bindings{
 						}
 						return terms;
 					}
-					BoundTerm[] terms;
-					foreach(l,row;r.bell.rows){
+					BoundTerm[] terms,antiderivatives;
+					if(!r.bell.tables.length) foreach(l,row;r.bell.rows){
 						uint[] literals;
 						if(l) terms~=monomials(row,power(inverse,l),literals);
 						r.ends[e].rows~=literals;
+					}else foreach(j,rows;r.bell.tables){
+						uint[][] table;
+						foreach(l,row;rows){
+							uint[] literals;
+							if(l&&built.poly[j].present) terms~=monomials(row,primitive(mulOp,[built.poly[j].term,power(inverse,l)]),literals);
+							table~=literals;
+						}
+						r.ends[e].tables~=table;
 					}
 					decaying[e]=primitive(mulOp,[balanced(terms),apply1(Builtin.expR,primitive(addOp,[constant,primitive(mulOp,[linear,o])]))]);
-					flat[e]=balanced(monomials(r.bell.primitive,BoundTerm.init,r.ends[e].primitive));
+					if(!r.bell.tables.length) antiderivatives=monomials(r.bell.primitive,BoundTerm.init,r.ends[e].primitive);
+					else foreach(j,row;r.primitives){
+						uint[] literals;
+						if(built.poly[j].present) antiderivatives~=monomials(row,built.poly[j].term,literals);
+						r.ends[e].primitives~=literals;
+					}
+					flat[e]=balanced(antiderivatives);
 				}
 				BoundTerm between(BoundTerm[2] ends){ return primitive(addOp,[ends[0],primitive(mulOp,[minusOne,ends[1]])]); }
 				auto test=primitive(arena.nonzero(arena.real_(1)),[linear]),mask=arena.mask(truth,arena.real_(1));
@@ -7785,11 +7814,13 @@ final class Bindings{
 					if(g.zero0!=uint.max)exponent="("~src~"Quadratic.fill0 "~literal(g.zero0,Rational(0))~" "~exponent~")";
 					string list(Rational[] row){string t="[";foreach(i,c;row)t~=(i?", ":"")~cert.q(c);return t~"]";}
 					string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
-					enforce(g.rows.length>1&&g.primitive.length>1,"bad table of a rate");
-					string table;foreach_reverse(row;g.rows)table=list(row)~(table.length?", ":"")~table;
+					auto symbolic=g.tables.length!=0;
+					enforce(symbolic?poly.length==g.tables.length&&r.primitives.length==g.tables.length:g.rows.length>1&&g.primitive.length>1,"bad table of a rate");
 					string[2] moments,flat;
 					foreach(e;0..2){
-						auto end=r.ends[e];enforce(end.rows.length==g.rows.length&&end.primitive.length==g.primitive.length,"bad literals of a rate");
+						auto end=r.ends[e];
+						enforce(symbolic?end.tables.length==g.tables.length&&end.primitives.length==g.tables.length:
+							end.rows.length==g.rows.length&&end.primitive.length==g.primitive.length,"bad literals of a rate");
 						auto vanish=end.zero?cert.closedProof(at(e?d.lower:d.upper),Rational(0)):"";
 						size_t count;
 						string rowProof(Rational[] row,uint[] literals){
@@ -7801,15 +7832,36 @@ final class Bindings{
 							}
 							return h;
 						}
+						string meet(bool present,Rational[] row,uint[] literals,string rest){
+							return "("~src~"MomentTerms."~(present?"present "~rowProof(row,literals):"absent "~list(row))~" "~rest~")";
+						}
+						// The first row of a table is zero; a coefficient that is
+						// absent meets nothing.
 						string monomials=src~"MomentTerms.done";
-						foreach_reverse(l,row;g.rows)monomials="("~src~"MomentTerms."~(l?"present "~rowProof(row,end.rows[l]):"absent "~list(row))~" "~monomials~")";
+						if(symbolic)foreach_reverse(j,rows;g.tables)foreach_reverse(l,row;rows)monomials=meet(l&&poly[j].present,row,end.tables[j][l],monomials);
+						else foreach_reverse(l,row;g.rows)monomials=meet(l!=0,row,end.rows[l],monomials);
 						moments[e]=monomials~" "~sums(count);
-						count=0;auto row=rowProof(g.primitive,end.primitive);
-						flat[e]=row~" "~sums(count);
+						count=0;string rows;
+						if(symbolic){
+							rows=src~"MomentTerms.done";
+							foreach_reverse(j,row;r.primitives)rows=meet(poly[j].present,row,end.primitives[j],rows);
+						}else rows=rowProof(g.primitive,end.primitive);
+						flat[e]=rows~" "~sums(count);
 					}
-					// Both are evaluated by the statement, and so elaborated to
-					// their end first.
-					return "("~termsName~".rate (["~table~"] :) ("~list(g.primitive)~" :) "~hv~" "~exponent~" rfl rfl "~
+					// The tables and the antiderivatives are evaluated by the
+					// statement, and so elaborated to their end first.
+					string tables,primitives;
+					if(symbolic){
+						foreach_reverse(rows;g.tables){
+							string table;foreach_reverse(row;rows)table=list(row)~(table.length?", ":"")~table;
+							tables="["~table~"]"~(tables.length?", ":"")~tables;
+						}
+						foreach_reverse(row;r.primitives)primitives=list(row)~(primitives.length?", ":"")~primitives;
+						return "("~termsName~".rateTerms (["~tables~"] :) (["~primitives~"] :) "~hv~" "~exponent~" rfl rfl rfl "~
+							moments[0]~" "~moments[1]~" "~flat[0]~" "~flat[1]~")";
+					}
+					foreach_reverse(row;g.rows)tables=list(row)~(tables.length?", ":"")~tables;
+					return "("~termsName~".rate (["~tables~"] :) ("~list(g.primitive)~" :) "~hv~" "~exponent~" rfl rfl "~
 						moments[0]~" "~moments[1]~" "~flat[0]~" "~flat[1]~")";
 				}
 				if(r.erf&&r.symbolic){

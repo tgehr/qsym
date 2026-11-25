@@ -820,7 +820,15 @@ private Case[] cases(){ return [
 	Case("RateBetweenFunction","λ(t:ℝ).∫dx [0≤x≤t]*r*exp(-r*x)*λ[x]","ℝ→ℝ","λ(t:ℝ). [0≤t]·(r·([r≠0]·(-r⁻¹·exp(-r·t)+r⁻¹)+[r=0]·t))"),
 	Case("RateBetweenGuarded","∫dx [c≤d]*[0≤x≤1]*exp(-r*x)*λ[x]","ℝ","[c≤d]·([r≠0]·(-r⁻¹·exp(-r)+r⁻¹)+[r=0])"),
 	Case("RateBetweenDegree","∫dx [0≤x≤1]*x^17*exp(-r*x)*λ[x]","ℝ"),
-	Case("RateBetweenTerms","∫dx [0≤x≤1]*(x+m)*exp(-r*x)*λ[x]","ℝ"),
+	Case("RateBetweenTerms","∫dx [0≤x≤1]*(x+m)*exp(-r*x)*λ[x]","ℝ","[r≠0]·((-m·r⁻¹-r⁻¹-(r^2)⁻¹)·exp(-r)+m·r⁻¹+(r^2)⁻¹)+[r=0]·(m+1/2)"),
+	Case("RateBetweenTermsBounds","∫dx [a≤x≤b]*(c*x^2+d)*exp(r*x)*λ[x]","ℝ",
+		"[a≤b]·([r≠0]·(-(c·r⁻¹·a^2-2·a·c·(r^2)⁻¹+d·r⁻¹+2·c·(r^3)⁻¹)·exp(a·r)+(c·r⁻¹·b^2-2·b·c·(r^2)⁻¹+d·r⁻¹+2·c·(r^3)⁻¹)·exp(b·r))+[r=0]·(-c·(1/3)·a^3+c·(1/3)·b^3-a·d+b·d))"),
+	Case("RateBetweenTermsScaled","∫dx [0≤x≤1]*(x-m)^2*r*exp(-r*x)*λ[x]","ℝ",
+		"r·([r≠0]·((-r⁻¹·m^2+2·m·r⁻¹+2·m·(r^2)⁻¹-r⁻¹-2·(r^2)⁻¹-2·(r^3)⁻¹)·exp(-r)+r⁻¹·m^2-2·m·(r^2)⁻¹+2·(r^3)⁻¹)+[r=0]·(m^2-m+1/3))"),
+	Case("RateBetweenTermsProduct","∫dx [0≤x≤t]*(m*x+1)*(x-1)*exp(-x/s)*λ[x]","ℝ",
+		"([0≤t]·(guard(s≠0,2·m·s^3-m·s^2+s^2+(-m·s·t^2-2·t·m·s^2-2·m·s^3+t·m·s+m·s^2-t·s-s^2+s)·exp(-t·s⁻¹)-s)):ℝ)"),
+	Case("RateBetweenTermsDegree","∫dx [0≤x≤1]*(x^17+m)*exp(-r*x)*λ[x]","ℝ"),
+	Case("RateBetweenTermsFactor","∫dx [0≤x≤1]*(x+m)*(exp(-r*x)+1)*λ[x]","ℝ"),
 	Case("RateSum","∫dx [0≤x]*(exp(-r*x)+exp(-x))*λ[x]","ℝ"),
 	Case("LimitOffset","lim[x→∞] exp(a-x)","ℝ","0"),
 	Case("LimitOffsetBottom","lim[x→-∞] x*exp(a+b+3*x)","ℝ","0"),
@@ -1572,23 +1580,34 @@ private void run(string directory){
 		// under the masks of that test. The certificate has the table and
 		// that antiderivative, and at each bound the monomials of both.
 		if(c.name.indexOf("RateBetween")==0){
-			bool retained=c.name=="RateBetweenDegree"||c.name=="RateBetweenTerms";
-			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.rate (")>=0)!=retained,c.name~" rate between bounds");
+			bool retained=c.name=="RateBetweenDegree"||c.name=="RateBetweenTermsDegree"||c.name=="RateBetweenTermsFactor";
+			// Under a polynomial whose coefficients are terms the integral is
+			// linear in them: each meets the table and the antiderivative of
+			// its power times the rational polynomial. A product with a sum is
+			// not distributed.
+			bool terms=c.name.indexOf("RateBetweenTerms")==0&&!retained;
+			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.rate (")>=0)==(!retained&&!terms),c.name~" rate between bounds");
+			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.rateTerms (")>=0)==terms,c.name~" coefficients that are terms");
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
-			// The table and the antiderivative of the polynomial are elaborated
-			// to their end, one after the other.
-			enforce((certificate.indexOf("]] :) ([(0 : ℚ), ")>=0)!=retained,c.name~" table and antiderivative");
+			// The tables and the antiderivatives of the polynomial are
+			// elaborated to their end, one after the other.
+			enforce((certificate.indexOf("]] :) ([(0 : ℚ), ")>=0)==(!retained&&!terms),c.name~" table and antiderivative");
+			enforce((certificate.indexOf("]]] :) ([[(0 : ℚ), ")>=0)==terms,c.name~" tables and antiderivatives");
 			// A bound that is a closed zero leaves only the constants; at
 			// another one a monomial is skipped where its coefficient is zero.
-			bool origin=c.name!="RateBetweenBounds"&&c.name!="RateBetweenScaled"&&!retained;
-			bool skipped=c.name=="RateBetweenPolynomial"||c.name=="RateBetweenScaled"||c.name=="RateBetweenCircle";
+			bool origin=c.name!="RateBetweenBounds"&&c.name!="RateBetweenScaled"&&c.name!="RateBetweenTermsBounds"&&!retained;
+			bool skipped=c.name=="RateBetweenPolynomial"||c.name=="RateBetweenScaled"||c.name=="RateBetweenCircle"||terms;
 			enforce((certificate.indexOf("Distribution.StepSource.RowTerms.vanish")>=0)==origin,c.name~" bound that is zero");
 			enforce((certificate.indexOf("Distribution.StepSource.RowTerms.zero")>=0)==skipped,c.name~" coefficient that is zero");
 			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.add")>=0)==(c.name=="RateBetweenSum"),c.name~" sum");
-			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.guard")>=0)==(c.name=="RateBetweenInverse"),c.name~" domain");
+			bool domain=c.name=="RateBetweenInverse"||c.name=="RateBetweenTermsProduct";
+			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.guard")>=0)==domain,c.name~" domain");
+			// A coefficient that is absent meets nothing: neither the rows of
+			// its table nor its antiderivative.
+			enforce((certificate.indexOf("Distribution.StepSource.MomentTerms.absent [(0 : ℚ), (0 : ℚ), ((1) / (2) : ℚ)]")>=0)==(c.name=="RateBetweenTermsBounds"),c.name~" absent coefficient");
 			// The masks of the test stay where the rate may vanish.
-			enforce((text.indexOf("≠0]")>=0)==(!retained&&c.name!="RateBetweenInverse"&&c.name!="RateBetweenCircle"),c.name~": "~text);
+			enforce((text.indexOf("≠0]")>=0)==(!retained&&!domain&&c.name!="RateBetweenCircle"),c.name~": "~text);
 			if(c.name=="RateBetweenGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}else if(c.name.indexOf("Rate")==0){
 			bool retained=c.name=="RateSum"||c.name=="RateDegree"||c.name=="RateTerms";

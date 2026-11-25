@@ -1644,6 +1644,249 @@ theorem IntervalTerms.rate {a b m : Option ℝ} {v : ℝ → Option ℝ} {S : Op
       left
       ring
 
+/-! The same under a polynomial whose coefficients do not mention the axis: the
+integral is linear in them. Coefficient `j` meets the table and the
+antiderivative of `xʲ` times the rational polynomial. -/
+
+/-- Table `j` is that of `xʲ·P`, and it has a row that is not zero. -/
+def rateTablesCheck : List ℚ → List (List (List ℚ)) → Bool
+  | _, [] => true
+  | P, K :: Ks => rateTableCheck 1 P K && !poly2Zero K && rateTablesCheck (0 :: P) Ks
+
+/-- Polynomial `j` is an antiderivative of `xʲ·P`. -/
+def flatsCheck : List ℚ → List (List ℚ) → Bool
+  | _, [] => true
+  | P, Q :: Qs => flatCheck P Q && flatsCheck (0 :: P) Qs
+
+theorem rateTables_nonzero :
+    ∀ (Ks : List (List (List ℚ))) (P : List ℚ), rateTablesCheck P Ks = true →
+      ∀ K ∈ Ks, poly2Zero K = false := by
+  intro Ks
+  induction Ks with
+  | nil => intro P _ K hK; simp at hK
+  | cons K Ks ih =>
+    intro P h K' hK'
+    simp only [rateTablesCheck, Bool.and_eq_true, Bool.not_eq_true'] at h
+    rcases List.mem_cons.1 hK' with rfl | hm
+    · exact h.1.2
+    · exact ih (0 :: P) h.2 K' hm
+
+/-- The exponential times the tables under their coefficients is an
+antiderivative of the polynomial of the coefficients times the rational one
+times the exponential. -/
+theorem rateTables_deriv (α : ℝ) {β : ℝ} (hβ : β ≠ 0) (x : ℝ) :
+    ∀ (cs : List (Option (Option ℝ))) (Ks : List (List (List ℚ))) (P : List ℚ),
+      cs.length = Ks.length → rateTablesCheck P Ks = true →
+      HasDerivAt (fun t : ℝ => Real.exp (α + β * t) * momentValue2 t β⁻¹ cs Ks)
+        (realEval cs x * polyEval P x * Real.exp (α + β * x)) x := by
+  intro cs
+  induction cs with
+  | nil =>
+    intro Ks P hl _
+    cases Ks with
+    | nil => simpa [momentValue2, realEval] using hasDerivAt_const x (0 : ℝ)
+    | cons K Ks => simp at hl
+  | cons c cs ih =>
+    intro Ks P hl hK
+    cases Ks with
+    | nil => simp at hl
+    | cons K Ks =>
+      simp only [rateTablesCheck, Bool.and_eq_true] at hK
+      have h1 := (rateTable_deriv hK.1.1 α hβ x).const_mul (coefReal c)
+      have h2 := ih Ks (0 :: P) (by simpa using hl) hK.2
+      have hf : (fun t : ℝ => Real.exp (α + β * t) * momentValue2 t β⁻¹ (c :: cs) (K :: Ks)) =
+          fun t => coefReal c * (Real.exp (α + β * t) * poly2Eval K t β⁻¹) +
+            Real.exp (α + β * t) * momentValue2 t β⁻¹ cs Ks := by
+        funext t
+        simp only [momentValue2]
+        ring
+      rw [hf]
+      refine (h1.add h2).congr_deriv ?_
+      simp only [realEval, polyEval]
+      push_cast
+      ring
+
+/-- The antiderivatives under their coefficients. -/
+theorem flats_deriv (x : ℝ) :
+    ∀ (cs : List (Option (Option ℝ))) (Qs : List (List ℚ)) (P : List ℚ),
+      cs.length = Qs.length → flatsCheck P Qs = true →
+      HasDerivAt (fun t : ℝ => momentValue t cs Qs) (realEval cs x * polyEval P x) x := by
+  intro cs
+  induction cs with
+  | nil =>
+    intro Qs P hl _
+    cases Qs with
+    | nil => simpa [momentValue, realEval] using hasDerivAt_const x (0 : ℝ)
+    | cons Q Qs => simp at hl
+  | cons c cs ih =>
+    intro Qs P hl hQ
+    cases Qs with
+    | nil => simp at hl
+    | cons Q Qs =>
+      simp only [flatsCheck, Bool.and_eq_true] at hQ
+      have h1 := (flat_deriv hQ.1 x).const_mul (coefReal c)
+      have h2 := ih Qs (0 :: P) (by simpa using hl) hQ.2
+      refine (h1.add h2).congr_deriv ?_
+      simp only [realEval, polyEval]
+      push_cast
+      ring
+
+/-- The value: undefined everywhere where the scale, a coefficient or the
+exponent is, and the polynomials times the exponential under the scale
+otherwise. -/
+private theorem rateTerms_value {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {cs : List (Option (Option ℝ))} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ}
+    (hv : Bell v S (some cs) P (some E)) (hE : Quadratic E (some c0) (some c1) none) :
+    ((S = some none ∨ some none ∈ cs ∨ c0 = none ∨ c1 = none) → ∀ x, v x = none) ∧
+      ∀ α β : ℝ, S ≠ some none → some none ∉ cs → c0 = some α → c1 = some β →
+        ∀ x, v x = some (scaleReal S *
+          (realEval cs x * polyEval P x * Real.exp (α + β * x))) := by
+  have hvx : ∀ x, v x = scaleBy S (Value.mul (Value.mul (symEval cs x) (some (polyEval P x)))
+      (Functions.expR.apply (E x))) := fun x => hv.equation x
+  have hnone : ∀ X : Option ℝ, scaleBy S (Value.mul X none) = none := fun X => by
+    rcases S with _ | _ | s <;> cases X <;> rfl
+  refine ⟨fun hm x => ?_, fun α β hS hd h0 h1 x => ?_⟩
+  · rw [hvx]
+    rcases hm with rfl | hd | rfl | rfl
+    · rfl
+    · rw [(symEval_none_iff cs x).2 hd]
+      rcases S with _ | _ | s <;> rfl
+    · have : E x = none := by rw [hE.equation]; rfl
+      rw [this]
+      exact hnone _
+    · have : E x = none := by rw [hE.equation]; cases c0 <;> rfl
+      rw [this]
+      exact hnone _
+  · subst h0 h1
+    have hEx : E x = some (α + β * x) := by
+      rw [hE.equation]
+      simp [coefValue, Value.add, Value.mul]
+    rw [hvx, hEx, symEval_real hd]
+    rcases S with _ | _ | s
+    · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
+    · exact absurd rfl hS
+    · simp [scaleBy, scaleReal, Value.mul, Function1.apply, Functions.expR]
+
+/-- Between two bounds, under the scale, with `k` the tables under their
+coefficients at a bound and at the inverse of the rate, and `p` the
+antiderivatives under their coefficients at a bound:
+`[c₁≠0]·(k_b·exp(c₀+c₁·b) - k_a·exp(c₀+c₁·a)) + [c₁=0]·(exp(c₀)·(p_b - p_a))`. -/
+theorem IntervalTerms.rateTerms {a b m : Option ℝ} {v : ℝ → Option ℝ} {S : Option (Option ℝ)}
+    {cs : List (Option (Option ℝ))} {P : List ℚ} {E : ℝ → Option ℝ} {c0 c1 : Option ℝ}
+    (Ks : List (List (List ℚ))) (Qs : List (List ℚ))
+    (hv : Bell v S (some cs) P (some E)) (hE : Quadratic E (some c0) (some c1) none)
+    (hK : rateTablesCheck P Ks = true) (hQ : flatsCheck P Qs = true)
+    (hl : cs.length = Ks.length)
+    {kb ka pb pa : Option ℝ} {msb msa qsb qsa : List (Option ℝ)}
+    (hmb : MomentTerms b (momentCoefs (Value.inv c1) cs Ks) Ks.flatten msb) (hkb : Sums msb kb)
+    (hma : MomentTerms a (momentCoefs (Value.inv c1) cs Ks) Ks.flatten msa) (hka : Sums msa ka)
+    (hqb : MomentTerms b cs Qs qsb) (hpb : Sums qsb pb)
+    (hqa : MomentTerms a cs Qs qsa) (hpa : Sums qsa pa) :
+    IntervalTerms a b m v (scaleBy S (Value.add
+      (Value.mask (Value.nonzero c1) (Value.add
+        (Value.mul kb (Functions.expR.apply (Value.add c0 (Value.mul c1 b))))
+        (Value.mul m (Value.mul ka (Functions.expR.apply (Value.add c0 (Value.mul c1 a)))))))
+      (Value.mask (Value.not (Value.nonzero c1))
+        (Value.mul (Functions.expR.apply c0) (Value.add pb (Value.mul m pa)))))) := by
+  obtain ⟨hmiss, hval⟩ := rateTerms_value hv hE
+  have hnone : scaleBy S none = none := by
+    rcases S with _ | _ | s <;> simp [scaleBy, Value.mul]
+  by_cases hu : S = some none ∨ some none ∈ cs ∨ c0 = none ∨ c1 = none
+  · have hout : scaleBy S (Value.add
+        (Value.mask (Value.nonzero c1) (Value.add
+          (Value.mul kb (Functions.expR.apply (Value.add c0 (Value.mul c1 b))))
+          (Value.mul m (Value.mul ka (Functions.expR.apply (Value.add c0 (Value.mul c1 a)))))))
+        (Value.mask (Value.not (Value.nonzero c1))
+          (Value.mul (Functions.expR.apply c0) (Value.add pb (Value.mul m pa))))) = none := by
+      rcases hu with rfl | hd | rfl | rfl
+      · rfl
+      · have hkb' : kb = none := by
+          rw [hkb.value, hmb.undefined
+            (momentCoefs_undefined _ cs Ks hl (rateTables_nonzero Ks P hK) hd)]
+        have hpb' : pb = none := by rw [hpb.value, hqb.undefined hd]
+        subst hkb' hpb'
+        have h1 : Value.add (Value.mul none (Functions.expR.apply (Value.add c0 (Value.mul c1 b))))
+            (Value.mul m (Value.mul ka (Functions.expR.apply (Value.add c0 (Value.mul c1 a))))) =
+            none := rfl
+        have h2 : Value.mul (Functions.expR.apply c0) (Value.add none (Value.mul m pa)) = none := by
+          cases Functions.expR.apply c0 <;> rfl
+        rw [h1, h2]
+        rcases c1 with _ | β
+        · exact hnone
+        · by_cases hβ : β = 0 <;>
+            simp [Value.nonzero, Value.not, Value.mask, Value.add, hβ, hnone]
+      · have h1 : Value.add (Value.mul kb (Functions.expR.apply (Value.add none (Value.mul c1 b))))
+            (Value.mul m (Value.mul ka (Functions.expR.apply (Value.add none (Value.mul c1 a))))) =
+            none := by
+          cases kb <;> rfl
+        have h2 : Value.mul (Functions.expR.apply none) (Value.add pb (Value.mul m pa)) = none :=
+          rfl
+        rw [h1, h2]
+        rcases c1 with _ | β
+        · exact hnone
+        · by_cases hβ : β = 0 <;>
+            simp [Value.nonzero, Value.not, Value.mask, Value.add, hβ, hnone]
+      · exact hnone
+    rw [hout]
+    exact IntervalTerms.undefined (hmiss hu)
+  simp only [not_or] at hu
+  obtain ⟨hS', hd, h0, h1⟩ := hu
+  obtain ⟨α, rfl⟩ := Option.ne_none_iff_exists'.1 h0
+  obtain ⟨β, rfl⟩ := Option.ne_none_iff_exists'.1 h1
+  have hg := hval α β hS' hd rfl rfl
+  have hcR : Continuous (realEval cs) :=
+    (Polynomial.continuous (realPoly cs)).congr (eval_realPoly cs)
+  have hcP : Continuous fun x : ℝ => realEval cs x * polyEval P x * Real.exp (α + β * x) :=
+    (hcR.mul (polyEval_continuous P)).mul (Real.continuous_exp.comp (by fun_prop))
+  refine IntervalTerms.value hg (continuous_const.mul hcP) fun l u ha hb hm => ?_
+  subst ha hb hm
+  rw [intervalIntegral.integral_const_mul]
+  have hpu : pb = some (momentValue u cs Qs) := by rw [hpb.value, hqb.value u rfl hd]
+  have hpl : pa = some (momentValue l cs Qs) := by rw [hpa.value, hqa.value l rfl hd]
+  by_cases hβ : β = 0
+  · subst hβ
+    have hI : ∫ x in l..u, realEval cs x * polyEval P x * Real.exp (α + 0 * x) =
+        Real.exp α * momentValue u cs Qs - Real.exp α * momentValue l cs Qs := by
+      have hD : ∀ x ∈ Set.uIcc l u, HasDerivAt (fun t : ℝ => Real.exp α * momentValue t cs Qs)
+          (realEval cs x * polyEval P x * Real.exp (α + 0 * x)) x := fun x _ => by
+        refine ((flats_deriv x cs Qs P hqb.length hQ).const_mul (Real.exp α)).congr_deriv ?_
+        rw [zero_mul, add_zero]
+        ring
+      rw [intervalIntegral.integral_eq_sub_of_hasDerivAt hD (hcP.intervalIntegrable _ _)]
+    rw [hI, hpu, hpl]
+    rcases S with _ | _ | s
+    · simp [scaleBy, scaleReal, Value.nonzero, Value.not, Value.mask, Value.add, Value.mul,
+        Function1.apply, Functions.expR]
+      ring
+    · exact absurd rfl hS'
+    · simp [scaleBy, scaleReal, Value.nonzero, Value.not, Value.mask, Value.add, Value.mul,
+        Function1.apply, Functions.expR]
+      left
+      ring
+  · have hi : Value.inv (some β) = some β⁻¹ := by simp [Value.inv, hβ]
+    rw [hi] at hmb hma
+    have hku : kb = some (momentValue2 u β⁻¹ cs Ks) := by
+      rw [hkb.value, hmb.value u rfl (momentCoefs_defined _ cs Ks hd),
+        momentValue_coefs u _ cs Ks hd]
+    have hkl : ka = some (momentValue2 l β⁻¹ cs Ks) := by
+      rw [hka.value, hma.value l rfl (momentCoefs_defined _ cs Ks hd),
+        momentValue_coefs l _ cs Ks hd]
+    have hI : ∫ x in l..u, realEval cs x * polyEval P x * Real.exp (α + β * x) =
+        Real.exp (α + β * u) * momentValue2 u β⁻¹ cs Ks -
+          Real.exp (α + β * l) * momentValue2 l β⁻¹ cs Ks := by
+      rw [intervalIntegral.integral_eq_sub_of_hasDerivAt
+        (fun x _ => rateTables_deriv α hβ x cs Ks P hl hK) (hcP.intervalIntegrable _ _)]
+    rw [hI, hku, hkl]
+    rcases S with _ | _ | s
+    · simp [scaleBy, scaleReal, Value.nonzero, Value.not, Value.mask, Value.add, Value.mul,
+        Function1.apply, Functions.expR, hβ]
+      ring
+    · exact absurd rfl hS'
+    · simp [scaleBy, scaleReal, Value.nonzero, Value.not, Value.mask, Value.add, Value.mul,
+        Function1.apply, Functions.expR, hβ]
+      left
+      ring
+
 /-! A curvature that does not mention the axis and cannot vanish. Beyond a
 single bound the exponential of the quadratic is integrable exactly where the
 curvature is negative, and the closed form with the complement of the error

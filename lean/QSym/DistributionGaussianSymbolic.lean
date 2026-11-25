@@ -1568,7 +1568,7 @@ private theorem momentValue_table (b h : ℝ) {c : Option (Option ℝ)} (hc : c 
         simp only [coefReal]
         ring
 
-private theorem momentValue_coefs (b h : ℝ) :
+theorem momentValue_coefs (b h : ℝ) :
     ∀ (cs : List (Option (Option ℝ))) (Ks : List (List (List ℚ))), some none ∉ cs →
       momentValue b (momentCoefs (some h) cs Ks) Ks.flatten = momentValue2 b h cs Ks := by
   intro cs
@@ -1598,7 +1598,7 @@ private theorem tableCoefs_defined (h : ℝ) {c : Option (Option ℝ)} (hc : c �
       refine ⟨?_, ih (l + 1)⟩
       split_ifs <;> simp [scaledPower_some]
 
-private theorem momentCoefs_defined (h : ℝ) :
+theorem momentCoefs_defined (h : ℝ) :
     ∀ (cs : List (Option (Option ℝ))) (Ks : List (List (List ℚ))), some none ∉ cs →
       some none ∉ momentCoefs (some h) cs Ks := by
   intro cs
@@ -1629,7 +1629,7 @@ private theorem tableCoefs_undefined (h : Option ℝ) {K : List (List ℚ)}
     · left
       rw [if_neg hz, scaledPower_none]
 
-private theorem momentCoefs_undefined (h : Option ℝ) :
+theorem momentCoefs_undefined (h : Option ℝ) :
     ∀ (cs : List (Option (Option ℝ))) (Ks : List (List (List ℚ))), cs.length = Ks.length →
       (∀ K ∈ Ks, poly2Zero K = false) → some none ∈ cs → some none ∈ momentCoefs h cs Ks := by
   intro cs
