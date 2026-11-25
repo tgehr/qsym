@@ -909,7 +909,24 @@ private Case[] cases(){ return [
 	Case("QuotientDomainBelow","∫dx [x≤b]*(x+1)/x^4*λ[x]","ℝ","guard(b<0,(-b·(1/2)-1/3)·(b^3)⁻¹)"),
 	Case("QuotientDomainCancelled","∫dx [a≤x]*x^2/x^5*λ[x]","ℝ","guard(0<a,(a^2)⁻¹·(1/2))"),
 	Case("QuotientRemovable","∫dx [a≤x≤b]*x^3/x*λ[x]","ℝ"),
-	Case("QuotientShifted","∫dx [1≤x≤2]*1/(x+1)*λ[x]","ℝ"),
+	Case("QuotientPole","∫dx [1≤x≤2]*1/(x+1)*λ[x]","ℝ","-log(2)+log(3)"),
+	Case("QuotientPoleBounds","∫dx [a≤x≤b]*1/(x+1)*λ[x]","ℝ","([a≤b]·(guard(-1<a∧b≠-1∨b<-1∧a≠-1,-log(abs(a+1))+log(abs(b+1)))):ℝ)"),
+	Case("QuotientPoleSquare","∫dx [1≤x≤2]*(1/(2*x+1)^2)*λ[x]","ℝ","1/15"),
+	Case("QuotientPoleProduct","∫dx [1≤x≤2]*x/(x+1)*λ[x]","ℝ","log(2)-log(3)+1"),
+	Case("QuotientPoleDivision","∫dx [0≤x≤1]*(x^2+1)/(x+1)*λ[x]","ℝ","2·log(2)-1/2"),
+	Case("QuotientPoleReversed","∫dx [a≤x≤b]*1/(1-x)*λ[x]","ℝ","([a≤b]·(guard(1<a∧b≠1∨b<1∧a≠1,log(abs(a-1))-log(abs(b-1)))):ℝ)"),
+	Case("QuotientPoleFunction","λ(t:ℝ).∫dx [0≤x]*[x≤t]*1/(x+1)^2*λ[x]","ℝ→ℝ","λ(t:ℝ). [0≤t]·(1-(t+1)⁻¹)"),
+	Case("QuotientPoleAbove","∫dx [0≤x]*1/(x+1)^2*λ[x]","ℝ","1"),
+	Case("QuotientPoleAboveTerm","∫dx [a≤x]*1/(x-2)^3*λ[x]","ℝ","guard(2<a,((a-2)^2)⁻¹·(1/2))"),
+	Case("QuotientPoleBelow","∫dx [x<b]*1/(2-x)^2*λ[x]","ℝ","guard(b<2,-(b-2)⁻¹)"),
+	Case("QuotientPoleScale","∫dx [1≤x≤2]*c/(x+1)*λ[x]","ℝ","c·(-log(2)+log(3))"),
+	Case("QuotientPoleScaleStrict","∫dx [a<x≤b]*c/(x+1)*λ[x]","ℝ","([a<b]·(guard(c=0∧-1≤a∨(-1<a∧b≠-1∨b<-1∧a≠-1),[c≠0]·(c·(-log(abs(a+1))+log(abs(b+1)))))):ℝ)"),
+	Case("QuotientPoleScaleClosed","∫dx [0<x<1]*c/(x+1)*λ[x]","ℝ","c·log(2)"),
+	Case("QuotientPoleScaleBelow","∫dx [x≤b]*c/(x-2)^2*λ[x]","ℝ","guard(b<2,-c·(b-2)⁻¹)"),
+	Case("QuotientPoleUniform","∫dx [a≤x≤b]*(1/(x+1))/log(b/a)*λ[x]","ℝ","([a≤b]·(guard(a≠0∧(0<b·a⁻¹∧(b≠a∧(-1<a∧b≠-1)))∨a<0∧(b≠a∧(b<-1∧a≠-1)),(-log(abs(a+1))+log(abs(b+1)))·log(b·a⁻¹)⁻¹)):ℝ)"),
+	Case("QuotientPoleInside","∫dx [-2≤x≤0]*1/(x+1)*λ[x]","ℝ"),
+	Case("QuotientPoleTwo","∫dx [1≤x≤2]*(1/(x+1)+1/x)*λ[x]","ℝ"),
+	Case("QuotientPoleQuadratic","∫dx [1≤x≤2]*(1/(x^2+1))*λ[x]","ℝ"),
 	Case("QuotientScale","∫dx [1≤x≤2]*c/x*λ[x]","ℝ","c·log(2)"),
 	Case("QuotientScaleBounds","∫dx [a≤x≤b]*c/x*λ[x]","ℝ","([a≤b]·(guard(0<a∧b≠0∨b<0∧a≠0,c·(-log(abs(a))+log(abs(b))))):ℝ)"),
 	Case("QuotientScaleStrict","∫dx [a<x≤b]*c/x*λ[x]","ℝ","([a<b]·(guard(c=0∧0≤a∨(0<a∧b≠0∨b<0∧a≠0),[c≠0]·(c·(-log(abs(a))+log(abs(b)))))):ℝ)"),
@@ -1402,60 +1419,75 @@ private void run(string directory){
 		// inside the mask of two bounds; around the mask it may be joined
 		// with the domain of the quotient, in either order. A factor inside
 		// a sum and a tail that diverges keep their integral.
+		// The powers may be those of the axis minus a rational pole: the
+		// inverse of a power of a linear polynomial. Moved along the axis
+		// by the pole that is a quotient around zero, between the bounds
+		// moved along with it, and the polynomials are moved as well. The
+		// domain is then that the axis is not at the pole. Two poles, a
+		// denominator without a root and the domain around a mask of closed
+		// bounds with the pole between them keep their integral.
 		if(c.name.indexOf("Quotient")==0||c.name=="DomainAxis"){
-			bool retained=c.name=="QuotientDiverges"||c.name=="QuotientAbovePolynomial"||c.name=="QuotientRemovable"||c.name=="QuotientShifted"||
-				c.name=="QuotientExponential"||c.name=="QuotientScaleSum"||c.name=="QuotientScaleDiverges";
-			bool domain=c.name.indexOf("QuotientDomain")==0,scaled=c.name.indexOf("QuotientScale")==0&&c.name!="QuotientScaled";
-			bool above=c.name.indexOf("QuotientAbove")==0||c.name=="QuotientDomainAbove"||c.name=="QuotientDomainCancelled"||
-				c.name.indexOf("QuotientScaleAbove")==0||c.name=="QuotientScaleDomainAbove";
-			bool below=c.name.indexOf("QuotientBelow")==0||c.name=="QuotientDomainBelow"||c.name.indexOf("QuotientScaleBelow")==0||c.name=="QuotientScaleDomainBelow";
-			// With a strict bound that is not closed on one side of zero the
-			// factor is under its mask.
-			bool masked=c.name=="QuotientScaleStrict"||c.name=="QuotientScaleEdge"||c.name=="QuotientScaleAboveStrict"||c.name=="QuotientScaleBelowStrict"||
-				c.name=="QuotientScaleDomainBelow";
+			enum src="Distribution.StepSource.";
+			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
+			bool retained=among("QuotientDiverges","QuotientAbovePolynomial","QuotientRemovable","QuotientExponential","QuotientScaleSum","QuotientScaleDiverges",
+				"QuotientPoleInside","QuotientPoleTwo","QuotientPoleQuadratic");
+			bool pole=c.name.indexOf("QuotientPole")==0&&!retained;
+			bool scaled=c.name.indexOf("QuotientScale")==0&&c.name!="QuotientScaled"||c.name.indexOf("QuotientPoleScale")==0||c.name=="QuotientPoleUniform";
+			bool above=c.name.indexOf("QuotientAbove")==0||c.name.indexOf("QuotientScaleAbove")==0||c.name.indexOf("QuotientPoleAbove")==0||
+				among("QuotientDomainAbove","QuotientDomainCancelled","QuotientScaleDomainAbove");
+			bool below=c.name.indexOf("QuotientBelow")==0||c.name.indexOf("QuotientScaleBelow")==0||
+				among("QuotientDomainBelow","QuotientScaleDomainBelow","QuotientPoleBelow","QuotientPoleScaleBelow");
+			// With a strict bound that is not closed on one side of the pole
+			// the factor is under its mask.
+			bool masked=among("QuotientScaleStrict","QuotientScaleEdge","QuotientScaleAboveStrict","QuotientScaleBelowStrict","QuotientScaleDomainBelow","QuotientPoleScaleStrict");
 			auto kind=scaled?(masked?"_scaled ":"_scaled_plain "):" ";
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_between"~kind)>=0)==(!retained&&!above&&!below),c.name~" quotient between bounds");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_above"~kind)>=0)==(!retained&&above),c.name~" quotient above a bound");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_below"~kind)>=0)==(!retained&&below),c.name~" quotient below a bound");
+			enforce(has("ratio_between"~kind)==(!retained&&!above&&!below),c.name~" quotient between bounds");
+			enforce(has("ratio_above"~kind)==(!retained&&above),c.name~" quotient above a bound");
+			enforce(has("ratio_below"~kind)==(!retained&&below),c.name~" quotient below a bound");
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_direct")>=0)!=retained,c.name~" certificate");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_inv ")>=0)!=retained,c.name~" inverse of a monomial");
+			enforce(has("ratio_inv ")!=retained,c.name~" inverse of a monomial");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			// The evidence follows the structure of the value.
-			bool difference=c.name=="QuotientDifference",factors=c.name=="QuotientFactors";
-			bool sums=difference||c.name=="QuotientAboveSum"||c.name=="QuotientBelowLowest";
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_left ")>=0)==(c.name=="QuotientSum"||factors||c.name=="QuotientDomain"||
-				c.name=="QuotientScaleFactors"),c.name~" polynomial and quotient");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_add_right ")>=0)==(c.name=="QuotientMinus"),c.name~" quotient and polynomial");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_add ")>=0)==sums,c.name~" sum of quotients");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_left ")>=0)==(c.name=="QuotientScaled"||sums),c.name~" polynomial times quotient");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul_right ")>=0)==(c.name=="QuotientProduct"||c.name=="QuotientDomainStrict"||
-				c.name=="QuotientDomainAbove"||c.name=="QuotientDomainBelow"||c.name=="QuotientScaleDomainFirst"),c.name~" quotient times polynomial");
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_mul ")>=0)==factors,c.name~" product of quotients");
-			enforce((certificate.indexOf("Distribution.StepSource.Fraction.mul ")>=0)==(scaled&&!retained),c.name~" product with a factor");
-			enforce((certificate.indexOf("Distribution.StepSource.Fraction.scale ")>=0)==(scaled&&!retained),c.name~" factor");
-			// Closed bounds on one side of zero, where one of them is strict.
-			enforce((certificate.indexOf("Distribution.StepSource.side_closed ")>=0)==(c.name=="QuotientScaleClosed"),c.name~" closed bounds");
-			enforce((certificate.indexOf("Distribution.StepSource.above_closed ")>=0)==(c.name=="QuotientScaleAboveClosed"),c.name~" closed lower bound");
-			enforce((certificate.indexOf("Distribution.StepSource.below_closed ")>=0)==(c.name=="QuotientScaleBelowClosed"),c.name~" closed upper bound");
+			bool sums=among("QuotientDifference","QuotientAboveSum","QuotientBelowLowest");
+			enforce(has("ratio_add_left ")==among("QuotientSum","QuotientFactors","QuotientDomain","QuotientScaleFactors"),c.name~" polynomial and quotient");
+			enforce(has("ratio_add_right ")==among("QuotientMinus"),c.name~" quotient and polynomial");
+			enforce(has("ratio_add ")==sums,c.name~" sum of quotients");
+			enforce(has("ratio_mul_left ")==(sums||among("QuotientScaled","QuotientPoleProduct","QuotientPoleDivision")),c.name~" polynomial times quotient");
+			enforce(has("ratio_mul_right ")==among("QuotientProduct","QuotientDomainStrict","QuotientDomainAbove","QuotientDomainBelow","QuotientScaleDomainFirst"),
+				c.name~" quotient times polynomial");
+			enforce(has("ratio_mul ")==among("QuotientFactors"),c.name~" product of quotients");
+			enforce(has("Fraction.mul ")==(scaled&&!retained),c.name~" product with a factor");
+			enforce(has("Fraction.scale ")==(scaled&&!retained),c.name~" factor");
+			// Closed bounds on one side of the pole, where one of them is strict.
+			enforce(has("side_closed ")==among("QuotientScaleClosed","QuotientPoleScaleClosed"),c.name~" closed bounds");
+			enforce(has("above_closed ")==among("QuotientScaleAboveClosed"),c.name~" closed lower bound");
+			enforce(has("below_closed ")==among("QuotientScaleBelowClosed"),c.name~" closed upper bound");
 			// Under the guard of its domain around the mask it is the same
 			// quotient. The domain of a factor is a guard of the observation;
 			// the two may be joined.
-			bool first=c.name=="QuotientScaleDomainFirst",nested=c.name=="QuotientScaleDomainNested";
-			bool joined=c.name=="QuotientScaleUniform"||c.name=="QuotientScaleDomainAbove"||c.name=="QuotientScaleDomainBelow"||nested;
-			bool outer=c.name=="QuotientScaleDomain"||c.name=="QuotientScaleUniform"||first||nested;
-			enforce((certificate.indexOf("Distribution.StepSource.ratio_guard ")>=0)==domain,c.name~" guard of the domain");
-			enforce((certificate.indexOf("Distribution.StepSource.Fraction.guard ")>=0)==(joined||first),c.name~" guard of the domain under a factor");
-			enforce((certificate.indexOf("Distribution.StepSource.MaskDomain.mask ")>=0)==(domain||c.name=="QuotientScaleDomain"||(joined||first)&&!nested),c.name~" domain around the mask");
-			enforce((certificate.indexOf("Distribution.StepSource.guard_and_left ")>=0)==joined,c.name~" domain of the axis first");
-			enforce((certificate.indexOf("Distribution.StepSource.guard_and_right ")>=0)==first,c.name~" domain of the factor first");
-			enforce((certificate.indexOf("Distribution.StepSource.between_guard_integral ")>=0)==outer,c.name~" guard inside the mask of the bounds");
-			enforce((certificate.indexOf("Distribution.StepSource.masked_guard_integral ")>=0)==(c.name=="QuotientScaleDomainAbove"||c.name=="QuotientScaleDomainBelow"),
-				c.name~" guard of the observation");
+			bool first=among("QuotientScaleDomainFirst"),nested=among("QuotientScaleDomainNested");
+			bool joined=among("QuotientScaleUniform","QuotientScaleDomainAbove","QuotientScaleDomainBelow","QuotientPoleUniform")||nested;
+			bool guardedPole=among("QuotientPoleBounds","QuotientPoleReversed","QuotientPoleAboveTerm","QuotientPoleBelow","QuotientPoleFunction");
+			bool guardedFactor=among("QuotientPoleScaleStrict","QuotientPoleScaleBelow");
+			enforce(has("ratio_guard ")==(c.name.indexOf("QuotientDomain")==0||guardedPole),c.name~" guard of the domain");
+			enforce(has("Fraction.guard ")==(joined||first||guardedFactor),c.name~" guard of the domain under a factor");
+			enforce(has("MaskDomain.mask ")==(c.name.indexOf("QuotientDomain")==0||among("QuotientScaleDomain")||(joined||first||guardedPole||guardedFactor)&&
+				!nested&&!among("QuotientPoleFunction")),c.name~" domain around the mask");
+			enforce(has("guard_and_left ")==joined,c.name~" domain of the axis first");
+			enforce(has("guard_and_right ")==first,c.name~" domain of the factor first");
+			enforce(has("between_guard_integral ")==(among("QuotientScaleDomain","QuotientScaleUniform","QuotientPoleUniform")||first||nested),c.name~" guard inside the mask of the bounds");
+			enforce(has("masked_guard_integral ")==among("QuotientScaleDomainAbove","QuotientScaleDomainBelow"),c.name~" guard of the observation");
+			// Around a pole that is not zero.
+			enforce(has("shift_between ")==(pole&&!above&&!below),c.name~" pole between bounds");
+			enforce(has("shift_above ")==(pole&&above),c.name~" pole below a bound");
+			enforce(has("shift_below ")==(pole&&below),c.name~" pole above a bound");
+			enforce(has("polynomial_translate ")==pole,c.name~" polynomial around the pole");
+			enforce(has("shifted_nonzero ")==(guardedPole||guardedFactor||among("QuotientPoleUniform")),c.name~" domain of the pole");
 			// Zero between the bounds, next to them or beyond the only one:
 			// nothing is observed.
-			enforce((text=="undefined(ℝ)")==(c.name=="QuotientAcross"||c.name=="QuotientEdge"||c.name=="QuotientAboveZero"||c.name=="QuotientAboveEdge"||
-				c.name=="QuotientScaleAcross"),c.name~": "~text);
-			if(c.name=="QuotientGuarded"||c.name=="QuotientAboveGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
+			enforce((text=="undefined(ℝ)")==among("QuotientAcross","QuotientEdge","QuotientAboveZero","QuotientAboveEdge","QuotientScaleAcross"),c.name~": "~text);
+			if(among("QuotientGuarded","QuotientAboveGuarded")) enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;

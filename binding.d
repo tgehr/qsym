@@ -64,6 +64,13 @@ private Rational[] polyProduct(Rational[] a,Rational[] b) @safe {
 	foreach(i,x;a) foreach(j,y;b) r[i+j]=r[i+j]+x*y;
 	return r;
 }
+// The coefficients of `q(y+s)`.
+private Rational[] polyTranslate(Rational[] q,Rational s) @safe {
+	if(s.zero) return q;
+	Rational[] r;
+	foreach_reverse(c;q) r=polySum(polyProduct(r,[s,Rational(1)]),[c]);
+	return r;
+}
 // One summand below an interval guard: a polynomial in the axis with an
 // optional factor that does not mention the axis, and its antiderivative.
 // With `curved` the summand is a polynomial times the exponential of a
@@ -108,6 +115,10 @@ private struct IntervalTerm{
 	// bound is strict or, with `ratioClosed`, the bounds are closed on one
 	// side of zero.
 	bool ratioTerm,ratioPlain,ratioClosed; uint ratioShift; uint[] ratioScale;
+	// The quotient may be one around a `ratioPole` that is not zero: then
+	// the bounds are moved by the literal `ratioMove` of its negation, and
+	// `ratioLower` and `ratioUpper` are the moved bounds.
+	Rational ratioPole; uint ratioMove=uint.max,ratioLower=uint.max,ratioUpper=uint.max;
 	// The exponential of a quadratic whose curvature is a term that cannot
 	// vanish, beyond a single bound: the literal of the factor of the linear
 	// coefficient over the curvature in the argument.
@@ -120,10 +131,12 @@ private struct IntervalTerm{
 // mask is, after those negations, that the axis is not zero: the domain of
 // a quotient by a power of it. With `joined` it is the conjunction `both`
 // of that and of a `domain` that does not mention the axis, with the axis
-// first for 1 and last for 2.
+// first for 1 and last for 2. The axis may also be kept away from another
+// point `axisPoint`: then the guard is that the sum of the axis and the
+// closed term `axisClosed` is not zero.
 private struct IntervalData{
-	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max,axis=uint.max,both=uint.max;
-	ubyte joined;
+	uint guard=uint.max,value=uint.max,unit=uint.max,lower,upper,minusOne,domain=uint.max,axis=uint.max,both=uint.max,axisClosed=uint.max;
+	ubyte joined; Rational axisPoint;
 	bool swap,strictLower,strictUpper,nested,half,below,hoisted;
 	// With `direct` the only term is observed by the integral of the mask:
 	// it may be defined without being integrable.
@@ -1374,15 +1387,17 @@ final class Bindings{
 	}
 	// A polynomial in the innermost variable over a power of it: sums and
 	// products of polynomials and of inverses of monomials. With the power
-	// zero it is a polynomial.
-	private bool axisRatio(uint id,out Rational[] p,out size_t power,uint depth=0){
+	// zero it is a polynomial. With a `pole` the monomials are powers of the
+	// variable minus the pole, and the polynomial is one in that difference.
+	private bool axisRatio(uint id,out Rational[] p,out size_t power,Rational pole=Rational(0),uint depth=0){
 		if(depth>64) return false;
-		if(axisPolynomial(id,p)) return true;
+		if(axisPolynomial(id,p)){ p=polyTranslate(p,pole); foreach(c;p) if(c.words>128) return false; return true; }
 		auto q=nodes[id];
 		if(q.op!=BoundOp.primitive) return false;
 		auto op=arena.view(arena.at(q.data));
 		if(op.op==Op.inv){
 			Rational[] m; if(!axisPolynomial(q.a,m)) return false;
+			m=polyTranslate(m,pole);
 			while(m.length&&m[$-1].zero) m.length=m.length-1;
 			if(m.length<2) return false;
 			foreach(c;m[0..$-1]) if(!c.zero) return false;
@@ -1390,7 +1405,7 @@ final class Bindings{
 		}
 		if(op.op!=Op.add&&op.op!=Op.mul) return false;
 		Rational[] a,b; size_t n,m;
-		if(!axisRatio(q.a,a,n,depth+1)||!axisRatio(q.b,b,m,depth+1)) return false;
+		if(!axisRatio(q.a,a,n,pole,depth+1)||!axisRatio(q.b,b,m,pole,depth+1)) return false;
 		static Rational[] shift(Rational[] x,size_t k){ Rational[] r; foreach(i;0..k) r~=Rational(0); return r~x; }
 		if(op.op==Op.mul){ p=polyProduct(a,b); power=n+m; }
 		else if(n&&m){ p=polySum(shift(a,m),shift(b,n)); power=n+m; }
@@ -1403,21 +1418,39 @@ final class Bindings{
 	// A product of such quotients and of factors that do not mention the
 	// innermost variable: the quotient, and those factors in their order,
 	// with `uint.max` for the product of the last two.
-	private bool axisFraction(uint id,out Rational[] p,out size_t power,ref uint[] scale,uint depth=0){
+	private bool axisFraction(uint id,out Rational[] p,out size_t power,ref uint[] scale,Rational pole=Rational(0),uint depth=0){
 		if(depth>64) return false;
-		if(axisRatio(id,p,power)) return true;
+		if(axisRatio(id,p,power,pole)) return true;
 		if(!depends(at(id),0)){ p=[Rational(1)]; scale~=id; return true; }
 		auto q=nodes[id];
 		if(q.op!=BoundOp.primitive||arena.view(arena.at(q.data)).op!=Op.mul) return false;
 		Rational[] a,b; size_t n,m; auto before=scale.length;
-		if(!axisFraction(q.a,a,n,scale,depth+1)) return false;
+		if(!axisFraction(q.a,a,n,scale,pole,depth+1)) return false;
 		auto middle=scale.length;
-		if(!axisFraction(q.b,b,m,scale,depth+1)) return false;
+		if(!axisFraction(q.b,b,m,scale,pole,depth+1)) return false;
 		if(middle>before&&scale.length>middle) scale~=uint.max;
 		p=polyProduct(a,b); power=n+m;
 		if(p.length>64||power>32) return false;
 		foreach(c;p) if(c.words>128) return false;
 		return true;
+	}
+	// The pole of the first inverse of a polynomial in the innermost
+	// variable in such a product or sum: where a power of a linear
+	// polynomial has its root.
+	private bool axisPole(uint id,out Rational pole,uint depth=0){
+		if(depth>64||!depends(at(id),0)) return false;
+		auto q=nodes[id];
+		if(q.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(q.data));
+		if(op.op==Op.inv){
+			Rational[] m; if(!axisPolynomial(q.a,m)) return false;
+			while(m.length&&m[$-1].zero) m.length=m.length-1;
+			if(m.length<2) return false;
+			pole=Rational(0)-m[$-2]/(Rational(cast(long)m.length-1)*m[$-1]);
+			return pole.words<=128;
+		}
+		if(op.op!=Op.add&&op.op!=Op.mul) return false;
+		return axisPole(q.a,pole,depth+1)||axisPole(q.b,pole,depth+1);
 	}
 	// A polynomial in the innermost variable times the exponential of a
 	// rational multiple of it. A rate of zero is a polynomial.
@@ -3438,12 +3471,21 @@ final class Bindings{
 			// below.
 			bool domainOf(uint rest){
 				if(!depends(at(rest),0)){ d.domain=rest; return true; }
-				bool nonzeroAxis(uint id){ auto test=nodes[id]; return isOp(test,Op.nonzero)&&nodes[test.a].op==BoundOp.variable&&nodes[test.a].data==0; }
+				// The axis is not zero, or its sum with a closed term is not.
+				bool nonzeroAxis(uint id){
+					auto test=nodes[id]; if(!isOp(test,Op.nonzero)) return false;
+					bool variable_(uint i){ auto v=nodes[i]; return v.op==BoundOp.variable&&v.data==0; }
+					if(variable_(test.a)){ d.axisPoint=Rational(0); d.axisClosed=uint.max; return true; }
+					auto sum=nodes[test.a]; if(!isOp(sum,Op.add)) return false;
+					Rational c; Term closed;
+					if(!variable_(sum.a)||nodes[sum.b].op!=BoundOp.scalar||!closedRational(at(sum.b),c,closed)||c.zero) return false;
+					d.axisPoint=Rational(0)-c; d.axisClosed=sum.b; return true;
+				}
 				auto both=nodes[rest];
 				if(nonzeroAxis(rest)){ d.axis=rest; return true; }
 				if(!isOp(both,Op.and_)) return false;
-				if(nonzeroAxis(both.a)&&!depends(at(both.b),0)){ d.axis=both.a; d.domain=both.b; d.both=rest; d.joined=1; return true; }
-				if(nonzeroAxis(both.b)&&!depends(at(both.a),0)){ d.axis=both.b; d.domain=both.a; d.both=rest; d.joined=2; return true; }
+				if(!depends(at(both.b),0)&&nonzeroAxis(both.a)){ d.axis=both.a; d.domain=both.b; d.both=rest; d.joined=1; return true; }
+				if(!depends(at(both.a),0)&&nonzeroAxis(both.b)){ d.axis=both.b; d.domain=both.a; d.both=rest; d.joined=2; return true; }
 				return false;
 			}
 			if(around!=uint.max){
@@ -3682,11 +3724,15 @@ final class Bindings{
 			// it has no power above the inverse square: then `A` and `κ` are
 			// zero, and `C(x)/x^M` vanishes out there. Factors that do not
 			// mention the axis may stand anywhere in a product with the
-			// quotient.
+			// quotient. The powers may be those of the axis minus a rational
+			// pole: all of this is then around the pole.
 			bool axisQuotient(uint id,ref IntervalTerm r){
 				if(d.unit!=uint.max||summand!=uint.max||solution.from.length!=1) return false;
-				Rational[] p; size_t power; uint[] scale;
-				if(!axisFraction(id,p,power,scale)||!power) return false;
+				Rational[] p; size_t power; uint[] scale; Rational pole;
+				if(!axisPole(id,pole)) pole=Rational(0);
+				if(d.axis!=uint.max&&!(pole==d.axisPoint)) return false;
+				if(!axisFraction(id,p,power,scale,pole)||!power) return false;
+				r.ratioPole=pole;
 				bool left; foreach(k;0..power) if(k<p.length&&!p[k].zero) left=true;
 				if(!left) return false;
 				if(d.half) foreach(k;power-1..p.length) if(!p[k].zero) return false;
@@ -4099,18 +4145,26 @@ final class Bindings{
 					auto condition=primitive(arena.or_(truth,truth),[side,primitive(arena.and_(truth,truth),[primitive(arena.not_(truth),[test]),outside])]);
 					return guard(condition,primitive(arena.mask(truth,arena.real_(1)),[test,scaled]));
 				}
+				// Around a pole that is not zero the bounds are moved by it.
+				BoundTerm moved(BoundTerm x){
+					if(r.ratioPole.zero) return x;
+					auto move=scalar(ctx,arena.real_(Rational(0)-r.ratioPole)); r.ratioMove=move.id;
+					return primitive(addOp,[x,move]);
+				}
 				if(d.half){
-					auto bound=d.below?upper:lower,strict=d.below?d.strictUpper:d.strictLower; uint[] literals;
+					auto bound=moved(d.below?upper:lower),strict=d.below?d.strictUpper:d.strictLower; uint[] literals;
+					if(d.below) r.ratioUpper=bound.id; else r.ratioLower=bound.id;
 					auto over=row(r.bell.moments,bound,literals); r.ends[0].rows=[literals];
 					auto value=primitive(mulOp,[over,primitive(arena.inv(arena.real_(1)),[power(bound,r.ratioShift)])]);
 					if(!d.below) value=primitive(mulOp,[minusOne,value]);
 					return finish(compare(true,d.below?bound:zero,d.below?zero:bound),compare(!strict,d.below?bound:zero,d.below?zero:bound),
 						value,strict,d.below?negative(bound):positive(bound));
 				}
-				auto above=at_(0,upper),below=at_(1,lower);
-				auto side=primitive(arena.or_(truth,truth),[compare(true,zero,lower),compare(true,upper,zero)]);
-				return finish(side,primitive(arena.or_(truth,truth),[compare(!d.strictLower,zero,lower),compare(!d.strictUpper,upper,zero)]),
-					primitive(addOp,[above,primitive(mulOp,[minusOne,below])]),d.strictLower||d.strictUpper,positive(lower)||negative(upper));
+				auto low=moved(lower),high=moved(upper); r.ratioLower=low.id; r.ratioUpper=high.id;
+				auto above=at_(0,high),below=at_(1,low);
+				auto side=primitive(arena.or_(truth,truth),[compare(true,zero,low),compare(true,high,zero)]);
+				return finish(side,primitive(arena.or_(truth,truth),[compare(!d.strictLower,zero,low),compare(!d.strictUpper,high,zero)]),
+					primitive(addOp,[above,primitive(mulOp,[minusOne,below])]),d.strictLower||d.strictUpper,positive(low)||negative(high));
 			}
 			auto total=d.direct?(whole.ratioTerm?quotientDifference(whole,d.value):whole.rateTerm?rateDifference(whole,d.value):curvatureDifference(whole,d.value)):
 				d.unit!=uint.max?difference(IntervalTerm(uint.max),[Rational(1)],Rational(0)):build(d.value,0);
@@ -7942,41 +7996,52 @@ final class Bindings{
 		// such. The polynomial stays symbolic; Lean computes it where the
 		// certificate compares it.
 		struct Quotient{string proof,poly;size_t power;}
-		Quotient quotient(uint id){
+		// Around a pole that is not zero the value is taken at the axis
+		// plus the pole, and its polynomials are moved along.
+		string functionAround(uint id,Rational pole){
+			return pole.zero?functionAt(id):"(fun y : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some (y + (("~cert.q(pole)~" : ℚ) : ℝ))) ρ))";
+		}
+		Quotient quotient(uint id,Rational pole){
 			enum src="Distribution.StepSource.";
 			Rational[] p;
-			if(axisPolynomial(id,p)){auto w=cert.piece(id,cert.everywhere,"",Rational(0));return Quotient(w.proof,w.poly,0);}
+			Quotient polynomial(uint id){
+				auto w=cert.piece(id,cert.everywhere,"",Rational(0));
+				return pole.zero?Quotient(w.proof,w.poly,0):
+					Quotient("("~src~"polynomial_translate "~cert.q(pole)~" "~w.proof~")","("~src~"polyTranslate "~cert.q(pole)~" "~w.poly~")",0);
+			}
+			if(axisPolynomial(id,p))return polynomial(id);
 			auto n=nodes[id];enforce(n.op==BoundOp.primitive,"unsupported quotient");
 			auto op=arena.view(arena.at(n.data));Quotient r;
 			string monomial(size_t k){return "("~src~"polyMonomial 1 "~to!string(k)~")";}
 			if(op.op==Op.inv){
 				Rational[] m;enforce(axisPolynomial(n.a,m),"inverse of another expression");
+				m=polyTranslate(m,pole);
 				while(m.length&&m[$-1].zero)m.length=m.length-1;
 				enforce(m.length>=2,"inverse of a constant");
-				auto inner=cert.piece(n.a,cert.everywhere,"",Rational(0));
+				auto inner=polynomial(n.a);
 				r.power=m.length-1;r.poly="[("~cert.q(m[$-1])~")⁻¹]";
 				r.proof="("~src~"ratio_inv "~inner.proof~" "~cert.q(m[$-1])~" "~to!string(r.power)~" rfl)";
 			}else{
 				enforce(op.op==Op.add||op.op==Op.mul,"unsupported quotient operation");
-				auto a=quotient(n.a),b=quotient(n.b);bool add=op.op==Op.add,both=a.power&&b.power;
+				auto a=quotient(n.a,pole),b=quotient(n.b,pole);bool add=op.op==Op.add,both=a.power&&b.power;
 				r.power=add&&!both?(a.power?a.power:b.power):a.power+b.power;
 				if(!add)r.poly="("~src~"polyMul "~a.poly~" "~b.poly~")";
 				else r.poly="("~src~"polyAdd "~(b.power?"("~src~"polyMul "~a.poly~" "~monomial(b.power)~")":a.poly)~" "~
 					(a.power?"("~src~"polyMul "~b.poly~" "~monomial(a.power)~")":b.poly)~")";
 				r.proof="("~src~"ratio_"~(add?"add":"mul")~(both?"":a.power?"_right":"_left")~" "~a.proof~" "~b.proof~")";
 			}
-			r.proof=save(src~"RatioOn "~functionAt(id)~" "~r.poly~" "~to!string(r.power),r.proof);
+			r.proof=save(src~"RatioOn "~functionAround(id,pole)~" "~r.poly~" "~to!string(r.power),r.proof);
 			return r;
 		}
 		// Such a quotient in a product with factors that do not mention the
 		// axis: each factor of the product is a quotient, a polynomial or
 		// such a factor, and the products follow its structure.
 		struct Part{string proof,scale,poly;size_t power;bool pole;}
-		Part fraction(uint id){
+		Part fraction(uint id,Rational pole){
 			enum src="Distribution.StepSource.";
 			Rational[] p;size_t power;
-			if(axisRatio(id,p,power)){
-				auto w=quotient(id);
+			if(axisRatio(id,p,power,pole)){
+				auto w=quotient(id,pole);
 				return Part("("~src~"Fraction."~(power?"ratio ":"polynomial ")~w.proof~")","none",w.poly,w.power,power!=0);
 			}
 			if(!depends(at(id),0)){
@@ -7984,10 +8049,10 @@ final class Bindings{
 				return Part("("~src~"Fraction.scale "~c~")","(some "~c~")","[1]",0,false);
 			}
 			auto n=nodes[id];enforce(n.op==BoundOp.primitive&&arena.view(arena.at(n.data)).op==Op.mul,"unsupported factor of a quotient");
-			auto a=fraction(n.a),b=fraction(n.b);Part r;
+			auto a=fraction(n.a,pole),b=fraction(n.b,pole);Part r;
 			r.poly="("~src~"polyMul "~a.poly~" "~b.poly~")";r.power=a.power+b.power;r.pole=a.pole||b.pole;
 			r.scale="("~src~"joinScale "~a.scale~" "~b.scale~")";
-			r.proof=save(src~"Fraction "~functionAt(id)~" "~r.scale~" "~r.poly~" "~to!string(r.power)~" "~(r.pole?"true":"false"),
+			r.proof=save(src~"Fraction "~functionAround(id,pole)~" "~r.scale~" "~r.poly~" "~to!string(r.power)~" "~(r.pole?"true":"false"),
 				"("~src~"Fraction.mul "~a.proof~" "~b.proof~")");
 			return r;
 		}
@@ -8063,21 +8128,33 @@ final class Bindings{
 					// has their product; without its mask it wants to know
 					// that no bound is strict, or that the bounds are closed
 					// on one side of zero.
-					bool scaled=r.ratioScale.length!=0;
+					// Around a pole that is not zero all of this is about the
+					// value at the axis plus the pole, between the bounds moved
+					// by it; the observation is the same.
+					bool scaled=r.ratioScale.length!=0;auto pole=r.ratioPole;
 					Quotient evidence;
 					if(scaled){
-						auto part=fraction(d.value);enforce(part.pole,"quotient without a pole");
+						auto part=fraction(d.value,pole);enforce(part.pole,"quotient without a pole");
 						evidence=Quotient(part.proof,part.poly,part.power);
-					}else evidence=quotient(d.value);
-					if(d.axis!=uint.max) evidence.proof="("~src~(scaled?"Fraction.guard":"ratio_guard")~" (q := fun x : ℝ => "~under(d.axis)~") "~evidence.proof~" "~src~"axis_nonzero)";
+					}else evidence=quotient(d.value,pole);
+					if(d.axis!=uint.max){
+						enforce(d.axisPoint==pole&&(d.axisClosed==uint.max)==pole.zero,"domain of another pole");
+						auto away=pole.zero?src~"axis_nonzero":"("~src~"shifted_nonzero "~cert.q(pole)~" "~literal(d.axisClosed,Rational(0)-pole)~")";
+						auto test=pole.zero?"fun x : ℝ => "~under(d.axis):
+							"fun y : ℝ => "~name(d.axis)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some (y + (("~cert.q(pole)~" : ℚ) : ℝ))) ρ)";
+						evidence.proof="("~src~(scaled?"Fraction.guard":"ratio_guard")~" (q := "~test~") "~evidence.proof~" "~away~")";
+					}
 					auto kind=scaled?(r.ratioPlain?"_scaled_plain ":"_scaled "):" ";
 					string known;
 					if(scaled&&r.ratioPlain){
 						auto zero=literal(r.rateZero,Rational(0));
 						Rational point;Term closed;
 						string bound(uint id){enforce(closedRational(at(id),point,closed),"bound is not closed");return cert.closedProof(at(id),point);}
-						known=!r.ratioClosed?" (Or.inl rfl)":" (Or.inr ("~src~(d.below?"below_closed "~bound(d.upper):d.half?"above_closed "~bound(d.lower):
-							"side_closed "~bound(d.lower)~" "~bound(d.upper))~" "~zero~" rfl))";
+						known=!r.ratioClosed?" (Or.inl rfl)":" (Or.inr ("~src~(d.below?"below_closed "~bound(r.ratioUpper):d.half?"above_closed "~bound(r.ratioLower):
+							"side_closed "~bound(r.ratioLower)~" "~bound(r.ratioUpper))~" "~zero~" rfl))";
+					}
+					string around(string flags,string observed){
+						return pole.zero?observed:"("~src~"shift_"~flags~" "~cert.q(pole)~" "~literal(r.ratioMove,Rational(0)-pole)~" "~observed~")";
 					}
 					string list(Rational[] row){string t="[";foreach(i,c;row)t~=(i?", ":"")~cert.q(c);return t~"]";}
 					string sums(size_t n){return n==1?src~"Sums.one":"("~src~"Sums.add "~sums(n/2)~" "~sums(n-n/2)~")";}
@@ -8097,6 +8174,7 @@ final class Bindings{
 						auto observed="("~src~"ratio_"~(d.below?"below":"above")~kind~
 							truth(d.below?d.strictUpper:d.strictLower)~" "~to!string(r.ratioShift)~" "~list(g.moments)~" "~evidence.proof~" rfl "~
 							literal(r.rateZero,Rational(0))~(d.below?"":" "~literal(d.minusOne,Rational(-1)))~" "~row(g.moments,r.ends[0].rows[0])~known~")";
+						observed=around((d.below?"below ":"above ")~truth(d.below?d.strictUpper:d.strictLower),observed);
 						// Under the strict guard of a domain that does not
 						// mention the axis: the guard of the observation.
 						if(d.domain!=uint.max)observed="("~src~"masked_guard_integral ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) ("~src~"compare_"~(d.below?"upper":"lower")~"_cases _ _) "~observed~")";
@@ -8110,6 +8188,7 @@ final class Bindings{
 					auto observed="("~src~"ratio_between"~kind~truth(d.swap)~" "~truth(d.strictLower)~" "~
 						truth(d.strictUpper)~" "~to!string(r.ratioShift)~" "~list(g.primitive)~" "~list(g.moments)~" "~cert.q(g.constant)~" "~evidence.proof~" rfl "~
 						literal(r.rateZero,Rational(0))~" "~literal(d.minusOne,Rational(-1))~" "~literal(g.factor,g.constant)~rows~known~")";
+					observed=around("between "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper),observed);
 					// Between two bounds that guard stays inside their mask.
 					if(d.domain!=uint.max)observed="("~src~"between_guard_integral "~truth(d.swap)~" "~truth(d.strictLower)~" "~truth(d.strictUpper)~
 						" ("~name(dropIndex(at(d.domain)).id)~".eval ξ ρ) "~observed~")";

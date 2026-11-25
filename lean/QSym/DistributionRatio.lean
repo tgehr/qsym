@@ -8,7 +8,9 @@ Such a quotient is undefined at zero and, where a negative power is left, not
 integrable next to it. So it is observed exactly between bounds on one side
 of zero, and its antiderivative has a polynomial, a polynomial over a power
 of the axis and a logarithm of the absolute value. Beyond one bound on that
-side it is observed where it has no power above the inverse square.
+side it is observed where it has no power above the inverse square. Then
+the same under a factor that does not mention the axis, and around another
+point of the axis.
 -/
 
 namespace QSym.Distribution.StepSource
@@ -1597,5 +1599,117 @@ theorem below_closed {b z : Option ℝ} {qb : ℚ} (hb : b = some (Numeric.denot
   have hr : (qb : ℝ) < 0 := by exact_mod_cast of_decide_eq_true h
   show Value.lt (some (qb : ℝ)) (some (0 : ℝ)) = _
   simp [Value.lt, hr]
+
+/-! A quotient around another point of the axis: the inverse of
+`c·(x - s)^n`, with polynomials. Moved along the axis by `s` it is a
+quotient around zero, between the bounds moved along with it, and the
+Lebesgue measure does not notice. -/
+
+/-- The coefficients of `p(y + s)`. -/
+def polyTranslate (s : ℚ) : List ℚ → List ℚ
+  | [] => []
+  | c :: p => polyAdd [c] (polyMul [s, 1] (polyTranslate s p))
+
+theorem polyEval_translate (s : ℚ) (p : List ℚ) (y : ℝ) :
+    polyEval (polyTranslate s p) y = polyEval p (y + s) := by
+  induction p with
+  | nil => rfl
+  | cons c p ih =>
+    simp only [polyTranslate, polyEval_add, polyEval_mul, polyEval, ih]
+    push_cast
+    ring
+
+/-- A polynomial moved along the axis. -/
+theorem polynomial_translate (s : ℚ) {f : ℝ → Option ℝ} {q : List ℚ}
+    (hf : PolynomialOn (fun _ => True) f q) :
+    PolynomialOn (fun _ => True) (fun y => f (y + s)) (polyTranslate s q) :=
+  ⟨fun y _ => by rw [hf.equation (y + s) trivial, polyEval_translate]⟩
+
+/-- A partial integral over the line does not change when the integrand is
+moved along it. -/
+theorem partialIntegral_translate (s : ℝ) (f : ℝ → Option ℝ) :
+    partialIntegral volume (fun y => f (y + s)) = partialIntegral volume f := by
+  have hdef : (∀ y, Value.Defined (f (y + s))) ↔ ∀ x, Value.Defined (f x) :=
+    ⟨fun h x => by simpa using h (x - s), fun h y => h (y + s)⟩
+  have hint : Integrable (fun y => (f (y + s)).getD 0) volume ↔
+      Integrable (fun x => (f x).getD 0) volume :=
+    ⟨fun h => by simpa using h.comp_add_right (-s), fun h => h.comp_add_right s⟩
+  by_cases h : (∀ x, Value.Defined (f x)) ∧ Integrable (fun x => (f x).getD 0) volume
+  · rw [partialIntegral_valid volume f h.1 h.2,
+      partialIntegral_valid volume _ (hdef.2 h.1) (hint.2 h.2)]
+    congr 1
+    exact integral_add_right_eq_self (fun x => (f x).getD 0) s
+  · rw [show partialIntegral volume f = none from if_neg h,
+      show partialIntegral volume (fun y => f (y + s)) = none from
+        if_neg fun h' => h ⟨hdef.1 h'.1, hint.1 h'.2⟩]
+
+private theorem compare_shift (t : Bool) (a b : Option ℝ) (σ : ℝ) :
+    compare t (Value.add a (some σ)) (Value.add b (some σ)) = compare t a b := by
+  cases a <;> cases b <;> cases t <;> simp [compare, Value.add, Value.lt, Value.le]
+
+private theorem compare_shift_lower (t : Bool) (a : Option ℝ) (s y : ℝ) :
+    compare t (Value.add a (some (-s))) (some y) = compare t a (some (y + s)) := by
+  cases a with
+  | none => cases t <;> rfl
+  | some l =>
+    have h1 : l + -s < y ↔ l < y + s := by constructor <;> intro h <;> linarith
+    have h2 : l + -s ≤ y ↔ l ≤ y + s := by constructor <;> intro h <;> linarith
+    cases t <;> simp [compare, Value.add, Value.lt, Value.le, h1, h2]
+
+private theorem compare_shift_upper (t : Bool) (b : Option ℝ) (s y : ℝ) :
+    compare t (some y) (Value.add b (some (-s))) = compare t (some (y + s)) b := by
+  cases b with
+  | none => cases t <;> rfl
+  | some u =>
+    have h1 : y < u + -s ↔ y + s < u := by constructor <;> intro h <;> linarith
+    have h2 : y ≤ u + -s ↔ y + s ≤ u := by constructor <;> intro h <;> linarith
+    cases t <;> simp [compare, Value.add, Value.lt, Value.le, h1, h2]
+
+private theorem guard_shift (swap sl su : Bool) (a b : Option ℝ) (s y : ℝ) :
+    intervalGuard swap sl su (Value.add a (some (-s))) (Value.add b (some (-s))) y =
+      intervalGuard swap sl su a b (y + s) := by
+  cases swap <;> simp only [intervalGuard, compare_shift_lower, compare_shift_upper]
+
+private theorem denote_neg (s : ℚ) : Numeric.denote (s := .real) (-s) = -(s : ℝ) := by
+  simp [Numeric.denote]
+
+/-- A value around a point `s` between two bounds: the value moved to zero
+between the bounds moved along with it. -/
+theorem shift_between (swap sl su : Bool) {a b σ : Option ℝ} {v : ℝ → Option ℝ} (s : ℚ)
+    {X : Option ℝ} (hσ : σ = some (Numeric.denote (s := .real) (-s)))
+    (h : partialIntegral volume (fun y => Value.mask
+        (intervalGuard swap sl su (Value.add a σ) (Value.add b σ) y) (v (y + s))) =
+      Value.mask (compare (sl || su) (Value.add a σ) (Value.add b σ)) X) :
+    partialIntegral volume (fun x => Value.mask (intervalGuard swap sl su a b x) (v x)) =
+      Value.mask (compare (sl || su) a b) X := by
+  rw [hσ, denote_neg] at h
+  rw [← partialIntegral_translate (s : ℝ), ← compare_shift (sl || su) a b (-(s : ℝ)), ← h]
+  simp only [guard_shift]
+
+/-- Above one bound, and below one. -/
+theorem shift_above (strict : Bool) {a σ : Option ℝ} {v : ℝ → Option ℝ} (s : ℚ) {X : Option ℝ}
+    (hσ : σ = some (Numeric.denote (s := .real) (-s)))
+    (h : partialIntegral volume
+        (fun y => Value.mask (compare strict (Value.add a σ) (some y)) (v (y + s))) = X) :
+    partialIntegral volume (fun x => Value.mask (compare strict a (some x)) (v x)) = X := by
+  rw [hσ, denote_neg] at h
+  rw [← partialIntegral_translate (s : ℝ), ← h]
+  simp only [compare_shift_lower]
+
+theorem shift_below (strict : Bool) {b σ : Option ℝ} {v : ℝ → Option ℝ} (s : ℚ) {X : Option ℝ}
+    (hσ : σ = some (Numeric.denote (s := .real) (-s)))
+    (h : partialIntegral volume
+        (fun y => Value.mask (compare strict (some y) (Value.add b σ)) (v (y + s))) = X) :
+    partialIntegral volume (fun x => Value.mask (compare strict (some x) b) (v x)) = X := by
+  rw [hσ, denote_neg] at h
+  rw [← partialIntegral_translate (s : ℝ), ← h]
+  simp only [compare_shift_upper]
+
+/-- The domain of a quotient around `s`, moved to zero. -/
+theorem shifted_nonzero (s : ℚ) {c : Option ℝ}
+    (hc : c = some (Numeric.denote (s := .real) (-s))) (y : ℝ) (hy : y ≠ 0) :
+    Value.nonzero (Value.add (some (y + s)) c) = some true := by
+  rw [hc, denote_neg]
+  simp [Value.nonzero, Value.add, hy]
 
 end QSym.Distribution.StepSource
