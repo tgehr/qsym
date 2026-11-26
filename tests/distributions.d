@@ -9,6 +9,7 @@ import std.stdio:writeln;
 private struct Case{ string name,source,type,expected; }
 private Case[] cases(){
 	enum retry="(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d)))";
+	enum endless="(μ(d:Distribution(ℝ)).addD(δ(0),d))";
 	enum twoArms="(μ(d:Distribution(ℝ)).addD(scaleD(1/4,addD(δ(0),d)),scaleD(1/4,addD(d,δ(2)))))";
 	return [
 	Case("Dirac","δ(2)","Distribution(ℕ)"),
@@ -1124,6 +1125,18 @@ private Case[] cases(){
 	Case("RetryObservationMissingProbe","massD(weightD(undefined(ℝ→ℝ),"~retry~"))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationMissingKernel","massD(bindD("~retry~",undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationContinuousOutput","massD(bindD("~retry~",λ(x:ℝ).Λy. [0≤y≤1]·λ[y]))","ℝ","1"),
+	Case("InfiniteSeriesVarying","λ(x:ℝ).densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),x)","ℝ→ℝ"),
+	Case("InfiniteRetryFunction","μ(d:Distribution(ℕ→ℕ)).addD(δ(λ(n:ℕ).n),d)","Distribution(ℕ→ℕ)","Λ(x:ℕ→ℕ). (∑(i:ℤ). δ(λ(n:ℕ). n)[x])"),
+	Case("InfiniteRetrySupercritical","μ(d:Distribution(ℝ)).addD(scaleD(3/4,δ(2)),scaleD(4,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(2)[x])"),
+	Case("InfiniteRetryMass","massD("~endless~")","ℝ","undefined(ℝ)"),
+	Case("InfiniteRetryAt","densityAtD("~endless~",0)","ℝ","undefined(ℝ)"),
+	Case("InfiniteRetryAway","densityAtD("~endless~",2)","ℝ","0"),
+	Case("InfiniteRetryDensity","λ(x:ℝ).densityAtD("~endless~",x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0}). (0:ℝ)"),
+	Case("InfiniteRetryZeroProbe","massD(weightD(λ(x:ℝ).x,"~endless~"))","ℝ","0"),
+	Case("InfiniteRetryNegativeProbe","massD(weightD(λ(x:ℝ).x-1,"~endless~"))","ℝ","undefined(ℝ)"),
+	Case("InfiniteRetryMissing","μ(d:Distribution(ℝ)).addD(δ(undefined(ℝ)),d)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("InfiniteRetryCaptured","λ(x:ℝ).μ(d:Distribution(ℝ)).addD(δ(x),d)","ℝ→Distribution(ℝ)","λ(x:ℝ). Λ(x1:ℝ). (∑(i:ℤ). δ(x)[x1])"),
+	Case("InfiniteRetryDirectSeries","densityAtD(sumD(λ(i:ℤ).δ((0:ℝ))),1)","ℝ","0"),
 	Case("WeightEmptyPartialBody","massD(weightD(λ(x:ℝ).undefined(ℝ),zeroD(ℝ)))","ℝ","0"),
 	Case("WeightEmptyReciprocal","massD(weightD(λ(x:ℝ).1/x,zeroD(ℝ)))","ℝ","0"),
 	Case("WeightEmptyMissing","massD(weightD(undefined(ℝ→ℝ),zeroD(ℝ)))","ℝ","undefined(ℝ)"),
@@ -1161,7 +1174,7 @@ private Case[] cases(){
 	Case("LinearTailEmissions","μ(d:Distribution(ℝ)).addD(scaleD(1/4,δ(7)),addD(scaleD(1/4,d),scaleD(1/2,d)))","Distribution(ℝ)","δ((7:ℝ))"),
 	Case("LinearTailWeights","μ(d:Distribution(ℝ)).Λx. 1/4·δ(7)[x]+1/2·(1/2·d[x]+d[x])","Distribution(ℝ)","δ((7:ℝ))"),
 	Case("LinearTailSwapped","μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,d),scaleD(1/4,d)),scaleD(1/2,δ(2)))","Distribution(ℝ)","δ((2:ℝ))"),
-	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","μ(d:Distribution(ℝ)). addD(δ((0:ℝ)),scaleD(1,d))"),
+	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
 	Case("AtomicRetryFair","μ(d:Distribution(ℝ)).Λx. 1/2·δ(0)[x]+1/2·d[x]","Distribution(ℝ)","δ((0:ℝ))"),
@@ -1178,7 +1191,7 @@ private Case[] cases(){
 	Case("AtomicRetryTwo","μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d))","Distribution(ℝ)","μ(d:Distribution(ℝ)). addD(Λ(x:ℝ). 1/4·δ(0)[x]+1/4·δ(1)[x],scaleD(1/2,d))"),
 	Case("AtomicRetryMass","massD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)))","ℝ","1"),
 	Case("AtomicRetryDensity","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠1}). (0:ℝ)"),
-	Case("AtomicRetryUnitRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(1,d))","Distribution(ℝ)","μ(d:Distribution(ℝ)). addD(δ((0:ℝ)),scaleD(1,d))"),
+	Case("AtomicRetryUnitRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(1,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("CountdownGeometric","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k:ℝ)"),
 	Case("CountdownSigned","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then scaleD(-3,δ((0:ℝ))) else scaleD(-2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). (-3·(-2)^k:ℝ)"),
 	Case("CountdownCapturedSeed","λ(d:Distribution(ℕ→ℕ)).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℕ→ℕ)).λ(n:ℕ).if n=0 then d else scaleD(1/2,f(n sub 1)))(k))",
@@ -1224,6 +1237,12 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name=="InfiniteSeriesVarying") enforce(certificate.indexOf("Atomic.density_constant_dirac_series")<0&&text.indexOf("∑")>=0,c.name);
+		if(c.name.indexOf("InfiniteRetry")==0){
+			if(c.name!="InfiniteRetryDirectSeries") enforce(certificate.indexOf("Atomic.retry_infinite_point")>=0,c.name);
+			if(c.name=="InfiniteRetryAt"||c.name=="InfiniteRetryAway"||c.name=="InfiniteRetryDensity"||c.name=="InfiniteRetryDirectSeries")
+				enforce(certificate.indexOf("Atomic.density_constant_dirac_series")>=0,c.name);
+		}
 		if(c.name.indexOf("WeightEmpty")==0&&c.name!="WeightEmptyMissing") enforce(certificate.indexOf("Distribution.weight_zeroValue")>=0,c.name);
 		if(c.name.indexOf("AffineBody")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_affine")>=0,c.name);
 		if(c.name.indexOf("RetryVisits")==0){

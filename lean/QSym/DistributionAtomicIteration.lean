@@ -22,7 +22,7 @@ private theorem tracks_unique {f : D α → Option (D α)} {s t : ℕ → Model 
   cases Option.some.inj (hd.symm.trans he)
   exact (hm.eq_iff hk).mpr (fun _ => rfl)
 
-/-- A missing approximant or a limit without a finite atomic presentation
+/-- A missing approximant or a limit without a supported atomic presentation
 gives a partial value. Zero approximants are genuine distributions. -/
 def fixedValue (body : Option (D α → Option (D α))) : Option (D α) := by
   classical

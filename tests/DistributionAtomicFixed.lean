@@ -45,6 +45,10 @@ theorem zeroWeightDiffers : ∃ t : ℝ → Option ℝ,
 #qsym_check_axioms Affine.scale_zero
 #qsym_check_axioms fixed_retry
 #qsym_check_axioms retry_empty
+#qsym_check_axioms retry_infinite_point
+#qsym_check_axioms infiniteAtom_geometric
+#qsym_check_axioms density_infiniteAtom
+#qsym_check_axioms infinite_mixed_signed
 #qsym_check_axioms retry_zero_point
 #qsym_check_axioms point_add
 #qsym_check_axioms point_add_empty

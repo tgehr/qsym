@@ -1,4 +1,4 @@
-import QSym.DistributionAtomicProbes
+import QSym.DistributionAtomicInfinite
 
 /-! Interpretation of an atomic retry as a least fixed point. A model with a
 single visited point has a unique weighted-atom normal form, including at
@@ -37,7 +37,8 @@ private theorem simple_unique {d e : D α} {m : Model α} (hd : Presents d m) (h
 def realize (m : Model α) : Option (D α) := by
   classical
   exact if s : ∃ d, Presents d m ∧ Simple d then some s.choose else
-    if h : ∃ d, Presents d m then some h.choose else none
+    if h : ∃ d, Presents d m then some h.choose else
+    if i : ∃ a, m = infiniteModel a then some (infiniteAtom i.choose) else none
 
 private theorem realize_presents {d : D α} {m : Model α} (hd : Presents d m) :
     ∃ e, realize m = some e ∧ Presents e m := by
@@ -55,6 +56,16 @@ private theorem realize_simple {d : D α} {m : Model α} (hd : Presents d m) (sd
   classical
   have h : ∃ e, Presents e m ∧ Simple e := ⟨d, hd, sd⟩
   rw [realize, dif_pos h, simple_unique h.choose_spec.1 hd h.choose_spec.2 sd]
+
+private theorem realize_infinite (a : α) : realize (infiniteModel a) = some (infiniteAtom a) := by
+  classical
+  have h : ¬ ∃ d, Presents d (infiniteModel a) := by
+    rintro ⟨d, hd⟩
+    simpa [infiniteModel, atom] using hd.1.finite_weight a
+  have hs : ¬ ∃ d, Presents d (infiniteModel a) ∧ Simple d := fun ⟨d, hd, _⟩ => h ⟨d, hd⟩
+  have i : ∃ b, infiniteModel a = infiniteModel b := ⟨a, rfl⟩
+  have eq : a = i.choose := Set.singleton_eq_singleton_iff.mp (congrArg Prod.snd i.choose_spec)
+  simp [realize, hs, h, i, ← eq]
 
 private def modelOf (d : D α) : Option (Model α) := by
   classical exact if h : ∃ m, Presents d m then some h.choose else none
@@ -307,5 +318,31 @@ theorem retry_zero_point {s : Option (D α)} {p : Option α} {r weight : Option 
       simp [pointModel]
     rw [retry_eq_realize hd (by exact_mod_cast h0), h, realize_simple (point_presents (le_refl 0) a) (.point _ _)]
     simp [point, diracValue, scaleValue]
+
+/-- A positive emission at one point with a noncontracting return produces
+infinitely many copies there. Constructing the outcome remains strict. -/
+theorem retry_infinite_point {s : Option (D α)} {p : Option α} {ratio : Option ℝ}
+    (q w : ℚ) (h1 : 1 ≤ q) (hw : 0 < w) (hr : ratio = some (q : ℝ)) (seed : PointSeed s w p) :
+    retryValue ratio s = p.bind (fun _ => sumValue (some (fun _ : ℤ => diracValue p))) := by
+  subst ratio
+  cases p with
+  | none =>
+    change s=none at seed
+    rw [seed]
+    rfl
+  | some a =>
+    obtain ⟨d, rfl, hd⟩ := seed
+    have q1 : (1 : ℝ) ≤ q := by exact_mod_cast h1
+    have w0 : 0 < (w : ℝ) := by exact_mod_cast hw
+    have r1 : 1 ≤ ENNReal.ofReal (q : ℝ) := by rw [← ENNReal.ofReal_one]; exact ENNReal.ofReal_le_ofReal q1
+    have limit : (strictRetryStep (pointModel (w : ℝ) a) (ENNReal.ofReal q)).lfp = infiniteModel a := by
+      rw [strictRetry_lfp]
+      refine Prod.ext (funext fun x => ?_) rfl
+      change (retryStep _ _).lfp x = _
+      rw [lfp_retry, tsub_eq_zero_of_le r1, ENNReal.inv_zero]
+      classical
+      by_cases e : x=a <;> simp [pointModel, infiniteModel, atom, e, ENNReal.ofReal_ne_zero_iff.mpr w0]
+    rw [retry_eq_realize hd (le_trans zero_le_one q1), limit, realize_infinite]
+    rfl
 
 end QSym.Distribution.Atomic
