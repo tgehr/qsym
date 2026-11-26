@@ -3450,9 +3450,9 @@ final class Bindings{
 			enforce(proofs.length<1_000_000,"binding proof limit exceeded");
 			proofs~=BindingStep(rule,from,to,left,right,extra); return cast(uint)proofs.length-1;
 		}
-		Result delegate(BoundTerm,uint) @safe normalizeClosed;
+		Result delegate(BoundTerm,uint) @safe visit;
 		Result sumDefined(BoundTerm sum,uint depth){
-			auto value=normalizeClosed(sum,depth),v=nodes[value.output];
+			auto value=visit(sum,depth),v=nodes[value.output];
 			if(v.op!=BoundOp.scalar)return Result(uint.max,uint.max);
 			auto source=arena.at(v.data),opts=Options(DensityMode.preserve,true);
 			opts.maxRewrites=512;opts.maxAlgebraWork=16384;
@@ -4872,7 +4872,7 @@ final class Bindings{
 		// partial values, including negative and undefined bounds.
 		Result roundSumBounds(BoundTerm t,bool splitMasks=false,bool expandExponent=false){
 			auto n=node(t);
-			if((n.op==BoundOp.scalar||n.op==BoundOp.primitive)&&!depends(t,0)&&scalarBody(t,arena.natural_(0))!=Term.init) return normalizeClosed(t,0);
+			if((n.op==BoundOp.scalar||n.op==BoundOp.primitive)&&!depends(t,0)&&scalarBody(t,arena.natural_(0))!=Term.init) return visit(t,0);
 			if(n.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(n.data)).op;
 				if(op==Op.builtin){
@@ -5982,7 +5982,8 @@ final class Bindings{
 			return distribution(ctx,BoundOp.distributionWeight,[hint(lambda(mask),"y"),distribution(ctx,BoundOp.distributionLebesgue)]);
 		}
 
-		Result visit(BoundTerm t,uint depth){
+		struct RewriteFrame { uint original,rebuilt,congruence,step; }
+		Result visitOnce(BoundTerm t,uint depth,ref RewriteFrame[] chain){
 			enforce(depth<512,"binding normalization depth exceeded");
 			auto old=memo.get(t.id,Result(uint.max,uint.max)); if(old.output!=uint.max) return old;
 			if(active.get(t.id,false)){ exhausted=true; return Result(t.id,emit(BindingRule.refl,t.id,t.id)); }
@@ -7477,13 +7478,27 @@ final class Bindings{
 			if(next!=BoundTerm.init&&steps>=budget){ next=BoundTerm.init; exhausted=true; }
 			if(next!=BoundTerm.init){
 				if(node(next).op==current.op&&(current.op==BoundOp.lambda||current.op==BoundOp.set||current.op==BoundOp.fixed)) inheritHint(at(result.output),next);
-				++steps; auto step=emit(rule,result.output,next.id,predicateDomain,excludedZero,extra),tail=visit(next,depth+1);
-				auto rest=emit(BindingRule.trans,result.output,tail.output,step,tail.proof);
-				result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,result.proof,rest));
+				++steps; auto step=emit(rule,result.output,next.id,predicateDomain,excludedZero,extra);
+				chain~=RewriteFrame(t.id,result.output,result.proof,step);
+				return Result(next.id,uint.max);
 			}
 			active.set(t.id,false); memo.set(t.id,result); return result;
 		}
-		normalizeClosed=&visit;
+		// Follow successive rewrites in a loop. Child visits still use depth
+		// first traversal. Rebuild exactly the same transitivity proofs and
+		// memo entries once the last term in this chain has a result.
+		Result normalizeChain(BoundTerm t,uint depth){
+			RewriteFrame[] chain;
+			auto result=visitOnce(t,depth,chain);
+			while(result.proof==uint.max) result=visitOnce(at(result.output),++depth,chain);
+			foreach_reverse(frame;chain){
+				auto rest=emit(BindingRule.trans,frame.rebuilt,result.output,frame.step,result.proof);
+				result.proof=emit(BindingRule.trans,frame.original,result.output,frame.congruence,rest);
+				active.set(frame.original,false); memo.set(frame.original,result);
+			}
+			return result;
+		}
+		visit=&normalizeChain;
 		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres,affineCharts,covers,limits,coordinates);
 	}
 
