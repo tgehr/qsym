@@ -1772,24 +1772,30 @@ final class Bindings{
 		foreach(c;p) if(c.words>128) return false;
 		return true;
 	}
-	// A polynomial in the innermost variable with rational literal coefficients.
-	private bool axisPolynomial(uint id,out Rational[] p,uint depth=0){
+	// A polynomial in the innermost variable. Smooth slope proofs can also replay
+	// closed coefficient calculations (for example, a parsed negative product).
+	private bool axisPolynomial(uint id,out Rational[] p,uint depth=0,bool calculated=false){
 		if(depth>64) return false;
 		auto q=nodes[id];
 		if(q.op==BoundOp.scalar){
 			auto leaf=arena.at(q.data);
-			if(!arena.isNumber(leaf)||arena.sort(leaf)!=Sort.real_||!arena.number(leaf).im.zero) return false;
-			p=[arena.number(leaf).re]; return true;
+			if(arena.sort(leaf)!=Sort.real_) return false;
+			if(arena.isNumber(leaf)){
+				p=[arena.number(leaf).re]; return arena.number(leaf).im.zero;
+			}
+			Rational c; Term term;
+			if(!calculated||!closedRational(at(id),c,term)) return false;
+			p=[c]; return true;
 		}
 		if(q.op==BoundOp.variable){ p=[Rational(0),Rational(1)]; return q.data==0; }
 		if(q.op!=BoundOp.primitive) return false;
 		auto op=arena.view(arena.at(q.data)); Rational[] a,b;
-		if(op.op!=Op.add&&op.op!=Op.mul&&op.op!=Op.pow||!axisPolynomial(q.a,a,depth+1)) return false;
+		if(op.op!=Op.add&&op.op!=Op.mul&&op.op!=Op.pow||!axisPolynomial(q.a,a,depth+1,calculated)) return false;
 		if(op.op==Op.pow){
 			if(op.value>16) return false;
 			p=[Rational(1)]; foreach(i;0..op.value){ p=polyProduct(p,a); if(p.length>64) return false; }
 		}else{
-			if(!axisPolynomial(q.b,b,depth+1)) return false;
+			if(!axisPolynomial(q.b,b,depth+1,calculated)) return false;
 			p=op.op==Op.add?polySum(a,b):polyProduct(a,b);
 		}
 		if(p.length>64) return false;
@@ -1821,6 +1827,27 @@ final class Bindings{
 		enum Sign { unknown, nonnegative, positive }
 		struct Evidence { Sign sign; string proof; }
 		Evidence[uint] signs;
+		Evidence centered(uint id,Sign known){
+			Rational[] p;
+			if(!axisPolynomial(id,p,0,true)) return Evidence.init;
+			while(p.length&&p[$-1].zero) p=p[0..$-1];
+			if(p.length<3||p.length>17||p.length%2==0||p[$-1]<Rational(0)) return Evidence.init;
+			// This translation cancels the coefficient immediately below the leading term.
+			auto center=-p[$-2]/(Rational(cast(long)(p.length-1))*p[$-1]);
+			if(center.words>128) return Evidence.init;
+			auto shifted=polyTranslate(p,center);
+			foreach(i,c;shifted) if(c.words>128||(i%2?!c.zero:c<Rational(0))) return Evidence.init;
+			auto sign=shifted[0].zero?Sign.nonnegative:Sign.positive;
+			if(sign<=known) return Evidence.init;
+			Evidence e=Evidence(sign);
+			if(cert !is null){
+				auto source=cert.piece(id,cert.everywhere,"",Rational(0)),strict=sign==Sign.positive?"true ":"false ";
+				e.proof=cert.save(ns~"Lower "~strict~cert.functionAt(id),
+					"("~ns~"Lower.centered "~strict~cert.q(center)~" "~source.proof~" rfl)");
+			}
+			return e;
+		}
+
 		Evidence lower(uint id,uint depth){
 			if(depth>64) return Evidence.init;
 			if(auto hit=id in signs) return *hit;
@@ -1844,10 +1871,11 @@ final class Bindings{
 					if(cert !is null) args=cert.functionAt(n.a);
 				}else if(op.op==Op.add||op.op==Op.mul){
 					auto a=lower(n.a,depth+1),b=lower(n.b,depth+1);
-					if(a.sign==Sign.unknown||b.sign==Sign.unknown) return e;
-					bool pos=op.op==Op.add?a.sign==Sign.positive||b.sign==Sign.positive:a.sign==Sign.positive&&b.sign==Sign.positive;
-					e.sign=pos?Sign.positive:Sign.nonnegative;law=op.op==Op.add?"add":"mul";
-					if(cert !is null) args=a.proof~" "~b.proof;
+					if(a.sign!=Sign.unknown&&b.sign!=Sign.unknown){
+						bool pos=op.op==Op.add?a.sign==Sign.positive||b.sign==Sign.positive:a.sign==Sign.positive&&b.sign==Sign.positive;
+						e.sign=pos?Sign.positive:Sign.nonnegative;law=op.op==Op.add?"add":"mul";
+						if(cert !is null) args=a.proof~" "~b.proof;
+					}
 				}else if(op.op==Op.pow){
 					auto a=lower(n.a,depth+1);
 					if(a.sign!=Sign.unknown){
@@ -1865,6 +1893,10 @@ final class Bindings{
 					}
 				}
 			}
+			if(n.op==BoundOp.primitive&&e.sign!=Sign.positive){
+				auto polynomial=centered(id,e.sign);
+				if(polynomial.sign!=Sign.unknown) return signs[id]=polynomial;
+			}
 			if(cert !is null&&e.sign!=Sign.unknown){
 				auto strict=e.sign==Sign.positive?"true ":"false ";
 				e.proof=cert.save(ns~"Lower "~strict~cert.functionAt(id),"("~ns~"Lower."~law~" "~args~")");
@@ -1877,7 +1909,7 @@ final class Bindings{
 			auto n=nodes[id],f=at(id),inner=context(f);
 			BoundTerm d; string lemma,args;
 			Rational[] polynomial;
-			if(axisPolynomial(id,polynomial)){
+			if(axisPolynomial(id,polynomial,0,true)){
 				d=coordinatePolynomial(inner,derivativeCoefficients(polynomial));
 				if(cert !is null){
 					auto a=cert.piece(id,cert.everywhere,"",Rational(0));

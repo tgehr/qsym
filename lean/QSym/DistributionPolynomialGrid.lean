@@ -78,6 +78,20 @@ theorem polyEval_pow (p : List ℚ) (n : ℕ) (x : ℝ) :
   | zero => simp [polyPow, polyEval]
   | succ n ih => simp only [polyPow, polyEval_mul, ih]; ring
 
+/-- The coefficients of `p(y + s)`. -/
+def polyTranslate (s : ℚ) : List ℚ → List ℚ
+  | [] => []
+  | c :: p => polyAdd [c] (polyMul [s, 1] (polyTranslate s p))
+
+theorem polyEval_translate (s : ℚ) (p : List ℚ) (y : ℝ) :
+    polyEval (polyTranslate s p) y = polyEval p (y + s) := by
+  induction p with
+  | nil => rfl
+  | cons c p ih =>
+    simp only [polyTranslate, polyEval_add, polyEval_mul, polyEval, ih]
+    push_cast
+    ring
+
 theorem polyEval_zero {p : List ℚ} (h : polyZero p = true) (x : ℝ) : polyEval p x = 0 := by
   induction p with
   | nil => rfl

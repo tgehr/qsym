@@ -194,6 +194,14 @@ private Case[] cases(){
 	Case("PositiveCoordinatePower","densityAtD(Λx. λ[log((exp(x)+1)^3)],0)","ℝ","3/2"),
 	Case("PositiveCoordinateRestricted","densityAtD(Λx. λ[sqrt(9+16*x²) | u. 0<u<5],1)","ℝ","0"),
 	Case("PositiveCoordinateClosed","densityAtD(Λx. λ[sqrt(9+16*x²) | u. 0<u≤5],1)","ℝ","16/5"),
+	Case("CenteredCoordinateLog","densityAtD(Λx. λ[log(x^2+x+1)],0)","ℝ","1"),
+	Case("CenteredCoordinateStationary","densityAtD(Λx. λ[log(x^2+x+1)],-1/2)","ℝ","0"),
+	Case("CenteredCoordinateRoot","densityAtD(Λx. λ[sqrt(x^2-6*x+25)],0)","ℝ","3/5"),
+	Case("CenteredCoordinateSquares","densityAtD(Λx. λ[log(x^2+(x-1)^2)],0)","ℝ","2"),
+	Case("CenteredCoordinateQuartic","densityAtD(Λx. λ[log(x^4-4*x^3+7*x^2-6*x+4)],0)","ℝ","3/2"),
+	Case("CenteredCoordinateNested","densityAtD(Λx. λ[log((x^2-2*x+1)*exp(x)+1)],0)","ℝ","1/2"),
+	Case("CoordinateTouchingLog","Λx. λ[log(x^2-2*x+1)]","Distribution(ℝ)"),
+	Case("CoordinateSignChangeLog","Λx. λ[log(x^2-3*x+1)]","Distribution(ℝ)"),
 	Case("CoordinateQueryMissing","densityAtD(Λx. λ[log(1+x²)],undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("CoordinateQueryMissingGuard","densityAtD(Λx. λ[sqrt(9+16*x²) | u. (1/(u-5))<0],1)","ℝ","undefined(ℝ)"),
 	Case("CoordinateLogPole","Λx. λ[log(x²)]","Distribution(ℝ)"),
@@ -1382,7 +1390,9 @@ private void run(string directory){
 		if(c.name=="UnsplitAbsolute") enforce(text.indexOf("∫")>=0,c.name~": "~text);
 		if(c.name.indexOf("PositiveCoordinate")==0)
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
-		if(c.name=="CoordinateLogPole")
+		if(c.name.indexOf("CenteredCoordinate")==0)
+			enforce(certificate.indexOf("Grid.Lower.centered")>=0,c.name~" rational translation");
+		if(c.name=="CoordinateLogPole"||c.name=="CoordinateTouchingLog"||c.name=="CoordinateSignChangeLog")
 			enforce(certificate.indexOf("Grid.Slope.log")<0,c.name~" lost the domain boundary");
 		if(c.name.indexOf("RestrictedSmooth")==0) enforce(certificate.indexOf("Grid.polynomialRestricted")>=0,c.name);
 		if(c.name.indexOf("RestrictedCorner")==0) enforce(certificate.indexOf("Grid.restrictedCorner")>=0,c.name);

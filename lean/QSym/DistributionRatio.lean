@@ -1705,20 +1705,6 @@ theorem below_closed {b z : Option ℝ} {qb : ℚ} (hb : b = some (Numeric.denot
 quotient around zero, between the bounds moved along with it, and the
 Lebesgue measure does not notice. -/
 
-/-- The coefficients of `p(y + s)`. -/
-def polyTranslate (s : ℚ) : List ℚ → List ℚ
-  | [] => []
-  | c :: p => polyAdd [c] (polyMul [s, 1] (polyTranslate s p))
-
-theorem polyEval_translate (s : ℚ) (p : List ℚ) (y : ℝ) :
-    polyEval (polyTranslate s p) y = polyEval p (y + s) := by
-  induction p with
-  | nil => rfl
-  | cons c p ih =>
-    simp only [polyTranslate, polyEval_add, polyEval_mul, polyEval, ih]
-    push_cast
-    ring
-
 /-- A polynomial moved along the axis. -/
 theorem polynomial_translate (s : ℚ) {f : ℝ → Option ℝ} {q : List ℚ}
     (hf : PolynomialOn (fun _ => True) f q) :

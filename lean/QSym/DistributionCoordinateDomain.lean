@@ -20,6 +20,38 @@ theorem constant (strict : Bool) (v : Option ℝ) (q : ℚ)
   cases hy
   cases strict <;> simp_all
 
+/-- The constant coefficient is strict only at the outermost step. Each
+pair contributes a nonnegative even power and a zero odd coefficient. -/
+def evenLower (strict : Bool) : List ℚ → Bool
+  | [] => !strict
+  | [c] => decide (if strict then 0 < c else 0 ≤ c)
+  | c :: b :: p => decide (if strict then 0 < c else 0 ≤ c) && decide (b = 0) && evenLower false p
+
+private theorem evenLower_sound (strict : Bool) : ∀ (p : List ℚ) (x : ℝ), evenLower strict p = true →
+    if strict then 0 < StepSource.polyEval p x else 0 ≤ StepSource.polyEval p x
+  | [], _, h => by cases strict <;> simp_all [evenLower, StepSource.polyEval]
+  | [c], _, h => by cases strict <;> simp_all [evenLower, StepSource.polyEval]
+  | c :: b :: p, x, h => by
+    simp only [evenLower, Bool.and_eq_true, decide_eq_true_eq] at h
+    obtain ⟨⟨hc, rfl⟩, hp⟩ := h
+    have htail : 0 ≤ StepSource.polyEval p x := evenLower_sound false p x hp
+    have hn := mul_nonneg (mul_self_nonneg x) htail
+    cases strict <;> simp only [Bool.false_eq_true, ↓reduceIte, StepSource.polyEval, Rat.cast_zero, zero_add] at hc ⊢
+    · have h : 0 ≤ (c : ℝ) := by exact_mod_cast hc
+      linarith only [h, hn, mul_assoc x x (StepSource.polyEval p x)]
+    · have h : 0 < (c : ℝ) := by exact_mod_cast hc
+      linarith only [h, hn, mul_assoc x x (StepSource.polyEval p x)]
+
+/-- A rational translation exhibits the polynomial as a sum of nonnegative
+even powers. Choosing the vertex gives a complete test for an upward quadratic. -/
+theorem centered (strict : Bool) (s : ℚ) {f p} (source : StepSource.PolynomialOn (fun _ => True) f p)
+    (check : evenLower strict (StepSource.polyTranslate s p) = true) : Lower strict f := by
+  intro x v hv
+  rw [source.equation x trivial] at hv
+  cases hv
+  have h := evenLower_sound strict _ (x - s) check
+  simpa only [StepSource.polyEval_translate, sub_add_cancel] using h
+
 theorem evenPow (f : Scalar) (k : ℕ) (even : k % 2 = 0) :
     Lower false (fun x => (f x).map (fun y => y^k)) := by
   intro x v h
