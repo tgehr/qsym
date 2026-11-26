@@ -1,4 +1,5 @@
 import QSym.DistributionCoordinateGrid
+import QSym.DistributionNonvanishing
 
 /-! Pointwise sign certificates for coordinate derivatives that have a domain
 condition. Each sign statement is conditional on the source value being
@@ -123,6 +124,40 @@ theorem mul {a b f g} (hf : Lower a f) (hg : Lower b g) :
 
 end Lower
 
+/-- A defined value of the coordinate is nonzero. The slope certificate supplies totality. -/
+def Nonzero (f : Scalar) : Prop := ∀ x, StepSource.Nonvanishing (f x)
+
+namespace Nonzero
+theorem positive {f} (h : Lower true f) : Nonzero f :=
+  fun x v hv => (show 0 < v from h x v hv).ne'
+
+theorem literal (v : Option ℝ) (q : ℚ) (h : v = some (q : ℝ)) (hn : q ≠ 0) :
+    Nonzero (fun _ => v) :=
+  fun _ => StepSource.Nonvanishing.literal q h (decide_eq_true hn)
+
+theorem mul {f g} (h : Nonzero f) (k : Nonzero g) : Nonzero (fun x => Value.mul (f x) (g x)) :=
+  fun x => (h x).mul (k x)
+
+theorem inv (f : Scalar) : Nonzero (fun x => Value.inv (f x)) := fun x => StepSource.Nonvanishing.inv (f x)
+
+theorem pow {f} (n : ℕ) (h : Nonzero f) : Nonzero (fun x => (f x).map (fun y => y^n)) := by
+  intro x v hv
+  cases e : f x <;> simp [e] at hv
+  subst v
+  exact pow_ne_zero _ (h x _ e)
+
+theorem centeredNegative (s : ℚ) {f p} (source : StepSource.PolynomialOn (fun _ => True) f p)
+    (check : Lower.evenLower true (StepSource.polyTranslate s (StepSource.polyScale (-1) p)) = true) :
+    Nonzero f := by
+  let g (x : ℝ) := (f x).map Neg.neg
+  have pg : StepSource.PolynomialOn (fun _ => True) g (StepSource.polyScale (-1) p) :=
+    ⟨fun x _ => by simp [g, source.equation x trivial, StepSource.polyEval_scale]⟩
+  have positive := Lower.centered true s pg check
+  intro x v hv
+  have hp : 0 < -v := positive x _ (by simp [g, hv])
+  exact (neg_pos.mp hp).ne
+end Nonzero
+
 namespace Slope
 
 theorem log {f d} (h : Slope f d) (pos : Lower true f) :
@@ -143,14 +178,19 @@ theorem sqrt {f d} (h : Slope f d) (pos : Lower true f) :
     fun x => by simp [eqf, eqd, Function1.apply, Functions.sqrtR, (hp x).le, Value.inv, Value.mul,
       (Real.sqrt_pos.2 (hp x)).ne', one_div]⟩
 
-theorem inv {f d} (h : Slope f d) (pos : Lower true f) :
+theorem inv_nonzero {f d} (h : Slope f d) (nonzero : Nonzero f) :
     Slope (fun x => Value.inv (f x))
       (fun x => Value.mul (Value.mul (some ((-1 : ℤ) : ℝ)) (Value.inv ((f x).map (fun y => y^2)))) (d x)) := by
   obtain ⟨g, dg, cg, hg, eqf, eqd⟩ := h
-  have hn (x) : g x ≠ 0 := (show 0 < g x from pos x _ (eqf x)).ne'
+  have hn (x) : g x ≠ 0 := nonzero x _ (eqf x)
   exact ⟨_, _, cg.inv hn, fun x => (hg x).inv (hn x),
     fun x => by simp [eqf, Value.inv, hn],
     fun x => by simp [eqf, eqd, Value.mul, Value.inv, hn, div_eq_mul_inv, mul_comm]⟩
+
+theorem inv {f d} (h : Slope f d) (pos : Lower true f) :
+    Slope (fun x => Value.inv (f x))
+      (fun x => Value.mul (Value.mul (some ((-1 : ℤ) : ℝ)) (Value.inv ((f x).map (fun y => y^2)))) (d x)) :=
+  h.inv_nonzero (Nonzero.positive pos)
 
 end Slope
 end QSym.Distribution.GraphFibre.Coordinates.Grid

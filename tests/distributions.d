@@ -208,6 +208,14 @@ private Case[] cases(){
 	Case("CenteredCoordinateNested","densityAtD(Λx. λ[log((x^2-2*x+1)*exp(x)+1)],0)","ℝ","1/2"),
 	Case("CoordinateTouchingLog","Λx. λ[log(x^2-2*x+1)]","Distribution(ℝ)"),
 	Case("CoordinateSignChangeLog","Λx. λ[log(x^2-3*x+1)]","Distribution(ℝ)"),
+	Case("NegativeCoordinateQuadratic","densityAtD(Λx. λ[(-x^2+x-1)⁻¹],0)","ℝ","1"),
+	Case("NegativeCoordinateStationary","densityAtD(Λx. λ[(-x^2+x-1)⁻¹],1/2)","ℝ","0"),
+	Case("NegativeCoordinateProduct","densityAtD(Λx. λ[(-exp(x)*cosh(x))⁻¹],0)","ℝ","1"),
+	Case("NegativeCoordinatePower","densityAtD(Λx. λ[((-x^2+x-1)^3)⁻¹],0)","ℝ","3"),
+	Case("NegativeCoordinateNested","densityAtD(Λx. λ[((-x^2+x-1)⁻¹)⁻¹],0)","ℝ","1"),
+	Case("NegativeCoordinateRestricted","densityAtD(Λx. λ[(-x^2+x-1)⁻¹ | t. t≤-1],0)","ℝ","1"),
+	Case("CoordinateReciprocalPole","Λx. λ[(-x^2+2*x-1)⁻¹]","Distribution(ℝ)"),
+	Case("CoordinateNegativeLog","Λx. λ[log(-x^2+x-1)]","Distribution(ℝ)"),
 	Case("CoordinateQueryMissing","densityAtD(Λx. λ[log(1+x²)],undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("CoordinateQueryMissingGuard","densityAtD(Λx. λ[sqrt(9+16*x²) | u. (1/(u-5))<0],1)","ℝ","undefined(ℝ)"),
 	Case("CoordinateLogPole","Λx. λ[log(x²)]","Distribution(ℝ)"),
@@ -1433,6 +1441,10 @@ private void run(string directory){
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
 		if(c.name=="CenteredCoordinateQuartic"||c.name=="PositiveCoordinateNestedInverse")
 			enforce(certificate.indexOf(".ofEq (fun ξ _ => (Numeric.calculate_sound ξ ")>=0,c.name~" direct rational evaluation");
+		if(c.name.indexOf("NegativeCoordinate")==0)
+			enforce(certificate.indexOf("Grid.Slope.inv_nonzero")>=0,c.name~" certified denominator");
+		if(c.name=="CoordinateReciprocalPole"||c.name=="CoordinateNegativeLog")
+			enforce(certificate.indexOf("Grid.Slope.inv_nonzero")<0&&certificate.indexOf("Grid.Slope.log")<0,c.name~" preserved domain");
 		if(c.name.indexOf("CenteredCoordinate")==0)
 			enforce(certificate.indexOf("Grid.Lower.centered")>=0,c.name~" rational translation");
 		if(c.name=="CoordinateLogPole"||c.name=="CoordinateTouchingLog"||c.name=="CoordinateSignChangeLog")

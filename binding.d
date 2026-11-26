@@ -1908,17 +1908,21 @@ final class Bindings{
 		enum Sign { unknown, nonnegative, positive }
 		struct Evidence { Sign sign; string proof; }
 		Evidence[uint] signs;
-		Evidence centered(uint id,Sign known){
+		Sign centeredSign(uint id,bool negative,out Rational center){
 			Rational[] p;
-			if(!axisPolynomial(id,p,0,true)) return Evidence.init;
+			if(!axisPolynomial(id,p,0,true)) return Sign.unknown;
 			while(p.length&&p[$-1].zero) p=p[0..$-1];
-			if(p.length<3||p.length>17||p.length%2==0||p[$-1]<Rational(0)) return Evidence.init;
+			if(negative) foreach(ref c;p) c=-c;
+			if(p.length<3||p.length>17||p.length%2==0||p[$-1]<Rational(0)) return Sign.unknown;
 			// This translation cancels the coefficient immediately below the leading term.
-			auto center=-p[$-2]/(Rational(cast(long)(p.length-1))*p[$-1]);
-			if(center.words>128) return Evidence.init;
+			center=-p[$-2]/(Rational(cast(long)(p.length-1))*p[$-1]);
+			if(center.words>128) return Sign.unknown;
 			auto shifted=polyTranslate(p,center);
-			foreach(i,c;shifted) if(c.words>128||(i%2?!c.zero:c<Rational(0))) return Evidence.init;
-			auto sign=shifted[0].zero?Sign.nonnegative:Sign.positive;
+			foreach(i,c;shifted) if(c.words>128||(i%2?!c.zero:c<Rational(0))) return Sign.unknown;
+			return shifted[0].zero?Sign.nonnegative:Sign.positive;
+		}
+		Evidence centered(uint id,Sign known){
+			Rational center; auto sign=centeredSign(id,false,center);
 			if(sign<=known) return Evidence.init;
 			Evidence e=Evidence(sign);
 			if(cert !is null){
@@ -1984,6 +1988,41 @@ final class Bindings{
 			}
 			return signs[id]=e;
 		}
+		struct NonzeroWitness { bool found; string proof; }
+		NonzeroWitness[uint] exclusions;
+		NonzeroWitness nonzero(uint id,uint depth){
+			if(depth>64) return NonzeroWitness.init;
+			if(auto cached=id in exclusions) return *cached;
+			NonzeroWitness evidence;
+			auto n=nodes[id],sign=lower(id,depth);
+			string law,args;
+			if(sign.sign==Sign.positive){law="positive";args=sign.proof;}
+			else if(n.op==BoundOp.scalar){
+				Rational q; Term value;
+				if(closedRational(at(id),q,value)&&!q.zero){
+					law="literal";
+					if(cert !is null) args=cert.atPoint(id,Rational(0))~" "~cert.q(q)~" "~cert.numericProof(id,Rational(0),cert.q(q))~" (of_decide_eq_true rfl)";
+				}
+			}else if(n.op==BoundOp.primitive){
+				auto op=arena.view(arena.at(n.data));
+				if(op.op==Op.inv){law="inv";if(cert !is null) args=cert.functionAt(n.a);}
+				else if(op.op==Op.mul){
+					auto a=nonzero(n.a,depth+1),b=nonzero(n.b,depth+1);
+					if(a.found&&b.found){law="mul";if(cert !is null) args=a.proof~" "~b.proof;}
+				}else if(op.op==Op.pow){
+					auto a=nonzero(n.a,depth+1);
+					if(a.found){law="pow";if(cert !is null) args=to!string(op.value)~" "~a.proof;}
+				}
+				Rational center;
+				if(!law.length&&centeredSign(id,true,center)==Sign.positive){
+					law="centeredNegative";
+					if(cert !is null) args=cert.q(center)~" "~cert.piece(id,cert.everywhere,"",Rational(0)).proof~" rfl";
+				}
+			}
+			evidence.found=law.length!=0;
+			if(cert !is null&&evidence.found) evidence.proof=cert.save(ns~"Nonzero "~cert.functionAt(id),"("~ns~"Nonzero."~law~" "~args~")");
+			return exclusions[id]=evidence;
+		}
 		BoundTerm visit(uint id,uint depth){
 			if(depth>64) return BoundTerm.init;
 			if(slopes.contains(id)) return at(slopes.get(id,uint.max));
@@ -2019,11 +2058,17 @@ final class Bindings{
 				if(cert !is null) args=proofs.get(n.a,"");
 				if(op.op==Op.inv||op.op==Op.builtin&&(op.value==Builtin.logR||op.value==Builtin.sqrtR)){
 					auto sign=lower(n.a,depth+1);
-					if(sign.sign!=Sign.positive) return BoundTerm.init;
-					if(cert !is null) args~=" "~sign.proof;
+					if(sign.sign==Sign.positive){
+						if(cert !is null) args~=" "~sign.proof;
+					}else{
+						if(op.op!=Op.inv) return BoundTerm.init;
+						auto evidence=nonzero(n.a,depth+1);
+						if(!evidence.found) return BoundTerm.init;
+						if(cert !is null) args~=" "~evidence.proof;
+					}
 					auto denominator=at(n.a);
 					if(op.op==Op.inv){
-						lemma="inv";
+						lemma=sign.sign==Sign.positive?"inv":"inv_nonzero";
 						denominator=primitive(arena.pow(zero,2),[denominator]);
 					}else if(op.value==Builtin.sqrtR){
 						denominator=primitive(product,[scalar(inner,arena.real_(2)),f]);
