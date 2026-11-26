@@ -232,7 +232,7 @@ private struct AffineChart{
 }
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
-private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max; bool[] conjunctPath; }
+private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max,falsePrefix=uint.max; bool[] conjunctPath; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
@@ -6326,13 +6326,28 @@ final class Bindings{
 						id=right?branch.b:branch.a;
 					}
 					if(!depends(suffix,0)) return BoundTerm.init;
-					auto input=scalarBody(suffix,point); if(input==Term.init) return BoundTerm.init;
+					auto input=scalarBody(suffix,point); uint falsePrefix=uint.max;
+					// A false leading guard shields even an opaque predicate or weight.
+					// Only the evaluated prefix needs a scalar certificate.
+					if(input==Term.init&&primitiveOp(suffix.id,Op.mask)){
+						auto test=node(suffix).a;
+						for(;;){
+							input=scalarBody(at(test),point);
+							if(input!=Term.init){ falsePrefix=test; break; }
+							if(!primitiveOp(test,Op.and_)) break;
+							test=nodes[test].a;
+						}
+					}
+					if(input==Term.init) return BoundTerm.init;
 					auto opts=Options(DensityMode.preserve,true),value=simplify(arena,input,opts);
-					if(value.exhausted||!arena.isNumber(value.output)||!arena.number(value.output).zero) return BoundTerm.init;
+					if(value.exhausted) return BoundTerm.init;
+					if(falsePrefix!=uint.max){
+						if(value.output!=arena.boolean(false)) return BoundTerm.init;
+					}else if(!arena.isNumber(value.output)||!arena.number(value.output).zero) return BoundTerm.init;
 					auto domain=simplifyDomain(arena,input,[],opts);
 					if(domain.exhausted||domain.output!=arena.boolean(true)) return BoundTerm.init;
 					auto d=ScalarDomain(input,domain,value,index,sort,path,BoundOp.primitive);
-					d.excludedPoint=point; d.affineInput=affine; d.conjunctPath=route;
+					d.excludedPoint=point; d.affineInput=affine; d.conjunctPath=route; d.falsePrefix=falsePrefix;
 					if(suffix.id!=n.b) d.maskBody=suffix.id;
 					extra=cast(uint)scalarDomains.length; scalarDomains~=d;
 					BoundTerm remaining;
@@ -12152,7 +12167,19 @@ final class Bindings{
 								return "(Numeric.calculate_sound ξ "~term~" 0 rfl)";
 							}
 							string fn(uint child){return "(fun u => "~name(child)~".eval ξ (Binding.Env.cons (a := .scalar ."~field~") u ρ))";}
-							auto h0="(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct ξ) ("~prefix~".ValueCertificate.refinement ξ)) "~zeroProof(value)~")";
+							auto known="(LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct ξ) ("~prefix~".ValueCertificate.refinement ξ))";
+							string h0;
+							if(d.falsePrefix==uint.max) h0="(Eq.trans "~known~" "~zeroProof(value)~")";
+							else{
+								auto arg="(n"~to!string(z.id)~".eval ξ)";
+								string evalPoint(uint id){ return "("~fn(id)~" "~arg~")"; }
+								auto s=nodes[suffix],test=s.a; uint[] guards;
+								while(test!=d.falsePrefix){ guards~=nodes[test].b; test=nodes[test].a; }
+								auto hf=known;
+								foreach_reverse(right;guards)
+									hf="(congrArg (fun p => Value.and p "~evalPoint(right)~") "~hf~")";
+								h0="(congrArg (fun p => Value.mask p "~evalPoint(s.b)~") "~hf~")";
+							}
 							string law;
 							if(d.affineInput==uint.max)
 								law="(Value.mask_nonzero_of_zero "~fn(pred)~" "~binderNonzero(pred)~" "~fn(suffix)~" (n"~to!string(z.id)~".eval ξ) "~zeroProof(z)~" "~h0~" x)";

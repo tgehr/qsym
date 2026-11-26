@@ -1434,6 +1434,13 @@ private Case[] cases(){
 	Case("MaskContextOtherPoint","λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·abs(h(x+1))","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). [h(x)≠0]·abs(h(x+1))"),
 	Case("MaskContextMissing","defined((λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·abs(h(x)))(λ(x:ℝ).x⁻¹)(0))","𝔹","false"),
 	Case("MaskContextMissingGuard","defined((λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·([false]·h(x)))(λ(x:ℝ).x⁻¹)(0))","𝔹","false"),
+	Case("OpaquePunctureWeight","λ(h:ℝ→ℝ).λ(x:ℝ).[x≠3∧cos(x-3)<0]·h(x)","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). [cos(x-3)<0]·h(x)"),
+	Case("OpaquePunctureKept","λ(h:ℝ→ℝ).λ(x:ℝ).[x≠3∧cos(x-3)>0]·h(x)","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). [x≠3∧0<cos(x-3)]·h(x)"),
+	Case("OpaquePuncturePrefix","λ(k:ℝ→𝔹).λ(h:ℝ→ℝ).λ(x:ℝ).[x≠3∧(cos(x-3)<0∧k(x))]·h(x)","(ℝ→𝔹)→(ℝ→ℝ)→ℝ→ℝ","λ(k:ℝ→𝔹). λ(h:ℝ→ℝ). λ(x:ℝ). [cos(x-3)<0∧k(x)]·h(x)"),
+	Case("OpaquePunctureOrder","λ(k:ℝ→𝔹).λ(h:ℝ→ℝ).λ(x:ℝ).[x≠3∧(k(x)∧cos(x-3)<0)]·h(x)","(ℝ→𝔹)→(ℝ→ℝ)→ℝ→ℝ","λ(k:ℝ→𝔹). λ(h:ℝ→ℝ). λ(x:ℝ). [x≠3∧(k(x)∧cos(x-3)<0)]·h(x)"),
+	Case("OpaquePunctureSquare","λ(h:ℝ→ℝ).λ(x:ℝ).[x≠2∧x^2<3]·h(x)","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). [-sqrt(3)<x∧x<sqrt(3)]·h(x)"),
+	Case("OpaquePunctureDensity","λ(h:ℝ→ℝ).Λx. [x≠3∧cos(x-3)<0]·h(x)·λ[x]","(ℝ→ℝ)→Distribution(ℝ)","λ(h:ℝ→ℝ). Λ(x:ℝ). ([cos(x-3)<0]·h(x))·λ[x]"),
+	Case("OpaquePunctureAt","(λ(h:ℝ→ℝ).λ(x:ℝ).[x≠3∧cos(x-3)<0]·h(x))(λ(x:ℝ).(x-3)⁻¹)(3)","ℝ","0"),
 	Case("OrderedPunctureCoordinate","Λx. [x≠3∧x<4]·λ[(x-3)^2]","Distribution(ℝ)","Λ(x:ℝ). ([x<4]·abs(2·x-6))·λ[x]"),
 	Case("OrderedPunctureLeft","λ(x:ℝ).[x≠3∧cos(x-3)>0∧x≠4]·abs(x-3)","ℝ→ℝ","λ(x:ℝ). [0<cos(x-3)∧x≠4]·abs(x-3)"),
 	Case("OrderedPunctureRight","λ(x:ℝ).[x≠3∧(x≠4∧cos(x-3)>0)]·abs(x-3)","ℝ→ℝ","λ(x:ℝ). [x≠4∧0<cos(x-3)]·abs(x-3)"),
@@ -1625,6 +1632,8 @@ private void run(string directory){
 			bool erased=c.name!="MaskContextReciprocal"&&c.name!="MaskContextNonstrict"&&c.name!="MaskContextOtherPoint"&&c.name!="MaskContextMissingGuard";
 			enforce((certificate.indexOf("Value.mask_nonzero_context ")>=0)==erased,c.name);
 		}
+		if(c.name=="OpaquePunctureWeight"||c.name=="OpaquePuncturePrefix"||c.name=="OpaquePunctureSquare"||c.name=="OpaquePunctureDensity")
+			enforce(certificate.indexOf("Distribution.StepSource.affine_mask_of_zero ")>=0,c.name);
 		if(c.name=="OrderedPunctureCoordinate"||c.name=="OrderedPunctureLeft"||c.name=="OrderedPunctureRight"||
 			c.name=="OrderedPunctureHiddenPole"||c.name=="OrderedPunctureAfterPartial")
 			enforce(certificate.indexOf("Distribution.StepSource.affine_mask_of_zero ")>=0&&
