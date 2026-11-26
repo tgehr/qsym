@@ -5,6 +5,7 @@ import qsym.types:TypeKind,TypePool,TypeId;
 import std.exception:enforce,assertThrown;
 import std.file:write,mkdirRecurse;
 import std.path:buildPath;
+import std.string:indexOf;
 @safe:
 
 private struct Artifact{ string name,code; }
@@ -29,6 +30,8 @@ private Artifact[] run(){
 	check("Curried",curried,a.natural_(3));
 	check("PartialApplication",b.apply(add,one));
 	check("Lambda",add);
+	enforce(artifacts[$-1].code.indexOf("\ntheorem p")<0&&artifacts[$-1].code.indexOf("Binding.Reduction.refl ")>=0,
+		"unchanged nested binders need only reflexivity");
 	check("Shadow",b.apply(b.apply(b.lambda(b.lambda(y)),one),two),a.natural_(2));
 	check("Capture",b.apply(b.apply(b.lambda(b.lambda(x)),one),two),a.natural_(1));
 	auto global=a.variable(Sort.natural,0);

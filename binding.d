@@ -12691,7 +12691,23 @@ final class Bindings{
 			return "(Option.rec (motive := fun other => "~operation~(right?" other none":" none other")~
 				" = none) rfl (fun _ => rfl) "~other~")";
 		}
-		string proofName(uint id){ return "(p"~to!string(id)~dimArg~" γ)"; }
+		// Binding steps are topologically ordered. A transitivity step with
+		// one unchanged endpoint can use the other proof directly.
+		auto representative=new uint[result.proofs.length];
+		foreach(i,p;result.proofs){
+			representative[i]=cast(uint)i;
+			if(p.rule!=BindingRule.trans) continue;
+			if(result.proofs[p.left].from==result.proofs[p.left].to) representative[i]=representative[p.right];
+			else if(result.proofs[p.right].from==result.proofs[p.right].to) representative[i]=representative[p.left];
+		}
+		auto usedSteps=new bool[result.proofs.length];
+		string proofName(uint id){
+			auto p=result.proofs[id];
+			if(p.from==p.to) return "(Binding.Reduction.refl "~name(p.from)~")";
+			id=representative[id]; usedSteps[id]=true;
+			return "(p"~to!string(id)~dimArg~" γ)";
+		}
+		auto rootProof=proofName(result.proof);
 		string realBody(uint fn){ return "(fun x : ℝ => "~name(nodes[fn].a)~
 			".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
 		string rowTotalProof(uint id){
@@ -12729,8 +12745,12 @@ final class Bindings{
 			}
 			return proof;
 		}
-		foreach(i,p;result.proofs){
-			auto n=nodes[p.from]; string proof;
+		// Emit just the premises referenced from the public reduction. Visiting
+		// them backwards lets the ordinary rule exporter mark its dependencies.
+		string[] declarations;
+		foreach_reverse(i;0..result.proofs.length){
+			if(!usedSteps[i]) continue;
+			auto p=result.proofs[i],n=nodes[p.from]; string proof,stepPrefix;
 			string sumZeroProof(){ auto sort=elementSort(types[n.type]); return sort==Sort.rational?"(congrArg some (div_one (0 : ℚ)))":sort==Sort.real_?"AffineRecurrence.zeroR":sort==Sort.complex?"AffineRecurrence.zeroC":"rfl"; }
 			string sumRawZero(){ return "(n"~to!string(arena.number(Number(0),elementSort(types[n.type])).id)~".eval ξ)"; }
 			final switch(p.rule){
@@ -13443,8 +13463,8 @@ final class Bindings{
 						auto mass=weighted?literal(parts.mass):Rational(1),start=to!string(literal(parts.start).numerator);
 						string cs="[";foreach(j,c;primitive_) cs~=(j?", ":"")~q(c);cs~="]";
 						auto tag="moment"~to!string(i),stride=to!string(literal(parts.stride).numerator);
-						code~="private def "~tag~"Primitive : List ℚ := "~cs~"\n";
-						code~="private theorem "~tag~"Check : GeometricMoments.checks "~source.polynomial~" "~tag~"Primitive "~q(literal(parts.ratio))~
+						stepPrefix~="private def "~tag~"Primitive : List ℚ := "~cs~"\n";
+						stepPrefix~="private theorem "~tag~"Check : GeometricMoments.checks "~source.polynomial~" "~tag~"Primitive "~q(literal(parts.ratio))~
 							" "~q(mass)~" "~start~" "~stride~" = true := rfl\n";
 						law=ns~"nat_shift_polynomial "~(weighted?"true ":"false ")~(parts.strideLeft?"true ":"false ")~
 							stride~yes~" "~q(mass)~" "~q(literal(parts.ratio))~yes~yes~yes~" "~
@@ -14183,9 +14203,10 @@ final class Bindings{
 					proof~=" "~proofName(p.left);
 					if(p.right!=uint.max) proof~=" "~proofName(p.right); break;
 			}
-			code~="theorem p"~to!string(i)~dimDecl~" (γ : Binding.Globals) : Binding.Reduction "~name(p.from)~" "~name(p.to)~" := "~proof~"\n";
+			declarations~=stepPrefix~"theorem p"~to!string(i)~dimDecl~" (γ : Binding.Globals) : Binding.Reduction "~name(p.from)~" "~name(p.to)~" := "~proof~"\n";
 		}
-		code~="theorem reduction"~dimDecl~" (γ : Binding.Globals) : Binding.Reduction "~name(result.input.id)~" "~name(result.output.id)~" := "~proofName(result.proof)~"\n";
+		foreach_reverse(decl;declarations) code~=decl;
+		code~="theorem reduction"~dimDecl~" (γ : Binding.Globals) : Binding.Reduction "~name(result.input.id)~" "~name(result.output.id)~" := "~rootProof~"\n";
 		string left=replace(name(result.input.id)," δ γ"," ξ.natural γ")~".eval ξ ρ",right=replace(name(result.output.id)," δ γ"," ξ.natural γ")~".eval ξ ρ";
 		auto ctx=replace(ctxName(node(result.input).context)," δ)"," ξ.natural)"),sizes=dependent_?" ξ.natural":"";
 		code~="theorem sound (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctx~") : "~left~" = "~right~" := Binding.Reduction.sound (reduction"~sizes~" γ) ξ ρ\n";
