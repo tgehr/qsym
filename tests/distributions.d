@@ -1500,6 +1500,12 @@ private Case[] cases(){
 	Case("VaryingEmission","λ(k:ℕ).massD("~discountedAtoms("k")~")","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·(2·2^k-2):ℝ)"),
 	Case("ConvolutionSymbolic","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","r","δ((3:ℝ))")~"))","ℝ→ℕ→ℝ"),
 	Case("ConvolutionTwo","λ(r:ℝ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("2","r","δ((3:ℝ))")~"))","ℝ→ℝ","λ(r:ℝ). 3·r^2+r+2"),
+	Case("ProductCrossForward","λ(k:ℕ).massD("~scaledSteps("(2*n+5)/(2*n+3)")~")","ℕ→ℝ","λ(k:ℕ). (1/5·(2·k+5):ℝ)"),
+	Case("ProductCrossReverse","λ(k:ℕ).massD("~scaledSteps("(2*n+3)/(2*n+5)")~")","ℕ→ℝ","λ(k:ℕ). (5·(2·k+5)⁻¹:ℝ)"),
+	Case("ProductCrossSquared","λ(k:ℕ).massD("~scaledSteps("(2*n+5)^2/(2*n+3)^2")~")","ℕ→ℝ","λ(k:ℕ). (1/25·(2·k+5)^2:ℝ)"),
+	Case("ProductCrossReversedQ","λ(k:ℕ).massD("~scaledSteps("invQ(n)*(n+1)")~")","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
+	Case("ProductCrossReversedR","λ(k:ℕ).massD("~scaledSteps("(n:ℝ)⁻¹*(n+1:ℝ)")~")","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
+	Case("ProductCrossDepth","massD("~scaledSteps("(2*n+3)/(2*n+5)","3")~")","ℝ","5/11"),
 	Case("VisitQuotientNatural","λ(k:ℕ).massD("~scaledSteps("(n+1)/n")~")","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
 	Case("VisitQuotientReciprocal","λ(k:ℕ).massD("~scaledSteps("n/(n+1)")~")","ℕ→ℝ","λ(k:ℕ). ((k+1)⁻¹:ℝ)"),
 	Case("VisitQuotientSquare","λ(k:ℕ).massD("~scaledSteps("(n+1)^2/n^2")~")","ℕ→ℝ","λ(k:ℕ). ((k+1)^2:ℝ)"),
@@ -1671,6 +1677,11 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name.indexOf("ProductCross")==0){
+			enforce(certificate.indexOf("Distribution.product_step_cross ")>=0&&text.indexOf("μ")<0,c.name);
+			if(c.name=="ProductCrossReversedR") enforce(certificate.indexOf("Distribution.product_ratio_comm ")>=0,c.name);
+			if(c.name=="ProductCrossReversedQ") enforce(certificate.indexOf("Distribution.product_ratio_cast ")>=0,c.name);
+		}
 		if(c.name.indexOf("VisitQuotient")==0)
 			enforce((certificate.indexOf("Distribution.observe_product_countdown ")>=0)==(c.name!="VisitQuotientCrossesZero"),c.name);
 		if(c.name.indexOf("ProductScale")==0){
@@ -1678,7 +1689,7 @@ private void run(string directory){
 			enforce((certificate.indexOf("Distribution.observe_product_countdown ")>=0)==solved,c.name);
 			if(solved) enforce(text.indexOf("μ")<0,c.name);
 			if(c.name=="ProductScalePole") enforce(text.indexOf("μ")>=0,c.name);
-			if(c.name=="ProductScaleMillion") enforce(certificate.length<120_000,c.name~" expanded countdown");
+			if(c.name=="ProductScaleMillion") enforce(certificate.length<75_000,c.name~" expanded countdown");
 		}
 		if(c.name.indexOf("Convolution")==0){
 			enforce(certificate.indexOf("Distribution.observe_convolution_countdown ")>=0&&text.indexOf("μ")<0,c.name);

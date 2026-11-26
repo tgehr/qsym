@@ -100,6 +100,67 @@ theorem product_step_of_zero (a b : Option ℝ) (m : Option ℝ) (hm : m = some 
   subst m
   cases a <;> cases b <;> simp_all [Value.add, Value.mul, ← sub_eq_add_neg, sub_eq_zero]
 
+theorem product_ratio_comm (a b : Option ℝ) :
+    Value.mul (Value.inv b) a = Value.mul a (Value.inv b) := by
+  cases a <;> cases Value.inv b <;> simp [Value.mul, mul_comm]
+
+theorem product_ratio_cast (a b : Option ℚ) (swap : Bool) :
+    Functions.castQR.apply (if swap then Functions.mulQ.apply (Functions.invQ.apply b) a
+      else Functions.mulQ.apply a (Functions.invQ.apply b)) =
+    Value.mul (Functions.castQR.apply a) (Value.inv (Functions.castQR.apply b)) := by
+  cases b with
+  | none => cases swap <;> cases a <;> simp [Functions.castQR, Functions.mulQ, Functions.invQ, Function1.apply, Function2.apply, Value.mul, Value.inv]
+  | some b =>
+    by_cases hb : b = 0
+    · subst b; cases swap <;> cases a <;>
+        simp [Functions.castQR, Functions.mulQ, Functions.invQ, Function1.apply, Function2.apply, Value.mul, Value.inv]
+    · have h : (b : ℝ) ≠ 0 := by exact_mod_cast hb
+      cases swap <;> cases a <;>
+        simp [Functions.castQR, Functions.mulQ, Functions.invQ, Function1.apply, Function2.apply, Value.mul, Value.inv, hb, h, mul_comm]
+
+private theorem scale_product_eq (r c u v : Option ℝ) (scaled : Bool) (h : Value.mul r u = v) :
+    Value.mul r (if scaled then Value.mul c u else u) = (if scaled then Value.mul c v else v) := by
+  subst v
+  cases scaled with
+  | false => rfl
+  | true => cases r <;> cases c <;> cases u <;> simp [Value.mul, mul_left_comm]
+
+/-- Clear denominators after certifying their domain. The remaining successor
+identity can be checked as a polynomial even when the source rate is rational. -/
+theorem product_step_cross (a b u v r c m : Option ℝ) (inverse scaled : Bool)
+    (hr : r = Value.mul a (Value.inv b)) (hm : m = some ((-1 : ℚ) : ℝ))
+    (hd : Domain.Correct (Value.inv (if inverse then Value.mul b (Value.mul u v) else b)) (some true))
+    (hx : Value.add (Value.mul a (if inverse then v else u))
+      (Value.mul m (Value.mul b (if inverse then u else v))) = some 0) :
+    Value.mul r (if scaled then Value.mul c (if inverse then Value.inv u else u)
+        else if inverse then Value.inv u else u) =
+      (if scaled then Value.mul c (if inverse then Value.inv v else v)
+        else if inverse then Value.inv v else v) := by
+  apply scale_product_eq
+  subst r
+  have eqv := product_step_of_zero _ _ _ hm hx
+  obtain ⟨d, hd, hn⟩ := (Value.defined_inv _).mp (hd.iff.mpr rfl)
+  cases inverse with
+  | false =>
+    change b = some d at hd
+    subst b
+    cases a <;> cases u <;> cases v <;> simp_all [Value.mul, Value.inv]
+    rename_i a u v
+    calc a * d⁻¹ * u = (a*u) * d⁻¹ := by ring
+         _ = v := by rw [eqv]; field_simp
+  | true =>
+    rcases b with _ | b <;> rcases u with _ | u <;> rcases v with _ | v <;> simp [Value.mul] at hd
+    have nonzero : b * (u * v) ≠ 0 := hd ▸ hn
+    have nz : b ≠ 0 ∧ u ≠ 0 ∧ v ≠ 0 := by simpa [mul_ne_zero_iff] using nonzero
+    rcases nz with ⟨hb,hu,hv⟩
+    cases a with
+    | none => simp [Value.mul] at eqv
+    | some a =>
+      simp [Value.mul] at eqv
+      simp [Value.mul, Value.inv, hb, hu, hv]
+      field_simp [hb,hu,hv]
+      linear_combination eqv
+
 /-- A captured scale may be undefined. The zero branch returns the seed
 without inspecting the scale, and a missing index still invalidates the call. -/
 theorem observe_partial_scale_countdown {α : Type} {o : Option (D α) → Option ℝ} (h : Atomic.Observation o)

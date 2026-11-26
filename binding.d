@@ -232,7 +232,8 @@ private struct AffineChart{
 }
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
-private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max,falsePrefix=uint.max; bool[] conjunctPath; }
+private struct ProductStep{ uint rate,gain; bool rational,swapped,inverse,scaled; }
+private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max,falsePrefix=uint.max; bool[] conjunctPath; ProductStep* product; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
@@ -3017,17 +3018,20 @@ final class Bindings{
 		auto product=arena.view(raw);
 		// Natural and integer quotients are formed in ℚ and then coerced to
 		// the real scale. Inspect that quotient when proposing a candidate.
-		if(product.op==Op.builtin&&product.value==Builtin.castQR) product=arena.view(arena.at(product.a));
+		bool rational=product.op==Op.builtin&&product.value==Builtin.castQR;
+		if(rational) product=arena.view(arena.at(product.a));
 		if(product.op!=Op.mul&&!(product.op==Op.builtin&&product.value==Builtin.mulQ)) return BoundTerm.init;
 		bool inverse(Term t){ auto n=arena.view(t); return n.op==Op.inv||n.op==Op.builtin&&n.value==Builtin.invQ; }
 		auto num=arena.at(product.a),den=arena.at(product.b);
-		if(inverse(num)){ auto t=num; num=den; den=t; }
+		bool swapped=inverse(num);
+		if(swapped){ auto t=num; num=den; den=t; }
 		if(!inverse(den)) return BoundTerm.init;
 		den=arena.castTo(arena.at(arena.view(den).a),Sort.real_);
 		num=arena.castTo(num,Sort.real_);
 		auto ctx=context(arg),inner=push(ctx,scalarType(Sort.natural));
 		auto z=arena.natural_(0),one=arena.natural_(1);
 		auto succ=arena.call(Builtin.addN,[k,one]),nextRate=scalarBody(at(rate),succ);
+		auto a=scalarBody(restoreBody(num,inner,k),succ),b=scalarBody(restoreBody(den,inner,k),succ),minus=arena.real_(-1);
 		auto opts=Options(DensityMode.preserve,true); opts.expandScalarEmbeddings=true;
 		opts.maxRewrites=2048; opts.maxAlgebraWork=65536;
 		foreach(i,factor;[num,den]){
@@ -3036,19 +3040,43 @@ final class Bindings{
 			auto initial=simplify(arena,scalarBody(body,z));
 			if(initial.exhausted||!arena.isNumber(initial.output)||arena.number(initial.output).zero) continue;
 			auto q=arena.number(initial.output).re;
-			auto w=i?arena.inv(factor):factor;
-			if(q!=Rational(1)) w=arena.mul(arena.real_(i?q:Rational(1)/q),w,true);
-			auto candidate=restoreBody(w,inner,k),base=scalarBody(candidate,z),next=scalarBody(candidate,succ);
-			auto residual=arena.add(arena.mul(nextRate,w,true),arena.mul(arena.real_(-1),next,true),true);
-			ScalarDomain[] evidence;
-			foreach(j,input;[base,residual]){
-				auto value=simplify(arena,input,opts);
-				if(value.exhausted||!arena.isNumber(value.output)||arena.number(value.output)!=Number(j?0:1)) break;
-				auto domain=simplifyDomain(arena,input,[],opts);
-				if(domain.exhausted||domain.output!=arena.boolean(true)) break;
-				evidence~=ScalarDomain(input,domain,value,index,Sort.natural);
+			auto gain=arena.real_(i?q:Rational(1)/q),w=i?arena.inv(factor):factor;
+			if(q!=Rational(1)) w=arena.mul(gain,w,true);
+			auto candidate=restoreBody(w,inner,k),base=scalarBody(candidate,z);
+			bool checked(Term term,long wanted,out ScalarDomain cert){
+				auto value=simplify(arena,term,opts);
+				if(value.exhausted||!arena.isNumber(value.output)||arena.number(value.output)!=Number(wanted)) return false;
+				auto domain=simplifyDomain(arena,term,[],opts);
+				if(domain.exhausted||domain.output!=arena.boolean(true)) return false;
+				cert=ScalarDomain(term,domain,value,index,Sort.natural); return true;
 			}
-			if(evidence.length!=2) continue;
+			ScalarDomain baseProof;
+			if(!checked(base,1,baseProof)) continue;
+			auto u=factor,v=scalarBody(body,succ);
+			// Move the variable denominators out of the equality. Their actual
+			// domains still need to hold at every positive source index.
+			auto cross=arena.add(arena.mul(a,i?v:u,true),arena.mul(minus,arena.mul(b,i?u:v,true),true),true);
+			ScalarDomain[] evidence=[baseProof];
+			if(polynomialZero(arena,cross)){
+				auto denominator=i?arena.mul(b,arena.mul(u,v,true),true):b;
+				auto reciprocal=arena.inv(denominator),domainOpts=opts;
+				// Retain the nonnegativity visible in natural operands first.
+				domainOpts.expandScalarEmbeddings=false;
+				auto domain=simplifyDomain(arena,reciprocal,[],domainOpts);
+				if(domain.exhausted||domain.output!=arena.boolean(true)) domain=simplifyDomain(arena,reciprocal,[],opts);
+				if(!domain.exhausted&&domain.output==arena.boolean(true)){
+					auto valid=ScalarDomain(reciprocal,domain);
+					valid.product=new ProductStep(nextRate.id,gain.id,rational,swapped,i!=0,q!=Rational(1));
+					auto identity=ScalarDomain(cross); identity.polynomial=true;
+					evidence~=[valid,identity];
+				}
+			}
+			if(evidence.length==1){
+				auto next=scalarBody(candidate,succ);
+				auto residual=arena.add(arena.mul(nextRate,w,true),arena.mul(minus,next,true),true);
+				ScalarDomain step; if(!checked(residual,0,step)) continue;
+				evidence~=step;
+			}
 			witness=cast(uint)checks.length; checks~=evidence;
 			auto f=hint(lambda(candidate),"n");
 			return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[apply(f,arg),seed]);
@@ -11004,6 +11032,9 @@ final class Bindings{
 			scalarNodes~=arena.viewPostorder(d.input); if(d.result.output!=Term.init)scalarNodes~=arena.viewPostorder(d.result.output);
 			if(d.value.traced) scalarNodes~=arena.viewPostorder(arena.castTo(d.value.output,arena.sort(d.input)));
 			if(d.mode==BoundOp.primitive) scalarNodes~=arena.viewPostorder(d.excludedPoint);
+			if(d.product !is null){
+				scalarNodes~=arena.viewPostorder(arena.at(d.product.rate)); scalarNodes~=arena.viewPostorder(arena.at(d.product.gain));
+			}
 		}
 		foreach(r;result.ranks) foreach(step;r.iterations) scalarNodes~=arena.viewPostorder(step.output);
 		foreach(r;result.ranks) if(r.lower.output!=Term.init) scalarNodes~=arena.viewPostorder(r.result.output);
@@ -12534,10 +12565,23 @@ final class Bindings{
 							return "(Eq.trans (LinearRecurrence.known ("~cert~".DomainCertificate.domain_correct "~en~") ("~cert~".ValueCertificate.refinement "~en~
 								")) (Numeric.calculate_real_"~number~" "~en~" n"~to!string(lit.id)~" rfl))";
 						}
-						auto residual=arena.view(result.domains[p.extra+1].input),neg=arena.view(arena.at(residual.b));
-						auto m="n"~to!string(neg.a);
+						auto d=result.domains[p.extra+1];
 						string ev(uint id){ return "(n"~to!string(id)~".eval "~env~")"; }
-						auto eq="(fun k => Distribution.product_step_of_zero "~ev(residual.a)~" "~ev(neg.b)~" ("~m~".eval ξ) (Numeric.calculate_sound ξ "~m~" (-1) rfl) "~checked(p.extra+1,env,"zero")~")";
+						string eq;
+						if(d.product is null){
+							auto residual=arena.view(d.input),neg=arena.view(arena.at(residual.b)),m="n"~to!string(neg.a);
+							eq="(fun k => Distribution.product_step_of_zero "~ev(residual.a)~" "~ev(neg.b)~" ("~m~".eval ξ) (Numeric.calculate_sound ξ "~m~" (-1) rfl) "~checked(p.extra+1,env,"zero")~")";
+						}else{
+							auto h=d.product,cross=arena.view(result.domains[p.extra+2].input),neg=arena.view(arena.at(cross.b));
+							auto left=arena.view(arena.at(cross.a)),right=arena.view(arena.at(neg.b));
+							auto a=left.a,b=right.a,u=h.inverse?right.b:left.b,v=h.inverse?left.b:right.b,m="n"~to!string(neg.a);
+							string rateEq="rfl";
+							if(h.rational)
+								rateEq="(Distribution.product_ratio_cast "~ev(arena.view(arena.at(a)).a)~" "~ev(arena.view(arena.at(b)).a)~" "~(h.swapped?"true":"false")~")";
+							else if(h.swapped) rateEq="(Distribution.product_ratio_comm "~ev(a)~" "~ev(b)~")";
+							eq="(fun k => Distribution.product_step_cross "~ev(a)~" "~ev(b)~" "~ev(u)~" "~ev(v)~" "~ev(h.rate)~" "~ev(h.gain)~" ("~m~".eval ξ) "~(h.inverse?"true":"false")~" "~(h.scaled?"true":"false")~
+								" "~rateEq~" (Numeric.calculate_sound ξ "~m~" (-1) rfl) (QSym.BindingScalar"~to!string(p.extra+1)~".DomainCertificate.domain_correct "~env~") (QSym.BindingScalar"~to!string(p.extra+2)~".zero "~env~"))";
+						}
 						proof=".ofEq (fun ξ ρ => Distribution.observe_product_countdown "~massObserver(ops,false)~" (rec"~f~") (fixed"~f~") ("~
 							name(base)~".eval ξ ρ) "~rate~" "~w~" "~checked(p.extra,"ξ","one")~" "~eq~" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))";
 						break;
