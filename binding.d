@@ -6470,6 +6470,34 @@ final class Bindings{
 			return distribution(ctx,BoundOp.distributionWeight,[hint(lambda(mask),"y"),distribution(ctx,BoundOp.distributionLebesgue)]);
 		}
 
+		// Evaluate a smooth coordinate at a literal before normalizing its
+		// derivative under a lambda. Each step is an existing binding rule.
+		Result literalCoordinateDensity(BoundTerm t){
+			auto n=node(t),d=nodes[n.a],y=at(n.b);
+			auto miss=Result(uint.max,uint.max);
+			if(node(y).op!=BoundOp.scalar||!arena.isNumber(arena.at(node(y).data))) return miss;
+			bool restricted=d.op==BoundOp.distributionInversePart;
+			if(!restricted&&d.op!=BoundOp.distributionInverseCover) return miss;
+			if(restricted&&nodes[d.a].op!=BoundOp.lambda) return miss;
+			auto row=nodes[restricted?d.b:d.a];
+			if(row.op!=BoundOp.vectorCons||nodes[row.b].op!=BoundOp.vectorNil||nodes[row.a].op!=BoundOp.lambda) return miss;
+			auto fn=at(row.a);
+			auto body=nodes[node(fn).a];
+			if(body.op!=BoundOp.primitive) return miss;
+			auto op=arena.view(arena.at(body.data)).op;
+			if(op!=Op.builtin&&op!=Op.inv) return miss;
+			auto w=smoothCoordinate(fn,restricted?at(d.a):BoundTerm.init);
+			if(w==BoundTerm.init) return miss;
+
+			auto density=distribution(context(t),BoundOp.distributionDensityAt,[w,y]);
+			auto coordinate=emit(BindingRule.distributionSmoothCoordinate,n.a,w.id);
+			auto lifted=emit(BindingRule.congr,t.id,density.id,coordinate,emit(BindingRule.refl,y.id,y.id));
+			auto weight=at(node(w).a),app=apply(weight,y);
+			auto applyWeight=emit(BindingRule.distributionDensityWeight,density.id,app.id);
+			auto exposed=emit(BindingRule.trans,t.id,app.id,lifted,applyWeight);
+			auto value=beta(at(node(weight).a),y);
+			return Result(value.id,emit(BindingRule.trans,t.id,value.id,exposed,emit(BindingRule.beta,app.id,value.id)));
+		}
 		struct RewriteFrame { uint original,rebuilt,congruence,step; }
 		Result visitOnce(BoundTerm t,uint depth,ref RewriteFrame[] chain){
 			enforce(depth<512,"binding normalization depth exceeded");
@@ -6539,6 +6567,14 @@ final class Bindings{
 				}
 			}
 			if(n.op==BoundOp.distributionDensityAt&&steps<budget){
+				if(budget-steps>=3){
+					auto direct=literalCoordinateDensity(t);
+					if(direct.output!=uint.max){
+						steps+=3;
+						chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),direct.proof);
+						return Result(direct.output,uint.max);
+					}
+				}
 				uint weight,point; bool product;
 				if(realAtomRow(at(n.a),weight,point)&&weight!=uint.max&&squareMap(lambda(at(point)).id,product)){
 					auto body=nodes[weight];

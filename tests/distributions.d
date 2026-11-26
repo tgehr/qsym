@@ -194,6 +194,8 @@ private Case[] cases(){
 	Case("PositiveCoordinatePower","densityAtD(Λx. λ[log((exp(x)+1)^3)],0)","ℝ","3/2"),
 	Case("PositiveCoordinateRestricted","densityAtD(Λx. λ[sqrt(9+16*x²) | u. 0<u<5],1)","ℝ","0"),
 	Case("PositiveCoordinateClosed","densityAtD(Λx. λ[sqrt(9+16*x²) | u. 0<u≤5],1)","ℝ","16/5"),
+	Case("CoordinateQueryMissing","densityAtD(Λx. λ[log(1+x²)],undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("CoordinateQueryMissingGuard","densityAtD(Λx. λ[sqrt(9+16*x²) | u. (1/(u-5))<0],1)","ℝ","undefined(ℝ)"),
 	Case("CoordinateLogPole","Λx. λ[log(x²)]","Distribution(ℝ)"),
 	Case("CoordinatePartialSqrt","Λy. λ[sqrt(y)]","Distribution(ℝ)","Λ(y:ℝ). λ[(sqrt(y))]"),
 	Case("CoordinatePartialLog","Λy. λ[log(y)]","Distribution(ℝ)","Λ(y:ℝ). λ[(log(y))]"),
