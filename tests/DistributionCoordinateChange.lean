@@ -1,5 +1,6 @@
 import QSym.DistributionCoordinateChange
 import QSym.DistributionCoordinateProbe
+import QSym.DistributionCoordinateMass
 import QSym.AxiomCheck
 
 noncomputable section
@@ -17,14 +18,15 @@ private theorem step_limits : Tendsto step (𝓝[<] 0) (𝓝 0) ∧ Tendsto step
     filter_upwards [self_mem_nhdsWithin] with x (hx : 0 < x)
     simp [step, hx.not_lt]
 
-private theorem step_regular {x : ℝ} (hx : x ≠ 0) : ContDiffAt ℝ 1 step x := by
+private theorem step_germ {x : ℝ} (hx : x ≠ 0) : step =ᶠ[𝓝 x] fun _ => step x := by
   rcases lt_or_gt_of_ne hx with hl | hr
-  · apply (contDiffAt_const (c := (0:ℝ))).congr_of_eventuallyEq
-    filter_upwards [gt_mem_nhds hl] with y hy
-    simp [step, hy]
-  · apply (contDiffAt_const (c := (1:ℝ))).congr_of_eventuallyEq
-    filter_upwards [lt_mem_nhds hr] with y hy
-    simp [step, hy.not_lt]
+  · filter_upwards [gt_mem_nhds hl] with y hy
+    simp [step, hl, hy]
+  · filter_upwards [lt_mem_nhds hr] with y hy
+    simp [step, hr.not_lt, hy.not_lt]
+
+private theorem step_regular {x : ℝ} (hx : x ≠ 0) : ContDiffAt ℝ 1 step x :=
+  contDiffAt_const.congr_of_eventuallyEq (step_germ hx)
 
 private def stepChart : VariationChart := by
   have cut : ¬ DifferentiableAt ℝ step 0 := by
@@ -53,6 +55,22 @@ theorem exp_step_observations :
   simp [postcompose, stepChart, leftLim_eq_of_tendsto (NeBot.ne inferInstance) l,
     rightLim_eq_of_tendsto (NeBot.ne inferInstance) r,
     abs_of_nonneg (sub_nonneg.mpr (Real.one_le_exp (by norm_num : (0:ℝ) ≤ 1)))]
+
+theorem exp_step_total_mass :
+    massValue ((stepChart.postcompose ChangeOn.exp (.univ stepChart)).present none) = some (Real.exp 1 - 1) := by
+  have inner (x : ℝ) : deriv step x = 0 := by
+    by_cases h : x = 0
+    · subst x; exact deriv_zero_of_not_differentiableAt ((stepChart.exceptional _).mp (by simp [stepChart]))
+    · rw [(step_germ h).deriv_eq, deriv_const]
+  rw [mass_flat]
+  · have l := Real.continuous_exp.continuousAt.tendsto.comp step_limits.1
+    have r := Real.continuous_exp.continuousAt.tendsto.comp step_limits.2
+    simp [postcompose, stepChart, jumpLength, leftLim_eq_of_tendsto (NeBot.ne inferInstance) l,
+      rightLim_eq_of_tendsto (NeBot.ne inferInstance) r,
+      abs_of_nonneg (sub_nonneg.mpr (Real.one_le_exp (by norm_num : (0:ℝ) ≤ 1)))]
+  · intro x
+    change deriv (Real.exp ∘ step) x = 0
+    rw [ChangeOn.exp.deriv_comp (fun _ => trivial), inner, mul_zero]
 
 /-- Exponentiating a unit jump changes its source length to e−1. -/
 theorem exp_step : atCut (Real.exp ∘ step) 0 none = atom 0 (some (Real.exp 1 - 1)) := by
@@ -99,6 +117,7 @@ theorem positive_values_with_log_pole :
 #qsym_check_axioms present_postcompose
 #qsym_check_axioms exp_step
 #qsym_check_axioms exp_step_observations
+#qsym_check_axioms exp_step_total_mass
 #qsym_check_axioms exp_step_restricted
 #qsym_check_axioms log_corner
 end QSym.Distribution.GraphFibre.Coordinates.ChangeTests

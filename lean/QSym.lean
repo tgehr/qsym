@@ -15,7 +15,7 @@ import QSym.DistributionGaussian
 import QSym.DistributionSymbolicPolynomial
 import QSym.DistributionGaussianSymbolic
 import QSym.DistributionCoordinateDomain
-import QSym.DistributionCoordinateGridProbe
+import QSym.DistributionCoordinateGridMass
 import QSym.DistributionWeightedAffine
 import QSym.Limit
 import QSym.LimitExponential

@@ -202,7 +202,7 @@ private struct CoordinateGrid{
 	uint body,weight,predicate=uint.max,outerPredicate=uint.max,query=uint.max;
 	Rational sampledValue,sampledWeight;
 	CoordinateChange change;
-	bool traceRange;
+	bool traceRange,flatMass;
 	CoordinateJoin[] joins;
 }
 private Rational polynomialAt(Rational[] p,Rational x) @safe {
@@ -6740,6 +6740,47 @@ final class Bindings{
 			return distribution(ctx,BoundOp.distributionWeight,[hint(lambda(mask),"y"),distribution(ctx,BoundOp.distributionLebesgue)]);
 		}
 
+		// Recover the source grid before postcomposition. Each trace must
+		// admit the change, even when the source omits that value at the cut.
+		bool changedJumpGrid(CoordinateChange change,uint input,out uint index,bool flat){
+			if(change==CoordinateChange.none||!gridNumerical(input)) return false;
+			Rational[] global; string proof;
+			if(axisPolynomial(input,global)||!gridChangeRange(change,input,proof)) return false;
+			if(polynomialCoordinate(lambda(at(input)),index)==BoundTerm.init) return false;
+			auto c=&coordinates[index]; bool jump;
+			bool admits(Rational r){
+				if(change==CoordinateChange.log||change==CoordinateChange.sqrt) return Rational(0)<r;
+				return change!=CoordinateChange.reciprocal||!r.zero;
+			}
+			foreach(j;c.joins){
+				if(j.kind==JoinKind.smooth) continue;
+				if(!admits(j.left)||!admits(j.right)){coordinates.length=index; return false;}
+				jump|=j.kind==JoinKind.jump;
+			}
+			if(!jump||flat&&!(nodes[c.weight].op==BoundOp.scalar&&arena.at(nodes[c.weight].data)==arena.real_(0))){
+				coordinates.length=index; return false;
+			}
+			c.change=change; c.traceRange=true;
+			return true;
+		}
+		BoundTerm flatCoordinateMass(BoundTerm t,out uint index){
+			auto cover=nodes[node(t).a];
+			if(cover.op!=BoundOp.distributionInverseCover) return BoundTerm.init;
+			auto row=nodes[cover.a];
+			if(row.op!=BoundOp.vectorCons||nodes[row.b].op!=BoundOp.vectorNil||nodes[row.a].op!=BoundOp.lambda) return BoundTerm.init;
+			auto id=nodes[row.a].a,body=nodes[id],change=gridChange(id);
+			if(!changedJumpGrid(change,body.a,index,true)) return BoundTerm.init;
+			auto c=&coordinates[index]; c.flatMass=true;
+			auto ctx=context(t),zero=arena.real_(0),sum=scalar(ctx,zero),minus=scalar(ctx,arena.real_(-1));
+			auto add=arena.add(zero,zero,true),mul=arena.mul(zero,zero,true),abs=arena.abs(zero);
+			BoundTerm trace(Rational r){return primitive(arena.at(body.data),[scalar(ctx,arena.real_(r))]);}
+			foreach_reverse(j;c.joins){
+				if(j.kind==JoinKind.smooth) continue;
+				auto gap=primitive(add,[trace(j.right),primitive(mul,[minus,trace(j.left)])]);
+				sum=primitive(add,[primitive(abs,[gap]),sum]);
+			}
+			return sum;
+		}
 		// A rational point asks for one cell or one exceptional event. The model
 		// determines the answer directly from the checked grid.
 		Result literalGridDensity(BoundTerm t){
@@ -6763,26 +6804,8 @@ final class Bindings{
 			auto sample=arena.number(arena.at(y.data)).re;
 			if(sample.words>128) return miss;
 			uint index;
-			if(polynomialCoordinate(at(row.a),index,BoundTerm.init,changed)==BoundTerm.init){
-				// Query a changed jump directly from the inner chart. Both one-sided
-				// traces must lie in the domain, including a trace the source never takes.
-				if(!changed) return miss;
-				Rational[] global; string proof;
-				if(axisPolynomial(body.a,global)||!gridChangeRange(change,body.a,proof)) return miss;
-				if(polynomialCoordinate(lambda(at(body.a)),index)==BoundTerm.init) return miss;
-				auto inner=&coordinates[index]; bool jump;
-				bool admits(Rational r){
-					if(change==CoordinateChange.log||change==CoordinateChange.sqrt) return Rational(0)<r;
-					return change!=CoordinateChange.reciprocal||!r.zero;
-				}
-				foreach(j;inner.joins){
-					if(j.kind==JoinKind.smooth) continue;
-					if(!admits(j.left)||!admits(j.right)){coordinates.length=index; return miss;}
-					jump|=j.kind==JoinKind.jump;
-				}
-				if(!jump){coordinates.length=index; return miss;}
-				inner.change=change; inner.traceRange=true;
-			}
+			if(polynomialCoordinate(at(row.a),index,BoundTerm.init,changed)==BoundTerm.init&&
+				!changedJumpGrid(change,body.a,index,false)) return miss;
 			auto c=&coordinates[index];
 			size_t cell;
 			while(cell<c.grid.cuts.length&&c.grid.cuts[cell]<sample) ++cell;
@@ -6912,6 +6935,15 @@ final class Bindings{
 					auto proof=emit(BindingRule.distributionRadiusChart,t.id,image.id,uint.max,uint.max,evidence),tail=visit(image,depth+1);
 					result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,proof,tail.proof));
 					active.set(t.id,false); memo.set(t.id,result); return result;
+				}
+			}
+			if(n.op==BoundOp.distributionMass&&steps<budget){
+				uint index; auto mass=flatCoordinateMass(t,index);
+				if(mass!=BoundTerm.init){
+					++steps;
+					auto step=emit(BindingRule.distributionCoordinateGrid,t.id,mass.id,uint.max,uint.max,index);
+					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),step);
+					return Result(mass.id,uint.max);
 				}
 			}
 			if(n.op==BoundOp.distributionDensityAt&&steps<budget){
@@ -9212,7 +9244,11 @@ final class Bindings{
 		Rational sample;
 		bool positive=c.change==CoordinateChange.log||c.change==CoordinateChange.sqrt;
 		bool checkTraces=c.traceRange&&(positive||c.change==CoordinateChange.reciprocal);
-		string probe,continuous,traces;
+		string probe,continuous,traces,jumps;
+		if(c.flatMass) jumps=app("JumpSum.nil",numeric(arena.real_(0),Rational(0)));
+		string member(Rational v){
+			return checkTraces?app(positive?"CutRange.positive":"CutRange.nonzero",q(v)~" rfl"):"True.intro";
+		}
 		if(checkTraces) traces=app("CutRange.nil",(positive?"(Set.Ioi (0 : ℝ))":"(fun u : ℝ => u ≠ 0)")~" "~f);
 		if(probing){
 			sample=arena.number(arena.at(nodes[c.query].data)).re;
@@ -9254,14 +9290,20 @@ final class Bindings{
 				}
 				if(checkTraces){
 					auto ends=app("traceEndpoints",q(j.left)~" "~q(j.right)~" "~germs~" rfl rfl");
-					string member(Rational v){return app(positive?"CutRange.positive":"CutRange.nonzero",q(v)~" rfl");}
 					traces=app("CutRange.cons","(d := "~name(j.event)~".eval ξ ρ) "~ends~" "~member(j.left)~" "~member(j.right)~" "~traces);
+				}
+				if(c.flatMass){
+					auto ends=app("traceValues",q(j.left)~" "~q(j.right)~" "~germs~" rfl rfl");
+					auto op=grid~"ScalarChange."~to!string(c.change);
+					jumps=app("JumpSum.cons","(d := "~name(j.event)~".eval ξ ρ) "~op~" "~q(j.left)~" "~q(j.right)~" "~ends~" "~
+						member(j.left)~" "~member(j.right)~" "~numeric(arena.real_(j.left),j.left)~" "~numeric(arena.real_(j.right),j.right)~" "~
+						numeric(arena.real_(-1),Rational(-1))~" "~jumps);
 				}
 				if(probing){
 					hit|=sample==a;
 					probe=app("Probe.cons",q(sample)~" "~q(a)~" ("~name(j.event)~".eval ξ ρ) "~probe);
 				}
-				if(restricted||probing) cert.roots~=j.event;
+				if(restricted||probing||c.flatMass) cert.roots~=j.event;
 				if(restricted&&j.kind==JoinKind.corner){
 					auto cut=app("restrictedCorner",pred~" "~q(v)~" "~germs~" "~pv~" rfl rfl");
 					string shape;
@@ -9304,6 +9346,7 @@ final class Bindings{
 					"(Distribution.GraphFibre.Coordinates.VariationChart.RangeIn.univ "~app("Checked.chart",tail)~")";
 			}else args~=range~" ";
 		}
+		if(c.flatMass) return app("massFlatChange",args~numeric(arena.real_(0),Rational(0))~" "~tail~" "~continuous~" "~jumps);
 		if(probing){
 			string sampled(uint id,Rational v){
 				return "(Eq.trans "~cert.numericProof(id,sample,q(v))~" (Eq.symm "~numeric(arena.real_(v),v)~"))";

@@ -255,12 +255,19 @@ private theorem traceR {f a p q} (g : Germ f a p q) :
 private theorem value_eq {v : ℚ} {p : List ℚ} {a : ℚ} (h : v = polyEvalQ p a) :
     (v : ℝ) = polyEval p a := h ▸ polyEvalQ_cast p a
 
+theorem traceValues {f a p q} (l r : ℚ) (g : Germ f a p q)
+    (hl : l = polyEvalQ p a) (hr : r = polyEvalQ q a) :
+    Tendsto (coord f) (𝓝[<] (a:ℝ)) (𝓝 (l:ℝ)) ∧ Tendsto (coord f) (𝓝[>] (a:ℝ)) (𝓝 (r:ℝ)) := by
+  rw [value_eq hl, value_eq hr]
+  exact ⟨traceL g, traceR g⟩
+
 /-- The actual one-sided values need not both occur as source values. -/
 theorem traceEndpoints {f a p q} (l r : ℚ) (g : Germ f a p q)
     (hl : l = polyEvalQ p a) (hr : r = polyEvalQ q a) :
-    Function.leftLim (coord f) (a:ℝ) = (l:ℝ) ∧ Function.rightLim (coord f) (a:ℝ) = (r:ℝ) :=
-  ⟨(leftLim_eq_of_tendsto (NeBot.ne inferInstance) (traceL g)).trans (value_eq hl).symm,
-    (rightLim_eq_of_tendsto (NeBot.ne inferInstance) (traceR g)).trans (value_eq hr).symm⟩
+    Function.leftLim (coord f) (a:ℝ) = (l:ℝ) ∧ Function.rightLim (coord f) (a:ℝ) = (r:ℝ) := by
+  obtain ⟨left, right⟩ := traceValues l r g hl hr
+  exact ⟨leftLim_eq_of_tendsto (NeBot.ne inferInstance) left,
+    rightLim_eq_of_tendsto (NeBot.ne inferInstance) right⟩
 
 /-- Both open germs tend to the actual value at a continuous join. -/
 theorem continuousJoin {f a p q} (v : ℚ) (g : Germ f a p q) (hf : f a = some (v:ℝ))

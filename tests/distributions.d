@@ -208,6 +208,17 @@ private Case[] cases(){
 	Case("CenteredCoordinateNested","densityAtD(Λx. λ[log((x^2-2*x+1)*exp(x)+1)],0)","ℝ","1/2"),
 	Case("CoordinateTouchingLog","Λx. λ[log(x^2-2*x+1)]","Distribution(ℝ)"),
 	Case("CoordinateSignChangeLog","Λx. λ[log(x^2-3*x+1)]","Distribution(ℝ)"),
+	Case("FlatCoordinateUnitJump","∫dx λ[exp([0≤x]·1)]","ℝ","e-1"),
+	Case("FlatCoordinateReversed","∫dx λ[exp([x<0]·1)]","ℝ","e-1"),
+	Case("FlatCoordinateClosed","massD(Λx. λ[exp([x≤0]·1)])","ℝ","e-1"),
+	Case("FlatCoordinateTwoJumps","∫dx λ[exp([x<0]·2+[1<x]·3)]","ℝ","exp(2)+exp(3)-2"),
+	Case("FlatCoordinateLog","∫dx λ[log(1+[0≤x]·2)]","ℝ","log(3)"),
+	Case("FlatCoordinateRoot","∫dx λ[sqrt(1+[0≤x]·3)]","ℝ","1"),
+	Case("FlatCoordinateReciprocal","∫dx λ[(1+[0≤x]·1)⁻¹]","ℝ","1/2"),
+	Case("FlatCoordinateSinh","∫dx λ[sinh([0≤x]·1)]","ℝ","sinh(1)"),
+	Case("FlatCoordinateArsinh","∫dx λ[asinh([0≤x]·1)]","ℝ","asinh(1)"),
+	Case("FlatCoordinateGrowing","∫dx λ[exp(x+[0≤x]·2)]","ℝ"),
+	Case("FlatCoordinateBoundary","∫dx λ[log([0≤x]·2)]","ℝ"),
 	Case("TraceCoordinateExpJump","densityAtD(Λx. λ[exp([0≤x]·2)],0)","ℝ","undefined(ℝ)"),
 	Case("TraceCoordinateExpRight","densityAtD(Λx. λ[exp(x+[0≤x]·2)],1)","ℝ","exp(3)"),
 	Case("TraceCoordinateExpLeft","densityAtD(Λx. λ[exp(x+[0≤x]·2)],-1)","ℝ","exp(-1)"),
@@ -1470,6 +1481,8 @@ private void run(string directory){
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
 		if(c.name=="CenteredCoordinateQuartic"||c.name=="PositiveCoordinateNestedInverse")
 			enforce(certificate.indexOf(".ofEq (fun ξ _ => (Numeric.calculate_sound ξ ")>=0,c.name~" direct rational evaluation");
+		if(c.name.indexOf("FlatCoordinate")==0)
+			enforce((certificate.indexOf("Grid.massFlatChange")>=0)==(c.name!="FlatCoordinateGrowing"&&c.name!="FlatCoordinateBoundary"),c.name~" flat mass");
 		if(c.name.indexOf("TraceCoordinate")==0)
 			enforce((certificate.indexOf("Grid.probeRange")>=0)==(c.name!="TraceCoordinateDomain"),c.name~" traced coordinate domain");
 		if(c.name.indexOf("ProbeGrid")==0)
