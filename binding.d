@@ -3470,7 +3470,7 @@ final class Bindings{
 		bool literalScale=!bare&&nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),rate);
 		bool unitScale=bare||literalScale&&rate.one;
 		bool indexedEmission=emission!=uint.max&&depends(at(emission),0);
-		if(pointwise&&emission!=uint.max&&(indexedRate||indexedEmission&&!unitScale)) return BoundTerm.init;
+		if(pointwise&&emission!=uint.max&&indexedRate) return BoundTerm.init;
 		auto call=bare?scale:nodes[scale.b];
 		if(call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
 		auto pred=nodes[call.b],one=nodes[pred.b],base=at(branch.b);
@@ -3540,7 +3540,14 @@ final class Bindings{
 				auto visits=finiteSum(hint(lambda(summand),"i"),arg);
 				return primitive(arena.add(zero,zero,true),[initial,visits]);
 			}
-			if(pointwise&&nodes[emission].op==BoundOp.distributionScale&&!depends(at(nodes[emission].b),0)){
+			BoundTerm convolution(BoundTerm initial,BoundTerm row,BoundTerm ratio){
+				auto power=arena.call(Builtin.powRN,[zero,oneN]),mul=arena.mul(zero,zero,true);
+				auto remaining=primitive(arena.call(Builtin.subN,[oneN,oneN]),[substitute(arg,inner,rowEnv[2..$]),successor]);
+				auto coefficient=primitive(power,[substitute(ratio,inner,rowEnv[2..$]),remaining]);
+				auto baseValue=primitive(mul,[primitive(power,[ratio,arg]),initial]);
+				return total(baseValue,primitive(mul,[coefficient,row]));
+			}
+			if(pointwise&&unitScale&&nodes[emission].op==BoundOp.distributionScale&&!depends(at(nodes[emission].b),0)){
 				// Keep the seed and the common emission as distributions until
 				// the accumulated scalar has multiplied both fibre components.
 				auto row=nodes[emission],e=substitute(at(row.b),ctx,env);
@@ -3557,11 +3564,15 @@ final class Bindings{
 				if(extractFibre(seedDistribution.id,query,baseFibre)==BoundTerm.init||
 					extractFibre(visit.id,substitute(query,inner,rowEnv[2..$]),visitFibre)==BoundTerm.init) return BoundTerm.init;
 				auto baseRow=baseFibre[$-1],row=visitFibre[$-1];
-				auto charge=total(at(baseRow.charge),at(row.charge)),regular=total(at(baseRow.regular),at(row.regular));
-				auto nonzero=primitive(arena.nonzero(zero),[charge]);
+				auto ratio=unitScale?BoundTerm.init:substitute(at(scale.a),ctx,env);
+				BoundTerm sum(uint b,uint e){ return unitScale?total(at(b),at(e)):convolution(at(b),at(e),ratio); }
+				auto charge=sum(baseRow.charge,row.charge),regular=sum(baseRow.regular,row.regular);
+				auto nonzero=primitive(arena.nonzero(zero),[charge]),value=guard(primitive(arena.not_(arena.boolean(false)),[nonzero]),regular);
 				witness=cast(uint)fibres.length; fibres~=[baseFibre,visitFibre];
 				rule=BindingRule.distributionIndexedFibre;
-				return guard(primitive(arena.not_(arena.boolean(false)),[nonzero]),regular);
+				if(unitScale) return value;
+				env[0]=arg;
+				return conditional(substitute(at(branch.a),ctx,env),density(seedDistribution),value);
 			}
 			auto row=observedMass(visit,operations,true);
 			if(indexedRate){
@@ -3575,11 +3586,7 @@ final class Bindings{
 			auto power=arena.call(Builtin.powRN,[zero,oneN]),mul=arena.mul(zero,zero,true);
 			auto ratio=substitute(at(scale.a),ctx,env);
 			if(!literalScale||rate.zero){
-				uint[] lifted; foreach(j;0..depth(ctx)) lifted~=j+1;
-				auto remaining=primitive(arena.call(Builtin.subN,[oneN,oneN]),[rename(arg,inner,lifted),successor]);
-				auto coefficient=primitive(power,[rename(ratio,inner,lifted),remaining]);
-				auto initial=primitive(mul,[primitive(power,[ratio,arg]),seed]);
-				auto positive=total(initial,primitive(mul,[coefficient,row]));
+				auto positive=convolution(seed,row,ratio);
 				env[0]=arg;
 				return conditional(substitute(at(branch.a),ctx,env),seed,positive);
 			}
@@ -13365,15 +13372,19 @@ final class Bindings{
 					if(p.rule==BindingRule.distributionIndexedFibre){
 						auto base=result.fibres[p.extra],rows=result.fibres[p.extra+1],seed=base[$-1],row=rows[$-1];
 						auto tail=nodes[swapped?step.a:step.b];
+						bool convolution=target.op==BoundOp.conditional;
 						string scale="(some 1) rfl false";
-						if(tail.op==BoundOp.distributionScale){
+						if(convolution){
+							auto total=nodes[nodes[target.c].b],baseGain=nodes[nodes[total.a].a];
+							scale=value(baseGain.a);
+						}else if(tail.op==BoundOp.distributionScale){
 							auto one="n"~to!string(nodes[tail.a].data);
 							scale="("~one~".eval ξ) (Numeric.calculate_real_one ξ "~one~" rfl) true";
 						}
 						string env="(Binding.Env.cons (a := .scalar .natural) (some i) ρ)";
 						string column(uint id){ return "(fun i : ℕ => "~name(id)~".eval ξ "~env~")"; }
 						proof=".ofEq (fun ξ ρ =>\n  let query := "~value(n.b)~"\n"~fibreEvidence(base,"query","  ")~
-							"  Distribution.RealDensityFibre.indexed_countdown (rec"~f~") (fixed"~f~") "~value(seed.source)~" "~indexedFunction(emission)~
+							"  Distribution.RealDensityFibre."~(convolution?"convolution_countdown":"indexed_countdown")~" (rec"~f~") (fixed"~f~") "~value(seed.source)~" "~indexedFunction(emission)~
 							" "~scale~" "~to!string(swapped)~" (fun _ _ => rfl) "~value(call.b)~
 							" (charge := "~column(row.charge)~") (regular := "~column(row.regular)~") h"~to!string(seed.source)~" (fun i =>\n"~
 							"    let ρ : Binding.Env "~ctxName(nodes[row.source].context)~" := "~env~"\n"~fibreEvidence(rows,"query","    ")~

@@ -822,5 +822,87 @@ theorem indexed_countdown
   | none => cases bc <;> rfl
   | some n => exact total n
 
+private theorem recorded_charge {d x c w} (h : FibreCertificate d x c w) : component true x d = c := by
+  cases d <;> cases x <;> simp_all [FibreCertificate, component]
+
+private theorem recorded_regular {d x c w} (h : FibreCertificate d x c w) (hc : Value.Defined c) :
+    component false x d = w := by
+  cases d <;> cases x <;> simp_all [FibreCertificate, component, Value.Defined]
+
+/-- The same finite linear combination acts on charge and regular weight.
+A successful charge observation ensures all visited regular certificates apply. -/
+theorem finite_combination {d b : Option (D ℝ)} {rows : ℕ → Option (D ℝ)}
+    {x bc bw : Option ℝ} {cs ws : ℕ → Option ℝ} (gain : Option ℝ) (weights : ℕ → Option ℝ) (n : Option ℕ)
+    (hb : FibreCertificate b x bc bw) (hr : ∀ i, FibreCertificate (rows i) x (cs i) (ws i))
+    (obs : ∀ c, component c x d = Value.add (Value.mul gain (component c x b))
+      (Summation.rangeValue (some fun i => Value.mul (weights i) (component c x (rows i))) n)) :
+    FibreCertificate d x
+      (Value.add (Value.mul gain bc) (Summation.rangeValue (some fun i => Value.mul (weights i) (cs i)) n))
+      (Value.add (Value.mul gain bw) (Summation.rangeValue (some fun i => Value.mul (weights i) (ws i)) n)) := by
+  classical
+  have charges (i : ℕ) := recorded_charge (hr i)
+  have charge := obs true
+  simp only [recorded_charge hb, charges] at charge
+  have regular (valid : Value.Defined (component true x d)) :
+      component false x d = Value.add (Value.mul gain bw)
+        (Summation.rangeValue (some fun i => Value.mul (weights i) (ws i)) n) := by
+    rw [charge] at valid
+    obtain ⟨base, sum⟩ := (Value.defined_add _ _).mp valid
+    rw [obs false, recorded_regular hb ((Value.defined_mul _ _).mp base).2]
+    cases n with
+    | none => rfl
+    | some n =>
+      congr 1
+      apply Summation.finite_congr
+      intro i hi
+      have all : ∀ j ∈ Finset.range n, (Value.mul (weights j) (cs j)).isSome := by
+        by_contra failed
+        obtain ⟨v, hv⟩ := sum
+        change (if ∀ j ∈ Finset.range n, (Value.mul (weights j) (cs j)).isSome then some _ else none) = some v at hv
+        rw [if_neg failed] at hv
+        cases hv
+      exact congrArg (Value.mul (weights i)) (recorded_regular (hr i)
+        ((Value.defined_mul _ _).mp (Option.isSome_iff_exists.mp (all i hi))).2)
+  cases d with
+  | none => exact charge.symm
+  | some d =>
+    cases x with
+    | none => exact charge.symm
+    | some x => exact ⟨charge.symm, (regular ⟨_, rfl⟩).symm⟩
+
+/-- A captured or zero discount uses nonnegative powers on the visited rows.
+At zero visits neither the discount nor the emission is forced. -/
+theorem convolution_countdown
+    (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b : Option (D ℝ)) (e : Option ℕ → Option (D ℝ))
+    (r : Option ℝ) (swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let d := scaleValue r ((Functions.subN.apply (some n) (some 1)).bind g)
+       if swap then addValue d (e (some n)) else addValue (e (some n)) d))
+    (arg : Option ℕ) {x bc bw : Option ℝ} {charge regular : ℕ → Option ℝ}
+    (hb : FibreCertificate b x bc bw)
+    (rows : ∀ i, FibreCertificate (e (Functions.addN.apply (some i) (some 1))) x (charge i) (regular i)) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg))) (densityAtValue b x)
+      (let total := fun a (w : ℕ → Option ℝ) => Value.add (Value.mul (Functions.powRN.apply r arg) a)
+         (Summation.rangeValue (some (fun i => Value.mul (Functions.powRN.apply r
+           (Functions.subN.apply arg (Functions.addN.apply (some i) (some 1)))) (w i))) arg)
+       Binding.guardValue (Value.not (Value.nonzero (total bc charge))) (total bw regular)) := by
+  have obs (c : Bool) := observe_convolution_countdown (observation c x) p hf b e r swap step arg
+  cases eq : Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg)) with
+  | none =>
+    apply density_congr (e := none)
+    intro c
+    simpa only [eq] using obs c
+  | some zero =>
+    cases zero with
+    | false =>
+      exact (finite_combination _ _ arg hb rows (fun c => by simpa only [eq] using obs c)).extract
+    | true =>
+      apply density_congr
+      intro c
+      simpa only [eq] using obs c
+
 end RealDensityFibre
 end QSym.Distribution

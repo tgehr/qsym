@@ -1866,6 +1866,22 @@ private Case[] cases(){
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
 	Case("CapturedScaleMissingIndex","λ(r:ℝ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(0 sub 1))","ℝ→ℝ","λ(r:ℝ). undefined(ℝ)"),
 	Case("VariableScaleByIndex","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD((n:ℝ),f(n sub 1)))(k))","ℝ→ℕ→ℝ"),
+	Case("DiscountFibreCancel","densityAtD("~emittedSteps("addD(δ((2:ℝ)),lebesgueD())","scaleD(-1/4,δ((n:ℝ)))","1/2","2")~",2)","ℝ","1/4"),
+	Case("DiscountFibreAfter","densityAtD("~emittedSteps("addD(δ((2:ℝ)),lebesgueD())","scaleD(-1/4,δ((n:ℝ)))","1/2","3",true)~",2)","ℝ","1/8"),
+	Case("DiscountFibreBefore","densityAtD("~emittedSteps("addD(δ((2:ℝ)),lebesgueD())","scaleD(-1/4,δ((n:ℝ)))","1/2","1")~",2)","ℝ","undefined(ℝ)"),
+	Case("DiscountFibreAlternating","densityAtD("~emittedSteps("addD(δ((1:ℝ)),lebesgueD())","δ((n:ℝ))","-1","1",true)~",1)","ℝ","-1"),
+	Case("DiscountFibreZeroClears","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","0","2")~",1)","ℝ","0"),
+	Case("DiscountFibreZeroLatest","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","0","2",true)~",2)","ℝ","undefined(ℝ)"),
+	Case("DiscountFibreZeroHole","defined(densityAtD("~emittedSteps("(Λx. x⁻¹·λ[x])","δ((n:ℝ))","0","2")~",0))","𝔹","false"),
+	Case("DiscountFibreZeroVisits","densityAtD("~emittedSteps("lebesgueD()","δ(((n:ℝ)-1)⁻¹)","undefined(ℝ)","0")~",1)","ℝ","1"),
+	Case("DiscountFibreMissingRate","defined(densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","undefined(ℝ)","1")~",1))","𝔹","false"),
+	Case("DiscountFibreMissingRow","defined(densityAtD("~emittedSteps("lebesgueD()","δ(((n:ℝ)-1)⁻¹)","0","2")~",3))","𝔹","false"),
+	Case("DiscountFibreMissingBound","defined(densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","1/2","0 sub 1")~",1))","𝔹","false"),
+	Case("DiscountFibreMissingQuery","defined(densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","-1","2")~",undefined(ℝ)))","𝔹","false"),
+	Case("DiscountFibreSmooth","densityAtD("~emittedSteps("lebesgueD()","(Λx. ((n:ℝ)+x)·λ[x])","1/2","3")~",1)","ℝ","49/8"),
+	Case("DiscountFibreCaptured","λ(r:ℝ).λ(k:ℕ).λ(x:ℝ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","r","k")~",x)","ℝ→ℕ→ℝ→ℝ"),
+	Case("DiscountFibreMixed","densityAtD("~emittedSteps("lebesgueD()","addD(δ((n:ℝ)),scaleD((n:ℝ),lebesgueD()))","-1","3")~",4)","ℝ","1"),
+	Case("DiscountFibreOpaqueSeed","λ(b:Distribution(ℝ)).densityAtD("~emittedSteps("b","δ((n:ℝ))","1/2","2")~",0)","Distribution(ℝ)→ℝ"),
 	Case("VisitFibreMillion","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","1000000")~",1000001)","ℝ","1"),
 	Case("VisitFibreLast","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","1000000")~",1000000)","ℝ","undefined(ℝ)"),
 	Case("VisitFibreSymbolic","λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","k")~",2)","ℕ→ℝ","λ(k:{k:ℕ | k≤1}). (1:ℝ)"),
@@ -2231,6 +2247,11 @@ private void run(string directory){
 			enforce(text.indexOf("∑")<0,c.name);
 			if(c.name!="RangeProbeMissingEmpty"&&c.name!="RangeProbeMissingVisit"&&c.name!="RangeProbeLazy")
 				enforce(certificate.indexOf("Summation.range_real_N ")>=0||certificate.indexOf("Summation.range_shifted_real_N ")>=0,c.name);
+		}
+		if(c.name.indexOf("DiscountFibre")==0){
+			bool solved=c.name!="DiscountFibreOpaqueSeed";
+			enforce((certificate.indexOf("Distribution.RealDensityFibre.convolution_countdown ")>=0)==solved,c.name);
+			if(solved) enforce(text.indexOf("μ")<0,c.name);
 		}
 		if(c.name.indexOf("VisitFibre")==0){
 			bool indexed=c.name!="VisitFibreOpaqueSeed";
