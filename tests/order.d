@@ -76,6 +76,13 @@ Example[] examples(){
 		Example("AbsSymbolic","abs(x)=y","0≤y∧(x=-y∨x=y)"),
 		Example("AbsOutside","2<abs(x)","x<-2∨2<x"),
 		Example("AbsOutsideClosed","2≤abs(x)","x≤-2∨2≤x"),
+		Example("CosPositiveUnit","0<cos(x)","true",["-1≤x","x≤1"]),
+		Example("CosNonzeroUnit","cos(x)≠0","true",["-1≤x","x≤1"]),
+		Example("CosPositiveSine","0<cos(sin(x))","true"),
+		Example("CosNonzeroCosine","cos(cos(x))≠0","true"),
+		Example("CosUnitEndpoint","cos(1)≠0","true"),
+		Example("CosPartialBound","cos(x)≠0","cos(x)≠0",["x≤1"]),
+		Example("CosOutsideUnit","cos(2*sin(x))≠0","cos(2*sin(x))≠0"),
 		Example("MaskPartialBody","[p]*log(-1)≠0","p∧log(-1)≠0")
 	];
 }

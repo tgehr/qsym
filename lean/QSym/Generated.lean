@@ -4835,6 +4835,24 @@ theorem r_real_cos_lower (v_x : Option (Ty.denote .real)) :
 
 #qsym_check_axioms r_real_cos_lower
 
+theorem r_real_cos_positive_unit (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (some (((-1) : Int) : ℝ)) v_x) (some true))
+    (hp1 : Value.Refines (Value.le v_x (some (((1) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (Functions.cosR.apply v_x)) (some true) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_positive_unit
+
+theorem r_real_cos_nonzero_unit (v_x : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le (some (((-1) : Int) : ℝ)) v_x) (some true))
+    (hp1 : Value.Refines (Value.le v_x (some (((1) : Int) : ℝ))) (some true)) :
+    Value.Refines (Value.nonzero (Functions.cosR.apply v_x)) (some true) := qsym_cached% by
+  cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_cos_nonzero_unit
+
 theorem r_real_sin_cos_product (v_x : Option (Ty.denote .real)) :
     Value.Refines (Value.mul (Functions.sinR.apply v_x) (Functions.cosR.apply v_x)) (Value.mul (some ((((1) : ℚ) / (2) : ℚ) : ℝ)) (Functions.sinR.apply (Value.mul (some (((2) : Int) : ℝ)) v_x))) := qsym_cached% by
   cases v_x

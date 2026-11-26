@@ -647,6 +647,8 @@ fact real_sin_upper(x:ℝ):sin(x)≤1;
 fact real_sin_lower(x:ℝ):-1≤sin(x);
 fact real_cos_upper(x:ℝ):cos(x)≤1;
 fact real_cos_lower(x:ℝ):-1≤cos(x);
+rewrite real_cos_positive_unit(x:ℝ):0<cos(x)⇒true when -1≤x,x≤1;
+rewrite real_cos_nonzero_unit(x:ℝ):cos(x)≠0⇒true when -1≤x,x≤1;
 rewrite real_sin_cos_product(x:ℝ):sin(x)*cos(x)⇒real(1,2)*sin(2*x);
 rewrite complex_sin_cos_product(z:ℂ):csin(z)*ccos(z)⇒toℂ(real(1,2))*csin(2*z);
 rewrite real_tanh_neg(x:ℝ):tanh(-x)⇒-tanh(x);

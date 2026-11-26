@@ -279,6 +279,15 @@ theorem complex_cos_quarter_normal (z : ℂ) :
 theorem integer_cos_normal (k : ℤ) : Real.cos (Real.pi*k)=(-1 : ℝ)^k := by
   simpa only [mul_comm] using real_integer_cos k
 
+theorem cos_unit_pos {x : ℝ} (lo : -1 ≤ x) (hi : x ≤ 1) : 0 < Real.cos x :=
+  Real.cos_pos_of_le_one (abs_le.mpr ⟨lo, hi⟩)
+
+theorem cos_unit_not_nonpositive {x : ℝ} (lo : -1 ≤ x) (hi : x ≤ 1) : ¬Real.cos x ≤ 0 :=
+  not_le.mpr (cos_unit_pos lo hi)
+
+theorem cos_unit_ne_zero {x : ℝ} (lo : -1 ≤ x) (hi : x ≤ 1) : Real.cos x ≠ 0 :=
+  (cos_unit_pos lo hi).ne'
+
 theorem cosh_not_nonpositive (x : ℝ) : ¬Real.cosh x≤0 := not_le.mpr (Real.cosh_pos x)
 theorem tanh_not_ge_one (x : ℝ) : ¬1≤Real.tanh x := not_le.mpr (tanh_lt_one x)
 theorem tanh_not_le_neg_one (x : ℝ) : ¬Real.tanh x≤-1 := not_le.mpr (neg_one_lt_tanh x)

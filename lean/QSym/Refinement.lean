@@ -562,6 +562,7 @@ macro "qsym_scalar" : tactic => `(tactic| (
       Real.cosh_sq, Complex.cosh_sq,
       Real.cosh_pos, Real.one_le_cosh, abs_of_pos (Real.cosh_pos _),
       Trigonometry.tanh_lt_one, Trigonometry.neg_one_lt_tanh,
+      Trigonometry.cos_unit_not_nonpositive, Trigonometry.cos_unit_ne_zero,
       Trigonometry.cosh_not_nonpositive, Trigonometry.tanh_not_ge_one, Trigonometry.tanh_not_le_neg_one, Elementary.cosh_ne_zero] <;> ring))
     all_goals try (qsym_new_trig_goal; solve | (simp_all [Real.cosh_eq, Complex.cosh, Real.sinh_eq, Complex.sinh] <;> ring))
     all_goals try (qsym_trig_goal; solve | simp_all [Elementary.sin_quarter_turn, Elementary.cos_quarter_turn,

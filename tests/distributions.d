@@ -459,6 +459,10 @@ private Case[] cases(){
 	Case("SmoothWaveRay","∫dx [x≤0]·λ[tan(cos(atan(x)))]","ℝ","tan(1)"),
 	Case("SmoothWaveWhole","∫dx λ[cosh(sin(atan(x)))]","ℝ","2·cosh(1)-2"),
 	Case("SmoothWaveAffine","∫dx [-π≤x≤π]·λ[3*sin(cos(2*x))-7]","ℝ","24·sin(1)"),
+	Case("TangentSineDomain","defined(tan(sin(x)))","𝔹","true"),
+	Case("TangentCosineDomain","defined(tan(cos(x)))","𝔹","true"),
+	Case("TangentPartialInput","defined(tan(sin(x⁻¹)))","𝔹","x≠0"),
+	Case("TangentAtPole","defined(tan(π/2))","𝔹","false"),
 	Case("SmoothWaveMissing","defined(∫dx [undefined(ℝ)≤x≤1]·λ[tan(sin(x))])","𝔹","false"),
 	Case("SmoothWaveSymbolic","λ(u:ℝ).∫dx [0≤x≤u]·λ[tan(sin(x))]","ℝ→ℝ"),
 	Case("SmoothWaveReciprocal","∫dx [0≤x≤π]·λ[(sin(x))⁻¹]","ℝ"),
@@ -2363,6 +2367,8 @@ private void run(string directory){
 			enforce((certificate.indexOf("WaveProfile.power ")>=0)==solved,c.name);
 			enforce((text.indexOf("∫")<0)==solved,c.name);
 		}
+		if(c.name=="SmoothWaveSymbolic")
+			enforce(text.indexOf("λ(u:ℝ).")==0&&certificate.indexOf("r_real_cos_nonzero_unit")>=0,c.name);
 		if(c.name.indexOf("SmoothWave")==0||c.name=="PeriodicSpanNonmonotone"){
 			bool solved=c.name!="SmoothWavePole"&&c.name!="SmoothWaveReciprocal"&&c.name!="SmoothWaveUnknown";
 			enforce((certificate.indexOf("WaveProfile.variation ")>=0)==solved,c.name);
