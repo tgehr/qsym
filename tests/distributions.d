@@ -9,6 +9,7 @@ import std.stdio:writeln;
 private struct Case{ string name,source,type,expected; }
 private Case[] cases(){
 	enum retry="(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d)))";
+	enum twoArms="(μ(d:Distribution(ℝ)).addD(scaleD(1/4,addD(δ(0),d)),scaleD(1/4,addD(d,δ(2)))))";
 	return [
 	Case("Dirac","δ(2)","Distribution(ℕ)"),
 	Case("NaturalDirac","(δ(2):Distribution(ℕ))","Distribution(ℕ)"),
@@ -1123,6 +1124,22 @@ private Case[] cases(){
 	Case("RetryObservationMissingProbe","massD(weightD(undefined(ℝ→ℝ),"~retry~"))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationMissingKernel","massD(bindD("~retry~",undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationContinuousOutput","massD(bindD("~retry~",λ(x:ℝ).Λy. [0≤y≤1]·λ[y]))","ℝ","1"),
+	Case("AffineBodyFair","μ(d:Distribution(ℝ)).scaleD(1/2,addD(δ(3),d))","Distribution(ℝ)","δ((3:ℝ))"),
+	Case("AffineBodyWeight","μ(d:Distribution(ℝ)).Λx. 1/2·(δ(3)[x]+d[x])","Distribution(ℝ)","δ((3:ℝ))"),
+	Case("AffineBodyConstant","μ(d:Distribution(ℝ)).δ(5)","Distribution(ℝ)","δ((5:ℝ))"),
+	Case("AffineBodyConstantPair","μ(d:Distribution(ℝ)).addD(δ(0),δ(1))","Distribution(ℝ)","μ(d:Distribution(ℝ)). Λ(x:ℝ). δ(0)[x]+δ(1)[x]"),
+	Case("AffineBodyPartial","μ(d:Distribution(ℝ)).scaleD(1/2,addD(undefined(Distribution(ℝ)),d))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("AffineBodyCapture","λ(x:ℝ).μ(d:Distribution(ℝ)).scaleD(1/2,addD(δ(x),d))","ℝ→Distribution(ℝ)","λ(x:ℝ). δ(x)"),
+	Case("AffineBodyType","μ(d:Distribution(Type)).scaleD(1/2,addD(δ(Distribution(ℝ)),d))","Distribution(Type)","δ(Distribution(ℝ))"),
+	Case("AffineBodySet","μ(d:Distribution(Set(ℝ))).scaleD(1/2,addD(δ({x:ℝ|x≠0}),d))","Distribution(Set(ℝ))","δ({x:ℝ | x≠0})"),
+	Case("AffineBodyHigher","μ(d:Distribution(ℕ→ℕ)).scaleD(1/2,addD(δ(λ(n:ℕ).n),d))","Distribution(ℕ→ℕ)","δ(λ(n:ℕ). n)"),
+	Case("AffineBodyMixed",twoArms,"Distribution(ℝ)","μ(d:Distribution(ℝ)). addD(Λ(x:ℝ). 1/4·δ(0)[x]+1/4·δ(2)[x],scaleD(1/2,d))"),
+	Case("AffineBodyMass","massD("~twoArms~")","ℝ","1"),
+	Case("AffineBodyFirstMoment","massD(weightD(λ(x:ℝ).x,"~twoArms~"))","ℝ","1"),
+	Case("AffineBodyDuplicate","μ(d:Distribution(ℝ)).addD(scaleD(1/4,addD(δ(3),d)),scaleD(1/4,addD(δ(3),d)))","Distribution(ℝ)","δ((3:ℝ))"),
+	Case("AffineBodyNested","μ(d:Distribution(ℝ)).scaleD(1/2,addD(addD(δ(2),d),scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 2·δ(2)[x]"),
+	Case("AffineBodyZeroVisit","massD(weightD(λ(x:ℝ).1/(x-1),μ(d:Distribution(ℝ)).addD(scaleD(1/2,addD(δ(0),d)),scaleD(0,δ(1)))))","ℝ","undefined(ℝ)"),
+	Case("AffineBodyNoMass","μ(d:Distribution(ℝ)).scaleD(0,addD(δ(4),d))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(4)[x]"),
 	Case("RetryVisitsCoincident","μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(2)),scaleD(1/4,δ(2))),scaleD(1/2,d))","Distribution(ℝ)","δ((2:ℝ))"),
 	Case("RetryVisitsLeftEmpty","μ(d:Distribution(ℝ)).addD(addD(zeroD(ℝ),scaleD(1/2,δ(2))),scaleD(1/2,d))","Distribution(ℝ)","δ((2:ℝ))"),
 	Case("RetryVisitsRightEmpty","μ(d:Distribution(ℝ)).addD(addD(scaleD(1/2,δ(2)),scaleD(8,zeroD(ℝ))),scaleD(1/2,d))","Distribution(ℝ)","δ((2:ℝ))"),
@@ -1202,6 +1219,7 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name.indexOf("AffineBody")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_affine")>=0,c.name);
 		if(c.name.indexOf("RetryVisits")==0){
 			if(c.name=="RetryVisitsEmpty") enforce(certificate.indexOf("Atomic.retry_empty")>=0,c.name);
 			else if(c.name=="RetryVisitsDistinct") enforce(certificate.indexOf("Atomic.retry_zero_point")<0&&text.indexOf("μ")>=0,c.name);
@@ -2177,6 +2195,7 @@ private void run(string directory){
 	}
 	auto owner=Session.open(),a=owner.arena; FunctionSyntax s;
 	foreach(source;[
+		"μ(d:Distribution(ℝ)).scaleD(1/2,addD(δ(massD(d)),d))", "μ(d:Distribution(ℝ)).scaleD(-1,addD(δ(0),d))",
 		"μ(d:Distribution(ℝ)).addD(scaleD(-1,d),d)", "μ(d:Distribution(ℝ)).Λx. x·d[x]",
 		"μ(d:Distribution(ℝ)).addD(δ(0),scaleD(-1,d))", "μ(d:Distribution(ℝ)).addD(Λx.λ[x],scaleD(1/2,d))",
 		"μ(d:Distribution(ℝ)).addD(δ(massD(d)),scaleD(1/2,d))",

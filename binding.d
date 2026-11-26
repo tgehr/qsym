@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionDefinedDirac,distributionDefinedBinary,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -811,10 +811,13 @@ final class Bindings{
 		}
 		return intern(BoundNode(op,ctx.index,typeId(output),args.length?args[0].id:uint.max,args.length>1?args[1].id:uint.max));
 	}
+	private enum AffineOp { constant, self, add, scale, weight }
+	private struct AffineForm { AffineOp op; Rational ratio; bool empty; }
 	private struct RetryParts {
 		uint seed=uint.max,tail;
 		Rational ratio;
 		bool swapped,weighted,direct;
+		AffineForm[uint] forms;
 	}
 	private bool nonnegativeReal(uint id,out Rational r){
 		auto t=nodes[id];
@@ -855,6 +858,52 @@ final class Bindings{
 		if(!retryFactor(n,factor,a)||!tailRatio(n.b,b)) return false;
 		q=a*b; return true;
 	}
+	/// The constant and recursive parts of a finite affine expression can
+	/// be interleaved. The coefficient is checked at every constructor.
+	private bool affineForm(uint id,ref AffineForm[uint] forms){
+		if(id in forms) return true;
+		auto n=nodes[id]; AffineForm form;
+		switch(n.op){
+			case BoundOp.bottom,BoundOp.distributionZero:form=AffineForm(AffineOp.constant,Rational(0),n.op==BoundOp.distributionZero); break;
+			case BoundOp.distributionDirac:
+				if(depends(at(n.a),0)) return false;
+				form=AffineForm(AffineOp.constant,Rational(0)); break;
+			case BoundOp.variable:
+				if(n.data!=0) return false;
+				form=AffineForm(AffineOp.self,Rational(1),true); break;
+			case BoundOp.distributionAdd:
+				if(!affineForm(n.a,forms)||!affineForm(n.b,forms)) return false;
+				form=AffineForm(AffineOp.add,forms[n.a].ratio+forms[n.b].ratio,forms[n.a].empty&&forms[n.b].empty); break;
+			case BoundOp.distributionScale,BoundOp.distributionWeight:{
+				uint factor; Rational r;
+				if(!retryFactor(n,factor,r)||!affineForm(n.b,forms)) return false;
+				form=AffineForm(n.op==BoundOp.distributionScale?AffineOp.scale:AffineOp.weight,r*forms[n.b].ratio,forms[n.b].empty);
+				break;
+			}
+			default:return false;
+		}
+		forms[id]=form; return true;
+	}
+	private BoundTerm affineSeed(uint id,Scope ctx,BoundTerm[] env,ref AffineForm[uint] forms,ref BoundTerm[uint] memo){
+		if(auto hit=id in memo) return *hit;
+		auto n=nodes[id]; BoundTerm seed;
+		if(forms[id].empty) return memo[id]=distribution(ctx,BoundOp.distributionZero,[],pool.view(type(at(id))).fields[0]);
+		final switch(forms[id].op){
+			case AffineOp.constant:seed=substitute(at(id),ctx,env); break;
+			case AffineOp.self:assert(false,"the recursive variable has no emission");
+			case AffineOp.add:
+				if(forms[n.a].empty) seed=affineSeed(n.b,ctx,env,forms,memo);
+				else if(forms[n.b].empty) seed=affineSeed(n.a,ctx,env,forms,memo);
+				else seed=distribution(ctx,n.op,[affineSeed(n.a,ctx,env,forms,memo),affineSeed(n.b,ctx,env,forms,memo)]);
+				break;
+			case AffineOp.scale,AffineOp.weight:{
+				uint factor; Rational coefficient; enforce(retryFactor(n,factor,coefficient));
+				seed=distribution(ctx,BoundOp.distributionScale,[scalar(ctx,arena.at(nodes[factor].data)),affineSeed(n.b,ctx,env,forms,memo)]);
+				break;
+			}
+		}
+		return memo[id]=seed;
+	}
 	private bool retrySource(uint id,out RetryParts parts){
 		auto body=nodes[id];
 		if(body.op==BoundOp.distributionAdd) foreach(swap;[false,true]){
@@ -867,13 +916,15 @@ final class Bindings{
 			parts=RetryParts(seed,tail,q,swap,weighted,direct); return true;
 		}
 		Rational q;
-		if(!tailRatio(id,q)) return false;
-		parts=RetryParts(uint.max,id,q); return true;
+		if(tailRatio(id,q)){ parts=RetryParts(uint.max,id,q); return true; }
+		AffineForm[uint] forms;
+		if(!affineForm(id,forms)) return false;
+		parts=RetryParts(uint.max,id,forms[id].ratio,false,false,false,forms); return true;
 	}
 	BoundTerm distributionFixed(BoundTerm fn){
 		auto n=node(fn); RetryParts parts;
 		enforce(n.op==BoundOp.lambda&&retrySource(n.a,parts),
-			"a distribution fixed point currently requires a positive linear recursive body with an optional finite nonnegative atomic seed");
+			"a distribution fixed point currently supports atoms, zero, addition and nonnegative literal scaling of the recursive variable and its emissions");
 		return distribution(context(fn),BoundOp.distributionFixed,[fn]);
 	}
 	/// Follow the input of an observed chain of weight and bind operations.
@@ -6107,16 +6158,23 @@ final class Bindings{
 				RetryParts parts;
 				if(retrySource(nodes[n.a].a,parts)){
 					auto ctx=context(t); BoundTerm target; BindingRule rule;
-					if(parts.seed==uint.max){
+					if(parts.seed==uint.max&&!parts.forms.length){
 						target=distribution(ctx,BoundOp.distributionZero,[],pool.view(type(t)).fields[0]);
 						rule=BindingRule.distributionFixedTail;
 					}else{
 						BoundTerm[] env=[bottom(ctx,type(t))];
 						foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
-						auto base=substitute(at(parts.seed),ctx,env);
+						BoundTerm base;
+						if(parts.forms.length){
+							BoundTerm[uint] cache;
+							base=affineSeed(parts.tail,ctx,env,parts.forms,cache);
+							rule=BindingRule.distributionFixedBody;
+						}else{
+							base=substitute(at(parts.seed),ctx,env);
+							rule=parts.direct?BindingRule.distributionFixedRetry:BindingRule.distributionFixedAffine;
+						}
 						target=distribution(ctx,BoundOp.distributionRetry,[scalar(ctx,arena.real_(parts.ratio)),base]);
 						inheritHint(at(n.a),target);
-						rule=parts.direct?BindingRule.distributionFixedRetry:BindingRule.distributionFixedAffine;
 					}
 					++steps; auto proof=emit(rule,t.id,target.id);
 					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
@@ -10711,6 +10769,7 @@ final class Bindings{
 				case BindingRule.distributionFixedRetry:
 				case BindingRule.distributionFixedAffine:
 				case BindingRule.distributionFixedTail:
+				case BindingRule.distributionFixedBody:
 				case BindingRule.distributionRetryPoint:
 				case BindingRule.distributionRetryEmpty:
 				case BindingRule.distributionRetryZeroPoint:
@@ -10772,14 +10831,36 @@ final class Bindings{
 						return " ("~ns~"Tail.scale "~(v.op==BoundOp.distributionWeight?"true ":"false ")~
 							q(a)~" "~q(coefficient)~yes~yes~" "~number(factor)~" "~sub~")";
 					}
+					string affine(uint id,uint base,ref AffineForm[uint] forms){
+						auto v=nodes[id],form=forms[id];
+						final switch(form.op){
+							case AffineOp.constant:
+								return " ("~ns~"Affine.constant "~(form.empty?ns~"admissible_zero":admissible(base))~")";
+							case AffineOp.self:return " "~ns~"Affine.self";
+							case AffineOp.add:{
+								bool left=forms[v.a].empty,right=forms[v.b].empty;
+								auto rule=left?"add_left_zero":right?"add_right_zero":"add";
+								auto l=left?uint.max:right?base:nodes[base].a;
+								auto r=right?uint.max:left?base:nodes[base].b;
+								return " ("~ns~"Affine."~rule~" "~q(form.ratio)~yes~affine(v.a,l,forms)~affine(v.b,r,forms)~")";
+							}
+							case AffineOp.scale,AffineOp.weight:{
+								uint factor; Rational r; enforce(retryFactor(v,factor,r));
+								return " ("~ns~(form.empty?"Affine.scale_zero ":"Affine.scale ")~(form.op==AffineOp.weight?"true ":"false ")~
+									q(r)~" "~q(form.ratio)~yes~yes~" "~number(factor)~affine(v.b,form.empty?uint.max:nodes[base].b,forms)~")";
+							}
+						}
+					}
 					string law;
-					if(p.rule==BindingRule.distributionFixedRetry||p.rule==BindingRule.distributionFixedAffine||p.rule==BindingRule.distributionFixedTail){
+					if(p.rule==BindingRule.distributionFixedRetry||p.rule==BindingRule.distributionFixedAffine||p.rule==BindingRule.distributionFixedTail||p.rule==BindingRule.distributionFixedBody){
 						RetryParts parts; enforce(retrySource(nodes[n.a].a,parts)); Rational coefficient;
 						if(p.rule==BindingRule.distributionFixedTail){
 							law=ns~"fixed_tail "~tail(parts.tail,coefficient)~" (fun _ => rfl)";
 						}else{
 							auto target=nodes[p.to],swap=parts.swapped?"true ":"false ";
-							if(parts.direct) law=ns~"fixed_retry "~swap~(parts.weighted?"true ":"false ")~q(parts.ratio)~yes~
+							if(parts.forms.length) law=ns~"fixed_affine "~q(parts.ratio)~" "~number(target.a)~
+								affine(parts.tail,target.b,parts.forms)~" (fun _ => rfl)";
+							else if(parts.direct) law=ns~"fixed_retry "~swap~(parts.weighted?"true ":"false ")~q(parts.ratio)~yes~
 								" "~number(target.a)~" "~admissible(target.b)~" (fun _ => rfl)";
 							else law=ns~"fixed_add_tail "~swap~q(parts.ratio)~" "~number(target.a)~" "~admissible(target.b)~
 								" "~tail(parts.tail,coefficient)~" (fun _ => rfl)";

@@ -1,4 +1,4 @@
-import QSym.DistributionAtomicIteration
+import QSym.DistributionAtomicAffine
 import QSym.DistributionAtomicObservation
 import QSym.AxiomCheck
 
@@ -39,6 +39,10 @@ theorem zeroWeightDiffers : ∃ t : ℝ → Option ℝ,
 #qsym_check_axioms fixed_tail
 #qsym_check_axioms fixed_add_tail
 #qsym_check_axioms fixed_of_step
+#qsym_check_axioms fixed_of_step_on
+#qsym_check_axioms fixed_affine
+#qsym_check_axioms Affine.add_left_zero
+#qsym_check_axioms Affine.scale_zero
 #qsym_check_axioms fixed_retry
 #qsym_check_axioms retry_empty
 #qsym_check_axioms retry_zero_point

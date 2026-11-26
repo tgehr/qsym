@@ -742,7 +742,9 @@ struct FunctionSyntax{
 				}
 				case BoundOp.distributionRetry:{
 					auto h=b.binderHint(t).name,name=fresh(locals,h.length?h:"d");
-					return "μ("~name~":"~typeName(b.type(t),locals)~"). addD("~child(n.b)~",scaleD("~
+					auto binder="μ("~name~":"~typeName(b.type(t),locals)~"). ",r=b.node(b.at(n.a));
+					if(r.op==BoundOp.scalar&&a.at(r.data)==a.real_(0)) return binder~child(n.b);
+					return binder~"addD("~child(n.b)~",scaleD("~
 						render(b.at(n.a),locals,depth+1,scalarType(Sort.real_))~","~name~"))";
 				}
 				case BoundOp.distributionMaskedGraph:return "maskedGraphD("~child(n.a)~","~child(n.b)~")";

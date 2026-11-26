@@ -47,8 +47,9 @@ theorem fixed_missing {f : D α → Option (D α)} {n : ℕ} (h : iterateBody f 
 
 /-- A compositional certificate for the source body suffices to compute its
 least fixed point in the atomic model. -/
-theorem fixed_of_step (f : D α → Option (D α)) (g : Model α →o Model α) (hg : ωScottContinuous g)
-    (lift : ∀ d m, Presents d m → ∃ e, f d = some e ∧ Presents e (g m)) :
+theorem fixed_of_step_on (f : D α → Option (D α)) (g : Model α →o Model α) (hg : ωScottContinuous g)
+    (P : Model α → Prop) (initial : P ⊥) (keep : ∀ m, P m → P (g m))
+    (lift : ∀ d m, P m → Presents d m → ∃ e, f d = some e ∧ Presents e (g m)) :
     fixedValue (some f) = realize g.lfp := by
   let s := fun n : ℕ => g^[n] ⊥
   have steps : ∀ n, s n ≤ s (n+1) := by
@@ -56,15 +57,25 @@ theorem fixed_of_step (f : D α → Option (D α)) (g : Model α →o Model α) 
     induction n with
     | zero => exact bot_le
     | succ n ih => simpa only [s, Function.iterate_succ_apply'] using g.monotone ih
+  have invariant : ∀ n, P (s n) := by
+    intro n
+    induction n with
+    | zero => exact initial
+    | succ n ih => simpa only [s, Function.iterate_succ_apply'] using keep (s n) ih
   have data : ∀ n, ∃ d, iterateBody f n = some d ∧ Presents d (s n) := by
     intro n
     induction n with
     | zero => exact ⟨.zero, rfl, Represents.zero, visited_zero⟩
     | succ n ih =>
       obtain ⟨d, hd, hm⟩ := ih
-      obtain ⟨e, he, hk⟩ := lift d _ hm
+      obtain ⟨e, he, hk⟩ := lift d _ (invariant n) hm
       exact ⟨e, by simpa [iterateBody, hd] using he, by simpa [s, Function.iterate_succ_apply'] using hk⟩
   rw [fixed_chain (⟨monotone_nat_of_le_succ steps, data⟩ : Tracks f s), fixedPoints.lfp_eq_sSup_iterate _ hg]
+
+theorem fixed_of_step (f : D α → Option (D α)) (g : Model α →o Model α) (hg : ωScottContinuous g)
+    (lift : ∀ d m, Presents d m → ∃ e, f d = some e ∧ Presents e (g m)) :
+    fixedValue (some f) = realize g.lfp :=
+  fixed_of_step_on f g hg (fun _ => True) trivial (fun _ _ => trivial) (fun d m _ => lift d m)
 
 theorem strictRetry_continuous (b : Model α) (r : ℝ≥0∞) : ωScottContinuous (strictRetryStep b r) := by
   apply ωScottContinuous_iff_map_ωSup_of_orderHom.mpr
@@ -104,7 +115,7 @@ def scaleTerm (weighted : Bool) (r : Option ℝ) (v : Option (D α)) : Option (D
 
 def retryTail (weighted : Bool) (r : Option ℝ) (d : D α) := scaleTerm weighted r (some d)
 
-private theorem tail_step (weighted : Bool) {d : D α} {k : Model α} (hd : Presents d k) {r : ℝ} (hr : 0 ≤ r) :
+theorem tail_step (weighted : Bool) {d : D α} {k : Model α} (hd : Presents d k) {r : ℝ} (hr : 0 ≤ r) :
     ∃ e, retryTail weighted (some r) d = some e ∧ Represents e (fun x => ENNReal.ofReal r * k.1 x) ∧ visited e = k.2 := by
   cases weighted with
   | false => exact ⟨_, rfl, hd.1.scale hr, (visited_scale _ _).trans hd.2⟩
