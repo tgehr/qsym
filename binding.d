@@ -3093,6 +3093,58 @@ final class Bindings{
 	private bool gaussianTail(uint body,out BellParts bell,bool build){
 		return bellParts(body,bell,build)&&bell.exponent&&!bell.symbolic&&bell.c[2].present&&bell.c[2].closed&&bell.c[2].value<Rational(0);
 	}
+	// A finite limit of atan, tanh or a reciprocal can use an infinite
+	// intermediate limit. Carry the direction through the source syntax.
+	private bool escapingTail(uint body,bool bottom,out bool negative,out string proof,SourceCertificates cert=null,uint depth=0){
+		if(depth>64) return false;
+		Rational[] p;
+		if(axisPolynomial(body,p)){
+			size_t degree=p.length;
+			while(degree&&p[degree-1].zero) --degree;
+			if(degree<2) return false;
+			--degree;
+			negative=(p[degree]<Rational(0))!=(bottom&&degree%2!=0);
+			if(cert){
+				auto src=cert.piece(body,cert.everywhere,"",Rational(0)).proof;
+				proof="(Limit.Escapes.polynomial "~(bottom?"true":"false")~" "~(negative?"true":"false")~" "~
+					to!string(degree)~" "~src~" rfl)";
+			}
+			return true;
+		}
+		auto n=nodes[body];
+		if(n.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(n.data)); string a,b;
+		if(op.op==Op.builtin&&op.value==Builtin.expR){
+			if(!escapingTail(n.a,bottom,negative,a,cert,depth+1)||negative) return false;
+			if(cert) proof="(Limit.Escapes.exp "~a~")";
+			return true;
+		}
+		if(op.op!=Op.add&&op.op!=Op.mul) return false;
+		foreach(right;[false,true]){
+			auto bound=at(right?n.b:n.a); Rational q; Term raw;
+			if(node(bound).op!=BoundOp.scalar||!closedRational(bound,q,raw)||op.op==Op.mul&&q.zero) continue;
+			if(!escapingTail(right?n.a:n.b,bottom,negative,a,cert,depth+1)) return false;
+			if(op.op==Op.mul&&q<Rational(0)) negative=!negative;
+			if(cert){
+				cert.numericTerms~=raw;
+				auto v=cert.q(q),lit="n"~to!string(raw.id),eq="(Numeric.calculate_sound ξ "~lit~" "~v~" rfl)";
+				auto args=op.op==Op.mul?"scale "~v~" (of_decide_eq_true rfl)":"add ("~lit~".eval ξ)";
+				proof="(Limit.Escapes."~args~" "~eq~" "~(right?"true":"false")~" "~a~")";
+			}
+			return true;
+		}
+		bool other;
+		if(op.op!=Op.add||!escapingTail(n.a,bottom,negative,a,cert,depth+1)||
+			!escapingTail(n.b,bottom,other,b,cert,depth+1)||other!=negative) return false;
+		if(cert) proof="(Limit.Escapes.addBoth "~a~" "~b~")";
+		return true;
+	}
+	private bool saturatingTail(uint body,bool bottom,out bool negative,out string proof,SourceCertificates cert=null){
+		auto n=nodes[body]; if(n.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(n.data));
+		return (op.op==Op.inv||op.op==Op.builtin&&(op.value==Builtin.atanR||op.value==Builtin.tanhR))&&
+			escapingTail(n.a,bottom,negative,proof,cert);
+	}
 	private BoundTerm limitTerms(uint body,bool bottom,bool build=true,uint depth=0){
 		if(depth>64) return BoundTerm.init;
 		auto found=at(body);
@@ -3123,6 +3175,15 @@ final class Bindings{
 		}
 		auto n=nodes[body]; if(n.op!=BoundOp.primitive&&n.op!=BoundOp.guard) return BoundTerm.init;
 		auto view=n.op==BoundOp.guard?arena.view(arena.boolean(true)):arena.view(arena.at(n.data)),op=view.op;
+		bool negative; string escape;
+		if(saturatingTail(body,bottom,negative,escape)){
+			if(!build) return found;
+			auto ctx=Scope(this,contexts[context(found).index].parent),z=arena.real_(0);
+			if(op==Op.inv) return scalar(ctx,z);
+			auto sign=Rational(negative?-1:1);
+			if(view.value==Builtin.tanhR) return scalar(ctx,arena.real_(sign));
+			return primitive(arena.mul(z,z,true),[scalar(ctx,arena.real_(sign/Rational(2))),scalar(ctx,arena.call(Builtin.pi,[]))]);
+		}
 		if(n.op==BoundOp.guard||op==Op.mask){
 			// A guard that is eventually decided: strict, or masking.
 			if(eventualTerm(n.a,bottom,false)==BoundTerm.init) return BoundTerm.init;
@@ -10097,6 +10158,16 @@ final class Bindings{
 				if(bell.scaled) zero=nodes[zero].b;
 				return "(Limit.Exact.gaussian Limit.Infinite."~(s.bottom?"bottom":"top")~" "~cert.q(bell.c[2].value)~" "~evidence~" "~quadratic~" "~
 					cert.closedProof(bell.c[2].term,bell.c[2].value)~" rfl "~literal(zero,"(0 : ℚ)")~")";
+			}
+			bool negative; string escape;
+			if(saturatingTail(body,s.bottom,negative,escape,cert)){
+				auto source=arena.view(arena.at(nodes[body].data));
+				auto arg=" (l := Filter."~end~") "~escape~" ";
+				if(source.op==Op.inv) return "(Limit.Escapes.inv"~arg~literal(output,"0")~")";
+				auto sign=Rational(negative?-1:1);
+				if(source.value==Builtin.tanhR)
+					return "(Limit.Escapes.tanh"~arg~literal(output,cert.q(sign))~")";
+				return "(Limit.Escapes.arctan"~arg~literal(nodes[output].a,cert.q(sign/Rational(2)))~" rfl)";
 			}
 			auto n=nodes[body],o=nodes[output];
 			if(n.op==BoundOp.guard){

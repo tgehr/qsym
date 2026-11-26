@@ -819,6 +819,27 @@ private Case[] cases(){
 	Case("UpperGrowing","∫dx [x≤0]*exp(-x)*λ[x]","ℝ"),
 	Case("UpperCurveGrowing","∫dx [x≤0]*x*exp(x^2)*λ[x]","ℝ"),
 	Case("UpperBracket","∫dx [x≤0]*λ[x]","ℝ"),
+	Case("ScalarAsymptoteLogisticLower","lim[x→-∞] (1+exp(-x))⁻¹","ℝ","0"),
+	Case("ScalarAsymptoteLogisticUpper","lim[x→∞] (exp(x)+1)⁻¹","ℝ","0"),
+	Case("ScalarAsymptoteLogisticRegular","lim[x→∞] (1+exp(-x))⁻¹","ℝ","1"),
+	Case("ScalarAsymptoteAtanPlus","lim[x→∞] atan(x)","ℝ","1/2·π"),
+	Case("ScalarAsymptoteAtanMinus","lim[x→-∞] atan(x)","ℝ","-1/2·π"),
+	Case("ScalarAsymptoteAtanCubic","lim[x→-∞] atan(3*x-x^3)","ℝ","1/2·π"),
+	Case("ScalarAsymptoteAtanQuartic","lim[x→-∞] atan(7-x^4)","ℝ","-1/2·π"),
+	Case("ScalarAsymptoteAtanExp","lim[x→∞] atan(exp(x))","ℝ","1/2·π"),
+	Case("ScalarAsymptoteAtanExpSigned","lim[x→∞] atan(-2*exp(x)+7)","ℝ","-1/2·π"),
+	Case("ScalarAsymptoteTwoGrowing","lim[x→∞] atan(x²+exp(x))","ℝ","1/2·π"),
+	Case("ScalarAsymptoteTanhPositive","lim[x→∞] tanh(x)","ℝ","1"),
+	Case("ScalarAsymptoteTanhNegative","lim[x→-∞] tanh(x)","ℝ","-1"),
+	Case("ScalarAsymptoteTanhNested","lim[x→∞] tanh(-2*exp(x))","ℝ","-1"),
+	Case("ScalarAsymptoteTanhWeighted","lim[x→-∞] 7*tanh(x)^2","ℝ","7"),
+	Case("ScalarAsymptotePoleAway","lim[x→∞] (exp(x)-2)⁻¹","ℝ","0"),
+	Case("ScalarAsymptoteGaussianEdge","lim[x→-∞] (exp(x^2)+3)⁻¹","ℝ","0"),
+	Case("ScalarAsymptoteOuter","lim[x→-∞] exp(atan(x))","ℝ","exp(-1/2·π)"),
+	Case("ScalarAsymptoteOpposite","lim[x→∞] atan(exp(x)-x^2)","ℝ","lim[x→∞] atan(-x^2+exp(x))"),
+	Case("ScalarAsymptoteOscillation","lim[x→∞] tanh(sin(x))","ℝ","lim[x→∞] tanh(sin(x))"),
+	Case("ScalarAsymptoteOpaque","λ(h:ℝ→ℝ).lim[x→∞] atan(h(x))","(ℝ→ℝ)→ℝ","λ(h:ℝ→ℝ). lim[x→∞] atan(h(x))"),
+	Case("ScalarAsymptoteMissing","defined(lim[x→∞] atan(undefined(ℝ)))","𝔹","false"),
 	Case("LimitDecay","lim[x→∞] exp(-x)*x^2","ℝ","0"),
 	Case("LimitBottom","lim[x→-∞] x^3*exp(x/2)","ℝ","0"),
 	Case("LimitConstant","lim[x→∞] 1/a","ℝ","a⁻¹"),
@@ -2040,6 +2061,11 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")
 			enforce(certificate.indexOf("observe_partial_scale_countdown")<0&&text.indexOf("μ")>=0,c.name~" index-dependent scale");
+		if(c.name.indexOf("ScalarAsymptote")==0){
+			bool uses=c.name!="ScalarAsymptoteLogisticRegular"&&c.name!="ScalarAsymptoteOpposite"&&
+				c.name!="ScalarAsymptoteOscillation"&&c.name!="ScalarAsymptoteOpaque"&&c.name!="ScalarAsymptoteMissing";
+			enforce((certificate.indexOf("Limit.Escapes.")>=0)==uses,c.name);
+		}
 		if(c.name.indexOf("FibreEmission")==0){
 			bool constant=c.name.indexOf("Geometric")>=0||c.name.indexOf("Signed")>=0||c.name.indexOf("Zero")>=0;
 			bool captured=c.name.indexOf("Unknown")>=0||c.name=="FibreEmissionSymbolicScale";

@@ -22,6 +22,7 @@ import QSym.DistributionCoordinateInterval
 import QSym.DistributionWeightedAffine
 import QSym.Limit
 import QSym.LimitExponential
+import QSym.LimitEscapes
 import QSym.LimitStep
 import QSym.LimitContinuous
 import QSym.LimitQuotient
