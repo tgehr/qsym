@@ -375,6 +375,10 @@ string emitLean(Rule[] rules){
 			lean~="  exact Value.refines_"~r.name~" v_a v_x v_b hp2\n\n#qsym_check_axioms "~ruleCode(r.name)~"\n\n";
 			continue;
 		}
+		if(r.name=="real_power_product_base"){
+			lean~="  exact Value.refines_of_eq (Value.powerR_mul_nonneg v_x v_y v_t hp0 hp1)\n\n#qsym_check_axioms "~ruleCode(r.name)~"\n\n";
+			continue;
+		}
 		string[] cases;
 		foreach(v;r.parameters) if(!v.natural) cases~="cases "~parameterCode(v.name);
 		if(cases.length) lean~="  "~cases.join(" <;> ")~"\n";

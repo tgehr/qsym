@@ -4803,8 +4803,7 @@ theorem r_real_power_product_base (v_x : Option (Ty.denote .real)) (v_y : Option
     (hp0 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_x) (some true))
     (hp1 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) v_y) (some true)) :
     Value.Refines (Value.mul (Functions.powerR.apply v_x v_t) (Functions.powerR.apply v_y v_t)) (Functions.powerR.apply (Value.mul v_x v_y) v_t) := qsym_cached% by
-  cases v_x <;> cases v_y <;> cases v_t
-  all_goals qsym_rule
+  exact Value.refines_of_eq (Value.powerR_mul_nonneg v_x v_y v_t hp0 hp1)
 
 #qsym_check_axioms r_real_power_product_base
 
