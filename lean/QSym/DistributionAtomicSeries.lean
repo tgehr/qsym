@@ -23,22 +23,24 @@ theorem probe_nat_sum (v : ℕ → Option (D α)) (t : α → Option ℝ) :
   · rw [if_neg hi, if_neg hi]
     rfl
 
-private theorem probe_difference (a b : Option (D α)) (t : α → Option ℝ) :
-    probe (addValue b (scaleValue (some (-1)) a)) t =
-      Value.add (probe b t) (Value.mul (some (-1)) (probe a t)) := by
-  cases b with
+theorem probe_add (a b : Option (D α)) (t : α → Option ℝ) :
+    probe (addValue a b) t = Value.add (probe a t) (probe b t) := by
+  cases a with
   | none => rfl
-  | some b =>
-    cases a with
+  | some a =>
+    cases b with
     | none =>
-      change none = Value.add (integrate b t) none
-      cases integrate b t <;> rfl
-    | some a => rfl
+      change none = Value.add (integrate a t) none
+      cases integrate a t <;> rfl
+    | some b => rfl
+
+theorem probe_scale (r : ℝ) (v : Option (D α)) (t : α → Option ℝ) :
+    probe (scaleValue (some r) v) t = Value.mul (some r) (probe v t) := by cases v <;> rfl
 
 theorem probe_incrementSeries (v : ℕ → Option (D α)) (t : α → Option ℝ) :
     probe (incrementSeries v) t = Summation.value norm (some (fun n =>
       Value.add (probe (v (n+1)) t) (Value.mul (some (-1)) (probe (v n) t)))) := by
-  simp only [incrementSeries, probe_nat_sum, probe_difference]
+  simp only [incrementSeries, probe_nat_sum, probe_add, probe_scale]
 
 /-- Replacing any finite stage by a presentation of the same model preserves
 every partial signed observation of the countable result. -/

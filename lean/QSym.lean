@@ -54,6 +54,7 @@ import QSym.DistributionAtomicAffine
 import QSym.DistributionAtomicKernel
 import QSym.DistributionAtomicSeries
 import QSym.DistributionAtomicDivergence
+import QSym.DistributionAtomicOrbit
 import QSym.DistributionAtomicObservation
 import QSym.Tensor
 import QSym.TensorDomains

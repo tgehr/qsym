@@ -34,11 +34,11 @@ theorem kernel_continuous (b : Kernel ι α) (r : ι → ℝ≥0∞) (next : ι 
       · exact Or.inl h
       · exact Or.inr ⟨n, h⟩
 
-def reachWeight (r : ι → ℝ≥0∞) (next : ι → ι) : ℕ → ι → ℝ≥0∞
+def reachWeight {R : Type*} [Monoid R] (r : ι → R) (next : ι → ι) : ℕ → ι → R
   | 0, _ => 1
   | n+1, x => r x * reachWeight r next n (next x)
 
-theorem reachWeight_prod (r : ι → ℝ≥0∞) (next : ι → ι) (n : ℕ) (x : ι) :
+theorem reachWeight_prod {R : Type*} [CommMonoid R] (r : ι → R) (next : ι → ι) (n : ℕ) (x : ι) :
     reachWeight r next n x = ∏ i ∈ Finset.range n, r (next^[i] x) := by
   induction n generalizing x with
   | zero => simp [reachWeight]
@@ -46,9 +46,11 @@ theorem reachWeight_prod (r : ι → ℝ≥0∞) (next : ι → ι) (n : ℕ) (x
     rw [reachWeight, ih, Finset.prod_range_succ']
     exact mul_comm _ _
 
-theorem reachWeight_const (r : ℝ≥0∞) (next : ι → ι) (n : ℕ) (x : ι) :
+theorem reachWeight_const {R : Type*} [Monoid R] (r : R) (next : ι → ι) (n : ℕ) (x : ι) :
     reachWeight (fun _ => r) next n x = r^n := by
-  simp [reachWeight_prod]
+  induction n generalizing x with
+  | zero => simp [reachWeight]
+  | succ n ih => rw [reachWeight, ih, pow_succ']
 
 private theorem iterate_kernel_weights (b : Kernel ι α) (r : ι → ℝ≥0∞) (next : ι → ι) (n : ℕ) (x : ι) (y : α) :
     (((kernelStep b r next)^[n] ⊥) x).1 y = ∑ i ∈ Finset.range n, reachWeight r next i x * (b (next^[i] x)).1 y := by
