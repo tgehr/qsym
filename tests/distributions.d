@@ -8,6 +8,10 @@ import std.stdio:writeln;
 
 private struct Case{ string name,source,type,expected; }
 private Case[] cases(){
+	string scaledSteps(string rate,string k="k",string seed="δ((3:ℝ))"){
+		return "(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then "~seed~" else scaleD("~rate~",f(n sub 1)))("~k~")";
+	}
+	enum growing="(n+1:ℝ)/(n:ℝ)",shrinking="(n:ℝ)/(n+1:ℝ)";
 	string discountedAtoms(string k,string rate="1/2",string seed="zeroD(ℝ)",bool tailFirst=false){
 		auto tail="scaleD("~rate~",f(n sub 1))",atom="δ((n:ℝ))";
 		return "(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then "~seed~" else addD("~
@@ -1496,6 +1500,18 @@ private Case[] cases(){
 	Case("VaryingEmission","λ(k:ℕ).massD("~discountedAtoms("k")~")","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·(2·2^k-2):ℝ)"),
 	Case("ConvolutionSymbolic","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","r","δ((3:ℝ))")~"))","ℝ→ℕ→ℝ"),
 	Case("ConvolutionTwo","λ(r:ℝ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("2","r","δ((3:ℝ))")~"))","ℝ→ℝ","λ(r:ℝ). 3·r^2+r+2"),
+	Case("ProductScaleGrowing","λ(k:ℕ).massD("~scaledSteps(growing)~")","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
+	Case("ProductScaleShrinking","λ(k:ℕ).massD("~scaledSteps(shrinking)~")","ℕ→ℝ","λ(k:ℕ). ((k+1)⁻¹:ℝ)"),
+	Case("ProductScaleShifted","λ(k:ℕ).massD("~scaledSteps("(2*(n:ℝ)+5)/(2*(n:ℝ)+3)")~")","ℕ→ℝ","λ(k:ℕ). (2/5·k+1:ℝ)"),
+	Case("ProductScaleSquared","λ(k:ℕ).massD("~scaledSteps("(n+1:ℝ)^2/(n:ℝ)^2")~")","ℕ→ℝ","λ(k:ℕ). ((k+1)^2:ℝ)"),
+	Case("ProductScaleMillion","massD("~scaledSteps(growing,"1000000")~")","ℝ","1000001"),
+	Case("ProductScaleMoment","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~scaledSteps(growing)~"))","ℕ→ℝ","λ(k:ℕ). (3·(k+1):ℝ)"),
+	Case("ProductScalePartialProbe","λ(h:ℝ→ℝ).λ(k:ℕ).massD(weightD(h,"~scaledSteps(shrinking)~"))","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(k:ℕ). h(3)·(k+1)⁻¹"),
+	Case("ProductScaleZeroDepth","massD("~scaledSteps(growing,"0")~")","ℝ","1"),
+	Case("ProductScaleMissing","defined(massD("~scaledSteps(growing,"0 sub 1")~"))","𝔹","false"),
+	Case("ProductScalePartialSeed","defined(massD("~scaledSteps(growing,"4","undefined(Distribution(ℝ))")~"))","𝔹","false"),
+	Case("ProductScalePole","λ(k:ℕ).massD("~scaledSteps("(n-1:ℝ)/(n-2:ℝ)")~")","ℕ→ℝ"),
+	Case("ProductScaleHitsPole","defined(massD("~scaledSteps("(n-1:ℝ)/(n-2:ℝ)","3")~"))","𝔹","false"),
 	Case("ConvolutionZeroRate","massD(weightD(λ(x:ℝ).x,"~discountedAtoms("4","0","δ((3:ℝ))")~"))","ℝ","4"),
 	Case("ConvolutionZeroHole","defined(massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~discountedAtoms("4","0","δ((3:ℝ))")~")))","𝔹","false"),
 	Case("ConvolutionSeedHole","defined(massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~discountedAtoms("1","0","δ((2:ℝ))")~")))","𝔹","false"),
@@ -1649,6 +1665,13 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name.indexOf("ProductScale")==0){
+			bool solved=c.name!="ProductScalePole"&&c.name!="ProductScaleHitsPole";
+			enforce((certificate.indexOf("Distribution.observe_product_countdown ")>=0)==solved,c.name);
+			if(solved) enforce(text.indexOf("μ")<0,c.name);
+			if(c.name=="ProductScalePole") enforce(text.indexOf("μ")>=0,c.name);
+			if(c.name=="ProductScaleMillion") enforce(certificate.length<120_000,c.name~" expanded countdown");
+		}
 		if(c.name.indexOf("Convolution")==0){
 			enforce(certificate.indexOf("Distribution.observe_convolution_countdown ")>=0&&text.indexOf("μ")<0,c.name);
 			if(c.name=="ConvolutionMissingIndex") enforce(certificate.indexOf("Binding.conditional_undefined ")>=0,c.name);

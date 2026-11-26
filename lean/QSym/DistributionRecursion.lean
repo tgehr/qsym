@@ -62,6 +62,44 @@ theorem observe_scale_countdown {α : Type} {o : Option (D α) → Option ℝ} (
   | none => exact h.missing
   | some n => simpa [Functions.powRN, Function2.apply, g] using observe_scale_steps h g base c h0 hs n
 
+/-- A source-checked cumulative scale solves a countdown with an index-dependent
+rate. The seed observation may be partial, even at a zero cumulative scale. -/
+theorem observe_product_countdown {α : Type} {o : Option (D α) → Option ℝ} (h : Atomic.Observation o)
+    (p : Recursion.Program ℕ (D α) (D α)) {fn : Option (ℕ → Option (D α))}
+    (hf : fn = some (FixedPoint.value p.functional)) (base : Option (D α))
+    (r w : Option ℕ → Option ℝ) (hw0 : w (some 0) = some 1)
+    (hw : ∀ n, let next := Functions.addN.apply (some n) (some 1)
+      Value.mul (r next) (w (some n)) = w next)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) base
+      (scaleValue (r (some n)) ((Functions.subN.apply (some n) (some 1)).bind g)))
+    (arg : Option ℕ) :
+    o (fn.bind (fun g => arg.bind g)) = Value.mul (arg.bind (fun n => w (some n))) (o base) := by
+  subst fn
+  let g := FixedPoint.value p.functional
+  obtain ⟨h0, hs⟩ := countdown_equations p base (fun n => scaleValue (r (some n))) step
+  have rec (n : ℕ) : o (g (n+1)) = Value.mul (r (some (n+1))) (o (g n)) :=
+    (congrArg o (hs n)).trans (observe_scale h _ _)
+  have solved (n : ℕ) : o (g n) = Value.mul (w (some n)) (o base) := by
+    induction n with
+    | zero => rw [hw0, Value.mul_one_left]; exact congrArg o h0
+    | succ n ih =>
+      have succ : Functions.addN.apply (some n) (some 1) = some (n+1) := by
+        simp [Function2.apply, Functions.addN]
+      have hstep : Value.mul (r (some (n+1))) (w (some n)) = w (some (n+1)) := by
+        simpa only [succ] using hw n
+      rw [rec, ih, ← hstep]
+      cases r (some (n+1)) <;> cases w (some n) <;> cases o base <;> simp [Value.mul, mul_assoc]
+  cases arg with
+  | none => exact h.missing
+  | some n => exact solved n
+
+/-- A defined zero difference certifies the equality of both partial operands. -/
+theorem product_step_of_zero (a b : Option ℝ) (m : Option ℝ) (hm : m = some ((-1 : ℚ) : ℝ))
+    (hz : Value.add a (Value.mul m b) = some 0) : a = b := by
+  subst m
+  cases a <;> cases b <;> simp_all [Value.add, Value.mul, ← sub_eq_add_neg, sub_eq_zero]
+
 /-- A captured scale may be undefined. The zero branch returns the seed
 without inspecting the scale, and a missing index still invalidates the call. -/
 theorem observe_partial_scale_countdown {α : Type} {o : Option (D α) → Option ℝ} (h : Atomic.Observation o)
