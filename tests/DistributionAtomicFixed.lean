@@ -1,4 +1,4 @@
-import QSym.DistributionAtomicFixed
+import QSym.DistributionAtomicProbes
 import QSym.AxiomCheck
 
 noncomputable section
@@ -25,6 +25,14 @@ theorem fairAtomDensity (x : ℝ) :
   rw [h.density, lfp_retry]
   by_cases e : x = 0 <;> simp [atom, e]
 
+theorem visitedZeroWeight : visited (.scale 0 (.dirac (0 : ℝ))) = {0} := by simp
+
+theorem zeroWeightDiffers : ∃ t : ℝ → Option ℝ,
+    integrate (.scale 0 (.dirac 0)) t ≠ integrate .zero t :=
+  ⟨fun _ => none, by decide⟩
+
+#qsym_check_axioms Presents.eq_iff
+#qsym_check_axioms Presents.unfold_retry
 #qsym_check_axioms fairRetry
 #qsym_check_axioms visitsZeroWeight
 #qsym_check_axioms fairAtomDensity
