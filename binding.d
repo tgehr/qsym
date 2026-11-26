@@ -208,6 +208,9 @@ private struct IntegralSolution{
 	// certificate of its normal form, if that differs. Before that the
 	// weight may be split where its absolute values change sign.
 	uint[] summands; Rational[] kinks; uint split=uint.max;
+	// Then it may be split at the points that are terms: the points, the
+	// certificates that they exist, and the weight so split.
+	uint[] points,pointDomains; uint parted=uint.max;
 	// After that the casts of a sum of a lesser sort may go to its summands.
 	uint lifted=uint.max;
 }
@@ -2378,6 +2381,59 @@ final class Bindings{
 		auto proof="(Value.split "~under(body)~" x "~SourceCertificates.q(kinks[0])~" "~literal(kinks[0])~")";
 		if(tail.proof.length) proof="(Eq.trans "~proof~" (congrArg₂ Value.add rfl "~tail.proof~"))";
 		return Spread(sum.id,proof);
+	}
+	// The points where the argument of an absolute value in a weight changes
+	// its sign that are terms: an argument of degree one in the axis with a
+	// rational slope, beside which it has terms that do not mention the
+	// axis, as in `abs(x-a)`. The point is those terms over the slope with
+	// the other sign, as the simplifier writes it. Only points that exist
+	// for every value of the parameters, with the certificates of that; at
+	// most two.
+	private BoundTerm[] absolutePoints(uint body,out ScalarDomain[] checks){
+		BoundTerm[] points; auto inner=context(at(body)),real_=scalarType(Sort.real_);
+		void visit(uint id,uint depth){
+			auto q=nodes[id]; if(depth>64||q.op!=BoundOp.primitive&&q.op!=BoundOp.guard||!depends(at(id),0)) return;
+			Rational p; Rational[] literal;
+			if(q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==Op.abs&&type(at(id))==real_&&!axisPolynomial(q.a,literal)&&axisSlope(q.a,p)&&!p.zero&&(Rational(1)/p).words<=64){
+				string evidence; auto beside=axisOffset(q.a,null,evidence);
+				auto argument=arena.variable(Sort.real_,freshScalarIndex(body)),terms=scalarBody(beside,argument);
+				if(terms!=Term.init){
+					ScalarResult value;
+					try value=simplify(arena,arena.mul(arena.neg(terms),arena.real_(Rational(1)/p)),Options(DensityMode.preserve,false));
+					catch(Exception){ value.exhausted=true; }
+					if(!value.exhausted){
+						auto point=restoreBody(arena.castTo(value.output,Sort.real_),inner,argument); bool known;
+						foreach(c;points) known|=c==point;
+						ScalarDomain check;
+						if(!known&&points.length<2&&!depends(point,0)&&totalRowDomain(point.id,check)){ points~=point; checks~=check; }
+					}
+				}
+			}
+			if(q.a!=uint.max) visit(q.a,depth+1);
+			if(q.b!=uint.max) visit(q.b,depth+1);
+		}
+		visit(body,0);
+		return points;
+	}
+	// A weight as the sum of its masks on the two sides of each such point,
+	// one point after the other: a partial value is the sum of its masks
+	// below a point and from it on where the point exists. With `under` the
+	// proof of the equation at a point of the axis is built, `total` being
+	// the proof that a point exists by its certificate.
+	private Spread splitPoints(uint body,BoundTerm[] points,uint[] domains,scope string delegate(uint) @safe under,scope string delegate(uint) @safe total){
+		auto inner=context(at(body)),x=variable(inner,0),zero=arena.real_(0);
+		auto addOp=arena.add(zero,zero,true),maskOp=arena.mask(arena.boolean(true),arena.real_(1));
+		auto current=body; string proof;
+		foreach(i,point;points){
+			auto below=primitive(arena.lt(zero,zero),[x,point]),from=primitive(arena.le(zero,zero),[point,x]);
+			auto sum=primitive(addOp,[primitive(maskOp,[below,at(current)]),primitive(maskOp,[from,at(current)])]);
+			if(under){
+				auto step="(Value.split_at "~under(current)~" x ("~total(domains[i])~" x))";
+				proof=proof.length?"(Eq.trans "~proof~" "~step~")":step;
+			}
+			current=sum.id;
+		}
+		return Spread(current,proof);
 	}
 	// A sum of a lesser sort below its casts to the reals, also under masks,
 	// as a factor of a product and as the base of a power of that sort: of
@@ -7128,7 +7184,8 @@ final class Bindings{
 		// A factor or a mask of a sum with a masked summand goes under the sum:
 		// a product and a mask distribute over a sum for every definedness
 		// pattern. Before that a weight is split where the arguments of its
-		// absolute values change sign: under the mask of a side the absolute
+		// absolute values change sign, at the points that are numbers and
+		// then at those that are terms: under the mask of a side the absolute
 		// value is its argument or the opposite. Each summand then takes its
 		// normal form by itself, under the guard of its domain; that of the
 		// whole sum would put a common mask back in front. Only where every
@@ -7139,14 +7196,18 @@ final class Bindings{
 			auto n=node(t);
 			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
 			auto body=solution.from[0],kinks=absoluteKinks(body);
-			if(!kinks.length&&!spreadsSum(body)&&!castsSum(body)) return BoundTerm.init;
-			auto cut=kinks.length?splitAt(body,kinks,null).id:body,lifted=liftCasts(cut,null);
-			auto source=lifted.id!=uint.max?lifted.id:cut,spread=spreadProducts(source,32,null);
+			ScalarDomain[] existing; auto points=absolutePoints(body,existing);
+			if(!kinks.length&&!points.length&&!spreadsSum(body)&&!castsSum(body)) return BoundTerm.init;
+			auto cut=kinks.length?splitAt(body,kinks,null).id:body;
+			auto parted=points.length?splitPoints(cut,points,null,null,null).id:cut,lifted=liftCasts(parted,null);
+			auto source=lifted.id!=uint.max?lifted.id:parted,spread=spreadProducts(source,32,null);
 			if(spread.id==uint.max||spread.id==body) return BoundTerm.init;
 			auto opts=Options(DensityMode.preserve,true),inner=context(at(body));
 			auto index=freshScalarIndex(body),argument=arena.variable(Sort.real_,index);
 			auto addOp=arena.add(arena.real_(0),arena.real_(0),true);
 			ScalarDomain[] checks; uint[] summands; BoundTerm[] conditions;
+			// The certificates that the points exist come before those of the summands.
+			uint[] pointDomains; foreach(check;existing){ pointDomains~=cast(uint)(scalarDomains.length+checks.length); checks~=check; }
 			bool observed(BoundTerm x){ return summandObserved(t,x.id,0); }
 			BoundTerm normal(uint id){
 				auto q=nodes[id];
@@ -7162,6 +7223,22 @@ final class Bindings{
 				catch(Exception){ return BoundTerm.init; }
 				if(value.exhausted||domain.exhausted) return BoundTerm.init;
 				auto output=arena.castTo(value.output,arena.sort(source));
+				// A summand whose value is a product or a power of sums that
+				// mention the axis is observed with these multiplied out, as a
+				// weight is, where the simplifier then leaves it so.
+				BoundTerm underDomain(BoundTerm x){
+					if(domain.output==arena.boolean(true)) return x;
+					auto condition=restoreBody(domain.output,inner,argument);
+					return depends(condition,0)?guard(condition,x):x;
+				}
+				if(multipliable(restoreBody(output,inner,argument).id)&&!observed(underDomain(restoreBody(output,inner,argument)))){
+					auto expanding=opts; expanding.expandPowers=true; ScalarResult wide,again;
+					try{
+						wide=simplify(arena,source,expanding);
+						if(!wide.exhausted) again=simplify(arena,arena.castTo(wide.output,arena.sort(source)),Options(DensityMode.preserve,false));
+					}catch(Exception){ wide.exhausted=true; }
+					if(!wide.exhausted&&!again.exhausted&&again.output==wide.output){ value=wide; output=arena.castTo(wide.output,arena.sort(source)); }
+				}
 				if(output==source){ summands~=uint.max; return observed(at(id))?at(id):BoundTerm.init; }
 				auto simplified=restoreBody(output,inner,argument);
 				summands~=cast(uint)(scalarDomains.length+checks.length); checks~=ScalarDomain(source,domain,value,index,Sort.real_,[],BoundOp.scalar);
@@ -7183,6 +7260,7 @@ final class Bindings{
 			if(commit) scalarDomains~=checks;
 			solution.to=[target.id]; solution.summands=summands;
 			if(kinks.length){ solution.kinks=kinks; solution.split=cut; }
+			if(points.length){ foreach(point;points) solution.points~=point.id; solution.pointDomains=pointDomains; solution.parted=parted; }
 			solution.lifted=lifted.id;
 			auto ctx=context(t),weight=inheritHint(at(nodes[n.a].a),lambda(target));
 			return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
@@ -12865,6 +12943,7 @@ final class Bindings{
 			}
 			// The masks of a split weight are named by its certificate.
 			if(s.split!=uint.max) stack~=s.split;
+			if(s.parted!=uint.max) stack~=s.parted;
 			// So are the summands below their casts.
 			if(s.lifted!=uint.max) stack~=s.lifted;
 			// So is the literal of `h` under a curvature that is a term, also
@@ -14891,6 +14970,13 @@ final class Bindings{
 					// The split at the changes of sign, then the factors under the sums.
 					auto source=s.from[0];string cut;
 					if(s.split!=uint.max){auto pieces=splitAt(source,s.kinks,&under);enforce(pieces.id==s.split,"missing split of a weight");cut=pieces.proof;source=s.split;}
+					// Then the split at the changes of sign that are terms.
+					if(s.parted!=uint.max){
+						BoundTerm[] points;foreach(id;s.points)points~=at(id);
+						auto pieces=splitPoints(source,points,s.pointDomains,&under,&rowTotalProof);
+						enforce(pieces.id==s.parted&&pieces.proof.length,"missing split of a weight at a term");
+						cut=cut.length?"(Eq.trans "~cut~" "~pieces.proof~")":pieces.proof;source=s.parted;
+					}
 					// Then the casts of a sum of a lesser sort at its summands.
 					if(s.lifted!=uint.max){
 						auto lift=liftCasts(source,&under);enforce(lift.id==s.lifted&&lift.proof.length,"missing casts of a sum");

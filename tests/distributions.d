@@ -1192,10 +1192,30 @@ private Case[] cases(){
 	Case("AbsoluteRoot","∫dx sqrt(b)*abs(x)*exp(-x^2)*λ[x]","ℝ","guard(0≤b,sqrt(b))"),
 	Case("AbsoluteGuarded","∫dx [c≤d]*exp(-abs(x))*λ[x]","ℝ","[c≤d]·2"),
 	Case("AbsolutePieces","∫dx ([x≤0]*exp(x)+[0≤x]*exp(-x))*abs(x)*λ[x]","ℝ","2"),
-	Case("AbsoluteSymbolic","∫dx exp(-abs(x-m))*λ[x]","ℝ"),
+	Case("AbsoluteSymbolic","∫dx exp(-abs(x-m))*λ[x]","ℝ","2"),
 	Case("AbsoluteSquare","∫dx exp(-abs(x^2-1))*λ[x]","ℝ"),
 	Case("AbsoluteGrowing","∫dx abs(x)*λ[x]","ℝ"),
 	Case("AbsoluteMany","∫dx exp(-abs(x)-abs(x-1)-abs(x-2)-abs(x-3))*λ[x]","ℝ"),
+	Case("AbsoluteTermInterval","∫dx [0≤x]*[x≤1]*abs(x-a)*λ[x]","ℝ","[0≤a∧a≤1]·(-1/2·a^2-a·(-a+1)+1/2)+[0<a]·([1<a]·(a-1/2)+[a≤1]·(1/2·a^2))+[a<0]·(-a+1/2)"),
+	Case("AbsoluteTermSlope","∫dx exp(-abs(2*x-a)/3)*λ[x]","ℝ","3"),
+	Case("AbsoluteTermSum","∫dx exp(-abs(x-a-b))*λ[x]","ℝ","2"),
+	Case("AbsoluteTermFactor","∫dx exp(-abs(x-a))*abs(x-a)*λ[x]","ℝ","2"),
+	Case("AbsoluteTermMoment","∫dx exp(-abs(x-a))*x^2*λ[x]","ℝ","a·(a-2)-a·(-a-2)+4"),
+	Case("AbsoluteTermProduct","∫dx [0≤x]*[x≤1]*abs(2*x-a)*x*λ[x]","ℝ","[0≤a∧a≤2]·(-1/12·a^3+a·(1/8·a^2-1/2)+2/3)+[0<a]·([2<a]·(a·(1/2)-2/3)+[a≤2]·(1/24·a^3))+[a<0]·(-a·(1/2)+2/3)"),
+	Case("AbsoluteTermRate","∫dx [0≤x]*exp(-x)*abs(x-a)*λ[x]","ℝ","[0<a]·(a·(-exp(-a)+1)+(a+1)·exp(-a)-1)+[a<0]·(-a+1)+[0≤a]·(-a·exp(-a)-(-a-1)·exp(-a))"),
+	Case("AbsoluteTermGaussian","∫dx exp(-x^2)*abs(x-a)*λ[x]","ℝ","-a·(1/2)·sqrt(π)·erfc(a)+a·(1/2)·sqrt(π)·erfc(-a)+exp(-a^2)"),
+	Case("AbsoluteTermCurve","∫dx exp(-abs(x-a)-x^2)*λ[x]","ℝ","1/2·sqrt(π)·exp(a+1/4)·erfc(a+1/2)+1/2·sqrt(π)·exp(-a+1/4)·erfc(-a+1/2)"),
+	Case("AbsoluteTermTwo","∫dx exp(-abs(x-a))*exp(-abs(x-b))*λ[x]","ℝ","[a<b]·((-a+b)·exp(a-b)+1/2·exp(a-b))+[b<a]·((a-b)·exp(-a+b)+1/2·exp(-a+b))+[a≤b]·(1/2·exp(a-b))+[b≤a]·(1/2·exp(-a+b))"),
+	Case("AbsoluteTermMixed","∫dx exp(-abs(x-a)-abs(x-1))*λ[x]","ℝ","[1<a]·((a-1)·exp(-a+1)+1/2·exp(-a+1))+[a<1]·((-a+1)·exp(a-1)+1/2·exp(a-1))+[1≤a]·(1/2·exp(-a+1))+[a≤1]·(1/2·exp(a-1))"),
+	Case("AbsoluteTermScaled","∫dx c*exp(-abs(x-a))*λ[x]","ℝ","2·c"),
+	Case("AbsoluteTermDomain","∫dx exp(-abs(x-a))/c*λ[x]","ℝ","guard(c≠0,2·c⁻¹)"),
+	Case("AbsoluteTermGuarded","∫dx [c≤d]*exp(-abs(x-a))*λ[x]","ℝ","[c≤d]·2"),
+	Case("AbsoluteTermFunction","λ(t:ℝ).∫dx exp(-abs(x-t))*abs(x)*λ[x]","ℝ→ℝ","λ(t:ℝ). [0<t]·(((t-1)·exp(t)+1)·exp(-t)+exp(-t))+[t<0]·((-(t+1)·exp(-t)+1)·exp(t)+exp(t))+[0≤t]·(t+1)+[t≤0]·(-t+1)"),
+	Case("AbsoluteTermNested","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*abs(x-y)*λ[x]*λ[y]","ℝ","1/3"),
+	Case("AbsoluteTermPartial","∫dx [0≤x]*[x≤1]*abs(x-log(a))*λ[x]","ℝ"),
+	Case("AbsoluteTermThree","∫dx exp(-abs(x-a)-abs(x-b)-abs(x-c))*λ[x]","ℝ"),
+	Case("AbsoluteTermInner","∫dx [0≤x]*[x≤1]*abs(abs(x-a)-b)*λ[x]","ℝ"),
+	Case("AbsoluteTermRateTerm","∫dx exp(-abs(a-x)/b)*λ[x]","ℝ"),
 	Case("GaussianSymbolic","∫dx exp(-(x-m)^2)*λ[x]","ℝ","sqrt(π)"),
 	Case("GaussianSymbolicOffset","∫dx exp(-x^2+a)*λ[x]","ℝ","sqrt(π)·exp(a)"),
 	Case("GaussianSymbolicMean","∫dx x*exp(-(x-m)^2/2)/sqrt(2*π)*λ[x]","ℝ","m"),
@@ -1686,7 +1706,7 @@ private Case[] cases(){
 	Case("OpenedSimplex","∫dx ∫dy ∫dz [0≤x]*[0≤y]*[0≤z]*[x+y+z≤1]*λ[x]*λ[y]*λ[z]","ℝ","1/6"),
 	Case("OpenedFunction","λ(t:ℝ).∫dx [0≤x]*[x≤1]*(x+t)^2*λ[x]","ℝ→ℝ","λ(t:ℝ). t^2+t+1/3"),
 	Case("OpenedInner","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*e^(-x*y)*λ[x]*λ[y]","ℝ","∫dx ([0≤x∧x≤1]·([x≠0]·(-x⁻¹·exp(-x)+x⁻¹)+[x=0]))·λ[x]"),
-	Case("OpenedKept","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*abs(x-y)*λ[x]*λ[y]","ℝ","∫dx (∫dy ([0≤x]·([x≤1]·([0≤y]·([y≤1]·abs(x-y)))))·λ[y])·λ[x]"),
+	Case("OpenedKept","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x*y≤1/2]*λ[x]*λ[y]","ℝ","∫dx (∫dy [0≤x∧(x≤1∧(0≤y∧(y≤1∧x·y≤1/2)))]·λ[y])·λ[x]"),
 	Case("OpenedDirect","∫dx ∫dy [0≤x]*[x≤1]*[x≤y]*[y≤2*x]*λ[x]*λ[y]","ℝ","1/2"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
@@ -3856,19 +3876,39 @@ private void run(string directory){
 		// change sign: a partial value is the sum of its masks on the pieces
 		// between those points, and under the mask of a piece each absolute
 		// value is its argument or the opposite. The guards of the domains of
-		// the observations beyond a single bound leave their sum. An argument
-		// that is not of degree one with rational coefficients, more than
-		// three such points and a piece that is not observed keep the integral.
+		// the observations beyond a single bound leave their sum. A point
+		// that is a term, as in `abs(x-a)`, splits the weight the same way
+		// where it exists for every value of the parameters: into its masks
+		// below the point and from it on, which asks nothing else of the
+		// point. Under the bound of a piece the simplifier knows the sign of
+		// the argument, also where the slope is not one. Two such points give
+		// four pieces, and with a point that is a number the pieces of the
+		// pieces. A piece whose value is a product of sums is multiplied out.
+		// An argument that is not of degree one with a rational slope, more
+		// than three points that are numbers or two that are terms, a point
+		// that may be missing, an absolute value inside another, a rate that
+		// is a term and a piece that is not observed keep the integral.
 		if(c.name.indexOf("Absolute")==0){
-			bool retained=c.name=="AbsoluteSymbolic"||c.name=="AbsoluteSquare"||c.name=="AbsoluteGrowing"||c.name=="AbsoluteMany";
-			bool several=c.name=="AbsoluteTwo"||c.name=="AbsoluteThree"||c.name=="AbsoluteProduct",domain=c.name=="AbsoluteDomain"||c.name=="AbsoluteRoot";
-			enforce((certificate.indexOf("Value.split ")>=0&&certificate.indexOf("Distribution.DensityProgram.mass_pointwise")>=0)!=retained,c.name~" certificate");
+			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
+			bool term=c.name.indexOf("AbsoluteTerm")==0||c.name=="AbsoluteSymbolic";
+			bool retained=among("AbsoluteSquare","AbsoluteGrowing","AbsoluteMany","AbsoluteTermPartial","AbsoluteTermThree","AbsoluteTermInner","AbsoluteTermRateTerm");
+			bool number=!term||among("AbsoluteTermMixed","AbsoluteTermFunction");
+			bool several=c.name=="AbsoluteTwo"||c.name=="AbsoluteThree"||c.name=="AbsoluteProduct",domain=among("AbsoluteDomain","AbsoluteRoot","AbsoluteTermDomain");
+			enforce((certificate.indexOf("Value.split ")>=0)==(number&&!retained),c.name~" split at a number");
+			enforce((certificate.indexOf("Value.split_at ")>=0)==(term&&!retained),c.name~" split at a term");
+			enforce((certificate.indexOf("Distribution.DensityProgram.mass_pointwise")>=0)!=retained,c.name~" certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			if(!retained){
 				enforce((certificate.indexOf("Value.split_between")>=0)==several,c.name~" pieces between two points");
 				enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0,c.name~" observations");
 				enforce((certificate.indexOf("Distribution.DensityProgram.GuardedSum.sound")>=0)==domain,c.name~" domains");
 			}
+			// The second split is of a sum already: its masks go under that sum.
+			if(among("AbsoluteTermTwo","AbsoluteTermMixed","AbsoluteTermFunction")) enforce(certificate.indexOf("Value.mask_add")>=0,c.name~" pieces of pieces");
+			// The variable of an outer integral, and of a function, is a
+			// parameter where the body is normalized once more.
+			if(among("AbsoluteTermFunction","AbsoluteTermNested")) enforce(certificate.indexOf(".lamOpened ")>=0,c.name~" variable of the function as a parameter");
+			if(c.name=="AbsoluteTermGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 			if(c.name=="AbsoluteGuarded") enforce(certificate.indexOf("Distribution.DensityProgram.mass_guard")>=0,c.name~" guard free of the axis");
 			// A factor of a sum of pieces: the masks of the split go under the
 			// sum, and a summand on the other side vanishes.

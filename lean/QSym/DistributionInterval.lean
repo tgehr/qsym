@@ -1424,6 +1424,17 @@ theorem _root_.QSym.Value.split (v : Option ℝ) (x : ℝ) {p : Option ℝ} (q :
   · have h' : Numeric.denote (s := .real) q ≤ x := not_lt.1 h
     cases v <;> simp [Value.lt, Value.le, Value.mask, Value.add, h, h']
 
+/-- The same at a point that is a term, where the term exists: nothing else
+is asked of the point. -/
+theorem _root_.QSym.Value.split_at (v : Option ℝ) (x : ℝ) {p : Option ℝ} (hp : Value.Defined p) :
+    v = Value.add (Value.mask (Value.lt (some x) p) v) (Value.mask (Value.le p (some x)) v) := by
+  obtain ⟨c, rfl⟩ := hp
+  by_cases h : x < c
+  · have h' : ¬ c ≤ x := not_le.2 h
+    cases v <;> simp [Value.lt, Value.le, Value.mask, Value.add, h, h']
+  · have h' : c ≤ x := not_lt.1 h
+    cases v <;> simp [Value.lt, Value.le, Value.mask, Value.add, h, h']
+
 /-- From a point on, a partial value is the sum of its masks up to a later
 point and from there. -/
 theorem _root_.QSym.Value.split_between (v : Option ℝ) (x : ℝ) {p r : Option ℝ} (q s : ℚ)
