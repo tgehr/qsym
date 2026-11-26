@@ -1245,6 +1245,13 @@ private Case[] cases(){
 	Case("ShiftOrbitAlternating","massD(weightD(λ(n:ℕ).(-1:ℝ)^n,"~counter~"))","ℝ","1/3"),
 	Case("ShiftOrbitAmplified","massD(weightD(λ(n:ℕ).(2:ℝ)^n,"~counter~"))","ℝ","undefined(ℝ)"),
 	Case("ShiftOrbitSecond","massD(weightD(λ(n:ℕ).(n:ℝ)^2,"~counter~"))","ℝ","3"),
+	Case("ShiftOrbitCubic","massD(weightD(λ(n:ℕ).(n:ℝ)^3,"~counter~"))","ℝ","13"),
+	Case("ShiftOrbitSixth","massD(weightD(λ(n:ℕ).(n:ℝ)^6,"~counter~"))","ℝ","4683"),
+	Case("ShiftOrbitPolynomial","massD(weightD(λ(n:ℕ).2*(n:ℝ)^3-3*(n:ℝ)+4,"~counter~"))","ℝ","27"),
+	Case("ShiftOrbitPowerOfSum","massD(weightD(λ(n:ℕ).(1+(n:ℝ))^12,"~counter~"))","ℝ","56183135190"),
+	Case("ShiftOrbitFractional","massD(weightD(λ(n:ℕ).(1/3*(n:ℝ)-1/2)^2,"~shift("0","n+1","1/3","2/3")~"))","ℝ","25/36"),
+	Case("ShiftOrbitOffsetSquare","massD(weightD(λ(n:ℕ).(n:ℝ)^2,"~shift("3","2+n")~"))","ℝ","33"),
+	Case("ShiftOrbitUnnormalizedSecond","massD(weightD(λ(n:ℕ).(n:ℝ)^2,"~shift("0","n+1","2")~"))","ℝ","12"),
 	Case("ShiftOrbitStride","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3","2+n")~"))","ℝ","5"),
 	Case("ShiftOrbitEven","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("0","n+2")~"))","ℝ","2"),
 	Case("ShiftOrbitOffset","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3")~"))","ℝ","4"),
@@ -1310,12 +1317,19 @@ private void run(string directory){
 		else if(c.name.indexOf("SeriesFibre")==0)
 			enforce(certificate.indexOf("Distribution.FibreCertificate.extract_sum")>=0||
 				certificate.indexOf("Distribution.FibreCertificate.extract_nat_sum")>=0,c.name);
+		if(c.name=="ShiftOrbitMean"||c.name=="ShiftOrbitSecond"||c.name=="ShiftOrbitCubic"||c.name=="ShiftOrbitSixth"||
+				c.name=="ShiftOrbitPolynomial"||c.name=="ShiftOrbitPowerOfSum"||c.name=="ShiftOrbitFractional"||
+				c.name=="ShiftOrbitOffsetSquare"||c.name=="ShiftOrbitUnnormalizedSecond"){
+			enforce(certificate.indexOf("Atomic.nat_shift_polynomial")>=0,c.name~" polynomial proof");
+			enforce(certificate.indexOf("Summation.tail_solution")<0,c.name~" replayed a symbolic antidifference");
+		}
 		if(c.name=="ShiftOrbitAlternating"||c.name=="ShiftOrbitAmplified")
 			enforce(certificate.indexOf("SummationElementary.PowerAt.product")>=0,c.name);
 		if(c.name=="ShiftOrbitPole"||c.name=="ShiftOrbitPoleAfterZero")
 			enforce(certificate.indexOf("SummationLinearity.missing_guard")>=0,c.name);
 		if(c.name.indexOf("ShiftOrbit")==0&&c.name!="ShiftOrbitBare")
-			enforce(certificate.indexOf("CountableObservation.nat_shift")>=0||certificate.indexOf("Atomic.nat_shift_mass")>=0,c.name~" shift observation");
+			enforce(certificate.indexOf("CountableObservation.nat_shift")>=0||certificate.indexOf("Atomic.nat_shift_mass")>=0||
+				certificate.indexOf("Atomic.nat_shift_polynomial")>=0,c.name~" shift observation");
 		if(c.name.indexOf("RetryUnbounded")==0&&c.name!="RetryUnboundedMissingProbe")
 			enforce(certificate.indexOf("CountableObservation.retry_noncontracting")>=0,c.name);
 		if(c.name.indexOf("LoopDensity")==0&&c.name!="LoopDensityMissingSeed"&&c.name!="LoopDensityMissingQuery")
