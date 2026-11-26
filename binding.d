@@ -2956,7 +2956,7 @@ final class Bindings{
 		return plain?scalar(ctx,t):primitive(t,args);
 	}
 	// Observe a countdown without constructing each finite presentation.
-	// Every seed may be partial. A total literal ratio permits powRN even at n=0.
+	// A captured scale is inspected only on positive indices.
 	private BoundTerm countdownMass(BoundTerm mass){
 		uint[] operations;
 		auto application=nodes[observationInput(node(mass).a,operations)];
@@ -2975,19 +2975,22 @@ final class Bindings{
 		if(!builtin(nz,Builtin.nonzeroZ)||!builtin(nodes[nz].a,Builtin.castNZ)||!variableAt(nodes[nodes[nz].a].a,0))
 			return BoundTerm.init;
 		auto scale=nodes[branch.c];
-		if(scale.op!=BoundOp.distributionScale||nodes[scale.a].op!=BoundOp.scalar) return BoundTerm.init;
-		auto ratio=arena.at(nodes[scale.a].data),call=nodes[scale.b];
-		if(!arena.isNumber(ratio)||call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
+		if(scale.op!=BoundOp.distributionScale||depends(at(scale.a),0)||depends(at(scale.a),1)) return BoundTerm.init;
+		auto call=nodes[scale.b];
+		if(call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
 		auto pred=nodes[call.b],one=nodes[pred.b],base=at(branch.b);
 		if(!variableAt(pred.a,0)||one.op!=BoundOp.scalar||arena.at(one.data)!=arena.natural_(1)||depends(base,0)||depends(base,1))
 			return BoundTerm.init;
-		auto ctx=context(mass),r=scalar(ctx,ratio);
+		auto ctx=context(mass);
 		BoundTerm[] env=[scalar(ctx,arena.natural_(0)),bottom(ctx,type(f))];
 		foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
 		auto seed=observedMass(substitute(base,ctx,env),operations);
-		auto zero=arena.real_(0);
-		auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[r,at(application.b)]);
-		return primitive(arena.mul(zero,zero,true),[power,seed]);
+		auto r=substitute(at(scale.a),ctx,env),arg=at(application.b),zero=arena.real_(0);
+		auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[r,arg]);
+		auto product=primitive(arena.mul(zero,zero,true),[power,seed]);
+		if(node(r).op==BoundOp.scalar&&arena.isNumber(arena.at(node(r).data))) return product;
+		env[0]=arg;
+		return conditional(substitute(at(branch.a),ctx,env),seed,product);
 	}
 	private BoundTerm solveRecurrence(BoundTerm t,out RecurrenceSolution solution){
 		auto n=node(t),body=node(at(n.a)),ty=pool.view(type(t));
@@ -12143,14 +12146,23 @@ final class Bindings{
 				}
 				case BindingRule.distributionMassCountdown:{
 					uint[] ops;
-					auto call=nodes[observationInput(n.a,ops)],target=nodes[p.to],ratio=nodes[nodes[target.a].a];
-					auto base=nodes[target.b].a;
+					auto call=nodes[observationInput(n.a,ops)],target=nodes[p.to];
+					bool partial=target.op==BoundOp.conditional;
+					auto product=partial?nodes[target.c]:target,ratio=nodes[product.a].a;
+					auto base=nodes[product.b].a;
 					foreach(id;ops) base=nodes[id].op==BoundOp.distributionWeight?nodes[base].b:nodes[base].a;
-					auto literal=arena.at(ratio.data),q=SourceCertificates.q(arena.number(literal).re),f=to!string(call.a)~dimArg~" γ ξ ρ";
-					auto law=ops.length?"observe_scale_countdown "~massObserver(ops,false):"mass_scale_countdown";
+					auto f=to!string(call.a)~dimArg~" γ ξ ρ";
+					string law,scale;
+					if(partial){
+						law="observe_partial_scale_countdown "~massObserver(ops,false);
+						scale="("~name(ratio)~".eval ξ ρ)";
+					}else{
+						law=ops.length?"observe_scale_countdown "~massObserver(ops,false):"mass_scale_countdown";
+						auto literal=arena.at(nodes[ratio].data),q=SourceCertificates.q(arena.number(literal).re),id=to!string(literal.id);
+						scale="(n"~id~".eval ξ) (Numeric.calculate_sound ξ n"~id~" "~q~" rfl)";
+					}
 					proof=".ofEq (fun ξ ρ => Distribution."~law~" (rec"~f~") (fixed"~f~") ("~
-						name(base)~".eval ξ ρ) (n"~to!string(literal.id)~".eval ξ) (Numeric.calculate_sound ξ n"~
-						to!string(literal.id)~" "~q~" rfl) (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))"; break;
+						name(base)~".eval ξ ρ) "~scale~" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))"; break;
 				}
 				case BindingRule.distributionDefinedDirac:
 					proof=".ofEq (fun ξ ρ => congrArg some (Option.isSome_map' (f := Distribution.Presentation.dirac) (x := "~name(nodes[n.a].a)~".eval ξ ρ)))"; break;
