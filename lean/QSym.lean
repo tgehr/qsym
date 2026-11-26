@@ -8,6 +8,7 @@ import QSym.DistributionGraphBridge
 import QSym.DistributionMixture
 import QSym.DistributionSum
 import QSym.DistributionSumFibre
+import QSym.DistributionCounting
 import QSym.DistributionPolynomialGrid
 import QSym.DistributionInterval
 import QSym.DistributionGaussian

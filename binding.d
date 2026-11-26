@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionDefinedDirac,distributionDefinedBinary,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -519,6 +519,37 @@ final class Bindings{
 		auto neg=primitive(arena.mul(zero,zero,true),[scalar(context(query),arena.real_(-1)),at(location)]);
 		auto diff=primitive(arena.add(zero,zero,true),[query,neg]);
 		return primitive(arena.nonzero(zero),[diff]);
+	}
+	private BoundTerm indexBuiltin(Builtin op,BoundTerm t){
+		return primitive(arena.call(op,[arena.number(Number(0),builtinInfo(op).args[0])]),[t]);
+	}
+	private BoundTerm realIndex(BoundTerm i){
+		if(type(i)==scalarType(Sort.natural)) i=indexBuiltin(Builtin.castNZ,i);
+		return indexBuiltin(Builtin.castQR,indexBuiltin(Builtin.castZQ,i));
+	}
+	// A real equality selects at most one integer or natural index. Test the
+	// recovered point before observing the weight, since the weight may be partial.
+	private BoundTerm selectRealIndex(BoundTerm function_,out bool swap){
+		auto root=node(function_).a;
+		if(!primitiveOp(root,Op.mask)) return BoundTerm.init;
+		auto row=nodes[root],pred=nodes[row.a];
+		if(!primitiveOp(row.a,Op.not_)||!primitiveOp(pred.a,Op.nonzero)) return BoundTerm.init;
+		auto difference=nodes[pred.a].a;
+		if(!primitiveOp(difference,Op.add)) return BoundTerm.init;
+		auto pair=nodes[difference];
+		if(!primitiveOp(pair.b,Op.mul)) return BoundTerm.init;
+		auto neg=nodes[pair.b],sign=nodes[neg.a];
+		if(sign.op!=BoundOp.scalar||arena.at(sign.data)!=arena.real_(-1)) return BoundTerm.init;
+		bool natural=naturalIndex(function_.id);
+		auto index=realIndex(variable(context(at(root)),0)).id;
+		swap=pair.a==index;
+		if(!swap&&neg.b!=index) return BoundTerm.init;
+		auto bound=at(swap?neg.b:pair.a);
+		if(depends(bound,0)) return BoundTerm.init;
+		auto query=dropIndex(bound),candidate=indexBuiltin(natural?Builtin.floorN:Builtin.floorR,query);
+		auto present=primitive(arena.not_(arena.boolean(false)),[awayFromAtom(realIndex(candidate).id,query)]);
+		auto weight=apply(inheritHint(function_,lambda(at(row.b))),candidate);
+		return primitive(arena.at(row.data),[present,weight]);
 	}
 	// Compile the signed singleton charge and regular weight together. Keeping
 	// one witness per source node also shares reused summands in the export.
@@ -6935,6 +6966,10 @@ final class Bindings{
 						auto atom=distribution(ctx,BoundOp.distributionDirac,[dropIndex(at(row.a))]);
 						next=distribution(ctx,BoundOp.distributionDensityAt,[atom,query]);
 						rule=BindingRule.distributionDensityInfiniteSeries;
+					}else if(row.op==BoundOp.distributionDirac&&row.a==realIndex(variable(context(body),0)).id){
+						auto point=realIndex(indexBuiltin(naturalIndex(d.a)?Builtin.floorN:Builtin.floorR,query));
+						next=guard(awayFromAtom(point.id,query),scalar(ctx,arena.real_(0)));
+						rule=BindingRule.distributionCountingDensity;
 					}else{
 						uint[] shift; foreach(i;0..this.depth(ctx)) shift~=i+1;
 						FibreStep[] witness;
@@ -7004,7 +7039,12 @@ final class Bindings{
 					extra=cast(uint)limits.length; limits~=LimitSolution(body,next.id,bottom);
 				}
 			}
-			if(current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
+			if(steps<budget&&current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
+				bool swap;
+				next=selectRealIndex(at(current.a),swap);
+				if(next!=BoundTerm.init){ rule=BindingRule.sumRealIndex; extra=swap; }
+			}
+			if(next==BoundTerm.init&&current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
 				auto body=nodes[nodes[current.a].a],ty=types[current.type];
 				if(steps<budget){
 					auto rounded=roundSumBounds(at(nodes[current.a].a));
@@ -10608,6 +10648,15 @@ final class Bindings{
 					auto ns=index==scalarType(Sort.natural),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
 					auto f="(fun (i : Option "~(ns?"ℕ":"ℤ")~") => "~name(sourceBody.b)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") i ρ))";
 					proof=".ofEq (fun ξ ρ => Summation.interval_convert"~(ns?"N":"Z")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(bounds.a)~".eval ξ ρ) ("~name(nodes[bounds.b].a)~".eval ξ ρ))"; break;
+				case BindingRule.sumRealIndex:{
+					auto resultApp=nodes[nodes[p.to].b],query=nodes[resultApp.b].a;
+					auto index=pool.view(type(at(n.a))).fields[0],sort=elementSort(types[n.type]);
+					bool natural=index==scalarType(Sort.natural);
+					auto f="(fun i : "~(natural?"ℕ":"ℤ")~" => "~name(nodes[resultApp.a].a)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") (some i) ρ))";
+					proof=".ofEq (fun ξ ρ => Summation.select_real_"~(natural?"N":"Z")~
+						(sort==Sort.natural?" (fun n : ℕ => (n : ℝ)) Summation.nat_weight_zero ":" norm norm_zero ")~
+						(p.extra?"true ":"false ")~f~" ("~name(query)~".eval ξ ρ))"; break;
+				}
 				case BindingRule.sumDelta,BindingRule.sumDeltaOffset:
 					auto out_=nodes[p.to],sort=elementSort(types[n.type]),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm",index=pool.view(type(at(n.a))).fields[0];
 					auto f="(fun (i : "~(index==scalarType(Sort.natural)?"ℕ":"ℤ")~") => "~name(nodes[out_.a].a)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") (some i) ρ))";
@@ -11377,6 +11426,8 @@ final class Bindings{
 					proof~=series?indent~witness(rows[$-1].source)~"))":"  Distribution.FibreCertificate.extract "~witness(n.a)~")";
 					break;
 				}
+				case BindingRule.distributionCountingDensity:
+					proof=".ofEq (fun ξ ρ => Distribution.counting_"~(naturalIndex(nodes[n.a].a)?"N":"Z")~" ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionDensityInfiniteSeries:
 					proof=".ofEq (fun ξ ρ => Distribution.Atomic.density_constant_dirac_series ("~name(nodes[nodes[p.to].a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionDensityDirac:

@@ -9,6 +9,15 @@ import std.conv:to;
 @safe:
 private struct Case { string name,input,expected,proof; }
 private Case[] cases(){ return [
+ Case("RealIndexZ","λ(x:ℝ). ∑(i:ℤ). [x=(i:ℝ)]·(1/(i+1))","λ(x:ℝ). [x=(floor(x):ℝ)]·(1/(floor(x)+1))","Summation.select_real_Z"),
+ Case("RealIndexN","λ(x:ℝ). ∑(i:ℕ). [(i:ℝ)=x]·(i:ℝ)","λ(x:ℝ). [x=(floorN(x):ℝ)]·(floorN(x):ℝ)","Summation.select_real_N"),
+ Case("RealIndexNatWeight","λ(x:ℝ). ∑(n:ℕ). [x=(n:ℝ)]·n","λ(x:ℝ). [x=(floorN(x):ℝ)]·floorN(x)","Summation.select_real_N"),
+ Case("RealIndexComplex","λ(x:ℝ). ∑(i:ℤ). [x=(i:ℝ)]·cis(i)","λ(x:ℝ). [x=(floor(x):ℝ)]·cis(floor(x))","Summation.select_real_Z"),
+ Case("RealIndexPartialWeight","λ(x:ℝ). ∑(i:ℤ). [x=(i:ℝ)]·undefined(ℝ)","λ(x:ℝ). [x=(floor(x):ℝ)]·undefined(ℝ)","Summation.select_real_Z"),
+ Case("RealIndexGap","∑(i:ℤ). [(i:ℝ)=(1/2:ℝ)]·undefined(ℝ)","(0:ℝ)"),
+ Case("RealIndexOutside","∑(i:ℕ). [(i:ℝ)=(-1:ℝ)]·undefined(ℝ)","(0:ℝ)"),
+ Case("RealIndexMissingWeight","∑(i:ℤ). [(i:ℝ)=(-1:ℝ)]·undefined(ℝ)","undefined(ℝ)"),
+ Case("RealIndexMissingQuery","∑(i:ℕ). [(i:ℝ)=undefined(ℝ)]·(0:ℝ)","undefined(ℝ)","Summation.select_real_N"),
  Case("ZeroSelectorN","∑(i:ℕ). [i=0]","1","SummationMasks.deltaN_zero"),
  Case("ZeroSelectorZ","∑(i:ℤ). [i=0]·sin(i+1)","sin(1)","SummationMasks.deltaZ_zero"),
  Case("ZeroSelectorPole","defined(∑(i:ℕ). [i=0]·1/i)","false"),

@@ -115,7 +115,7 @@ theorem mixed_mass_bridge (a : ℝ) (p : DensityProgram) :
   mixed_observe_bridge a p (fun _ => some 1)
 
 /-- The scalar frontend represents x ≠ a by nonzero (x + (-1) * a). -/
-private noncomputable def awayFromAtom (a x : Option ℝ) : Option Bool :=
+noncomputable def awayFromAtom (a x : Option ℝ) : Option Bool :=
   Value.nonzero (Value.add x (Value.mul (some ((-1 : ℤ) : ℝ)) a))
 
 private theorem mixed_guard (a x : ℝ) (w : ℝ → Option ℝ) :

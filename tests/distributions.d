@@ -1125,7 +1125,8 @@ private Case[] cases(){
 	Case("RetryObservationMissingProbe","massD(weightD(undefined(ℝ→ℝ),"~retry~"))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationMissingKernel","massD(bindD("~retry~",undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationContinuousOutput","massD(bindD("~retry~",λ(x:ℝ).Λy. [0≤y≤1]·λ[y]))","ℝ","1"),
-	Case("InfiniteSeriesVarying","λ(x:ℝ).densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),x)","ℝ→ℝ"),
+	Case("InfiniteSeriesVarying","λ(x:ℝ).densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠floor(x)}). (0:ℝ)"),
+	Case("SeriesFibreNaturalCounting","λ(x:ℝ).densityAtD(sumD(λ(i:ℕ).δ((i:ℝ))),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠floorN(x)}). (0:ℝ)"),
 	Case("SeriesFibreIntegerHit","densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),2)","ℝ","undefined(ℝ)"),
 	Case("SeriesFibreIntegerGap","densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),1/2)","ℝ","0"),
 	Case("SeriesFibreNaturalHit","densityAtD(sumD(λ(i:ℕ).δ((i:ℝ))),2)","ℝ","undefined(ℝ)"),
@@ -1248,7 +1249,10 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
-		if(c.name=="InfiniteSeriesVarying"||c.name.indexOf("SeriesFibre")==0)
+		if(c.name=="InfiniteSeriesVarying"||c.name=="SeriesFibreNaturalCounting"||c.name=="SeriesFibreIntegerHit"||
+			c.name=="SeriesFibreIntegerGap"||c.name=="SeriesFibreNaturalHit"||c.name=="SeriesFibreNaturalGap"||c.name=="SeriesFibreMissing")
+			enforce(certificate.indexOf("Distribution.counting_")>=0,c.name);
+		else if(c.name.indexOf("SeriesFibre")==0)
 			enforce(certificate.indexOf("Distribution.FibreCertificate.extract_sum")>=0||
 				certificate.indexOf("Distribution.FibreCertificate.extract_nat_sum")>=0,c.name);
 		if(c.name.indexOf("InfiniteRetry")==0){
