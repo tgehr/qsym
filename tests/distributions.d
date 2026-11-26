@@ -11,6 +11,11 @@ private Case[] cases(){
 	string scaledSteps(string rate,string k="k",string seed="δ((3:ℝ))"){
 		return "(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then "~seed~" else scaleD("~rate~",f(n sub 1)))("~k~")";
 	}
+	string emittedSteps(string seed,string emission,string rate,string k,bool tailFirst=false){
+		auto tail=rate.length?"scaleD("~rate~",f(n sub 1))":"f(n sub 1)";
+		auto step=tailFirst?tail~","~emission:emission~","~tail;
+		return "(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then "~seed~" else addD("~step~"))("~k~")";
+	}
 	enum growing="(n+1:ℝ)/(n:ℝ)",shrinking="(n:ℝ)/(n+1:ℝ)";
 	string discountedAtoms(string k,string rate="1/2",string seed="zeroD(ℝ)",bool tailFirst=false){
 		auto tail="scaleD("~rate~",f(n sub 1))",atom="δ((n:ℝ))";
@@ -1765,6 +1770,27 @@ private Case[] cases(){
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
 	Case("CapturedScaleMissingIndex","λ(r:ℝ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(0 sub 1))","ℝ→ℝ","λ(r:ℝ). undefined(ℝ)"),
 	Case("VariableScaleByIndex","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD((n:ℝ),f(n sub 1)))(k))","ℝ→ℕ→ℝ"),
+	Case("FibreEmissionAtCancellation","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","scaleD(-1,δ((0:ℝ)))","","1")~",0)","ℝ","1"),
+	Case("FibreEmissionBeforeCancellation","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","scaleD(-1,δ((0:ℝ)))","","0")~",0)","ℝ","undefined(ℝ)"),
+	Case("FibreEmissionAfterCancellation","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","scaleD(-1,δ((0:ℝ)))","","2")~",0)","ℝ","undefined(ℝ)"),
+	Case("FibreEmissionSymbolic","λ(k:ℕ).densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","scaleD(-1,δ((0:ℝ)))","","k")~",0)","ℕ→ℝ"),
+	Case("FibreEmissionSwapped","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","scaleD(-1,δ((0:ℝ)))","1","1",true)~",0)","ℝ","1"),
+	Case("FibreEmissionRegular","λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","scaleD(2,lebesgueD())","","k")~",7)","ℕ→ℝ"),
+	Case("FibreEmissionSeparate","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","δ((1:ℝ))","","1000000",true)~",2)","ℝ","1"),
+	Case("FibreEmissionMissingEmpty","densityAtD("~emittedSteps("lebesgueD()","undefined(Distribution(ℝ))","","0")~",0)","ℝ","1"),
+	Case("FibreEmissionMissingVisit","defined(densityAtD("~emittedSteps("lebesgueD()","undefined(Distribution(ℝ))","","1")~",0))","𝔹","false"),
+	Case("FibreEmissionPole","defined(densityAtD("~emittedSteps("(Λx. (1/x)·λ[x])","scaleD(-1,δ((0:ℝ)))","","1")~",0))","𝔹","false"),
+	Case("FibreEmissionMissingIndex","defined(densityAtD("~emittedSteps("lebesgueD()","lebesgueD()","","0 sub 1",true)~",1))","𝔹","false"),
+	Case("FibreEmissionMissingQuery","defined(densityAtD("~emittedSteps("lebesgueD()","lebesgueD()","","3")~",undefined(ℝ)))","𝔹","false"),
+	Case("FibreEmissionGeometric","λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","scaleD(3,lebesgueD())","1/2","k")~",0)","ℕ→ℝ"),
+	Case("FibreEmissionSignedCancel","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","δ((0:ℝ))","-1","1",true)~",0)","ℝ","-1"),
+	Case("FibreEmissionSignedReturn","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","δ((0:ℝ))","-1","2")~",0)","ℝ","undefined(ℝ)"),
+	Case("FibreEmissionZeroClears","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","lebesgueD()","0","3")~",0)","ℝ","1"),
+	Case("FibreEmissionZeroPole","defined(densityAtD("~emittedSteps("(Λx. (1/x)·λ[x])","lebesgueD()","0","3",true)~",0))","𝔹","false"),
+	Case("FibreEmissionUnknownEmpty","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","undefined(Distribution(ℝ))","undefined(ℝ)","0")~",2)","ℝ","1"),
+	Case("FibreEmissionUnknownUsed","defined(densityAtD("~emittedSteps("lebesgueD()","lebesgueD()","undefined(ℝ)","1")~",2))","𝔹","false"),
+	Case("FibreEmissionSymbolicScale","λ(r:ℝ).λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","lebesgueD()","r","k")~",2)","ℝ→ℕ→ℝ"),
+	Case("FibreEmissionParameters","λ(b:Distribution(ℝ)).λ(v:Distribution(ℝ)).λ(k:ℕ).densityAtD("~emittedSteps("b","v","","k",true)~",0)","Distribution(ℝ)→Distribution(ℝ)→ℕ→ℝ"),
 	Case("FibreProductGrowing","λ(k:ℕ).densityAtD("~scaledSteps("(n+1)/n","k","lebesgueD()")~",1)","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
 	Case("FibreProductShrinking","λ(k:ℕ).densityAtD("~scaledSteps("n/(n+1)","k","lebesgueD()")~",1)","ℕ→ℝ","λ(k:ℕ). ((k+1)⁻¹:ℝ)"),
 	Case("FibreProductMixed","densityAtD("~scaledSteps("(n+2)/n","4","addD(lebesgueD(),δ((0:ℝ)))")~",2)","ℝ","15"),
@@ -2014,6 +2040,12 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")
 			enforce(certificate.indexOf("observe_partial_scale_countdown")<0&&text.indexOf("μ")>=0,c.name~" index-dependent scale");
+		if(c.name.indexOf("FibreEmission")==0){
+			bool constant=c.name.indexOf("Geometric")>=0||c.name.indexOf("Signed")>=0||c.name.indexOf("Zero")>=0;
+			bool captured=c.name.indexOf("Unknown")>=0||c.name=="FibreEmissionSymbolicScale";
+			auto law=constant?"centered_countdown":captured?"emitting_countdown":"unit_countdown";
+			enforce(certificate.indexOf("Distribution.RealDensityFibre."~law~" ")>=0&&text.indexOf("μ")<0,c.name);
+		}
 		if(c.name.indexOf("FibreProduct")==0){
 			bool solved=c.name!="FibreProductCrossesPole";
 			enforce((certificate.indexOf("Distribution.RealDensityFibre.product_countdown ")>=0)==solved,c.name);

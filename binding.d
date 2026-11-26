@@ -3342,7 +3342,7 @@ final class Bindings{
 		bool bare=emission!=uint.max&&scale.op==BoundOp.apply;
 		if(!bare&&(scale.op!=BoundOp.distributionScale||depends(at(scale.a),1))) return BoundTerm.init;
 		bool indexedRate=!bare&&depends(at(scale.a),0);
-		if(pointwise&&emission!=uint.max) return BoundTerm.init;
+		if(pointwise&&emission!=uint.max&&(indexedRate||depends(at(emission),0))) return BoundTerm.init;
 		auto call=bare?scale:nodes[scale.b];
 		if(call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
 		auto pred=nodes[call.b],one=nodes[pred.b],base=at(branch.b);
@@ -3360,6 +3360,35 @@ final class Bindings{
 			if(cumulative==BoundTerm.init) return BoundTerm.init;
 			if(pointwise) return density(distribution(ctx,BoundOp.distributionScale,[apply(cumulative,arg),seedDistribution]));
 		}
+		Number rate;
+		bool literalScale=!bare&&nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),rate);
+		bool unitScale=bare||literalScale&&rate.one;
+		BoundTerm geometricSum(BoundTerm ratio){
+			auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
+			uint[] shift; foreach(j;0..depth(ctx)) shift~=j+1;
+			auto powers=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[rename(ratio,inner,shift),i]);
+			return finiteSum(lambda(powers),arg);
+		}
+		if(pointwise&&emission!=uint.max){
+			auto e=substitute(at(emission),ctx,env);
+			BoundTerm add(BoundTerm a,BoundTerm b){ return distribution(ctx,BoundOp.distributionAdd,[a,b]); }
+			BoundTerm scaled(BoundTerm r,BoundTerm d){ return distribution(ctx,BoundOp.distributionScale,[r,d]); }
+			BoundTerm summed;
+			if(unitScale) summed=add(seedDistribution,scaled(realIndex(arg),e));
+			else{
+				auto r=substitute(at(scale.a),ctx,env);
+				auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[r,arg]);
+				Rational q; Term raw;
+				if(node(r).op==BoundOp.scalar&&closedRational(r,q,raw)&&q!=Rational(1)){
+					auto gain=scalar(ctx,arena.real_(Rational(1)/(Rational(1)-q)));
+					auto limit=scaled(gain,e),delta=add(seedDistribution,scaled(scalar(ctx,arena.real_(-1)),limit));
+					summed=add(limit,scaled(power,delta));
+				}else summed=add(scaled(power,seedDistribution),scaled(geometricSum(r),e));
+			}
+			// At depth zero a missing emission or captured rate has never been inspected.
+			env[0]=arg;
+			return conditional(substitute(at(branch.a),ctx,env),density(seedDistribution),density(summed));
+		}
 		if(pointwise){
 			auto ratio=substitute(at(scale.a),ctx,env);
 			auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[ratio,arg]);
@@ -3375,9 +3404,6 @@ final class Bindings{
 		}
 		if(indexedRate&&emission==uint.max)
 			return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[apply(cumulative,arg),seed]);
-		Number rate;
-		bool literalScale=!bare&&nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),rate);
-		bool unitScale=bare||literalScale&&rate.one;
 		if(emission!=uint.max&&(indexedRate||depends(at(emission),0))){
 			auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
 			auto oneN=arena.natural_(1);
@@ -3414,9 +3440,7 @@ final class Bindings{
 		}
 		if(emission!=uint.max&&unitScale){
 			auto visits=observedMass(substitute(at(emission),ctx,env),operations);
-			auto casted=arg;
-			foreach(c;[Builtin.castNZ,Builtin.castZQ,Builtin.castQR])
-				casted=primitive(arena.call(c,[arena.number(Number(0),builtinInfo(c).args[0])]),[casted]);
+			auto casted=realIndex(arg);
 			auto nonzero=primitive(arena.call(Builtin.nonzeroN,[arena.natural_(0)]),[arg]);
 			auto amount=primitive(arena.mul(zero,zero,true),[casted,visits]);
 			return primitive(arena.add(zero,zero,true),[seed,primitive(arena.mask(arena.boolean(true),zero),[nonzero,amount])]);
@@ -3434,10 +3458,7 @@ final class Bindings{
 				auto neg=primitive(mul,[scalar(ctx,arena.real_(-1)),limit]);
 				product=primitive(add,[limit,primitive(mul,[power,primitive(add,[seed,neg])])]);
 			}else{
-				auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
-				uint[] shift; foreach(j;0..depth(ctx)) shift~=j+1;
-				auto powers=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[rename(r,inner,shift),i]);
-				auto total=finiteSum(lambda(powers),arg);
+				auto total=geometricSum(r);
 				auto term=primitive(arena.mul(zero,zero,true),[total,visits]);
 				product=primitive(arena.add(zero,zero,true),[product,term]);
 			}
@@ -13076,12 +13097,43 @@ final class Bindings{
 					auto call=nodes[pointwise?n.a:observationInput(n.a,ops)],target=nodes[p.to];
 					bool partial=target.op==BoundOp.conditional;
 					auto f=to!string(call.a)~dimArg~" γ ξ ρ";
+					auto branch=nodes[nodes[nodes[call.a].a].a],step=nodes[branch.c];
+					bool emitting=step.op==BoundOp.distributionAdd;
+					bool swapped=emitting&&depends(at(step.a),1);
+					string value(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+					if(pointwise&&emitting){
+						auto base=nodes[target.b].a,sum=nodes[nodes[target.c].a],tail=nodes[swapped?step.a:step.b];
+						Number rate;
+						bool unit=tail.op==BoundOp.apply||nodes[tail.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[tail.a].data),rate)&&rate.one;
+						string law,scale; uint visit;
+						Rational q; Term raw;
+						if(unit){
+							law="unit_countdown"; visit=nodes[sum.b].b;
+							if(tail.op==BoundOp.distributionScale){
+								auto one="n"~to!string(nodes[tail.a].data);
+								scale="("~one~".eval ξ) (Numeric.calculate_real_one ξ "~one~" rfl) true";
+							}else scale="(some 1) rfl false";
+						}else if(nodes[tail.a].op==BoundOp.scalar&&closedRational(at(tail.a),q,raw)&&q!=Rational(1)){
+							law="centered_countdown";
+							auto limit=nodes[sum.a],delta=nodes[nodes[sum.b].b],minus=nodes[delta.b];
+							visit=limit.b;
+							string number(uint id,Rational v){
+								return "(Numeric.calculate_sound ξ n"~to!string(id)~" "~SourceCertificates.q(v)~" rfl)";
+							}
+							scale=SourceCertificates.q(q)~" (of_decide_eq_true rfl) "~number(raw.id,q)~" "~
+								number(nodes[limit.a].data,Rational(1)/(Rational(1)-q))~" "~number(nodes[minus.a].data,Rational(-1));
+						}else{
+							law="emitting_countdown"; visit=nodes[sum.b].b; scale=value(nodes[nodes[sum.a].a].a);
+						}
+						proof=".ofEq (fun ξ ρ => Distribution.RealDensityFibre."~law~" (rec"~f~") (fixed"~f~") "~value(base)~
+							" "~value(visit)~" "~scale~" "~(swapped?"true":"false")~" (fun _ _ => rfl) "~value(call.b)~" "~value(n.b)~")";
+						break;
+					}
 					if(pointwise&&p.rule!=BindingRule.distributionProductCountdown){
 						auto observed=partial?nodes[target.c]:target;
 						bool scalar=observed.op==BoundOp.primitive;
 						auto scaled=scalar?observed:nodes[observed.a],power=nodes[scaled.a];
 						auto base=scalar?nodes[observed.b].a:scaled.b;
-						string value(uint id){ return "("~name(id)~".eval ξ ρ)"; }
 						auto law=partial?"partial_scale_countdown":scalar?"nonzero_scale_countdown":"scale_countdown";
 						string ratioProof;
 						if(!partial){
@@ -13095,14 +13147,11 @@ final class Bindings{
 							" "~value(power.a)~ratioProof~" (fun _ _ => rfl) "~value(call.b)~" "~value(n.b)~")";
 						break;
 					}
-					auto branch=nodes[nodes[nodes[call.a].a].a],step=nodes[branch.c];
-					bool emitting=step.op==BoundOp.distributionAdd;
 					uint observedInput(uint mass){
 						auto d=nodes[mass].a;
 						foreach(id;ops) d=nodes[id].op==BoundOp.distributionWeight?nodes[d].b:nodes[d].a;
 						return d;
 					}
-					bool swapped=emitting&&depends(at(step.a),1);
 					auto emission=swapped?step.b:step.a;
 					bool indexed=emitting&&depends(at(emission),0);
 					string indexedVisit(){

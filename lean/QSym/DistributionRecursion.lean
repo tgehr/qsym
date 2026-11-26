@@ -669,5 +669,77 @@ theorem product_countdown
   exact (observe_product_countdown (observation c x) p hf base r w hw0 hw step arg).trans
     (component_scale c x _ base).symm
 
+theorem component_add (c : Bool) (x : Option ℝ) (a b : Option (D ℝ)) :
+    component c x (addValue a b) = Value.add (component c x a) (component c x b) :=
+  observedAdd (observation c x) false a b
+
+/-- Extract the density after adding the signed contribution of all positive visits. -/
+theorem unit_countdown
+    (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b e : Option (D ℝ)) (r : Option ℝ)
+    (hr : r = some 1) (scaled swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let tail := (Functions.subN.apply (some n) (some 1)).bind g
+       let d := if scaled then scaleValue r tail else tail
+       if swap then addValue d e else addValue e d))
+    (arg : Option ℕ) (x : Option ℝ) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg))) (densityAtValue b x)
+      (densityAtValue (addValue b (scaleValue
+        (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply arg))) e)) x) := by
+  apply density_cases
+  intro c
+  rw [observe_unit_countdown (observation c x) p hf b e r hr scaled swap step arg,
+    component_add, component_scale]
+  rcases arg with _ | n
+  · cases component c x b <;> rfl
+  · cases n with
+    | zero =>
+      simpa [Functions.castNZ, Function1.apply, Functions.nonzeroZ, Functions.nonzeroN,
+        Value.not, Value.mask, Binding.conditionalValue] using Value.add_zero_right (component c x b)
+    | succ n =>
+      have hn : (n : ℤ) + 1 ≠ 0 := by omega
+      simp [Functions.nonzeroZ, Functions.nonzeroN, Functions.castNZ, Function1.apply,
+        Value.not, Value.mask, Binding.conditionalValue, hn]
+
+theorem emitting_countdown
+    (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b e : Option (D ℝ)) (r : Option ℝ) (swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let d := scaleValue r ((Functions.subN.apply (some n) (some 1)).bind g)
+       if swap then addValue d e else addValue e d))
+    (arg : Option ℕ) (x : Option ℝ) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg))) (densityAtValue b x)
+      (densityAtValue (addValue (scaleValue (Functions.powRN.apply r arg) b) (scaleValue
+        (Summation.rangeValue (some (fun i => Functions.powRN.apply r (some i))) arg) e)) x) := by
+  apply density_cases
+  intro c
+  rw [component_add, component_scale, component_scale]
+  exact observe_emitting_countdown (observation c x) p hf b e r swap step arg
+
+theorem centered_countdown
+    (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b e : Option (D ℝ))
+    (q : ℚ) (hq : q ≠ 1) {r gain minus : Option ℝ} (hr : r = some (q : ℝ))
+    (hg : gain = some (((1-q)⁻¹ : ℚ) : ℝ)) (hm : minus = some ((-1 : ℚ) : ℝ)) (swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let d := scaleValue r ((Functions.subN.apply (some n) (some 1)).bind g)
+       if swap then addValue d e else addValue e d))
+    (arg : Option ℕ) (x : Option ℝ) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg))) (densityAtValue b x)
+      (let limit := scaleValue gain e
+       densityAtValue (addValue limit (scaleValue (Functions.powRN.apply r arg)
+         (addValue b (scaleValue minus limit)))) x) := by
+  apply density_cases
+  intro c
+  simp only [component_add, component_scale]
+  exact (observe_emitting_countdown (observation c x) p hf b e r swap step arg).trans
+    (geometric_emission q hq hr hg hm (component c x b) (component c x e) arg)
+
 end RealDensityFibre
 end QSym.Distribution
