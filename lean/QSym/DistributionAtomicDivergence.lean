@@ -91,7 +91,7 @@ structure CountableObservation (o : Option (D α) → Option ℝ) : Prop where
 theorem CountableObservation.mass : CountableObservation (massValue (α := α)) :=
   ⟨Observation.mass, mass_sumValue⟩
 
-private theorem CountableObservation.natSum {o : Option (D α) → Option ℝ} (h : CountableObservation o)
+theorem CountableObservation.natSum {o : Option (D α) → Option ℝ} (h : CountableObservation o)
     (k : ℕ → Option (D α)) : o (sumNatValue (some k)) = Summation.value norm (some (fun n => o (k n))) := by
   cases h.finite with
   | absent absent => simp [absent, Summation.value]
@@ -139,7 +139,7 @@ theorem CountableObservation.realBind {o : Option (D ℝ) → Option ℝ} (h : C
   | some k =>
     exact h.through _ (h.finite.realBind (some k)) (fun f => GraphFibre.realBind_sumValue f (some k) _ (fun _ => rfl))
 
-private theorem CountableObservation.at_chain {o : Option (D α) → Option ℝ} (h : CountableObservation o)
+theorem CountableObservation.at_chain {o : Option (D α) → Option ℝ} (h : CountableObservation o)
     (p : LinearObservation o) (m : Model α) {s : ℕ → Model α} {v : ℕ → Option (D α)} (hs : Approximates v s) :
     o (realizeChain m s) = probe (realizeChain m s) (fun a => o (some (.dirac a))) := by
   rcases realize_cases m with ⟨d, he, hd⟩ | ⟨a, _, ha⟩ | he

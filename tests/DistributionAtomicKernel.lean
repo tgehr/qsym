@@ -1,4 +1,4 @@
-import QSym.DistributionAtomicOrbit
+import QSym.DistributionAtomicTransport
 import QSym.AxiomCheck
 
 noncomputable section
@@ -142,6 +142,28 @@ theorem changing_rates :
   simp_rw [row]
   exact QSym.Summation.delta norm norm_zero _ _
 
+private def shiftCounter (d : D ℕ) : Option (D ℕ) :=
+  addValue (emission 0) (scaleValue (some (1/2)) (bindValue (some d) (some (fun i => diracValue (some i.succ)))))
+
+theorem shifted_counter {o : Option (D ℕ) → Option ℝ} (h : CountableObservation o) :
+    o (fixedValue (some shiftCounter)) = o (orbitSeries emission (fun _ => 1/2) Nat.succ 0) := by
+  apply h.forward_orbit (Transport.bind (fun i : ℕ => diracValue (some i.succ))) emission (1/2)
+    (by norm_num) Nat.succ seed Set.univ (fun _ _ => Set.mem_univ _) _ _ (Set.mem_univ 0) _ (fun _ => rfl)
+  · intro i _
+    exact ⟨_, rfl, (Represents.dirac i).scale (r := 1/2) (by norm_num), by simp [seed]⟩
+  · intro i _; rfl
+  · apply (Set.infinite_univ : (Set.univ : Set ℕ).Infinite).mono
+    intro n _
+    exact Set.mem_iUnion.mpr ⟨n, by simp [seed, succ_iterate_zero]⟩
+
+theorem shifted_counter_mass : massValue (fixedValue (some shiftCounter)) = some 1 := by
+  rw [shifted_counter CountableObservation.mass]
+  have e := probe_kernel_orbit (b := emission) (r := fun _ => 1/2) (next := Nat.succ) (walk_limit 0) (fun _ => some 1)
+  exact e.symm.trans walk_mass
+
+#qsym_check_axioms CountableObservation.forward_orbit
+#qsym_check_axioms shifted_counter
+#qsym_check_axioms shifted_counter_mass
 #qsym_check_axioms orbit_limit_on
 #qsym_check_axioms probe_kernel_orbit
 #qsym_check_axioms walk_all_probes
