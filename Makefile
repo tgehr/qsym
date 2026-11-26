@@ -335,12 +335,13 @@ clean:
 # Focused, source-checked distribution prototype regression suite.
 test-distributions: build/distribution-tests test-distribution-model-rules test-dependent-references test-distribution-source-model
 	./build/distribution-tests build/distributions
-	cd lean && $(LAKE) build QSym.DistributionSquareIntegral QSym.DistributionGraphBridge QSym.DistributionMixture QSym.DistributionSum QSym.DistributionPolynomialGrid QSym.DistributionInterval QSym.DistributionGaussian QSym.DistributionSymbolicPolynomial QSym.DistributionGaussianSymbolic QSym.DistributionCoordinateGrid QSym.DistributionRecursion QSym.DistributionAtomicAffine QSym.DistributionAtomicObservation QSym.DistributionWeightedAffine QSym.LimitExponential QSym.LimitStep QSym.LimitContinuous QSym.LimitQuotient QSym.DistributionExponentialInterval QSym.DistributionGaussianInterval QSym.DistributionRatio QSym.DistributionLog QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.RawPolynomial QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
+	cd lean && $(LAKE) build QSym.DistributionSquareIntegral QSym.DistributionGraphBridge QSym.DistributionMixture QSym.DistributionSum QSym.DistributionPolynomialGrid QSym.DistributionInterval QSym.DistributionGaussian QSym.DistributionSymbolicPolynomial QSym.DistributionGaussianSymbolic QSym.DistributionCoordinateGrid QSym.DistributionRecursion QSym.DistributionAtomicAffine QSym.DistributionAtomicKernel QSym.DistributionAtomicObservation QSym.DistributionWeightedAffine QSym.LimitExponential QSym.LimitStep QSym.LimitContinuous QSym.LimitQuotient QSym.DistributionExponentialInterval QSym.DistributionGaussianInterval QSym.DistributionRatio QSym.DistributionLog QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.RawPolynomial QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
 	cd lean && $(LAKE) env lean ../tests/RestrictedSquare.lean
 	cd lean && $(LAKE) env lean ../tests/SquareReconstruction.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionCoordinates.lean
 	cd lean && $(LAKE) env lean ../tests/AffineGraph.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionAtomicFixed.lean
+	cd lean && $(LAKE) env lean ../tests/DistributionAtomicKernel.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionBranch.lean
 	python3 tools/check_distributions.py --lake $(LAKE)
 

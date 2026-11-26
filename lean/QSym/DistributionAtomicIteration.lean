@@ -11,39 +11,50 @@ def iterateBody (f : D α → Option (D α)) : ℕ → Option (D α)
   | 0 => some .zero
   | n+1 => (iterateBody f n).bind f
 
-def Tracks (f : D α → Option (D α)) (s : ℕ → Model α) : Prop :=
-  Monotone s ∧ ∀ n, ∃ d, iterateBody f n = some d ∧ Presents d (s n)
+def Approximates (values : ℕ → Option (D α)) (s : ℕ → Model α) : Prop :=
+  Monotone s ∧ ∀ n, ∃ d, values n = some d ∧ Presents d (s n)
 
-private theorem tracks_unique {f : D α → Option (D α)} {s t : ℕ → Model α}
-    (hs : Tracks f s) (ht : Tracks f t) : s = t := by
+abbrev Tracks (f : D α → Option (D α)) (s : ℕ → Model α) := Approximates (iterateBody f) s
+
+private theorem Approximates.unique {v : ℕ → Option (D α)} {s t : ℕ → Model α}
+    (hs : Approximates v s) (ht : Approximates v t) : s = t := by
   funext n
   obtain ⟨d, hd, hm⟩ := hs.2 n
   obtain ⟨e, he, hk⟩ := ht.2 n
   cases Option.some.inj (hd.symm.trans he)
   exact (hm.eq_iff hk).mpr (fun _ => rfl)
 
-/-- A missing approximant or a limit without a supported atomic presentation
-gives a partial value. Zero approximants are genuine distributions. -/
-def fixedValue (body : Option (D α → Option (D α))) : Option (D α) := by
-  classical
-  exact body.bind fun f =>
-    if h : ∃ s, Tracks f s then realize (⨆ n, h.choose n) else none
+/-- The semantic limit exists even when its support has no finite presentation. -/
+def limitModel (v : ℕ → Option (D α)) : Option (Model α) := by
+  classical exact if h : ∃ s, Approximates v s then some (⨆ n, h.choose n) else none
 
-theorem fixed_chain {f : D α → Option (D α)} {s : ℕ → Model α} (h : Tracks f s) :
-    fixedValue (some f) = realize (⨆ n, s n) := by
+theorem limitModel_eq {v : ℕ → Option (D α)} {s : ℕ → Model α} (h : Approximates v s) :
+    limitModel v = some (⨆ n, s n) := by
   classical
-  have hex : ∃ t, Tracks f t := ⟨s, h⟩
-  simp only [fixedValue, Option.some_bind, dif_pos hex, tracks_unique hex.choose_spec h]
+  have hex : ∃ t, Approximates v t := ⟨s, h⟩
+  simp only [limitModel, dif_pos hex, hex.choose_spec.unique h]
 
-theorem fixed_missing {f : D α → Option (D α)} {n : ℕ} (h : iterateBody f n = none) :
-    fixedValue (some f) = none := by
+theorem limitModel_missing {v : ℕ → Option (D α)} {n : ℕ} (h : v n = none) : limitModel v = none := by
   classical
-  have missing : ¬ ∃ s, Tracks f s := by
+  have missing : ¬ ∃ s, Approximates v s := by
     rintro ⟨s, hs⟩
     obtain ⟨d, hd, _⟩ := hs.2 n
     rw [h] at hd
     contradiction
-  simp [fixedValue, missing]
+  simp [limitModel, missing]
+
+/-- A missing approximant or a limit without a supported atomic presentation
+gives a partial value. Zero approximants are genuine distributions. -/
+def fixedValue (body : Option (D α → Option (D α))) : Option (D α) :=
+  body.bind fun f => (limitModel (iterateBody f)).bind realize
+
+theorem fixed_chain {f : D α → Option (D α)} {s : ℕ → Model α} (h : Tracks f s) :
+    fixedValue (some f) = realize (⨆ n, s n) := by
+  simp only [fixedValue, Option.some_bind, limitModel_eq h]
+
+theorem fixed_missing {f : D α → Option (D α)} {n : ℕ} (h : iterateBody f n = none) :
+    fixedValue (some f) = none := by
+  simp only [fixedValue, Option.some_bind, limitModel_missing h, Option.none_bind]
 
 /-- A compositional certificate for the source body suffices to compute its
 least fixed point in the atomic model. -/
