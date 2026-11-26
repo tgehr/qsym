@@ -30,12 +30,12 @@ theorem mass_scale_steps {α : Type} (g : ℕ → Option (D α)) (base : Option 
   observe_scale_steps .mass g base r h0 hs n
 
 private theorem countdown_equations {α : Type} (p : Recursion.Program ℕ (D α) (D α))
-    (base : Option (D α)) (next : Option (D α) → Option (D α))
+    (base : Option (D α)) (next : ℕ → Option (D α) → Option (D α))
     (step : ∀ g n, p.eval g n = Binding.conditionalValue
       (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) base
-      (next ((Functions.subN.apply (some n) (some 1)).bind g))) :
+      (next n ((Functions.subN.apply (some n) (some 1)).bind g))) :
     let g := FixedPoint.value p.functional
-    g 0 = base ∧ ∀ n, g (n+1) = next (g n) := by
+    g 0 = base ∧ ∀ n, g (n+1) = next (n+1) (g n) := by
   let g := FixedPoint.value p.functional
   have hu (n : ℕ) := (p.unfold n).symm.trans (step g n)
   constructor
@@ -57,7 +57,7 @@ theorem observe_scale_countdown {α : Type} {o : Option (D α) → Option ℝ} (
     o (fn.bind (fun g => arg.bind g)) = Value.mul (Functions.powRN.apply r arg) (o base) := by
   subst fn r
   let g := FixedPoint.value p.functional
-  obtain ⟨h0, hs⟩ := countdown_equations p base (scaleValue (some c)) step
+  obtain ⟨h0, hs⟩ := countdown_equations p base (fun _ => scaleValue (some c)) step
   cases arg with
   | none => exact h.missing
   | some n => simpa [Functions.powRN, Function2.apply, g] using observe_scale_steps h g base c h0 hs n
@@ -75,7 +75,7 @@ theorem observe_partial_scale_countdown {α : Type} {o : Option (D α) → Optio
       (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg))) (o base)
       (Value.mul (Functions.powRN.apply r arg) (o base)) := by
   subst fn
-  obtain ⟨h0, hs⟩ := countdown_equations p base (scaleValue r) step
+  obtain ⟨h0, hs⟩ := countdown_equations p base (fun _ => scaleValue r) step
   cases arg with
   | none => exact h.missing
   | some n =>
@@ -139,7 +139,7 @@ theorem observe_emitting_countdown {α : Type} {o : Option (D α) → Option ℝ
   subst fn
   let g := FixedPoint.value p.functional
   obtain ⟨h0, hs⟩ := countdown_equations p b
-    (fun d => if swap then addValue (scaleValue r d) e else addValue e (scaleValue r d)) step
+    (fun _ d => if swap then addValue (scaleValue r d) e else addValue e (scaleValue r d)) step
   have rec (n : ℕ) : o (g (n+1)) = Value.add (o e) (Value.mul r (o (g n))) :=
     (congrArg o (hs n)).trans (observedEmission h swap e r (g n))
   cases arg with
@@ -185,6 +185,10 @@ theorem geometric_emission (q : ℚ) (hq : q ≠ 1) {r gain minus : Option ℝ} 
     field_simp [sub_ne_zero.mpr neq, sub_ne_zero.mpr neq.symm]
     <;> ring
 
+private theorem observe_unit_tail {o : Option (D α) → Option ℝ} (h : Atomic.Observation o)
+    (scaled : Bool) (d : Option (D α)) : o (if scaled then scaleValue (some 1) d else d) = o d := by
+  cases scaled <;> simp [observe_scale h, Value.mul_one_left]
+
 /-- With a bare recursive call or a unit-scale call the accumulated weight
 is the number of steps. A missing emission is harmless at depth zero. -/
 theorem observe_unit_countdown {α : Type} {o : Option (D α) → Option ℝ} (h : Atomic.Observation o)
@@ -201,14 +205,12 @@ theorem observe_unit_countdown {α : Type} {o : Option (D α) → Option ℝ} (h
       (Value.mul (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply arg))) (o e))) := by
   subst fn r
   let g := FixedPoint.value p.functional
-  obtain ⟨h0, hs⟩ := countdown_equations p b (fun tail =>
+  obtain ⟨h0, hs⟩ := countdown_equations p b (fun _ tail =>
     let d := if scaled then scaleValue (some 1) tail else tail
     if swap then addValue d e else addValue e d) step
-  have unit (d : Option (D α)) : o (if scaled then scaleValue (some 1) d else d) = o d := by
-    cases scaled <;> simp [observe_scale h, Value.mul_one_left]
   have rec (n : ℕ) : o (g (n+1)) = Value.add (o e) (Value.mul (some 1) (o (g n))) :=
     ((congrArg o (hs n)).trans (observedAdd h swap e _)).trans
-      (congrArg (Value.add (o e)) ((unit _).trans (Value.mul_one_left _).symm))
+      (congrArg (Value.add (o e)) ((observe_unit_tail h scaled _).trans (Value.mul_one_left _).symm))
   cases arg with
   | none =>
     change o none = Value.add (o b) none
@@ -221,6 +223,44 @@ theorem observe_unit_countdown {α : Type} {o : Option (D α) → Option ℝ} (h
     | succ n =>
       simpa [g, Functions.castNZ, Functions.castZQ, Functions.castQR, Function1.apply, Functions.nonzeroN,
         Value.mask, Value.mul_one_left] using emission_steps (fun k => o (g k)) (o b) (o e) 1 (congrArg o h0) rec n
+
+/-- The emission may depend on the current index. A finite sum visits
+exactly indices 1 through the argument, even for a partial observation. -/
+theorem observe_indexed_countdown {α : Type} {o : Option (D α) → Option ℝ} (h : Atomic.Observation o)
+    (p : Recursion.Program ℕ (D α) (D α)) {fn : Option (ℕ → Option (D α))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b : Option (D α)) (e : Option ℕ → Option (D α))
+    (r : Option ℝ) (hr : r = some 1) (scaled swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let tail := (Functions.subN.apply (some n) (some 1)).bind g
+       let d := if scaled then scaleValue r tail else tail
+       if swap then addValue d (e (some n)) else addValue (e (some n)) d))
+    (arg : Option ℕ) :
+    o (fn.bind (fun g => arg.bind g)) = Value.add (o b)
+      (Summation.rangeValue (some (fun i => o (e (Functions.addN.apply (some i) (some 1))))) arg) := by
+  subst fn r
+  let g := FixedPoint.value p.functional
+  let visit (i : ℕ) := o (e (some (i+1)))
+  obtain ⟨h0, hs⟩ := countdown_equations p b (fun n tail =>
+    let d := if scaled then scaleValue (some 1) tail else tail
+    if swap then addValue d (e (some n)) else addValue (e (some n)) d) step
+  have rec (n : ℕ) : o (g (n+1)) = Value.add (visit n) (o (g n)) :=
+    ((congrArg o (hs n)).trans (observedAdd h swap _ _)).trans
+      (congrArg (Value.add (visit n)) (observe_unit_tail h scaled _))
+  have total (n : ℕ) : o (g n) = Value.add (o b) (Summation.finite (Finset.range n) visit) := by
+    induction n with
+    | zero => simpa [Summation.finite_empty, Value.add_zero_right] using congrArg o h0
+    | succ n ih =>
+      rw [rec, ih, Summation.range_succ]
+      cases o b <;> cases Summation.finite (Finset.range n) visit <;> cases visit n <;>
+        simp [Value.add, add_comm, add_left_comm, add_assoc]
+  cases arg with
+  | none =>
+    change o none = Value.add (o b) none
+    rw [h.missing]
+    cases o b <;> rfl
+  | some n =>
+    simpa [visit, g, Summation.rangeValue, Function2.apply, Functions.addN] using total n
 
 theorem mass_scale_countdown {α : Type} (p : Recursion.Program ℕ (D α) (D α))
     {fn : Option (ℕ → Option (D α))} (hf : fn = some (FixedPoint.value p.functional))

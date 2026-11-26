@@ -8,6 +8,7 @@ import std.stdio:writeln;
 
 private struct Case{ string name,source,type,expected; }
 private Case[] cases(){
+	enum indexedAtoms="(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((n:ℝ)),f(n sub 1)))";
 	enum mixedLoop="(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d))";
 	enum retry="(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d)))";
 	string shift(string start,string step="n+1",string mass="1/2",string ratio="1/2"){
@@ -1422,6 +1423,16 @@ private Case[] cases(){
 	Case("KeepMaskReciprocal","λ(x:ℝ).[x≠0]·x⁻¹","ℝ→ℝ","λ(x:ℝ). [x≠0]·x⁻¹"),
 	Case("KeepMaskHigher","λ(h:ℝ→ℝ).λ(x:ℝ).[x≠0]·(h(x)·x)","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). ([x≠0]·(x·h(x)):ℝ)"),
 	Case("KeepMaskLebesgue","Λx. [x≠0]·λ[x]","Distribution(ℝ)","Λ(x:ℝ). [x≠0]·λ[x]"),
+	Case("IndexedVisitCount","λ(k:ℕ).massD("~indexedAtoms~"(k))","ℕ→ℝ","λ(k:ℕ). (k:ℝ)"),
+	Case("IndexedVisitFirstMoment","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~indexedAtoms~"(k)))","ℕ→ℝ","λ(k:ℕ). (k·(1/2·k+1/2):ℝ)"),
+	Case("IndexedVisitSecondMoment","λ(k:ℕ).massD(weightD(λ(x:ℝ).x^2,"~indexedAtoms~"(k)))","ℕ→ℝ","λ(k:ℕ). (k·(k·(1/3·k+1/2)+1/6):ℝ)"),
+	Case("IndexedVisitThousand","massD(weightD(λ(x:ℝ).x,"~indexedAtoms~"(1000)))","ℝ","500500"),
+	Case("IndexedVisitHigher","λ(h:ℝ→ℝ).λ(k:ℕ).massD(weightD(h,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else addD(δ((n:ℝ)),f(n sub 1)))(k)))","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(k:ℕ). (h((0:ℝ))+(∑(i:ℕ). [i<k]·(h((i+1:ℝ)))):ℝ)"),
+	Case("IndexedVisitOffset","λ(t:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ(t) else addD(scaleD(1,f(n sub 1)),δ((n:ℝ)+t)))(k)))","ℝ→ℕ→ℝ","λ(t:ℝ). λ(k:ℕ). t+[k≠0]·(t·k)+k·(1/2·k+1/2)"),
+	Case("IndexedVisitEmpty","massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~indexedAtoms~"(0)))","ℝ","0"),
+	Case("IndexedVisitBeforeHole","massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~indexedAtoms~"(1)))","ℝ","-1"),
+	Case("IndexedVisitIncludesHole","defined(massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~indexedAtoms~"(3))))","𝔹","false"),
+	Case("IndexedVisitMissingIndex","defined(massD("~indexedAtoms~"(0 sub 1)))","𝔹","false"),
 	Case("UnitEmissionMass","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else addD(δ((1:ℝ)),f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
 	Case("UnitEmissionWeighted","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((5:ℝ)) else addD(f(n sub 1),δ((-2:ℝ))))(k)))","ℕ→ℝ","λ(k:ℕ). (-2·k+5:ℝ)"),
 	Case("UnitEmissionMillion","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(f(n sub 1),δ((3:ℝ))))(1000000))","ℝ","1000000"),
@@ -1549,6 +1560,8 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
+		if(c.name.indexOf("IndexedVisit")==0)
+			enforce(certificate.indexOf("Distribution.observe_indexed_countdown ")>=0&&text.indexOf("μ")<0,c.name);
 		if(c.name.indexOf("EraseMask")==0||c.name.indexOf("KeepMask")==0)
 			enforce((certificate.indexOf("Value.mask_nonzero_of_zero ")>=0)==(c.name.indexOf("EraseMask")==0),c.name);
 		if(c.name.indexOf("UnitEmission")==0||c.name=="EmittingThousand"){
