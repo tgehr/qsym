@@ -439,18 +439,16 @@ theorem finishRestricted {f w es ds} (pred : ℝ → Option Bool) (h : Checked f
 
 /-- Clip a jump on its whole closed traversal. Reuse the ordinary mass
 certificate for the clipped indicator, including its endpoint probes. -/
-theorem restrictedJump {f a p q} (pred : ℝ → Option Bool) (l r k : ℚ)
-    (g : Germ f a p q) (hl : l = polyEvalQ p a) (hr : r = polyEvalQ q a) (hne : l ≠ r)
+theorem restrictedJumpFromLimits {g : ℝ → ℝ} {a : ℝ} (pred : ℝ → Option Bool) (l r k : ℚ)
+    (ends : Tendsto g (𝓝[<] a) (𝓝 (l:ℝ)) ∧ Tendsto g (𝓝[>] a) (𝓝 (r:ℝ))) (hne : l ≠ r)
     {lo hi unit : Option ℝ} (hlo : lo = some ((min l r : ℚ):ℝ))
     (hhi : hi = some ((max l r : ℚ):ℝ)) (hu : unit = some ((1:ℚ):ℝ))
     (hm : massValue (weightValue (some fun x => Value.mask
       (Value.and (Value.le lo (some x)) (Value.le (some x) hi)) (Value.mask (pred x) unit))
       lebesgueValue) = some (k:ℝ)) :
-    VariationChart.atCut (coord f) a (some pred) = VariationChart.atom a (some (k:ℝ)) := by
+    VariationChart.atCut g a (some pred) = VariationChart.atom a (some (k:ℝ)) := by
   classical
-  have tl := traceL g; rw [← value_eq hl] at tl
-  have tr := traceR g; rw [← value_eq hr] at tr
-  rw [VariationChart.atCut_of_limits tl tr, if_neg (Rat.cast_injective.ne hne)]
+  rw [VariationChart.atCut_of_limits ends.1 ends.2, if_neg (Rat.cast_injective.ne hne)]
   congr 1
   subst lo; subst hi; subst unit
   simp only [Rat.cast_one] at hm
@@ -472,6 +470,16 @@ theorem restrictedJump {f a p q} (pred : ℝ → Option Bool) (l r k : ℚ)
     · exact (if_neg hx).trans (if_neg hx).symm
   exact (branchIntegral_congr measurableSet_uIcc (fun x hx => ((atPoint x).trans (if_pos hx)).symm)).trans
     (branchIntegral_eq_full measurableSet_uIcc clipped (fun x hx => (atPoint x).trans (if_neg hx)))
+
+theorem restrictedJump {f a p q} (pred : ℝ → Option Bool) (l r k : ℚ)
+    (g : Germ f a p q) (hl : l = polyEvalQ p a) (hr : r = polyEvalQ q a) (hne : l ≠ r)
+    {lo hi unit : Option ℝ} (hlo : lo = some ((min l r : ℚ):ℝ))
+    (hhi : hi = some ((max l r : ℚ):ℝ)) (hu : unit = some ((1:ℚ):ℝ))
+    (hm : massValue (weightValue (some fun x => Value.mask
+      (Value.and (Value.le lo (some x)) (Value.le (some x) hi)) (Value.mask (pred x) unit))
+      lebesgueValue) = some (k:ℝ)) :
+    VariationChart.atCut (coord f) a (some pred) = VariationChart.atom a (some (k:ℝ)) :=
+  restrictedJumpFromLimits pred l r k (traceValues l r g hl hr) hne hlo hhi hu hm
 
 private theorem zero_test (x : ℝ) :
     (if x = 0 then some true else some false) = Value.not (Value.nonzero (some x)) := by

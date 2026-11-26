@@ -82,6 +82,36 @@ private theorem foldCutCongr (as : List ℝ) {l r : ℝ → Option (D ℝ)} {z v
   | cons a as ih =>
     exact congrArg₂ addValue (cuts _ List.mem_cons_self) (ih (fun _ hm => cuts _ (List.mem_cons_of_mem _ hm)))
 
+theorem Checked.changeValues {s h op jac f w es} (grid : Checked f w none es)
+    (c : ScalarChange s h op jac) (range : RangeIn grid.chart s) (x : ℝ) :
+    op (f x) = some ((grid.chart.postcompose c.change range).coord x) :=
+  (congrArg op (grid.values x).1).trans (c.value _ (range.value x))
+
+/-- The checked regular weight is shared by restricted and unrestricted
+changes, independently of how the exceptional events are evaluated. -/
+theorem Checked.presentChange {s h op jac f w es} (grid : Checked f w none es)
+    (c : ScalarChange s h op jac) (range : RangeIn grid.chart s) (p : Option (ℝ → Option Bool)) :
+    (grid.chart.postcompose c.change range).present p =
+      (es.map Prod.fst).foldr (fun a d => addValue (VariationChart.atCut (h ∘ coord f) a p) d)
+        (weightValue (some fun x =>
+          let weight := Value.mul (jac (f x)) (w x)
+          p.elim weight (fun pred => Value.mask ((op (f x)).bind pred) weight)) lebesgueValue) := by
+  have values (x : ℝ) : coord f x ∈ s := range.value x
+  have regular (x : ℝ) := grid.values x
+  have weight x : Value.mul (jac (f x)) (w x) = some (|deriv h (coord f x)| * |deriv (coord f) x|) := by
+    rw [(regular x).1, (regular x).2, c.weight _ (values x)]
+    rfl
+  rw [present_postcompose]
+  apply congrArg (fun u : Scalar => (es.map Prod.fst).foldr
+    (fun a d => addValue (VariationChart.atCut (h ∘ coord f) a p) d) (weightValue (some u) lebesgueValue))
+  funext x
+  cases p with
+  | none => exact (weight x).symm
+  | some pred =>
+    apply congrArg₂ Value.mask _ (weight x).symm
+    rw [(regular x).1, c.value _ (values x)]
+    rfl
+
 private theorem finishChangeAt {s h op jac f w es} (c : ScalarChange s h op jac)
     (src : SourceIn s f) (grid : Checked f w none es) (cuts : ContinuousCuts f es)
     (p : Option (ℝ → Option Bool)) :
@@ -96,26 +126,13 @@ private theorem finishChangeAt {s h op jac f w es} (c : ScalarChange s h op jac)
     obtain ⟨e, he, rfl⟩ := List.mem_map.mp ha
     exact cuts e he
   have range : RangeIn grid.chart s := .of_continuousAt values atCuts
-  refine ⟨grid.chart.postcompose c.change range, fun x => (congrArg op (grid.values x).1).trans (c.value _ (values x)), ?_⟩
-  rw [present_postcompose]
-  have regular (x : ℝ) := grid.values x
-  have weight x : Value.mul (jac (f x)) (w x) = some (|deriv h (coord f x)| * |deriv (coord f) x|) := by
-    rw [(regular x).1, (regular x).2, c.weight _ (values x)]
-    rfl
-  apply foldCutCongr
-  · intro a ha
-    change VariationChart.atCut (h ∘ coord f) a p = _
-    have ha' := atCuts a ha
-    rw [atCut_of_continuousAt ((c.change.smooth _ (values a)).continuousAt.comp ha'), atCut_of_continuousAt ha']
-    cases p <;> simp [Function.comp_apply, c.value _ (values a), Checked.chart]
-  · apply congrArg (fun u : Scalar => weightValue (some u) lebesgueValue)
-    funext x
-    cases p with
-    | none => exact (weight x).symm
-    | some pred =>
-      apply congrArg₂ Value.mask _ (weight x).symm
-      rw [(regular x).1, c.value _ (values x)]
-      rfl
+  refine ⟨grid.chart.postcompose c.change range, grid.changeValues c range, (grid.presentChange c range p).trans ?_⟩
+  apply foldCutCongr _ _ rfl
+  intro a ha
+  change VariationChart.atCut (h ∘ coord f) a p = _
+  have ha' := atCuts a ha
+  rw [atCut_of_continuousAt ((c.change.smooth _ (values a)).continuousAt.comp ha'), atCut_of_continuousAt ha']
+  cases p <;> simp [Function.comp_apply, c.value _ (values a), Checked.chart]
 
 theorem finishChange {s h op jac f w es} (c : ScalarChange s h op jac) (src : SourceIn s f)
     (grid : Checked f w none es) (cuts : ContinuousCuts f es) :

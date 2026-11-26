@@ -234,6 +234,17 @@ private Case[] cases(){
 	Case("ProbeGridCorners","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],-1)","ℝ","undefined(ℝ)"),
 	Case("ProbeGridMiddle","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],0)","ℝ","0"),
 	Case("ProbeGridAffine","densityAtD(Λx. λ[2*abs(x-1)],2/3)","ℝ","2"),
+	Case("ImageWindowInterior","Λx. λ[(1+[0≤x]·1)⁻¹ | u. 1/2<u<3/4]","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(0)[x]+0·λ[x]"),
+	Case("ImageWindowMass","∫dx λ[(1+[0≤x]·1)⁻¹ | u. 1/2<u<3/4]","ℝ","1/4"),
+	Case("ImageWindowUnit","Λx. λ[sqrt(1+[0≤x]·3) | u. 1≤u≤2]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
+	Case("ImageWindowReverse","Λx. λ[sqrt(4+[x<0]·5) | u. 9/4<u<11/4]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+0·λ[x]"),
+	Case("ImageWindowTwo","Λx. λ[(1+[x<0]·1+[1<x]·3)⁻¹ | u. 1/4<u<3/4]","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(0)[x]+(1/2·δ(1)[x]+0·λ[x])"),
+	Case("ImageWindowDisjoint","Λx. λ[(1+[0≤x]·1)⁻¹ | u. 2<u]","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]+0·λ[x]"),
+	Case("ImageWindowMixed","Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹ | u. 0<u]","Distribution(ℝ)"),
+	Case("ImageWindowCornerExcluded","densityAtD(Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹ | u. u<1],0)","ℝ","0"),
+	Case("ImageWindowCornerIncluded","densityAtD(Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹ | u. u≤1],0)","ℝ","undefined(ℝ)"),
+	Case("ImageWindowPartial","λ(k:ℝ→𝔹). Λx. λ[(1+[0≤x]·1)⁻¹ | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
+	Case("ImageWindowEndpoint","Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-1/2)⁻¹<2]","Distribution(ℝ)"),
 	Case("ImageCoordinateReciprocal","Λx. λ[(1+[0≤x]·1)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+0·λ[x]"),
 	Case("ImageCoordinateUnit","Λx. λ[sqrt(1+[0≤x]·3)]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
 	Case("ImageCoordinateReverse","Λx. λ[sqrt(4+[x<0]·5)]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
@@ -1495,6 +1506,11 @@ private void run(string directory){
 			enforce((certificate.indexOf("Grid.probeRange")>=0)==(c.name!="TraceCoordinateDomain"),c.name~" traced coordinate domain");
 		if(c.name.indexOf("ProbeGrid")==0)
 			enforce(certificate.indexOf("Grid.probe")>=0,c.name~" missing direct point observation");
+		if(c.name.indexOf("ImageWindow")==0){
+			bool handled=c.name!="ImageWindowPartial"&&c.name!="ImageWindowEndpoint";
+			enforce((certificate.indexOf("Grid.finishImageRestricted ")>=0)==handled,c.name~" restricted change");
+			if(handled) enforce(certificate.indexOf("Grid.restrictedJumpFromLimits ")>=0,c.name~" clipped traversal");
+		}
 		if(c.name.indexOf("ImageCoordinate")==0)
 			enforce((certificate.indexOf("Grid.finishImage ")>=0)==(c.name!="ImageCoordinateIrrational"),c.name~" image events");
 		if(c.name.indexOf("ChangedCoordinate")==0)
