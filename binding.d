@@ -158,7 +158,7 @@ private struct IntervalData{
 	// it may be defined without being integrable.
 	bool direct;
 	IntervalTerm[] terms;
-	uint coordinate=uint.max; bool decreasing;
+	uint coordinate=uint.max,turning=uint.max; bool decreasing;
 }
 // A Gaussian integral. With `symbolic` the constant and linear coefficients of
 // the exponent are terms: `vertex` is `-1/(4·c₂)`, `moments` is the polynomial
@@ -2307,11 +2307,14 @@ final class Bindings{
 			if(auto old=id in cache) return *old;
 			cache[id]=Evidence.init;
 			auto n=nodes[id]; string law,args;
-			Rational a,b;
+			Rational a,b; Term number;
 			if(affineBody(id,a,b)||n.op==BoundOp.scalar&&arena.isNumber(arena.at(n.data))){
 				if(down?a>Rational(0):a<Rational(0)) return Evidence.init;
 				law="affine";
 				if(cert !is null) args=dir~" "~cert.affineProof(id).proof~" rfl";
+			}else if(!depends(at(id),0)&&closedRational(at(id),b,number)){
+				law="constant";
+				if(cert !is null) args=dir~" "~cert.closedProof(at(id),b);
 			}else if(n.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(n.data)),change=gridChange(id);
 				if(change==CoordinateChange.exp||change==CoordinateChange.sinh||
@@ -4789,7 +4792,15 @@ final class Bindings{
 			if(!intervalMask(nodes[w.a].a,d,bounds)||d.half||bounds.around!=uint.max) return BoundTerm.init;
 			if(d.unit==uint.max&&(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
 				return BoundTerm.init;
-			d.coordinate=nodes[row.a].a; string evidence;
+			d.coordinate=nodes[row.a].a;
+			auto outer=nodes[d.coordinate];
+			if(outer.op==BoundOp.primitive){
+				auto op=arena.view(arena.at(outer.data));
+				if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&op.value==Builtin.coshR){
+					d.turning=d.coordinate; d.coordinate=outer.a;
+				}
+			}
+			string evidence;
 			if(!directedCoordinate(d.coordinate,false,evidence)){
 				if(!directedCoordinate(d.coordinate,true,evidence)) return BoundTerm.init;
 				d.decreasing=true;
@@ -4797,7 +4808,22 @@ final class Bindings{
 			auto a=dropIndex(at(bounds.lower)),b=dropIndex(at(bounds.upper)),ctx=context(t),zero=arena.real_(0);
 			auto m=scalar(ctx,arena.real_(-1));
 			auto comparison=primitive(d.strictLower||d.strictUpper?arena.lt(zero,zero):arena.le(zero,zero),[a,b]);
-			auto body=at(d.coordinate),below=substituteArgument(body,a),above=substituteArgument(body,b);
+			// Evaluate a primitive of the absolute derivative in the inner
+			// coordinate. The inner chart may cross the outer critical value.
+			BoundTerm endpoint(BoundTerm bound){
+				auto v=substituteArgument(at(d.coordinate),bound);
+				if(d.turning==uint.max) return v;
+				auto mul=arena.mul(zero,zero,true),op=arena.view(arena.at(outer.data));
+				if(op.op==Op.pow){
+					auto mag=primitive(arena.abs(zero),[v]);
+					if(op.value>2) mag=primitive(arena.pow(zero,cast(uint)op.value-1),[mag]);
+					return primitive(mul,[v,mag]);
+				}
+				auto h=primitive(arena.at(outer.data),[v]),sum=arena.add(zero,zero,true);
+				auto negative=primitive(arena.lt(zero,zero),[v,scalar(ctx,zero)]);
+				return conditional(negative,primitive(sum,[scalar(ctx,arena.real_(1)),primitive(mul,[m,h])]),primitive(sum,[h,m]));
+			}
+			auto below=endpoint(a),above=endpoint(b);
 			auto neg=primitive(arena.mul(zero,zero,true),[m,d.decreasing?above:below]);
 			auto diff=primitive(arena.add(zero,zero,true),[d.decreasing?below:above,neg]);
 			auto out_=primitive(arena.mask(arena.boolean(true),zero),[comparison,diff]);
@@ -10469,7 +10495,20 @@ final class Bindings{
 				shape=d.nested?"(fun _ => (Distribution.StepSource.mask_mask _ _ _).trans "~one~")":"(fun _ => "~one~")";
 			}
 			auto extension="(fun z : Option ℝ => "~name(d.coordinate)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
-			return "Distribution.GraphFibre.Coordinates.Grid.Directed.interval (w := "~functionAt(s.from[0])~") "~extension~" "~
+			enum grid="Distribution.GraphFibre.Coordinates.Grid.";
+			string law="Directed.interval",change;
+			if(d.turning!=uint.max){
+				law="VariationChange.interval";
+				auto op=arena.view(arena.at(nodes[d.turning].data));
+				if(op.op==Op.pow&&op.value==2) change=" "~grid~"VariationChange.square";
+				else if(op.op==Op.pow) change=" ("~grid~"VariationChange.evenPower "~to!string(op.value)~" (of_decide_eq_true rfl) rfl)";
+				else{
+					auto ctx=context(at(d.minusOne)),z=scalar(ctx,arena.real_(0)),u=scalar(ctx,arena.real_(1));
+					change=" ("~grid~"VariationChange.cosh "~eval(z.id)~" "~eval(u.id)~" "~eval(d.minusOne)~" "~
+						cert.closedProof(z,Rational(0))~" "~cert.closedProof(u,Rational(1))~" "~cert.closedProof(at(d.minusOne),Rational(-1))~")";
+				}
+			}
+			return grid~law~" (w := "~functionAt(s.from[0])~") "~extension~change~" "~
 				to!string(d.decreasing)~" "~to!string(d.swap)~" "~to!string(d.strictLower)~" "~to!string(d.strictUpper)~
 				" "~eval(d.lower)~" "~eval(d.upper)~" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~" "~shape;
 		}

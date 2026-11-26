@@ -324,6 +324,23 @@ private Case[] cases(){
 	Case("MissingQuadraticSafe","∫dx (2+x²)⁻¹·λ[x]","ℝ","1/2·sqrt(2)·π"),
 	Case("MissingQuadraticBottom","defined(∫dx undefined(ℝ)·λ[x])","𝔹","false"),
 	Case("MissingQuadraticZeroArg","defined((λ(a:ℝ).∫dx a⁻¹*(1+x²)⁻¹·λ[x])(0))","𝔹","false"),
+	Case("VariationSquareCross","∫dx [-1≤x≤1]·λ[x²]","ℝ","2"),
+	Case("VariationSquareShift","∫dx [0≤x≤1]·λ[(1-2*x)^2]","ℝ","2"),
+	Case("VariationSquareDown","∫dx [1<x≤3]·λ[(2-x)^2]","ℝ","2"),
+	Case("VariationSixth","∫dx [-1≤x≤2]·λ[x^6]","ℝ","65"),
+	Case("VariationSquareSinh","∫dx [-1≤x≤1]·λ[sinh(x)^2]","ℝ","2·sinh(1)^2"),
+	Case("VariationSquareAtan","∫dx [-1≤x≤1]·λ[atan(x)^2]","ℝ","1/8·π^2"),
+	Case("VariationSquareExp","λ(u:ℝ).∫dx [0≤x<u]·λ[(exp(x)-2)^2]","ℝ→ℝ","λ(u:ℝ). [0<u]·((exp(u)-2)·abs(exp(u)-2)+1)"),
+	Case("VariationSquareGeneral","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·λ[x²]","ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). [l<u]·(-l·abs(l)+u·abs(u))"),
+	Case("VariationSquarePartial","λ(h:ℝ→ℝ).λ(t:ℝ).∫dx [-1≤x<h(t)]·λ[x²]","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(t:ℝ). [-1<h(t)]·(h(t)·abs(h(t))+1)"),
+	Case("VariationCoshCross","∫dx [-1≤x≤1]·λ[cosh(x)]","ℝ","2·cosh(1)-2"),
+	Case("VariationCoshDown","∫dx [0≤x<2]·λ[cosh(2-2*x)]","ℝ","cosh(-2)+cosh(2)-2"),
+	Case("VariationCoshExp","∫dx [0≤x≤1]·λ[cosh(exp(x))]","ℝ","-cosh(1)+cosh(e)"),
+	Case("VariationCoshSymbolic","λ(u:ℝ).∫dx [0<x≤u]·λ[cosh(x)]","ℝ→ℝ","λ(u:ℝ). [0<u]·(cosh(u)-1)"),
+	Case("VariationEmpty","∫dx [2≤x<1]·λ[cosh(x)]","ℝ","0"),
+	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
+	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
+	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
 	Case("CoordinateIntervalSinhExp","∫dx [0≤x≤1]·λ[sinh(exp(x))]","ℝ","-sinh(1)+sinh(e)"),
 	Case("CoordinateIntervalArsinhExp","∫dx [-1≤x≤1]·λ[asinh(exp(2*x-3))]","ℝ","-asinh(exp(-5))+asinh(exp(-1))"),
 	Case("CoordinateIntervalDecreasing","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·λ[atan(exp(-x))]","ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). [l<u]·(atan(exp(-l))-atan(exp(-u)))"),
@@ -1846,6 +1863,10 @@ private void run(string directory){
 				c.name!="MissingQuadraticHoleHidden"&&c.name!="MissingQuadraticSafe";
 			enforce((certificate.indexOf("MissingPoint.InDensity.mass ")>=0)==witness,c.name);
 		}
+		if(c.name.indexOf("Variation")==0){
+			bool changed=c.name!="VariationOscillating"&&c.name!="VariationJump";
+			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
 		if(c.name.indexOf("CoordinateInterval")==0||c.name=="CauchyWindowAtan"||c.name=="CauchyWindowAtanScaled"){
 			bool directed=c.name!="CoordinateIntervalTurning"&&c.name!="CoordinateIntervalOpposite"&&c.name!="CoordinateIntervalJump";
 			enforce((certificate.indexOf("Grid.Directed.interval ")>=0)==directed,c.name);
@@ -2018,7 +2039,9 @@ private void run(string directory){
 			enforce(certificate.indexOf("GraphFibre.Coordinates.twoRayJumps ")>=0,c.name);
 		if(c.name.indexOf("CoordinateRay")==0)
 			enforce(certificate.indexOf("GraphFibre.Coordinates.rayPower ")>=0,c.name);
-		if(c.name.indexOf("CoordinateSquare")==0)
+		if(c.name=="CoordinateSquareLeftMass"||c.name=="CoordinateSquareRightMass")
+			enforce(certificate.indexOf("Grid.VariationChange.square")>=0,c.name);
+		else if(c.name.indexOf("CoordinateSquare")==0)
 			enforce(certificate.indexOf("GraphFibre.Coordinates.square ")>=0,c.name);
 		if(c.name=="CoverRegularSum") enforce(certificate.indexOf("GraphFibre.Coordinates.sinh")>=0&&
 			certificate.indexOf("GraphFibre.Coordinates.asinh")>=0,c.name);
