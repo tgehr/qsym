@@ -482,6 +482,31 @@ theorem restrictedJumpFromLimits {g : ℝ → ℝ} {a : ℝ} (pred : ℝ → Opt
   exact (traversalMass pred l r (hlo.trans (congrArg some (Rat.cast_min l r)))
     (hhi.trans (congrArg some (Rat.cast_max l r))) (by simpa only [Rat.cast_one] using hu)).trans hm
 
+theorem guardedMissing {α : Type} {p : Option Bool} {v : Option α} (hp : Value.Refines p (some false)) :
+    Domain.Correct (Binding.guardValue p v) (some false) := by
+  cases p with
+  | none => rfl
+  | some b => cases b with
+    | false => rfl
+    | true => exact False.elim (Bool.false_ne_true (Option.some.inj (hp true rfl)))
+
+/-- One certified undefined point anywhere on the closed traversal makes
+the entire jump undefined. Its Lebesgue mass as a singleton is irrelevant. -/
+theorem restrictedMissingJump {g : ℝ → ℝ} {a : ℝ} (pred : ℝ → Option Bool) (l r u : ℚ)
+    (ends : Tendsto g (𝓝[<] a) (𝓝 (l:ℝ)) ∧ Tendsto g (𝓝[>] a) (𝓝 (r:ℝ))) (hne : l ≠ r)
+    (inside : min l r ≤ u ∧ u ≤ max l r) (missing : Domain.Correct (pred u) (some false)) :
+    VariationChart.atCut g a (some pred) = none := by
+  have hu : (u:ℝ) ∈ uIcc (l:ℝ) (r:ℝ) := by
+    change min (l:ℝ) (r:ℝ) ≤ (u:ℝ) ∧ (u:ℝ) ≤ max (l:ℝ) (r:ℝ)
+    rw [← Rat.cast_min, ← Rat.cast_max]
+    exact ⟨Rat.cast_le.mpr inside.1, Rat.cast_le.mpr inside.2⟩
+  have undefined : pred u = none := by cases e : pred u <;> simp_all [Domain.Correct]
+  have bad : ¬ ∀ x ∈ uIcc (l:ℝ) (r:ℝ), Value.Defined (Value.mask (pred x) (some (1:ℝ))) := by
+    intro total
+    simpa [undefined, Value.mask, Value.Defined] using total u hu
+  rw [VariationChart.atCut_of_limits ends.1 ends.2, if_neg (Rat.cast_injective.ne hne)]
+  simp [branchIntegral, bad, VariationChart.atom, scaleValue]
+
 /-- A defined portion of a jump can weigh at most the full traversal.
 Missing endpoint probes still make the integral undefined. -/
 theorem traversalMass_le {l r k : ℝ} (pred : ℝ → Option Bool)

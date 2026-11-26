@@ -196,7 +196,9 @@ private struct CoordinateJoin{
 	Rational left,right,slope;
 	uint event=uint.max;
 	IntegralSolution* clipped;
-	uint traversal=uint.max;
+	uint traversal=uint.max,missingDomain=uint.max;
+	bool missingGuard;
+	Rational witness;
 	CornerSelection selection;
 	Rational leftImage,rightImage;
 	bool symbolicRoot;
@@ -6225,6 +6227,46 @@ final class Bindings{
 			auto d=distribution(ctx,BoundOp.distributionDirac,[scalar(ctx,arena.real_(a))]);
 			return height==Rational(1)?d:distribution(ctx,BoundOp.distributionScale,[scalar(ctx,arena.real_(height)),d]);
 		}
+		// The symbolic domain proposes probes. Only a closed scalar domain proof
+		// can establish that a particular point of the traversal is missing.
+		bool missingTraversal(uint test,Rational lo,Rational hi,ref CoordinateJoin join){
+			auto testNode=nodes[test];
+			bool guarded=testNode.op==BoundOp.guard;
+			auto id=guarded?testNode.a:test;
+			auto axis=arena.variable(Sort.real_,freshScalarIndex(id)),body=scalarBody(at(id),axis);
+			if(body==Term.init) return false;
+			auto opts=Options(DensityMode.preserve,true);
+			opts.maxRewrites=512; opts.maxAlgebraWork=16384;
+			auto domain=guarded?simplify(arena,body,[],opts):simplifyDomain(arena,body,[],opts);
+			if(domain.output==arena.boolean(true)) return false;
+			Rational[] probes=[lo,hi],cuts;
+			auto left=lo;
+			if(!domain.exhausted&&integralCutPoints(arena,domain.output,axis,cuts)&&cuts.length<=64){
+				import std.algorithm.sorting:sort;
+				sort(cuts);
+				foreach(c;cuts) if(left<c&&c<hi){
+					probes~=c; probes~=(left+c)/Rational(2); left=c;
+				}
+			}
+			probes~=(left+hi)/Rational(2);
+			foreach(u;probes){
+				if(u.words>128) continue;
+				auto sample=scalarBody(at(id),arena.real_(u));
+				auto check=guarded?simplify(arena,sample,[],opts):simplifyDomain(arena,sample,[],opts);
+				if(check.exhausted||check.output!=arena.boolean(false)) continue;
+				auto evidence=ScalarDomain(sample,check);
+				if(guarded){
+					evidence.value=check;
+					evidence.result=simplifyDomain(arena,sample,[],opts);
+					if(evidence.result.exhausted) continue;
+				}
+				join.witness=u; join.missingGuard=guarded;
+				join.missingDomain=cast(uint)scalarDomains.length;
+				scalarDomains~=evidence;
+				return true;
+			}
+			return false;
+		}
 		BoundTerm partialJumpAtom(Scope ctx,Rational a,Rational l,Rational r,BoundTerm mass){
 			auto atom=distribution(ctx,BoundOp.distributionDirac,[scalar(ctx,arena.real_(a))]);
 			auto scaled=distribution(ctx,BoundOp.distributionScale,[mass,atom]);
@@ -6321,7 +6363,7 @@ final class Bindings{
 					j.clipped=new IntegralSolution;
 					if(integratePolynomials(mass,*j.clipped)==BoundTerm.init){
 						j.clipped=null;
-						j.traversal=mass.id;
+						if(!missingTraversal(cert.image?cert.outerPredicate:cert.predicate,lo,hi,j)) j.traversal=mass.id;
 					}
 				}
 			}
@@ -6371,7 +6413,8 @@ final class Bindings{
 					event=gridAtom(ctx,a,k<Rational(0)?-k:k);
 				}
 				if(pred!=BoundTerm.init){
-					if(join.traversal!=uint.max){
+					if(join.missingDomain!=uint.max) event=bottom(ctx,type(event));
+					else if(join.traversal!=uint.max){
 						event=partialJumpAtom(ctx,a,cert.image?join.leftImage:join.left,cert.image?join.rightImage:join.right,at(join.traversal));
 					}else if(join.kind==JoinKind.jump) event=gridAtom(ctx,a,join.clipped.value);
 					else final switch(join.selection){
@@ -6902,10 +6945,11 @@ final class Bindings{
 			if(sample.words>128) return miss;
 			uint index;
 			if(restricted){
+				auto domainsBefore=scalarDomains.length;
 				if(changedJumpCoordinate(at(n.a),index)==BoundTerm.init) return miss;
 				foreach(j;coordinates[index].joins){
 					if(j.kind==JoinKind.corner&&j.selection==CornerSelection.dynamic||j.kind==JoinKind.jump&&!j.clipped){
-						coordinates.length=index; return miss;
+						coordinates.length=index; scalarDomains.length=domainsBefore; return miss;
 					}
 				}
 			}else if(polynomialCoordinate(at(row.a),index,BoundTerm.init,changed?CoordinateGridMode.continuousChange:CoordinateGridMode.source)==BoundTerm.init&&
@@ -9491,7 +9535,12 @@ final class Bindings{
 						return numeric(arena.real_(lower),lower)~" "~numeric(arena.real_(upper),upper)~" "~numeric(arena.real_(1),Rational(1));
 					}
 					string eventProof;
-					if(j.traversal!=uint.max){
+					if(j.missingDomain!=uint.max){
+						auto prefixProof="(QSym.BindingScalar"~to!string(j.missingDomain);
+						auto missing=j.missingGuard?app("guardedMissing",prefixProof~".ValueCertificate.refinement ξ)"):
+							prefixProof~".DomainCertificate.domain_correct ξ)";
+						eventProof=app("restrictedMissingJump",prefix~q(j.witness)~" "~limits()~" (of_decide_eq_true rfl) (of_decide_eq_true rfl) "~missing);
+					}else if(j.traversal!=uint.max){
 						eventProof=app("restrictedPartialJump",prefix~limits()~" (of_decide_eq_true rfl) "~apos~" "~boundsProof()~" "~numeric(arena.real_(-1),Rational(-1)));
 					}else{
 						auto mass=*j.clipped;

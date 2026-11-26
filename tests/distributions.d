@@ -251,10 +251,15 @@ private Case[] cases(){
 	Case("WindowProbeTwo","densityAtD(Λx. λ[(1+[x<0]·1+[1<x]·3)⁻¹ | u. 1/4<u<3/4],1)","ℝ","undefined(ℝ)"),
 	Case("WindowProbeRoot","densityAtD(Λx. λ[sqrt(4+[x<0]·5) | u. 3<u],0)","ℝ","0"),
 	Case("ImageWindowPartial","λ(k:ℝ→𝔹). Λx. λ[(1+[0≤x]·1)⁻¹ | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
-	Case("ImageWindowEndpoint","Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-1/2)⁻¹<2]","Distribution(ℝ)"),
+	Case("ImageWindowEndpoint","Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-1/2)⁻¹<2]","Distribution(ℝ)","undefined(Distribution(ℝ))"),
 	Case("SymbolicJumpLong","λ(k:ℝ→𝔹). Λx. λ[2·[0≤x] | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
 	Case("SymbolicJumpReversed","λ(k:ℝ→𝔹). Λx. λ[sqrt(4+5·[x<0]) | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
-	Case("SymbolicJumpDistant","densityAtD(Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-1/2)⁻¹<2],2)","ℝ"),
+	Case("SymbolicJumpDistant","densityAtD(Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-1/2)⁻¹<2],2)","ℝ","undefined(ℝ)"),
+	Case("TraversalHoleInterior","Λx. λ[2·[0≤x] | u. (u-1)⁻¹<2]","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("TraversalHoleReversed","Λx. λ[sqrt(4+[x<0]·5) | u. (u-3)⁻¹<0]","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("TraversalHoleCell","Λx. λ[2·[0≤x] | u. sqrt((u-1/4)*(u-3/4))<2]","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("TraversalHoleMasked","Λx. λ[3·[0≤x] | u. if u=1 then true else (u-1)⁻¹<0]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
+	Case("TraversalHoleShortCircuit","Λx. λ[2·[0≤x] | u. u<1 ∨ (u-1/2)⁻¹<0]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
 	Case("SymbolicJumpOutside","Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-2)⁻¹<0]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+0·λ[x]"),
 	Case("ImageCoordinateReciprocal","Λx. λ[(1+[0≤x]·1)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+0·λ[x]"),
 	Case("ImageCoordinateUnit","Λx. λ[sqrt(1+[0≤x]·3)]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
@@ -311,7 +316,7 @@ private Case[] cases(){
 	Case("RestrictedJumpDensity","densityAtD(Λy. λ[2*[0≤y] | x. 0<x<1],0)","ℝ","undefined(ℝ)"),
 	Case("RestrictedJumpPartialProbe","∫dy y⁻¹·λ[2*[0≤y] | x. 0<x<1]","ℝ","undefined(ℝ)"),
 	Case("RestrictedJumpSlope","densityAtD(Λy. λ[y+2*[0≤y] | x. 1<x<3],1/2)","ℝ","1"),
-	Case("JumpPartialRestriction","∫dy λ[2*[0≤y] | x. x⁻¹<1]","ℝ"),
+	Case("JumpPartialRestriction","∫dy λ[2*[0≤y] | x. x⁻¹<1]","ℝ","undefined(ℝ)"),
 	Case("JumpOutputWindow","∫dy [0<y<1]·λ[2*[0≤y]]","ℝ","0"),
 	Case("SheetPartPairing","λ(p:ℝ→𝔹). λ(t:ℝ→ℝ). ∫dy t(y)·λ[-sqrt(y),sqrt(y) | x. p(x)]","(ℝ→𝔹)→(ℝ→ℝ)→ℝ"),
 	Case("SheetPartCritical","∫dy y⁻¹·λ[-sqrt(y),sqrt(y) | x. 0<x]","ℝ","undefined(ℝ)"),
@@ -1509,13 +1514,17 @@ private void run(string directory){
 			bool fallback=c.name=="CountdownDifferentStride"||c.name=="CountdownPartialRatioZero"||c.name=="CountdownPartialRatioOne";
 			enforce((certificate.indexOf("Distribution.mass_scale_countdown")>=0)!=fallback,c.name~" countdown certificate");
 		}
-		if(c.name.indexOf("SymbolicJump")==0||c.name=="JumpPartialRestriction"||c.name=="ImageWindowPartial"||c.name=="ImageWindowEndpoint"){
+		if(c.name=="SymbolicJumpLong"||c.name=="SymbolicJumpReversed"||c.name=="ImageWindowPartial"||c.name=="SymbolicJumpOutside"){
 			enforce(certificate.indexOf("Grid.restrictedPartialJump ")>=0,c.name~" partial traversal");
 			enforce(text.indexOf("∫")>=0||c.name=="SymbolicJumpOutside",c.name~" retained a partial integrand");
 			if(c.name=="SymbolicJumpLong"||c.name=="SymbolicJumpReversed") enforce(text.indexOf("if ")>=0,c.name~" unit weight");
 			if(c.name=="ImageWindowPartial") enforce(text.indexOf("if ")<0,c.name~" subunit jump");
-			if(c.name=="SymbolicJumpDistant") enforce(certificate.indexOf("Grid.probeImageAt ")<0,c.name~" unchecked distant traversal");
 		}
+		if(c.name=="SymbolicJumpDistant"||c.name=="ImageWindowEndpoint"||c.name=="JumpPartialRestriction"||
+			c.name=="TraversalHoleInterior"||c.name=="TraversalHoleReversed"||c.name=="TraversalHoleCell")
+			enforce(certificate.indexOf("Grid.restrictedMissingJump ")>=0,c.name~" strict traversal");
+		if(c.name=="TraversalHoleMasked"||c.name=="TraversalHoleShortCircuit"||c.name=="SymbolicJumpOutside")
+			enforce(certificate.indexOf("Grid.restrictedMissingJump ")<0,c.name~" masked or unreachable pole");
 		if(c.name=="UnsplitAbsolute") enforce(text.indexOf("∫")>=0,c.name~": "~text);
 		if(c.name.indexOf("PositiveCoordinate")==0)
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
