@@ -886,6 +886,20 @@ theorem Linear.add {f g : ℝ → Option ℝ} {p q : ℚ} {s t : Option ℝ} (hf
     push_cast
     ring⟩
 
+/-- A term of degree one in the axis whose slope is not zero vanishes at one
+point only: at every other point it is not zero. -/
+theorem Linear.nonzero_away {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ} (h : Linear f p s)
+    (hp : p ≠ 0) {c : ℝ} (hs : s = some c) {x : ℝ} (hx : x ≠ -c / p) :
+    Value.nonzero (f x) = some true := by
+  have hp' : (p : ℝ) ≠ 0 := by exact_mod_cast hp
+  have h0 : (p : ℝ) * x + c ≠ 0 := by
+    intro h0
+    apply hx
+    field_simp
+    linarith
+  rw [h.equation, hs]
+  simp [Value.add, Value.nonzero, h0]
+
 private theorem slope_inverse {p κ : ℚ} (h : p * κ = 1) : ((κ : ℚ) : ℝ) = ((p : ℚ) : ℝ)⁻¹ := by
   have h' : (p : ℝ) * (κ : ℝ) = 1 := by exact_mod_cast h
   exact eq_inv_of_mul_eq_one_right h'
@@ -1172,5 +1186,23 @@ theorem mass_guard_origin (g : Option Bool) {w m : ℝ → Option ℝ}
       by_cases hx : x = 0 <;> simp [hx, Value.nonzero, Value.or, Binding.guardValue]
     rw [hw]
     rfl
+
+/-- A point of the axis that a weight excludes: `x ≠ a`, which is the term
+`x - a`, of degree one in the axis, being not zero. Where the exclusion holds,
+the weight is the weight with the exclusion taken to hold. That is at every
+point but one, so the two have the same observation where both exist at
+every point and so does what the term has beside the axis. Without that, a
+missing value could be asked for at the excluded point only, or the point
+itself could be missing. -/
+theorem mass_null_point {w v f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ}
+    (hf : StepSource.Linear f p s) (hp : decide (p ≠ 0) = true) (hs : Value.Defined s)
+    (tw : ∀ x, Value.Defined (w x)) (tv : ∀ x, Value.Defined (v x))
+    (h : ∀ x, Value.nonzero (f x) = some true → w x = v x) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      massValue (DensityProgram.weight v .lebesgue).presentation := by
+  rw [mass_weight, mass_weight]
+  obtain ⟨c, hc⟩ := hs
+  exact partialIntegral_congr_away w v [-c / p] tw tv
+    (fun x hx => h x (hf.nonzero_away (of_decide_eq_true hp) hc (hx _ (by simp))))
 
 end QSym.Distribution.DensityProgram

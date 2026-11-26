@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -1860,6 +1860,56 @@ final class Bindings{
 		foreach_reverse(c;casts) rest=primitive(arena.at(nodes[c].data),[rest]);
 		return true;
 	}
+	// The proof that a literal is the rational number it is written as.
+	private string literalProof(Rational q){ return "(Numeric.calculate_sound ξ n"~to!string(arena.real_(q).id)~" "~SourceCertificates.q(q)~" rfl)"; }
+	private bool axisVariable(uint id){ auto v=nodes[id]; return v.op==BoundOp.variable&&v.data==0; }
+	// A rational literal as a factor.
+	private bool literalFactor(uint id,out Rational c){
+		auto q=nodes[id]; if(q.op!=BoundOp.scalar||!arena.isNumber(arena.at(q.data))) return false;
+		auto value=arena.number(arena.at(q.data)); c=value.re; return value.im.zero;
+	}
+	// The slope of a term of degree one in the axis: a sum of rational
+	// multiples of the axis and of terms that do not mention it. Decided
+	// without building anything.
+	private bool axisSlope(uint id,out Rational p,uint depth=0){
+		if(depth>16||type(at(id))!=scalarType(Sort.real_)) return false;
+		if(axisVariable(id)){ p=Rational(1); return true; }
+		auto q=nodes[id]; Rational c,r1,r2;
+		if(primitiveOp(id,Op.mul)){
+			bool left=literalFactor(q.a,c);
+			if(!left&&!literalFactor(q.b,c)||!axisSlope(left?q.b:q.a,r1,depth+1)) return false;
+			p=c*r1; return p.words<=64;
+		}
+		if(!primitiveOp(id,Op.add)) return false;
+		bool da=depends(at(q.a),0),db=depends(at(q.b),0);
+		if(!da&&!db||da&&!axisSlope(q.a,r1,depth+1)||db&&!axisSlope(q.b,r2,depth+1)) return false;
+		p=da&&db?r1+r2:da?r1:r2; return p.words<=64;
+	}
+	// The sum of what such a term has that does not mention the axis, in
+	// the order of the term with a zero for the axis. With `under`, the
+	// evaluation of a subterm of the term at a point, also the evidence that
+	// the term is that multiple of the axis plus this sum.
+	private BoundTerm axisOffset(uint id,scope string delegate(uint) @safe under,out string evidence){
+		enum src="Distribution.StepSource.";
+		auto inner=context(at(id)),zero=arena.real_(0);
+		if(axisVariable(id)){
+			if(under) evidence="("~src~"Linear.axis "~literalProof(Rational(0))~")";
+			return scalar(inner,zero);
+		}
+		auto q=nodes[id]; Rational c; string e1,e2;
+		if(primitiveOp(id,Op.mul)){
+			bool left=literalFactor(q.a,c); if(!left) literalFactor(q.b,c);
+			auto s=axisOffset(left?q.b:q.a,under,e1);
+			if(under) evidence="("~src~"Linear."~(left?"scale ":"scaled ")~SourceCertificates.q(c)~
+				" (Numeric.calculate_sound ξ n"~to!string(nodes[left?q.a:q.b].data)~" "~SourceCertificates.q(c)~" rfl) "~e1~")";
+			return primitive(arena.at(q.data),left?[at(q.a),s]:[s,at(q.b)]);
+		}
+		bool da=depends(at(q.a),0),db=depends(at(q.b),0);
+		auto s1=da?axisOffset(q.a,under,e1):at(q.a),s2=db?axisOffset(q.b,under,e2):at(q.b);
+		if(under) evidence=da&&db?"("~src~"Linear.add "~e1~" "~e2~")":
+			da?"("~src~"Linear.add_left "~e1~" "~under(q.b)~")":"("~src~"Linear.add_right "~under(q.a)~" "~e2~")";
+		return primitive(arena.at(q.data),[s1,s2]);
+	}
 	// The comparisons of a weight that are not solved for the axis: one side
 	// is of degree one in the axis, a rational multiple of the axis plus
 	// terms that do not mention it, and the other side does not mention it.
@@ -1873,53 +1923,9 @@ final class Bindings{
 	private Spread solveBounds(uint body,scope string delegate(uint) @safe under){
 		auto inner=context(at(body)),real_=scalarType(Sort.real_);
 		enum src="Distribution.StepSource.";
-		string literal(Rational q){ return "(Numeric.calculate_sound ξ n"~to!string(arena.real_(q).id)~" "~SourceCertificates.q(q)~" rfl)"; }
-		bool axis(uint i){ auto v=nodes[i]; return v.op==BoundOp.variable&&v.data==0; }
-		bool isOp(uint i,Op op){ auto q=nodes[i]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op; }
-		// A rational literal as a factor.
-		bool factor(uint i,out Rational c){
-			auto q=nodes[i]; if(q.op!=BoundOp.scalar||!arena.isNumber(arena.at(q.data))) return false;
-			auto value=arena.number(arena.at(q.data)); c=value.re; return value.im.zero;
-		}
-		// The slope of a term of degree one in the axis: a sum of rational
-		// multiples of the axis and of terms that do not mention it. Decided
-		// without building anything.
-		bool slope(uint id,out Rational p,uint depth){
-			if(depth>16||type(at(id))!=real_) return false;
-			if(axis(id)){ p=Rational(1); return true; }
-			auto q=nodes[id]; Rational c,r1,r2;
-			if(isOp(id,Op.mul)){
-				bool left=factor(q.a,c);
-				if(!left&&!factor(q.b,c)||!slope(left?q.b:q.a,r1,depth+1)) return false;
-				p=c*r1; return p.words<=64;
-			}
-			if(!isOp(id,Op.add)) return false;
-			bool da=depends(at(q.a),0),db=depends(at(q.b),0);
-			if(!da&&!db||da&&!slope(q.a,r1,depth+1)||db&&!slope(q.b,r2,depth+1)) return false;
-			p=da&&db?r1+r2:da?r1:r2; return p.words<=64;
-		}
-		// The sum of what such a term has that does not mention the axis, in
-		// the order of the term with a zero for the axis, and the evidence.
-		BoundTerm offset(uint id,out string evidence){
-			auto zero=arena.real_(0);
-			if(axis(id)){
-				if(under) evidence="("~src~"Linear.axis "~literal(Rational(0))~")";
-				return scalar(inner,zero);
-			}
-			auto q=nodes[id]; Rational c; string e1,e2;
-			if(isOp(id,Op.mul)){
-				bool left=factor(q.a,c); if(!left) factor(q.b,c);
-				auto s=offset(left?q.b:q.a,e1);
-				if(under) evidence="("~src~"Linear."~(left?"scale ":"scaled ")~SourceCertificates.q(c)~
-					" (Numeric.calculate_sound ξ n"~to!string(nodes[left?q.a:q.b].data)~" "~SourceCertificates.q(c)~" rfl) "~e1~")";
-				return primitive(arena.at(q.data),left?[at(q.a),s]:[s,at(q.b)]);
-			}
-			bool da=depends(at(q.a),0),db=depends(at(q.b),0);
-			auto s1=da?offset(q.a,e1):at(q.a),s2=db?offset(q.b,e2):at(q.b);
-			if(under) evidence=da&&db?"("~src~"Linear.add "~e1~" "~e2~")":
-				da?"("~src~"Linear.add_left "~e1~" "~under(q.b)~")":"("~src~"Linear.add_right "~under(q.a)~" "~e2~")";
-			return primitive(arena.at(q.data),[s1,s2]);
-		}
+		alias literal=literalProof; alias axis=axisVariable; alias isOp=primitiveOp;
+		bool slope(uint id,out Rational p,uint depth){ return axisSlope(id,p,depth); }
+		BoundTerm offset(uint id,out string evidence){ return axisOffset(id,under,evidence); }
 		string congr(string f,string a,string b){ return a.length||b.length?"(congrArg₂ "~f~" "~(a.length?a:"rfl")~" "~(b.length?b:"rfl")~")":""; }
 		Spread visit(uint id,uint depth){
 			auto q=nodes[id];
@@ -1950,6 +1956,51 @@ final class Bindings{
 		}
 		auto r=visit(body,0);
 		return r.id==body?Spread.init:r;
+	}
+	// A point of the axis that a weight excludes: `x≠a`, which is the term
+	// `x-a` being not zero, and in general a term of degree one in the axis
+	// with a slope that is not zero. Such a term vanishes at one point, so
+	// the exclusion holds at every other point, and the weight is there the
+	// weight with the exclusion taken to hold, whatever the exclusion is
+	// part of: a guard, the negation in `x=a`, a summand. The first exclusion
+	// of the weight: the weight with the literal `true` in its place, the
+	// term, and what of the term does not mention the axis. With `under`,
+	// the evaluation of a subterm at a point, the proof that the two weights
+	// agree at a point where the exclusion holds, from `he`, that it does;
+	// and with `fixed`, the evaluation of a subterm that does not mention
+	// the axis, the evidence that the term is of degree one.
+	private struct PointExclusion{ uint term=uint.max; BoundTerm to,offset; Rational slope; string linear,agree; }
+	private bool pointExclusion(uint body,out PointExclusion e,scope string delegate(uint) @safe under,scope string delegate(uint) @safe fixed){
+		uint found=uint.max; Table!(uint,bool) seen;
+		void find(uint id,uint depth){
+			if(found!=uint.max||depth>64||seen.get(id,false)) return;
+			seen.set(id,true);
+			auto q=nodes[id]; if(q.op!=BoundOp.primitive||!depends(at(id),0)) return;
+			Rational p;
+			if(primitiveOp(id,Op.nonzero)&&axisSlope(q.a,p)&&!p.zero){ found=id; e.slope=p; return; }
+			find(q.a,depth+1); if(q.b!=uint.max) find(q.b,depth+1);
+		}
+		find(body,0); if(found==uint.max) return false;
+		auto truth=scalar(context(at(body)),arena.boolean(true));
+		string congr(string f,string a,string b){ return "(congrArg₂ "~f~" "~(a.length?a:"rfl")~" "~(b.length?b:"rfl")~")"; }
+		Spread[uint] done;
+		Spread visit(uint id,uint depth){
+			if(id==found) return Spread(truth.id,"he");
+			auto q=nodes[id];
+			if(depth>64||q.op!=BoundOp.primitive||!depends(at(id),0)) return Spread(id);
+			if(auto known=id in done) return *known;
+			auto a=visit(q.a,depth+1),b=q.b==uint.max?Spread.init:visit(q.b,depth+1);
+			auto r=Spread(id);
+			if(a.id!=q.a||q.b!=uint.max&&b.id!=q.b){
+				r.id=primitive(arena.at(q.data),q.b==uint.max?[at(a.id)]:[at(a.id),at(b.id)]).id;
+				if(under) r.proof=q.b==uint.max?"(congrArg "~valueOperation(q)~" "~a.proof~")":congr(valueOperation(q),a.proof,b.proof);
+			}
+			done[id]=r; return r;
+		}
+		auto r=visit(body,0); if(r.id==body) return false;
+		e.term=nodes[found].a; e.to=at(r.id); e.agree=r.proof;
+		e.offset=axisOffset(e.term,fixed,e.linear);
+		return true;
 	}
 	// The guard of the domain of a term of a bound. A guard is evaluated
 	// from the left, so the term of a bound is asked for only where the
@@ -8169,6 +8220,22 @@ final class Bindings{
 			mapDomains.set(body,id);
 			return id;
 		}
+		// A point that the only weight of a Lebesgue observation excludes
+		// leaves the weight. This is an equation of partial values where the
+		// weight, the weight without the exclusion, and what the term of the
+		// exclusion has beside the axis all exist at every point: three
+		// checks by the scalar simplifier, whose certificates the step
+		// carries. Without them a missing value could be asked for at the
+		// excluded point only, or the point itself could be missing.
+		BoundTerm excludePoint(BoundTerm t,out uint[3] domains) @safe {
+			auto n=node(t); uint[] bodies; PointExclusion e;
+			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,bodies)||bodies.length!=1||!pointExclusion(bodies[0],e,null,null)) return BoundTerm.init;
+			auto rows=[bodies[0],e.to.id,e.offset.id];
+			foreach(row;rows){ ScalarDomain check; if(!mapDomains.contains(row)&&!totalRowDomain(row,check,false)) return BoundTerm.init; }
+			foreach(i,row;rows){ domains[i]=totalMapDomain(row); if(domains[i]==uint.max) return BoundTerm.init; }
+			auto ctx=context(t),weight=inheritHint(at(nodes[n.a].a),lambda(e.to));
+			return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
+		}
 		bool affineMap(uint id,out Rational a,out Rational b){
 			return nodes[id].op==BoundOp.lambda&&type(at(id))==pool.function_(scalarType(Sort.real_),scalarType(Sort.real_))&&
 				affineBody(nodes[id].a,a,b);
@@ -9241,7 +9308,11 @@ final class Bindings{
 					else if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
 					else if(bounds!=BoundTerm.init){ next=bounds; rule=BindingRule.distributionMassBounds; }
 					else if(solved!=BoundTerm.init){ next=solved; rule=BindingRule.distributionMassSolve; }
-					else{ solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution); }
+					else{
+						solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution);
+						uint[3] domains; auto point=evaluated==BoundTerm.init?excludePoint(at(result.output),domains):BoundTerm.init;
+						if(point!=BoundTerm.init){ next=point; rule=BindingRule.distributionMassPoint; predicateDomain=domains[0]; excludedZero=domains[1]; extra=domains[2]; }
+					}
 				}
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
 			}
@@ -12577,6 +12648,12 @@ final class Bindings{
 				chartProofs[$-1]~=" "~c.functionAt(chart.borelPredicate)~" "~borelProof(chart.borelPredicate,c);
 			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
 		}
+		// What the term of an excluded point has beside the axis is named by
+		// the certificate of its step.
+		foreach(p;result.proofs) if(p.rule==BindingRule.distributionMassPoint){
+			PointExclusion e; enforce(pointExclusion(nodes[nodes[nodes[p.from].a].a].a,e,null,null),"missing excluded point");
+			proofRoots~=e.offset.id;
+		}
 		bool[] used=new bool[nodes.length]; uint[] stack=[result.input.id,result.output.id]~proofRoots;
 		foreach(p;result.proofs){ stack~=p.from; stack~=p.to; }
 		foreach(s;result.sums) stack~=s.candidate;
@@ -14664,6 +14741,16 @@ final class Bindings{
 					auto body=nodes[nodes[n.a].a].a;uint condition;BoundTerm rest;
 					enforce(originGuard(body,condition,rest),"missing guard that can fail at the origin only");
 					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_guard_origin ("~name(dropIndex(at(condition)).id)~".eval ξ ρ) (w := "~fn(body)~") (m := "~fn(rest.id)~") (fun _ => rfl); h)"; break;
+				}
+				case BindingRule.distributionMassPoint:{
+					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string fixed(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some (0 : ℝ)) ρ))";}
+					string fn(uint id){return "(fun x : ℝ => "~under(id)~")";}
+					auto body=nodes[nodes[n.a].a].a; PointExclusion e;
+					enforce(pointExclusion(body,e,&under,&fixed)&&e.to.id==nodes[nodes[nodes[p.to].a].a].a,"missing excluded point");
+					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_null_point (w := "~fn(body)~") (v := "~fn(e.to.id)~") (f := "~fn(e.term)~
+						") (p := "~SourceCertificates.q(e.slope)~") "~e.linear~" rfl ("~rowTotalProof(p.extra)~" 0) "~rowTotalProof(p.left)~" "~rowTotalProof(p.right)~
+						" (fun x he => "~e.agree~"); h)"; break;
 				}
 				case BindingRule.distributionMassSolve:{
 					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}

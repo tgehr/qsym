@@ -1611,6 +1611,30 @@ private Case[] cases(){
 	Case("ExcludedEndOffset","∫dx [0≤x]*[x≤a+1]*[x-a≠1]*λ[x]","ℝ","[-1<a]·(a+1)"),
 	Case("ExcludedEndScaled","∫dx [0≤x]*[2*x≤a]*[a≠2*x]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
 	Case("ExcludedEndExponential","∫dx [0≤x]*[x≤a]*[x≠a]*[x≠0]*e^(-x)*λ[x]","ℝ","[0<a]·(-exp(-a)+1)"),
+	Case("TermPointExcluded","∫dx [0≤x]*[x≤1]*[x≠a]*λ[x]","ℝ","1"),
+	Case("TermPointExcludedFirst","∫dx [x≠a]*[0≤x]*[x≤1]*λ[x]","ℝ","1"),
+	Case("TermPointExcludedBetween","∫dx [0≤x]*[x≠a]*[x≤1]*λ[x]","ℝ","1"),
+	Case("TermPointExcludedSwapped","∫dx [0≤x]*[x≤1]*[a≠x]*λ[x]","ℝ","1"),
+	Case("TermPointExcludedScaled","∫dx [0≤x]*[x≤1]*[2*x≠a]*x*λ[x]","ℝ","1/2"),
+	Case("TermPointExcludedTerms","∫dx [0≤x]*[x≤1]*[x+a≠b]*λ[x]","ℝ","1"),
+	Case("TermPointExcludedTwo","∫dx [0≤x]*[x≤1]*[x≠a]*[x≠b]*λ[x]","ℝ","1"),
+	Case("TermPointExcludedRational","∫dx [0≤x]*[x≤1]*[x≠1/2]*[x≠a]*λ[x]","ℝ","1"),
+	Case("TermPointExcludedLine","∫dx [x≠a]*e^(-x^2)*λ[x]","ℝ","sqrt(π)"),
+	Case("TermPointExcludedHalfLine","∫dx [0≤x]*[x≠a]*e^(-x)*λ[x]","ℝ","1"),
+	Case("TermPointExcludedBound","∫dx [0≤x]*[x≤b]*[x≠a]*λ[x]","ℝ","[0≤b]·b"),
+	Case("TermPointExcludedCompeting","∫dx [0≤x]*[x≤1]*[x≠a]*[x≤b]*λ[x]","ℝ","[b<1∧0≤b]·b+[1≤b]"),
+	Case("TermPointExcludedCondition","∫dx [0≤x]*[x≤1]*[x≠a]*[0<b]*λ[x]","ℝ","[0<b]"),
+	Case("TermPointExcludedSum","∫dx ([0≤x]*[x≤1]*[x≠a]+[1≤x]*[x≤2]*[x≠b]*3)*λ[x]","ℝ","4"),
+	Case("TermPointExcludedQuotient","∫dx [0≤x]*[x≤1]*[x≠a]*(1/(1+x^2))*λ[x]","ℝ","1/4·π"),
+	Case("TermPointOnly","∫dx [0≤x]*[x≤1]*[x=a]*λ[x]","ℝ","0"),
+	Case("TermPointOnlyValue","∫dx [0≤x]*[x≤1]*[x=a]*x*λ[x]","ℝ","0"),
+	Case("TermPointOnlySummand","∫dx [0≤x]*[x≤1]*([x=a]+2)*λ[x]","ℝ","2"),
+	Case("TermPointCases","∫dx [0≤x]*[x≤1]*([x=a]*3+[x≠a]*x)*λ[x]","ℝ","1/2"),
+	Case("TermPointExcludedDomain","∫dx [0≤x]*[x≤1]*[x≠a]*(1/b)*λ[x]","ℝ"),
+	Case("TermPointExcludedPartial","∫dx [0≤x]*[x≤1]*[x≠log(a)]*λ[x]","ℝ"),
+	Case("TermPointExcludedTermDomain","∫dx [0≤x]*[x≤log(b)]*[x≠a]*λ[x]","ℝ"),
+	Case("TermPointExcludedNested","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*λ[x]*λ[y]","ℝ"),
+	Case("TermPointExcludedSquare","∫dx [0≤x]*[x≤1]*[x^2≠a]*λ[x]","ℝ"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3333,6 +3357,31 @@ private void run(string directory){
 			enforce(has("Distribution.StepSource.beyond_domain_piece ")==among("Sum"),c.name~" domain of a term of a summand behind a bound");
 			enforce(has("Distribution.DensityProgram.mass_between_domain ")==between,c.name~" domain of a term behind a lower and an upper bound");
 			enforce(has("Distribution.DensityProgram.mass_beyond_domain ")==(!between&&!retained),c.name~" domain of a term behind a single bound");
+		}
+		// A point that a weight excludes, `[x≠a]`, and a weight on a point
+		// only, `[x=a]`: the exclusion is the term `x-a` being not zero, and
+		// the other its negation. A term of degree one in the axis vanishes
+		// at one point, so the weight with the exclusion taken to hold
+		// differs from it at that point only and has the same observation,
+		// whatever the exclusion is part of. This is an equation of partial
+		// values where both weights and the rest of the term exist at every
+		// point; the certificate carries the three checks. So the weight of
+		// a point is a zero, and the two branches of a comparison of the
+		// axis with a term leave the branch of the exclusion. Kept are a
+		// weight with a value or a term that is not total, where a missing
+		// value could be asked for at the excluded point only; a point that
+		// is not total itself; a point that is the variable of an outer
+		// integral, which may be missing; and an exclusion whose term is
+		// not of degree one.
+		if(c.name.indexOf("TermPoint")==0){
+			bool among(string[] names...){ foreach(name;names) if(c.name=="TermPoint"~name) return true; return false; }
+			bool retained=among("ExcludedDomain","ExcludedPartial","ExcludedTermDomain","ExcludedNested","ExcludedSquare");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			if(among("ExcludedQuotient")) enforce(certificate.indexOf("Distribution.StepSource.IntervalTerms.cauchy ")>=0,c.name);
+			enforce((text.indexOf("≠")>=0)==retained,c.name~": "~text);
+			import std.algorithm.searching:count;
+			auto steps=certificate.count("Distribution.DensityProgram.mass_null_point ");
+			enforce(steps==(retained?0:among("ExcludedTwo","ExcludedRational","ExcludedSum")?2:1),c.name~" excluded points");
 		}
 		// An end of an interval that a condition excludes: `[x≤a]·[x≠a]`,
 		// `[x≤a]·[a≠x]`, `[x<a]·[x≠a]`. The scalar simplifier knows the two
