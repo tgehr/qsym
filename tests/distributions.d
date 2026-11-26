@@ -470,6 +470,26 @@ private Case[] cases(){
 	Case("CauchyQuartic","∫dx (1+x^4)⁻¹·λ[x]","ℝ"),
 	Case("CauchyAffine","∫dx (1+x)⁻¹·λ[x]","ℝ"),
 	Case("CauchyMeasure","Λx. (1+x²)⁻¹·λ[x]","Distribution(ℝ)","Λ(x:ℝ). ((x^2+1)⁻¹)·λ[x]"),
+	Case("TurningWholeSquare","∫dx λ[atan(x)^2]","ℝ","1/2·π^2"),
+	Case("TurningWholeFourth","∫dx λ[tanh(x)^4]","ℝ","2"),
+	Case("TurningWholeCosh","∫dx λ[cosh(atan(x))]","ℝ","cosh(-1/2·π)+cosh(1/2·π)-2"),
+	Case("TurningWholeReflected","∫dx λ[cosh(tanh(-2*x))]","ℝ","2·cosh(1)-2"),
+	Case("TurningWholeShift","∫dx λ[(tanh(x)+1)^2]","ℝ","4"),
+	Case("TurningWholeOffCentre","∫dx λ[(tanh(x)+2)^4]","ℝ","80"),
+	Case("TurningWholeNonnegative","∫dx λ[atan(exp(x))^2]","ℝ","1/4·π^2"),
+	Case("TurningRayCDF","λ(u:ℝ). ∫dx [x≤u]·λ[atan(x)^2]","ℝ→ℝ","λ(u:ℝ). atan(u)·atan(abs(u))+1/4·π^2"),
+	Case("TurningRayRight","λ(l:ℝ). ∫dx [l<x]·λ[tanh(x)^4]","ℝ→ℝ","λ(l:ℝ). -tanh(abs(l))^3·tanh(l)+1"),
+	Case("TurningRayReverse","∫dx [x≤0]·λ[tanh(-3*x)^2]","ℝ","1"),
+	Case("TurningRayCosh","∫dx [0≤x]·λ[cosh(atan(x))]","ℝ","cosh(1/2·π)-1"),
+	Case("TurningRayCoshCross","∫dx [x≤1]·λ[cosh(tanh(x))]","ℝ","[tanh(1)<0]·(-cosh(tanh(1))+1)+[0≤tanh(1)]·(cosh(tanh(1))-1)+cosh(1)-1"),
+	Case("TurningRayDecay","∫dx [x≤0]·λ[cosh(exp(x))]","ℝ","cosh(1)-1"),
+	Case("TurningRayPartial","λ(u:ℝ). ∫dx [x≤u⁻¹]·λ[tanh(x)^2]","ℝ→ℝ","λ(u:ℝ). (guard(u≠0,tanh(u⁻¹)·tanh(abs(u)⁻¹)))+1"),
+	Case("TurningRayMissing","∫dx [x<undefined(ℝ)]·λ[tanh(x)^2]","ℝ","undefined(ℝ)"),
+	Case("TurningRayHigher","λ(h:ℕ→ℝ). λ(n:ℕ). ∫dx [h(n)≤x]·λ[tanh(x)^2]","(ℕ→ℝ)→ℕ→ℝ","λ(h:ℕ→ℝ). λ(n:ℕ). -(guard(holds((n∈domain(h))),abs(tanh(h(n)))·tanh(h(n))))+1"),
+	Case("TurningControlOpaque","λ(h:ℝ→ℝ). ∫dx λ[cosh(h(x))]","(ℝ→ℝ)→ℝ","λ(h:ℝ→ℝ). ∫dx λ[(cosh(h(x)))]"),
+	Case("TurningControlInfinite","∫dx λ[x^2]","ℝ","∫dx (2·abs(x))·λ[x]"),
+	Case("TurningControlOscillating","∫dx λ[cosh(sin(x))]","ℝ","∫dx (abs(cos(x))·sinh(abs(sin(x))))·λ[x]"),
+	Case("TurningControlOneEnd","∫dx λ[cosh(exp(x))]","ℝ","∫dx (exp(x)·sinh(exp(x)))·λ[x]"),
 	Case("TanhCoordinateMeasure","Λx. λ[tanh(x)]","Distribution(ℝ)","Λ(x:ℝ). ((cosh(x)^2)⁻¹)·λ[x]"),
 	Case("TanhCoordinateSmooth","Λx. λ[tanh(x^2+1)]","Distribution(ℝ)","Λ(x:ℝ). (2·(cosh(x^2+1)^2)⁻¹·abs(x))·λ[x]"),
 	Case("TanhCoordinatePoint","densityAtD(Λx.λ[tanh(2*x)],0)","ℝ","2"),
@@ -2042,6 +2062,11 @@ private void run(string directory){
 		}else if(c.name.indexOf("Cauchy")==0){
 			bool finite=c.name!="CauchyPole"&&c.name!="CauchyTouch"&&c.name!="CauchyQuartic"&&c.name!="CauchyAffine"&&c.name!="CauchyMeasure";
 			enforce((certificate.indexOf("StepSource.cauchy_mass ")>=0)==finite,c.name);
+		}
+		if(c.name.indexOf("Turning")==0){
+			bool whole=certificate.indexOf("Grid.VariationChange.whole ")>=0,half=certificate.indexOf("Grid.VariationChange.ray ")>=0;
+			enforce(whole==(c.name.indexOf("TurningWhole")==0)&&half==(c.name.indexOf("TurningRay")==0),c.name);
+			if(whole||half) enforce(text.indexOf("∫")<0&&text.indexOf("lim[")<0,c.name);
 		}
 		if(c.name.indexOf("TanhCoordinate")==0&&c.name!="TanhCoordinateRemovable"&&c.name!="TanhCoordinateHole"&&
 			c.name!="TanhCoordinateUnsupported"&&c.name!="TanhCoordinatePole")

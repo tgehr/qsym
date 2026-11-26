@@ -194,3 +194,54 @@ theorem whole {f : Scalar} (down : Bool) (m : Option ℝ)
         exact False.elim (hi (by simpa [raySet, j] using l.union r))
 
 end QSym.Distribution.GraphFibre.Coordinates.Grid.Directed
+
+namespace QSym.Distribution.GraphFibre.Coordinates.Grid.VariationChange
+open Filter Topology StepSource
+
+private theorem endpoint_limit {l : Filter ℝ} [l.NeBot] {h k op prim} {f : Scalar} {g : ℝ → ℝ} {e : Option ℝ}
+    (c : VariationChange h k op prim) (src : ∀ x, f x = some (g x)) (he : Limit.Exact l f e) :
+    Limit.value l (some fun x => prim (f x)) = prim e := by
+  cases e with
+  | none =>
+    obtain ⟨x, hx⟩ := (show ∀ᶠ x in l, f x = none from he).exists
+    exact False.elim (Option.noConfusion ((src x).symm.trans hx))
+  | some a =>
+    obtain ⟨u, eu, hu⟩ := he
+    rw [c.endpoint a]
+    exact Limit.along_eq_some (eu.mono fun x hx => (congrArg prim hx).trans (c.endpoint _))
+      ((c.smoothPrimitive.continuous.tendsto a).comp hu)
+
+/-- The variation primitive at a certified finite asymptote also computes the length
+on a ray crossing a critical point of the outer coordinate. -/
+theorem ray {h k op prim} {f w : Scalar} (c : VariationChange h k op prim)
+    (down below strict : Bool) (b m : Option ℝ) (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (v : Directed down f) (e : Option ℝ) (he : Limit.Exact (if below then atBot else atTop) f e)
+    (hw : ∀ x, w x = Value.mask (if below then compare strict (some x) b else compare strict b (some x)) (some (1 : ℝ))) :
+    massValue (weightValue (some w) (value (Tensor.consValue (some fun x => op (f x)) Tensor.nilValue))) =
+      (let atBound := b.bind fun x => prim (f x)
+       if below != down then Value.add atBound (Value.mul m (prim e))
+       else Value.add (prim e) (Value.mul m atBound)) := by
+  have directed := c.directed v
+  obtain ⟨g, sg, _, src⟩ := v
+  haveI : (if below then (atBot : Filter ℝ) else atTop).NeBot := by
+    cases below
+    · exact (inferInstance : (atTop : Filter ℝ).NeBot)
+    · exact (inferInstance : (atBot : Filter ℝ).NeBot)
+  have p := Directed.ray down below strict b m hm directed hw
+  rw [endpoint_limit c src he] at p
+  exact (congrArg (fun d => massValue (weightValue (some w) d)) (c.length sg src)).trans p
+
+/-- A turning coordinate can have finite total length even when its two limits coincide. -/
+theorem whole {h k op prim} {f : Scalar} (c : VariationChange h k op prim) (down : Bool)
+    (m : Option ℝ) (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (v : Directed down f)
+    (lo : Option ℝ) (hl : Limit.Exact atBot f lo) (hi : Option ℝ) (hr : Limit.Exact atTop f hi) :
+    massValue (value (Tensor.consValue (some fun x => op (f x)) Tensor.nilValue)) =
+      (if down then Value.add (prim lo) (Value.mul m (prim hi))
+       else Value.add (prim hi) (Value.mul m (prim lo))) := by
+  have directed := c.directed v
+  obtain ⟨g, sg, _, src⟩ := v
+  have p := Directed.whole down m hm directed
+  rw [endpoint_limit c src hl, endpoint_limit c src hr] at p
+  exact (congrArg massValue (c.length sg src)).trans p
+
+end QSym.Distribution.GraphFibre.Coordinates.Grid.VariationChange

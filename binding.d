@@ -158,7 +158,7 @@ private struct IntervalData{
 	// it may be defined without being integrable.
 	bool direct;
 	IntervalTerm[] terms;
-	uint coordinate=uint.max,turning=uint.max; bool decreasing;
+	uint coordinate=uint.max,turning=uint.max,lowerLimit=uint.max,upperLimit=uint.max; bool decreasing;
 }
 // A Gaussian integral. With `symbolic` the constant and linear coefficients of
 // the exponent are terms: `vertex` is `-1/(4·c₂)`, `moments` is the polynomial
@@ -4911,7 +4911,7 @@ final class Bindings{
 			}
 			d.coordinate=nodes[row.a].a;
 			auto outer=nodes[d.coordinate];
-			if(!whole&&!d.half&&outer.op==BoundOp.primitive){
+			if(outer.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(outer.data));
 				if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&op.value==Builtin.coshR){
 					d.turning=d.coordinate; d.coordinate=outer.a;
@@ -4936,24 +4936,9 @@ final class Bindings{
 				auto neg=primitive(arena.mul(zero,zero,true),[m,lo]);
 				return primitive(arena.add(zero,zero,true),[hi,neg]);
 			}
-			d.minusOne=m.id;
-			solution.from=[whole?d.coordinate:nodes[w.a].a]; solution.bounds=d;
-			solution.interval=true; solution.piecewise=true;
-			if(whole){
-				auto lo=limit(at(row.a),true),hi=limit(at(row.a),false);
-				auto value=d.decreasing?difference(lo,hi):difference(hi,lo);
-				solution.output=value.id; return value;
-			}
-			if(d.half){
-				auto edge=limit(at(row.a),d.below),endpoint=apply(at(row.a),a);
-				auto value=d.below!=d.decreasing?difference(endpoint,edge):difference(edge,endpoint);
-				solution.output=value.id; return value;
-			}
-			auto comparison=primitive(d.strictLower||d.strictUpper?arena.lt(zero,zero):arena.le(zero,zero),[a,b]);
-			// Evaluate a primitive of the absolute derivative in the inner
-			// coordinate. The inner chart may cross the outer critical value.
-			BoundTerm endpoint(BoundTerm bound){
-				auto v=substituteArgument(at(d.coordinate),bound);
+			// Along a monotone inner chart the variation primitive accumulates
+			// absolute length, including where the outer coordinate turns.
+			BoundTerm primitiveAt(BoundTerm v){
 				if(d.turning==uint.max) return v;
 				auto mul=arena.mul(zero,zero,true),op=arena.view(arena.at(outer.data));
 				if(op.op==Op.pow){
@@ -4961,15 +4946,37 @@ final class Bindings{
 					if(op.value>2) mag=primitive(arena.pow(zero,cast(uint)op.value-1),[mag]);
 					return primitive(mul,[v,mag]);
 				}
+				auto scope_=context(v),minus=scalar(scope_,arena.real_(-1));
 				auto h=primitive(arena.at(outer.data),[v]),sum=arena.add(zero,zero,true);
-				auto negative=primitive(arena.lt(zero,zero),[v,scalar(ctx,zero)]);
-				return conditional(negative,primitive(sum,[scalar(ctx,arena.real_(1)),primitive(mul,[m,h])]),primitive(sum,[h,m]));
+				auto negative=primitive(arena.lt(zero,zero),[v,scalar(scope_,zero)]);
+				return conditional(negative,primitive(sum,[scalar(scope_,arena.real_(1)),primitive(mul,[minus,h])]),primitive(sum,[h,minus]));
 			}
-			auto below=endpoint(a),above=endpoint(b);
-			auto diff=d.decreasing?difference(below,above):difference(above,below);
-			auto out_=primitive(arena.mask(arena.boolean(true),zero),[comparison,diff]);
-			solution.output=out_.id;
-			return out_;
+			BoundTerm edge(bool bottom){
+				if(d.turning==uint.max) return limit(at(row.a),bottom);
+				auto v=limitTerms(d.coordinate,bottom);
+				if(bottom) d.lowerLimit=v.id; else d.upperLimit=v.id;
+				return primitiveAt(v);
+			}
+			d.minusOne=m.id;
+			solution.from=[whole?d.coordinate:nodes[w.a].a];
+			solution.interval=true; solution.piecewise=true;
+			BoundTerm result;
+			if(whole){
+				auto lo=edge(true),hi=edge(false);
+				result=d.decreasing?difference(lo,hi):difference(hi,lo);
+			}else if(d.half){
+				auto atInfinity=edge(d.below);
+				auto fn=d.turning==uint.max?at(row.a):inheritHint(at(row.a),lambda(primitiveAt(at(d.coordinate))));
+				auto endpoint=apply(fn,a);
+				result=d.below!=d.decreasing?difference(endpoint,atInfinity):difference(atInfinity,endpoint);
+			}else{
+				auto comparison=primitive(d.strictLower||d.strictUpper?arena.lt(zero,zero):arena.le(zero,zero),[a,b]);
+				auto below=primitiveAt(substituteArgument(at(d.coordinate),a)),above=primitiveAt(substituteArgument(at(d.coordinate),b));
+				auto diff=d.decreasing?difference(below,above):difference(above,below);
+				result=primitive(arena.mask(arena.boolean(true),zero),[comparison,diff]);
+			}
+			solution.bounds=d; solution.output=result.id;
+			return result;
 		}
 		BoundTerm integratePolynomials(BoundTerm t,out IntegralSolution solution){
 			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)) return BoundTerm.init;
@@ -10122,7 +10129,7 @@ final class Bindings{
 		}
 	}
 	// Evidence for a structural limit, case by case as the rule found it.
-	private string limitProof(LimitSolution s,SourceCertificates cert){
+	private string exactLimitProof(LimitSolution s,SourceCertificates cert){
 		auto end=s.bottom?"atBot":"atTop";
 		string literal(uint id,string value){ return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~value~" rfl)"; }
 		// An eventually constant term and its eventual value.
@@ -10217,7 +10224,7 @@ final class Bindings{
 			enforce(op.op==Op.add||op.op==Op.mul,"unsupported limit operation");
 			return "(Limit.Exact."~(op.op==Op.add?"add":"mul")~" "~visit(n.a,o.a)~" "~visit(n.b,o.b)~")";
 		}
-		return "Limit.Exact.sound "~visit(s.body,s.output);
+		return visit(s.body,s.output);
 	}
 	private string coordinateGridProof(CoordinateGrid c,SourceCertificates cert){
 		alias q=SourceCertificates.q;
@@ -10645,23 +10652,8 @@ final class Bindings{
 			enforce(directedCoordinate(d.coordinate,d.decreasing,evidence,cert),"missing coordinate orientation");
 			string eval(uint id){ return "("~name(id)~".eval ξ ρ)"; }
 			enum grid="Distribution.GraphFibre.Coordinates.Grid.";
-			if(d.guard==uint.max) return grid~"Directed.whole (f := "~functionAt(d.coordinate)~") "~to!string(d.decreasing)~
-				" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence;
-			string shape;
-			if(d.unit!=uint.max) shape="(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")";
-			else{
-				auto one="(congrArg (Value.mask _) (Numeric.calculate_real_one ξ n"~to!string(nodes[d.value].data)~" rfl))";
-				shape=d.nested?"(fun _ => (Distribution.StepSource.mask_mask _ _ _).trans "~one~")":"(fun _ => "~one~")";
-			}
-			auto extension="(fun z : Option ℝ => "~name(d.coordinate)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
-			if(d.half){
-				return grid~"Directed.ray (f := "~functionAt(d.coordinate)~") (w := "~functionAt(s.from[0])~") "~to!string(d.decreasing)~
-					" "~to!string(d.below)~" "~to!string(d.below?d.strictUpper:d.strictLower)~" "~eval(d.lower)~" "~eval(d.minusOne)~
-					" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~" "~shape;
-			}
-			string law="Directed.interval",change;
+			string change;
 			if(d.turning!=uint.max){
-				law="VariationChange.interval";
 				auto op=arena.view(arena.at(nodes[d.turning].data));
 				if(op.op==Op.pow&&op.value==2) change=" "~grid~"VariationChange.square";
 				else if(op.op==Op.pow) change=" ("~grid~"VariationChange.evenPower "~to!string(op.value)~" (of_decide_eq_true rfl) rfl)";
@@ -10671,7 +10663,27 @@ final class Bindings{
 						cert.closedProof(z,Rational(0))~" "~cert.closedProof(u,Rational(1))~" "~cert.closedProof(at(d.minusOne),Rational(-1))~")";
 				}
 			}
-			return grid~law~" (w := "~functionAt(s.from[0])~") "~extension~change~" "~
+			string edge(bool bottom){
+				auto e=bottom?d.lowerLimit:d.upperLimit;
+				return " "~eval(e)~" "~exactLimitProof(LimitSolution(d.coordinate,e,bottom),cert);
+			}
+			auto law=change.length?"VariationChange.":"Directed.";
+			if(d.guard==uint.max) return grid~law~"whole (f := "~functionAt(d.coordinate)~")"~change~" "~to!string(d.decreasing)~
+				" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~
+				(change.length?edge(true)~edge(false):"");
+			string shape;
+			if(d.unit!=uint.max) shape="(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")";
+			else{
+				auto one="(congrArg (Value.mask _) (Numeric.calculate_real_one ξ n"~to!string(nodes[d.value].data)~" rfl))";
+				shape=d.nested?"(fun _ => (Distribution.StepSource.mask_mask _ _ _).trans "~one~")":"(fun _ => "~one~")";
+			}
+			auto extension="(fun z : Option ℝ => "~name(d.coordinate)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
+			if(d.half){
+				return grid~law~"ray (f := "~functionAt(d.coordinate)~") (w := "~functionAt(s.from[0])~")"~change~" "~to!string(d.decreasing)~
+					" "~to!string(d.below)~" "~to!string(d.below?d.strictUpper:d.strictLower)~" "~eval(d.lower)~" "~eval(d.minusOne)~
+					" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~(change.length?edge(d.below):"")~" "~shape;
+			}
+			return grid~law~"interval (w := "~functionAt(s.from[0])~") "~extension~change~" "~
 				to!string(d.decreasing)~" "~to!string(d.swap)~" "~to!string(d.strictLower)~" "~to!string(d.strictUpper)~
 				" "~eval(d.lower)~" "~eval(d.upper)~" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~" "~shape;
 		}
@@ -11520,7 +11532,7 @@ final class Bindings{
 		string[] limitProofs=new string[result.limits.length];
 		foreach(i,s;result.limits){
 			auto c=new SourceCertificates("limit"~to!string(i)~"_",s.body);
-			limitProofs[i]=limitProof(s,c);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
+			limitProofs[i]="Limit.Exact.sound "~exactLimitProof(s,c);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
 		}
 		Table!(uint,string) squareWeights;
 		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionWeightedSquare&&p.left!=uint.max){
@@ -11639,6 +11651,8 @@ final class Bindings{
 			if(s.interval&&!s.pieces.length){
 				if(s.bounds.coordinate==uint.max||s.bounds.guard!=uint.max) stack~=[s.bounds.lower,s.bounds.upper];
 				if(!s.bounds.below) stack~=s.bounds.minusOne;
+				if(s.bounds.lowerLimit!=uint.max) stack~=s.bounds.lowerLimit;
+				if(s.bounds.upperLimit!=uint.max) stack~=s.bounds.upperLimit;
 			}
 			// The masks of a split weight are named by its certificate.
 			if(s.split!=uint.max) stack~=s.split;
