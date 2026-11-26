@@ -299,6 +299,19 @@ private Case[] cases(){
 	Case("ChangedCoordinateRoot","densityAtD(Λx. λ[sqrt(1+abs(x))],3)","ℝ","1/4"),
 	Case("ChangedCoordinateReciprocal","densityAtD(Λx. λ[(1+abs(x))⁻¹],-1)","ℝ","1/4"),
 	Case("ChangedCoordinateSinh","densityAtD(Λx. λ[sinh(abs(x-2))],2)","ℝ","undefined(ℝ)"),
+	Case("CauchyWhole","∫dx (1+x²)⁻¹·λ[x]","ℝ","π"),
+	Case("CauchyScaledAxis","∫dx (1+4*x²)⁻¹·λ[x]","ℝ","1/2·π"),
+	Case("CauchyTranslated","∫dx (1+(2*x-3)^2)⁻¹·λ[x]","ℝ","1/2·π"),
+	Case("CauchyIrrationalWidth","∫dx (2*x²+2*x+3)⁻¹·λ[x]","ℝ","1/5·sqrt(5)·π"),
+	Case("CauchyNegative","∫dx (-2*x²-2*x-3)⁻¹·λ[x]","ℝ","-1/5·sqrt(5)·π"),
+	Case("CauchyRational","∫dx ((x-1)^2+1/4)⁻¹·λ[x]","ℝ","2·π"),
+	Case("CauchyAtanWhole","∫dx λ[atan(x)]","ℝ","π"),
+	Case("CauchyGuard","λ(p:𝔹).∫dx [p]·(1+x²)⁻¹·λ[x]","𝔹→ℝ","λ(p:𝔹). [p]·π"),
+	Case("CauchyPole","∫dx (x²-1)⁻¹·λ[x]","ℝ"),
+	Case("CauchyTouch","∫dx (1-2*x+x²)⁻¹·λ[x]","ℝ"),
+	Case("CauchyQuartic","∫dx (1+x^4)⁻¹·λ[x]","ℝ"),
+	Case("CauchyAffine","∫dx (1+x)⁻¹·λ[x]","ℝ"),
+	Case("CauchyMeasure","Λx. (1+x²)⁻¹·λ[x]","Distribution(ℝ)","Λ(x:ℝ). ((x^2+1)⁻¹)·λ[x]"),
 	Case("AtanMeasure","Λx. λ[atan(x)]","Distribution(ℝ)","Λ(x:ℝ). ((x^2+1)⁻¹)·λ[x]"),
 	Case("AtanPoint","densityAtD(Λx. λ[atan(2*x+1)],0)","ℝ","1"),
 	Case("AtanAbs","densityAtD(Λx. λ[atan(abs(x))],1)","ℝ","1/2"),
@@ -1744,6 +1757,10 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
+		if(c.name.indexOf("Cauchy")==0){
+			bool finite=c.name!="CauchyPole"&&c.name!="CauchyTouch"&&c.name!="CauchyQuartic"&&c.name!="CauchyAffine"&&c.name!="CauchyMeasure";
+			enforce((certificate.indexOf("StepSource.cauchy_mass ")>=0)==finite,c.name);
+		}
 		if(c.name.indexOf("Atan")==0)
 			enforce(certificate.indexOf("ScalarChange.arctan")>=0&&text.indexOf("λ[atan(")<0,c.name);
 		if(c.name.indexOf("ObservedGuard")==0)

@@ -12,6 +12,7 @@ import QSym.DistributionCounting
 import QSym.DistributionPolynomialGrid
 import QSym.DistributionInterval
 import QSym.DistributionGaussian
+import QSym.DistributionCauchy
 import QSym.DistributionSymbolicPolynomial
 import QSym.DistributionGaussianSymbolic
 import QSym.DistributionCoordinateDomain

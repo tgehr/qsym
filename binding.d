@@ -174,8 +174,12 @@ private struct GaussianData{
 	// vanish: the result is under their mask.
 	bool maskScale,maskPolynomial;
 }
+private struct CauchyData{
+	Rational constant,halfLinear,leading,determinant;
+	uint sign=uint.max,radicand=uint.max;
+}
 private struct IntegralSolution{
-	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell;
+	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell; CauchyData cauchy;
 	// The summands of a sum of observations between bounds, each with its own.
 	IntegralSolution[] pieces;
 	// The summands of a weight with a factor under its sum: for each the
@@ -5490,6 +5494,27 @@ final class Bindings{
 			solution.bounds=d; solution.interval=true; solution.piecewise=true; solution.output=result.id;
 			return result;
 		}
+		// The reciprocal of a root-free quadratic integrates to signed π/√k,
+		// with k=ac-b² for ax²+2bx+c. Poles are kept in the source domain.
+		BoundTerm integrateCauchy(BoundTerm t,out IntegralSolution solution){
+			auto n=node(t);
+			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
+			auto id=solution.from[0];
+			Rational[] p;
+			if(!primitiveOp(id,Op.inv)||!axisPolynomial(nodes[id].a,p,0,true)) return BoundTerm.init;
+			while(p.length&&p[$-1].zero) p.length=p.length-1;
+			if(p.length!=3) return BoundTerm.init;
+			auto half=p[1]/Rational(2),k=p[2]*p[0]-half*half;
+			if(k<=Rational(0)||k.words>128) return BoundTerm.init;
+			auto ctx=context(t),zero=arena.real_(0);
+			auto sign=scalar(ctx,arena.real_(p[2]<Rational(0)?-1:1)),radicand=scalar(ctx,arena.real_(k));
+			auto root=primitive(arena.call(Builtin.sqrtR,[zero]),[radicand]);
+			auto pi=scalar(ctx,arena.call(Builtin.pi,[])),mul=arena.mul(zero,zero,true);
+			auto answer=primitive(mul,[primitive(mul,[sign,pi]),primitive(arena.inv(zero),[root])]);
+			solution.cauchy=CauchyData(p[0],half,p[2],k,sign.id,radicand.id);
+			solution.piecewise=true; solution.output=answer.id;
+			return answer;
+		}
 		// A rational polynomial times the exponential of a quadratic whose
 		// curvature is a term that does not mention the axis either. The
 		// moments of the polynomial relative to the Gaussian integral are a
@@ -5837,6 +5862,7 @@ final class Bindings{
 			if(!observed){ trial=IntegralSolution.init; observed=integratePolynomials(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integrateInterval(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integrateGaussian(inside,trial)!=BoundTerm.init; }
+			if(!observed){ trial=IntegralSolution.init; observed=integrateCauchy(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integratePieces(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=distributeMass(inside,trial,false)!=BoundTerm.init; }
 			if(!observed&&massGuard(inside,depth+1)==BoundTerm.init) return BoundTerm.init;
@@ -7938,6 +7964,7 @@ final class Bindings{
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePolynomials(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateInterval(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateGaussian(at(result.output),solution); }
+				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateCauchy(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePieces(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){
 					auto strict=unguardMass(at(result.output)),unguarded=strict==BoundTerm.init?massGuard(at(result.output),0):BoundTerm.init;
@@ -10226,6 +10253,12 @@ final class Bindings{
 			auto monomials=rowProof(d.moments,d.literals);
 			return "Distribution.DensityProgram.presentation_mass_gaussian_symbolic "~program~" "~list(d.moments)~" "~q(d.c2)~" "~q(d.vertex)~" "~q(d.width)~" "~evidence~" "~exponent~
 				" "~cert.closedProof(at(d.curvature),d.c2)~" rfl "~monomials~" "~sums(count)~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
+		}
+		if(s.cauchy.sign!=uint.max){
+			auto d=s.cauchy,source=piece(nodes[s.from[0]].a,cert.everywhere,"",Rational(0));
+			auto sign=d.leading<Rational(0)?Rational(-1):Rational(1);
+			return "Distribution.StepSource.cauchy_mass "~q(d.constant)~" "~q(d.halfLinear)~" "~q(d.leading)~" "~q(d.determinant)~" "~q(sign)~
+				" "~source.proof~" rfl "~cert.closedProof(at(d.sign),sign)~" rfl "~cert.closedProof(at(d.radicand),d.determinant);
 		}
 		if(s.gaussian){
 			// The density is a polynomial times the exponential of a quadratic
@@ -12843,7 +12876,7 @@ final class Bindings{
 				}
 				case BindingRule.distributionInterval,BindingRule.distributionIntegralAE:{
 					auto s=result.integrals[p.extra];enforce(s.piecewise||s.ae,"missing compositional integral certificate");
-					if(s.interval||s.gaussian){ proof=".ofEq (fun ξ ρ => let h := "~stepProofs[p.extra]~"; h)"; break; }
+					if(s.interval||s.gaussian||s.cauchy.sign!=uint.max){ proof=".ofEq (fun ξ ρ => let h := "~stepProofs[p.extra]~"; h)"; break; }
 					if(s.polynomial){ proof=".ofEq (fun ξ ρ => ("~stepProofs[p.extra]~").trans (Eq.symm "~stepOutputs[p.extra]~"))"; break; }
 					string rationalQ(Rational q){return q.denominator==1?"("~to!string(q.numerator)~" : ℚ)":"(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)";}
 					string tail="[";foreach(k,q;s.exceptions[1..$]){if(k)tail~=",";tail~=rationalQ(q);}tail~="]";
