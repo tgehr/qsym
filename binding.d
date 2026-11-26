@@ -546,8 +546,8 @@ final class Bindings{
 		return indexBuiltin(Builtin.castQR,indexBuiltin(Builtin.castZQ,i));
 	}
 	private struct RealSelection{
-		uint weight,query,offset=uint.max;
-		bool swapped,offsetFirst;
+		uint weight,query,axis,offset=uint.max,addend=uint.max;
+		bool swapped,offsetFirst,addendFirst;
 	}
 	// The equality tests the real image of an index. A finite natural
 	// range also permits translation by a captured natural offset.
@@ -558,33 +558,50 @@ final class Bindings{
 		if(!primitiveOp(row.a,Op.not_)||!primitiveOp(pred.a,Op.nonzero)) return false;
 		auto difference=nodes[pred.a].a;
 		if(!primitiveOp(difference,Op.add)) return false;
-		auto pair=nodes[difference];
-		if(!primitiveOp(pair.b,Op.mul)) return false;
-		auto neg=nodes[pair.b],sign=nodes[neg.a];
-		if(sign.op!=BoundOp.scalar||arena.at(sign.data)!=arena.real_(-1)) return false;
-		auto i=variable(context(at(root)),0);
-		foreach(swap;[false,true]){
-			auto expr=swap?pair.a:neg.b,bound=at(swap?neg.b:pair.a);
-			if(depends(bound,0)) continue;
-			if(expr!=realIndex(i).id){
-				if(!finite) continue;
-				bool builtin(uint id,Builtin op){
-					return nodes[id].op==BoundOp.primitive&&arena.view(arena.at(nodes[id].data)).op==Op.builtin&&
-						arena.view(arena.at(nodes[id].data)).value==op;
-				}
-				foreach(op;[Builtin.castQR,Builtin.castZQ,Builtin.castNZ]){
-					if(!builtin(expr,op)) return false;
-					expr=nodes[expr].a;
-				}
-				if(!builtin(expr,Builtin.addN)) return false;
-				auto add=nodes[expr];
-				s.offsetFirst=add.b==i.id;
-				if(!s.offsetFirst&&add.a!=i.id) return false;
-				auto offset=at(s.offsetFirst?add.a:add.b);
-				if(depends(offset,0)) return false;
-				s.offset=dropIndex(offset).id;
+		auto pair=nodes[difference],i=variable(context(at(root)),0);
+		bool matches(uint axis){
+			s.axis=axis; s.offset=uint.max; s.offsetFirst=false;
+			if(axis==realIndex(i).id) return true;
+			if(!finite) return false;
+			bool builtin(uint id,Builtin op){
+				auto n=nodes[id];
+				if(n.op!=BoundOp.primitive) return false;
+				auto v=arena.view(arena.at(n.data));
+				return v.op==Op.builtin&&v.value==op;
 			}
-			s.weight=row.b; s.query=dropIndex(bound).id; s.swapped=swap;
+			foreach(op;[Builtin.castQR,Builtin.castZQ,Builtin.castNZ]){
+				if(!builtin(axis,op)) return false;
+				axis=nodes[axis].a;
+			}
+			if(!builtin(axis,Builtin.addN)) return false;
+			auto add=nodes[axis];
+			s.offsetFirst=add.b==i.id;
+			if(!s.offsetFirst&&add.a!=i.id) return false;
+			auto offset=at(s.offsetFirst?add.a:add.b);
+			if(depends(offset,0)) return false;
+			s.offset=dropIndex(offset).id;
+			return true;
+		}
+		s.weight=row.b;
+		if(primitiveOp(pair.b,Op.mul)){
+			auto neg=nodes[pair.b],sign=nodes[neg.a];
+			if(sign.op==BoundOp.scalar&&arena.at(sign.data)==arena.real_(-1)){
+				foreach(swap;[false,true]){
+					auto axis=swap?pair.a:neg.b,bound=at(swap?neg.b:pair.a);
+					if(depends(bound,0)||!matches(axis)) continue;
+					s.query=dropIndex(bound).id; s.swapped=swap;
+					return true;
+				}
+			}
+		}
+		// Closed arithmetic may already have absorbed the minus sign.
+		// A plain addend on either side determines the opposite query.
+		foreach(first;[false,true]){
+			auto axis=first?pair.b:pair.a,term=at(first?pair.a:pair.b);
+			if(depends(term,0)||!matches(axis)) continue;
+			auto c=dropIndex(term),ctx=context(c);
+			s.query=primitive(arena.mul(arena.real_(0),arena.real_(0),true),[scalar(ctx,arena.real_(-1)),c]).id;
+			s.addend=c.id; s.addendFirst=first; s.swapped=true;
 			return true;
 		}
 		return false;
@@ -12813,22 +12830,29 @@ final class Bindings{
 					auto f="(fun (i : Option "~(ns?"ℕ":"ℤ")~") => "~name(sourceBody.b)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") i ρ))";
 					proof=".ofEq (fun ξ ρ => Summation.interval_convert"~(ns?"N":"Z")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(bounds.a)~".eval ξ ρ) ("~name(nodes[bounds.b].a)~".eval ξ ρ))"; break;
 				case BindingRule.sumRealIndex:{
-					if(n.op==BoundOp.finiteSum){
-						RealSelection s;
-						enforce(realSelection(at(n.a),true,s),"missing finite index equality");
-						auto f="(fun i : ℕ => "~name(s.weight)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some i) ρ))";
-						string value(uint id){ return " ("~name(id)~".eval ξ ρ)"; }
-						auto law=s.offset==uint.max?"range_real_N ":"range_shifted_real_N ";
-						proof=".ofEq (fun ξ ρ => Summation."~law~to!string(s.swapped)~(s.offset==uint.max?"":" "~to!string(s.offsetFirst))~
-							" "~f~value(s.query)~(s.offset==uint.max?"":value(s.offset))~value(n.b)~")"; break;
+					bool finite=n.op==BoundOp.finiteSum,natural=naturalIndex(n.a);
+					RealSelection s;
+					enforce(realSelection(at(n.a),finite,s),"missing real index equality");
+					auto sort=elementSort(types[n.type]),index=pool.view(type(at(n.a))).fields[0],ity=natural?"ℕ":"ℤ";
+					auto env="(Binding.Env.cons (a := "~leanType(index)~") (some i) ρ)";
+					string atIndex(uint id){ return name(id)~".eval ξ "~env; }
+					string value(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+					auto weight=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
+					auto f="(fun i : "~ity~" => "~atIndex(s.weight)~")",swap=to!string(s.swapped);
+					string law;
+					if(finite){
+						auto shift=s.offset!=uint.max;
+						law="Summation."~(shift?"range_shifted_real_N ":"range_real_N ")~swap~(shift?" "~to!string(s.offsetFirst):"")~
+							" "~f~" "~value(s.query)~(shift?" "~value(s.offset):"")~" "~value(n.b);
+					}else law="Summation.select_real_"~(natural?"N ":"Z ")~weight~
+						(sort==Sort.natural?" Summation.nat_weight_zero ":" norm_zero ")~swap~" "~f~" "~value(s.query);
+					if(s.addend!=uint.max){
+						auto observe=finite?"Summation.rangeValue (some v) "~value(n.b):"Summation.value "~weight~" (some v)";
+						auto eq="(funext (fun i : "~ity~" => Summation.mask_addend "~to!string(s.addendFirst)~
+							" ("~atIndex(s.axis)~") "~value(s.addend)~" ("~atIndex(s.weight)~")))";
+						law="Eq.trans (congrArg (fun v => "~observe~") "~eq~") ("~law~")";
 					}
-					auto resultApp=nodes[nodes[p.to].b],query=nodes[resultApp.b].a;
-					auto index=pool.view(type(at(n.a))).fields[0],sort=elementSort(types[n.type]);
-					bool natural=index==scalarType(Sort.natural);
-					auto f="(fun i : "~(natural?"ℕ":"ℤ")~" => "~name(nodes[resultApp.a].a)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") (some i) ρ))";
-					proof=".ofEq (fun ξ ρ => Summation.select_real_"~(natural?"N":"Z")~
-						(sort==Sort.natural?" (fun n : ℕ => (n : ℝ)) Summation.nat_weight_zero ":" norm norm_zero ")~
-						(p.extra?"true ":"false ")~f~" ("~name(query)~".eval ξ ρ))"; break;
+					proof=".ofEq (fun ξ ρ => "~law~")"; break;
 				}
 				case BindingRule.sumDelta,BindingRule.sumDeltaOffset:
 					auto out_=nodes[p.to],sort=elementSort(types[n.type]),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm",index=pool.view(type(at(n.a))).fields[0];

@@ -1869,6 +1869,18 @@ private Case[] cases(){
 	Case("VisitFibreMillion","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","1000000")~",1000001)","ℝ","1"),
 	Case("VisitFibreLast","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","1000000")~",1000000)","ℝ","undefined(ℝ)"),
 	Case("VisitFibreSymbolic","λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","k")~",2)","ℕ→ℝ","λ(k:{k:ℕ | k≤1}). (1:ℝ)"),
+	Case("IndexAddendLast","∑(i:ℕ). [i<1000000]·([((i+3):ℝ)=1000002]·(i:ℝ))","ℝ","999999"),
+	Case("IndexAddendOutside","∑(i:ℕ). [i<1000000]·([((i+3):ℝ)=1000003]·undefined(ℝ))","ℝ","0"),
+	Case("IndexAddendFraction","∑(i:ℕ). [i<1000000]·([((i+3):ℝ)=7/2]·undefined(ℝ))","ℝ","0"),
+	Case("IndexAddendZero","∑(i:ℕ). [i<1000000]·([((i+3):ℝ)=3]·(-7:ℝ))","ℝ","-7"),
+	Case("IndexAddendPositive","∑(i:ℕ). [i<1000000]·([((i:ℝ)+1)=0]·undefined(ℝ))","ℝ","0"),
+	Case("IndexAddendDependent","λ(y:ℝ). ∑(i:ℕ). [i<1000000]·([((i+3):ℝ)+y=0]·(i:ℝ))","ℝ→ℝ","λ(y:ℝ). ([floorN(-y-3)≤999999∧y+(floorN(-y-3)+3)=0]·floorN(-y-3):ℝ)"),
+	Case("IndexAddendFirst","λ(y:ℝ). ∑(i:ℕ). [i<1000000]·([y+((3+i):ℝ)=0]·(i:ℝ))","ℝ→ℝ","λ(y:ℝ). ([floorN(-y-3)≤999999∧y+(floorN(-y-3)+3)=0]·floorN(-y-3):ℝ)"),
+	Case("IndexAddendMissing","∑(i:ℕ). [i<0]·([((i:ℝ)+undefined(ℝ))=0]·undefined(ℝ))","ℝ","0"),
+	Case("IndexAddendRowHole","∑(i:ℕ). [i<1000000]·([((i+3):ℝ)=1000002]·undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("IndexAddendUnbounded","∑(i:ℤ). [(i:ℝ)=-7]·(i:ℝ)","ℝ","-7"),
+	Case("IndexAddendUnboundedNat","∑(i:ℕ). [(i:ℝ)=17]·(i:ℝ)","ℝ","17"),
+	Case("IndexAddendFunction","λ(f:ℕ→ℝ). ∑(i:ℕ). [i<1000000]·([((i+3):ℝ)=1000002]·f(i))","(ℕ→ℝ)→ℝ","λ(f:ℕ→ℝ). f(999999)"),
 	Case("RangeProbeBare","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([x=(i:ℝ)]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x)<n∧x=floorN(x))]"),
 	Case("RangeProbeShift","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([x=(i+3:ℝ)]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x-3)<n∧x=(floorN(x-3)+3))]"),
 	Case("RangeProbeFlipped","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([(3+i:ℝ)=x]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x-3)<n∧x=(floorN(x-3)+3))]"),
@@ -2210,6 +2222,10 @@ private void run(string directory){
 			bool uses=c.name!="ScalarAsymptoteLogisticRegular"&&c.name!="ScalarAsymptoteOpposite"&&
 				c.name!="ScalarAsymptoteOscillation"&&c.name!="ScalarAsymptoteOpaque"&&c.name!="ScalarAsymptoteMissing";
 			enforce((certificate.indexOf("Limit.Escapes.")>=0)==uses,c.name);
+		}
+		if(c.name.indexOf("IndexAddend")==0){
+			enforce(text.indexOf("∑")<0,c.name);
+			if(c.name!="IndexAddendMissing") enforce(certificate.indexOf("Summation.mask_addend ")>=0,c.name);
 		}
 		if(c.name.indexOf("RangeProbe")==0||c.name=="VisitFibreMillion"||c.name=="VisitFibreLast"||c.name=="VisitFibreSymbolic"){
 			enforce(text.indexOf("∑")<0,c.name);

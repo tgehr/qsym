@@ -151,4 +151,11 @@ theorem range_shifted_real_N (swap offFirst : Bool) (f : ℕ → Option α) (x :
     simpa only [shift, inv, Option.map_some] using
       range_real_index (fun i : ℕ => ((i+o : ℕ) : ℝ)) recover left swap f x n
 
+/-- Moving an independent addend to the other side of a real equality also
+preserves missing inputs and the laziness of the masked weight. -/
+theorem mask_addend {β : Type} [Zero β] (first : Bool) (i c : Option ℝ) (v : Option β) :
+    Value.mask (Value.not (Value.nonzero (if first then Value.add c i else Value.add i c))) v =
+      Value.mask (realMatch i (Value.mul (some ((-1 : ℤ) : ℝ)) c)) v := by
+  cases first <;> cases i <;> cases c <;> simp [realMatch, Value.add, Value.mul, _root_.add_comm]
+
 end QSym.Summation
