@@ -8,6 +8,11 @@ import std.stdio:writeln;
 
 private struct Case{ string name,source,type,expected; }
 private Case[] cases(){
+	string discountedAtoms(string k,string rate="1/2",string seed="zeroD(ℝ)",bool tailFirst=false){
+		auto tail="scaleD("~rate~",f(n sub 1))",atom="δ((n:ℝ))";
+		return "(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then "~seed~" else addD("~
+			(tailFirst?tail~","~atom:atom~","~tail)~"))("~k~")";
+	}
 	enum indexedAtoms="(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((n:ℝ)),f(n sub 1)))";
 	enum mixedLoop="(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d))";
 	enum retry="(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d)))";
@@ -1446,7 +1451,15 @@ private Case[] cases(){
 	Case("EmittingUnused","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else addD(undefined(Distribution(ℝ)),scaleD(undefined(ℝ),f(n sub 1))))(0))","ℝ","1"),
 	Case("EmittingMissing","defined(massD(weightD(λ(x:ℝ).x⁻¹,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((2:ℝ)) else addD(δ((0:ℝ)),scaleD(0,f(n sub 1))))(2))))","𝔹","false"),
 	Case("EmittingParameter","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((1:ℝ)),scaleD(r,f(n sub 1))))(k))","ℝ→ℕ→ℝ"),
-	Case("VaryingEmission","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((n:ℝ)),scaleD(1/2,f(n sub 1))))(k))","ℕ→ℝ"),
+	Case("VaryingEmission","λ(k:ℕ).massD("~discountedAtoms("k")~")","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·(2·2^k-2):ℝ)"),
+	Case("DiscountVisitFirst","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k")~"))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·((2·k-2)·2^k+2):ℝ)"),
+	Case("DiscountVisitFour","massD(weightD(λ(x:ℝ).x,"~discountedAtoms("4")~"))","ℝ","49/8"),
+	Case("DiscountVisitSquares","massD(weightD(λ(x:ℝ).x^2,"~discountedAtoms("4")~"))","ℝ","173/8"),
+	Case("DiscountVisitSigned","massD(weightD(λ(x:ℝ).x,"~discountedAtoms("4","-2/3","δ((3:ℝ))",true)~"))","ℝ","86/27"),
+	Case("DiscountVisitEmpty","massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~discountedAtoms("0")~"))","ℝ","0"),
+	Case("DiscountVisitHole","defined(massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~discountedAtoms("4")~")))","𝔹","false"),
+	Case("DiscountVisitHigher","λ(h:ℝ→ℝ).λ(k:ℕ).massD(weightD(h,"~discountedAtoms("k","1/2","δ((0:ℝ))")~"))","(ℝ→ℝ)→ℕ→ℝ"),
+	Case("DiscountVisitMissingIndex","defined(massD("~discountedAtoms("0 sub 1","-1")~"))","𝔹","false"),
 	Case("CapturedScale","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(k))","ℝ→ℕ→ℝ","λ(r:ℝ). λ(k:ℕ). [k≠0]·r^k+[k=0]"),
 	Case("CapturedScaleMoment","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x^2,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r⁻¹,f(n sub 1)))(k)))","ℝ→ℕ→ℝ","λ(r:ℝ). λ(k:ℕ). [k≠0]·(9·(r⁻¹)^k)+[k=0]·9"),
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
@@ -1569,8 +1582,8 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
-		if(c.name=="VaryingEmission")
-			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")<0,c.name~" index-dependent emission");
+		if(c.name=="VaryingEmission"||c.name.indexOf("DiscountVisit")==0)
+			enforce(certificate.indexOf("Distribution.observe_discounted_countdown ")>=0&&text.indexOf("μ")<0,c.name);
 		if(c.name.indexOf("CapturedScale")==0||c.name=="CountdownPartialRatioZero"||c.name=="CountdownPartialRatioOne")
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")

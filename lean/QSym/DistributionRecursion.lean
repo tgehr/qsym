@@ -262,6 +262,51 @@ theorem observe_indexed_countdown {α : Type} {o : Option (D α) → Option ℝ}
   | some n =>
     simpa [visit, g, Summation.rangeValue, Function2.apply, Functions.addN] using total n
 
+/-- Factor a nonzero rational scale out of an indexed countdown. Each
+visited row is tested, including rows with zero observed mass. -/
+theorem observe_discounted_countdown {α : Type} {o : Option (D α) → Option ℝ} (h : Atomic.Observation o)
+    (p : Recursion.Program ℕ (D α) (D α)) {fn : Option (ℕ → Option (D α))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b : Option (D α)) (e : Option ℕ → Option (D α))
+    (q inv : ℚ) (reciprocal : q * inv = 1) (r s : Option ℝ) (hr : r = some (q : ℝ))
+    (hi : s = some (inv : ℝ)) (swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let d := scaleValue r ((Functions.subN.apply (some n) (some 1)).bind g)
+       if swap then addValue d (e (some n)) else addValue (e (some n)) d))
+    (arg : Option ℕ) :
+    o (fn.bind (fun g => arg.bind g)) = Value.mul (Functions.powRN.apply r arg)
+      (Value.add (o b) (Summation.rangeValue (some (fun i =>
+        let k := Functions.addN.apply (some i) (some 1)
+        Value.mul (Functions.powRN.apply s k) (o (e k)))) arg)) := by
+  subst fn r s
+  let g := FixedPoint.value p.functional
+  let visit (i : ℕ) := Value.mul (some ((inv : ℝ)^(i+1))) (o (e (some (i+1))))
+  obtain ⟨h0, hs⟩ := countdown_equations p b (fun n tail =>
+    let d := scaleValue (some (q : ℝ)) tail
+    if swap then addValue d (e (some n)) else addValue (e (some n)) d) step
+  have rec (n : ℕ) : o (g (n+1)) = Value.add (o (e (some (n+1)))) (Value.mul (some (q : ℝ)) (o (g n))) :=
+    (congrArg o (hs n)).trans (observedEmission h swap _ _ _)
+  have cancel (n : ℕ) : (q : ℝ)^(n+1) * (inv : ℝ)^(n+1) = 1 := by
+    have hc : (q : ℝ) * (inv : ℝ) = 1 := by exact_mod_cast reciprocal
+    rw [← mul_pow, hc, one_pow]
+  have update (n : ℕ) (b a v : ℝ) :
+      v + q * ((q : ℝ)^n * (b+a)) = (q : ℝ)^(n+1) * (b + (a + (inv : ℝ)^(n+1) * v)) := by
+    calc
+      _ = (q : ℝ)^(n+1) * (b+a) + 1*v := by rw [pow_succ']; ring
+      _ = _ := by rw [← cancel n]; ring
+  have total (n : ℕ) : o (g n) = Value.mul (some ((q : ℝ)^n))
+      (Value.add (o b) (Summation.finite (Finset.range n) visit)) := by
+    induction n with
+    | zero => simpa [Summation.finite_empty, Value.add_zero_right, Value.mul_one_left] using congrArg o h0
+    | succ n ih =>
+      rw [rec, ih, Summation.range_succ]
+      cases o b <;> cases Summation.finite (Finset.range n) visit <;> dsimp only [visit] <;>
+        cases o (e (some (n+1))) <;> simp [Value.add, Value.mul, update]
+  cases arg with
+  | none => exact h.missing
+  | some n =>
+    simpa [visit, g, Summation.rangeValue, Function2.apply, Functions.addN, Functions.powRN] using total n
+
 theorem mass_scale_countdown {α : Type} (p : Recursion.Program ℕ (D α) (D α))
     {fn : Option (ℕ → Option (D α))} (hf : fn = some (FixedPoint.value p.functional))
     (base : Option (D α)) (r : Option ℝ) {c : ℝ} (hr : r = some c)

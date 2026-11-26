@@ -3029,18 +3029,27 @@ final class Bindings{
 		foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
 		auto seed=observedMass(substitute(base,ctx,env),operations);
 		auto arg=at(application.b),zero=arena.real_(0);
-		Number unit;
-		bool unitScale=bare||nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),unit)&&unit.one;
+		Number rate;
+		bool literalScale=!bare&&nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),rate);
+		bool unitScale=bare||literalScale&&rate.one;
 		if(emission!=uint.max&&depends(at(emission),0)){
-			if(!unitScale) return BoundTerm.init;
+			if(!unitScale&&(!literalScale||rate.zero)) return BoundTerm.init;
 			auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
 			auto oneN=arena.natural_(1);
 			auto successor=primitive(arena.call(Builtin.addN,[oneN,oneN]),[i,scalar(inner,oneN)]);
 			BoundTerm[] rowEnv=[successor,bottom(inner,type(f))];
 			foreach(j;0..depth(ctx)) rowEnv~=variable(inner,j+1);
 			auto row=observedMass(substitute(at(emission),inner,rowEnv),operations,true);
-			auto visits=finiteSum(hint(lambda(row),"i"),arg);
-			return primitive(arena.add(zero,zero,true),[seed,visits]);
+			BoundTerm total(BoundTerm summand){
+				auto visits=finiteSum(hint(lambda(summand),"i"),arg);
+				return primitive(arena.add(zero,zero,true),[seed,visits]);
+			}
+			if(unitScale) return total(row);
+			auto power=arena.call(Builtin.powRN,[zero,oneN]),mul=arena.mul(zero,zero,true);
+			auto inverse=scalar(inner,arena.real_(Rational(1)/rate.re));
+			row=primitive(mul,[primitive(power,[inverse,successor]),row]);
+			auto ratio=scalar(ctx,arena.at(nodes[scale.a].data));
+			return primitive(mul,[primitive(power,[ratio,arg]),total(row)]);
 		}
 		if(emission!=uint.max&&unitScale){
 			auto visits=observedMass(substitute(at(emission),ctx,env),operations);
@@ -12291,22 +12300,31 @@ final class Bindings{
 					if(emitting&&!partial){
 						bool swapped=depends(at(step.a),1);
 						auto tail=nodes[swapped?step.a:step.b];
+						auto emission=swapped?step.b:step.a;
+						bool indexed=depends(at(emission),0);
+						bool discounted=indexed&&primitiveOp(p.to,Op.mul);
+						auto total=discounted?nodes[target.b]:target;
 						string factor="(some 1) rfl false";
-						if(tail.op==BoundOp.distributionScale){
+						if(discounted){
+							auto sum=nodes[total.b],row=nodes[nodes[sum.a].a],inverse=nodes[row.a].a;
+							auto r=nodes[tail.a].data,s=nodes[inverse].data; Number rate;
+							enforce(literalNumber(arena.at(r),rate),"missing indexed countdown scale");
+							auto q=SourceCertificates.q(rate.re),inv=SourceCertificates.q(arena.number(arena.at(s)).re);
+							auto raw="n"~to!string(r),reciprocal="n"~to!string(s);
+							factor=q~" "~inv~" (of_decide_eq_true rfl) ("~raw~".eval ξ) ("~reciprocal~".eval ξ) (Numeric.calculate_sound ξ "~raw~" "~q~" rfl) (Numeric.calculate_sound ξ "~reciprocal~" "~inv~" rfl)";
+						}else if(tail.op==BoundOp.distributionScale){
 							auto id=to!string(nodes[tail.a].data);
 							factor="(n"~id~".eval ξ) (Numeric.calculate_real_one ξ n"~id~" rfl) true";
 						}
-						auto emission=swapped?step.b:step.a;
-						bool indexed=depends(at(emission),0);
 						string visit;
 						if(indexed) visit="(fun (u : Option ℕ) => "~name(emission)~".eval ξ (Binding.Env.cons (a := .scalar .natural) u (Binding.Env.cons (a := "~leanType(type(at(call.a)))~") none ρ)))";
 						else{
 							auto mask=nodes[target.b],amount=nodes[mask.b];
 							visit="("~name(observedInput(amount.b))~".eval ξ ρ)";
 						}
-						auto law=indexed?"observe_indexed_countdown":"observe_unit_countdown";
+						auto law=discounted?"observe_discounted_countdown":indexed?"observe_indexed_countdown":"observe_unit_countdown";
 						proof=".ofEq (fun ξ ρ => Distribution."~law~" "~massObserver(ops,false)~" (rec"~f~") (fixed"~f~") ("~
-							name(observedInput(target.a))~".eval ξ ρ) "~visit~" "~factor~" "~
+							name(observedInput(total.a))~".eval ξ ρ) "~visit~" "~factor~" "~
 							(swapped?"true":"false")~" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))";
 						break;
 					}

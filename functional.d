@@ -838,18 +838,41 @@ struct FunctionSyntax{
 				default:assert(0);
 			}
 			auto printer=scalar; printer.variables=printer.variables.dup; Table!(uint,uint) memo;
+			// A range sum reparses from its masked, unbounded spelling. This can
+			// reverse its position in the scalar syntax tree. Allocate its
+			// printing variable after the other operands, in either spelling.
+			struct SumOperand{ uint id; string text; Sort sort; }
+			SumOperand[] sums;
+			Table!(uint,bool) visited;
+			void allocate(BoundTerm x){
+				if(visited.get(x.id,false)) return;
+				visited.set(x.id,true);
+				auto v=b.node(x);
+				switch(v.op){
+					case BoundOp.scalar: memo.set(x.id,v.data); return;
+					case BoundOp.primitive:
+						allocate(b.at(v.a)); if(v.b!=uint.max) allocate(b.at(v.b)); return;
+					default:break;
+				}
+				Sort sort; enforce(scalarSort(b.type(x),sort),"non-scalar primitive argument");
+				auto name=v.op==BoundOp.variable?locals[v.data]:v.op==BoundOp.apply?render(x,locals,depth+1):"("~render(x,locals,depth+1)~")";
+				if(v.op==BoundOp.finiteSum||v.op==BoundOp.summation){
+					sums~=SumOperand(x.id,name,sort);
+				}else{
+					memo.set(x.id,a.variable(sort,cast(uint)printer.variables.length).id); printer.variables~=Parameter(name,sort);
+				}
+			}
+			allocate(t);
+			import std.algorithm:sort;
+			sort!((x,y)=>x.text<y.text)(sums);
+			foreach(s;sums){
+				memo.set(s.id,a.variable(s.sort,cast(uint)printer.variables.length).id);
+				printer.variables~=Parameter(s.text,s.sort);
+			}
 			Term flatten(BoundTerm x){
 				auto found=memo.get(x.id,uint.max); if(found!=uint.max) return a.at(found);
-				auto v=b.node(x); Term r;
-				if(v.op==BoundOp.scalar) r=a.at(v.data);
-				else if(v.op==BoundOp.primitive){
-					Term[] args=[flatten(b.at(v.a))]; if(v.b!=uint.max) args~=flatten(b.at(v.b));
-					r=a.viewRebuild(a.at(v.data),args,true);
-				}else{
-					Sort sort; enforce(scalarSort(b.type(x),sort),"non-scalar primitive argument");
-					auto name=v.op==BoundOp.variable?locals[v.data]:v.op==BoundOp.apply?render(x,locals,depth+1):"("~render(x,locals,depth+1)~")";
-					r=a.variable(sort,cast(uint)printer.variables.length); printer.variables~=Parameter(name,sort);
-				}
+				auto v=b.node(x); Term[] args=[flatten(b.at(v.a))]; if(v.b!=uint.max) args~=flatten(b.at(v.b));
+				auto r=a.viewRebuild(a.at(v.data),args,true);
 				memo.set(x.id,r.id); return r;
 			}
 			auto flat=flatten(t),text=printer.format(a,flat);
