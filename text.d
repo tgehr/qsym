@@ -78,7 +78,7 @@ struct Syntax{
 	/// Prints without scalar injections. Reparse and simplify to recover the
 	/// normal form; the spelling need not retain a redundant original sort.
 	string format(Arena a,Term root){
-		struct Piece{ string text; uint precedence=100; bool negative,iverson; string indicatorConjunct; }
+		struct Piece{ string text; uint precedence=100; bool negative,iverson; string indicatorConjunct; bool liftedProduct,coefficient,lowerVariable; }
 		Piece[] memo=new Piece[a.length];
 		bool[] symbolic=new bool[a.length];
 		string render(Piece p,uint precedence=0,bool magnitude=false){
@@ -122,18 +122,58 @@ struct Syntax{
 			Piece l,r; pair(x,y,l,r);
 			return Piece(render(l,51)~relation~render(r,51),50);
 		}
+		bool exactProduct(Node v){
+			return v.op==Op.builtin&&(v.value==Builtin.mulN||v.value==Builtin.mulZ||v.value==Builtin.mulQ);
+		}
+		// Injections preserve strict multiplication. The pretty syntax elides
+		// them, so order these factors independently of the lower-sort groups
+		// that the parser happens to build.
+		Piece mixedProduct(Node n){
+			struct Factor{ uint group; Piece piece; }
+			Factor[] factors; uint[] pending=[n.a,n.b]; bool negative; size_t work;
+			while(pending.length){
+				// Shared products of units can have exponentially many leaves.
+				if(++work>4096) return Piece.init;
+				auto id=pending[$-1]; --pending.length;
+				auto t=uncast(id),v=a.view(t);
+				if(exactProduct(v)){ pending~=[v.a,v.b]; continue; }
+				auto p=memo[id]; if(p.iverson) return Piece.init;
+				negative=negative!=p.negative;
+				if(a.isNumber(t)&&(a.number(t).one||(-a.number(t)).one)) continue;
+				auto group=a.isNumber(t)?0u:v.op==Op.variable?1u:v.op==Op.builtin&&v.value==Builtin.invQ?2u:3u;
+				factors~=Factor(group,p);
+				enforce(factors.length<=100_000,"formatted expression has too many repeated operands");
+			}
+			sort!((x,y)=>x.group==y.group?x.piece.text<y.piece.text:x.group<y.group)(factors);
+			import std.array:appender;
+			auto out_=appender!string();
+			foreach(i,f;factors){
+				if(i) out_.put("·");
+				out_.put(render(f.piece,i?71:70,true));
+				enforce(out_.data.length<=1_000_000,"formatted expression exceeds one million bytes");
+			}
+			if(!factors.length) return Piece("1",100,negative);
+			if(factors.length==1){ auto f=factors[0].piece; f.negative=negative; return f; }
+			return Piece(out_.data,70,negative,false,"",true);
+		}
 		Piece product(Node n){
 			// [p]·x denotes a non-strict mask, so a strict product needs an explicit call.
 			if(memo[n.a].iverson||memo[n.b].iverson)
 				return Piece("mul"~suffix(n.sort)~"("~arg(n.a)~","~arg(n.b)~")");
 			auto l=memo[n.a],r=memo[n.b];
+			bool coefficient=l.coefficient||r.coefficient,lower=l.lowerVariable||r.lowerVariable;
+			if(l.liftedProduct||r.liftedProduct||coefficient&&lower&&
+				(exactProduct(a.view(uncast(n.a)))||exactProduct(a.view(uncast(n.b))))){
+				auto canonical=mixedProduct(n);
+				if(canonical.text.length){ canonical.coefficient=coefficient; canonical.lowerVariable=lower; return canonical; }
+			}
 			bool unit(uint id){ return n.sort!=Sort.natural&&a.isNumber(a.at(id))&&(a.number(a.at(id)).one||(-a.number(a.at(id))).one); }
 			if(unit(n.a)){ r.negative=(-a.number(a.at(n.a))).one!=r.negative; return r; }
 			if(unit(n.b)){ l.negative=l.negative!=(-a.number(a.at(n.b))).one; return l; }
 			pair(n.a,n.b,l,r);
 			auto v=a.view(a.at(n.b));
 			auto strict=v.op==Op.mul||v.op==Op.builtin&&(v.value==Builtin.mulN||v.value==Builtin.mulZ||v.value==Builtin.mulQ);
-			return Piece(render(l,70,true)~"·"~render(r,strict?70:71,true),70,l.negative!=r.negative);
+			return Piece(render(l,70,true)~"·"~render(r,strict?70:71,true),70,l.negative!=r.negative,false,"",false,coefficient,lower);
 		}
 		Operand[] ordered(Term t,Op op){
 			auto es=a.multisetTerms(a.multiset(t,op));
@@ -238,7 +278,7 @@ struct Syntax{
 			final switch(n.op){
 				case Op.realLit,Op.complexLit,Op.numberLit:
 					auto z=a.number(t);
-					if(z.im.zero) p=rational(z.re);
+					if(z.im.zero){ p=rational(z.re); p.coefficient=z.re.integral&&!z.one&&!(-z).one; }
 					else{
 						auto negative=z.re<Rational(0)||z.re.zero&&z.im<Rational(0); if(negative) z=-z;
 						auto im=z.im==Rational(1)?"ⅈ":z.im==Rational(-1)?"-ⅈ":z.im.toString~"·ⅈ";
@@ -275,7 +315,10 @@ struct Syntax{
 					break;
 				case Op.builtin:
 					auto f=cast(Builtin)n.value,info=builtinInfo(f),code=info.code;
-					if(conversion(n)){ p=memo[n.a]; }
+					if(conversion(n)){
+						p=memo[n.a]; auto base=a.view(uncast(n.a));
+						p.liftedProduct|=exactProduct(base); p.lowerVariable|=base.op==Op.variable;
+					}
 					else if(code=="pi") p.text="π";
 					else if(code=="e") p.text="e";
 					else if(f==Builtin.expR&&a.isNumber(a.at(n.a))&&a.number(a.at(n.a)).one) p.text="e";
