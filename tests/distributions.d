@@ -1124,6 +1124,11 @@ private Case[] cases(){
 	Case("RetryObservationMissingProbe","massD(weightD(undefined(ℝ→ℝ),"~retry~"))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationMissingKernel","massD(bindD("~retry~",undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationContinuousOutput","massD(bindD("~retry~",λ(x:ℝ).Λy. [0≤y≤1]·λ[y]))","ℝ","1"),
+	Case("WeightEmptyPartialBody","massD(weightD(λ(x:ℝ).undefined(ℝ),zeroD(ℝ)))","ℝ","0"),
+	Case("WeightEmptyReciprocal","massD(weightD(λ(x:ℝ).1/x,zeroD(ℝ)))","ℝ","0"),
+	Case("WeightEmptyMissing","massD(weightD(undefined(ℝ→ℝ),zeroD(ℝ)))","ℝ","undefined(ℝ)"),
+	Case("WeightEmptyFunction","weightD(λ(k:ℕ→ℕ).undefined(ℝ),zeroD(ℕ→ℕ))","Distribution(ℕ→ℕ)","Λ(x:ℕ→ℕ). 0"),
+	Case("WeightEmptyLoop","massD(weightD(λ(x:ℝ).undefined(ℝ),μ(d:Distribution(ℝ)).addD(d,d)))","ℝ","0"),
 	Case("AffineBodyFair","μ(d:Distribution(ℝ)).scaleD(1/2,addD(δ(3),d))","Distribution(ℝ)","δ((3:ℝ))"),
 	Case("AffineBodyWeight","μ(d:Distribution(ℝ)).Λx. 1/2·(δ(3)[x]+d[x])","Distribution(ℝ)","δ((3:ℝ))"),
 	Case("AffineBodyConstant","μ(d:Distribution(ℝ)).δ(5)","Distribution(ℝ)","δ((5:ℝ))"),
@@ -1219,6 +1224,7 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name.indexOf("WeightEmpty")==0&&c.name!="WeightEmptyMissing") enforce(certificate.indexOf("Distribution.weight_zeroValue")>=0,c.name);
 		if(c.name.indexOf("AffineBody")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_affine")>=0,c.name);
 		if(c.name.indexOf("RetryVisits")==0){
 			if(c.name=="RetryVisitsEmpty") enforce(certificate.indexOf("Atomic.retry_empty")>=0,c.name);

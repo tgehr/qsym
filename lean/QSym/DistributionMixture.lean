@@ -71,6 +71,12 @@ theorem weight_scaleValue {α : Type} (f : Option (α → Option ℝ)) (r : Opti
     | none => rfl
     | some r => cases d <;> rfl
 
+/-- An empty distribution visits no outcome. The weight function itself must
+be present, but its body is never evaluated. -/
+theorem weight_zeroValue {α : Type} (f : Option (α → Option ℝ)) :
+    weightValue f zeroValue = f.bind (fun _ => zeroValue) := by
+  cases f <;> rfl
+
 /-- Left identity of composition, including a missing atom or kernel. -/
 theorem bind_diracValue {α β : Type} (a : Option α) (k : Option (α → Option (D β))) :
     bindValue (diracValue a) k = k.bind (fun g => a.bind g) := by
