@@ -836,6 +836,7 @@ elab "qsym_imaginary_argument" : tactic => do
 
 macro "qsym_rule" : tactic => `(tactic| (
   first
+  | solve | qsym_exact_scalar
   | solve | qsym_imaginary_argument
   | solve | qsym_distribution
   | solve | apply Value.refines_of_eq; apply Value.powerR_add_pos; assumption
