@@ -158,6 +158,7 @@ private struct IntervalData{
 	// it may be defined without being integrable.
 	bool direct;
 	IntervalTerm[] terms;
+	uint coordinate=uint.max; bool decreasing;
 }
 // A Gaussian integral. With `symbolic` the constant and linear coefficients of
 // the exponent are terms: `vertex` is `-1/(4·c₂)`, `moments` is the polynomial
@@ -1502,11 +1503,14 @@ final class Bindings{
 		}
 		return visit(term);
 	}
-	BoundTerm beta(BoundTerm body,BoundTerm argument){
-		auto target=context(argument); enforce(context(body)==push(target,type(argument)),"beta context mismatch");
+	private BoundTerm substituteArgument(BoundTerm body,BoundTerm argument){
+		auto target=context(argument); enforce(context(body)==push(target,type(argument)),"argument context mismatch");
 		BoundTerm[] values=[argument];
 		foreach(i;0..contexts[target.index].length) values~=variable(target,i);
-		return sequence(argument,substitute(body,target,values));
+		return substitute(body,target,values);
+	}
+	BoundTerm beta(BoundTerm body,BoundTerm argument){
+		return sequence(argument,substituteArgument(body,argument));
 	}
 	private bool totalScalar(BoundTerm t){
 		auto n=node(t); if(n.op!=BoundOp.scalar) return false;
@@ -1547,6 +1551,44 @@ final class Bindings{
 		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument); if(y==Term.init) return Term.init; args~=y; }
 		return arena.viewRebuild(arena.at(n.data),args,true);
 	}
+	// A real axis interval shared by density and coordinate observations.
+	private struct AxisBounds{ uint lower,upper,first,second,around=uint.max; }
+	private bool intervalMask(uint id,ref IntervalData d,out AxisBounds bounds){
+		bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
+		bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
+		auto body=nodes[id];
+		// The domain of a value that may be missing is a guard around the mask.
+		if(body.op==BoundOp.guard){ bounds.around=body.a; body=nodes[body.b]; if(!isOp(body,Op.mask)) return false; }
+		if(call(body,Builtin.castQR)&&call(nodes[body.a],Builtin.castZQ)&&call(nodes[nodes[body.a].a],Builtin.castNZ)){
+			auto bracket=nodes[nodes[nodes[body.a].a].a];
+			if(!isOp(bracket,Op.mask)||nodes[bracket.b].op!=BoundOp.scalar||arena.at(nodes[bracket.b].data)!=arena.natural_(1)) return false;
+			d.guard=bracket.a; d.unit=bracket.b;
+		}else if(isOp(body,Op.mask)){ d.guard=body.a; d.value=body.b; }
+		else return false;
+		// Below a binder the two guards stay nested masks: their conjunction.
+		// A single bound is a half-line.
+		auto first=d.guard; uint second=uint.max;
+		if(isOp(nodes[d.guard],Op.and_)){ first=nodes[d.guard].a; second=nodes[d.guard].b; }
+		else if(d.unit==uint.max&&isOp(nodes[d.value],Op.mask)){ d.nested=true; second=nodes[d.value].a; d.value=nodes[d.value].b; }
+		else d.half=true;
+		bool bound(uint id,out bool lower,out bool strict,out uint term){
+			auto c=nodes[id]; if(!isOp(c,Op.le)&&!isOp(c,Op.lt)) return false;
+			strict=isOp(c,Op.lt);
+			bool axis(uint i){auto v=nodes[i];return v.op==BoundOp.variable&&v.data==0;}
+			if(axis(c.b)&&!depends(at(c.a),0)){ lower=true; term=c.a; return true; }
+			if(axis(c.a)&&!depends(at(c.b),0)){ term=c.b; return true; }
+			return false;
+		}
+		bool lower1,strict1,lower2,strict2; uint term1,term2;
+		if(!bound(first,lower1,strict1,term1)) return false;
+		if(d.half){ d.below=!lower1; term2=term1; }
+		else if(!bound(second,lower2,strict2,term2)||lower1==lower2) return false;
+		d.swap=!lower1; d.strictLower=lower1?strict1:strict2; d.strictUpper=lower1?strict2:strict1;
+		bounds.first=first; bounds.second=second;
+		bounds.lower=lower1?term1:term2; bounds.upper=lower1?term2:term1;
+		return true;
+	}
+
 	// Match the affine source certificate. A product needs a syntactically
 	// constant side so the evaluation of its multiplier is closed.
 	private bool affineBody(uint id,out Rational a,out Rational b){
@@ -2253,6 +2295,53 @@ final class Bindings{
 		return primitive(arena.inv(zero),[den]);
 	}
 
+	// Check smoothness and one orientation on the source. Reuse the same
+	// traversal when exporting the proof for the original coordinate lambda.
+	private bool directedCoordinate(uint body,bool down,out string proof,SourceCertificates cert=null){
+		enum grid="Distribution.GraphFibre.Coordinates.Grid.";
+		struct Evidence{ bool found; string term; }
+		Evidence[uint] cache;
+		auto dir=down?"true":"false";
+		Evidence visit(uint id,uint depth){
+			if(depth>64) return Evidence.init;
+			if(auto old=id in cache) return *old;
+			cache[id]=Evidence.init;
+			auto n=nodes[id]; string law,args;
+			Rational a,b;
+			if(affineBody(id,a,b)||n.op==BoundOp.scalar&&arena.isNumber(arena.at(n.data))){
+				if(down?a>Rational(0):a<Rational(0)) return Evidence.init;
+				law="affine";
+				if(cert !is null) args=dir~" "~cert.affineProof(id).proof~" rfl";
+			}else if(n.op==BoundOp.primitive){
+				auto op=arena.view(arena.at(n.data)),change=gridChange(id);
+				if(change==CoordinateChange.exp||change==CoordinateChange.sinh||
+					change==CoordinateChange.arsinh||change==CoordinateChange.arctan){
+					law="change";
+					if(cert !is null){
+						auto tag=to!string(change);
+						args=grid~"ScalarChange."~tag~" Real."~tag~"_strictMono.monotone ";
+					}
+				}else if(op.op==Op.pow&&op.value%2){
+					law="oddPower";
+					if(cert !is null) args=to!string(op.value)~" rfl ";
+				}else if(op.op==Op.add) law="add";
+				else return Evidence.init;
+				auto l=visit(n.a,depth+1);
+				if(!l.found) return Evidence.init;
+				args~=l.term;
+				if(op.op==Op.add){
+					auto r=visit(n.b,depth+1);
+					if(!r.found) return Evidence.init;
+					args~=" "~r.term;
+				}
+			}else return Evidence.init;
+			Evidence e=Evidence(true);
+			if(cert !is null) e.term=cert.save(grid~"Directed "~dir~" "~cert.functionAt(id),
+				"("~grid~"Directed."~law~" "~args~")");
+			return cache[id]=e;
+		}
+		auto e=visit(body,0); proof=e.term; return e.found;
+	}
 	// Construct a signed derivative. Replay the identical traversal when
 	// emitting evidence so every accepted operation has a checked chain rule.
 	private BoundTerm smoothSlope(BoundTerm body,out string witness,SourceCertificates cert=null){
@@ -4689,6 +4778,34 @@ final class Bindings{
 			}
 			return true;
 		}
+		BoundTerm integrateCoordinateInterval(BoundTerm t,out IntegralSolution solution){
+			auto w=nodes[node(t).a];
+			if(w.op!=BoundOp.distributionWeight||nodes[w.a].op!=BoundOp.lambda||
+				nodes[w.b].op!=BoundOp.distributionInverseCover) return BoundTerm.init;
+			auto row=nodes[nodes[w.b].a];
+			if(row.op!=BoundOp.vectorCons||nodes[row.b].op!=BoundOp.vectorNil||nodes[row.a].op!=BoundOp.lambda)
+				return BoundTerm.init;
+			IntervalData d; AxisBounds bounds;
+			if(!intervalMask(nodes[w.a].a,d,bounds)||d.half||bounds.around!=uint.max) return BoundTerm.init;
+			if(d.unit==uint.max&&(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
+				return BoundTerm.init;
+			d.coordinate=nodes[row.a].a; string evidence;
+			if(!directedCoordinate(d.coordinate,false,evidence)){
+				if(!directedCoordinate(d.coordinate,true,evidence)) return BoundTerm.init;
+				d.decreasing=true;
+			}
+			auto a=dropIndex(at(bounds.lower)),b=dropIndex(at(bounds.upper)),ctx=context(t),zero=arena.real_(0);
+			auto m=scalar(ctx,arena.real_(-1));
+			auto comparison=primitive(d.strictLower||d.strictUpper?arena.lt(zero,zero):arena.le(zero,zero),[a,b]);
+			auto body=at(d.coordinate),below=substituteArgument(body,a),above=substituteArgument(body,b);
+			auto neg=primitive(arena.mul(zero,zero,true),[m,d.decreasing?above:below]);
+			auto diff=primitive(arena.add(zero,zero,true),[d.decreasing?below:above,neg]);
+			auto out_=primitive(arena.mask(arena.boolean(true),zero),[comparison,diff]);
+			d.lower=a.id; d.upper=b.id; d.minusOne=m.id;
+			solution.from=[nodes[w.a].a]; solution.bounds=d;
+			solution.interval=true; solution.piecewise=true; solution.output=out_.id;
+			return out_;
+		}
 		BoundTerm integratePolynomials(BoundTerm t,out IntegralSolution solution){
 			auto n=node(t); if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)) return BoundTerm.init;
 			PolynomialGrid grid; if(!polynomialGrid(solution.from,grid,true)) return BoundTerm.init;
@@ -4717,35 +4834,8 @@ final class Bindings{
 			else if(!densityBodies(n.a,solution.from)||!solution.from.length) return BoundTerm.init;
 			auto ctx=context(t),inner=context(at(solution.from[0])); IntervalData d;
 			bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
-			bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
-			auto body=nodes[solution.from[0]]; uint around=uint.max;
-			// The domain of a value that may be missing is a guard around the mask.
-			if(body.op==BoundOp.guard){ around=body.a; body=nodes[body.b]; if(!isOp(body,Op.mask)) return BoundTerm.init; }
-			if(call(body,Builtin.castQR)&&call(nodes[body.a],Builtin.castZQ)&&call(nodes[nodes[body.a].a],Builtin.castNZ)){
-				auto bracket=nodes[nodes[nodes[body.a].a].a];
-				if(!isOp(bracket,Op.mask)||nodes[bracket.b].op!=BoundOp.scalar||arena.at(nodes[bracket.b].data)!=arena.natural_(1)) return BoundTerm.init;
-				d.guard=bracket.a; d.unit=bracket.b;
-			}else if(isOp(body,Op.mask)){ d.guard=body.a; d.value=body.b; }
-			else return BoundTerm.init;
-			// Below a binder the two guards stay nested masks: their conjunction.
-			// A single bound is a half-line.
-			uint first=d.guard,second=uint.max;
-			if(isOp(nodes[d.guard],Op.and_)){ first=nodes[d.guard].a; second=nodes[d.guard].b; }
-			else if(d.unit==uint.max&&isOp(nodes[d.value],Op.mask)){ d.nested=true; second=nodes[d.value].a; d.value=nodes[d.value].b; }
-			else d.half=true;
-			bool bound(uint id,out bool lower,out bool strict,out uint term){
-				auto c=nodes[id]; if(!isOp(c,Op.le)&&!isOp(c,Op.lt)) return false;
-				strict=isOp(c,Op.lt);
-				bool axis(uint i){auto v=nodes[i];return v.op==BoundOp.variable&&v.data==0;}
-				if(axis(c.b)&&!depends(at(c.a),0)){ lower=true; term=c.a; return true; }
-				if(axis(c.a)&&!depends(at(c.b),0)){ term=c.b; return true; }
-				return false;
-			}
-			bool lower1,strict1,lower2,strict2; uint term1,term2;
-			if(!bound(first,lower1,strict1,term1)) return BoundTerm.init;
-			if(d.half){ d.below=!lower1; term2=term1; }
-			else if(!bound(second,lower2,strict2,term2)||lower1==lower2) return BoundTerm.init;
-			d.swap=!lower1; d.strictLower=lower1?strict1:strict2; d.strictUpper=lower1?strict2:strict1;
+			AxisBounds bounds;
+			if(!intervalMask(solution.from[0],d,bounds)) return BoundTerm.init;
 			// A value that may be missing where a term that does not mention the
 			// axis is: it is under a strict guard of its domain, or the mask is
 			// under the guard of its own domain, which holds wherever one of its
@@ -4779,11 +4869,11 @@ final class Bindings{
 				if(!depends(at(both.a),0)&&(nonzeroAxis(both.b)||positiveAxis(both.b))){ d.axis=both.b; d.domain=both.a; d.both=rest; d.joined=2; return true; }
 				return false;
 			}
-			if(around!=uint.max){
+			if(bounds.around!=uint.max){
 				if(d.nested) return BoundTerm.init;
-				auto o=nodes[around]; if(!isOp(o,Op.or_)||!negatedComparison(o.a,first)) return BoundTerm.init;
+				auto o=nodes[bounds.around]; if(!isOp(o,Op.or_)||!negatedComparison(o.a,bounds.first)) return BoundTerm.init;
 				auto rest=o.b;
-				if(!d.half){ o=nodes[rest]; if(!isOp(o,Op.or_)||!negatedComparison(o.a,second)) return BoundTerm.init; rest=o.b; }
+				if(!d.half){ o=nodes[rest]; if(!isOp(o,Op.or_)||!negatedComparison(o.a,bounds.second)) return BoundTerm.init; rest=o.b; }
 				if(!domainOf(rest)) return BoundTerm.init;
 				d.hoisted=true;
 			}else if(d.unit==uint.max&&nodes[d.value].op==BoundOp.guard&&domainOf(nodes[d.value].a)) d.value=nodes[d.value].b;
@@ -4838,7 +4928,7 @@ final class Bindings{
 				auto E=exponent.dup; Rational bound;
 				while(E.length&&E[$-1].zero) E.length=E.length-1;
 				while(p.length&&p[$-1].zero) p.length=p.length-1;
-				if(E.length!=3||!(E[2]<Rational(0))||!p.length||!closedValue(term1,bound)) return false;
+				if(E.length!=3||!(E[2]<Rational(0))||!p.length||!closedValue(bounds.lower,bound)) return false;
 				if(!(bound*Rational(2)*E[2]==Rational(0)-E[1])) return false;
 				GaussianData g; g.c0=E[0]; g.c1=E[1]; g.c2=E[2];
 				auto R=new Rational[](p.length-1);
@@ -5091,7 +5181,7 @@ final class Bindings{
 			if(d.axis!=uint.max&&!(d.direct&&(whole.ratioTerm||whole.logTerm))) return BoundTerm.init;
 			if(!d.direct&&(d.unit!=uint.max?d.half&&!decays(outerRate):!admissible(d.value,0))) return BoundTerm.init;
 			if(!construct) return t;
-			auto lower=dropIndex(at(lower1?term1:term2)),upper=dropIndex(at(lower1?term2:term1));
+			auto lower=dropIndex(at(bounds.lower)),upper=dropIndex(at(bounds.upper));
 			auto addOp=arena.add(arena.real_(0),arena.real_(0),true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
 			auto minusOne=scalar(ctx,arena.real_(Rational(-1)));
 			// x·(p₀/1+x·(p₁/2+…)), in Horner form, below the axis binder. With
@@ -7600,13 +7690,14 @@ final class Bindings{
 			if(n.op==BoundOp.distributionMass&&steps<budget){
 				// Retain a pole witness before scalar simplification puts a
 				// zero times a reciprocal under the domain of the denominator.
-				IntegralSolution hole;
-				auto missing=integrateMissingPoint(t,hole);
-				if(missing!=BoundTerm.init){
-					auto index=cast(uint)integrals.length; integrals~=hole; ++steps;
-					auto proof=emit(BindingRule.distributionInterval,t.id,missing.id,uint.max,uint.max,index);
+				IntegralSolution observation;
+				auto value=integrateMissingPoint(t,observation);
+				if(value==BoundTerm.init) value=integrateCoordinateInterval(t,observation);
+				if(value!=BoundTerm.init){
+					auto index=cast(uint)integrals.length; integrals~=observation; ++steps;
+					auto proof=emit(BindingRule.distributionInterval,t.id,value.id,uint.max,uint.max,index);
 					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
-					return Result(missing.id,uint.max);
+					return Result(value.id,uint.max);
 				}
 				BindingRule rule; auto target=shiftMass(t,rule);
 				if(target==BoundTerm.init) target=involutionMass(t,rule);
@@ -10366,6 +10457,21 @@ final class Bindings{
 			auto monomials=rowProof(d.moments,d.literals);
 			return "Distribution.DensityProgram.presentation_mass_gaussian_symbolic "~program~" "~list(d.moments)~" "~q(d.c2)~" "~q(d.vertex)~" "~q(d.width)~" "~evidence~" "~exponent~
 				" "~cert.closedProof(at(d.curvature),d.c2)~" rfl "~monomials~" "~sums(count)~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
+		}
+		if(s.bounds.coordinate!=uint.max){
+			auto d=s.bounds; string evidence;
+			enforce(directedCoordinate(d.coordinate,d.decreasing,evidence,cert),"missing coordinate orientation");
+			string eval(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+			string shape;
+			if(d.unit!=uint.max) shape="(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")";
+			else{
+				auto one="(congrArg (Value.mask _) (Numeric.calculate_real_one ξ n"~to!string(nodes[d.value].data)~" rfl))";
+				shape=d.nested?"(fun _ => (Distribution.StepSource.mask_mask _ _ _).trans "~one~")":"(fun _ => "~one~")";
+			}
+			auto extension="(fun z : Option ℝ => "~name(d.coordinate)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
+			return "Distribution.GraphFibre.Coordinates.Grid.Directed.interval (w := "~functionAt(s.from[0])~") "~extension~" "~
+				to!string(d.decreasing)~" "~to!string(d.swap)~" "~to!string(d.strictLower)~" "~to!string(d.strictUpper)~
+				" "~eval(d.lower)~" "~eval(d.upper)~" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~" "~shape;
 		}
 		if(s.missingWeight!=uint.max){
 			enum ns="Distribution.StepSource.MissingPoint.";

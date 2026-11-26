@@ -13,6 +13,13 @@ structure ScalarChange (s : Set ℝ) (h : ℝ → ℝ) (op jac : Option ℝ → 
   value : ∀ u ∈ s, op (some u) = some (h u)
   weight : ∀ u ∈ s, jac (some u) = some |deriv h u|
 
+theorem nonneg_deriv_of_monotone {g : ℝ → ℝ} (inc : Monotone g) {x : ℝ} (hd : DifferentiableAt ℝ g x) :
+    0 ≤ deriv g x := by
+  apply ge_of_tendsto hd.hasDerivAt.tendsto_slope_zero_right
+  filter_upwards [self_mem_nhdsWithin (a := 0) (s := Ioi (0 : ℝ))] with t ht
+  have h : 0 ≤ t := le_of_lt ht
+  exact mul_nonneg (inv_nonneg.mpr h) (sub_nonneg.mpr (inc (le_add_of_nonneg_right h)))
+
 namespace ScalarChange
 
 def exp : ScalarChange univ Real.exp Functions.expR.apply Functions.expR.apply :=
@@ -61,11 +68,7 @@ signed derivative. Use it inside a larger smooth coordinate expression. -/
 theorem slope {g op jac f d} (c : ScalarChange univ g op jac) (inc : Monotone g) (inner : Slope f d) :
     Slope (fun x => op (f x)) (fun x => Value.mul (jac (f x)) (d x)) := by
   have diff (u : ℝ) := ((c.change.smooth u trivial).differentiableAt le_rfl).hasDerivAt
-  have nonneg (u : ℝ) : 0 ≤ deriv g u := by
-    apply ge_of_tendsto (diff u).tendsto_slope_zero_right
-    filter_upwards [self_mem_nhdsWithin (a := 0) (s := Ioi (0 : ℝ))] with t ht
-    have h : 0 ≤ t := le_of_lt ht
-    exact mul_nonneg (inv_nonneg.mpr h) (sub_nonneg.mpr (inc (le_add_of_nonneg_right h)))
+  have nonneg (u : ℝ) := nonneg_deriv_of_monotone inc (diff u).differentiableAt
   exact Slope.chain inner op jac g (deriv g) (contDiff_iff_contDiffAt.mpr fun u => c.change.smooth u trivial)
     diff (fun u => c.value u trivial)
     (fun u => (c.weight u trivial).trans (congrArg some (abs_of_nonneg (nonneg u))))

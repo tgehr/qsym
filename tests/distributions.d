@@ -324,6 +324,21 @@ private Case[] cases(){
 	Case("MissingQuadraticSafe","∫dx (2+x²)⁻¹·λ[x]","ℝ","1/2·sqrt(2)·π"),
 	Case("MissingQuadraticBottom","defined(∫dx undefined(ℝ)·λ[x])","𝔹","false"),
 	Case("MissingQuadraticZeroArg","defined((λ(a:ℝ).∫dx a⁻¹*(1+x²)⁻¹·λ[x])(0))","𝔹","false"),
+	Case("CoordinateIntervalSinhExp","∫dx [0≤x≤1]·λ[sinh(exp(x))]","ℝ","-sinh(1)+sinh(e)"),
+	Case("CoordinateIntervalArsinhExp","∫dx [-1≤x≤1]·λ[asinh(exp(2*x-3))]","ℝ","-asinh(exp(-5))+asinh(exp(-1))"),
+	Case("CoordinateIntervalDecreasing","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·λ[atan(exp(-x))]","ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). [l<u]·(atan(exp(-l))-atan(exp(-u)))"),
+	Case("CoordinateIntervalOdd","λ(u:ℝ).∫dx [0≤x≤u]·λ[atan(x)^3]","ℝ→ℝ","λ(u:ℝ). [0≤u]·atan(u)^3"),
+	Case("CoordinateIntervalSum","∫dx [0≤x≤1]·λ[sinh(x)+atan(x)]","ℝ","sinh(1)+1/4·π"),
+	Case("CoordinateIntervalSumDown","∫dx [0≤x≤1]·λ[atan(-x)+exp(-x)]","ℝ","-exp(-1)+1/4·π+1"),
+	Case("CoordinateIntervalTranslated","∫dx [0≤x≤1]·λ[2+sinh(exp(x))]","ℝ","-sinh(1)+sinh(e)"),
+	Case("CoordinateIntervalStrict","∫dx [x<1∧0<x]·λ[sinh(exp(x))]","ℝ","-sinh(1)+sinh(e)"),
+	Case("CoordinateIntervalReverse","∫dx [1≤x<0]·λ[atan(exp(-x))]","ℝ","0"),
+	Case("CoordinateIntervalEqual","∫dx [1≤x≤1]·λ[sinh(exp(x))]","ℝ","0"),
+	Case("CoordinateIntervalPartial","λ(h:ℝ→ℝ).λ(t:ℝ).∫dx [0<x≤h(t)]·λ[sinh(exp(x))]","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(t:ℝ). [0<h(t)]·(-sinh(1)+sinh(exp(h(t))))"),
+	Case("CoordinateIntervalMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[sinh(exp(x))])","𝔹","false"),
+	Case("CoordinateIntervalTurning","∫dx [-1≤x≤1]·λ[exp(sin(x))]","ℝ"),
+	Case("CoordinateIntervalOpposite","∫dx [-2≤x≤2]·λ[exp(x)+exp(-x)]","ℝ"),
+	Case("CoordinateIntervalJump","∫dx [-1≤x≤1]·λ[[0≤x]·1]","ℝ","1"),
 	Case("CauchyRayLower","∫dx [1≤x]·(1+x²)⁻¹·λ[x]","ℝ","1/4·π"),
 	Case("CauchyRayUpper","∫dx [x<1]·(1+x²)⁻¹·λ[x]","ℝ","3/4·π"),
 	Case("CauchyRayLowerNegative","∫dx [-1<x]·(-1-x²)⁻¹·λ[x]","ℝ","-3/4·π"),
@@ -1831,7 +1846,10 @@ private void run(string directory){
 				c.name!="MissingQuadraticHoleHidden"&&c.name!="MissingQuadraticSafe";
 			enforce((certificate.indexOf("MissingPoint.InDensity.mass ")>=0)==witness,c.name);
 		}
-		if(c.name.indexOf("CauchyRay")==0){
+		if(c.name.indexOf("CoordinateInterval")==0||c.name=="CauchyWindowAtan"||c.name=="CauchyWindowAtanScaled"){
+			bool directed=c.name!="CoordinateIntervalTurning"&&c.name!="CoordinateIntervalOpposite"&&c.name!="CoordinateIntervalJump";
+			enforce((certificate.indexOf("Grid.Directed.interval ")>=0)==directed,c.name);
+		}else if(c.name.indexOf("CauchyRay")==0){
 			bool integrated=c.name!="CauchyRayMissing"&&c.name!="CauchyRayPole";
 			enforce((certificate.indexOf("Distribution.StepSource.cauchyRay ")>=0)==integrated,c.name);
 		}else if(c.name.indexOf("CauchyWindow")==0||c.name=="QuotientPoleQuadratic"){
