@@ -213,6 +213,8 @@ private struct IntegralSolution{
 	uint[] points,pointDomains; uint parted=uint.max;
 	// After that the casts of a sum of a lesser sort may go to its summands.
 	uint lifted=uint.max;
+	// Original weight and totality witness for an exceptional coordinate point.
+	uint excludedWeight=uint.max,excludedDomain=uint.max;
 }
 private struct PolynomialGrid{
 	Rational[] cuts,points;
@@ -8477,6 +8479,23 @@ final class Bindings{
 			mapDomains.set(body,id);
 			return id;
 		}
+		BoundTerm integrateExcludedCoordinate(BoundTerm t,out IntegralSolution solution){
+			auto w=nodes[node(t).a];
+			if(w.op!=BoundOp.distributionWeight||nodes[w.a].op!=BoundOp.lambda||
+				nodes[w.b].op!=BoundOp.distributionInverseCover) return BoundTerm.init;
+			auto body=nodes[w.a].a;
+			BoundSplit split;
+			if(!competingBody(body,split)||!split.excluded||split.only) return BoundTerm.init;
+			auto ctx=context(t),weight=inheritHint(at(w.a),lambda(split.kept));
+			auto kept=distribution(ctx,BoundOp.distributionWeight,[weight,at(w.b)]);
+			auto mass=distribution(ctx,BoundOp.distributionMass,[kept]);
+			auto value=integrateCoordinateMass(mass,solution);
+			if(value==BoundTerm.init) return BoundTerm.init;
+			auto total=totalMapDomain(split.tail.id);
+			if(total==uint.max) return BoundTerm.init;
+			solution.excludedWeight=body; solution.excludedDomain=total;
+			value=guardedCase(split,value); solution.output=value.id; return value;
+		}
 		// A point that the only weight of a Lebesgue observation excludes
 		// leaves the weight. This is an equation of partial values where the
 		// weight, the weight without the exclusion, and what the term of the
@@ -9076,6 +9095,7 @@ final class Bindings{
 					IntegralSolution observation;
 					auto value=integrateMissingPoint(t,observation);
 					if(value==BoundTerm.init) value=integrateCoordinateMass(t,observation);
+					if(value==BoundTerm.init) value=integrateExcludedCoordinate(t,observation);
 					if(value!=BoundTerm.init){
 						auto index=cast(uint)integrals.length; integrals~=observation; ++steps;
 						auto proof=emit(BindingRule.distributionInterval,t.id,value.id,uint.max,uint.max,index);
@@ -11725,7 +11745,23 @@ final class Bindings{
 		}
 		return restricted?app("finishRestricted",pred~" "~tail~" "~selected):app("finish",tail);
 	}
-	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof){
+	private string boundArguments(ref BoundSplit s){
+		auto count=s.front?0:(s.third?3:2)-(s.free?1:0);
+		string args=s.lower?"true":"false";
+		foreach(k;0..count) args~=s.strict[k]?" true":" false";
+		foreach(k;0..count) args~=" ("~name(dropIndex(at(s.terms[k])).id)~".eval ξ ρ)";
+		return args;
+	}
+	// The same masks and linear point describe exclusions for a density or a coordinate.
+	private string excludedEvidence(string prefix,ref BoundSplit s,uint body,string total,string zero=""){
+		string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+		auto kind=s.only?"only":"excluded";
+		auto lemma=s.front?"front_"~kind:(s.third?"between_":"beyond_")~kind~" "~boundArguments(s);
+		return prefix~lemma~" (f := "~fn(s.point)~") (p := "~SourceCertificates.q(s.slope)~") "~s.linear~" rfl"~zero~
+			" (w := "~fn(body)~")"~(s.only?"":" (v := "~fn(s.kept.id)~")")~
+			" (fun x => "~s.rest~") (fun x => "~s.whole~")"~(s.only?"":" (fun x => "~s.one~")")~" "~total;
+	}
+	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof,string tailTotal=""){
 		auto q=&cert.q,app=&cert.app,atPoint=&cert.atPoint,functionAt=&cert.functionAt;
 		auto save=&cert.save,numericProof=&cert.numericProof,affineProof=&cert.affineProof;
 		string bracket(IntervalData d){
@@ -11970,11 +12006,18 @@ final class Bindings{
 			}else unitMass=grid~law~"interval"~input~" "~extension~change~" "~
 				to!string(d.decreasing)~" "~to!string(d.swap)~" "~to!string(d.strictLower)~" "~to!string(d.strictUpper)~
 				" "~eval(d.lower)~" "~eval(d.upper)~" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~" "~unitShape;
-			if(!scaled) return unitMass;
-			auto factor=scalar(context(at(d.minusOne)),arena.real_(d.unitValue));
+			if(!scaled&&s.excludedWeight==uint.max) return unitMass;
 			auto smooth="("~grid~law~"smoothSource"~change~" "~evidence~")";
-			return grid~"scale_masked_mass (w := "~functionAt(s.from[0])~") "~smooth~" "~eval(factor.id)~
-				" "~cert.closedProof(factor,d.unitValue)~" (Rat.cast_ne_zero.mpr (of_decide_eq_true rfl)) "~shape~" ("~unitMass~")";
+			if(scaled){
+				auto factor=scalar(context(at(d.minusOne)),arena.real_(d.unitValue));
+				unitMass=grid~"scale_masked_mass (w := "~functionAt(s.from[0])~") "~smooth~" "~eval(factor.id)~
+					" "~cert.closedProof(factor,d.unitValue)~" (Rat.cast_ne_zero.mpr (of_decide_eq_true rfl)) "~shape~" ("~unitMass~")";
+			}
+			if(s.excludedWeight==uint.max) return unitMass;
+			BoundSplit split;
+			enforce(competingBody(s.excludedWeight,split)&&split.excluded&&!split.only,"missing coordinate exclusion");
+			auto excluded=excludedEvidence("Distribution.StepSource.",split,s.excludedWeight,tailTotal);
+			return grid~"SmoothSource.excluded_mass "~smooth~" ("~excluded~") ("~unitMass~")";
 		}
 		if(s.missingWeight!=uint.max){
 			enum ns="Distribution.StepSource.MissingPoint.";
@@ -12837,13 +12880,19 @@ final class Bindings{
 		}
 		code~="namespace QSym.BindingCertificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
 		foreach(s;result.solutions) if(s.cfinite){ code~="attribute [local semireducible] Nat.div Nat.modCore\n"; break; }
+		string rowTotalProof(uint id){
+			auto index=to!string(result.domains[id].variable);
+			auto env="({ ξ with real := fun i => if i = "~index~" then x else ξ.real i })";
+			return "(fun x : ℝ => (QSym.BindingScalar"~to!string(id)~".DomainCertificate.domain_correct "~env~").iff.mpr rfl)";
+		}
 		Term[] stepNumerics;string stepDeclarations;string[] stepProofs=new string[result.integrals.length],stepOutputs=new string[result.integrals.length];
 		uint[] proofRoots;
 		foreach(d;result.domains) if(d.maskBody!=uint.max) proofRoots~=d.maskBody;
 		foreach(p;result.proofs) if(p.rule==BindingRule.closedRationalValue) stepNumerics~=arena.at(p.extra);
 		foreach(i,s;result.integrals) if(s.piecewise||s.ae){
 			auto c=new SourceCertificates("step"~to!string(i)~"_",s.from[0]);
-			stepProofs[i]=stepGridProof(s,c,stepOutputs[i]);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
+			auto total=s.excludedDomain==uint.max?"":rowTotalProof(s.excludedDomain);
+			stepProofs[i]=stepGridProof(s,c,stepOutputs[i],total);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
 		}
 		string[] limitProofs=new string[result.limits.length];
 		foreach(i,s;result.limits){
@@ -13795,11 +13844,6 @@ final class Bindings{
 		auto rootProof=proofName(result.proof);
 		string realBody(uint fn){ return "(fun x : ℝ => "~name(nodes[fn].a)~
 			".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
-		string rowTotalProof(uint id){
-			auto index=to!string(result.domains[id].variable);
-			auto env="({ ξ with real := fun i => if i = "~index~" then x else ξ.real i })";
-			return "(fun x : ℝ => (QSym.BindingScalar"~to!string(id)~".DomainCertificate.domain_correct "~env~").iff.mpr rfl)";
-		}
 		string densityProgram(uint[] bodies){
 			string value="Distribution.DensityProgram.lebesgue";
 			foreach(id;bodies) value="(Distribution.DensityProgram.weight (fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ)) "~value~")";
@@ -15081,18 +15125,11 @@ final class Bindings{
 				case BindingRule.distributionMassBounds:{
 					BoundSplit s;enforce(competingBounds(p.from,s),"missing bounds on one side");
 					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
-					auto count=s.front?0:(s.third?3:2)-(s.free?1:0);
-					string arguments=s.lower?"true":"false";
-					foreach(k;0..count)arguments~=s.strict[k]?" true":" false";
-					foreach(k;0..count)arguments~=" ("~name(dropIndex(at(s.terms[k])).id)~".eval ξ ρ)";
+					auto arguments=boundArguments(s);
 					if(s.excluded){
-						// An excluded point behind its bounds, or at the front; or
-						// the point only, whose observation is the literal zero.
-						auto kind=s.only?"only":"excluded";
-						auto lemma=s.front?"mass_front_"~kind:(s.third?"mass_between_":"mass_beyond_")~kind~" "~arguments;
-						auto other=s.only?" (z := "~name(scalar(context(at(p.from)),arena.real_(0)).id)~".eval ξ ρ) "~literalProof(Rational(0)):"";
-						proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram."~lemma~" (f := "~fn(s.point)~") (p := "~SourceCertificates.q(s.slope)~") "~s.linear~" rfl"~other~" (w := "~fn(nodes[nodes[n.a].a].a)~")"~
-							(s.only?"":" (v := "~fn(s.kept.id)~")")~" (fun x => "~s.rest~") (fun x => "~s.whole~")"~(s.only?"":" (fun x => "~s.one~")")~" "~rowTotalProof(p.extra)~"; h)"; break;
+						auto zero=s.only?" (z := "~name(scalar(context(at(p.from)),arena.real_(0)).id)~".eval ξ ρ) "~literalProof(Rational(0)):"";
+						auto law=excludedEvidence("Distribution.DensityProgram.mass_",s,nodes[nodes[n.a].a].a,rowTotalProof(p.extra),zero);
+						proof=".ofEq (fun ξ ρ => let h := "~law~"; h)"; break;
 					}
 					if(s.free){
 						// A condition that does not mention the axis, behind its bounds.

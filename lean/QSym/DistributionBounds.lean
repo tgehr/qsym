@@ -1,4 +1,4 @@
-import QSym.DistributionInterval
+import QSym.DistributionCoordinateInterval
 
 /-! Several bounds of the axis on one side. A guard is a conjunction of
 comparisons, evaluated from the left, or as many nested masks: a bound whose
@@ -1578,3 +1578,43 @@ theorem mass_front_only {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ}
   exact (StepSource.front_only hf hp r h hr).zero hz
 
 end QSym.Distribution.DensityProgram
+
+namespace QSym.Distribution
+namespace StepSource
+
+/-- A total density factor preserves an exceptional point and the definedness
+of the two weights there, including where the factor vanishes. -/
+theorem Excluded.mul_total {w v n s} (h : Excluded w v n s) (j : ℝ → ℝ) :
+    Excluded (fun x => Value.mul (some (j x)) (w x))
+      (fun x => Value.mul (some (j x)) (v x)) n s := by
+  have dom (c : ℝ) (z : Option ℝ) : Value.Defined (Value.mul (some c) z) ↔ Value.Defined z := by
+    cases z <;> simp [Value.Defined, Value.mul]
+  refine ⟨fun hn => ?_, fun hn x => ?_, fun hn hs => ?_, fun hn c hs => ?_⟩
+  · obtain ⟨x, hx⟩ := h.missing hn
+    exact ⟨x, by rw [hx]; rfl⟩
+  · rw [h.empty hn x]; simp [Value.mul]
+  · obtain ⟨x, hx⟩ := h.undecided hn hs
+    exact ⟨x, by rw [hx]; rfl⟩
+  · obtain ⟨a, away, point⟩ := h.holds hn c hs
+    exact ⟨a, fun x hx => congrArg (Value.mul (some (j x))) (away x hx),
+      (dom _ _).trans (point.trans (dom _ _).symm)⟩
+
+end StepSource
+namespace GraphFibre.Coordinates.Grid
+open MeasureTheory StepSource
+
+/-- Remove an isolated point from a mass observation of a smooth coordinate.
+The source test for reaching the exclusion and the existence of its location
+are retained in their original order. -/
+theorem SmoothSource.excluded_mass {f w v : Scalar} (hf : SmoothSource f) {n s}
+    (hw : Excluded w v n s) {z : Option ℝ}
+    (hz : massValue (weightValue (some v) (value (Tensor.consValue (some f) Tensor.nilValue))) = z) :
+    massValue (weightValue (some w) (value (Tensor.consValue (some f) Tensor.nilValue))) =
+      Value.mask n (Value.mask (Value.le s s) z) := by
+  obtain ⟨k, hk, src⟩ := hf
+  rw [← hz, singleton_length hk src (w := fun x => some |deriv k x|) (fun _ => rfl)]
+  simp only [weight_weight_lebesgue, weighted_lebesgue_mass_bridge, Model.densityMassValue_eq]
+  exact (hw.mul_total (fun x => |deriv k x|)).integral
+
+end GraphFibre.Coordinates.Grid
+end QSym.Distribution

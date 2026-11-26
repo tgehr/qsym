@@ -484,6 +484,23 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("CoordinatePuncturePeriod","∫dx [0≤x≤2*π]·[x≠a]·λ[sin(x)]","ℝ","4"),
+	Case("CoordinatePunctureFront","∫dx [x≠a]·[0≤x≤2*π]·λ[sin(x)]","ℝ","4"),
+	Case("CoordinatePunctureClosedPoint","∫dx [0≤x≤2*π]·[x≠1]·λ[sin(x)]","ℝ","4"),
+	Case("CoordinatePunctureBetween","∫dx [0≤x]·[x≠a]·[x≤2*π]·λ[sin(x)]","ℝ","4"),
+	Case("CoordinatePunctureAffine","∫dx [0≤x≤2*π]·[2*x+a≠0]·λ[sin(x)]","ℝ","4"),
+	Case("CoordinatePunctureCrest","∫dx [0≤x≤2]·[x≠1]·λ[sin(x)^2]","ℝ","cos(2)^2+1"),
+	Case("CoordinatePunctureSigned","∫dx [0≤x≤2*π]·[x≠a]·(-3/2)·λ[sin(x)]","ℝ","-6"),
+	Case("CoordinatePunctureRay","∫dx [x≤0]·[x≠a]·λ[atan(x)]","ℝ","1/2·π"),
+	Case("CoordinatePunctureSymbolic","λ(l:ℝ).λ(u:ℝ).∫dx [l≤x<u]·[x≠a]·λ[sinh(exp(x))]","ℝ→ℝ→ℝ"),
+	Case("CoordinatePuncturePartial","λ(h:ℝ→ℝ).λ(t:ℝ).∫dx [0≤x≤2*π]·[x≠h(t)]·λ[sin(x)]","(ℝ→ℝ)→ℝ→ℝ"),
+	Case("CoordinatePunctureMissing","defined(∫dx [0≤x≤1]·[x≠undefined(ℝ)]·λ[sin(x)])","𝔹","false"),
+	Case("CoordinatePunctureEmpty","∫dx [1<x≤0]·[x≠undefined(ℝ)]·λ[sin(x)]","ℝ","0"),
+	Case("CoordinatePunctureFirstMissing","defined(∫dx [x≠undefined(ℝ)]·[1<x≤0]·λ[sin(x)])","𝔹","false"),
+	Case("CoordinatePuncturePointDensity","densityAtD(Λx. [x≠0]·λ[sin(x)],0)","ℝ","0"),
+	Case("CoordinatePunctureJumpHit","∫dx [-1≤x≤1]·λ[[0≤x]·1]","ℝ","1"),
+	Case("CoordinatePunctureJumpExcluded","∫dx [-1≤x≤1]·[x≠0]·λ[[0≤x]·1]","ℝ","0"),
+	Case("CoordinatePunctureHiddenPole","∫dx [0≤x≤1]·[x≠0]·x⁻¹·λ[sin(x)]","ℝ"),
 	Case("CoordinateWeightPeriod","∫dx [0≤x≤2*π]·2·λ[sin(x)]","ℝ","8"),
 	Case("CoordinateWeightSigned","∫dx [0≤x≤2*π]·(-3/2)·λ[sin(x)]","ℝ","-6"),
 	Case("CoordinateWeightCrest","∫dx [0≤x≤2]·(-3/2)·λ[sin(x)^2]","ℝ","-3/2·cos(2)^2-3/2"),
@@ -2557,6 +2574,12 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("CoordinatePuncture")==0){
+			bool smooth=c.name!="CoordinatePuncturePointDensity"&&c.name!="CoordinatePunctureJumpHit"&&
+				c.name!="CoordinatePunctureJumpExcluded"&&c.name!="CoordinatePunctureHiddenPole";
+			enforce((certificate.indexOf("SmoothSource.excluded_mass ")>=0)==smooth,c.name);
+			if(smooth) enforce(text.indexOf("∫")<0,c.name);
 		}
 		if(c.name.indexOf("CoordinateWeight")==0){
 			bool scaled=c.name!="CoordinateWeightInfinite"&&c.name!="CoordinateWeightZero";
