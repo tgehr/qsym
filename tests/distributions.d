@@ -1452,6 +1452,16 @@ private Case[] cases(){
 	Case("EmittingMissing","defined(massD(weightD(λ(x:ℝ).x⁻¹,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((2:ℝ)) else addD(δ((0:ℝ)),scaleD(0,f(n sub 1))))(2))))","𝔹","false"),
 	Case("EmittingParameter","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((1:ℝ)),scaleD(r,f(n sub 1))))(k))","ℝ→ℕ→ℝ"),
 	Case("VaryingEmission","λ(k:ℕ).massD("~discountedAtoms("k")~")","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·(2·2^k-2):ℝ)"),
+	Case("ConvolutionSymbolic","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","r","δ((3:ℝ))")~"))","ℝ→ℕ→ℝ"),
+	Case("ConvolutionTwo","λ(r:ℝ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("2","r","δ((3:ℝ))")~"))","ℝ→ℝ","λ(r:ℝ). 3·r^2+r+2"),
+	Case("ConvolutionZeroRate","massD(weightD(λ(x:ℝ).x,"~discountedAtoms("4","0","δ((3:ℝ))")~"))","ℝ","4"),
+	Case("ConvolutionZeroHole","defined(massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~discountedAtoms("4","0","δ((3:ℝ))")~")))","𝔹","false"),
+	Case("ConvolutionSeedHole","defined(massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~discountedAtoms("1","0","δ((2:ℝ))")~")))","𝔹","false"),
+	Case("ConvolutionUnusedRate","massD(weightD(λ(x:ℝ).x,"~discountedAtoms("0","undefined(ℝ)","δ((3:ℝ))")~"))","ℝ","3"),
+	Case("ConvolutionMissingRate","defined(massD(weightD(λ(x:ℝ).x,"~discountedAtoms("1","undefined(ℝ)","δ((3:ℝ))")~")))","𝔹","false"),
+	Case("ConvolutionMissingIndex","defined(massD(weightD(λ(x:ℝ).x,"~discountedAtoms("0 sub 1","undefined(ℝ)","δ((3:ℝ))")~")))","𝔹","false"),
+	Case("ConvolutionHigher","λ(h:ℝ→ℝ).λ(k:ℕ).massD("~discountedAtoms("k","h((1:ℝ))","δ((3:ℝ))",true)~")","(ℝ→ℝ)→ℕ→ℝ"),
+	Case("ConvolutionReciprocal","λ(r:ℝ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("2","r⁻¹","δ((3:ℝ))")~"))","ℝ→ℝ","λ(r:{r:ℝ | r≠0}). 2+r⁻¹+3·(r^2)⁻¹"),
 	Case("DiscountVisitFirst","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k")~"))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·((2·k-2)·2^k+2):ℝ)"),
 	Case("DiscountVisitFour","massD(weightD(λ(x:ℝ).x,"~discountedAtoms("4")~"))","ℝ","49/8"),
 	Case("DiscountVisitSquares","massD(weightD(λ(x:ℝ).x^2,"~discountedAtoms("4")~"))","ℝ","173/8"),
@@ -1582,6 +1592,11 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name.indexOf("Convolution")==0){
+			enforce(certificate.indexOf("Distribution.observe_convolution_countdown ")>=0&&text.indexOf("μ")<0,c.name);
+			if(c.name=="ConvolutionMissingIndex") enforce(certificate.indexOf("Binding.conditional_undefined ")>=0,c.name);
+			if(c.name=="ConvolutionHigher") enforce(text.indexOf("powRN(h(")>=0,c.name);
+		}
 		if(c.name=="VaryingEmission"||c.name.indexOf("DiscountVisit")==0)
 			enforce(certificate.indexOf("Distribution.observe_discounted_countdown ")>=0&&text.indexOf("μ")<0,c.name);
 		if(c.name.indexOf("CapturedScale")==0||c.name=="CountdownPartialRatioZero"||c.name=="CountdownPartialRatioOne")

@@ -287,9 +287,13 @@ struct Syntax{
 					else if(code=="powerR"||code=="powerC"||code.length==5&&code[0..3]=="pow"){
 						p=Piece(arg(n.a,91)~"^"~render(exponent(n.b),91),90);
 						// Check the overload selected by the injection-free spelling.
-						// Use the typed operation only if ordinary notation selects another.
+						// Binder operands may print as applications that the scalar
+						// parser cannot type on its own. Keep the operator explicit
+						// whenever that parser cannot confirm the overload.
 						auto names=variables.dup;
-						if(Parser(p.text).parseExpression(names).name!=code)
+						bool confirmed;
+						try{ confirmed=Parser(p.text).parseExpression(names).name==code; }catch(Exception){}
+						if(!confirmed)
 							p=Piece(info.name~"("~arg(n.a)~","~arg(n.b)~")");
 					}
 					else p.text=info.name~"("~arg(n.a)~(n.arity==2?","~arg(n.b):"")~")";

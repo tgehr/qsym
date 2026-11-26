@@ -636,6 +636,10 @@ theorem Reduction.conditionalFalse (x y : Expr Γ a) :
 theorem Reduction.conditionalBottom (x y : Expr Γ a) :
     Reduction (.conditional (.constant none) x y) (.constant none) := .ofEq (fun _ _ => rfl)
 
+theorem conditional_undefined (p : Option Bool) (x y : Option α)
+    (h : Domain.Correct p (some false)) : conditionalValue p x y = none := by
+  cases p <;> simp_all [Domain.Correct, conditionalValue]
+
 theorem Reduction.conditionalSame (p : Expr Γ (.scalar .bool)) (x : Expr Γ a) :
     Reduction (.conditional p x x) (.seq p x) := .ofEq (by
   intro ξ ρ

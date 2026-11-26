@@ -46,7 +46,7 @@ private enum BindingRule:ubyte{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -3033,23 +3033,31 @@ final class Bindings{
 		bool literalScale=!bare&&nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),rate);
 		bool unitScale=bare||literalScale&&rate.one;
 		if(emission!=uint.max&&depends(at(emission),0)){
-			if(!unitScale&&(!literalScale||rate.zero)) return BoundTerm.init;
 			auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
 			auto oneN=arena.natural_(1);
 			auto successor=primitive(arena.call(Builtin.addN,[oneN,oneN]),[i,scalar(inner,oneN)]);
 			BoundTerm[] rowEnv=[successor,bottom(inner,type(f))];
 			foreach(j;0..depth(ctx)) rowEnv~=variable(inner,j+1);
 			auto row=observedMass(substitute(at(emission),inner,rowEnv),operations,true);
-			BoundTerm total(BoundTerm summand){
+			BoundTerm total(BoundTerm initial,BoundTerm summand){
 				auto visits=finiteSum(hint(lambda(summand),"i"),arg);
-				return primitive(arena.add(zero,zero,true),[seed,visits]);
+				return primitive(arena.add(zero,zero,true),[initial,visits]);
 			}
-			if(unitScale) return total(row);
+			if(unitScale) return total(seed,row);
 			auto power=arena.call(Builtin.powRN,[zero,oneN]),mul=arena.mul(zero,zero,true);
+			auto ratio=substitute(at(scale.a),ctx,env);
+			if(!literalScale||rate.zero){
+				uint[] lifted; foreach(j;0..depth(ctx)) lifted~=j+1;
+				auto remaining=primitive(arena.call(Builtin.subN,[oneN,oneN]),[rename(arg,inner,lifted),successor]);
+				auto coefficient=primitive(power,[rename(ratio,inner,lifted),remaining]);
+				auto initial=primitive(mul,[primitive(power,[ratio,arg]),seed]);
+				auto positive=total(initial,primitive(mul,[coefficient,row]));
+				env[0]=arg;
+				return conditional(substitute(at(branch.a),ctx,env),seed,positive);
+			}
 			auto inverse=scalar(inner,arena.real_(Rational(1)/rate.re));
 			row=primitive(mul,[primitive(power,[inverse,successor]),row]);
-			auto ratio=scalar(ctx,arena.at(nodes[scale.a].data));
-			return primitive(mul,[primitive(power,[ratio,arg]),total(row)]);
+			return primitive(mul,[primitive(power,[ratio,arg]),total(seed,row)]);
 		}
 		if(emission!=uint.max&&unitScale){
 			auto visits=observedMass(substitute(at(emission),ctx,env),operations);
@@ -8002,9 +8010,17 @@ final class Bindings{
 				}
 			}
 			if(current.op==BoundOp.conditional){
+				bool missingPredicate(uint id){
+					auto input=scalarBody(at(id),Term.init);
+					if(input==Term.init||arena.view(input).op==Op.boolLit) return false;
+					auto d=simplifyDomain(arena,input,[],Options(DensityMode.preserve,true));
+					if(d.exhausted||d.output!=arena.boolean(false)) return false;
+					extra=cast(uint)scalarDomains.length; scalarDomains~=ScalarDomain(input,d); return true;
+				}
 				if(isTrue(current.a,true)){ next=at(current.b); rule=BindingRule.conditionalTrue; }
 				else if(isTrue(current.a,false)){ next=at(current.c); rule=BindingRule.conditionalFalse; }
 				else if(nodes[current.a].op==BoundOp.bottom){ next=bottom(ctx,type(at(result.output))); rule=BindingRule.conditionalBottom; }
+				else if(steps<budget&&missingPredicate(current.a)){ next=bottom(ctx,type(at(result.output))); rule=BindingRule.conditionalUndefined; }
 				else if(current.b==current.c){ next=sequence(at(current.a),at(current.b)); rule=BindingRule.conditionalSame; }
 				else if(types[current.type]==scalarType(Sort.boolean)){
 					auto predicate=at(current.a),neg=primitive(arena.not_(arena.boolean(false)),[predicate]);
@@ -11933,6 +11949,9 @@ final class Bindings{
 				case BindingRule.conditionalTrue:proof=".conditionalTrue "~name(n.b)~" "~name(n.c); break;
 				case BindingRule.conditionalFalse:proof=".conditionalFalse "~name(n.b)~" "~name(n.c); break;
 				case BindingRule.conditionalBottom:proof=".conditionalBottom "~name(n.b)~" "~name(n.c); break;
+				case BindingRule.conditionalUndefined:
+					proof=".ofEq (fun ξ ρ => Binding.conditional_undefined ("~name(n.a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ) ("~name(n.c)~
+						".eval ξ ρ) (QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct ξ))"; break;
 				case BindingRule.conditionalSame:proof=".conditionalSame "~name(n.a)~" "~name(n.b); break;
 				case BindingRule.conditionalBool:proof=".conditionalBool "~name(n.a)~" "~name(n.b)~" "~name(n.c); break;
 				case BindingRule.closedRationalValue:{
@@ -12297,11 +12316,21 @@ final class Bindings{
 						return d;
 					}
 					auto f=to!string(call.a)~dimArg~" γ ξ ρ";
+					bool swapped=emitting&&depends(at(step.a),1);
+					auto emission=swapped?step.b:step.a;
+					bool indexed=emitting&&depends(at(emission),0);
+					string indexedVisit(){
+						return "(fun (u : Option ℕ) => "~name(emission)~".eval ξ (Binding.Env.cons (a := .scalar .natural) u (Binding.Env.cons (a := "~leanType(type(at(call.a)))~") none ρ)))";
+					}
+					if(indexed&&partial){
+						auto positive=nodes[target.c],ratio=nodes[nodes[positive.a].a].a;
+						proof=".ofEq (fun ξ ρ => Distribution.observe_convolution_countdown "~massObserver(ops,false)~" (rec"~f~") (fixed"~f~") ("~
+							name(observedInput(target.b))~".eval ξ ρ) "~indexedVisit()~" ("~name(ratio)~".eval ξ ρ) "~(swapped?"true":"false")~
+							" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))";
+						break;
+					}
 					if(emitting&&!partial){
-						bool swapped=depends(at(step.a),1);
 						auto tail=nodes[swapped?step.a:step.b];
-						auto emission=swapped?step.b:step.a;
-						bool indexed=depends(at(emission),0);
 						bool discounted=indexed&&primitiveOp(p.to,Op.mul);
 						auto total=discounted?nodes[target.b]:target;
 						string factor="(some 1) rfl false";
@@ -12317,7 +12346,7 @@ final class Bindings{
 							factor="(n"~id~".eval ξ) (Numeric.calculate_real_one ξ n"~id~" rfl) true";
 						}
 						string visit;
-						if(indexed) visit="(fun (u : Option ℕ) => "~name(emission)~".eval ξ (Binding.Env.cons (a := .scalar .natural) u (Binding.Env.cons (a := "~leanType(type(at(call.a)))~") none ρ)))";
+						if(indexed) visit=indexedVisit();
 						else{
 							auto mask=nodes[target.b],amount=nodes[mask.b];
 							visit="("~name(observedInput(amount.b))~".eval ξ ρ)";

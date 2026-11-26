@@ -1,6 +1,6 @@
 import QSym.Binding
 import QSym.DistributionAtomicObservation
-import QSym.Summation
+import QSym.SummationElementary
 
 /-! Scalar observations of recursive distributions. The recursive value is a
 partial presentation. Its mass is computed after taking the fixed point. -/
@@ -306,6 +306,81 @@ theorem observe_discounted_countdown {α : Type} {o : Option (D α) → Option �
   | none => exact h.missing
   | some n =>
     simpa [visit, g, Summation.rangeValue, Function2.apply, Functions.addN, Functions.powRN] using total n
+
+private theorem indexed_steps (r : ℝ) (b : Option ℝ) (visit y : ℕ → Option ℝ)
+    (h0 : y 0 = b) (hs : ∀ n, y (n+1) = Value.add (visit (n+1)) (Value.mul (some r) (y n))) (n : ℕ) :
+    y n = Value.add (Value.mul (some (r^n)) b) (Summation.finite (Finset.range n)
+      (fun i => Value.mul (some (r^(n-(i+1)))) (visit (i+1)))) := by
+  let row (k i : ℕ) := Value.mul (some (r^(k-(i+1)))) (visit (i+1))
+  have scaledPrefix (k : ℕ) : Summation.finite (Finset.range k) (row (k+1)) =
+      Value.mul (some r) (Summation.finite (Finset.range k) (row k)) := by
+    refine (Summation.finite_congr _ ?_).trans (SummationElementary.finite_scale r (row k) k)
+    intro i hi
+    have le : i+1 ≤ k := Finset.mem_range.mp hi
+    have ex : (k+1)-(i+1) = (k-(i+1))+1 := by omega
+    simp only [row, ex, pow_succ']
+    cases visit (i+1) <;> simp [Value.mul, mul_assoc]
+  have last (k : ℕ) : row (k+1) k = visit (k+1) := by simp [row, Value.mul_one_left]
+  change y n = Value.add (Value.mul (some (r^n)) b) (Summation.finite _ (row n))
+  induction n with
+  | zero => simpa [Summation.finite_empty, Value.mul_one_left, Value.add_zero_right] using h0
+  | succ n ih =>
+    rw [hs, ih, Summation.range_succ, scaledPrefix, last]
+    cases b <;> cases Summation.finite (Finset.range n) (row n) <;> cases visit (n+1) <;>
+      simp [Value.add, Value.mul, pow_succ'] <;> ring
+
+/-- The finite convolution uses only nonnegative powers on visited indices.
+The zero branch does not evaluate the scale or the emission. -/
+theorem observe_convolution_countdown {α : Type} {o : Option (D α) → Option ℝ} (h : Atomic.Observation o)
+    (p : Recursion.Program ℕ (D α) (D α)) {fn : Option (ℕ → Option (D α))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b : Option (D α)) (e : Option ℕ → Option (D α))
+    (r : Option ℝ) (swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let d := scaleValue r ((Functions.subN.apply (some n) (some 1)).bind g)
+       if swap then addValue d (e (some n)) else addValue (e (some n)) d))
+    (arg : Option ℕ) :
+    o (fn.bind (fun g => arg.bind g)) = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg))) (o b)
+      (Value.add (Value.mul (Functions.powRN.apply r arg) (o b))
+        (Summation.rangeValue (some (fun i =>
+          let k := Functions.addN.apply (some i) (some 1)
+          Value.mul (Functions.powRN.apply r (Functions.subN.apply arg k)) (o (e k)))) arg)) := by
+  subst fn
+  let g := FixedPoint.value p.functional
+  obtain ⟨h0, hs⟩ := countdown_equations p b (fun n tail =>
+    let d := scaleValue r tail
+    if swap then addValue d (e (some n)) else addValue (e (some n)) d) step
+  have rec (n : ℕ) : o (g (n+1)) = Value.add (o (e (some (n+1)))) (Value.mul r (o (g n))) :=
+    (congrArg o (hs n)).trans (observedEmission h swap _ _ _)
+  cases arg with
+  | none => exact h.missing
+  | some n =>
+    cases n with
+    | zero =>
+      simpa [Binding.conditionalValue, Functions.castNZ, Functions.nonzeroZ, Function1.apply, Value.not] using congrArg o h0
+    | succ n =>
+      have cond : Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some (n+1)))) = some false := by
+        simp [Functions.castNZ, Functions.nonzeroZ, Function1.apply, Value.not]
+        omega
+      rw [cond]
+      cases r with
+      | none =>
+        change o (g (n+1)) = _
+        rw [rec]
+        cases o (e (some (n+1))) <;> rfl
+      | some r =>
+        have rows (k : ℕ) : Summation.rangeValue (some (fun i =>
+            let j := Functions.addN.apply (some i) (some 1)
+            Value.mul (Functions.powRN.apply (some r) (Functions.subN.apply (some k) j)) (o (e j)))) (some k) =
+            Summation.finite (Finset.range k) (fun i => Value.mul (some (r^(k-(i+1)))) (o (e (some (i+1))))) := by
+          apply Summation.finite_congr
+          intro i hi
+          have le : i+1 ≤ k := Finset.mem_range.mp hi
+          simp [Functions.addN, Functions.subN, Functions.powRN, Function2.apply, le]
+        rw [rows]
+        simpa [Binding.conditionalValue, g, Functions.powRN, Function2.apply] using
+          indexed_steps r (o b) (fun k => o (e (some k))) (fun k => o (g k)) (congrArg o h0) rec (n+1)
 
 theorem mass_scale_countdown {α : Type} (p : Recursion.Program ℕ (D α) (D α))
     {fn : Option (ℕ → Option (D α))} (hf : fn = some (FixedPoint.value p.functional))
