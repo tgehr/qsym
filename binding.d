@@ -36,7 +36,7 @@ struct BoundNode{
 }
 struct BinderHint{ string name,refinement; }
 private enum BindingRule:ubyte{
-	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMap,conditionalLeft,conditionalRight,beta,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
+	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
@@ -2538,17 +2538,28 @@ final class Bindings{
 			default:return false;
 		}
 	}
+	private bool numericOperation(Term t){
+		auto v=arena.view(t);
+		return arena.isNumber(t)||v.op==Op.boolLit||v.op==Op.add||v.op==Op.mul||v.op==Op.pow||v.op==Op.inv||v.op==Op.abs||v.op==Op.mask||
+			v.op==Op.lt||v.op==Op.le||v.op==Op.nonzero||v.op==Op.and_||v.op==Op.or_||v.op==Op.not_||
+			v.op==Op.builtin&&v.value>=Builtin.castNZ&&v.value<=Builtin.castQR;
+	}
+	// Inspect bound syntax before building a scalar calculator input. A failed
+	// fast path must not intern intermediates in the ordinary certificate.
+	private bool numericSyntax(uint id){
+		auto n=nodes[id];
+		if(n.op==BoundOp.scalar){
+			foreach(i;arena.viewPostorder(arena.at(n.data))) if(!numericOperation(arena.at(i))) return false;
+			return true;
+		}
+		return n.op==BoundOp.primitive&&numericOperation(arena.at(n.data))&&numericSyntax(n.a)&&
+			(n.b==uint.max||numericSyntax(n.b));
+	}
 	// The rational value of a closed term that the numeric calculator of the
 	// certificates evaluates, as a scalar term for it.
 	private bool closedRational(BoundTerm t,out Rational q,out Term term){
 		term=scalarBody(t,Term.init); if(term==Term.init) return false;
-		foreach(id;arena.viewPostorder(term)){
-			auto v=arena.view(arena.at(id));
-			bool calculated=arena.isNumber(arena.at(id))||v.op==Op.boolLit||v.op==Op.add||v.op==Op.mul||v.op==Op.pow||v.op==Op.inv||v.op==Op.abs||v.op==Op.mask||
-				v.op==Op.lt||v.op==Op.le||v.op==Op.nonzero||v.op==Op.and_||v.op==Op.or_||v.op==Op.not_||
-				v.op==Op.builtin&&v.value>=Builtin.castNZ&&v.value<=Builtin.castQR;
-			if(!calculated) return false;
-		}
+		foreach(id;arena.viewPostorder(term)) if(!numericOperation(arena.at(id))) return false;
 		auto value=simplify(arena,term);
 		if(value.exhausted||!arena.isNumber(value.output)||!arena.number(value.output).im.zero) return false;
 		q=arena.number(value.output).re; return q.words<=128;
@@ -6595,7 +6606,21 @@ final class Bindings{
 			auto applyWeight=emit(BindingRule.distributionDensityWeight,density.id,app.id);
 			auto exposed=emit(BindingRule.trans,t.id,app.id,lifted,applyWeight);
 			auto value=beta(at(node(weight).a),y);
-			return Result(value.id,emit(BindingRule.trans,t.id,value.id,exposed,emit(BindingRule.beta,app.id,value.id)));
+			auto atPoint=emit(BindingRule.trans,t.id,value.id,exposed,emit(BindingRule.beta,app.id,value.id));
+			// A closed rational derivative has one calculator proof. This bypasses
+			// scalar normalization of every intermediate product and reciprocal.
+			Rational q; Term expression;
+			auto applied=at(node(value).b);
+			if(numericSyntax(applied.id)&&closedRational(applied,q,expression)){
+				auto literal=scalar(context(t),arena.real_(q));
+				if(applied!=literal){
+					auto present=emit(BindingRule.seqScalar,value.id,applied.id);
+					auto evaluated=emit(BindingRule.closedRationalValue,applied.id,literal.id,uint.max,uint.max,expression.id);
+					auto answer=emit(BindingRule.trans,value.id,literal.id,present,evaluated);
+					return Result(literal.id,emit(BindingRule.trans,t.id,literal.id,atPoint,answer));
+				}
+			}
+			return Result(value.id,atPoint);
 		}
 		struct RewriteFrame { uint original,rebuilt,congruence,step; }
 		Result visitOnce(BoundTerm t,uint depth,ref RewriteFrame[] chain){
@@ -9990,6 +10015,7 @@ final class Bindings{
 		foreach(s;result.solutions) if(s.cfinite){ code~="attribute [local semireducible] Nat.div Nat.modCore\n"; break; }
 		Term[] stepNumerics;string stepDeclarations;string[] stepProofs=new string[result.integrals.length],stepOutputs=new string[result.integrals.length];
 		uint[] proofRoots;
+		foreach(p;result.proofs) if(p.rule==BindingRule.closedRationalValue) stepNumerics~=arena.at(p.extra);
 		foreach(i,s;result.integrals) if(s.piecewise||s.ae){
 			auto c=new SourceCertificates("step"~to!string(i)~"_",s.from[0]);
 			stepProofs[i]=stepGridProof(s,c,stepOutputs[i]);stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
@@ -11219,6 +11245,12 @@ final class Bindings{
 				case BindingRule.conditionalBottom:proof=".conditionalBottom "~name(n.b)~" "~name(n.c); break;
 				case BindingRule.conditionalSame:proof=".conditionalSame "~name(n.a)~" "~name(n.b); break;
 				case BindingRule.conditionalBool:proof=".conditionalBool "~name(n.a)~" "~name(n.b)~" "~name(n.c); break;
+				case BindingRule.closedRationalValue:{
+					auto literal=arena.at(nodes[p.to].data),q=SourceCertificates.q(arena.number(literal).re);
+					auto exact="(Numeric.calculate_sound ξ n"~to!string(p.extra)~" "~q~" rfl)";
+					auto literalProof="(Numeric.calculate_sound ξ n"~to!string(literal.id)~" "~q~" rfl)";
+					proof=".ofEq (fun ξ _ => "~exact~".trans "~literalProof~".symm)"; break;
+				}
 				case BindingRule.conditionalNumeric:
 					auto sort=elementSort(types[n.type]);
 					auto add=sort==Sort.natural?"Functions.addN.apply":sort==Sort.integer?"Functions.addZ.apply":sort==Sort.rational?"Functions.addQ.apply":"Value.add";

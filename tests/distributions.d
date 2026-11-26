@@ -1423,6 +1423,8 @@ private void run(string directory){
 		if(c.name=="UnsplitAbsolute") enforce(text.indexOf("∫")>=0,c.name~": "~text);
 		if(c.name.indexOf("PositiveCoordinate")==0)
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
+		if(c.name=="CenteredCoordinateQuartic"||c.name=="PositiveCoordinateNestedInverse")
+			enforce(certificate.indexOf(".ofEq (fun ξ _ => (Numeric.calculate_sound ξ ")>=0,c.name~" direct rational evaluation");
 		if(c.name.indexOf("CenteredCoordinate")==0)
 			enforce(certificate.indexOf("Grid.Lower.centered")>=0,c.name~" rational translation");
 		if(c.name=="CoordinateLogPole"||c.name=="CoordinateTouchingLog"||c.name=="CoordinateSignChangeLog")
