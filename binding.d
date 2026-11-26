@@ -199,7 +199,8 @@ private struct CoordinateJoin{
 }
 private struct CoordinateGrid{
 	PolynomialGrid grid;
-	uint body,weight,predicate=uint.max,outerPredicate=uint.max;
+	uint body,weight,predicate=uint.max,outerPredicate=uint.max,query=uint.max;
+	Rational sampledValue,sampledWeight;
 	CoordinateChange change;
 	CoordinateJoin[] joins;
 }
@@ -6732,6 +6733,49 @@ final class Bindings{
 			return distribution(ctx,BoundOp.distributionWeight,[hint(lambda(mask),"y"),distribution(ctx,BoundOp.distributionLebesgue)]);
 		}
 
+		// A rational point asks for one cell or one exceptional event. The model
+		// determines the answer directly from the checked grid.
+		Result literalGridDensity(BoundTerm t){
+			auto n=node(t),cover=nodes[n.a],y=nodes[n.b];
+			auto miss=Result(uint.max,uint.max);
+			if(cover.op!=BoundOp.distributionInverseCover||y.op!=BoundOp.scalar||!arena.isNumber(arena.at(y.data))) return miss;
+			auto row=nodes[cover.a];
+			if(row.op!=BoundOp.vectorCons||nodes[row.b].op!=BoundOp.vectorNil||nodes[row.a].op!=BoundOp.lambda) return miss;
+			auto body=nodes[nodes[row.a].a];
+			if(body.op!=BoundOp.primitive) return miss;
+			auto op=arena.view(arena.at(body.data)).op;
+			bool changed=gridChange(nodes[row.a].a)!=CoordinateChange.none;
+			if(!gridNumerical(changed?body.a:nodes[row.a].a)) return miss;
+			if(!changed){
+				// Polynomials and elementary rays already have smaller specialized proofs.
+				if(op!=Op.abs&&op!=Op.add&&op!=Op.mul) return miss;
+				Rational[] global; JumpRays rays;
+				if(axisPolynomial(nodes[row.a].a,global)||jumpRays(row.a,rays)) return miss;
+			}
+			auto sample=arena.number(arena.at(y.data)).re;
+			if(sample.words>128) return miss;
+			uint index;
+			if(polynomialCoordinate(at(row.a),index,BoundTerm.init,changed)==BoundTerm.init) return miss;
+			auto c=&coordinates[index];
+			size_t cell;
+			while(cell<c.grid.cuts.length&&c.grid.cuts[cell]<sample) ++cell;
+			bool seam=cell<c.grid.cuts.length&&c.grid.cuts[cell]==sample;
+			auto ctx=context(t); BoundTerm answer;
+			if(seam&&c.joins[cell].kind!=JoinKind.smooth) answer=bottom(ctx,type(t));
+			else{
+				c.sampledValue=seam?c.grid.points[cell]:polynomialAt(c.grid.cells[cell],sample);
+				auto slope=polynomialAt(derivativeCoefficients(c.grid.cells[cell]),sample);
+				c.sampledWeight=slope<Rational(0)?-slope:slope;
+				if(c.sampledValue.words>128||c.sampledWeight.words>128){coordinates.length=index; return miss;}
+				answer=scalar(ctx,arena.real_(c.sampledWeight));
+				if(changed){
+					auto inner=scalar(ctx,arena.real_(c.sampledValue));
+					answer=primitive(arena.mul(arena.real_(0),arena.real_(0),true),[gridChangeJacobian(c.change,inner),answer]);
+				}
+			}
+			c.query=n.b;
+			return Result(answer.id,emit(BindingRule.distributionCoordinateGrid,t.id,answer.id,uint.max,uint.max,index));
+		}
 		// Evaluate a smooth coordinate at a literal before normalizing its
 		// derivative under a lambda. Each step is an existing binding rule.
 		Result literalCoordinateDensity(BoundTerm t){
@@ -6851,6 +6895,12 @@ final class Bindings{
 						chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),direct.proof);
 						return Result(direct.output,uint.max);
 					}
+				}
+				auto grid=literalGridDensity(t);
+				if(grid.output!=uint.max){
+					++steps;
+					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),grid.proof);
+					return Result(grid.output,uint.max);
 				}
 				uint weight,point; bool product;
 				if(realAtomRow(at(n.a),weight,point)&&weight!=uint.max&&squareMap(lambda(at(point)).id,product)){
@@ -9131,7 +9181,14 @@ final class Bindings{
 		if(restricted){ cert.roots~=c.weight; pred=cert.functionAt(c.predicate); }
 		if(!cuts.length) return restricted?app("polynomialRestricted",pred~" "~cells[0]):app("polynomial",cells[0]);
 		bool changed=c.change!=CoordinateChange.none;
-		string continuous;
+		bool probing=c.query!=uint.max,hit;
+		Rational sample;
+		string probe,continuous;
+		if(probing){
+			sample=arena.number(arena.at(nodes[c.query].data)).re;
+			probe=app("Probe.nil",q(sample));
+			cert.roots~=c.weight;
+		}
 		if(changed){
 			cert.roots~=c.weight;
 			if(restricted) cert.roots~=c.predicate;
@@ -9165,7 +9222,11 @@ final class Bindings{
 					law=app("jump",point~"(l := "~q(j.left)~") (r := "~q(j.right)~") "~germs~" "~pv~" rfl rfl (of_decide_eq_true rfl) "~side~" "~zero);
 					eq=app("atomTerm",q(a)~" "~q(height)~" "~apos~" "~numeric(arena.real_(height),height));
 				}
-				if(restricted) cert.roots~=j.event;
+				if(probing){
+					hit|=sample==a;
+					probe=app("Probe.cons",q(sample)~" "~q(a)~" ("~name(j.event)~".eval ξ ρ) "~probe);
+				}
+				if(restricted||probing) cert.roots~=j.event;
 				if(restricted&&j.kind==JoinKind.corner){
 					auto cut=app("restrictedCorner",pred~" "~q(v)~" "~germs~" "~pv~" rfl rfl");
 					string shape;
@@ -9199,9 +9260,25 @@ final class Bindings{
 			}
 			tail=cert.save(grid~"Checked "~f~" "~w~" "~lo~" "~events,app(j.kind==JoinKind.smooth?"pass":"cut",bounds~"rfl "~cells[i]~" "~law~" "~tail));
 		}
+		string args;
 		if(changed){
 			string range; enforce(gridChangeRange(c.change,c.body,range,cert),"missing coordinate range");
-			auto args=grid~"ScalarChange."~to!string(c.change)~" "~range~" ";
+			args=grid~"ScalarChange."~to!string(c.change)~" "~range~" ";
+		}
+		if(probing){
+			string sampled(uint id,Rational v){
+				return "(Eq.trans "~cert.numericProof(id,sample,q(v))~" (Eq.symm "~numeric(arena.real_(v),v)~"))";
+			}
+			args~=q(sample)~" "~numeric(arena.at(nodes[c.query].data),sample)~" "~tail~" ";
+			if(changed) args~=continuous~" ";
+			args~=probe;
+			if(!hit){
+				if(changed) args~=" "~sampled(c.body,c.sampledValue);
+				args~=" "~sampled(c.weight,c.sampledWeight);
+			}
+			return app((changed?"probeChange":"probe")~(hit?"Cut":"Regular"),args);
+		}
+		if(changed){
 			return restricted?app("finishChangeRestricted",args~cert.functionAt(c.outerPredicate)~" "~tail~" "~continuous~" "~selected):
 				app("finishChange",args~tail~" "~continuous);
 		}

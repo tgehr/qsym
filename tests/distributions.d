@@ -208,6 +208,11 @@ private Case[] cases(){
 	Case("CenteredCoordinateNested","densityAtD(Λx. λ[log((x^2-2*x+1)*exp(x)+1)],0)","ℝ","1/2"),
 	Case("CoordinateTouchingLog","Λx. λ[log(x^2-2*x+1)]","Distribution(ℝ)"),
 	Case("CoordinateSignChangeLog","Λx. λ[log(x^2-3*x+1)]","Distribution(ℝ)"),
+	Case("ProbeGridJump","densityAtD(Λx. λ[x+[1≤x]·3],1)","ℝ","undefined(ℝ)"),
+	Case("ProbeGridJumpAway","densityAtD(Λx. λ[x+[1≤x]·3],2)","ℝ","1"),
+	Case("ProbeGridCorners","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],-1)","ℝ","undefined(ℝ)"),
+	Case("ProbeGridMiddle","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],0)","ℝ","0"),
+	Case("ProbeGridAffine","densityAtD(Λx. λ[2*abs(x-1)],2/3)","ℝ","2"),
 	Case("ChangedCoordinateExp","Λx. λ[exp(abs(x))]","Distribution(ℝ)","Λ(y:ℝ). (∫dx λ[x]·δ(x^2)[y]·[x=0])+(([y<0]+[0<y])·exp(abs(y)))·λ[y]"),
 	Case("ChangedCoordinateExpLeft","densityAtD(Λx. λ[exp(abs(x))],-1)","ℝ","e"),
 	Case("ChangedCoordinateLogLeft","densityAtD(Λx. λ[log(1+abs(x))],-3)","ℝ","1/4"),
@@ -1455,8 +1460,10 @@ private void run(string directory){
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
 		if(c.name=="CenteredCoordinateQuartic"||c.name=="PositiveCoordinateNestedInverse")
 			enforce(certificate.indexOf(".ofEq (fun ξ _ => (Numeric.calculate_sound ξ ")>=0,c.name~" direct rational evaluation");
+		if(c.name.indexOf("ProbeGrid")==0)
+			enforce(certificate.indexOf("Grid.probe")>=0,c.name~" missing direct point observation");
 		if(c.name.indexOf("ChangedCoordinate")==0)
-			enforce(certificate.indexOf("Grid.finishChange")>=0,c.name~" missing smooth change of a grid");
+			enforce(certificate.indexOf("Grid.finishChange")>=0||certificate.indexOf("Grid.probeChange")>=0,c.name~" missing smooth change of a grid");
 		if(c.name=="UnchangedCoordinateLogZero")
 			enforce(certificate.indexOf("Grid.finishChange")<0,c.name~" lost a domain boundary");
 		if(c.name.indexOf("NegativeCoordinate")==0)
