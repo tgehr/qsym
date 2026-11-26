@@ -1631,9 +1631,31 @@ private Case[] cases(){
 	Case("TermPointOnlySummand","∫dx [0≤x]*[x≤1]*([x=a]+2)*λ[x]","ℝ","2"),
 	Case("TermPointCases","∫dx [0≤x]*[x≤1]*([x=a]*3+[x≠a]*x)*λ[x]","ℝ","1/2"),
 	Case("TermPointExcludedDomain","∫dx [0≤x]*[x≤1]*[x≠a]*(1/b)*λ[x]","ℝ"),
-	Case("TermPointExcludedPartial","∫dx [0≤x]*[x≤1]*[x≠log(a)]*λ[x]","ℝ"),
-	Case("TermPointExcludedTermDomain","∫dx [0≤x]*[x≤log(b)]*[x≠a]*λ[x]","ℝ"),
-	Case("TermPointExcludedNested","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*λ[x]*λ[y]","ℝ"),
+	Case("TermPointExcludedPartial","∫dx [0≤x]*[x≤1]*[x≠log(a)]*λ[x]","ℝ","guard(0<a,(1:ℝ))"),
+	Case("TermPointExcludedTermDomain","∫dx [0≤x]*[x≤log(b)]*[x≠a]*λ[x]","ℝ","guard(0<b,[1≤b]·log(b))"),
+	Case("TermPointExcludedNested","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*λ[x]*λ[y]","ℝ","1"),
+	Case("TermPointMissingLine","∫dx [x≠log(a)]*e^(-x^2)*λ[x]","ℝ","guard(0<a,sqrt(π))"),
+	Case("TermPointMissingHalfLine","∫dx [0≤x]*[x≠log(a)]*e^(-x)*λ[x]","ℝ","guard(0<a,(1:ℝ))"),
+	Case("TermPointMissingFront","∫dx [x≠log(a)]*[0≤x]*[x≤1]*λ[x]","ℝ","guard(0<a,(1:ℝ))"),
+	Case("TermPointMissingScaled","∫dx [0≤x]*[x≤1]*[2*x≠log(a)]*x*λ[x]","ℝ","guard(0<a,(1/2:ℝ))"),
+	Case("TermPointMissingBound","∫dx [0≤x]*[x≤b]*[x≠log(a)]*λ[x]","ℝ","[0≤b]·(guard(0<a,[0≤b]·b))"),
+	Case("TermPointMissingRoot","∫dx [0≤x]*[x≤1]*[x≠sqrt(a)]*λ[x]","ℝ","guard(0≤a,(1:ℝ))"),
+	Case("TermPointMissingValue","∫dx [0≤x]*[x≤1]*[x≠log(a)]*x*λ[x]","ℝ","guard(0<a,(1/2:ℝ))"),
+	Case("TermPointMissingTwo","∫dx [0≤x]*[x≤1]*[x≠log(a)]*[x≠b]*λ[x]","ℝ","guard(0<a,(1:ℝ))"),
+	Case("TermPointMissingOrder","∫dx [0≤x]*[x≤1]*[x≠b]*[x≠log(a)]*λ[x]","ℝ"),
+	Case("TermPointMissingSum","∫dx ([0≤x]*[x≤1]*[x≠log(a)]+[1≤x]*[x≤2]*3)*λ[x]","ℝ"),
+	Case("TermPointMissingOnly","∫dx [0≤x]*[x≤1]*[x=log(a)]*λ[x]","ℝ","guard(0<a,(0:ℝ))"),
+	Case("TermPointMissingOnlyLine","∫dx [x=log(a)]*e^(-x^2)*λ[x]","ℝ","guard(0<a,(0:ℝ))"),
+	Case("TermPointMissingOnlyHalfLine","∫dx [0≤x]*[x=log(a)]*e^(-x)*λ[x]","ℝ","guard(0<a,(0:ℝ))"),
+	Case("TermPointMissingOnlyBound","∫dx [0≤x]*[x≤b]*[x=log(a)]*λ[x]","ℝ","[0≤b]·(guard(0<a,(0:ℝ)))"),
+	Case("TermPointNestedFront","∫dx ∫dy [0≤x]*[x≤1]*[x≠y]*[0≤y]*[y≤1]*λ[x]*λ[y]","ℝ","1"),
+	Case("TermPointNestedScaled","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[2*y≠x]*λ[x]*λ[y]","ℝ","1"),
+	Case("TermPointNestedFactor","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*2*λ[x]*λ[y]","ℝ","2"),
+	Case("TermPointNestedTwo","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*[y≠a]*λ[x]*λ[y]","ℝ","1"),
+	Case("TermPointNestedThree","∫dx ∫dy ∫dz [0≤x]*[x≤1]*[0≤y]*[y≤1]*[0≤z]*[z≤1]*[x≠y]*[y≠z]*λ[x]*λ[y]*λ[z]","ℝ","1"),
+	Case("TermPointNestedOnly","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x=y]*λ[x]*λ[y]","ℝ","0"),
+	Case("TermPointNestedValue","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*x*y*λ[x]*λ[y]","ℝ"),
+	Case("TermPointNestedCases","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*([x=y]*3+[x≠y]*2)*λ[x]*λ[y]","ℝ"),
 	Case("TermPointExcludedSquare","∫dx [0≤x]*[x≤1]*[x^2≠a]*λ[x]","ℝ"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
@@ -3361,27 +3383,52 @@ private void run(string directory){
 		// A point that a weight excludes, `[x≠a]`, and a weight on a point
 		// only, `[x=a]`: the exclusion is the term `x-a` being not zero, and
 		// the other its negation. A term of degree one in the axis vanishes
-		// at one point, so the weight with the exclusion taken to hold
-		// differs from it at that point only and has the same observation,
-		// whatever the exclusion is part of. This is an equation of partial
-		// values where both weights and the rest of the term exist at every
-		// point; the certificate carries the three checks. So the weight of
-		// a point is a zero, and the two branches of a comparison of the
-		// axis with a term leave the branch of the exclusion. Kept are a
-		// weight with a value or a term that is not total, where a missing
+		// at one point, so the weight differs at that point only from the
+		// weight without the exclusion, and the weight on the point only
+		// from a zero.
+		//
+		// Where the exclusion is a condition of the guard right behind a
+		// lower and an upper bound, behind a single bound, or at the front,
+		// it leaves the observation from there, and the point may be
+		// missing, as `log(a)` is and as the variable of an outer integral
+		// is in the model: the result is under the test that the point
+		// exists, which `t≤t` says of the rest of its term, and that under
+		// the test that the bounds in front leave a point, as for a
+		// condition that does not mention the axis. What is behind the
+		// exclusion exists at every point; the certificate carries that
+		// check. The weight on such a point only is a zero under the same
+		// tests.
+		//
+		// Elsewhere, in a summand or with a value behind it whose
+		// observation is kept, the exclusion is taken to hold in the whole
+		// weight: an equation of partial values where both weights and the
+		// rest of the term exist at every point, three checks.
+		//
+		// Kept are a weight with a value that is not total, where a missing
 		// value could be asked for at the excluded point only; a point that
-		// is not total itself; a point that is the variable of an outer
-		// integral, which may be missing; and an exclusion whose term is
-		// not of degree one.
+		// may be missing behind another exclusion, in a summand, or with a
+		// value behind it that mentions the variable of the outer integral;
+		// and an exclusion whose term is not of degree one.
 		if(c.name.indexOf("TermPoint")==0){
 			bool among(string[] names...){ foreach(name;names) if(c.name=="TermPoint"~name) return true; return false; }
-			bool retained=among("ExcludedDomain","ExcludedPartial","ExcludedTermDomain","ExcludedNested","ExcludedSquare");
+			import std.algorithm.searching:count;
+			size_t steps(string lemma){ return certificate.count("Distribution.DensityProgram."~lemma~" "); }
+			bool retained=among("ExcludedDomain","ExcludedSquare","MissingOrder","MissingSum","NestedValue","NestedCases");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			if(among("ExcludedQuotient")) enforce(certificate.indexOf("Distribution.StepSource.IntervalTerms.cauchy ")>=0,c.name);
 			enforce((text.indexOf("≠")>=0)==retained,c.name~": "~text);
-			import std.algorithm.searching:count;
-			auto steps=certificate.count("Distribution.DensityProgram.mass_null_point ");
-			enforce(steps==(retained?0:among("ExcludedTwo","ExcludedRational","ExcludedSum")?2:1),c.name~" excluded points");
+			enforce(steps("mass_null_point")==(among("ExcludedSum")?2:among("OnlySummand","Cases")?1:0),c.name~" exclusion in a weight at every point");
+			bool only=c.name.indexOf("TermPointMissingOnly")==0||among("Only","OnlyValue","NestedOnly");
+			bool front=among("ExcludedFirst","ExcludedLine","MissingLine","MissingFront","MissingOnlyLine","NestedFront");
+			bool beyond=among("ExcludedBetween","ExcludedHalfLine","MissingHalfLine","MissingOnlyHalfLine");
+			bool between=!retained&&!steps("mass_null_point")&&!front&&!beyond;
+			size_t twice=among("ExcludedTwo","ExcludedRational","MissingTwo","NestedTwo","NestedThree")?2:1;
+			enforce(steps("mass_front_excluded")==(front&&!only?1:0),c.name~" excluded point at the front");
+			enforce(steps("mass_beyond_excluded")==(beyond&&!only?1:0),c.name~" excluded point behind a bound");
+			enforce(steps("mass_between_excluded")==(between&&!only?twice:0),c.name~" excluded point behind two bounds");
+			enforce(steps("mass_front_only")==(front&&only?1:0),c.name~" point only at the front");
+			enforce(steps("mass_beyond_only")==(beyond&&only?1:0),c.name~" point only behind a bound");
+			enforce(steps("mass_between_only")==(between&&only?1:0),c.name~" point only behind two bounds");
 		}
 		// An end of an interval that a condition excludes: `[x≤a]·[x≠a]`,
 		// `[x≤a]·[a≠x]`, `[x<a]·[x≠a]`. The scalar simplifier knows the two

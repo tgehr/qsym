@@ -57,7 +57,7 @@ private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=u
 // then there is one case, the weight without that condition. Or, with
 // `domain`, the guard of the domain of a term of a later bound in that
 // place: then the one case is the weight without the guard.
-private struct BoundSplit{ bool third,first,lower,free,domain; bool[3] strict; uint[3] terms; uint condition=uint.max; BoundTerm kept,changed; string rest,whole,one,other; }
+private struct BoundSplit{ bool third,first,lower,free,domain,excluded,only,front; bool[3] strict; uint[3] terms; uint condition=uint.max,point=uint.max; BoundTerm kept,changed,exists,tail; Rational slope; string rest,whole,one,other,linear; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct IntegralCell{ Rational lower,upper,sample; }
 // Rational coefficient lists, lowest degree first.
@@ -2146,7 +2146,7 @@ final class Bindings{
 			if(!isOp(top,Op.mask)) return false;
 			maskOp=arena.at(top.data); whole=masks(weight);
 		}
-		if(many||chain.length<2) return false;
+		if(many||!chain.length) return false;
 		bool bound(uint id,out bool lower,out bool strict,out uint term){
 			auto c=nodes[id]; if(!isOp(c,Op.le)&&!isOp(c,Op.lt)) return false;
 			strict=isOp(c,Op.lt);
@@ -2155,25 +2155,42 @@ final class Bindings{
 			if(axis(c.a)&&!depends(at(c.b),0)){ term=c.b; return true; }
 			return false;
 		}
-		bool[3] lower;
-		if(!bound(chain[0],lower[0],s.strict[0],s.terms[0])) return false;
-		s.lower=lower[0]; size_t count=2;
-		if(!depends(at(chain[1]),0)){ s.free=true; s.condition=chain[1]; }
+		// An excluded point in place of a condition that does not mention
+		// the axis: a term of degree one in the axis being not zero. Or the
+		// negation of that, which leaves the point only. Not under the
+		// guard of a domain, whose shape is another one then.
+		bool excludes(uint id){
+			auto only=primitiveOp(id,Op.not_),exclusion=only?nodes[id].a:id;
+			if(around!=uint.max||!primitiveOp(exclusion,Op.nonzero)||!axisSlope(nodes[exclusion].a,s.slope)||s.slope.zero) return false;
+			s.free=s.excluded=true; s.only=only; s.condition=id; s.point=nodes[exclusion].a; return true;
+		}
+		bool[3] lower; size_t count=2;
+		if(excludes(chain[0])){ s.front=true; count=1; }
 		else{
-			if(!bound(chain[1],lower[1],s.strict[1],s.terms[1])) return false;
-			if(lower[0]!=lower[1]){
-				if(chain.length<3) return false;
-				s.third=true; count=3;
-				if(!depends(at(chain[2]),0)){ s.free=true; s.condition=chain[2]; }
-				else{
-					if(!bound(chain[2],lower[2],s.strict[2],s.terms[2])) return false;
-					s.first=lower[2]==lower[0];
+			if(chain.length<2||!bound(chain[0],lower[0],s.strict[0],s.terms[0])) return false;
+			s.lower=lower[0];
+			if(!depends(at(chain[1]),0)){ s.free=true; s.condition=chain[1]; }
+			else if(!excludes(chain[1])){
+				if(!bound(chain[1],lower[1],s.strict[1],s.terms[1])) return false;
+				if(lower[0]!=lower[1]){
+					if(chain.length<3) return false;
+					s.third=true; count=3;
+					if(!depends(at(chain[2]),0)){ s.free=true; s.condition=chain[2]; }
+					else if(!excludes(chain[2])){
+						if(!bound(chain[2],lower[2],s.strict[2],s.terms[2])) return false;
+						s.first=lower[2]==lower[0];
+					}
 				}
 			}
 		}
 		// The weight with these positions of the guard in front of its rest:
 		// one mask of a conjunction nested to the right.
 		BoundTerm rebuilt(uint[] guards,size_t[] front){
+			if(!guards.length){
+				// Nothing but the value is left, under its casts.
+				auto bare=at(value); foreach_reverse(c;casts) bare=primitive(arena.at(nodes[c].data),[bare]);
+				return bare;
+			}
 			auto g=at(guards[$-1]),andOp=arena.and_(arena.boolean(true),arena.boolean(true));
 			foreach_reverse(c;guards[0..$-1]) g=primitive(andOp,[at(c),g]);
 			auto r=primitive(maskOp,[g,at(value)]);
@@ -2193,11 +2210,12 @@ final class Bindings{
 				}
 				return step(0);
 			}
+			if(!guards.length) return "rfl";
 			auto g="("~src~"Conjunction.one "~under(guards[$-1])~")";
 			foreach_reverse(c;guards[0..$-1]) g="("~src~"Conjunction.cons "~under(c)~" "~g~")";
 			return casts.length?"("~src~brackets[casts.length-1]~" "~g~" "~under(value)~")":"("~src~"Masks.mask "~g~" ("~src~"Masks.value "~under(value)~"))";
 		}
-		size_t[] kept=s.third?[0,1]:[0],changed=!s.third?[1]:s.first?[2,1]:[0,2];
+		size_t[] kept=s.front?[]:s.third?[0,1]:[0],changed=!s.third?[1]:s.first?[2,1]:[0,2];
 		uint[] select(size_t[] front){ uint[] r; foreach(i;front) r~=chain[i]; return r~chain[count..$]; }
 		s.kept=rebuilt(select(kept),kept); s.one=evidence(select(kept));
 		if(!s.free){ s.changed=rebuilt(select(changed),changed); s.other=evidence(select(changed)); }
@@ -2208,6 +2226,19 @@ final class Bindings{
 		if(casts.length) s.rest="(Functions.castQR.apply "~s.rest~")";
 		if(around!=uint.max) s.rest="(Binding.guardValue "~under(domains[$-1])~" "~s.rest~")";
 		foreach_reverse(c;chain[count..$]) s.rest="(Value.mask "~under(c)~" "~s.rest~")";
+		if(s.excluded){
+			// The test that the point exists: what its term has beside the
+			// axis, compared with itself. And what is behind the exclusion,
+			// as the rest above: the masks of its conditions around the
+			// value under its casts. That exists at every point; where it
+			// does not, the weight keeps the exclusion.
+			string fixed(uint id){ return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some (0 : ℝ)) ρ))"; }
+			auto offset=axisOffset(s.point,&fixed,s.linear),zero=arena.real_(0);
+			s.exists=primitive(arena.le(zero,zero),[offset,offset]);
+			s.tail=at(value); foreach_reverse(c;casts) s.tail=primitive(arena.at(nodes[c].data),[s.tail]);
+			foreach_reverse(c;chain[count..$]) s.tail=primitive(arena.mask(arena.boolean(true),arena.real_(1)),[at(c),s.tail]);
+			ScalarDomain check; if(!totalRowDomain(s.tail.id,check,false)) return false;
+		}
 		return true;
 	}
 	// A guard of a weight that can fail at the origin only: `x≠0`, or a
@@ -6931,7 +6962,9 @@ final class Bindings{
 			BoundTerm term(size_t i){ return dropIndex(at(s.terms[i])); }
 			BoundTerm test(bool strict,BoundTerm a,BoundTerm b){ return primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[a,b]); }
 			BoundTerm masked(BoundTerm c,BoundTerm x){ return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[c,x]); }
-			auto inside=s.domain?guard(dropIndex(at(s.condition)),kept):masked(dropIndex(at(s.condition)),kept);
+			auto condition=dropIndex(s.excluded?s.exists:at(s.condition));
+			auto inside=s.domain?guard(condition,kept):masked(condition,kept);
+			if(s.front) return inside;
 			if(!s.third) return masked(test(false,term(0),term(0)),inside);
 			bool strict=s.strict[0]||s.strict[1];
 			return masked(s.lower?test(strict,term(0),term(1)):test(strict,term(1),term(0)),inside);
@@ -6944,13 +6977,13 @@ final class Bindings{
 		bool summandObserved(BoundTerm t,uint id,uint depth){
 			IntegralSolution trial; if(integrateInterval(t,trial,id,false)!=BoundTerm.init) return true;
 			BoundSplit s;
-			return depth<4&&competingBody(id,s)&&summandObserved(t,s.kept.id,depth+1)&&(s.free||summandObserved(t,s.changed.id,depth+1));
+			return depth<4&&competingBody(id,s)&&!s.excluded&&summandObserved(t,s.kept.id,depth+1)&&(s.free||summandObserved(t,s.changed.id,depth+1));
 		}
 		BoundTerm integrateSummand(BoundTerm t,uint id,out IntegralSolution piece,uint depth){
 			IntegralSolution trial;
 			if(integrateInterval(t,trial,id,false)!=BoundTerm.init) return integrateInterval(t,piece,id);
 			BoundSplit s; IntegralSolution first,second;
-			if(depth>=4||!competingBody(id,s)) return BoundTerm.init;
+			if(depth>=4||!competingBody(id,s)||s.excluded) return BoundTerm.init;
 			auto kept=integrateSummand(t,s.kept.id,first,depth+1); if(kept==BoundTerm.init) return kept;
 			if(s.free){
 				auto guarded=guardedCase(s,kept);
@@ -7113,6 +7146,8 @@ final class Bindings{
 				auto weight=inheritHint(at(nodes[node(t).a].a),lambda(body));
 				return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
 			}
+			// The observation of a weight on a point only is a zero.
+			if(s.only) return guardedCase(s,scalar(ctx,arena.real_(0)));
 			if(s.free){
 				auto inside=mass(s.kept);
 				return observable(inside,depth+1)?guardedCase(s,inside):BoundTerm.init;
@@ -7133,6 +7168,19 @@ final class Bindings{
 			auto inside=distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
 			return observable(inside,depth+1)?inside:BoundTerm.init;
 		}
+		// A weight that excludes a point can be observed where the weight
+		// without the exclusion can, as the simplifier then writes it: the
+		// step that takes the exclusion away is tried last at an
+		// observation, and the steps before it ask this of what they leave.
+		bool pointObserved(BoundTerm inside,uint depth) @safe {
+			auto n=node(inside); uint[] bodies; PointExclusion e;
+			if(depth>8||n.op!=BoundOp.distributionMass||!densityBodies(n.a,bodies)||bodies.length!=1||!pointExclusion(bodies[0],e,null,null)) return false;
+			foreach(row;[bodies[0],e.to.id,e.offset.id]){ ScalarDomain check; if(!totalRowDomain(row,check,false)) return false; }
+			auto inner=context(e.to),argument=arena.variable(Sort.real_,freshScalarIndex(e.to.id)),source=scalarBody(e.to,argument);
+			auto value=simplify(arena,source,Options(DensityMode.preserve,false)); if(value.exhausted) return false;
+			auto ctx=context(inside),weight=lambda(restoreBody(arena.castTo(value.output,arena.sort(source)),inner,argument));
+			return observable(distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]),depth+1);
+		}
 		bool observed(BoundTerm inside,uint depth) @safe {
 			IntegralSolution trial; bool found=integrateSteps(inside,trial)!=BoundTerm.init;
 			if(!found){ trial=IntegralSolution.init; found=integratePolynomials(inside,trial)!=BoundTerm.init; }
@@ -7142,7 +7190,7 @@ final class Bindings{
 			if(!found){ trial=IntegralSolution.init; found=integrateMissingPoint(inside,trial)!=BoundTerm.init; }
 			if(!found){ trial=IntegralSolution.init; found=integratePieces(inside,trial)!=BoundTerm.init; }
 			if(!found){ trial=IntegralSolution.init; found=distributeMass(inside,trial,false)!=BoundTerm.init; }
-			return found||massGuard(inside,depth)!=BoundTerm.init||splitBounds(inside,depth)!=BoundTerm.init||solveMass(inside,depth)!=BoundTerm.init;
+			return found||massGuard(inside,depth)!=BoundTerm.init||splitBounds(inside,depth)!=BoundTerm.init||solveMass(inside,depth)!=BoundTerm.init||pointObserved(inside,depth);
 		}
 		observable=&observed;
 		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
@@ -9306,7 +9354,11 @@ final class Bindings{
 					if(strict!=BoundTerm.init){ next=strict; rule=origin!=BoundTerm.init?BindingRule.distributionMassOrigin:BindingRule.distributionMassStrictGuard; }
 					else if(spread!=BoundTerm.init){ next=spread; rule=BindingRule.distributionMassSpread; extra=cast(uint)integrals.length; integrals~=sum; }
 					else if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
-					else if(bounds!=BoundTerm.init){ next=bounds; rule=BindingRule.distributionMassBounds; }
+					else if(bounds!=BoundTerm.init){
+						next=bounds; rule=BindingRule.distributionMassBounds;
+						// The certificate of what is behind an excluded point.
+						BoundSplit split; if(competingBounds(result.output,split)&&split.excluded) extra=totalMapDomain(split.tail.id);
+					}
 					else if(solved!=BoundTerm.init){ next=solved; rule=BindingRule.distributionMassSolve; }
 					else{
 						solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution);
@@ -14762,10 +14814,19 @@ final class Bindings{
 				case BindingRule.distributionMassBounds:{
 					BoundSplit s;enforce(competingBounds(p.from,s),"missing bounds on one side");
 					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
-					auto count=(s.third?3:2)-(s.free?1:0);
+					auto count=s.front?0:(s.third?3:2)-(s.free?1:0);
 					string arguments=s.lower?"true":"false";
 					foreach(k;0..count)arguments~=s.strict[k]?" true":" false";
 					foreach(k;0..count)arguments~=" ("~name(dropIndex(at(s.terms[k])).id)~".eval ξ ρ)";
+					if(s.excluded){
+						// An excluded point behind its bounds, or at the front; or
+						// the point only, whose observation is the literal zero.
+						auto kind=s.only?"only":"excluded";
+						auto lemma=s.front?"mass_front_"~kind:(s.third?"mass_between_":"mass_beyond_")~kind~" "~arguments;
+						auto other=s.only?" (z := "~name(scalar(context(at(p.from)),arena.real_(0)).id)~".eval ξ ρ) "~literalProof(Rational(0)):"";
+						proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram."~lemma~" (f := "~fn(s.point)~") (p := "~SourceCertificates.q(s.slope)~") "~s.linear~" rfl"~other~" (w := "~fn(nodes[nodes[n.a].a].a)~")"~
+							(s.only?"":" (v := "~fn(s.kept.id)~")")~" (fun x => "~s.rest~") (fun x => "~s.whole~")"~(s.only?"":" (fun x => "~s.one~")")~" "~rowTotalProof(p.extra)~"; h)"; break;
+					}
 					if(s.free){
 						// A condition that does not mention the axis, behind its bounds.
 						proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram."~(s.third?"mass_between":"mass_beyond")~(s.domain?"_domain":"_guard")~" "~arguments~" ("~name(dropIndex(at(s.condition)).id)~".eval ξ ρ) (w := "~fn(nodes[nodes[n.a].a].a)~") (v := "~

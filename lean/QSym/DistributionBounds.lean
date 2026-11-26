@@ -1045,6 +1045,230 @@ theorem solve_right_neg (σ : Bool) {f : ℝ → Option ℝ} {p : ℚ} {s m k : 
   · rw [← div_eq_mul_inv, lt_div_iff_of_neg hp]
     constructor <;> intro h <;> linarith
 
+/-- At that one point it is zero. -/
+theorem Linear.zero_at {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ} (h : Linear f p s)
+    (hp : p ≠ 0) {c : ℝ} (hs : s = some c) : Value.nonzero (f (-c / p)) = some false := by
+  have hp' : (p : ℝ) ≠ 0 := by exact_mod_cast hp
+  have h0 : (p : ℝ) * (-c / p) + c = 0 := by field_simp; ring
+  rw [h.equation, hs]
+  simp [Value.add, Value.nonzero, h0]
+
+/-- Where what the term has beside the axis is missing, the term is missing
+at every point. -/
+theorem Linear.missing {f : ℝ → Option ℝ} {p : ℚ} (h : Linear f p none) (x : ℝ) :
+    Value.nonzero (f x) = none := by
+  rw [h.equation]; rfl
+
+/-- A weight that excludes a point of the axis, behind bounds. Under a test,
+and where the point exists, it is another weight at every point but that one,
+and there the two exist together. Where the test fails it is a zero at every
+point, and where the test or the point is missing it is missing at some
+point. The point exists where what its term has beside the axis does. -/
+structure Excluded (w v : ℝ → Option ℝ) (n : Option Bool) (s : Option ℝ) : Prop where
+  missing : n = none → ∃ x, w x = none
+  empty : n = some false → ∀ x, w x = some 0
+  undecided : n = some true → s = none → ∃ x, w x = none
+  holds : n = some true → ∀ c, s = some c →
+    ∃ a : ℝ, (∀ x, x ≠ a → w x = v x) ∧ (Value.Defined (w a) ↔ Value.Defined (v a))
+
+/-- Two weights that agree at every point but one, and exist together at that
+one, have the same observation. -/
+theorem observation_away {w v : ℝ → Option ℝ} {a : ℝ} (away : ∀ x, x ≠ a → w x = v x)
+    (point : Value.Defined (w a) ↔ Value.Defined (v a)) :
+    partialIntegral volume w = partialIntegral volume v := by
+  have missing : ∀ {u : ℝ → Option ℝ} {x : ℝ}, ¬ Value.Defined (u x) → u x = none := by
+    intro u x hx
+    cases hu : u x with
+    | none => rfl
+    | some y => exact absurd ⟨y, hu⟩ hx
+  by_cases hd : ∀ x, Value.Defined (w x)
+  · have hv : ∀ x, Value.Defined (v x) := fun x => by
+      by_cases hx : x = a
+      · subst hx; exact point.mp (hd x)
+      · rw [← away x hx]; exact hd x
+    exact partialIntegral_congr_away w v [a] hd hv (fun x hx => away x (hx a (by simp)))
+  · obtain ⟨x, hx⟩ := not_forall.mp hd
+    have hy : ∃ y, v y = none := by
+      by_cases hxa : x = a
+      · subst hxa; exact ⟨x, missing (fun h => hx (point.mpr h))⟩
+      · exact ⟨x, by rw [← away x hxa]; exact missing hx⟩
+    obtain ⟨y, hy⟩ := hy
+    rw [partialIntegral_missing (missing hx), partialIntegral_missing hy]
+
+/-- The observation of such a weight is that of the other weight, under the
+test and where the point exists, which `s ≤ s` says of the rest of its
+term. -/
+theorem Excluded.integral {w v : ℝ → Option ℝ} {n : Option Bool} {s : Option ℝ}
+    (h : Excluded w v n s) :
+    partialIntegral volume w =
+      Value.mask n (Value.mask (Value.le s s) (partialIntegral volume v)) := by
+  rcases n with _ | _ | _
+  · obtain ⟨x, hx⟩ := h.missing rfl
+    rw [partialIntegral_missing hx]; rfl
+  · rw [zero_observation w (h.empty rfl)]; rfl
+  rcases s with _ | c
+  · obtain ⟨x, hx⟩ := h.undecided rfl rfl
+    rw [partialIntegral_missing hx]; rfl
+  · obtain ⟨a, away, point⟩ := h.holds rfl c rfl
+    have hle : Value.le (some c) (some c) = some true := by simp [Value.le]
+    rw [hle, observation_away away point]; rfl
+
+/-- An excluded point behind a lower and an upper bound: it leaves the weight
+under the test that a point is between the bounds. What is behind the
+exclusion exists at every point: at the excluded one it is asked for only
+without the exclusion. -/
+theorem between_excluded (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {f : ℝ → Option ℝ} {p : ℚ}
+    {s : Option ℝ} (hf : Linear f p s) (hp : decide (p ≠ 0) = true) {w v : ℝ → Option ℝ}
+    (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower s₁ t₁ x)
+      (Value.mask (axisBound (!lower) s₂ t₂ x) (Value.mask (Value.nonzero (f x)) (r x))))
+    (hv : ∀ x, v x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x)))
+    (hr : ∀ x, Value.Defined (r x)) :
+    Excluded w v (boundsMeet lower s₁ s₂ t₁ t₂) s := by
+  refine ⟨fun hN => ?_, fun hN x => ?_, fun hN hs => ?_, fun hN c hs => ?_⟩
+  · obtain ⟨x, hx⟩ := meet_missing hN (fun x => Value.mask (Value.nonzero (f x)) (r x))
+    exact ⟨x, by rw [h x]; exact hx⟩
+  · rw [h x]; exact meet_empty hN (fun x => Value.mask (Value.nonzero (f x)) (r x)) x
+  · obtain ⟨a, b, x, rfl, rfl, h₁, h₂⟩ := meet_point hN
+    subst hs
+    refine ⟨x, ?_⟩
+    rw [h x, axisBound_real, axisBound_real, decide_eq_true h₁, decide_eq_true h₂, hf.missing]; rfl
+  · obtain ⟨a, b, _, rfl, rfl, _, _⟩ := meet_point hN
+    have hp' := of_decide_eq_true hp
+    refine ⟨-c / p, fun x hx => ?_, ?_⟩
+    · rw [h x, hv x, hf.nonzero_away hp' hs hx]; rfl
+    · obtain ⟨y, hy⟩ := hr (-c / p)
+      rw [h, hv, axisBound_real, axisBound_real, hf.zero_at hp' hs, hy]
+      by_cases h₁ : meets lower s₁ a (-c / p) <;> by_cases h₂ : meets (!lower) s₂ b (-c / p) <;>
+        simp [h₁, h₂, Value.mask, Value.Defined]
+
+/-- An excluded point behind a single bound: a half-line is never empty, so
+the test is only that the term of the bound exists. -/
+theorem beyond_excluded (lower σ : Bool) (t : Option ℝ) {f : ℝ → Option ℝ} {p : ℚ}
+    {s : Option ℝ} (hf : Linear f p s) (hp : decide (p ≠ 0) = true) {w v : ℝ → Option ℝ}
+    (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower σ t x) (Value.mask (Value.nonzero (f x)) (r x)))
+    (hv : ∀ x, v x = Value.mask (axisBound lower σ t x) (r x))
+    (hr : ∀ x, Value.Defined (r x)) :
+    Excluded w v (Value.le t t) s := by
+  rcases t with _ | a
+  · refine ⟨fun _ => ⟨0, by rw [h 0, axisBound_missing]; rfl⟩, fun hN => ?_, fun hN => ?_,
+      fun hN => ?_⟩ <;> cases hN
+  · have hle : Value.le (some a) (some a) = some true := by simp [Value.le]
+    have hp' := of_decide_eq_true hp
+    refine ⟨fun hN => ?_, fun hN => ?_, fun _ hs => ?_, fun _ c hs => ?_⟩
+    · rw [hle] at hN; cases hN
+    · rw [hle] at hN; cases hN
+    · obtain ⟨x, hx⟩ := meets_beyond lower σ a
+      subst hs
+      exact ⟨x, by rw [h x, axisBound_real, decide_eq_true hx, hf.missing]; rfl⟩
+    · refine ⟨-c / p, fun x hx => ?_, ?_⟩
+      · rw [h x, hv x, hf.nonzero_away hp' hs hx]; rfl
+      · obtain ⟨y, hy⟩ := hr (-c / p)
+        rw [h, hv, axisBound_real, hf.zero_at hp' hs, hy]
+        by_cases h₁ : meets lower σ a (-c / p) <;> simp [h₁, Value.mask, Value.Defined]
+
+/-- An excluded point at the front of a weight: there is no test. -/
+theorem front_excluded {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ} (hf : Linear f p s)
+    (hp : decide (p ≠ 0) = true) {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (Value.nonzero (f x)) (r x)) (hv : ∀ x, v x = r x)
+    (hr : ∀ x, Value.Defined (r x)) :
+    Excluded w v (some true) s := by
+  have hp' := of_decide_eq_true hp
+  refine ⟨fun hN => ?_, fun hN => ?_, fun _ hs => ?_, fun _ c hs => ?_⟩
+  · cases hN
+  · cases hN
+  · subst hs
+    exact ⟨0, by rw [h 0, hf.missing]; rfl⟩
+  · refine ⟨-c / p, fun x hx => ?_, ?_⟩
+    · rw [h x, hv x, hf.nonzero_away hp' hs hx]; rfl
+    · rw [h, hv, hf.zero_at hp' hs]
+      exact ⟨fun _ => hr _, fun _ => ⟨0, rfl⟩⟩
+
+/-- A weight on a point only, behind a lower and an upper bound: the negation
+of an exclusion. Under the same test, and where the point exists, it is a zero
+at every point but that one. -/
+theorem between_only (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {f : ℝ → Option ℝ} {p : ℚ}
+    {s : Option ℝ} (hf : Linear f p s) (hp : decide (p ≠ 0) = true) {w : ℝ → Option ℝ}
+    (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower s₁ t₁ x)
+      (Value.mask (axisBound (!lower) s₂ t₂ x)
+        (Value.mask (Value.not (Value.nonzero (f x))) (r x))))
+    (hr : ∀ x, Value.Defined (r x)) :
+    Excluded w (fun _ => some 0) (boundsMeet lower s₁ s₂ t₁ t₂) s := by
+  refine ⟨fun hN => ?_, fun hN x => ?_, fun hN hs => ?_, fun hN c hs => ?_⟩
+  · obtain ⟨x, hx⟩ :=
+      meet_missing hN (fun x => Value.mask (Value.not (Value.nonzero (f x))) (r x))
+    exact ⟨x, by rw [h x]; exact hx⟩
+  · rw [h x]
+    exact meet_empty hN (fun x => Value.mask (Value.not (Value.nonzero (f x))) (r x)) x
+  · obtain ⟨a, b, x, rfl, rfl, h₁, h₂⟩ := meet_point hN
+    subst hs
+    refine ⟨x, ?_⟩
+    rw [h x, axisBound_real, axisBound_real, decide_eq_true h₁, decide_eq_true h₂, hf.missing]; rfl
+  · obtain ⟨a, b, _, rfl, rfl, _, _⟩ := meet_point hN
+    have hp' := of_decide_eq_true hp
+    refine ⟨-c / p, fun x hx => ?_, ?_⟩
+    · rw [h x, axisBound_real, axisBound_real, hf.nonzero_away hp' hs hx]
+      by_cases h₁ : meets lower s₁ a x <;> by_cases h₂ : meets (!lower) s₂ b x <;>
+        simp [h₁, h₂, Value.mask, Value.not]
+    · obtain ⟨y, hy⟩ := hr (-c / p)
+      rw [h, axisBound_real, axisBound_real, hf.zero_at hp' hs, hy]
+      by_cases h₁ : meets lower s₁ a (-c / p) <;> by_cases h₂ : meets (!lower) s₂ b (-c / p) <;>
+        simp [h₁, h₂, Value.mask, Value.not, Value.Defined]
+
+/-- The same behind a single bound. -/
+theorem beyond_only (lower σ : Bool) (t : Option ℝ) {f : ℝ → Option ℝ} {p : ℚ}
+    {s : Option ℝ} (hf : Linear f p s) (hp : decide (p ≠ 0) = true) {w : ℝ → Option ℝ}
+    (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower σ t x)
+      (Value.mask (Value.not (Value.nonzero (f x))) (r x)))
+    (hr : ∀ x, Value.Defined (r x)) :
+    Excluded w (fun _ => some 0) (Value.le t t) s := by
+  rcases t with _ | a
+  · refine ⟨fun _ => ⟨0, by rw [h 0, axisBound_missing]; rfl⟩, fun hN => ?_, fun hN => ?_,
+      fun hN => ?_⟩ <;> cases hN
+  · have hle : Value.le (some a) (some a) = some true := by simp [Value.le]
+    have hp' := of_decide_eq_true hp
+    refine ⟨fun hN => ?_, fun hN => ?_, fun _ hs => ?_, fun _ c hs => ?_⟩
+    · rw [hle] at hN; cases hN
+    · rw [hle] at hN; cases hN
+    · obtain ⟨x, hx⟩ := meets_beyond lower σ a
+      subst hs
+      exact ⟨x, by rw [h x, axisBound_real, decide_eq_true hx, hf.missing]; rfl⟩
+    · refine ⟨-c / p, fun x hx => ?_, ?_⟩
+      · rw [h x, axisBound_real, hf.nonzero_away hp' hs hx]
+        by_cases h₁ : meets lower σ a x <;> simp [h₁, Value.mask, Value.not]
+      · obtain ⟨y, hy⟩ := hr (-c / p)
+        rw [h, axisBound_real, hf.zero_at hp' hs, hy]
+        by_cases h₁ : meets lower σ a (-c / p) <;> simp [h₁, Value.mask, Value.not, Value.Defined]
+
+/-- The same at the front of a weight. -/
+theorem front_only {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ} (hf : Linear f p s)
+    (hp : decide (p ≠ 0) = true) {w : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (Value.not (Value.nonzero (f x))) (r x))
+    (hr : ∀ x, Value.Defined (r x)) :
+    Excluded w (fun _ => some 0) (some true) s := by
+  have hp' := of_decide_eq_true hp
+  refine ⟨fun hN => ?_, fun hN => ?_, fun _ hs => ?_, fun _ c hs => ?_⟩
+  · cases hN
+  · cases hN
+  · subst hs
+    exact ⟨0, by rw [h 0, hf.missing]; rfl⟩
+  · refine ⟨-c / p, fun x hx => ?_, ?_⟩
+    · rw [h x, hf.nonzero_away hp' hs hx]; rfl
+    · rw [h, hf.zero_at hp' hs]
+      exact ⟨fun _ => ⟨0, rfl⟩, fun _ => hr _⟩
+
+/-- The observation of a weight on a point only: a zero under the tests. -/
+theorem Excluded.zero {w : ℝ → Option ℝ} {n : Option Bool} {s z : Option ℝ}
+    (h : Excluded w (fun _ => some 0) n s)
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    partialIntegral volume w = Value.mask n (Value.mask (Value.le s s) z) := by
+  rw [h.integral, zero_observation (fun _ => some 0) (fun _ => rfl), hz]
+  simp [Numeric.denote]
+
 end QSym.Distribution.StepSource
 
 namespace QSym.Distribution.DensityProgram
@@ -1204,5 +1428,90 @@ theorem mass_null_point {w v f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ}
   obtain ⟨c, hc⟩ := hs
   exact partialIntegral_congr_away w v [-c / p] tw tv
     (fun x hx => h x (hf.nonzero_away (of_decide_eq_true hp) hc (hx _ (by simp))))
+
+/-- A point of the axis that a weight excludes, where the point may be
+missing: the term of the exclusion is of degree one in the axis, and the
+point exists where what the term has beside the axis does, which `s ≤ s`
+says. The exclusion leaves the observation as that test, under the test that
+the bounds in front of it leave a point: where they leave none the weight is
+a zero whatever the point is, and where they leave one the exclusion is
+asked for there. What is behind the exclusion exists at every point. Behind
+a lower and an upper bound, behind a single bound, and at the front. -/
+theorem mass_between_excluded (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {f : ℝ → Option ℝ}
+    {p : ℚ} {s : Option ℝ} (hf : StepSource.Linear f p s) (hp : decide (p ≠ 0) = true)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (StepSource.axisBound lower s₁ t₁ x)
+      (Value.mask (StepSource.axisBound (!lower) s₂ t₂ x)
+        (Value.mask (Value.nonzero (f x)) (r x))))
+    (hv : ∀ x, v x = Value.mask (StepSource.axisBound lower s₁ t₁ x)
+      (Value.mask (StepSource.axisBound (!lower) s₂ t₂ x) (r x)))
+    (hr : ∀ x, Value.Defined (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (StepSource.boundsMeet lower s₁ s₂ t₁ t₂)
+        (Value.mask (Value.le s s) (massValue (DensityProgram.weight v .lebesgue).presentation)) := by
+  rw [mass_weight, mass_weight]
+  exact (StepSource.between_excluded lower s₁ s₂ t₁ t₂ hf hp r h hv hr).integral
+
+theorem mass_beyond_excluded (lower σ : Bool) (t : Option ℝ) {f : ℝ → Option ℝ}
+    {p : ℚ} {s : Option ℝ} (hf : StepSource.Linear f p s) (hp : decide (p ≠ 0) = true)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (StepSource.axisBound lower σ t x)
+      (Value.mask (Value.nonzero (f x)) (r x)))
+    (hv : ∀ x, v x = Value.mask (StepSource.axisBound lower σ t x) (r x))
+    (hr : ∀ x, Value.Defined (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (Value.le t t)
+        (Value.mask (Value.le s s) (massValue (DensityProgram.weight v .lebesgue).presentation)) := by
+  rw [mass_weight, mass_weight]
+  exact (StepSource.beyond_excluded lower σ t hf hp r h hv hr).integral
+
+theorem mass_front_excluded {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ}
+    (hf : StepSource.Linear f p s) (hp : decide (p ≠ 0) = true) {w v : ℝ → Option ℝ}
+    (r : ℝ → Option ℝ) (h : ∀ x, w x = Value.mask (Value.nonzero (f x)) (r x))
+    (hv : ∀ x, v x = r x) (hr : ∀ x, Value.Defined (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (Value.le s s) (massValue (DensityProgram.weight v .lebesgue).presentation) := by
+  rw [mass_weight, mass_weight]
+  exact (StepSource.front_excluded hf hp r h hv hr).integral
+
+/-- A weight on a point of the axis only, where the point may be missing:
+`x = a`, the negation of an exclusion. Its observation is a zero under the
+same tests: that the bounds in front of it leave a point, and that the point
+exists. What is behind it exists at every point. -/
+theorem mass_between_only (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {f : ℝ → Option ℝ}
+    {p : ℚ} {s : Option ℝ} (hf : StepSource.Linear f p s) (hp : decide (p ≠ 0) = true)
+    {z : Option ℝ} (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    {w : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (StepSource.axisBound lower s₁ t₁ x)
+      (Value.mask (StepSource.axisBound (!lower) s₂ t₂ x)
+        (Value.mask (Value.not (Value.nonzero (f x))) (r x))))
+    (hr : ∀ x, Value.Defined (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (StepSource.boundsMeet lower s₁ s₂ t₁ t₂) (Value.mask (Value.le s s) z) := by
+  rw [mass_weight]
+  exact (StepSource.between_only lower s₁ s₂ t₁ t₂ hf hp r h hr).zero hz
+
+theorem mass_beyond_only (lower σ : Bool) (t : Option ℝ) {f : ℝ → Option ℝ}
+    {p : ℚ} {s : Option ℝ} (hf : StepSource.Linear f p s) (hp : decide (p ≠ 0) = true)
+    {z : Option ℝ} (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    {w : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (StepSource.axisBound lower σ t x)
+      (Value.mask (Value.not (Value.nonzero (f x))) (r x)))
+    (hr : ∀ x, Value.Defined (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (Value.le t t) (Value.mask (Value.le s s) z) := by
+  rw [mass_weight]
+  exact (StepSource.beyond_only lower σ t hf hp r h hr).zero hz
+
+theorem mass_front_only {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ}
+    (hf : StepSource.Linear f p s) (hp : decide (p ≠ 0) = true)
+    {z : Option ℝ} (hz : z = some (Numeric.denote (s := .real) (0 : ℚ)))
+    {w : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (Value.not (Value.nonzero (f x))) (r x))
+    (hr : ∀ x, Value.Defined (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (Value.le s s) z := by
+  rw [mass_weight]
+  exact (StepSource.front_only hf hp r h hr).zero hz
 
 end QSym.Distribution.DensityProgram
