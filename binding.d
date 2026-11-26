@@ -2457,6 +2457,21 @@ final class Bindings{
 		return primitive(arena.inv(zero),[den]);
 	}
 
+	private static string waveProfile(Node op){
+		if(op.op==Op.pow) return op.value>=2?"power":"";
+		if(op.op!=Op.builtin) return "";
+		switch(op.value){
+			case Builtin.sinR:return "sine";
+			case Builtin.sinhR:return "sinh";
+			case Builtin.coshR:return "cosh";
+			case Builtin.tanhR:return "tanh";
+			case Builtin.atanR:return "arctan";
+			case Builtin.asinhR:return "arsinh";
+			case Builtin.tanR:return "tangent";
+			default:return "";
+		}
+	}
+
 	// Keep the directed coordinate intact unless the wrappers lead to a
 	// turning function with a known variation primitive.
 	private void turningCoordinate(uint body,ref IntervalData d){
@@ -2464,7 +2479,7 @@ final class Bindings{
 		CoordinateAffine[] affine;
 		while(nodes[body].op==BoundOp.primitive){
 			auto n=nodes[body],op=arena.view(arena.at(n.data));
-			if(op.op==Op.pow&&op.value>=2&&nodes[n.a].op==BoundOp.primitive){
+			if(waveProfile(op).length&&nodes[n.a].op==BoundOp.primitive){
 				auto inner=arena.view(arena.at(nodes[n.a].data));
 				if(inner.op==Op.builtin&&(inner.value==Builtin.sinR||inner.value==Builtin.cosR)) d.wave=n.a;
 			}
@@ -10946,7 +10961,9 @@ final class Bindings{
 				if(d.wave!=uint.max){
 					bool sine=arena.view(arena.at(nodes[d.wave].data)).value==Builtin.sinR;
 					auto profile=grid~"VariationChange.WaveProfile.";
-					change=" ("~profile~"variation ("~profile~"power "~to!string(op.value)~") "~to!string(sine)~")";
+					auto witness=profile~waveProfile(op);
+					if(op.op==Op.pow) witness~=" "~to!string(op.value);
+					change=" ("~profile~"variation ("~witness~") "~to!string(sine)~")";
 				}else if(op.op==Op.pow&&op.value==2) change=" "~grid~"VariationChange.square";
 				else if(op.op==Op.pow) change=" ("~grid~"VariationChange.evenPower "~to!string(op.value)~" (of_decide_eq_true rfl) rfl)";
 				else if(op.value==Builtin.sinR||op.value==Builtin.cosR) change=" "~grid~"VariationChange."~(op.value==Builtin.sinR?"sine":"cosine");

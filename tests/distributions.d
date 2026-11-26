@@ -407,7 +407,7 @@ private Case[] cases(){
 	Case("PeriodicSpanRay","∫dx [x≤0]·λ[cos(atan(x))]","ℝ","1"),
 	Case("PeriodicSpanRayDown","∫dx [0≤x]·λ[sin(atan(-x))]","ℝ","1"),
 	Case("PeriodicSpanUnbounded","∫dx λ[cos(x)]","ℝ"),
-	Case("PeriodicSpanNonmonotone","∫dx [-π≤x≤π]·λ[sin(sin(x))]","ℝ"),
+	Case("PeriodicSpanNonmonotone","∫dx [-π≤x≤π]·λ[sin(sin(x))]","ℝ","4·sin(1)"),
 	Case("AffineTurnScale","∫dx [0≤x≤2*π]·λ[3*sin(x)+4]","ℝ","12"),
 	Case("AffineTurnNegative","∫dx [0≤x≤2*π]·λ[7-2*cos(x)]","ℝ","8"),
 	Case("AffineTurnMillion","∫dx [0≤x≤1000000*π]·λ[3*cos(x)+7]","ℝ","6000000"),
@@ -447,6 +447,23 @@ private Case[] cases(){
 	Case("PowerWavePoint","∫dx [π/2≤x≤π/2]·λ[cos(x)^6]","ℝ","0"),
 	Case("PowerWaveUnknownVelocity","λ(h:ℝ→ℝ).∫dx [0≤x<1]·λ[sin(h(x))^2]","(ℝ→ℝ)→ℝ"),
 	Case("PowerWaveInfinite","∫dx λ[cos(x)^3]","ℝ"),
+	Case("SmoothWaveSineCosine","∫dx [0≤x≤π]·λ[sin(cos(x))]","ℝ","2·sin(1)"),
+	Case("SmoothWaveTangent","∫dx [0≤x≤π/2]·λ[tan(sin(x))]","ℝ","tan(1)"),
+	Case("SmoothWaveTangentMillion","∫dx [0≤x≤1000000*π]·λ[tan(cos(x))]","ℝ","2000000·tan(1)"),
+	Case("SmoothWaveCosh","∫dx [-π≤x≤π]·λ[cosh(sin(x))]","ℝ","4·cosh(1)-4"),
+	Case("SmoothWaveTanh","∫dx [0≤x≤2*π]·λ[tanh(cos(x))]","ℝ","4·tanh(1)"),
+	Case("SmoothWaveSinh","∫dx [-π/2≤x≤π/2]·λ[sinh(sin(x))]","ℝ","2·sinh(1)"),
+	Case("SmoothWaveArctan","∫dx [-π≤x≤π]·λ[atan(cos(x))]","ℝ","π"),
+	Case("SmoothWaveArsinh","∫dx [0≤x≤π]·λ[asinh(sin(x))]","ℝ","2·asinh(1)"),
+	Case("SmoothWaveCrest","∫dx [π/3≤x≤2*π/3]·λ[atan(sin(x))]","ℝ","-2·atan(1/2·sqrt(3))+1/2·π"),
+	Case("SmoothWaveRay","∫dx [x≤0]·λ[tan(cos(atan(x)))]","ℝ","tan(1)"),
+	Case("SmoothWaveWhole","∫dx λ[cosh(sin(atan(x)))]","ℝ","2·cosh(1)-2"),
+	Case("SmoothWaveAffine","∫dx [-π≤x≤π]·λ[3*sin(cos(2*x))-7]","ℝ","24·sin(1)"),
+	Case("SmoothWaveMissing","defined(∫dx [undefined(ℝ)≤x≤1]·λ[tan(sin(x))])","𝔹","false"),
+	Case("SmoothWaveSymbolic","λ(u:ℝ).∫dx [0≤x≤u]·λ[tan(sin(x))]","ℝ→ℝ"),
+	Case("SmoothWaveReciprocal","∫dx [0≤x≤π]·λ[(sin(x))⁻¹]","ℝ"),
+	Case("SmoothWavePole","∫dx [0≤x≤π]·λ[tan(2*sin(x))]","ℝ"),
+	Case("SmoothWaveUnknown","λ(h:ℝ→ℝ).∫dx [0≤x≤π]·λ[h(sin(x))]","(ℝ→ℝ)→ℝ"),
 	Case("VariationSquareSinh","∫dx [-1≤x≤1]·λ[sinh(x)^2]","ℝ","2·sinh(1)^2"),
 	Case("VariationSquareAtan","∫dx [-1≤x≤1]·λ[atan(x)^2]","ℝ","1/8·π^2"),
 	Case("VariationSquareExp","λ(u:ℝ).∫dx [0≤x<u]·λ[(exp(x)-2)^2]","ℝ→ℝ","λ(u:ℝ). [0<u]·((exp(u)-2)·abs(exp(u)-2)+1)"),
@@ -2346,8 +2363,13 @@ private void run(string directory){
 			enforce((certificate.indexOf("WaveProfile.power ")>=0)==solved,c.name);
 			enforce((text.indexOf("∫")<0)==solved,c.name);
 		}
-		if(c.name.indexOf("PeriodicSpan")==0){
-			bool solved=c.name!="PeriodicSpanUnbounded"&&c.name!="PeriodicSpanNonmonotone";
+		if(c.name.indexOf("SmoothWave")==0||c.name=="PeriodicSpanNonmonotone"){
+			bool solved=c.name!="SmoothWavePole"&&c.name!="SmoothWaveReciprocal"&&c.name!="SmoothWaveUnknown";
+			enforce((certificate.indexOf("WaveProfile.variation ")>=0)==solved,c.name);
+			enforce((text.indexOf("∫")<0)==solved,c.name);
+		}
+		if(c.name.indexOf("PeriodicSpan")==0&&c.name!="PeriodicSpanNonmonotone"){
+			bool solved=c.name!="PeriodicSpanUnbounded";
 			enforce((text.indexOf("∫")<0)==solved,c.name~": "~text);
 			enforce((certificate.indexOf("Grid.VariationChange.sine")>=0||certificate.indexOf("Grid.VariationChange.cosine")>=0)==solved,c.name);
 		}
