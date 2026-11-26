@@ -470,6 +470,25 @@ private Case[] cases(){
 	Case("CauchyQuartic","∫dx (1+x^4)⁻¹·λ[x]","ℝ"),
 	Case("CauchyAffine","∫dx (1+x)⁻¹·λ[x]","ℝ"),
 	Case("CauchyMeasure","Λx. (1+x²)⁻¹·λ[x]","Distribution(ℝ)","Λ(x:ℝ). ((x^2+1)⁻¹)·λ[x]"),
+	Case("TanhCoordinateMeasure","Λx. λ[tanh(x)]","Distribution(ℝ)","Λ(x:ℝ). ((cosh(x)^2)⁻¹)·λ[x]"),
+	Case("TanhCoordinateSmooth","Λx. λ[tanh(x^2+1)]","Distribution(ℝ)","Λ(x:ℝ). (2·(cosh(x^2+1)^2)⁻¹·abs(x))·λ[x]"),
+	Case("TanhCoordinatePoint","densityAtD(Λx.λ[tanh(2*x)],0)","ℝ","2"),
+	Case("TanhCoordinateNestedPoint","densityAtD(Λx.λ[tanh(atan(3*x))],0)","ℝ","3"),
+	Case("TanhCoordinateCDF","λ(u:ℝ).∫dx [x≤u]·λ[tanh(x)]","ℝ→ℝ","λ(u:ℝ). tanh(u)+1"),
+	Case("TanhCoordinateSurvival","λ(l:ℝ).∫dx [l<x]·λ[tanh(-x)]","ℝ→ℝ","λ(l:ℝ). -tanh(l)+1"),
+	Case("TanhCoordinateWhole","∫dx λ[tanh(3*x+2)]","ℝ","2"),
+	Case("TanhCoordinateNested","∫dx λ[tanh(atan(x))]","ℝ","-tanh(-1/2·π)+tanh(1/2·π)"),
+	Case("TanhCoordinateWindow","∫dx [-1≤x≤1]·λ[tanh(-2*x)]","ℝ","-tanh(-2)+tanh(2)"),
+	Case("TanhCoordinateSquareWindow","∫dx [-1≤x≤1]·λ[tanh(x)^2]","ℝ","2·tanh(1)^2"),
+	Case("TanhCoordinateCorner","densityAtD(Λx.λ[tanh(abs(x))],0)","ℝ","undefined(ℝ)"),
+	Case("TanhCoordinateBesideCorner","densityAtD(Λx.λ[tanh(abs(x))],-1)","ℝ","(cosh(1)^2)⁻¹"),
+	Case("TanhCoordinateJump","∫dx λ[tanh([0≤x])]","ℝ","tanh(1)"),
+	Case("TanhCoordinateJumpPoint","densityAtD(Λx.λ[tanh([0≤x])],0)","ℝ","undefined(ℝ)"),
+	Case("TanhCoordinateJumpAway","densityAtD(Λx.λ[tanh([0≤x])],1)","ℝ","0"),
+	Case("TanhCoordinateRemovable","∫dx λ[tanh([x=0])]","ℝ","∫dx λ[([x=0]·tanh(1))]"),
+	Case("TanhCoordinateHole","defined(densityAtD(Λx.λ[tanh(x)],undefined(ℝ)))","𝔹","false"),
+	Case("TanhCoordinateUnsupported","λ(h:ℝ→ℝ).∫dx λ[tanh(h(x))]","(ℝ→ℝ)→ℝ","λ(h:ℝ→ℝ). ∫dx λ[(tanh(h(x)))]"),
+	Case("TanhCoordinatePole","∫dx λ[tanh(x⁻¹)]","ℝ","∫dx λ[(tanh(x⁻¹))]"),
 	Case("AtanMeasure","Λx. λ[atan(x)]","Distribution(ℝ)","Λ(x:ℝ). ((x^2+1)⁻¹)·λ[x]"),
 	Case("AtanPoint","densityAtD(Λx. λ[atan(2*x+1)],0)","ℝ","1"),
 	Case("AtanAbs","densityAtD(Λx. λ[atan(abs(x))],1)","ℝ","1/2"),
@@ -2024,6 +2043,9 @@ private void run(string directory){
 			bool finite=c.name!="CauchyPole"&&c.name!="CauchyTouch"&&c.name!="CauchyQuartic"&&c.name!="CauchyAffine"&&c.name!="CauchyMeasure";
 			enforce((certificate.indexOf("StepSource.cauchy_mass ")>=0)==finite,c.name);
 		}
+		if(c.name.indexOf("TanhCoordinate")==0&&c.name!="TanhCoordinateRemovable"&&c.name!="TanhCoordinateHole"&&
+			c.name!="TanhCoordinateUnsupported"&&c.name!="TanhCoordinatePole")
+			enforce(certificate.indexOf("ScalarChange.tanh")>=0,c.name);
 		if(c.name.indexOf("Atan")==0)
 			enforce(certificate.indexOf("ScalarChange.arctan")>=0&&text.indexOf("λ[atan(")<0,c.name);
 		if(c.name.indexOf("ObservedGuard")==0)

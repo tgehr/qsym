@@ -1,4 +1,5 @@
 import QSym.DistributionCoordinateVariation
+import Mathlib.Analysis.Calculus.InverseFunctionTheorem.Deriv
 import Mathlib.Analysis.SpecialFunctions.Arsinh
 import Mathlib.Analysis.SpecialFunctions.Sqrt
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.ArctanDeriv
@@ -43,6 +44,16 @@ theorem atCut_of_continuousAt {g : ℝ → ℝ} {a : ℝ} (t : ContinuousAt g a)
     if_pos rfl]
 
 namespace ChangeOn
+
+/-- The inverse function theorem supplies the inverse derivative on an open
+range of input values. The coordinate change need only be injective on that set. -/
+def ofInjOn {s : Set ℝ} {f : ℝ → ℝ} (hs : IsOpen s) (inj : InjOn f s)
+    (sm : ∀ u ∈ s, ContDiffAt ℝ 1 f u) (hn : ∀ u ∈ s, deriv f u ≠ 0) : ChangeOn s f := by
+  refine ⟨_, inj.leftInvOn_invFunOn, sm, ?_⟩
+  intro u hu
+  have left : ∀ᶠ x in 𝓝 u, Function.invFunOn f s (f x) = x := by
+    filter_upwards [hs.mem_nhds hu] with x hx using inj.leftInvOn_invFunOn hx
+  exact ((sm u hu).hasStrictDerivAt le_rfl |>.to_local_left_inverse (hn u hu) left).hasDerivAt.differentiableAt
 variable {s : Set ℝ} {h g : ℝ → ℝ}
 
 theorem differentiable_iff (e : ChangeOn s h) (values : ∀ x, g x ∈ s) (x : ℝ) :
@@ -69,6 +80,24 @@ def exp : ChangeOn univ Real.exp :=
 def sinh : ChangeOn univ Real.sinh :=
   ⟨Real.arsinh, fun _ _ => Real.arsinh_sinh _, fun _ _ => Real.contDiff_sinh.contDiffAt,
     fun _ _ => Real.differentiable_arsinh _⟩
+
+theorem tanh_deriv (x : ℝ) : deriv Real.tanh x = ((Real.cosh x)^2)⁻¹ := by
+  have eq : Real.tanh = fun v => Real.sinh v / Real.cosh v := funext Real.tanh_eq_sinh_div_cosh
+  rw [eq, ((Real.hasDerivAt_sinh x).div (Real.hasDerivAt_cosh x) (Real.cosh_pos x).ne').deriv]
+  rw [← sq, ← sq, Real.cosh_sq_sub_sinh_sq, one_div]
+
+theorem tanh_mono : StrictMono Real.tanh :=
+  strictMono_of_deriv_pos fun x => (tanh_deriv x).symm ▸ inv_pos.mpr (sq_pos_of_pos (Real.cosh_pos x))
+
+def tanh : ChangeOn univ Real.tanh := by
+  apply ofInjOn isOpen_univ tanh_mono.injective.injOn
+  · intro u _
+    have eq : Real.tanh = fun v => Real.sinh v / Real.cosh v := funext Real.tanh_eq_sinh_div_cosh
+    rw [eq]
+    exact (Real.contDiff_sinh.div Real.contDiff_cosh (fun x => (Real.cosh_pos x).ne')).contDiffAt
+  · intro u _
+    rw [tanh_deriv]
+    positivity
 
 def arctan : ChangeOn univ Real.arctan :=
   ⟨Real.tan, fun _ _ => Real.tan_arctan _, fun _ _ => Real.contDiff_arctan.contDiffAt,

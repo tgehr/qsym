@@ -36,6 +36,13 @@ def sinh : ScalarChange univ Real.sinh Functions.sinhR.apply Functions.coshR.app
   ⟨.sinh, fun u _ => by simp [Function1.apply, Functions.sinhR],
     fun u _ => by simp [Function1.apply, Functions.coshR, (Real.hasDerivAt_sinh u).deriv, abs_of_pos (Real.cosh_pos u)]⟩
 
+def tanh : ScalarChange univ Real.tanh Functions.tanhR.apply (fun u => Value.inv ((Functions.coshR.apply u).map (·^2))) :=
+  ⟨.tanh, fun u _ => by simp [Function1.apply, Functions.tanhR],
+    fun u _ => by
+      have h := Real.cosh_pos u
+      simp [Function1.apply, Functions.coshR, Value.inv, VariationChart.ChangeOn.tanh_deriv,
+        abs_of_pos (inv_pos.mpr (sq_pos_of_pos h)), h.ne']⟩
+
 def arctan : ScalarChange univ Real.arctan Functions.atanR.apply
     (fun u => Value.inv (Value.add (some ((1:ℤ):ℝ)) (u.map (·^2)))) := by
   refine ⟨.arctan, fun _ _ => by simp [Function1.apply, Functions.atanR], fun u _ => ?_⟩
