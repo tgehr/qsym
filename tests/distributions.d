@@ -1564,6 +1564,24 @@ private Case[] cases(){
 	Case("SumFactorsRealSquare","∫dx [0≤x]*[x≤1]*([x≤a]*x+[a<x]*2)^2*λ[x]","ℝ","[a<1∧0≤a]·(1/3·a^3)+[0≤a∧a<1]·(-4·a+4)+[1≤a]·(1/3)+[a<0]·4"),
 	Case("SumFactorsRealCube","∫dx [0≤x]*[x≤1]*([x≤a]*x+[a<x]*2)^3*λ[x]","ℝ","[a<1∧0≤a]·(1/4·a^4)+[0≤a∧a<1]·(-8·a+8)+[1≤a]·(1/4)+[a<0]·8"),
 	Case("SumFactorsMasked","∫dx [0≤x]*[x≤1]*([x≤a]*x)^2*λ[x]","ℝ","[a<1∧0≤a]·(1/3·a^3)+[1≤a]·(1/3)"),
+	Case("BehindBetween","∫dx [0≤x]*[x≤a]*[0<a]*λ[x]","ℝ","[0<a]·a"),
+	Case("BehindBetweenUniform","∫dx [0≤x]*[x≤a]*[0<a]*(1/a)*λ[x]","ℝ","[0<a]"),
+	Case("BehindBetweenUniformTerms","∫dx [a≤x]*[x≤b]*[a<b]*(1/(b-a))*λ[x]","ℝ","[a<b]"),
+	Case("BehindBetweenOther","∫dx [0≤x]*[x≤a]*[b≠0]*λ[x]","ℝ","[0≤a∧b≠0]·a"),
+	Case("BehindBetweenTerms","∫dx [a≤x]*[x≤b]*[0<c]*λ[x]","ℝ","[a≤b∧0<c]·(-a+b)"),
+	Case("BehindBetweenStrict","∫dx [a≤x]*[x<b]*[0<c]*x*λ[x]","ℝ","[a<b∧0<c]·(-1/2·a^2+1/2·b^2)"),
+	Case("BehindBetweenTwo","∫dy [0≤y]*[y≤1]*[0≤x]*[x≤1]*λ[y]","ℝ","[0≤x∧x≤1]"),
+	Case("BehindBoundThenBetween","∫dy [0≤y]*[0≤x]*[y≤1]*[x≤1]*λ[y]","ℝ","[0≤x∧x≤1]"),
+	Case("BehindBoundStrict","∫dx [x<1]*[0<a]*[0<x]*[b<a]*λ[x]","ℝ","[0<a∧b<a]"),
+	Case("BehindBoundHalfLine","∫dx [0≤x]*e^(-x)*[0<a]*λ[x]","ℝ","[0<a]"),
+	Case("BehindBoundUpper","∫dx [x≤0]*e^x*[0<a]*[b<1]*λ[x]","ℝ","[0<a∧b<1]"),
+	Case("BehindNested","∫dx ∫dy [0≤y]*[y≤1]*[0≤x]*[x≤1]*[x+y≤1]*λ[x]*λ[y]","ℝ","1/2"),
+	Case("BehindPieces","∫dx ([0≤x]*[x≤1]*[0<a]+[1≤x]*[x≤2]*[b<1]*3)*λ[x]","ℝ","[0<a]+[b<1]·3"),
+	Case("BehindPiecesHalfLine","∫dx ([0≤x]*e^(-x)*[0<a]+[x≤0]*e^x*[b<1])*λ[x]","ℝ","[b<1]+[0<a]"),
+	Case("BehindPiecesSpread","∫dx [0≤x]*[x≤1]*[0<a]*([x≤a]+[a<x]*2)*λ[x]","ℝ","[a≠0]·([a<1∧0<a]·a+[1≤a])+[0<a∧a<1]·(-2·a+2)"),
+	Case("BehindBetweenDomain","∫dx [0≤x]*[x≤1]*[c<1]*(1/b)*λ[x]","ℝ","[c<1]·(guard(b≠0,b⁻¹))"),
+	Case("BehindBoundDomain","∫dx [0≤x]*[c<1]*[x≤1]*(1/b)*λ[x]","ℝ","[c<1]·(guard(b≠0,b⁻¹))"),
+	Case("BehindBetweenDomainTwo","∫dx [0≤x]*[x≤1]*[c<1]*[0<d]*(1/b)*λ[x]","ℝ"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3260,6 +3278,33 @@ private void run(string directory){
 			enforce((certificate.indexOf("Value.mul_add ")>=0)==among("CastSumWeight","CastSumExponential","CastSumHalfLine"),c.name~" factor of the sum");
 			enforce(has("third_second_piece ")==among("CastSumRational","CastSumCompeting","CastSumCompetingInteger","CastSumMany","CastSumOne","CastSumMixed","CastSumBound","CastSumWeight"),c.name~" bounds of a summand that compete");
 			enforce(has("same_side_piece ")==among("CastSumHalfLine"),c.name~" bounds of a summand on one side");
+		}
+		// A condition that does not mention the axis, behind bounds of the
+		// axis in a guard. A guard is evaluated from the left, so the condition
+		// is asked for only where the bounds in front of it hold: it leaves
+		// the observation as a mask under the test that those bounds leave a
+		// point, the test of a third bound behind a lower and an upper one,
+		// and behind a single bound, whose half-line is never empty, the test
+		// that its term exists. So the factors of a density may come in any
+		// order: the condition on the parameter of a uniform density behind
+		// its bounds, the bounds of an outer variable behind those of the
+		// inner one. The same in a summand of a sum of observations, and
+		// under the guard of the domain of the value. Two such conditions
+		// behind the bounds under such a guard keep the integral.
+		if(c.name.indexOf("Behind")==0){
+			bool among(string[] names...){ foreach(name;names) if(c.name=="Behind"~name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(evidence)>=0; }
+			bool retained=among("BetweenDomainTwo");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			bool pieces=among("Pieces","PiecesHalfLine","PiecesSpread");
+			bool between=c.name.indexOf("BehindBetween")==0||among("BoundThenBetween","BoundStrict","Nested");
+			bool beyond=c.name.indexOf("BehindBound")==0;
+			enforce(has("Distribution.DensityProgram.mass_between_guard ")==(between&&!retained),c.name~" condition behind a lower and an upper bound");
+			enforce(has("Distribution.DensityProgram.mass_beyond_guard ")==beyond,c.name~" condition behind a single bound");
+			enforce(has("Distribution.StepSource.between_guard_piece ")==among("Pieces","PiecesSpread"),c.name~" condition behind two bounds of a summand");
+			enforce(has("Distribution.StepSource.beyond_guard_piece ")==among("PiecesHalfLine","PiecesSpread"),c.name~" condition behind a bound of a summand");
+			enforce(has("Distribution.DensityProgram.presentation_mass_pieces")==pieces,c.name~" sum of observations");
+			enforce(has("Distribution.StepSource.Masks.under_last ")==among("BetweenDomain","BoundDomain"),c.name~" under the guard of the domain");
 		}
 		// A product and a power of sums of brackets. Below the casts they are
 		// a product and a power of a lesser sort; the casts are multiplicative

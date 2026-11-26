@@ -536,6 +536,93 @@ theorem third_first_cases (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option
     rw [h, h₂, axisBound_real, axisBound_real, axisBound_real]
     exact mask_implying_far (meets_of_not_implies hi) _
 
+/-- A weight under a condition that does not mention the axis. Under a test
+it is another weight where the condition holds and a zero where the condition
+fails. Where the test fails it is a zero at every point, and where the test
+or the condition is missing it is missing at some point. -/
+structure Guarded (w v : ℝ → Option ℝ) (n g : Option Bool) : Prop where
+  missing : n = none → ∃ x, w x = none
+  empty : n = some false → ∀ x, w x = some 0
+  undecided : n = some true → g = none → ∃ x, w x = none
+  holds : n = some true → g = some true → ∀ x, w x = v x
+  fails : n = some true → g = some false → ∀ x, w x = some 0
+
+/-- The observation of such a weight is that of the other weight under the
+condition, under the test. -/
+theorem Guarded.integral {w v : ℝ → Option ℝ} {n g : Option Bool} (h : Guarded w v n g) :
+    partialIntegral volume w = Value.mask n (Value.mask g (partialIntegral volume v)) := by
+  rcases n with _ | _ | _
+  · obtain ⟨x, hx⟩ := h.missing rfl
+    rw [partialIntegral_missing hx]; rfl
+  · rw [zero_observation w (h.empty rfl)]; rfl
+  rcases g with _ | _ | _
+  · obtain ⟨x, hx⟩ := h.undecided rfl rfl
+    rw [partialIntegral_missing hx]; rfl
+  · rw [zero_observation w (h.fails rfl rfl)]; rfl
+  · rw [funext (h.holds rfl rfl)]; rfl
+
+/-- The same for a summand of a sum of observations. -/
+theorem Guarded.piece {w v : ℝ → Option ℝ} {n g : Option Bool} {o : Option ℝ}
+    (h : Guarded w v n g) (p : Piece v o) : Piece w (Value.mask n (Value.mask g o)) := by
+  have zero : (∀ x, w x = some 0) → Piece w (some 0) := fun hw => by
+    refine Or.inl ⟨fun x => ⟨0, hw x⟩, ?_, ?_⟩
+    · rw [show (fun x => (w x).getD 0) = fun _ => (0 : ℝ) from funext fun x => by rw [hw x]; rfl]
+      exact integrable_zero ℝ ℝ volume
+    · rw [show (fun x => (w x).getD 0) = fun _ => (0 : ℝ) from funext fun x => by rw [hw x]; rfl]
+      simp
+  rcases n with _ | _ | _
+  · exact Or.inr ⟨h.missing rfl, rfl⟩
+  · exact zero (h.empty rfl)
+  rcases g with _ | _ | _
+  · exact Or.inr ⟨h.undecided rfl rfl, rfl⟩
+  · exact zero (h.fails rfl rfl)
+  · rw [funext (h.holds rfl rfl)]; exact p
+
+/-- A condition that does not mention the axis, behind a lower and an upper
+bound: it leaves the weight under the test that a point is between the
+bounds. Where none is, the weight is a zero whatever the condition is; where
+one is, the condition is asked for there. -/
+theorem between_guarded (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) (g : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower s₁ t₁ x)
+      (Value.mask (axisBound (!lower) s₂ t₂ x) (Value.mask g (r x))))
+    (hv : ∀ x, v x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x))) :
+    Guarded w v (boundsMeet lower s₁ s₂ t₁ t₂) g := by
+  refine ⟨fun hN => ?_, fun hN x => ?_, fun hN hg => ?_, fun hN hg x => ?_, fun hN hg x => ?_⟩
+  · obtain ⟨x, hx⟩ := meet_missing hN (fun x => Value.mask g (r x))
+    exact ⟨x, by rw [h x]; exact hx⟩
+  · rw [h x]; exact meet_empty hN (fun x => Value.mask g (r x)) x
+  · obtain ⟨a, b, x, rfl, rfl, h₁, h₂⟩ := meet_point hN
+    refine ⟨x, ?_⟩
+    rw [h x, hg, axisBound_real, axisBound_real, decide_eq_true h₁, decide_eq_true h₂]; rfl
+  · rw [h x, hv x, hg]; rfl
+  · obtain ⟨a, b, _, rfl, rfl, _, _⟩ := meet_point hN
+    rw [h x, hg, axisBound_real, axisBound_real]
+    by_cases h₁ : meets lower s₁ a x <;> by_cases h₂ : meets (!lower) s₂ b x <;>
+      simp [h₁, h₂, Value.mask]
+
+/-- A condition that does not mention the axis, behind a single bound: a
+half-line is never empty, so the test is only that the term of the bound
+exists, which `t ≤ t` says. -/
+theorem beyond_guarded (lower s : Bool) (t : Option ℝ) (g : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower s t x) (Value.mask g (r x)))
+    (hv : ∀ x, v x = Value.mask (axisBound lower s t x) (r x)) :
+    Guarded w v (Value.le t t) g := by
+  rcases t with _ | a
+  · refine ⟨fun _ => ⟨0, by rw [h 0, axisBound_missing]; rfl⟩, fun hN => ?_, fun hN => ?_,
+      fun hN => ?_, fun hN => ?_⟩ <;> cases hN
+  · have hle : Value.le (some a) (some a) = some true := by simp [Value.le]
+    refine ⟨fun hN => ?_, fun hN => ?_, fun _ hg => ?_, fun _ hg x => ?_, fun _ hg x => ?_⟩
+    · rw [hle] at hN; cases hN
+    · rw [hle] at hN; cases hN
+    · obtain ⟨x, hx⟩ := meets_beyond lower s a
+      exact ⟨x, by rw [h x, hg, axisBound_real, decide_eq_true hx]; rfl⟩
+    · rw [h x, hv x, hg]; rfl
+    · rw [h x, hg, axisBound_real]
+      by_cases h₁ : meets lower s a x <;> simp [h₁, Value.mask]
+
 /-- The same as observations that add: a summand of a sum of observations
 with several bounds on one side. -/
 theorem same_side_piece (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {w w₁ w₂ : ℝ → Option ℝ}
@@ -584,6 +671,26 @@ bound of the axis by the difference of the other side and those terms,
 divided by the slope, from the other side where the slope is negative. Both
 are missing exactly where a term is, so this is an equation at every point
 for every definedness pattern. -/
+
+/-- The same for a condition that does not mention the axis, behind its
+bounds. -/
+theorem between_guard_piece (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) (g : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower s₁ t₁ x)
+      (Value.mask (axisBound (!lower) s₂ t₂ x) (Value.mask g (r x))))
+    (hv : ∀ x, v x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x)))
+    {o : Option ℝ} (p : Piece v o) :
+    Piece w (Value.mask (boundsMeet lower s₁ s₂ t₁ t₂) (Value.mask g o)) :=
+  (between_guarded lower s₁ s₂ t₁ t₂ g r h hv).piece p
+
+theorem beyond_guard_piece (lower s : Bool) (t : Option ℝ) (g : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (axisBound lower s t x) (Value.mask g (r x)))
+    (hv : ∀ x, v x = Value.mask (axisBound lower s t x) (r x))
+    {o : Option ℝ} (p : Piece v o) :
+    Piece w (Value.mask (Value.le t t) (Value.mask g o)) :=
+  (beyond_guarded lower s t g r h hv).piece p
 
 /-- A function of degree one in the axis: a rational multiple of the axis
 plus a partial value that does not mention it. -/
@@ -854,5 +961,30 @@ theorem mass_third_first (lower s₁ s₂ s₃ : Bool) (t₁ t₂ t₃ : Option 
             (massValue (DensityProgram.weight w₂ .lebesgue).presentation))) := by
   rw [mass_weight, mass_weight, mass_weight]
   exact (StepSource.third_first_cases lower s₁ s₂ s₃ t₁ t₂ t₃ r h h₁ h₂).integral
+
+/-- A condition that does not mention the axis leaves the observation from
+behind a lower and an upper bound, under the test that a point is between
+them, and from behind a single bound, under the test that its term exists. -/
+theorem mass_between_guard (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) (g : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (StepSource.axisBound lower s₁ t₁ x)
+      (Value.mask (StepSource.axisBound (!lower) s₂ t₂ x) (Value.mask g (r x))))
+    (hv : ∀ x, v x = Value.mask (StepSource.axisBound lower s₁ t₁ x)
+      (Value.mask (StepSource.axisBound (!lower) s₂ t₂ x) (r x))) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (StepSource.boundsMeet lower s₁ s₂ t₁ t₂)
+        (Value.mask g (massValue (DensityProgram.weight v .lebesgue).presentation)) := by
+  rw [mass_weight, mass_weight]
+  exact (StepSource.between_guarded lower s₁ s₂ t₁ t₂ g r h hv).integral
+
+theorem mass_beyond_guard (lower s : Bool) (t : Option ℝ) (g : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Value.mask (StepSource.axisBound lower s t x) (Value.mask g (r x)))
+    (hv : ∀ x, v x = Value.mask (StepSource.axisBound lower s t x) (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (Value.le t t)
+        (Value.mask g (massValue (DensityProgram.weight v .lebesgue).presentation)) := by
+  rw [mass_weight, mass_weight]
+  exact (StepSource.beyond_guarded lower s t g r h hv).integral
 
 end QSym.Distribution.DensityProgram
