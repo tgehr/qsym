@@ -866,11 +866,12 @@ struct FunctionSyntax{
 				}
 				out_.put(text[start..$]); return out_.data;
 			}
-			// A range sum reparses from its masked, unbounded spelling. This can
-			// reverse its position in the scalar syntax tree. Allocate its
-			// printing variable after the other operands, in either spelling.
-			struct SumOperand{ uint id; string text; Sort sort; }
-			SumOperand[] sums;
+			// The scalar printer orders variables by their identifiers. Hidden
+			// higher-order operands need a stable order across reparsing a sum
+			// or product. Range sums keep their own group because they reparse
+			// through their masked, unbounded spelling.
+			struct PrintedOperand{ uint id; string text; Sort sort; }
+			PrintedOperand[] opaque,sums;
 			Table!(uint,bool) visited;
 			void allocate(BoundTerm x){
 				if(visited.get(x.id,false)) return;
@@ -884,19 +885,20 @@ struct FunctionSyntax{
 				}
 				Sort sort; enforce(scalarSort(b.type(x),sort),"non-scalar primitive argument");
 				auto name=v.op==BoundOp.variable?locals[v.data]:v.op==BoundOp.apply?render(x,locals,depth+1):"("~render(x,locals,depth+1)~")";
-				if(v.op==BoundOp.finiteSum||v.op==BoundOp.summation){
-					sums~=SumOperand(x.id,name,sort);
-				}else{
+				if(v.op==BoundOp.variable){
 					memo.set(x.id,a.variable(sort,cast(uint)printer.variables.length).id);
-					printer.variables~=Parameter(v.op==BoundOp.variable?name:placeholder(name),sort);
-				}
+					printer.variables~=Parameter(name,sort);
+				}else if(v.op==BoundOp.finiteSum||v.op==BoundOp.summation) sums~=PrintedOperand(x.id,name,sort);
+				else opaque~=PrintedOperand(x.id,name,sort);
 			}
 			allocate(t);
 			import std.algorithm:sort;
-			sort!((x,y)=>x.text<y.text)(sums);
-			foreach(s;sums){
-				memo.set(s.id,a.variable(s.sort,cast(uint)printer.variables.length).id);
-				printer.variables~=Parameter(placeholder(s.text),s.sort);
+			foreach(group;[opaque,sums]){
+				sort!((x,y)=>x.text==y.text?x.sort<y.sort:x.text<y.text)(group);
+				foreach(s;group){
+					memo.set(s.id,a.variable(s.sort,cast(uint)printer.variables.length).id);
+					printer.variables~=Parameter(placeholder(s.text),s.sort);
+				}
 			}
 			Term flatten(BoundTerm x){
 				auto found=memo.get(x.id,uint.max); if(found!=uint.max) return a.at(found);
