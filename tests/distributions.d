@@ -1260,6 +1260,15 @@ private Case[] cases(){
 	Case("AtomicRetryDensity","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠1}). (0:ℝ)"),
 	Case("AtomicRetryUnitRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(1,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("CountdownGeometric","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k:ℝ)"),
+	Case("ReemitNat","massD("~shift("3","n")~")","ℝ","1"),
+	Case("ReemitNatZeroRight","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3","n+0")~"))","ℝ","3"),
+	Case("ReemitNatZeroLeft","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3","0+n")~"))","ℝ","3"),
+	Case("ReemitMissing","massD("~shift("0 sub 1","n")~")","ℝ","undefined(ℝ)"),
+	Case("ReemitReal","densityAtD(μ(d:Distribution(ℝ)).addD(δ((2:ℝ)),scaleD(1/2,bindD(d,λ(x:ℝ).δ(x)))),2)","ℝ","undefined(ℝ)"),
+	Case("ReemitOutside","densityAtD(μ(d:Distribution(ℝ)).addD(δ((2:ℝ)),scaleD(1/2,bindD(d,λ(x:ℝ).δ(x)))),3)","ℝ","0"),
+	Case("ReemitFunction","massD(μ(d:Distribution(ℕ→ℕ)).addD(δ(λ(n:ℕ).n),scaleD(1/2,bindD(d,λ(f:ℕ→ℕ).δ(f)))))","ℝ","2"),
+	Case("ReemitNested","massD(μ(d:Distribution(Distribution(ℕ))).addD(δ(δ((2:ℕ))),scaleD(1/2,bindD(d,λ(u:Distribution(ℕ)).δ(u)))))","ℝ","2"),
+	Case("ReemitAffine","massD(μ(d:Distribution(ℕ)).bindD(addD(δ((2:ℕ)),scaleD(1/4,d)),λ(n:ℕ).δ(n)))","ℝ","4/3"),
 	Case("ShiftOrbitBare",counter,"Distribution(ℕ)"),
 	Case("ShiftOrbitMass","massD("~counter~")","ℝ","1"),
 	Case("ShiftOrbitMean","massD(weightD(λ(n:ℕ).(n:ℝ),"~counter~"))","ℝ","1"),
@@ -1348,6 +1357,8 @@ private void run(string directory){
 			enforce(certificate.indexOf("SummationElementary.PowerAt.product")>=0,c.name);
 		if(c.name=="ShiftOrbitPole"||c.name=="ShiftOrbitPoleAfterZero")
 			enforce(certificate.indexOf("SummationLinearity.missing_guard")>=0,c.name);
+		if(c.name.indexOf("Reemit")==0)
+			enforce(certificate.indexOf("Affine.bind_self")>=0||certificate.indexOf("Affine.realBind_self")>=0,c.name~" identity kernel");
 		if(c.name.indexOf("ShiftOrbit")==0&&c.name!="ShiftOrbitBare")
 			enforce(certificate.indexOf("CountableObservation.nat_shift")>=0||certificate.indexOf("Atomic.nat_shift_mass")>=0||
 				certificate.indexOf("Atomic.nat_shift_polynomial")>=0,c.name~" shift observation");

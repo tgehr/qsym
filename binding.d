@@ -844,7 +844,22 @@ final class Bindings{
 		}
 		return intern(BoundNode(op,ctx.index,typeId(output),args.length?args[0].id:uint.max,args.length>1?args[1].id:uint.max));
 	}
-	private enum AffineOp { constant, self, add, scale, weight }
+	private enum Reemit { none, self, plusZero, zeroPlus }
+	private Reemit reemitKernel(uint id){
+		auto fn=nodes[id];
+		if(fn.op!=BoundOp.lambda||nodes[fn.a].op!=BoundOp.distributionDirac) return Reemit.none;
+		auto out_=nodes[nodes[fn.a].a];
+		bool self(uint i){return nodes[i].op==BoundOp.variable&&nodes[i].data==0;}
+		if(out_.op==BoundOp.variable&&out_.data==0) return Reemit.self;
+		if(out_.op!=BoundOp.primitive) return Reemit.none;
+		auto op=arena.view(arena.at(out_.data));
+		if(op.op!=Op.builtin||op.value!=Builtin.addN) return Reemit.none;
+		bool zero(uint i){return nodes[i].op==BoundOp.scalar&&arena.at(nodes[i].data)==arena.natural_(0);}
+		if(self(out_.a)&&zero(out_.b)) return Reemit.plusZero;
+		if(zero(out_.a)&&self(out_.b)) return Reemit.zeroPlus;
+		return Reemit.none;
+	}
+	private enum AffineOp { constant, self, add, scale, weight, reemit }
 	private struct AffineForm { AffineOp op; Rational ratio; bool empty; }
 	private struct RetryParts {
 		uint seed=uint.max,tail;
@@ -904,6 +919,9 @@ final class Bindings{
 			case BoundOp.variable:
 				if(n.data!=0) return false;
 				form=AffineForm(AffineOp.self,Rational(1),true); break;
+			case BoundOp.distributionBind:
+				if(reemitKernel(n.b)==Reemit.none||!affineForm(n.a,forms)) return false;
+				form=AffineForm(AffineOp.reemit,forms[n.a].ratio,forms[n.a].empty); break;
 			case BoundOp.distributionAdd:
 				if(!affineForm(n.a,forms)||!affineForm(n.b,forms)) return false;
 				form=AffineForm(AffineOp.add,forms[n.a].ratio+forms[n.b].ratio,forms[n.a].empty&&forms[n.b].empty); break;
@@ -924,6 +942,7 @@ final class Bindings{
 		final switch(forms[id].op){
 			case AffineOp.constant:seed=substitute(at(id),ctx,env); break;
 			case AffineOp.self:assert(false,"the recursive variable has no emission");
+			case AffineOp.reemit:seed=affineSeed(n.a,ctx,env,forms,memo); break;
 			case AffineOp.add:
 				if(forms[n.a].empty) seed=affineSeed(n.b,ctx,env,forms,memo);
 				else if(forms[n.b].empty) seed=affineSeed(n.a,ctx,env,forms,memo);
@@ -11353,6 +11372,12 @@ final class Bindings{
 							case AffineOp.constant:
 								return " ("~ns~"Affine.constant "~(form.empty?ns~"admissible_zero":admissible(base))~")";
 							case AffineOp.self:return " "~ns~"Affine.self";
+							case AffineOp.reemit:{
+								auto kind=reemitKernel(v.b);
+								auto point=kind==Reemit.self?"(fun _ => rfl)":"("~ns~"reemit_nat_zero "~(kind==Reemit.zeroPlus?"true":"false")~" rfl)";
+								auto law=type(at(id))==pool.distribution(scalarType(Sort.real_))?"realBind_self":"bind_self";
+								return " ("~ns~"Affine."~law~affine(v.a,base,forms)~" "~point~")";
+							}
 							case AffineOp.add:{
 								bool left=forms[v.a].empty,right=forms[v.b].empty;
 								auto rule=left?"add_left_zero":right?"add_right_zero":"add";

@@ -1,6 +1,7 @@
 import QSym.DistributionAtomicDivergence
 import QSym.DistributionAtomicOrbit
 import QSym.DistributionAtomicLimit
+import QSym.DistributionAtomicAffine
 
 /-! Transport the recursive distribution before adding this round's emission.
 For example, mapping every emitted natural number to its successor produces
@@ -23,6 +24,48 @@ theorem Transport.bind (k : α → Option (D α)) : Transport (fun d => bindValu
 
 theorem Transport.realBind (k : ℝ → Option (D ℝ)) : Transport (fun d => GraphFibre.realBindValue d (some k)) :=
   ⟨rfl, rfl, fun _ _ => GraphFibre.realBind_addValue _ _ _, fun _ _ => GraphFibre.realBind_scaleValue _ _ _⟩
+
+private theorem Transport.reemit {push : Option (D α) → Option (D α)} (tr : Transport push)
+    (point : ∀ a, push (some (.dirac a)) = some (.dirac a)) {d : D α} {k : Weights α}
+    (hd : Represents d k) : push (some d) = some d := by
+  induction hd with
+  | zero => exact tr.zero
+  | dirac a => exact point a
+  | add _ _ ih jh =>
+    change push (addValue (some _) (some _)) = _
+    rw [tr.add, ih, jh]; rfl
+  | scale hr _ ih =>
+    change push (scaleValue (some _) (some _)) = _
+    rw [tr.scale, ih]; rfl
+
+private theorem Affine.reemit {f : D α → Option (D α)} {s q u} (h : Affine f s q u)
+    {push : Option (D α) → Option (D α)} (tr : Transport push)
+    (point : ∀ a, push (some (.dirac a)) = some (.dirac a)) :
+    Affine (fun d => push (f d)) s q u := by
+  refine ⟨h.nonneg, ?_⟩
+  cases h.behavior with
+  | missing hs step => exact .missing hs (fun d => by rw [step, tr.missing])
+  | present hs hb step =>
+    apply AffineBehavior.present hs hb
+    intro d k hd
+    obtain ⟨e, he, pe⟩ := step d k hd
+    exact ⟨e, he ▸ tr.reemit point pe.1, pe⟩
+
+/-- Binding a finite atomic approximation to its own Dirac preserves its
+weights and visits, including inside a recursive affine expression. -/
+theorem Affine.bind_self {f : D α → Option (D α)} {s q u} (h : Affine f s q u)
+    {k : α → Option (D α)} (point : ∀ a, k a = some (.dirac a)) :
+    Affine (fun d => bindValue (f d) (some k)) s q u :=
+  h.reemit (Transport.bind k) point
+
+theorem Affine.realBind_self {f : D ℝ → Option (D ℝ)} {s q u} (h : Affine f s q u)
+    {k : ℝ → Option (D ℝ)} (point : ∀ a, k a = some (.dirac a)) :
+    Affine (fun d => GraphFibre.realBindValue (f d) (some k)) s q u :=
+  h.reemit (Transport.realBind k) point
+
+theorem reemit_nat_zero (left : Bool) {v : Option ℕ} (zero : v = some 0) (a : ℕ) :
+    diracValue (if left then Functions.addN.apply v (some a) else Functions.addN.apply (some a) v) = some (.dirac a) := by
+  cases left <;> simp [zero, Functions.addN, Function2.apply, diracValue]
 
 private theorem Transport.orbit_stages {push : Option (D α) → Option (D α)} (hp : Transport push)
     (b : ι → Option (D α)) (r : ℝ) (next : ι → ι) (states : Set ι) (closed : Set.MapsTo next states states)
