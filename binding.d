@@ -179,7 +179,7 @@ private struct CauchyData{
 	uint sign=uint.max,radicand=uint.max,inverse=uint.max,factor=uint.max; bool right;
 }
 private struct IntegralSolution{
-	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell; CauchyData cauchy;
+	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max,missingWeight=uint.max; IntervalData bounds; GaussianData bell; CauchyData cauchy;
 	// The summands of a sum of observations between bounds, each with its own.
 	IntegralSolution[] pieces;
 	// The summands of a weight with a factor under its sum: for each the
@@ -1959,6 +1959,44 @@ final class Bindings{
 		if(p.length>64) return false;
 		foreach(c;p) if(c.words>128) return false;
 		return true;
+	}
+	// Find a point where a strict weight is missing. Iverson masks can
+	// hide a pole, so traversal follows only strict operations and guards.
+	private bool missingPoint(uint body,out string evidence,SourceCertificates cert=null){
+		enum ns="Distribution.StepSource.MissingPoint.";
+		uint fuel=128;
+		bool visit(uint id,ref string proof){
+			if(!fuel) return false;
+			--fuel;
+			auto n=nodes[id];
+			if(n.op==BoundOp.bottom){ if(cert !is null) proof=ns~"bottom"; return true; }
+			if(n.op==BoundOp.guard){
+				if(!visit(n.b,proof)) return false;
+				if(cert !is null) proof="("~ns~"guard "~cert.functionAt(n.a)~" "~proof~")";
+				return true;
+			}
+			if(n.op!=BoundOp.primitive) return false;
+			auto op=arena.view(arena.at(n.data)).op;
+			if(op==Op.add||op==Op.mul){
+				bool left=visit(n.a,proof);
+				if(!left&&!visit(n.b,proof)) return false;
+				if(cert !is null) proof="("~ns~(op==Op.add?"add":"mul")~(left?"_left ":"_right ")~
+					cert.functionAt(left?n.b:n.a)~" "~proof~")";
+				return true;
+			}
+			Rational[] p;
+			if(op!=Op.inv||!axisPolynomial(n.a,p,0,true)) return false;
+			while(p.length&&p[$-1].zero) p.length=p.length-1;
+			if(p.length<2||p.length>3) return false;
+			auto b=p[1]/Rational(2),a=p.length==3?p[2]:Rational(0);
+			if(b*b<a*p[0]) return false;
+			if(cert !is null){
+				auto poly=cert.piece(n.a,cert.everywhere,"",Rational(0));
+				proof="("~ns~"quadratic "~cert.q(p[0])~" "~cert.q(b)~" "~cert.q(a)~" "~poly.proof~" rfl rfl)";
+			}
+			return true;
+		}
+		return visit(body,evidence);
 	}
 	// Build an ordinary scalar polynomial in the innermost real variable.
 	private BoundTerm coordinatePolynomial(Scope inner,Rational[] coefficients){
@@ -5494,6 +5532,17 @@ final class Bindings{
 			solution.bounds=d; solution.interval=true; solution.piecewise=true; solution.output=result.id;
 			return result;
 		}
+		BoundTerm integrateMissingPoint(BoundTerm t,out IntegralSolution solution){
+			auto n=node(t);
+			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)) return BoundTerm.init;
+			foreach(i,id;solution.from){
+				string proof;
+				if(!missingPoint(id,proof)) continue;
+				solution.missingWeight=cast(uint)i; solution.piecewise=true;
+				return bottom(context(t),type(t));
+			}
+			return BoundTerm.init;
+		}
 		// The reciprocal of a root-free quadratic integrates to signed π/√k,
 		// with k=ac-b² for ax²+2bx+c. Poles are kept in the source domain.
 		BoundTerm integrateCauchy(BoundTerm t,out IntegralSolution solution){
@@ -5878,6 +5927,7 @@ final class Bindings{
 			if(!observed){ trial=IntegralSolution.init; observed=integrateInterval(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integrateGaussian(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integrateCauchy(inside,trial)!=BoundTerm.init; }
+			if(!observed){ trial=IntegralSolution.init; observed=integrateMissingPoint(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=integratePieces(inside,trial)!=BoundTerm.init; }
 			if(!observed){ trial=IntegralSolution.init; observed=distributeMass(inside,trial,false)!=BoundTerm.init; }
 			if(!observed&&massGuard(inside,depth+1)==BoundTerm.init) return BoundTerm.init;
@@ -7511,6 +7561,16 @@ final class Bindings{
 				}
 			}
 			if(n.op==BoundOp.distributionMass&&steps<budget){
+				// Retain a pole witness before scalar simplification puts a
+				// zero times a reciprocal under the domain of the denominator.
+				IntegralSolution hole;
+				auto missing=integrateMissingPoint(t,hole);
+				if(missing!=BoundTerm.init){
+					auto index=cast(uint)integrals.length; integrals~=hole; ++steps;
+					auto proof=emit(BindingRule.distributionInterval,t.id,missing.id,uint.max,uint.max,index);
+					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
+					return Result(missing.id,uint.max);
+				}
 				BindingRule rule; auto target=shiftMass(t,rule);
 				if(target==BoundTerm.init) target=involutionMass(t,rule);
 				uint witness=uint.max;
@@ -7981,6 +8041,7 @@ final class Bindings{
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateGaussian(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateCauchy(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePieces(at(result.output),solution); }
+				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateMissingPoint(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){
 					auto strict=unguardMass(at(result.output)),unguarded=strict==BoundTerm.init?massGuard(at(result.output),0):BoundTerm.init;
 					IntegralSolution sum; auto spread=strict==BoundTerm.init&&unguarded==BoundTerm.init?distributeMass(at(result.output),sum,true):BoundTerm.init;
@@ -10268,6 +10329,19 @@ final class Bindings{
 			auto monomials=rowProof(d.moments,d.literals);
 			return "Distribution.DensityProgram.presentation_mass_gaussian_symbolic "~program~" "~list(d.moments)~" "~q(d.c2)~" "~q(d.vertex)~" "~q(d.width)~" "~evidence~" "~exponent~
 				" "~cert.closedProof(at(d.curvature),d.c2)~" rfl "~monomials~" "~sums(count)~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
+		}
+		if(s.missingWeight!=uint.max){
+			enum ns="Distribution.StepSource.MissingPoint.";
+			string proof,program="Distribution.DensityProgram.lebesgue";
+			foreach(i,id;s.from){
+				auto weight=functionAt(id);
+				if(i==s.missingWeight){
+					enforce(missingPoint(id,proof,cert),"missing weight witness");
+					proof="("~ns~"mul_right (Distribution.DensityProgram.density "~program~") "~proof~")";
+				}else if(i>s.missingWeight) proof="("~ns~"mul_left "~weight~" "~proof~")";
+				program="(Distribution.DensityProgram.weight "~weight~" "~program~")";
+			}
+			return ns~"mass "~program~" "~proof;
 		}
 		if(s.cauchy.sign!=uint.max){
 			auto d=s.cauchy,source=piece(nodes[d.inverse].a,cert.everywhere,"",Rational(0));
@@ -12895,7 +12969,7 @@ final class Bindings{
 				}
 				case BindingRule.distributionInterval,BindingRule.distributionIntegralAE:{
 					auto s=result.integrals[p.extra];enforce(s.piecewise||s.ae,"missing compositional integral certificate");
-					if(s.interval||s.gaussian||s.cauchy.sign!=uint.max){ proof=".ofEq (fun ξ ρ => let h := "~stepProofs[p.extra]~"; h)"; break; }
+					if(s.interval||s.gaussian||s.cauchy.sign!=uint.max||s.missingWeight!=uint.max){ proof=".ofEq (fun ξ ρ => let h := "~stepProofs[p.extra]~"; h)"; break; }
 					if(s.polynomial){ proof=".ofEq (fun ξ ρ => ("~stepProofs[p.extra]~").trans (Eq.symm "~stepOutputs[p.extra]~"))"; break; }
 					string rationalQ(Rational q){return q.denominator==1?"("~to!string(q.numerator)~" : ℚ)":"(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)";}
 					string tail="[";foreach(k,q;s.exceptions[1..$]){if(k)tail~=",";tail~=rationalQ(q);}tail~="]";

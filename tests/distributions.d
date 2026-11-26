@@ -299,6 +299,22 @@ private Case[] cases(){
 	Case("ChangedCoordinateRoot","densityAtD(Λx. λ[sqrt(1+abs(x))],3)","ℝ","1/4"),
 	Case("ChangedCoordinateReciprocal","densityAtD(Λx. λ[(1+abs(x))⁻¹],-1)","ℝ","1/4"),
 	Case("ChangedCoordinateSinh","densityAtD(Λx. λ[sinh(abs(x-2))],2)","ℝ","undefined(ℝ)"),
+	Case("MissingQuadraticPositive","∫dx (x²-2)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
+	Case("MissingQuadraticTranslated","∫dx ((2*x-3)^2-2)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
+	Case("MissingQuadraticNegative","∫dx (2-x²)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
+	Case("MissingQuadraticTouch","∫dx (1-2*x+x²)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
+	Case("MissingQuadraticAffine","∫dx (2*x+3)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
+	Case("MissingQuadraticStrictZero","∫dx 0*(x²-2)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
+	Case("MissingQuadraticStrictSum","∫dx (1+(x²-2)⁻¹)·λ[x]","ℝ","undefined(ℝ)"),
+	Case("MissingQuadraticHigher","λ(h:ℝ→ℝ).∫dx h(x)*(x²-2)⁻¹·λ[x]","(ℝ→ℝ)→ℝ","λ(h:ℝ→ℝ). undefined(ℝ)"),
+	Case("MissingQuadraticFactor","λ(a:ℝ).∫dx a*(x²-1)⁻¹·λ[x]","ℝ→ℝ","λ(a:ℝ). undefined(ℝ)"),
+	Case("MissingQuadraticMask","λ(p:𝔹).∫dx [p]·(x²-2)⁻¹·λ[x]","𝔹→ℝ","λ(p:𝔹). [p]·(undefined(ℝ))"),
+	Case("MissingQuadraticInactive","∫dx [false]·(x²-2)⁻¹·λ[x]","ℝ","0"),
+	Case("MissingQuadraticOutside","∫dx [2<x<3]·(x²-2)⁻¹·λ[x]","ℝ"),
+	Case("MissingQuadraticHoleHidden","∫dx [x²≠2]·(x²-2)⁻¹·λ[x]","ℝ"),
+	Case("MissingQuadraticSafe","∫dx (2+x²)⁻¹·λ[x]","ℝ","1/2·sqrt(2)·π"),
+	Case("MissingQuadraticBottom","defined(∫dx undefined(ℝ)·λ[x])","𝔹","false"),
+	Case("MissingQuadraticZeroArg","defined((λ(a:ℝ).∫dx a⁻¹*(1+x²)⁻¹·λ[x])(0))","𝔹","false"),
 	Case("CauchyScaledAtan","∫dx λ[atan(2*x-3)]","ℝ","π"),
 	Case("CauchyScaleNormal","∫dx (π⁻¹)·(1+x²)⁻¹·λ[x]","ℝ","1"),
 	Case("CauchyScaleQuotient","∫dx 1/(π*(1+x²))·λ[x]","ℝ","1"),
@@ -1769,6 +1785,11 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
+		if(c.name.indexOf("MissingQuadratic")==0){
+			bool witness=c.name!="MissingQuadraticInactive"&&c.name!="MissingQuadraticOutside"&&
+				c.name!="MissingQuadraticHoleHidden"&&c.name!="MissingQuadraticSafe";
+			enforce((certificate.indexOf("MissingPoint.mass ")>=0)==witness,c.name);
+		}
 		if(c.name.indexOf("CauchyScale")==0&&c.name!="CauchyScaledAxis"){
 			bool scaled=c.name!="CauchyScalePole"&&c.name!="CauchyScaleZero";
 			enforce((certificate.indexOf("StepSource.cauchy_scaled_mass ")>=0)==scaled,c.name);

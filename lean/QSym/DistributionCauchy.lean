@@ -1,5 +1,4 @@
-import QSym.DistributionPolynomialGrid
-import QSym.DistributionModelBridge
+import QSym.DistributionMissingPoint
 import QSym.IntegrationLaws
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 
@@ -65,14 +64,7 @@ theorem cauchy_mass {f : ℝ → Option ℝ} {p : List ℚ} (c b a k s : ℚ)
   have key : (k : ℝ) = a*c - b^2 := by exact_mod_cast he
   have hsg : (s : ℝ) * |(a : ℝ)| = a := by exact_mod_cast sg
   let q := fun x : ℝ => (c : ℝ) + 2*b*x + a*x^2
-  have eq (x : ℝ) : f x = some (q x) := by
-    rw [src.equation x trivial]
-    have hz := polyEval_zero coeff x
-    rw [polyEval_add, polyEval_scale] at hz
-    simp [polyEval] at hz
-    congr 1
-    dsimp [q]
-    linarith
+  have eq (x : ℝ) : f x = some (q x) := quadratic_source c b a src coeff x
   have total (x : ℝ) : Value.inv (f x) = some ((q x)⁻¹) := by
     have nz : q x ≠ 0 := by
       have h : (a : ℝ)*q x = (a*x+b)^2+k := by dsimp [q]; rw [key]; ring
