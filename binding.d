@@ -232,7 +232,7 @@ private struct AffineChart{
 }
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
-private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; }
+private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
@@ -1536,6 +1536,21 @@ final class Bindings{
 		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument); if(y==Term.init) return Term.init; args~=y; }
 		return arena.viewRebuild(arena.at(n.data),args,true);
 	}
+	// Match the affine source certificate. A product needs a syntactically
+	// constant side so the evaluation of its multiplier is closed.
+	private bool affineBody(uint id,out Rational a,out Rational b){
+		bool shape(uint i){
+			auto n=nodes[i];
+			if(!depends(at(i),0)) return true;
+			if(n.op==BoundOp.variable) return n.data==0;
+			if(n.op!=BoundOp.primitive) return false;
+			auto op=arena.view(arena.at(n.data)).op;
+			return (op==Op.add||op==Op.mul&&(!depends(at(n.a),0)||!depends(at(n.b),0)))&&shape(n.a)&&shape(n.b);
+		}
+		if(!shape(id)) return false;
+		auto arg=arena.variable(Sort.real_,freshScalarIndex(id)),raw=scalarBody(at(id),arg);
+		return raw!=Term.init&&integralAffine(arena,raw,arg,a,b)&&!a.zero;
+	}
 	// A comparison that excludes exactly zero of the innermost argument.
 	// Surface natural equality can introduce an integer coercion.
 	private string binderNonzero(uint id){
@@ -1558,6 +1573,10 @@ final class Bindings{
 				return "Functions.nonzeroCastNZ_eq";
 		}
 		return "";
+	}
+	private uint lastConjunct(uint id,out uint[] conjunctions){
+		while(primitiveOp(id,Op.and_)){ conjunctions~=id; id=nodes[id].b; }
+		return id;
 	}
 	// The negation of a comparison: the other comparison of its operands in
 	// the other order. Both are primitives, or both scalars.
@@ -6249,16 +6268,33 @@ final class Bindings{
 			auto argument=arena.variable(sort,index);
 			BoundTerm rewrite(BoundTerm t,uint[] path,bool masksOnly){
 				auto n=node(t),mode=n.op==BoundOp.defined||n.op==BoundOp.holds?n.op:BoundOp.scalar;
-				if(masksOnly&&primitiveOp(t.id,Op.mask)&&binderNonzero(n.a).length&&depends(at(n.b),0)){
-					auto z=arena.number(Number(0),sort),input=scalarBody(at(n.b),z);
+				if(masksOnly&&primitiveOp(t.id,Op.mask)&&depends(at(n.b),0)){
+					uint[] conjunctions;
+					auto pred=lastConjunct(n.a,conjunctions);
+					Term point; uint affine=uint.max;
+					if(binderNonzero(pred).length) point=arena.number(Number(0),sort);
+					else if(sort==Sort.real_&&primitiveOp(pred,Op.nonzero)&&type(at(nodes[pred].a))==scalarType(sort)){
+						Rational slope,offset;
+						if(affineBody(nodes[pred].a,slope,offset)){
+							point=arena.real_((Rational(0)-offset)/slope);
+							affine=nodes[pred].a;
+						}
+					}
+					auto input=point==Term.init?Term.init:scalarBody(at(n.b),point);
 					if(input!=Term.init){
 						auto opts=Options(DensityMode.preserve,true),value=simplify(arena,input,opts);
 						if(!value.exhausted&&arena.isNumber(value.output)&&arena.number(value.output).zero){
 							auto domain=simplifyDomain(arena,input,[],opts);
 							if(!domain.exhausted&&domain.output==arena.boolean(true)){
 								extra=cast(uint)scalarDomains.length;
-								scalarDomains~=ScalarDomain(input,domain,value,index,sort,path,BoundOp.primitive);
-								return at(n.b);
+								auto d=ScalarDomain(input,domain,value,index,sort,path,BoundOp.primitive);
+								d.excludedPoint=point; d.affineInput=affine; scalarDomains~=d;
+								BoundTerm remaining;
+								foreach_reverse(id;conjunctions){
+									auto c=nodes[id];
+									remaining=remaining==BoundTerm.init?at(c.a):primitive(arena.at(c.data),[at(c.a),remaining]);
+								}
+								return remaining==BoundTerm.init?at(n.b):primitive(arena.at(n.data),[remaining,at(n.b)]);
 							}
 						}
 					}
@@ -6627,22 +6663,9 @@ final class Bindings{
 			mapDomains.set(body,id);
 			return id;
 		}
-		// Match the same affine grammar as the certificate builder. A product
-		// needs a syntactically constant side so its numeric proof is closed.
 		bool affineMap(uint id,out Rational a,out Rational b){
-			if(nodes[id].op!=BoundOp.lambda||type(at(id))!=pool.function_(scalarType(Sort.real_),scalarType(Sort.real_))) return false;
-			auto body=at(nodes[id].a);
-			bool shape(uint i){
-				auto n=nodes[i];
-				if(!depends(at(i),0)) return true;
-				if(n.op==BoundOp.variable) return n.data==0;
-				if(n.op!=BoundOp.primitive) return false;
-				auto op=arena.view(arena.at(n.data)).op;
-				return (op==Op.add||op==Op.mul&&(!depends(at(n.a),0)||!depends(at(n.b),0)))&&shape(n.a)&&shape(n.b);
-			}
-			if(!shape(body.id)) return false;
-			auto arg=arena.variable(Sort.real_,freshScalarIndex(body.id)),raw=scalarBody(body,arg);
-			return raw!=Term.init&&integralAffine(arena,raw,arg,a,b)&&!a.zero;
+			return nodes[id].op==BoundOp.lambda&&type(at(id))==pool.function_(scalarType(Sort.real_),scalarType(Sort.real_))&&
+				affineBody(nodes[id].a,a,b);
 		}
 		// Build the inverse in the source binder's context. It can then be
 		// applied to any (possibly partial) target without capturing variables.
@@ -10743,6 +10766,14 @@ final class Bindings{
 			coordinateProofs~=coordinateGridProof(coordinate,c); proofRoots~=c.roots;
 			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
 		}
+		Table!(uint,string) affineMasks;
+		foreach(i,d;result.domains) if(d.affineInput!=uint.max){
+			auto c=new SourceCertificates("mask"~to!string(i)~"_",d.affineInput),f=c.affineProof(d.affineInput);
+			auto z=c.q(arena.number(d.excludedPoint).re);
+			affineMasks.set(cast(uint)i,c.functionAt(d.affineInput)~" "~c.q(f.slope)~" "~c.q(f.offset)~" "~z~" "~f.proof~
+				" (of_decide_eq_true rfl) (of_decide_eq_true rfl)");
+			stepNumerics~=c.numericTerms; stepDeclarations~=c.declarations;
+		}
 		Table!(uint,string) smoothCoordinates;
 		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionSmoothCoordinate){
 			auto n=nodes[p.from]; bool restricted=n.op==BoundOp.distributionInversePart;
@@ -10845,7 +10876,7 @@ final class Bindings{
 		foreach(d;result.domains){
 			scalarNodes~=arena.viewPostorder(d.input); if(d.result.output!=Term.init)scalarNodes~=arena.viewPostorder(d.result.output);
 			if(d.value.traced) scalarNodes~=arena.viewPostorder(arena.castTo(d.value.output,arena.sort(d.input)));
-			if(d.mode==BoundOp.primitive) scalarNodes~=arena.viewPostorder(arena.number(Number(0),d.sort));
+			if(d.mode==BoundOp.primitive) scalarNodes~=arena.viewPostorder(d.excludedPoint);
 		}
 		foreach(r;result.ranks) foreach(step;r.iterations) scalarNodes~=arena.viewPostorder(step.output);
 		foreach(r;result.ranks) if(r.lower.output!=Term.init) scalarNodes~=arena.viewPostorder(r.result.output);
@@ -12054,7 +12085,9 @@ final class Bindings{
 					string wrap(uint id,size_t depth){
 						if(depth==d.path.length){
 							if(d.mode!=BoundOp.primitive) return equality;
-							auto mask=nodes[id],z=arena.number(Number(0),d.sort);
+							auto mask=nodes[id],z=d.excludedPoint;
+							uint[] conjunctions;
+							auto pred=lastConjunct(mask.a,conjunctions);
 							auto value=arena.castTo(d.value.output,arena.sort(d.input));
 							string zeroProof(Term a){
 								auto term="n"~to!string(a.id);
@@ -12064,7 +12097,19 @@ final class Bindings{
 							}
 							string fn(uint child){return "(fun u => "~name(child)~".eval ξ (Binding.Env.cons (a := .scalar ."~field~") u ρ))";}
 							auto h0="(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct ξ) ("~prefix~".ValueCertificate.refinement ξ)) "~zeroProof(value)~")";
-							return "(Value.mask_nonzero_of_zero "~fn(mask.a)~" "~binderNonzero(mask.a)~" "~fn(mask.b)~" (n"~to!string(z.id)~".eval ξ) "~zeroProof(z)~" "~h0~" x)";
+							string law;
+							if(d.affineInput==uint.max)
+								law="(Value.mask_nonzero_of_zero "~fn(pred)~" "~binderNonzero(pred)~" "~fn(mask.b)~" (n"~to!string(z.id)~".eval ξ) "~zeroProof(z)~" "~h0~" x)";
+							else{
+								auto point="n"~to!string(z.id),q=SourceCertificates.q(arena.number(z).re);
+								law="(Distribution.StepSource.affine_mask_of_zero "~affineMasks.get(p.extra,"")~" "~fn(mask.b)~" ("~point~".eval ξ) (Numeric.calculate_sound ξ "~point~" "~q~" rfl) "~h0~" x)";
+							}
+							foreach_reverse(i,conjunction;conjunctions){
+								auto left="("~name(nodes[conjunction].a)~".eval ξ (Binding.Env.cons (a := .scalar ."~field~") (some x) ρ))";
+								auto lemma=i+1==conjunctions.length?"mask_and_of_right":"mask_and_congr_right";
+								law="(Value."~lemma~" "~left~" "~law~")";
+							}
+							return law;
 						}
 						auto q=nodes[id],left=d.path[depth]==0?wrap(q.a,depth+1):"rfl";
 						if(q.b==uint.max) return "(congrArg "~valueOperation(q)~" "~left~")";

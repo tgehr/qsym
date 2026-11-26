@@ -30,6 +30,20 @@ theorem Functions.nonzeroCastNZ_eq :
   funext x
   cases x <;> simp [nonzeroZ, castNZ, Function1.apply, Value.nonzero]
 
+theorem Value.mask_and_of_right {β : Type} [Zero β] (p : Option Bool)
+    {q : Option Bool} {v : Option β} (h : Value.mask q v = v) :
+    Value.mask (Value.and p q) v = Value.mask p v := by
+  cases p with
+  | none => rfl
+  | some p => cases p <;> first | rfl | exact h
+
+theorem Value.mask_and_congr_right {β : Type} [Zero β] (p : Option Bool)
+    {q r : Option Bool} {v : Option β} (h : Value.mask q v = Value.mask r v) :
+    Value.mask (Value.and p q) v = Value.mask (Value.and p r) v := by
+  cases p with
+  | none => rfl
+  | some p => cases p <;> first | rfl | exact h
+
 theorem Function1.apply_mask {α β : Type} [Zero α] [Zero β] (f : Function1 α β)
     (p : Option Bool) (x : Option α) (hd : f.domain 0) (hz : f.value 0 = 0) :
     f.apply (Value.mask p x) = Value.mask p (f.apply x) := by

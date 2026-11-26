@@ -61,6 +61,27 @@ structure Affine (f : ℝ → Option ℝ) (a b : ℚ) : Prop where
 instance {f : ℝ → Option ℝ} {a b : ℚ} :
     CoeFun (Affine f a b) (fun _ => ∀ x, f x = some ((a : ℝ)*x+b)) := ⟨Affine.equation⟩
 
+/-- An affine nonzero test excludes exactly its root. The weighted value
+can be partial at other points. -/
+theorem affine_mask_of_zero {β : Type} [Zero β] (f : ℝ → Option ℝ) (a b z : ℚ)
+    (hf : Affine f a b) (ha : a ≠ 0) (hz : a*z+b = 0)
+    (w : Option ℝ → Option β) (v : Option ℝ) (hv : v = some (z : ℝ))
+    (hw : w v = some 0) (x : ℝ) :
+    Value.mask (Value.nonzero (f x)) (w (some x)) = w (some x) := by
+  subst v
+  rw [hf x]
+  have root : (a : ℝ) * (z : ℝ) + b = 0 := by exact_mod_cast hz
+  by_cases h : x = (z : ℝ)
+  · subst x
+    simp [Value.nonzero, Value.mask, root, hw]
+  · have slope : (a : ℝ) ≠ 0 := by exact_mod_cast ha
+    have ne : (a : ℝ)*x+b ≠ 0 := by
+      intro eq
+      apply h
+      apply mul_left_cancel₀ slope
+      linarith
+    simp [Value.nonzero, Value.mask, ne]
+
 theorem affine_variable : Affine (fun x => some x) 1 0 := by
   constructor
   intro x; simp

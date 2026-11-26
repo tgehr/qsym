@@ -1419,6 +1419,17 @@ private Case[] cases(){
 	Case("ShiftOrbitStart","λ(a:ℕ).massD("~shift("a")~")","ℕ→ℝ","λ(a:ℕ). (1:ℝ)"),
 	Case("ShiftOrbitZeroCharge","massD("~shift("0","n+1","0","2")~")","ℝ","0"),
 	Case("ShiftOrbitMissingProbe","massD(weightD(λ(n:ℕ).undefined(ℝ),"~shift("0","n+1","0","0")~"))","ℝ","undefined(ℝ)"),
+	Case("MaskRootCoordinate","Λx. [x≠3]·λ[(x-3)^2]","Distribution(ℝ)","Λ(x:ℝ). (abs(2·x-6))·λ[x]"),
+	Case("MaskRootFraction","Λx. [x≠1/2]·abs(2*x-1)·λ[x]","Distribution(ℝ)","Λ(x:ℝ). (abs(2·x-1))·λ[x]"),
+	Case("MaskRootPolynomial","λ(x:ℝ).[x^2≠1]·abs(x^2-1)","ℝ→ℝ","λ(x:ℝ). abs(x^2-1)"),
+	Case("MaskRootThree","λ(x:ℝ).[x≠1∧x≠2∧x≠3]·((x-1)*(x-2)*(x-3))","ℝ→ℝ","λ(x:ℝ). (x-3)·(x-2)·(x-1)"),
+	Case("MaskRootOneKept","λ(x:ℝ).[x≠2∧x≠3]·abs(x-3)","ℝ→ℝ","λ(x:ℝ). [x≠2]·abs(x-3)"),
+	Case("MaskRootAfterPartial","λ(h:ℝ→𝔹).λ(x:ℝ).[h(x)∧x≠3]·abs(x-3)","(ℝ→𝔹)→ℝ→ℝ","λ(h:ℝ→𝔹). λ(x:ℝ). ([h(x)]·abs(x-3):ℝ)"),
+	Case("MaskRootBeforePartial","λ(h:ℝ→𝔹).λ(x:ℝ).[x≠3∧h(x)]·abs(x-3)","(ℝ→𝔹)→ℝ→ℝ","λ(h:ℝ→𝔹). λ(x:ℝ). ([x≠3∧h(x)]·abs(x-3):ℝ)"),
+	Case("MaskRootPole","λ(x:ℝ).[x≠2]·(x-2)⁻¹","ℝ→ℝ","λ(x:ℝ). [x≠2]·(x-2)⁻¹"),
+	Case("MaskRootAt","densityAtD(Λx. [x≠3]·λ[(x-3)^2],3)","ℝ","0"),
+	Case("MaskRootOff","densityAtD(Λx. [x≠3]·λ[(x-3)^2],4)","ℝ","2"),
+	Case("MaskRootMass","∫dx [2≤x≤4]·[x≠3]·λ[(x-3)^2]","ℝ","2"),
 	Case("EraseMaskNatural","λ(k:ℕ).[k≠0]·k","ℕ→ℕ","λ(k:ℕ). k"),
 	Case("EraseMaskInteger","λ(i:ℤ).[i≠0]·(-2*i)","ℤ→ℤ","λ(i:ℤ). -2·i"),
 	Case("EraseMaskRational","λ(q:ℚ).[q≠0]·q^2","ℚ→ℚ","λ(q:ℚ). q^2"),
@@ -1585,6 +1596,10 @@ private void run(string directory){
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
 		if(c.name.indexOf("IndexedVisit")==0)
 			enforce(certificate.indexOf("Distribution.observe_indexed_countdown ")>=0&&text.indexOf("μ")<0,c.name);
+		if(c.name=="MaskRootCoordinate"||c.name=="MaskRootFraction"||c.name=="MaskRootPolynomial"||
+			c.name=="MaskRootThree"||c.name=="MaskRootOneKept"||c.name=="MaskRootAfterPartial")
+			enforce(certificate.indexOf("Distribution.StepSource.affine_mask_of_zero ")>=0,c.name);
+		if(c.name=="MaskRootThree") enforce(certificate.indexOf("Value.mask_and_congr_right ")>=0,c.name);
 		if(c.name.indexOf("EraseMask")==0||c.name.indexOf("KeepMask")==0)
 			enforce((certificate.indexOf("Value.mask_nonzero_of_zero ")>=0)==(c.name.indexOf("EraseMask")==0),c.name);
 		if(c.name.indexOf("UnitEmission")==0||c.name=="EmittingThousand"){
