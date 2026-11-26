@@ -101,9 +101,25 @@ Example[] examples(){
 		Example("CosOutsideUnit","cos(2*sin(x))≠0","cos(2*sin(x))≠0"),
 		Example("MaskPartialBody","[p]*log(-1)≠0","p∧log(-1)≠0"),
 		// Bounds that differ by a constant: a premise about one asks for the
-		// same about the other, moved by that constant, without end.
+		// same about the other, moved by that constant, without end. A chain
+		// of premises takes a known fact once, so it does not go around such
+		// a cycle of facts, of two or of three, with an offset or a factor,
+		// and with other facts to branch at.
 		Example("OffsetChain","[0≤y]*[y≤x]*[x-1≤y]","[0≤y∧(y≤x∧x-1≤y)]"),
-		Example("OffsetChainUpper","[y≤1]*[y≤x]*[x-1≤y]","[y≤1∧(y≤x∧x-1≤y)]")
+		Example("OffsetChainUpper","[y≤1]*[y≤x]*[x-1≤y]","[y≤1∧(y≤x∧x-1≤y)]"),
+		Example("OffsetChainThree","[0≤t]*[t≤y]*[y≤x]*[x-1≤t]","[0≤t∧(t≤y∧(y≤x∧x-1≤t))]"),
+		Example("ScaledChain","[0≤y]*[y≤x]*[x/2≤y]","[0≤y∧(y≤x∧x·(1/2)≤y)]"),
+		Example("OffsetChainBranching","[0≤y]*[y≤x]*[x-1≤y]*[y≤2*x]*[x/3≤y]","[0≤y∧(y≤x∧(x-1≤y∧x·(1/3)≤y))]"),
+		// A chain through different facts stays: it shows a bound that the
+		// others imply, with the offsets added, and one that they refute. A
+		// cycle of facts that contradict each other shows without a second
+		// round.
+		Example("ChainImplied","[0≤y]*[y≤x]*[x≤t]*[0≤t]","[0≤y∧(y≤x∧x≤t)]"),
+		Example("ChainImpliedOffset","[x≤y+1]*[y≤x+1]*[0≤x]*[x≤1]*[y≤2]","[x≤y+1∧(y≤x+1∧(0≤x∧x≤1))]"),
+		Example("ChainRefuted","[0≤y]*[y≤x]*[x≤t]*[t<0]","0"),
+		Example("ChainRefutedOffset","[x≤y+1]*[y≤x+1]*[0≤x]*[x≤1]*[2<y]","0"),
+		Example("ChainContradiction","[0≤y]*[y≤x]*[x+1≤y]","0"),
+		Example("ChainContradictionThree","[x≤y]*[y≤t]*[t≤x]*[x<t]","0")
 	];
 }
 private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,t:ℝ,z:ℂ,p:𝔹,q:𝔹"); return s; }

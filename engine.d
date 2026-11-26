@@ -35,6 +35,10 @@ package final class Engine{
 	private Proof[] proofs;
 	private uint[] roots;
 	private Table!(ulong,bool) active,proving;
+	// The known facts that gave the premises in progress their missing
+	// terms, and how often a fact was passed over because it is among them.
+	private Table!(uint,bool) chained;
+	private size_t passed;
 	private Proof[][] facts=[[]];
 	this(Arena a,Derivation d,Budget budget,size_t rewrites,bool expandPowers=false,bool distributeLogic=true){
 		this.a=a; this.d=d; this.budget=budget; rewritesLeft=rewrites;
@@ -185,17 +189,40 @@ package final class Engine{
 		--rewritesLeft;
 		result=d.rule(i,premises,ctx); return true;
 	}
-	private bool complete(Law law,Term[] bindings,uint ctx,out Proof result,uint nesting=0){
+	// The terms of a law that its conclusion does not fix are taken from the
+	// known facts that match its premises. The remaining premises may ask for
+	// the same again, and such a chain need not repeat a goal: from `y≤x` and
+	// `x-1≤y`, `1<x` asks for `1<y`, that for `1<x-1`, which is `2<x`, and
+	// so on without end. A chain therefore takes a known fact once, and its
+	// length is at most the number of known facts.
+	//
+	// Taking a fact again closes a cycle through the facts. Where the facts
+	// are bounds with offsets, a round of the cycle moves the goal by the sum
+	// of the offsets, and nothing is lost: if that makes the goal harder,
+	// every round asks for more than the one before; if it leaves the goal
+	// as it is, the goal repeats, which `prove` excludes; and if it makes
+	// the goal easier, the facts of the cycle contradict each other, which
+	// shows without a second round, as the negation of one of them follows
+	// from the others. Where a bound has a factor, as in `x/2≤y` and `y≤x`,
+	// rounds approach what the cycle implies, here `0≤x`, without reaching
+	// it; a goal that some number of rounds would bring below another known
+	// bound is given up.
+	private bool complete(Law law,Term[] bindings,uint ctx,out Proof result,uint nesting=0,uint[] taken=null){
 		budget.spend(); if(nesting>=128) return false;
 		size_t missing; foreach(b;bindings) if(b.id==uint.max) ++missing;
-		if(!missing) return instanceProof(instantiate(a,law,bindings),ctx,result);
+		if(!missing){
+			foreach(f;taken) chained.set(f,true);
+			scope(exit) foreach(f;taken) chained.set(f,false);
+			return instanceProof(instantiate(a,law,bindings),ctx,result);
+		}
 		auto available=known(ctx);
 		foreach(i;0..conditionCount(law)) foreach(f;available){
 			budget.spend(); auto bs=bindings.dup;
 			if(!match(a,law,cast(int)i,f.before,bs)) continue;
 			size_t rest; foreach(b;bs) if(b.id==uint.max) ++rest;
 			if(rest>=missing) continue;
-			if(complete(law,bs,ctx,result,nesting+1)) return true;
+			if(chained.get(f.before.id,false)){ ++passed; continue; }
+			if(complete(law,bs,ctx,result,nesting+1,taken~f.before.id)) return true;
 		}
 		return false;
 	}
@@ -222,13 +249,10 @@ package final class Engine{
 			if(numeric.after!=a.boolean(true)) return false;
 			result=numeric; remember(truths,k,result); return true;
 		}
-		// A premise may ask for another through a known fact, and a chain of
-		// such questions need not repeat a goal: from `x-1≤y` and `y≤x`,
-		// `1<x` asks for `1<y`, that for `1<x-1`, which is `2<x`, and so on.
-		// Like the other searches, this one is bounded in depth.
-		if(proving.get(k,false)||premiseDepth>=128) return false;
+		if(proving.get(k,false)) return false;
 		proving.set(k,true); ++premiseDepth;
 		scope(exit){ proving.set(k,false); --premiseDepth; }
+		auto before=passed;
 		// Check a bounded polynomial identity before asking root/guard solvers
 		// to reason about its unevaluated factored residual.
 		auto goal=a.view(t);
@@ -251,7 +275,9 @@ package final class Engine{
 			auto q=expandedEquality(p.after,ctx);
 			if(q.after==a.boolean(true)){ result=d.trans(p,q,ctx); remember(truths,k,result); return true; }
 		}
-		failedProofs.set(failureKey,true);
+		// A failure that passed over a fact of the chain it is in says nothing
+		// about the goal in another place.
+		if(passed==before) failedProofs.set(failureKey,true);
 		return false;
 	}
 	// Pure disequalities cannot establish a new zero equation. Avoid a
