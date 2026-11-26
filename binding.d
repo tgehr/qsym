@@ -3010,7 +3010,7 @@ final class Bindings{
 	// A quotient suggests its numerator or the reciprocal of its denominator
 	// as the cumulative scale. Certify the base and the original successor
 	// equation at every natural index before accepting either candidate.
-	private BoundTerm countdownProduct(uint rate,BoundTerm seed,BoundTerm arg,ref ScalarDomain[] checks,out uint witness){
+	private BoundTerm countdownProduct(uint rate,Scope ctx,bool emitting,ref ScalarDomain[] checks,out uint witness){
 		witness=uint.max;
 		auto index=freshScalarIndex(rate),k=arena.variable(Sort.natural,index);
 		auto raw=scalarBody(at(rate),k);
@@ -3028,12 +3028,20 @@ final class Bindings{
 		if(!inverse(den)) return BoundTerm.init;
 		den=arena.castTo(arena.at(arena.view(den).a),Sort.real_);
 		num=arena.castTo(num,Sort.real_);
-		auto ctx=context(arg),inner=push(ctx,scalarType(Sort.natural));
+		auto inner=push(ctx,scalarType(Sort.natural));
 		auto z=arena.natural_(0),one=arena.natural_(1);
 		auto succ=arena.call(Builtin.addN,[k,one]),nextRate=scalarBody(at(rate),succ);
 		auto a=scalarBody(restoreBody(num,inner,k),succ),b=scalarBody(restoreBody(den,inner,k),succ),minus=arena.real_(-1);
 		auto opts=Options(DensityMode.preserve,true); opts.expandScalarEmbeddings=true;
 		opts.maxRewrites=2048; opts.maxAlgebraWork=65536;
+		ScalarResult domainOf(Term expression){
+			auto naturalOpts=opts;
+			// Retain the nonnegativity visible in natural operands first.
+			naturalOpts.expandScalarEmbeddings=false;
+			auto d=simplifyDomain(arena,expression,[],naturalOpts);
+			if(!d.exhausted&&d.output==arena.boolean(true)) return d;
+			return simplifyDomain(arena,expression,[],opts);
+		}
 		BoundTerm certify(Term factor,bool reverse){
 			auto body=restoreBody(factor,inner,k);
 			if(!depends(body,0)) return BoundTerm.init;
@@ -3059,11 +3067,7 @@ final class Bindings{
 			ScalarDomain[] evidence=[baseProof];
 			if(polynomialZero(arena,cross)){
 				auto denominator=reverse?arena.mul(b,arena.mul(u,v,true),true):b;
-				auto reciprocal=arena.inv(denominator),domainOpts=opts;
-				// Retain the nonnegativity visible in natural operands first.
-				domainOpts.expandScalarEmbeddings=false;
-				auto domain=simplifyDomain(arena,reciprocal,[],domainOpts);
-				if(domain.exhausted||domain.output!=arena.boolean(true)) domain=simplifyDomain(arena,reciprocal,[],opts);
+				auto reciprocal=arena.inv(denominator),domain=domainOf(reciprocal);
 				if(!domain.exhausted&&domain.output==arena.boolean(true)){
 					auto valid=ScalarDomain(reciprocal,domain);
 					valid.product=new ProductStep(nextRate.id,gain.id,rational,swapped,reverse,q!=Rational(1));
@@ -3077,9 +3081,13 @@ final class Bindings{
 				ScalarDomain step; if(!checked(residual,0,step)) return BoundTerm.init;
 				evidence~=step;
 			}
+			if(emitting){
+				auto inverse=arena.inv(scalarBody(candidate,succ)),domain=domainOf(inverse);
+				if(domain.exhausted||domain.output!=arena.boolean(true)) return BoundTerm.init;
+				evidence~=ScalarDomain(inverse,domain);
+			}
 			witness=cast(uint)checks.length; checks~=evidence;
-			auto f=hint(lambda(candidate),"n");
-			return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[apply(f,arg),seed]);
+			return hint(lambda(candidate),"n");
 		}
 		foreach(i,factor;[num,den]){
 			auto solved=certify(factor,i!=0); if(solved!=BoundTerm.init) return solved;
@@ -3148,7 +3156,6 @@ final class Bindings{
 		bool bare=emission!=uint.max&&scale.op==BoundOp.apply;
 		if(!bare&&(scale.op!=BoundOp.distributionScale||depends(at(scale.a),1))) return BoundTerm.init;
 		bool indexedRate=!bare&&depends(at(scale.a),0);
-		if(indexedRate&&emission!=uint.max) return BoundTerm.init;
 		auto call=bare?scale:nodes[scale.b];
 		if(call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
 		auto pred=nodes[call.b],one=nodes[pred.b],base=at(branch.b);
@@ -3159,11 +3166,17 @@ final class Bindings{
 		foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
 		auto seed=observedMass(substitute(base,ctx,env),operations);
 		auto arg=at(application.b),zero=arena.real_(0);
-		if(indexedRate) return countdownProduct(scale.a,seed,arg,checks,witness);
+		BoundTerm cumulative;
+		if(indexedRate){
+			cumulative=countdownProduct(scale.a,ctx,emission!=uint.max,checks,witness);
+			if(cumulative==BoundTerm.init) return BoundTerm.init;
+			if(emission==uint.max)
+				return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[apply(cumulative,arg),seed]);
+		}
 		Number rate;
 		bool literalScale=!bare&&nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),rate);
 		bool unitScale=bare||literalScale&&rate.one;
-		if(emission!=uint.max&&depends(at(emission),0)){
+		if(emission!=uint.max&&(indexedRate||depends(at(emission),0))){
 			auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
 			auto oneN=arena.natural_(1);
 			auto successor=primitive(arena.call(Builtin.addN,[oneN,oneN]),[i,scalar(inner,oneN)]);
@@ -3173,6 +3186,13 @@ final class Bindings{
 			BoundTerm total(BoundTerm initial,BoundTerm summand){
 				auto visits=finiteSum(hint(lambda(summand),"i"),arg);
 				return primitive(arena.add(zero,zero,true),[initial,visits]);
+			}
+			if(indexedRate){
+				// At visit i+1, divide its observation by the cumulative scale
+				// there. An empty range leaves even a missing emission unused.
+				auto value=substitute(at(node(cumulative).a),inner,[successor]~rowEnv[2..$]);
+				auto inverse=primitive(arena.inv(zero),[value]),mul=arena.mul(zero,zero,true);
+				return primitive(mul,[apply(cumulative,arg),total(seed,primitive(mul,[inverse,row]))]);
 			}
 			if(unitScale) return total(seed,row);
 			auto power=arena.call(Builtin.powRN,[zero,oneN]),mul=arena.mul(zero,zero,true);
@@ -12590,8 +12610,9 @@ final class Bindings{
 						return "(fun (u : Option ℕ) => "~name(emission)~".eval ξ (Binding.Env.cons (a := .scalar .natural) u (Binding.Env.cons (a := "~leanType(type(at(call.a)))~") none ρ)))";
 					}
 					if(p.rule==BindingRule.distributionProductCountdown){
-						auto candidate=nodes[nodes[target.a].a].a,base=observedInput(target.b);
-						auto rate="(fun (k : Option ℕ) => "~name(step.a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) k (Binding.Env.cons (a := "~leanType(type(at(call.a)))~") none ρ)))";
+						auto candidate=nodes[nodes[target.a].a].a,base=observedInput(emitting?nodes[target.b].a:target.b);
+						auto scale=emitting?nodes[swapped?step.a:step.b]:step;
+						auto rate="(fun (k : Option ℕ) => "~name(scale.a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) k (Binding.Env.cons (a := "~leanType(type(at(call.a)))~") none ρ)))";
 						auto w="(fun (k : Option ℕ) => "~name(candidate)~".eval ξ (Binding.Env.cons (a := .scalar .natural) k ρ))";
 						auto env="({ ξ with natural := fun i => if i = "~to!string(result.domains[p.extra].variable)~" then k else ξ.natural i })";
 						string checked(uint i,string en,string number){
@@ -12616,8 +12637,15 @@ final class Bindings{
 							eq="(fun k => Distribution.product_step_cross "~ev(a)~" "~ev(b)~" "~ev(u)~" "~ev(v)~" "~ev(h.rate)~" "~ev(h.gain)~" ("~m~".eval ξ) "~(h.inverse?"true":"false")~" "~(h.scaled?"true":"false")~
 								" "~rateEq~" (Numeric.calculate_sound ξ "~m~" (-1) rfl) (QSym.BindingScalar"~to!string(p.extra+1)~".DomainCertificate.domain_correct "~env~") (QSym.BindingScalar"~to!string(p.extra+2)~".zero "~env~"))";
 						}
-						proof=".ofEq (fun ξ ρ => Distribution.observe_product_countdown "~massObserver(ops,false)~" (rec"~f~") (fixed"~f~") ("~
-							name(base)~".eval ξ ρ) "~rate~" "~w~" "~checked(p.extra,"ξ","one")~" "~eq~" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))";
+						auto law=emitting?"observe_product_emitting_countdown":"observe_product_countdown";
+						auto visit=emitting?indexedVisit()~" ":"";
+						string nonzero;
+						if(emitting){
+							auto inverseCheck=p.extra+(d.product is null?2:3);
+							nonzero=" (fun k => QSym.BindingScalar"~to!string(inverseCheck)~".DomainCertificate.domain_correct "~env~") "~(swapped?"true":"false");
+						}
+						proof=".ofEq (fun ξ ρ => Distribution."~law~" "~massObserver(ops,false)~" (rec"~f~") (fixed"~f~") ("~
+							name(base)~".eval ξ ρ) "~visit~rate~" "~w~" "~checked(p.extra,"ξ","one")~" "~eq~nonzero~" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))";
 						break;
 					}
 					if(indexed&&partial){

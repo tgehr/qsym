@@ -406,6 +406,68 @@ theorem observe_discounted_countdown {α : Type} {o : Option (D α) → Option �
   | some n =>
     simpa [visit, g, Summation.rangeValue, Function2.apply, Functions.addN, Functions.powRN] using total n
 
+private theorem product_emission_step (r u v b s z : Option ℝ) (hs : Value.mul r u = v)
+    (hd : Domain.Correct (Value.inv v) (some true)) :
+    Value.add z (Value.mul r (Value.mul u (Value.add b s))) =
+      Value.mul v (Value.add b (s.bind fun a => (Value.mul (Value.inv v) z).map (fun x => a + x))) := by
+  obtain ⟨w, hw, hn⟩ := (Value.defined_inv _).mp (hd.iff.mpr rfl)
+  rw [hw] at hs ⊢
+  cases r with
+  | none => cases hs
+  | some r =>
+    cases u with
+    | none => cases hs
+    | some u =>
+      have eq : r*u = w := Option.some.inj hs
+      cases b <;> cases s <;> cases z <;> simp [Value.add, Value.mul, Value.inv, hn]
+      rw [← mul_assoc, eq]
+      field_simp
+      ring
+
+/-- The cumulative scale of a countdown can serve as an integrating factor.
+The sum inspects each emitted observation exactly on the positive visited indices.
+Its reciprocal is used only with a source proof of nonvanishing there. -/
+theorem observe_product_emitting_countdown {α : Type} {o : Option (D α) → Option ℝ}
+    (h : Atomic.Observation o) (p : Recursion.Program ℕ (D α) (D α))
+    {fn : Option (ℕ → Option (D α))} (hf : fn = some (FixedPoint.value p.functional))
+    (b : Option (D α)) (e : Option ℕ → Option (D α)) (r w : Option ℕ → Option ℝ)
+    (hw0 : w (some 0) = some 1)
+    (hw : ∀ n, let next := Functions.addN.apply (some n) (some 1)
+      Value.mul (r next) (w (some n)) = w next)
+    (hi : ∀ n, Domain.Correct (Value.inv (w (Functions.addN.apply (some n) (some 1)))) (some true))
+    (swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let tail := scaleValue (r (some n)) ((Functions.subN.apply (some n) (some 1)).bind g)
+       if swap then addValue tail (e (some n)) else addValue (e (some n)) tail))
+    (arg : Option ℕ) :
+    o (fn.bind (fun g => arg.bind g)) = Value.mul (arg.bind (fun n => w (some n)))
+      (Value.add (o b) (Summation.rangeValue (some (fun i =>
+        let next := Functions.addN.apply (some i) (some 1)
+        Value.mul (Value.inv (w next)) (o (e next)))) arg)) := by
+  subst fn
+  let g := FixedPoint.value p.functional
+  let visit (i : ℕ) := Value.mul (Value.inv (w (some (i+1)))) (o (e (some (i+1))))
+  obtain ⟨h0, hs⟩ := countdown_equations p b (fun n tail =>
+    let d := scaleValue (r (some n)) tail
+    if swap then addValue d (e (some n)) else addValue (e (some n)) d) step
+  have rec (n : ℕ) : o (g (n+1)) = Value.add (o (e (some (n+1)))) (Value.mul (r (some (n+1))) (o (g n))) :=
+    (congrArg o (hs n)).trans (observedEmission h swap _ _ _)
+  have total (n : ℕ) : o (g n) = Value.mul (w (some n))
+      (Value.add (o b) (Summation.finite (Finset.range n) visit)) := by
+    induction n with
+    | zero => simpa [hw0, Summation.finite_empty, Value.add_zero_right, Value.mul_one_left] using congrArg o h0
+    | succ n ih =>
+      rw [rec, ih, Summation.range_succ]
+      have succ : Functions.addN.apply (some n) (some 1) = some (n+1) := by
+        simp [Function2.apply, Functions.addN]
+      apply product_emission_step
+      · simpa only [succ] using hw n
+      · simpa only [succ] using hi n
+  cases arg with
+  | none => exact h.missing
+  | some n => simpa [visit, Summation.rangeValue, Function2.apply, Functions.addN] using total n
+
 private theorem indexed_steps (r : ℝ) (b : Option ℝ) (visit y : ℕ → Option ℝ)
     (h0 : y 0 = b) (hs : ∀ n, y (n+1) = Value.add (visit (n+1)) (Value.mul (some r) (y n))) (n : ℕ) :
     y n = Value.add (Value.mul (some (r^n)) b) (Summation.finite (Finset.range n)

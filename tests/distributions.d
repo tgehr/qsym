@@ -17,6 +17,7 @@ private Case[] cases(){
 		return "(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then "~seed~" else addD("~
 			(tailFirst?tail~","~atom:atom~","~tail)~"))("~k~")";
 	}
+	enum uniformCountdown="(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else addD(scaleD(1/(n+1),δ((n:ℝ))),scaleD(n/(n+1),f(n sub 1))))";
 	enum indexedAtoms="(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((n:ℝ)),f(n sub 1)))";
 	enum mixedLoop="(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d))";
 	enum retry="(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d)))";
@@ -1500,6 +1501,23 @@ private Case[] cases(){
 	Case("VaryingEmission","λ(k:ℕ).massD("~discountedAtoms("k")~")","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·(2·2^k-2):ℝ)"),
 	Case("ConvolutionSymbolic","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","r","δ((3:ℝ))")~"))","ℝ→ℕ→ℝ"),
 	Case("ConvolutionTwo","λ(r:ℝ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("2","r","δ((3:ℝ))")~"))","ℝ→ℝ","λ(r:ℝ). 3·r^2+r+2"),
+	Case("IntegratingFactorMass","λ(k:ℕ).massD("~discountedAtoms("k","n/(n+1)")~")","ℕ→ℝ","λ(k:ℕ). (k·(k+1)⁻¹·(1/2·k+3/2):ℝ)"),
+	Case("IntegratingFactorMean","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","n/(n+1)","zeroD(ℝ)",true)~"))","ℕ→ℝ"),
+	Case("IntegratingFactorMillion","massD(weightD(λ(x:ℝ).x,"~discountedAtoms("1000000","n/(n+1)")~"))","ℝ","333334000000"),
+	Case("IntegratingFactorHigher","λ(h:ℝ→ℝ).λ(k:ℕ).massD(weightD(h,"~discountedAtoms("k","n/(n+1)","δ((7:ℝ))")~"))","(ℝ→ℝ)→ℕ→ℝ"),
+	Case("IntegratingFactorHarmonic","λ(k:ℕ).massD("~discountedAtoms("k","(n+1)/n")~")","ℕ→ℝ"),
+	Case("IntegratingFactorGap","λ(k:ℕ).massD("~discountedAtoms("k","n/(n+2)")~")","ℕ→ℝ"),
+	Case("IntegratingFactorBeforeHole","massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~discountedAtoms("1","n/(n+1)")~"))","ℝ","-1"),
+	Case("IntegratingFactorAtHole","defined(massD(weightD(λ(x:ℝ).(x-2)⁻¹,"~discountedAtoms("3","n/(n+1)")~")))","𝔹","false"),
+	Case("IntegratingFactorSeed","defined(massD("~discountedAtoms("3","n/(n+1)","undefined(Distribution(ℝ))")~"))","𝔹","false"),
+	Case("IntegratingFactorMissingIndex","defined(massD("~discountedAtoms("0 sub 1","n/(n+1)")~"))","𝔹","false"),
+	Case("IntegratingFactorEmpty","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else addD(undefined(Distribution(ℝ)),scaleD(n/(n+1),f(n sub 1))))(0))","ℝ","1"),
+	Case("IntegratingFactorMissingEmission","defined(massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else addD(undefined(Distribution(ℝ)),scaleD(n/(n+1),f(n sub 1))))(1)))","𝔹","false"),
+	Case("IntegratingFactorPole","λ(k:ℕ).massD("~discountedAtoms("k","(n+1)/(n-1)")~")","ℕ→ℝ"),
+	Case("UniformCountdownMass","λ(k:ℕ).massD("~uniformCountdown~"(k))","ℕ→ℝ","λ(k:ℕ). (1:ℝ)"),
+	Case("UniformCountdownMean","massD(weightD(λ(x:ℝ).x,"~uniformCountdown~"(1000000)))","ℝ","500000"),
+	Case("UniformCountdownSecond","massD(weightD(λ(x:ℝ).x^2,"~uniformCountdown~"(1000000)))","ℝ","333333500000"),
+	Case("UniformCountdownProbe","λ(h:ℝ→ℝ).λ(k:ℕ).massD(weightD(h,"~uniformCountdown~"(k)))","(ℝ→ℝ)→ℕ→ℝ"),
 	Case("ExactProductLifted","λ(k:ℕ). 2*(k:ℝ)*(k+1)⁻¹*(k+3/2)","ℕ→ℝ","λ(k:ℕ). (2·k·(k+1)⁻¹·(k+3/2):ℝ)"),
 	Case("ExactProductGrouped","λ(k:ℕ). ((2*k)*((k+1)⁻¹*(k+3/2)):ℝ)","ℕ→ℝ","λ(k:ℕ). (2·k·(k+1)⁻¹·(k+3/2):ℝ)"),
 	Case("ExactProductSign","λ(k:ℕ). (-(2*k)*((k+1)⁻¹*(k+3/2)):ℝ)","ℕ→ℝ","λ(k:ℕ). (-2·k·(k+1)⁻¹·(k+3/2):ℝ)"),
@@ -1694,6 +1712,13 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name.indexOf("IntegratingFactor")==0||c.name.indexOf("UniformCountdown")==0){
+			bool solved=c.name!="IntegratingFactorPole";
+			enforce((certificate.indexOf("Distribution.observe_product_emitting_countdown ")>=0)==solved,c.name);
+			enforce((text.indexOf("μ")<0)==solved,c.name);
+			bool finiteSum=c.name=="IntegratingFactorHarmonic"||c.name=="IntegratingFactorHigher"||c.name=="UniformCountdownProbe";
+			if(solved) enforce((text.indexOf("∑")>=0)==finiteSum,c.name~": "~text);
+		}
 		if(c.name.indexOf("GapProduct")==0){
 			bool solved=c.name!="GapProductPole"&&c.name!="GapProductHitsPole"&&c.name!="GapProductHalfStep";
 			enforce((certificate.indexOf("Distribution.product_step_cross ")>=0)==solved,c.name);
