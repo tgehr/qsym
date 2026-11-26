@@ -48,6 +48,7 @@ import QSym.Domain
 import QSym.Conditionals
 import QSym.Binding
 import QSym.DistributionRecursion
+import QSym.DistributionAtomicFixed
 import QSym.Tensor
 import QSym.TensorDomains
 import QSym.MatrixBlocks
