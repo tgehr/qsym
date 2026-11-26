@@ -1087,28 +1087,6 @@ theorem r_real_le_strict (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.deno
 
 #qsym_check_axioms r_real_le_strict
 
-theorem r_real_less_distinct (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
-    (hp0 : Value.Refines (Value.lt v_x v_y) (some true))
-    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y)))))) (some true))
-    (hp2 : Value.Defined v_x)
-    (hp3 : Value.Defined v_y) :
-    Value.Refines (Value.nonzero v_z) (some true) := qsym_cached% by
-  cases v_x <;> cases v_y <;> cases v_z
-  all_goals qsym_rule
-
-#qsym_check_axioms r_real_less_distinct
-
-theorem r_real_greater_distinct (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
-    (hp0 : Value.Refines (Value.lt v_x v_y) (some true))
-    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x)))))) (some true))
-    (hp2 : Value.Defined v_x)
-    (hp3 : Value.Defined v_y) :
-    Value.Refines (Value.nonzero v_z) (some true) := qsym_cached% by
-  cases v_x <;> cases v_y <;> cases v_z
-  all_goals qsym_rule
-
-#qsym_check_axioms r_real_greater_distinct
-
 theorem r_real_distinct_reverse (v_x : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
     (hp0 : Value.Refines (Value.nonzero v_x) (some true))
     (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (some (((-1) : Int) : ℝ)) v_x))))) (some true))
@@ -1118,6 +1096,84 @@ theorem r_real_distinct_reverse (v_x : Option (Ty.denote .real)) (v_z : Option (
   all_goals qsym_rule
 
 #qsym_check_axioms r_real_distinct_reverse
+
+theorem r_real_le_from_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_u : Option (Ty.denote .real)) (v_v : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_x v_y) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.add v_v (Value.mul (some (((-1) : Int) : ℝ)) v_u)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_c (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))))))) (some true))
+    (hp2 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_c) (some true))
+    (hp3 : Value.Defined v_x)
+    (hp4 : Value.Defined v_y)
+    (hp5 : Value.Defined v_c) :
+    Value.Refines (Value.le v_u v_v) (some true) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_u <;> cases v_v <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_le_from_le
+
+theorem r_real_le_from_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_u : Option (Ty.denote .real)) (v_v : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_x v_y) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.add v_v (Value.mul (some (((-1) : Int) : ℝ)) v_u)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_c (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))))))) (some true))
+    (hp2 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_c) (some true))
+    (hp3 : Value.Defined v_x)
+    (hp4 : Value.Defined v_y)
+    (hp5 : Value.Defined v_c) :
+    Value.Refines (Value.le v_u v_v) (some true) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_u <;> cases v_v <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_le_from_lt
+
+theorem r_real_lt_from_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_u : Option (Ty.denote .real)) (v_v : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_x v_y) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.add v_v (Value.mul (some (((-1) : Int) : ℝ)) v_u)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_c (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))))))) (some true))
+    (hp2 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_c) (some true))
+    (hp3 : Value.Defined v_x)
+    (hp4 : Value.Defined v_y)
+    (hp5 : Value.Defined v_c) :
+    Value.Refines (Value.lt v_u v_v) (some true) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_u <;> cases v_v <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_lt_from_lt
+
+theorem r_real_not_lt_from_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_u : Option (Ty.denote .real)) (v_v : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.le v_x v_y) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.add v_u (Value.mul (some (((-1) : Int) : ℝ)) v_v)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_c (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))))))) (some true))
+    (hp2 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_c) (some true))
+    (hp3 : Value.Defined v_x)
+    (hp4 : Value.Defined v_y)
+    (hp5 : Value.Defined v_c) :
+    Value.Refines (Value.lt v_u v_v) (some false) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_u <;> cases v_v <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_not_lt_from_le
+
+theorem r_real_not_le_from_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_u : Option (Ty.denote .real)) (v_v : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_x v_y) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.add v_u (Value.mul (some (((-1) : Int) : ℝ)) v_v)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_c (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))))))) (some true))
+    (hp2 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_c) (some true))
+    (hp3 : Value.Defined v_x)
+    (hp4 : Value.Defined v_y)
+    (hp5 : Value.Defined v_c) :
+    Value.Refines (Value.le v_u v_v) (some false) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_u <;> cases v_v <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_not_le_from_lt
+
+theorem r_real_not_lt_from_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_u : Option (Ty.denote .real)) (v_v : Option (Ty.denote .real)) (v_c : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_x v_y) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.add v_u (Value.mul (some (((-1) : Int) : ℝ)) v_v)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul v_c (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x))))))) (some true))
+    (hp2 : Value.Refines (Value.lt (some (((0) : Int) : ℝ)) v_c) (some true))
+    (hp3 : Value.Defined v_x)
+    (hp4 : Value.Defined v_y)
+    (hp5 : Value.Defined v_c) :
+    Value.Refines (Value.lt v_u v_v) (some false) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_u <;> cases v_v <;> cases v_c
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_not_lt_from_lt
 
 theorem r_real_lt_self (v_x : Option (Ty.denote .real)) :
     Value.Refines (Value.lt v_x v_x) (some false) := qsym_cached% by

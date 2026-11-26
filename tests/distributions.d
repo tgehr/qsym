@@ -3538,7 +3538,7 @@ private void run(string directory){
 			enforce(text.indexOf("∫")<0,c.name~": "~text);
 			enforce(has("Generated.r_real_le_strict ")==!among("EndStrict"),c.name~" bound made strict");
 			enforce(has("Generated.r_real_distinct_reverse ")==among("EndSwapped","Ends","EndsOrigin","EndMoment","EndScaled"),c.name~" exclusion known the other way round");
-			enforce(has("Generated.r_real_less_distinct ")||has("Generated.r_real_greater_distinct ")||!among("EndStrict"),c.name~" distinct below a strict bound");
+			enforce(has("Generated.r_real_lt_from_lt ")||!among("EndStrict"),c.name~" distinct below a strict bound");
 		}
 		// A weight between bounds that meet at the origin exactly where its
 		// value is missing: the density of a uniform variable on `[0,a]`,

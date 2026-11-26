@@ -141,7 +141,45 @@ Example[] examples(){
 		Example("DistinctNegated","[x≠0]*[-x≠0]","[x≠0]"),
 		Example("DistinctSplit","[x≠y+1]*[y-x≠-1]","[x≠y+1]"),
 		Example("DistinctEqual","[x<y]*[y=x]","0"),
-		Example("DistinctEqualSwapped","[x≠y]*[y=x]","0")
+		Example("DistinctEqualSwapped","[x≠y]*[y=x]","0"),
+		// Two terms in the order that a known bound gives, where the bound
+		// is not written with the same two sides: the difference of the
+		// sides of the comparison is a positive multiple of that of the
+		// known bound, and the comparison holds, or a negative multiple,
+		// and it fails. A strict comparison does not follow from a bound
+		// that is not strict, nor does a weak one fail against it; the two
+		// together are the strict bound and the equation. So the absolute
+		// value of a difference is the difference or its opposite, also in
+		// an exponent, and so is the square root of its square.
+		Example("OrderedDifference","[y≤x]*[0≤x-y]","[y≤x]"),
+		Example("OrderedDifferenceStrict","[y<x]*[0<x-y]","[y<x]"),
+		Example("OrderedDifferenceWeak","[y<x]*[0≤x-y]","[y<x]"),
+		Example("OrderedDifferenceFirst","[0≤x-y]*[y≤x]","[0≤x-y]"),
+		Example("OrderedOpposite","[x<y]*[0≤x-y]","0"),
+		Example("OrderedOppositeWeak","[y≤x]*[x-y<0]","0"),
+		Example("OrderedOppositeStrict","[y<x]*[x-y≤0]","0"),
+		Example("OrderedOppositeBoth","[y<x]*[x-y<0]","0"),
+		Example("OrderedTightened","[y≤x]*[0<x-y]","[y<x]"),
+		Example("OrderedBoundary","[y≤x]*[x-y≤0]","[x=y]"),
+		Example("OrderedScaled","[y≤3*x]*[0≤x-y/3]","[y≤3*x]"),
+		Example("OrderedScaledOpposite","[2*y<3*x]*[x/2≤y/3]","0"),
+		Example("OrderedShifted","[x<y]*[x-y+1<1]","[x<y]"),
+		Example("OrderedSum","[x+y≤t]*[y≤t-x]","[x+y≤t]"),
+		Example("OrderedProduct","[x*y<1]*[0<1-x*y]","[x*y<1]"),
+		Example("OrderedPartial","[log(y)≤x]*[0≤x-log(y)]","[log(y)≤x]"),
+		Example("OrderedFact","0≤x-y","true",["y≤x"]),
+		Example("OrderedFactStrict","0<2*x-2*y","true",["y<x"]),
+		Example("OrderedFactOpposite","x-y<0","false",["y≤x"]),
+		Example("OrderedFactTightened","0<x-y","x≠y",["y≤x"]),
+		Example("OrderedAbs","[y≤x]*abs(x-y)","[y≤x]*(x-y)"),
+		Example("OrderedAbsBelow","[x<y]*abs(x-y)","[x<y]*(y-x)"),
+		Example("OrderedAbsScaled","[y/2≤x]*abs(2*x-y)","[y/2≤x]*(2*x-y)"),
+		Example("OrderedAbsExponent","[y≤x]*exp(-abs(x-y))","[y≤x]*exp(y-x)"),
+		Example("OrderedAbsProduct","[y≤x]*[x<t]*abs(x-y)*abs(x-t)","[y≤x]*[x<t]*((x-y)*(t-x))"),
+		Example("OrderedAbsPartial","[log(y)≤x]*abs(x-log(y))","[log(y)≤x]*(x-log(y))"),
+		Example("OrderedAbsOther","[y≤x]*abs(x-t)","[y≤x]*abs(x-t)"),
+		Example("OrderedRoot","[y≤x]*sqrt((x-y)^2)","[y≤x]*(x-y)"),
+		Example("OrderedMaximum","[y≤x]*max(x-y,0)","[y≤x]*(x-y)")
 	];
 }
 private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,t:ℝ,z:ℂ,p:𝔹,q:𝔹"); return s; }

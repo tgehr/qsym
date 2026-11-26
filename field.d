@@ -135,6 +135,30 @@ package final class Field{
 		if(c.zero) return false;
 		coefficient=a.number(c,a.sort(variable)); remainder=a.region(Op.add,a.sort(variable),rest); return true;
 	}
+	// The difference `v-u` of two sums of monomials as a number times the
+	// polynomial whose first monomial has the coefficient one, and that
+	// polynomial as a key: two differences are multiples of each other by a
+	// number exactly where they have the same key, and the number is the
+	// quotient of the two numbers. No term is built for it.
+	bool differenceKey(Term u,Term v,out Number content,out string key){
+		import std.conv:to;
+		auto p=polynomial(v); foreach(m;polynomial(u)){ m.coefficient=-m.coefficient; p~=m; }
+		sort!((x,y)=>order(x,y)<0)(p);
+		Mono[] merged;
+		foreach(m;p){
+			if(merged.length&&!order(merged[$-1],m)) merged[$-1].coefficient=budget.calc!"+"(merged[$-1].coefficient,m.coefficient);
+			else merged~=m;
+		}
+		bool found;
+		foreach(m;merged){
+			if(m.coefficient.zero) continue;
+			if(!found){ content=m.coefficient; found=true; }
+			key~=budget.calc!"/"(m.coefficient,content).toString~"*";
+			foreach(f;m.factors) key~=to!string(f.atom.id)~"^"~to!string(f.exponent)~".";
+			key~=";";
+		}
+		return found;
+	}
 	bool quadratic(Term expression,out Term atom,out Number[3] coefficients){
 		if(a.sort(expression)!=Sort.real_&&a.sort(expression)!=Sort.complex) return false;
 		bool found;

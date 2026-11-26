@@ -275,6 +275,11 @@ package final class Engine{
 			auto q=expandedEquality(p.after,ctx);
 			if(q.after==a.boolean(true)){ result=d.trans(p,q,ctx); remember(truths,k,result); return true; }
 		}
+		// The order that a known bound gives, where the two are not written
+		// with the same sides: asked of the goal as it is normalized where
+		// that is a comparison still.
+		Proof ordered; auto asked=a.view(p.after).op==Op.le||a.view(p.after).op==Op.lt?p.after:t;
+		if(knownOrder(asked,ctx,ordered)&&ordered.after==a.boolean(true)){ result=asked==t?ordered:d.trans(p,ordered,ctx); remember(truths,k,result); return true; }
 		// A failure that passed over a fact of the chain it is in says nothing
 		// about the goal in another place.
 		if(passed==before) failedProofs.set(failureKey,true);
@@ -437,38 +442,29 @@ package final class Engine{
 		}
 		// The exclusion may be known the other way round, `y≠x` for `x≤y`.
 		Proof q;
-		if(!knownDistinct(p.after,ctx,q,false)) return false;
+		if(!knownDistinct(p.after,ctx,q)) return false;
 		if(!rewritesLeft) throw new Limit;
 		--rewritesLeft; result=d.rule(i,[d.trans(p,q,ctx)],ctx); return true;
 	}
-	// Two terms are distinct where one is known to be less than the other,
-	// and where they are known to be distinct the other way round. The
-	// known fact need not be written with the same two sides: `x≠y+1` holds
-	// where `x-1<y` is known, and where `y-x≠-1` is. What is compared is the
-	// difference of the two sides as a polynomial, which the exclusion has
-	// with the same sign or the other. Like the tightening of a bound, only
-	// from an established fact, without a search.
-	private bool knownDistinct(Term t,uint ctx,out Proof result,bool order=true){
+	// Two terms are distinct where they are known to be distinct the other
+	// way round: `x≠y` holds where `y≠x` is known, and where `y-x≠0` is.
+	// What is compared is the difference of the two sides as a polynomial,
+	// which the known exclusion has with the other sign. Like the tightening
+	// of a bound, only from an established fact, without a search. Where one
+	// of the two is known to be less than the other, their difference has a
+	// sign by the order that a known bound gives, below.
+	private bool knownDistinct(Term t,uint ctx,out Proof result){
 		auto n=a.view(t);
 		if(n.op!=Op.nonzero||!ctx||a.sort(a.at(n.a))!=Sort.real_) return false;
 		auto difference=a.at(n.a); Term negative;
 		foreach(f;known(ctx)){
 			if(!f.known||f.after!=a.boolean(true)) continue;
-			auto m=a.view(f.before); Instance i;
-			if(m.op==Op.lt&&order&&a.sort(a.at(m.a))==Sort.real_){
-				budget.spend();
-				auto other=go(a.sub(a.at(m.a),a.at(m.b)),0,true).after;
-				if(other!=difference){
-					if(negative==Term.init) negative=go(a.neg(difference),0,true).after;
-					if(other!=negative) continue;
-				}
-				i=instantiate(a,other==difference?Law.real_less_distinct:Law.real_greater_distinct,[a.at(m.a),a.at(m.b),difference]);
-			}else if(m.op==Op.nonzero&&a.sort(a.at(m.a))==Sort.real_){
-				budget.spend();
-				if(negative==Term.init) negative=go(a.neg(difference),0,true).after;
-				if(a.at(m.a)!=negative) continue;
-				i=instantiate(a,Law.real_distinct_reverse,[a.at(m.a),difference]);
-			}else continue;
+			auto m=a.view(f.before);
+			if(m.op!=Op.nonzero||a.sort(a.at(m.a))!=Sort.real_) continue;
+			budget.spend();
+			if(negative==Term.init) negative=go(a.neg(difference),0,true).after;
+			if(a.at(m.a)!=negative) continue;
+			auto i=instantiate(a,Law.real_distinct_reverse,[a.at(m.a),difference]);
 			if(i.before!=t||i.conditions[0].term!=f.before) continue;
 			bool missing;
 			foreach(c;i.conditions) if(c.defined&&!d.domain(i.before,c.term,ctx).found) missing=true;
@@ -477,6 +473,73 @@ package final class Engine{
 			if(equal.after!=a.boolean(true)) continue;
 			if(!rewritesLeft) throw new Limit;
 			--rewritesLeft; result=d.rule(i,[f,equal],ctx); return true;
+		}
+		return false;
+	}
+	// Two terms are in the order that a known bound gives, also where the
+	// bound is not written with the same two sides: `0≤x-a` holds where
+	// `a≤x` is known and `x-a<0` fails there, `0≤2·x-a` holds where `a/2≤x`
+	// is known, and where `a<x` is known the strict comparison holds and
+	// the opposite one fails. What is compared is the difference of the two
+	// sides as a polynomial: that of the comparison is a multiple of that of
+	// the known bound by a number, which is positive or negative. Like the
+	// terms that a known fact shows to be distinct, only from an established
+	// fact, without a search.
+	//
+	// The difference of a comparison is kept as a number times a polynomial
+	// whose first monomial has the coefficient one, read off the two sides
+	// once for each comparison without building a term. Two comparisons are
+	// related so exactly where they have the same such polynomial, which is
+	// the only thing that is looked at for a known bound that does not
+	// decide the comparison.
+	private struct Difference{ Number content; uint key=uint.max; }
+	private Difference[] differences;
+	private Table!(uint,uint) differenceOf;
+	private uint[string] differenceKeys;
+	private Difference difference(Term t){
+		auto known=differenceOf.get(t.id,uint.max);
+		if(known!=uint.max) return differences[known];
+		auto n=a.view(t); Difference result; string key;
+		if(field.differenceKey(a.at(n.a),a.at(n.b),result.content,key)&&result.content.im.zero){
+			if(auto slot=key in differenceKeys) result.key=*slot;
+			else{ result.key=cast(uint)differenceKeys.length; differenceKeys[key]=result.key; }
+		}else result=Difference.init;
+		differenceOf.set(t.id,cast(uint)differences.length); differences~=result;
+		return result;
+	}
+	private bool knownOrder(Term t,uint ctx,out Proof result){
+		auto n=a.view(t);
+		if(n.op!=Op.le&&n.op!=Op.lt||!ctx||a.sort(a.at(n.a))!=Sort.real_) return false;
+		bool strict=n.op==Op.lt,found; Difference own;
+		foreach(f;known(ctx)){
+			if(!f.known||f.after!=a.boolean(true)||f.before==t) continue;
+			auto m=a.view(f.before);
+			if(m.op!=Op.le&&m.op!=Op.lt||a.sort(a.at(m.a))!=Sort.real_) continue;
+			if(!found){ budget.spend(); own=difference(t); found=true; if(own.key==uint.max) return false; }
+			auto other=difference(f.before);
+			if(other.key!=own.key) continue;
+			// With a positive factor the comparison holds, a strict one where
+			// the known one is strict; with a negative factor it fails, a weak
+			// one where the known one is strict.
+			auto factor=budget.calc!"/"(own.content,other.content);
+			bool sharp=m.op==Op.lt,same=Rational(0)<factor.re; Law law;
+			if(same){
+				if(strict&&!sharp) continue;
+				law=strict?Law.real_lt_from_lt:sharp?Law.real_le_from_lt:Law.real_le_from_le;
+			}else{
+				if(!strict&&!sharp) continue;
+				law=!strict?Law.real_not_le_from_lt:sharp?Law.real_not_lt_from_lt:Law.real_not_lt_from_le;
+			}
+			auto scale=a.number(Number(same?factor.re:Rational(0)-factor.re),Sort.real_);
+			auto i=instantiate(a,law,[a.at(m.a),a.at(m.b),a.at(n.a),a.at(n.b),scale]);
+			if(i.before!=t||i.conditions[0].term!=f.before) continue;
+			bool missing;
+			foreach(c;i.conditions) if(c.defined&&!d.domain(i.before,c.term,ctx).found) missing=true;
+			if(missing) continue;
+			auto equal=go(i.conditions[1].term,0,true),positive=go(i.conditions[2].term,0,true);
+			if(equal.after!=a.boolean(true)||positive.after!=a.boolean(true)) continue;
+			if(!rewritesLeft) throw new Limit;
+			--rewritesLeft; result=d.rule(i,[f,equal,positive],ctx); return true;
 		}
 		return false;
 	}
@@ -714,6 +777,10 @@ package final class Engine{
 					p=d.trans(p,proposed,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 				}
 			}
+			// What nothing else decides may follow from a known bound that is
+			// written with other sides.
+			Proof ordered;
+			if(!probe&&knownOrder(current,ctx,ordered)){ p=d.trans(p,ordered,ctx); memoize(k,p); return p; }
 			// Premise normalization must not start another guarded search.
 			if(!probe&&(n.op==Op.mask||n.op==Op.and_||n.op==Op.or_)){
 				auto c=enter(ctx,a.at(n.a),n.op!=Op.or_);
