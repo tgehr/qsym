@@ -87,4 +87,29 @@ theorem zero {β : Type} (right : Bool) (token : Option β) (w : ℕ → Option 
         · simp [finite]
 
 end RangeDefined
+
+namespace SelectedRow
+
+/-- A strict product can pass through an Iverson mask when its other factor is
+defined. The value under the mask may be partial. -/
+theorem first (left : Bool) (a : Option ℝ) (ha : Domain.Correct a (some true)) (p : Option Bool) (v : Option ℝ) :
+    (if left then Value.mul a (Value.mask p v) else Value.mul (Value.mask p v) a) =
+      Value.mask p (Value.mul a v) := by
+  obtain ⟨a, rfl⟩ := ha.iff.mpr rfl
+  cases left <;> rcases p with _ | _ | _ <;> cases v <;> simp [Value.mul, Value.mask, mul_comm]
+
+theorem factor (left : Bool) (a : Option ℝ) (ha : Domain.Correct a (some true))
+    {p : Option Bool} {source coef v : Option ℝ} (h : source = Value.mask p (Value.mul coef v)) :
+    (if left then Value.mul a source else Value.mul source a) = Value.mask p (Value.mul (Value.mul a coef) v) := by
+  obtain ⟨a, rfl⟩ := ha.iff.mpr rfl
+  rw [h]
+  cases left <;> rcases p with _ | _ | _ <;> cases coef <;> cases v <;>
+    simp [Value.mul, Value.mask, mul_comm, mul_left_comm, mul_assoc]
+
+theorem range (f v : ℕ → Option ℝ) (p : ℕ → Option Bool) (n : Option ℕ)
+    (h : ∀ i, f i = Value.mask (p i) (v i)) :
+    rangeValue (some f) n = rangeValue (some fun i => Value.mask (p i) (v i)) n :=
+  congrArg (fun g => rangeValue (some g) n) (funext h)
+
+end SelectedRow
 end QSym.Summation

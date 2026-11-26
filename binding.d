@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -628,6 +628,48 @@ final class Bindings{
 		if(!finite) return selected;
 		auto inside=primitive(arena.call(Builtin.ltN,[nat,nat]),[candidate,count]);
 		return primitive(mask,[indexBuiltin(Builtin.nonzeroN,count),primitive(mask,[inside,selected])]);
+	}
+	private struct RowFactor{ uint id; bool left; }
+	// Follow strict multiplication down to a single index mask. The path is
+	// recorded from its innermost factor outwards, in multiplication order.
+	private uint selectedFactors(uint root,ref RowFactor[] factors){
+		Table!(uint,bool) seen;
+		uint find(uint id){
+			if(seen.get(id,false)) return uint.max;
+			seen.set(id,true);
+			if(primitiveOp(id,Op.mask)){
+				RealSelection selection;
+				return realSelection(lambda(at(id)),true,selection)?id:uint.max;
+			}
+			if(!primitiveOp(id,Op.mul)) return uint.max;
+			auto n=nodes[id];
+			foreach(left;[true,false]){
+				auto mask=find(left?n.b:n.a);
+				if(mask!=uint.max){ factors~=RowFactor(left?n.a:n.b,left); return mask; }
+			}
+			return uint.max;
+		}
+		return find(root);
+	}
+	private BoundTerm totalSelectedRow(BoundTerm fn,ref ScalarDomain[] checks,out uint witness){
+		auto root=node(fn).a;
+		if(type(at(root))!=scalarType(Sort.real_)||!primitiveOp(root,Op.mul)) return BoundTerm.init;
+		RowFactor[] factors;
+		auto mask=selectedFactors(root,factors);
+		if(mask==uint.max) return BoundTerm.init;
+		auto m=nodes[mask],times=arena.at(nodes[root].data);
+		BoundTerm coefficient;
+		ScalarDomain[] evidence;
+		foreach(part;factors){
+			ScalarDomain check;
+			if(!totalRowDomain(part.id,check,true,Sort.natural)) return BoundTerm.init;
+			evidence~=check;
+			auto coef=at(part.id);
+			coefficient=coefficient==BoundTerm.init?coef:primitive(times,[coef,coefficient]);
+		}
+		witness=cast(uint)checks.length; checks~=evidence;
+		auto weight=primitive(times,[coefficient,at(m.b)]);
+		return inheritHint(fn,lambda(primitive(arena.at(m.data),[at(m.a),weight])));
 	}
 	private struct RangeProduct{
 		uint power,token,other;
@@ -3343,15 +3385,15 @@ final class Bindings{
 		}
 		return index;
 	}
-	// A successful scalar domain certificate applies at every real parameter
+	// A successful scalar domain certificate applies at every scalar parameter
 	// and every assignment of the expression's free scalar variables.
-	private bool totalRowDomain(uint body,out ScalarDomain check,bool trace=true){
-		auto index=freshScalarIndex(body),arg=arena.variable(Sort.real_,index);
+	private bool totalRowDomain(uint body,out ScalarDomain check,bool trace=true,Sort sort=Sort.real_){
+		auto index=freshScalarIndex(body),arg=arena.variable(sort,index);
 		auto expression=scalarBody(at(body),arg);
 		if(expression==Term.init) return false;
 		auto domain=simplifyDomain(arena,expression,[],Options(DensityMode.preserve,trace));
 		if(domain.exhausted||domain.output!=arena.boolean(true)) return false;
-		check=ScalarDomain(expression,domain,ScalarResult.init,index,Sort.real_);
+		check=ScalarDomain(expression,domain,ScalarResult.init,index,sort);
 		return true;
 	}
 	// Bare integral syntax reparses as a real bind of Dirac rows. The
@@ -8008,6 +8050,22 @@ final class Bindings{
 					++steps; auto proof=emit(rule,t.id,target.id);
 					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
 					return Result(target.id,uint.max);
+				}
+			}
+			if(n.op==BoundOp.finiteSum&&nodes[n.a].op==BoundOp.lambda&&steps<budget){
+				// Select before scalar normalization changes the source equality
+				// or a short literal range expands its individual visits.
+				uint witness;
+				auto row=totalSelectedRow(at(n.a),scalarDomains,witness);
+				if(row!=BoundTerm.init){
+					auto masked=finiteSum(row,at(n.b));
+					bool swapped;
+					auto selected=selectRealIndex(row,at(n.b),swapped);
+					auto expose=emit(BindingRule.rangeSelectedRow,t.id,masked.id,uint.max,uint.max,witness);
+					auto select=emit(BindingRule.sumRealIndex,masked.id,selected.id,uint.max,uint.max,swapped);
+					++steps; auto proof=emit(BindingRule.trans,t.id,selected.id,expose,select);
+					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
+					return Result(selected.id,uint.max);
 				}
 			}
 			if((n.op==BoundOp.distributionMass||n.op==BoundOp.distributionDensityAt)&&steps<budget){
@@ -12904,6 +12962,24 @@ final class Bindings{
 					auto ns=index==scalarType(Sort.natural),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
 					auto f="(fun (i : Option "~(ns?"ℕ":"ℤ")~") => "~name(sourceBody.b)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") i ρ))";
 					proof=".ofEq (fun ξ ρ => Summation.interval_convert"~(ns?"N":"Z")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(bounds.a)~".eval ξ ρ) ("~name(nodes[bounds.b].a)~".eval ξ ρ))"; break;
+				case BindingRule.rangeSelectedRow:{
+					auto root=nodes[n.a].a,mask=nodes[nodes[nodes[p.to].a].a];
+					RowFactor[] factors; auto original=nodes[selectedFactors(root,factors)];
+					string atIndex(uint id){return " ("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some i) ρ))";}
+					string column(uint id){return " (fun i : ℕ =>"~atIndex(id)~")";}
+					string law;
+					foreach(j,factor;factors){
+						auto index=p.extra+cast(uint)j;
+						auto env="({ ξ with natural := fun k => if k = "~to!string(result.domains[index].variable)~" then i else ξ.natural k })";
+						auto domain=" (QSym.BindingScalar"~to!string(index)~".DomainCertificate.domain_correct "~env~")";
+						auto args=" "~to!string(factor.left)~atIndex(factor.id)~domain;
+						if(!j) law="(Summation.SelectedRow.first"~args~atIndex(original.a)~atIndex(original.b)~")";
+						else law="(Summation.SelectedRow.factor"~args~" "~law~")";
+					}
+					proof=".ofEq (fun ξ ρ => Summation.SelectedRow.range"~column(root)~column(mask.b)~column(mask.a)~
+						" ("~name(n.b)~".eval ξ ρ) (fun i => "~law~"))";
+					break;
+				}
 				case BindingRule.rangeDefinedProduct:{
 					RangeProduct d;
 					enforce(rangeProduct(at(n.a),at(n.b),d),"missing coefficient domain on the finite range");

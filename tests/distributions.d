@@ -1866,6 +1866,20 @@ private Case[] cases(){
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
 	Case("CapturedScaleMissingIndex","λ(r:ℝ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(0 sub 1))","ℝ→ℝ","λ(r:ℝ). undefined(ℝ)"),
 	Case("VariableScaleByIndex","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD((n:ℝ),f(n sub 1)))(k))","ℝ→ℕ→ℝ"),
+	Case("ProductFibreUniformMillionHit","densityAtD("~uniformCountdown~"(1000000),1000000)","ℝ","undefined(ℝ)"),
+	Case("ProductFibreUniformMillionMiss","densityAtD("~uniformCountdown~"(1000000),1000001)","ℝ","0"),
+	Case("ProductFibreUniformSymbolic","λ(k:ℕ).λ(x:ℝ).densityAtD("~uniformCountdown~"(k),x)","ℕ→ℝ→ℝ"),
+	Case("ProductFibreUnweighted","λ(k:ℕ).λ(x:ℝ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","n/(n+1)","k")~",x)","ℕ→ℝ→ℝ"),
+	Case("SelectedRowReciprocal","∑(i:ℕ). [i<1000000]·mulR((i+1:ℝ)⁻¹,[999999=(i:ℝ)]·(3:ℝ))","ℝ","3/1000000"),
+	Case("SelectedRowRight","∑(i:ℕ). [i<1000000]·mulR([999999=(i:ℝ)]·(3:ℝ),(i+1:ℝ))","ℝ","3000000"),
+	Case("SelectedRowNested","∑(i:ℕ). [i<1000000]·mulR((i+1:ℝ),mulR([999999=(i:ℝ)]·(3:ℝ),((i+1:ℝ)^2+1)⁻¹))","ℝ","3000000/1000000000001"),
+	Case("SelectedRowMissingWeight","∑(i:ℕ). [i<1000000]·mulR((i+1:ℝ),[999999=(i:ℝ)]·undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("SelectedRowUnusedWeight","∑(i:ℕ). [i<1000000]·mulR((i+1:ℝ),[1000000=(i:ℝ)]·undefined(ℝ))","ℝ","0"),
+	Case("SelectedRowPole","defined(∑(i:ℕ). [i<1000000]·mulR((i:ℝ)⁻¹,[999999=(i:ℝ)]·1))","𝔹","false"),
+	Case("SelectedRowEmptyPole","∑(i:ℕ). [i<0]·mulR((i:ℝ)⁻¹,[999999=(i:ℝ)]·undefined(ℝ))","ℝ","0"),
+	Case("SelectedRowOpaque","λ(h:ℕ→ℝ).∑(i:ℕ). [i<1000000]·mulR(mulR((i+1:ℝ),[999999=(i:ℝ)]·h(i)),(i+1:ℝ)⁻¹)","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). h(999999)"),
+	Case("SelectedRowTranslated","λ(k:ℕ).λ(x:ℝ).∑(i:ℕ). [i<k]·mulR([x=(i+3:ℝ)]·(1:ℝ),(i+1:ℝ)⁻¹)","ℕ→ℝ→ℝ"),
+	Case("SelectedRowFreePole","λ(r:ℝ).defined(∑(i:ℕ). [i<2]·mulR((r-(i:ℝ))⁻¹,[5=(i:ℝ)]·1))","ℝ→𝔹","λ(r:ℝ). r≠0∧r≠1"),
 	Case("ProductFibreUniformSeed","densityAtD("~uniformCountdown~"(0),0)","ℝ","undefined(ℝ)"),
 	Case("ProductFibreUniformEmpty","densityAtD("~uniformCountdown~"(0),1)","ℝ","0"),
 	Case("ProductFibreUniformFirst","densityAtD("~uniformCountdown~"(5),0)","ℝ","undefined(ℝ)"),
@@ -2282,6 +2296,14 @@ private void run(string directory){
 			enforce(text.indexOf("∑")<0,c.name);
 			if(c.name!="RangeProbeMissingEmpty"&&c.name!="RangeProbeMissingVisit"&&c.name!="RangeProbeLazy")
 				enforce(certificate.indexOf("Summation.range_real_N ")>=0||certificate.indexOf("Summation.range_shifted_real_N ")>=0,c.name);
+		}
+		if(c.name.indexOf("SelectedRow")==0||c.name.indexOf("ProductFibreUniformMillion")==0||
+			c.name=="ProductFibreUniformSymbolic"||c.name=="ProductFibreUnweighted"){
+			enforce(text.indexOf("∑")<0,c.name~": "~text);
+			bool total=c.name!="SelectedRowPole"&&c.name!="SelectedRowFreePole"&&c.name!="SelectedRowEmptyPole";
+			enforce((certificate.indexOf("Summation.SelectedRow.range ")>=0)==total,c.name);
+			if(total) enforce(certificate.indexOf("Summation.range_step ")<0,c.name);
+			if(c.name=="SelectedRowNested"||c.name=="SelectedRowOpaque") enforce(certificate.indexOf("Summation.SelectedRow.factor ")>=0,c.name);
 		}
 		if(c.name.indexOf("ProductFibre")==0){
 			bool solved=c.name!="ProductFibreOpaque"&&c.name!="ProductFibrePole";
