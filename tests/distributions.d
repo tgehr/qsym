@@ -1501,6 +1501,14 @@ private Case[] cases(){
 	Case("VaryingEmission","λ(k:ℕ).massD("~discountedAtoms("k")~")","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·(2·2^k-2):ℝ)"),
 	Case("ConvolutionSymbolic","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","r","δ((3:ℝ))")~"))","ℝ→ℕ→ℝ"),
 	Case("ConvolutionTwo","λ(r:ℝ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("2","r","δ((3:ℝ))")~"))","ℝ→ℝ","λ(r:ℝ). 3·r^2+r+2"),
+	Case("OpaqueUnitPairLeft","λ(h:ℝ→ℝ).λ(n:ℕ).(n+1:ℝ)*(h((n:ℝ))*(n+1:ℝ)⁻¹)","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(n:ℕ). h((n:ℝ))"),
+	Case("OpaqueUnitPairInner","λ(h:ℝ→ℝ).λ(n:ℕ).(n+1:ℝ)*((n+1:ℝ)⁻¹*h((n:ℝ)))","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(n:ℕ). h((n:ℝ))"),
+	Case("OpaqueUnitPairRight","λ(h:ℝ→ℝ).λ(n:ℕ).((n+1:ℝ)⁻¹*h((n:ℝ)))*(n+1:ℝ)","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(n:ℕ). h((n:ℝ))"),
+	Case("OpaqueUnitPairRational","λ(h:ℝ→ℝ).λ(n:ℕ).(n+1)⁻¹*(h((n:ℝ))*(n+1))","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(n:ℕ). h((n:ℝ))"),
+	Case("OpaqueUnitPairZero","λ(h:ℝ→ℝ).λ(n:ℕ).(n:ℝ)*(h((n:ℝ))*0)","(ℝ→ℝ)→ℕ→ℝ"),
+	Case("OpaqueUnitPairPole","λ(h:ℝ→ℝ).λ(n:ℕ).(n:ℝ)*(h((n:ℝ))*(n:ℝ)⁻¹)","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(n:{n:ℕ | n≠0}). h((n:ℝ))"),
+	Case("OpaqueUnitPairAtPole","defined((λ(h:ℝ→ℝ).λ(n:ℕ).(n:ℝ)*(h((n:ℝ))*(n:ℝ)⁻¹))(λ(x:ℝ).1)(0))","𝔹","false"),
+	Case("OpaqueUnitPairMissing","defined((λ(h:ℝ→ℝ).λ(n:ℕ).(n+1:ℝ)*(h((n:ℝ))*(n+1:ℝ)⁻¹))(λ(x:ℝ).(x-2)⁻¹)(2))","𝔹","false"),
 	Case("IntegratingFactorMass","λ(k:ℕ).massD("~discountedAtoms("k","n/(n+1)")~")","ℕ→ℝ","λ(k:ℕ). (k·(k+1)⁻¹·(1/2·k+3/2):ℝ)"),
 	Case("IntegratingFactorMean","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","n/(n+1)","zeroD(ℝ)",true)~"))","ℕ→ℝ"),
 	Case("IntegratingFactorMillion","massD(weightD(λ(x:ℝ).x,"~discountedAtoms("1000000","n/(n+1)")~"))","ℝ","333334000000"),
@@ -1712,6 +1720,10 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name.indexOf("OpaqueUnitPair")==0)
+			enforce((certificate.indexOf("Value.mul_pair_one ")>=0)==(c.name!="OpaqueUnitPairZero"),c.name);
+		if(c.name=="UniformCountdownProbe")
+			enforce(certificate.indexOf("Value.mul_pair_one ")>=0&&text.indexOf("i+1+1")<0,c.name~": "~text);
 		if(c.name.indexOf("IntegratingFactor")==0||c.name.indexOf("UniformCountdown")==0){
 			bool solved=c.name!="IntegratingFactorPole";
 			enforce((certificate.indexOf("Distribution.observe_product_emitting_countdown ")>=0)==solved,c.name);

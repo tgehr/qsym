@@ -233,7 +233,7 @@ private struct AffineChart{
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
 private struct ProductStep{ uint rate,gain; bool rational,swapped,inverse,scaled; }
-private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max,falsePrefix=uint.max; bool[] conjunctPath; ProductStep* product; }
+private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max,falsePrefix=uint.max; bool[] conjunctPath; ProductStep* product; uint unitOperand=uint.max; bool unitOuterLeft,unitInnerLeft; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
@@ -6495,6 +6495,33 @@ final class Bindings{
 				}
 				return search(n.a,[]);
 			}
+			// Two scalar factors can enclose an opaque application. Eliminate
+			// them on the certified domain where their product equals one.
+			BoundTerm cancelPair(BoundTerm t,uint[] path){
+				auto root=node(t),opts=Options(DensityMode.preserve,true);
+				foreach(outerLeft;[true,false]){
+					auto pair=outerLeft?root.b:root.a;
+					if(!primitiveOp(pair,Op.mul)) continue;
+					auto a=scalarBody(at(outerLeft?root.a:root.b),argument);
+					if(a==Term.init) continue;
+					auto q=nodes[pair];
+					foreach(innerLeft;[true,false]){
+						auto x=innerLeft?q.b:q.a;
+						if(!needsBindingScalar(x)) continue;
+						auto b=scalarBody(at(innerLeft?q.a:q.b),argument);
+						if(b==Term.init) continue;
+						auto source=arena.mul(a,b,true),value=simplify(arena,source,opts);
+						if(value.exhausted||!arena.isNumber(value.output)||!arena.number(value.output).one) continue;
+						auto domain=simplifyDomain(arena,source,[],opts);
+						if(domain.exhausted) continue;
+						auto check=ScalarDomain(source,domain,value,index,sort,path,BoundOp.primitive);
+						check.unitOperand=x; check.unitOuterLeft=outerLeft; check.unitInnerLeft=innerLeft;
+						extra=cast(uint)scalarDomains.length; scalarDomains~=check;
+						return domain.output==arena.boolean(true)?at(x):guard(restoreBody(domain.output,ctx,argument),at(x));
+					}
+				}
+				return BoundTerm.init;
+			}
 			BoundTerm rewrite(BoundTerm t,uint[] path,bool masksOnly){
 				auto n=node(t),mode=n.op==BoundOp.defined||n.op==BoundOp.holds?n.op:BoundOp.scalar;
 				if(masksOnly&&primitiveOp(t.id,Op.mask)&&(depends(at(n.b),0)||primitiveOp(n.a,Op.and_))){
@@ -6517,6 +6544,9 @@ final class Bindings{
 					if(mode==BoundOp.defined) return restoreBody(d.output,ctx,argument);
 					if(mode==BoundOp.holds) return restoreBody(arena.and_(d.output,source),ctx,argument);
 					return d.output==arena.boolean(true)?simplified:guard(restoreBody(d.output,ctx,argument),simplified);
+				}
+				if(!masksOnly&&primitiveOp(t.id,Op.mul)&&type(t)==scalarType(Sort.real_)){
+					auto changed=cancelPair(t,path); if(changed!=BoundTerm.init) return changed;
 				}
 				if(n.op==BoundOp.conditional||n.op==BoundOp.guard||n.op==BoundOp.primitive||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.vectorCons||n.op==BoundOp.pair||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor){
 					BoundTerm[] children=[at(n.a)]; if(n.b!=uint.max) children~=at(n.b); if(n.c!=uint.max) children~=at(n.c);
@@ -11085,7 +11115,7 @@ final class Bindings{
 		foreach(d;result.domains){
 			scalarNodes~=arena.viewPostorder(d.input); if(d.result.output!=Term.init)scalarNodes~=arena.viewPostorder(d.result.output);
 			if(d.value.traced) scalarNodes~=arena.viewPostorder(arena.castTo(d.value.output,arena.sort(d.input)));
-			if(d.mode==BoundOp.primitive) scalarNodes~=arena.viewPostorder(d.excludedPoint);
+			if(d.excludedPoint!=Term.init) scalarNodes~=arena.viewPostorder(d.excludedPoint);
 			if(d.product !is null){
 				scalarNodes~=arena.viewPostorder(arena.at(d.product.rate)); scalarNodes~=arena.viewPostorder(arena.at(d.product.gain));
 			}
@@ -12297,6 +12327,13 @@ final class Bindings{
 					string wrap(uint id,size_t depth){
 						if(depth==d.path.length){
 							if(d.mode!=BoundOp.primitive) return equality;
+							if(d.unitOperand!=uint.max){
+								auto pair=arena.view(d.input),one=arena.castTo(d.value.output,Sort.real_);
+								auto x="("~name(d.unitOperand)~".eval ξ (Binding.Env.cons (a := .scalar ."~field~") (some x) ρ))";
+								auto unit="n"~to!string(one.id);
+								return "(Value.mul_pair_one (n"~to!string(pair.a)~".eval "~env~") (n"~to!string(pair.b)~".eval "~env~") "~x~" ("~unit~".eval "~env~") "~domain~" "~(d.unitOuterLeft?"true":"false")~" "~(d.unitInnerLeft?"true":"false")~
+									" "~hd~" ("~prefix~".ValueCertificate.refinement "~env~") (Numeric.calculate_real_one "~env~" "~unit~" rfl))";
+							}
 							auto mask=nodes[id],z=d.excludedPoint;
 							auto pred=mask.a;
 							foreach(right;d.conjunctPath) pred=right?nodes[pred].b:nodes[pred].a;

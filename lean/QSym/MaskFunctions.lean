@@ -3,6 +3,27 @@ import QSym.Domain
 
 namespace QSym
 
+/-- Two strict factors whose product refines one can be removed on its
+certified domain, even when the intervening observation is missing. -/
+theorem Value.mul_pair_one (a b x one : Option ℝ) (p : Option Bool) (outerLeft innerLeft : Bool)
+    (hd : Domain.Correct (Value.mul a b) p) (h : Value.Refines (Value.mul a b) one)
+    (h1 : one = some 1) :
+    (let t := if innerLeft then Value.mul b x else Value.mul x b
+     if outerLeft then Value.mul a t else Value.mul t a) = (if p == some true then x else none) := by
+  subst one
+  rw [hd]
+  have assoc : (let t := if innerLeft then Value.mul b x else Value.mul x b
+      if outerLeft then Value.mul a t else Value.mul t a) = Value.mul (Value.mul a b) x := by
+    cases a <;> cases b <;> cases x <;> cases outerLeft <;> cases innerLeft <;>
+      simp [Value.mul, mul_comm, mul_left_comm, mul_assoc]
+  rw [assoc]
+  cases hv : Value.mul a b with
+  | none => rfl
+  | some v =>
+    have he := Option.some.inj (h v hv)
+    rw [← he]
+    exact Value.mul_one_left x
+
 /-- Outside zero, a defined test leaves its operand untouched. At zero
 and at a missing test, check the partial scalar context itself. -/
 theorem Value.mask_nonzero_context {β : Type} [Zero β] (f : Option ℝ → Option β)
