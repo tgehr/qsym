@@ -2300,16 +2300,16 @@ final class Bindings{
 	private bool directedCoordinate(uint body,bool down,out string proof,SourceCertificates cert=null){
 		enum grid="Distribution.GraphFibre.Coordinates.Grid.";
 		struct Evidence{ bool found; string term; }
-		Evidence[uint] cache;
-		auto dir=down?"true":"false";
-		Evidence visit(uint id,uint depth){
+		Evidence[uint][2] cache;
+		Evidence visit(uint id,bool decreasing,uint depth){
+			auto dir=decreasing?"true":"false";
 			if(depth>64) return Evidence.init;
-			if(auto old=id in cache) return *old;
-			cache[id]=Evidence.init;
+			if(auto old=id in cache[decreasing]) return *old;
+			cache[decreasing][id]=Evidence.init;
 			auto n=nodes[id]; string law,args;
 			Rational a,b; Term number;
 			if(affineBody(id,a,b)||n.op==BoundOp.scalar&&arena.isNumber(arena.at(n.data))){
-				if(down?a>Rational(0):a<Rational(0)) return Evidence.init;
+				if(decreasing?a>Rational(0):a<Rational(0)) return Evidence.init;
 				law="affine";
 				if(cert !is null) args=dir~" "~cert.affineProof(id).proof~" rfl";
 			}else if(!depends(at(id),0)&&closedRational(at(id),b,number)){
@@ -2317,6 +2317,7 @@ final class Bindings{
 				if(cert !is null) args=dir~" "~cert.closedProof(at(id),b);
 			}else if(n.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(n.data)),change=gridChange(id);
+				uint input=n.a; bool reverse;
 				if(change==CoordinateChange.exp||change==CoordinateChange.sinh||
 					change==CoordinateChange.arsinh||change==CoordinateChange.arctan){
 					law="change";
@@ -2324,16 +2325,28 @@ final class Bindings{
 						auto tag=to!string(change);
 						args=grid~"ScalarChange."~tag~" Real."~tag~"_strictMono.monotone ";
 					}
+				}else if(change==CoordinateChange.log||change==CoordinateChange.sqrt||change==CoordinateChange.reciprocal){
+					string range;
+					if(!gridChangeRange(change,input,range,cert,true)) return Evidence.init;
+					reverse=change==CoordinateChange.reciprocal;
+					law=reverse?"inv":to!string(change);
+					if(cert !is null) args=range~" ";
+				}else if(op.op==Op.mul){
+					bool right=!depends(at(n.b),0);
+					auto coefficient=at(right?n.b:n.a); input=right?n.a:n.b;
+					if(!closedRational(coefficient,b,number)) return Evidence.init;
+					reverse=b<Rational(0); law="scale";
+					if(cert !is null) args=cert.q(b)~" "~to!string(right)~" "~cert.closedProof(coefficient,b)~" ";
 				}else if(op.op==Op.pow&&op.value%2){
 					law="oddPower";
 					if(cert !is null) args=to!string(op.value)~" rfl ";
 				}else if(op.op==Op.add) law="add";
 				else return Evidence.init;
-				auto l=visit(n.a,depth+1);
+				auto l=visit(input,decreasing!=reverse,depth+1);
 				if(!l.found) return Evidence.init;
 				args~=l.term;
 				if(op.op==Op.add){
-					auto r=visit(n.b,depth+1);
+					auto r=visit(n.b,decreasing,depth+1);
 					if(!r.found) return Evidence.init;
 					args~=" "~r.term;
 				}
@@ -2341,9 +2354,9 @@ final class Bindings{
 			Evidence e=Evidence(true);
 			if(cert !is null) e.term=cert.save(grid~"Directed "~dir~" "~cert.functionAt(id),
 				"("~grid~"Directed."~law~" "~args~")");
-			return cache[id]=e;
+			return cache[decreasing][id]=e;
 		}
-		auto e=visit(body,0); proof=e.term; return e.found;
+		auto e=visit(body,down,0); proof=e.term; return e.found;
 	}
 	// Construct a signed derivative. Replay the identical traversal when
 	// emitting evidence so every accepted operation has a checked chain rule.

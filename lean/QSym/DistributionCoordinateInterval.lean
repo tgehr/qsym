@@ -37,6 +37,60 @@ theorem change {g op jac down f} (c : ScalarChange univ g op jac) (inc : Monoton
   · exact inc.comp mon
   · exact inc.comp_antitone mon
 
+/-- A smooth outer change only needs the indicated derivative sign on the
+actual range. This also applies to a domain with several components. -/
+theorem changeOn {s h op jac down f} (c : ScalarChange s h op jac) (reverse : Bool)
+    (hs : ∀ u ∈ s, if reverse then deriv h u ≤ 0 else 0 ≤ deriv h u)
+    (range : SourceIn s f) (v : Directed down f) :
+    Directed (if reverse then !down else down) (fun x => op (f x)) := by
+  obtain ⟨g, sg, mon, fs⟩ := v
+  have ran (x : ℝ) := range x _ (fs x)
+  have smooth : ContDiff ℝ 1 (h ∘ g) :=
+    contDiff_iff_contDiffAt.mpr fun x => (c.change.smooth _ (ran x)).comp x sg.contDiffAt
+  have d := sg.differentiable le_rfl
+  refine ⟨h ∘ g, smooth, ?_, fun x => by simp only [fs, Function.comp_apply]; exact c.value _ (ran x)⟩
+  have slope (x : ℝ) := c.change.deriv_comp ran x
+  have diff := smooth.differentiable le_rfl
+  cases reverse <;> cases down
+  · exact monotone_of_deriv_nonneg diff fun x => (slope x).symm ▸
+      mul_nonneg (hs _ (ran x)) (nonneg_deriv_of_monotone mon (d x))
+  · exact antitone_of_deriv_nonpos diff fun x => (slope x).symm ▸
+      mul_nonpos_of_nonneg_of_nonpos (hs _ (ran x)) (nonpos_deriv_of_antitone mon (d x))
+  · exact antitone_of_deriv_nonpos diff fun x => (slope x).symm ▸
+      mul_nonpos_of_nonpos_of_nonneg (hs _ (ran x)) (nonneg_deriv_of_monotone mon (d x))
+  · exact monotone_of_deriv_nonneg diff fun x => (slope x).symm ▸
+      mul_nonneg_of_nonpos_of_nonpos (hs _ (ran x)) (nonpos_deriv_of_antitone mon (d x))
+
+theorem log {down f} (p : Lower true f) (v : Directed down f) :
+    Directed down (fun x => Functions.logR.apply (f x)) :=
+  changeOn ScalarChange.log false (fun u hu => by rw [Real.deriv_log]; exact inv_nonneg.mpr (le_of_lt hu)) p v
+
+theorem sqrt {down f} (p : Lower true f) (v : Directed down f) :
+    Directed down (fun x => Functions.sqrtR.apply (f x)) :=
+  changeOn ScalarChange.sqrt false (fun u hu => by
+    change 0 ≤ deriv Real.sqrt u
+    rw [(Real.hasDerivAt_sqrt (ne_of_gt (show 0 < u from hu))).deriv]
+    positivity) p v
+
+theorem inv {down f} (p : Nonzero f) (v : Directed down f) : Directed (!down) (fun x => Value.inv (f x)) :=
+  changeOn ScalarChange.reciprocal true (fun u _ => by rw [deriv_inv]; exact neg_nonpos.mpr (inv_nonneg.mpr (sq_nonneg u))) p v
+
+/-- A closed signed scale can occur on either side of the source. -/
+theorem scale {down f c} (q : ℚ) (right : Bool) (hc : c = some (Numeric.denote (s := .real) q))
+    (v : Directed down f) :
+    Directed (if q < 0 then !down else down) (fun x => if right then Value.mul (f x) c else Value.mul c (f x)) := by
+  obtain ⟨g, sg, mon, fs⟩ := v
+  change c = some (q : ℝ) at hc
+  refine ⟨fun x => (q : ℝ)*g x, contDiff_const.mul sg, ?_,
+    fun x => by cases right <;> simp [hc, fs, Value.mul, mul_comm]⟩
+  by_cases h : q < 0
+  · have real : (q : ℝ) ≤ 0 := by exact_mod_cast h.le
+    simp only [if_pos h]
+    cases down <;> exact fun _ _ hxy => mul_le_mul_of_nonpos_left (mon hxy) real
+  · have real : (0 : ℝ) ≤ q := by exact_mod_cast le_of_not_gt h
+    simp only [if_neg h]
+    cases down <;> exact fun _ _ hxy => mul_le_mul_of_nonneg_left (mon hxy) real
+
 theorem oddPower {down f} (n : ℕ) (odd : n % 2 = 1) (h : Directed down f) :
     Directed down (fun x => (f x).map (· ^ n)) := by
   obtain ⟨v, sm, mon, src⟩ := h
@@ -82,11 +136,7 @@ theorem interval {w : Scalar} (F : Option ℝ → Option ℝ) (down swap sl su :
       rw [intervalIntegral.integral_eq_sub_of_hasDerivAt (f := g) (fun x _ => (hd x).hasDerivAt)
         ((hg.continuous_deriv le_rfl).intervalIntegrable l u)]
       simp [sub_eq_add_neg, add_comm]
-    · have dec : Monotone (fun x => -g x) := fun _ _ hxy => neg_le_neg (mon hxy)
-      have sign (x : ℝ) : |deriv g x| = -deriv g x := by
-        have h := nonneg_deriv_of_monotone dec (hd x).neg
-        rw [deriv.neg] at h
-        exact abs_of_nonpos (neg_nonneg.mp h)
+    · have sign (x : ℝ) := abs_of_nonpos (nonpos_deriv_of_antitone (g := g) mon (hd x))
       simp only [↓reduceIte, sign, intervalIntegral.integral_neg]
       rw [intervalIntegral.integral_eq_sub_of_hasDerivAt (f := g) (fun x _ => (hd x).hasDerivAt)
         ((hg.continuous_deriv le_rfl).intervalIntegrable l u)]

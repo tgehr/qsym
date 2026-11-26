@@ -324,6 +324,22 @@ private Case[] cases(){
 	Case("MissingQuadraticSafe","∫dx (2+x²)⁻¹·λ[x]","ℝ","1/2·sqrt(2)·π"),
 	Case("MissingQuadraticBottom","defined(∫dx undefined(ℝ)·λ[x])","𝔹","false"),
 	Case("MissingQuadraticZeroArg","defined((λ(a:ℝ).∫dx a⁻¹*(1+x²)⁻¹·λ[x])(0))","𝔹","false"),
+	Case("DirectedRangeRoot","∫dx [0≤x≤1]·λ[sqrt(exp(x)+1)]","ℝ","-sqrt(2)+sqrt(e+1)"),
+	Case("DirectedRangeLog","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·λ[log(1+exp(x))]","ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). [l<u]·(-log(exp(l)+1)+log(exp(u)+1))"),
+	Case("DirectedRangeInverse","λ(u:ℝ).∫dx [0<x≤u]·λ[(1+exp(x))⁻¹]","ℝ→ℝ","λ(u:ℝ). [0<u]·(1/2-(exp(u)+1)⁻¹)"),
+	Case("DirectedRangeInverseDown","∫dx [0≤x≤1]·λ[(1+exp(-x))⁻¹]","ℝ","-1/2+(exp(-1)+1)⁻¹"),
+	Case("DirectedRangeInverseNegative","∫dx [0≤x≤1]·λ[(-2*exp(x))⁻¹]","ℝ","-1/2·exp(-1)+1/2"),
+	Case("DirectedRangeTwice","∫dx [0≤x≤1]·λ[(sqrt(exp(-x)+1))⁻¹]","ℝ","-1/2·sqrt(2)+sqrt(exp(-1)+1)⁻¹"),
+	Case("DirectedRangeNested","λ(u:ℝ).∫dx [0≤x<u]·λ[atan(log(1+exp(-x)))]","ℝ→ℝ","λ(u:ℝ). [0<u]·(atan(log(2))-atan(log(exp(-u)+1)))"),
+	Case("DirectedRangeScaled","∫dx [-1≤x≤1]·λ[(-3/2)*atan(x)]","ℝ","3/4·π"),
+	Case("DirectedRangeScaleRight","∫dx [0≤x≤1]·λ[exp(-x)*(-2)]","ℝ","-2·exp(-1)+2"),
+	Case("DirectedRangeSquare","∫dx [0≤x≤1]·λ[(sqrt(1+exp(x))-2)^2]","ℝ","(sqrt(e+1)-2)·abs(sqrt(e+1)-2)-4·sqrt(2)+6"),
+	Case("DirectedRangeCosh","∫dx [-1≤x≤1]·λ[cosh(log(1+exp(x)))]","ℝ","-1/2·exp(-1)+1/2·e+(e+1)⁻¹·(1/2)-(exp(-1)+1)⁻¹·(1/2)"),
+	Case("DirectedRangePartial","λ(h:ℝ→ℝ).λ(t:ℝ).∫dx [0≤x<h(t)]·λ[(1+exp(-x))⁻¹]","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(t:ℝ). [0<h(t)]·(-1/2+(exp(-h(t))+1)⁻¹)"),
+	Case("DirectedRangeMissing","defined(∫dx [0<x<undefined(ℝ)]·λ[log(1+exp(x))])","𝔹"),
+	Case("DirectedRangePole","∫dx [-1≤x≤1]·λ[x⁻¹]","ℝ"),
+	Case("DirectedRangeTouch","∫dx [-1≤x≤1]·λ[sqrt(x²)]","ℝ","2"),
+	Case("DirectedRangeGap","∫dx [1≤x≤2]·λ[log(x)]","ℝ"),
 	Case("VariationSquareCross","∫dx [-1≤x≤1]·λ[x²]","ℝ","2"),
 	Case("VariationSquareShift","∫dx [0≤x≤1]·λ[(1-2*x)^2]","ℝ","2"),
 	Case("VariationSquareDown","∫dx [1<x≤3]·λ[(2-x)^2]","ℝ","2"),
@@ -1862,6 +1878,11 @@ private void run(string directory){
 			bool witness=c.name!="MissingQuadraticInactive"&&c.name!="MissingQuadraticOutside"&&
 				c.name!="MissingQuadraticHoleHidden"&&c.name!="MissingQuadraticSafe";
 			enforce((certificate.indexOf("MissingPoint.InDensity.mass ")>=0)==witness,c.name);
+		}
+		if(c.name.indexOf("DirectedRange")==0){
+			bool changed=c.name!="DirectedRangePole"&&c.name!="DirectedRangeGap"&&c.name!="DirectedRangeTouch";
+			bool integrated=certificate.indexOf("Grid.Directed.interval ")>=0||certificate.indexOf("Grid.VariationChange.interval ")>=0;
+			enforce(integrated==changed,c.name);
 		}
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationOscillating"&&c.name!="VariationJump";

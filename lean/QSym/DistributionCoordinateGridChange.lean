@@ -20,6 +20,12 @@ theorem nonneg_deriv_of_monotone {g : ℝ → ℝ} (inc : Monotone g) {x : ℝ} 
   have h : 0 ≤ t := le_of_lt ht
   exact mul_nonneg (inv_nonneg.mpr h) (sub_nonneg.mpr (inc (le_add_of_nonneg_right h)))
 
+theorem nonpos_deriv_of_antitone {g : ℝ → ℝ} (dec : Antitone g) {x : ℝ} (hd : DifferentiableAt ℝ g x) :
+    deriv g x ≤ 0 := by
+  have h := nonneg_deriv_of_monotone (g := fun t => -g t) (fun _ _ hxy => neg_le_neg (dec hxy)) hd.neg
+  rw [deriv.neg] at h
+  exact neg_nonneg.mp h
+
 namespace ScalarChange
 
 def exp : ScalarChange univ Real.exp Functions.expR.apply Functions.expR.apply :=
