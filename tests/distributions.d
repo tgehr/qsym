@@ -1123,6 +1123,16 @@ private Case[] cases(){
 	Case("RetryObservationMissingProbe","massD(weightD(undefined(ℝ→ℝ),"~retry~"))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationMissingKernel","massD(bindD("~retry~",undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationContinuousOutput","massD(bindD("~retry~",λ(x:ℝ).Λy. [0≤y≤1]·λ[y]))","ℝ","1"),
+	Case("LinearTailSelf","μ(d:Distribution(ℝ)).d","Distribution(ℝ)","Λ(x:ℝ). 0"),
+	Case("LinearTailScaled","μ(d:Distribution(ℝ)).scaleD(2,d)","Distribution(ℝ)","Λ(x:ℝ). 0"),
+	Case("LinearTailCopied","μ(d:Distribution(ℝ)).addD(d,d)","Distribution(ℝ)","Λ(x:ℝ). 0"),
+	Case("LinearTailFunction","μ(d:Distribution(ℕ→ℕ)).addD(scaleD(9,d),scaleD(2,addD(d,d)))","Distribution(ℕ→ℕ)","Λ(x:ℕ→ℕ). 0"),
+	Case("LinearTailEmissions","μ(d:Distribution(ℝ)).addD(scaleD(1/4,δ(7)),addD(scaleD(1/4,d),scaleD(1/2,d)))","Distribution(ℝ)","δ((7:ℝ))"),
+	Case("LinearTailWeights","μ(d:Distribution(ℝ)).Λx. 1/4·δ(7)[x]+1/2·(1/2·d[x]+d[x])","Distribution(ℝ)","δ((7:ℝ))"),
+	Case("LinearTailSwapped","μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,d),scaleD(1/4,d)),scaleD(1/2,δ(2)))","Distribution(ℝ)","δ((2:ℝ))"),
+	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","μ(d:Distribution(ℝ)). addD(δ((0:ℝ)),scaleD(1,d))"),
+	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
+	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
 	Case("AtomicRetryFair","μ(d:Distribution(ℝ)).Λx. 1/2·δ(0)[x]+1/2·d[x]","Distribution(ℝ)","δ((0:ℝ))"),
 	Case("AtomicRetrySwapped","μ(d:Distribution(ℝ)).Λx. 1/2·d[x]+1/2·δ(0)[x]","Distribution(ℝ)","δ((0:ℝ))"),
 	Case("AtomicRetryFiniteWeight","μ(d:Distribution(ℝ)).addD(scaleD(1/4,δ(3)),scaleD(1/2,d))","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(3)[x]"),
@@ -1183,6 +1193,10 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name.indexOf("LinearTail")==0){
+			bool empty=c.name=="LinearTailSelf"||c.name=="LinearTailScaled"||c.name=="LinearTailCopied"||c.name=="LinearTailFunction";
+			enforce(certificate.indexOf(empty?"Distribution.Atomic.fixed_tail":"Distribution.Atomic.fixed_add_tail")>=0,c.name);
+		}
 		if(c.name.indexOf("RetryObservation")==0&&c.name!="RetryObservationMissingProbe"&&c.name!="RetryObservationMissingKernel"){
 			enforce(certificate.indexOf("Distribution.Atomic.Observation.retry")>=0,c.name);
 			if(c.name=="RetryObservationMappedMoment") enforce(certificate.indexOf("Observation.realBind (Distribution.Atomic.Observation.weight")>=0,c.name);
@@ -2147,6 +2161,7 @@ private void run(string directory){
 	}
 	auto owner=Session.open(),a=owner.arena; FunctionSyntax s;
 	foreach(source;[
+		"μ(d:Distribution(ℝ)).addD(scaleD(-1,d),d)", "μ(d:Distribution(ℝ)).Λx. x·d[x]",
 		"μ(d:Distribution(ℝ)).addD(δ(0),scaleD(-1,d))", "μ(d:Distribution(ℝ)).addD(Λx.λ[x],scaleD(1/2,d))",
 		"μ(d:Distribution(ℝ)).addD(δ(massD(d)),scaleD(1/2,d))",
 		"if x<0 then δ(0)[x] else λ[x]", "(λ[x]·δ(x+y)[y])//λ[y]", "Λ(z:ℝ).(λ[x]·δ(x²)[y])//λ[y]",

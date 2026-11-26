@@ -99,8 +99,10 @@ private theorem weight_constant {d : D α} {k : Weights α} (h : Represents d k)
     exact ⟨.scale c a, by simp [weight, ha, scaleValue], by simpa [mul_left_comm] using ka.scale hc,
       by simp [va]⟩
 
-def retryTail (weighted : Bool) (r : Option ℝ) (d : D α) : Option (D α) :=
-  if weighted then weightValue (some (fun _ => r)) (some d) else scaleValue r (some d)
+def scaleTerm (weighted : Bool) (r : Option ℝ) (v : Option (D α)) : Option (D α) :=
+  if weighted then weightValue (some (fun _ => r)) v else scaleValue r v
+
+def retryTail (weighted : Bool) (r : Option ℝ) (d : D α) := scaleTerm weighted r (some d)
 
 private theorem tail_step (weighted : Bool) {d : D α} {k : Model α} (hd : Presents d k) {r : ℝ} (hr : 0 ≤ r) :
     ∃ e, retryTail weighted (some r) d = some e ∧ Represents e (fun x => ENNReal.ofReal r * k.1 x) ∧ visited e = k.2 := by
@@ -115,28 +117,88 @@ def retryBody (swap weighted : Bool) (r : Option ℝ) (seed : Option (D α)) (d 
   let tail := retryTail weighted r d
   if swap then addValue tail seed else addValue seed tail
 
-theorem fixed_retry (swap weighted : Bool) {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q : ℝ))
-    {seed : Option (D α)} (hs : Admissible seed) {f : D α → Option (D α)}
-    (body : ∀ d, f d = retryBody swap weighted r seed d) : fixedValue (some f) = retryValue r seed := by
+/-- A homogeneous recursive expression scales every outcome weight by the
+same nonnegative factor and preserves every visit, including when it scales by zero. -/
+structure Tail (g : D α → Option (D α)) (q : ℚ) : Prop where
+  nonneg : 0 ≤ q
+  step : ∀ d m, Presents d m → ∃ e, g d = some e ∧
+    Represents e (fun x => ENNReal.ofReal (q : ℝ) * m.1 x) ∧ visited e = m.2
+
+theorem Tail.self : Tail (fun d : D α => some d) 1 :=
+  ⟨zero_le_one, fun d _ hd => ⟨d, rfl, by simpa using hd.1, hd.2⟩⟩
+
+theorem Tail.scale {g : D α → Option (D α)} {q : ℚ} (weighted : Bool) {r : Option ℝ}
+    (c z : ℚ) (hc : 0 ≤ c) (hz : z = c*q) (hr : r = some (c : ℝ)) (h : Tail g q) :
+    Tail (fun d => scaleTerm weighted r (g d)) z := by
+  subst r z
+  refine ⟨mul_nonneg hc h.nonneg, ?_⟩
+  intro d m hd
+  obtain ⟨a, ha, ka, va⟩ := h.step d m hd
+  have ca : 0 ≤ (c : ℝ) := by exact_mod_cast hc
+  obtain ⟨e, he, ke, ve⟩ := tail_step weighted
+    (k := (fun x => ENNReal.ofReal (q : ℝ) * m.1 x, m.2)) ⟨ka, va⟩ ca
+  exact ⟨e, ha ▸ he, by simpa [ENNReal.ofReal_mul ca, mul_assoc] using ke, ve⟩
+
+theorem Tail.add {f g : D α → Option (D α)} {a b : ℚ}
+    (z : ℚ) (hz : z = a+b) (hf : Tail f a) (hg : Tail g b) :
+    Tail (fun d => addValue (f d) (g d)) z := by
+  subst z
+  refine ⟨add_nonneg hf.nonneg hg.nonneg, ?_⟩
+  intro d m hd
+  obtain ⟨x, hx, kx, vx⟩ := hf.step d m hd
+  obtain ⟨y, hy, ky, vy⟩ := hg.step d m hd
+  have ha : 0 ≤ (a : ℝ) := by exact_mod_cast hf.nonneg
+  have hb : 0 ≤ (b : ℝ) := by exact_mod_cast hg.nonneg
+  exact ⟨.add x y, by rw [hx, hy]; rfl, by simpa [ENNReal.ofReal_add ha hb, add_mul] using kx.add ky,
+    by simp [vx, vy]⟩
+
+theorem fixed_add_tail (swap : Bool) {r : Option ℝ} (q : ℚ) (hr : r = some (q : ℝ))
+    {seed : Option (D α)} (hs : Admissible seed) {g f : D α → Option (D α)} (tail : Tail g q)
+    (body : ∀ d, f d = if swap then addValue (g d) seed else addValue seed (g d)) :
+    fixedValue (some f) = retryValue r seed := by
   subst r
   cases seed with
   | none =>
     change fixedValue (some f) = none
     apply fixed_missing (n := 1)
-    cases swap <;> cases weighted <;> simp [iterateBody, body, retryBody, retryTail, addValue, scaleValue, weightValue, weight]
+    change f .zero = none
+    rw [body]
+    cases swap <;> cases g .zero <;> rfl
   | some b =>
     obtain ⟨m, hb⟩ := hs b rfl
-    have r0 : 0 ≤ (q : ℝ) := by exact_mod_cast h0
+    have r0 : 0 ≤ (q : ℝ) := by exact_mod_cast tail.nonneg
     rw [retry_eq_realize hb r0]
     apply fixed_of_step _ _ (strictRetry_continuous _ _)
     intro d k hd
-    obtain ⟨e, he, htail, hvis⟩ := tail_step weighted hd r0
+    obtain ⟨e, he, htail, hvis⟩ := tail.step d k hd
     cases swap with
     | false =>
-      refine ⟨.add b e, by simp [body, retryBody, he, addValue], hb.1.add htail, ?_⟩
+      refine ⟨.add b e, by simp [body, he, addValue], hb.1.add htail, ?_⟩
       exact (visited_add _ _).trans (congrArg₂ (· ∪ ·) hb.2 hvis)
     | true =>
-      refine ⟨.add e b, by simp [body, retryBody, he, addValue], ?_, ?_⟩
+      refine ⟨.add e b, by simp [body, he, addValue], ?_, ?_⟩
       · simpa [strictRetryStep, retryStep, add_comm] using htail.add hb.1
       · exact (visited_add _ _).trans ((congrArg₂ (· ∪ ·) hvis hb.2).trans (Set.union_comm _ _))
+
+theorem fixed_retry (swap weighted : Bool) {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q : ℝ))
+    {seed : Option (D α)} (hs : Admissible seed) {f : D α → Option (D α)}
+    (body : ∀ d, f d = retryBody swap weighted r seed d) : fixedValue (some f) = retryValue r seed := by
+  apply fixed_add_tail swap q hr hs (g := retryTail weighted r) _ body
+  subst r
+  exact ⟨h0, fun _ _ hd => tail_step weighted hd (by exact_mod_cast h0)⟩
+
+/-- With no emission the empty distribution is already a fixed point, even if
+one step duplicates the continuation or multiplies its weight by more than one. -/
+theorem fixed_tail {f g : D α → Option (D α)} {q : ℚ} (tail : Tail g q)
+    (body : ∀ d, f d = g d) : fixedValue (some f) = zeroValue := by
+  let m : Model α := (fun _ => 0, ∅)
+  have h : Presents (.zero : D α) m := ⟨Represents.zero, visited_zero⟩
+  have h0 : 0 ≤ (q : ℝ) := by exact_mod_cast tail.nonneg
+  rw [← retry_zero q tail.nonneg (r := some (q : ℝ)) rfl, zeroValue, retry_eq_realize h h0]
+  apply fixed_of_step _ _ (strictRetry_continuous _ _)
+  intro d k hd
+  obtain ⟨e, he, hk, hv⟩ := tail.step d k hd
+  exact ⟨e, (body d).trans he, by simpa [strictRetryStep, retryStep, m] using hk,
+    by simpa [strictRetryStep, m] using hv⟩
+
 end QSym.Distribution.Atomic

@@ -36,6 +36,8 @@ theorem zeroWeightDiffers : ∃ t : ℝ → Option ℝ,
 #qsym_check_axioms Observation.weight
 #qsym_check_axioms Observation.bind
 #qsym_check_axioms Observation.realBind
+#qsym_check_axioms fixed_tail
+#qsym_check_axioms fixed_add_tail
 #qsym_check_axioms fixed_of_step
 #qsym_check_axioms fixed_retry
 #qsym_check_axioms retry_point
