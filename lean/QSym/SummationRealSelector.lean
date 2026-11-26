@@ -63,12 +63,59 @@ theorem select_real_Z (weight : α → ℝ) (hw : weight 0 = 0) (swap : Bool) (f
   simpa only [realIndexZ_map, floorInt, Option.map_some, Option.map_map, Function.comp_def] using
     select_real_index weight hw ((↑) : ℤ → ℝ) Int.floor Int.floor_intCast swap f x
 
+/-- An encoding of natural indices with a total real-valued recovery map. Re-encoding the candidate detects points outside its image. -/
+structure NaturalIndexMap (enc : Option ℕ → Option ℝ) (dec : Option ℝ → Option ℝ) where
+  forward : ℕ → ℝ
+  inverse : ℝ → ℝ
+  forward_eval (x) : enc x = x.map forward
+  inverse_eval (x) : dec x = x.map inverse
+  left (i : ℕ) : inverse (forward i) = i
+
+namespace NaturalIndexMap
+
+def identity : NaturalIndexMap realIndexN id where
+  forward := (↑)
+  inverse := id
+  forward_eval := realIndexN_map
+  inverse_eval x := by simp
+  left _ := rfl
+
+def square : NaturalIndexMap (fun i => (realIndexN i).map (· ^ 2)) (fun x => Functions.sqrtR.apply (Value.abs x)) where
+  forward i := (i : ℝ) ^ 2
+  inverse x := Real.sqrt |x|
+  forward_eval i := by cases i <;> simp [realIndexN_map]
+  inverse_eval x := by cases x <;> simp [Value.abs, Functions.sqrtR, Function1.apply, abs_nonneg]
+  left i := by rw [abs_of_nonneg (sq_nonneg _), Real.sqrt_sq (Nat.cast_nonneg i)]
+
+/-- Scalar narrowing can move the same square below the natural-to-real cast. -/
+def squareNat : NaturalIndexMap (fun i => realIndexN (i.map (· ^ 2)))
+    (fun x => Functions.sqrtR.apply (Value.abs x)) where
+  forward := square.forward
+  inverse := square.inverse
+  forward_eval i := by cases i <;> simp [realIndexN_map, square]
+  inverse_eval := square.inverse_eval
+  left := square.left
+
+theorem leftNat {enc dec} (c : NaturalIndexMap enc dec) :
+    LeftInverse (Nat.floor ∘ c.inverse) c.forward :=
+  fun i => by simp [c.left i]
+
+end NaturalIndexMap
+
+theorem select_chart_N {enc dec} (c : NaturalIndexMap enc dec) (weight : α → ℝ) (hw : weight 0 = 0)
+    (swap : Bool) (f : ℕ → Option α) (x : Option ℝ) :
+    value weight (some (fun i => Value.mask
+      (if swap then realMatch (enc (some i)) x else realMatch x (enc (some i))) (f i))) =
+      (let j := Functions.floorN.apply (dec x)
+       Value.mask (realMatch x (enc j)) (j.bind f)) := by
+  simpa only [c.forward_eval, c.inverse_eval, floorNat, Option.map_some, Option.map_map, Function.comp_def] using
+    select_real_index weight hw c.forward _ c.leftNat swap f x
+
 theorem select_real_N (weight : α → ℝ) (hw : weight 0 = 0) (swap : Bool) (f : ℕ → Option α) (x : Option ℝ) :
     value weight (some (fun i => Value.mask
       (if swap then realMatch (realIndexN (some i)) x else realMatch x (realIndexN (some i))) (f i))) =
-      Value.mask (realMatch x (realIndexN (Functions.floorN.apply x))) ((Functions.floorN.apply x).bind f) := by
-  simpa only [realIndexN_map, floorNat, Option.map_some, Option.map_map, Function.comp_def] using
-    select_real_index weight hw ((↑) : ℕ → ℝ) Nat.floor Nat.floor_natCast swap f x
+      Value.mask (realMatch x (realIndexN (Functions.floorN.apply x))) ((Functions.floorN.apply x).bind f) :=
+  select_chart_N NaturalIndexMap.identity weight hw swap f x
 
 /-- A finite range probes the recovered index only when it belongs to the range.
 An empty range also skips a missing query. -/
@@ -108,25 +155,34 @@ theorem range_real_index (encode : ℕ → ℝ) (recover : ℝ → ℕ) (left : 
           simp [Functions.nonzeroN, Functions.ltN, Function1.apply, Function2.apply, Value.mask, realMatch_some, hi] <;>
           cases decide (x = encode (recover x)) <;> rfl
 
+theorem range_chart_N {enc dec} (c : NaturalIndexMap enc dec) (swap : Bool) (f : ℕ → Option α)
+    (x : Option ℝ) (n : Option ℕ) :
+    rangeValue (some (fun i => Value.mask
+      (if swap then realMatch (enc (some i)) x else realMatch x (enc (some i))) (f i))) n =
+      (let j := Functions.floorN.apply (dec x)
+       Value.mask (Functions.nonzeroN.apply n) (Value.mask (Functions.ltN.apply j n)
+         (Value.mask (realMatch x (enc j)) (j.bind f)))) := by
+  simpa only [c.forward_eval, c.inverse_eval, floorNat, Option.map_some, Option.map_map, Function.comp_def] using
+    range_real_index c.forward _ c.leftNat swap f x n
+
 theorem range_real_N (swap : Bool) (f : ℕ → Option α) (x : Option ℝ) (n : Option ℕ) :
     rangeValue (some (fun i => Value.mask
       (if swap then realMatch (realIndexN (some i)) x else realMatch x (realIndexN (some i))) (f i))) n =
       (let j := Functions.floorN.apply x
        Value.mask (Functions.nonzeroN.apply n) (Value.mask (Functions.ltN.apply j n)
-         (Value.mask (realMatch x (realIndexN j)) (j.bind f)))) := by
-  simpa only [realIndexN_map, floorNat, Option.map_some] using
-    range_real_index ((↑) : ℕ → ℝ) Nat.floor Nat.floor_natCast swap f x n
+         (Value.mask (realMatch x (realIndexN j)) (j.bind f)))) :=
+  range_chart_N NaturalIndexMap.identity swap f x n
 
 private def shiftedIndex (offFirst : Bool) (off i : Option ℕ) :=
   if offFirst then Functions.addN.apply off i else Functions.addN.apply i off
 
-theorem range_shifted_real_N (swap offFirst : Bool) (f : ℕ → Option α) (x : Option ℝ) (off n : Option ℕ) :
+theorem range_shifted_chart_N {enc dec} (c : NaturalIndexMap enc dec) (swap offFirst : Bool) (f : ℕ → Option α) (x : Option ℝ) (off n : Option ℕ) :
     rangeValue (some (fun i => Value.mask
-      (let z := realIndexN (shiftedIndex offFirst off (some i))
+      (let z := enc (shiftedIndex offFirst off (some i))
        if swap then realMatch z x else realMatch x z) (f i))) n =
-      (let j := Functions.floorN.apply (Value.add x (Value.mul (some ((-1 : ℤ) : ℝ)) (realIndexN off)))
+      (let j := Functions.floorN.apply (Value.add (dec x) (Value.mul (some ((-1 : ℤ) : ℝ)) (realIndexN off)))
        Value.mask (Functions.nonzeroN.apply n) (Value.mask (Functions.ltN.apply j n)
-         (Value.mask (realMatch x (realIndexN (shiftedIndex offFirst off j))) (j.bind f)))) := by
+         (Value.mask (realMatch x (enc (shiftedIndex offFirst off j))) (j.bind f)))) := by
   rcases off with _ | o
   · rcases n with _ | n
     · rfl
@@ -137,19 +193,28 @@ theorem range_shifted_real_N (swap offFirst : Bool) (f : ℕ → Option α) (x :
         rw [range_succ]
         generalize finite (α := α) (Finset.range n) _ = prev
         cases swap <;> cases offFirst <;> cases x <;> cases prev <;>
-          simp [shiftedIndex, floorNat, realIndexN_map, Functions.addN, Functions.nonzeroN, Functions.ltN, Function1.apply,
+          simp [c.forward_eval, c.inverse_eval, shiftedIndex, floorNat, realIndexN_map, Functions.addN, Functions.nonzeroN, Functions.ltN, Function1.apply,
             Function2.apply, Value.mask, realMatch, Value.add, Value.mul, Value.not, Value.nonzero]
-  · let recover (x : ℝ) := ⌊x - (o : ℝ)⌋₊
-    have left : LeftInverse recover (fun i : ℕ => ((i+o : ℕ) : ℝ)) := by
+  · let recover (x : ℝ) := ⌊c.inverse x - (o : ℝ)⌋₊
+    have left : LeftInverse recover (fun i : ℕ => c.forward (i+o)) := by
       intro i
-      change ⌊((i+o : ℕ) : ℝ) - o⌋₊ = i
-      rw [Nat.cast_add, add_sub_cancel_right, Nat.floor_natCast]
-    have shift (i : Option ℕ) : realIndexN (shiftedIndex offFirst (some o) i) = i.map (fun j : ℕ => ((j+o : ℕ) : ℝ)) := by
-      cases i <;> cases offFirst <;> simp [realIndexN_map, shiftedIndex, Functions.addN, Function2.apply, Nat.add_comm]
-    have inv : Functions.floorN.apply (Value.add x (Value.mul (some ((-1 : ℤ) : ℝ)) (realIndexN (some o)))) = x.map recover := by
-      cases x <;> simp [floorNat, realIndexN_map, Value.add, Value.mul, recover, sub_eq_add_neg]
+      change ⌊c.inverse (c.forward (i+o)) - o⌋₊ = i
+      rw [c.left (i+o), Nat.cast_add, add_sub_cancel_right, Nat.floor_natCast]
+    have shift (i : Option ℕ) : enc (shiftedIndex offFirst (some o) i) = i.map (fun j : ℕ => c.forward (j+o)) := by
+      cases i <;> cases offFirst <;> simp [c.forward_eval, shiftedIndex, Functions.addN, Function2.apply, Nat.add_comm]
+    have inv : Functions.floorN.apply (Value.add (dec x) (Value.mul (some ((-1 : ℤ) : ℝ)) (realIndexN (some o)))) = x.map recover := by
+      cases x <;> simp [c.inverse_eval, floorNat, realIndexN_map, Value.add, Value.mul, recover, sub_eq_add_neg]
     simpa only [shift, inv, Option.map_some] using
-      range_real_index (fun i : ℕ => ((i+o : ℕ) : ℝ)) recover left swap f x n
+      range_real_index (fun i : ℕ => c.forward (i+o)) recover left swap f x n
+
+theorem range_shifted_real_N (swap offFirst : Bool) (f : ℕ → Option α) (x : Option ℝ) (off n : Option ℕ) :
+    rangeValue (some (fun i => Value.mask
+      (let z := realIndexN (shiftedIndex offFirst off (some i))
+       if swap then realMatch z x else realMatch x z) (f i))) n =
+      (let j := Functions.floorN.apply (Value.add x (Value.mul (some ((-1 : ℤ) : ℝ)) (realIndexN off)))
+       Value.mask (Functions.nonzeroN.apply n) (Value.mask (Functions.ltN.apply j n)
+         (Value.mask (realMatch x (realIndexN (shiftedIndex offFirst off j))) (j.bind f)))) :=
+  range_shifted_chart_N NaturalIndexMap.identity swap offFirst f x off n
 
 /-- Moving an independent addend to the other side of a real equality also
 preserves missing inputs and the laziness of the masked weight. -/

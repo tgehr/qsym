@@ -569,12 +569,14 @@ final class Bindings{
 		if(type(i)==scalarType(Sort.natural)) i=indexBuiltin(Builtin.castNZ,i);
 		return indexBuiltin(Builtin.castQR,indexBuiltin(Builtin.castZQ,i));
 	}
+	private enum RealIndexShape{linear,realSquare,naturalSquare}
 	private struct RealSelection{
 		uint weight,query,axis,offset=uint.max,addend=uint.max;
-		bool swapped,offsetFirst,addendFirst;
+		bool swapped,offsetFirst,addendFirst; RealIndexShape shape;
 	}
-	// The equality tests the real image of an index. A finite natural
-	// range also permits translation by a captured natural offset.
+	// The equality tests the real image of an index. On natural indices the
+	// square can occur on either side of the cast. Finite ranges also admit
+	// a captured natural offset inside the encoding.
 	private bool realSelection(BoundTerm fn,bool finite,out RealSelection s){
 		auto root=node(fn).a;
 		if(!primitiveOp(root,Op.mask)) return false;
@@ -584,9 +586,15 @@ final class Bindings{
 		if(!primitiveOp(difference,Op.add)) return false;
 		auto pair=nodes[difference],i=variable(context(at(root)),0);
 		bool matches(uint axis){
-			s.axis=axis; s.offset=uint.max; s.offsetFirst=false;
-			if(axis==realIndex(i).id) return true;
-			if(!finite) return false;
+			s.axis=axis; s.offset=uint.max; s.offsetFirst=false; s.shape=RealIndexShape.linear;
+			auto linear=realIndex(i).id;
+			if(axis==linear) return true;
+			if(type(i)!=scalarType(Sort.natural)) return false;
+			bool square(uint id){return primitiveOp(id,Op.pow)&&arena.view(arena.at(nodes[id].data)).value==2;}
+			if(square(axis)){
+				s.shape=RealIndexShape.realSquare; axis=nodes[axis].a;
+				if(axis==linear) return true;
+			}
 			bool builtin(uint id,Builtin op){
 				auto n=nodes[id];
 				if(n.op!=BoundOp.primitive) return false;
@@ -597,7 +605,11 @@ final class Bindings{
 				if(!builtin(axis,op)) return false;
 				axis=nodes[axis].a;
 			}
-			if(!builtin(axis,Builtin.addN)) return false;
+			if(s.shape==RealIndexShape.linear&&square(axis)){
+				s.shape=RealIndexShape.naturalSquare; axis=nodes[axis].a;
+				if(axis==i.id) return true;
+			}
+			if(!finite||!builtin(axis,Builtin.addN)) return false;
 			auto add=nodes[axis];
 			s.offsetFirst=add.b==i.id;
 			if(!s.offsetFirst&&add.a!=i.id) return false;
@@ -637,16 +649,21 @@ final class Bindings{
 		swapped=s.swapped;
 		auto row=nodes[node(fn).a],query=at(s.query),input=query;
 		auto zero=arena.real_(0),nat=arena.natural_(0);
+		if(s.shape!=RealIndexShape.linear)
+			input=indexBuiltin(Builtin.sqrtR,primitive(arena.abs(zero),[query]));
 		if(s.offset!=uint.max){
 			auto neg=primitive(arena.mul(zero,zero,true),[scalar(context(query),arena.real_(-1)),realIndex(at(s.offset))]);
-			input=primitive(arena.add(zero,zero,true),[query,neg]);
+			input=primitive(arena.add(zero,zero,true),[input,neg]);
 		}
 		auto candidate=indexBuiltin(naturalIndex(fn.id)?Builtin.floorN:Builtin.floorR,input),location=candidate;
 		if(s.offset!=uint.max){
 			auto off=at(s.offset);
 			location=primitive(arena.call(Builtin.addN,[nat,nat]),s.offsetFirst?[off,candidate]:[candidate,off]);
 		}
-		auto present=primitive(arena.not_(arena.boolean(false)),[awayFromAtom(realIndex(location).id,query)]);
+		if(s.shape==RealIndexShape.naturalSquare) location=primitive(arena.pow(nat,2),[location]);
+		auto point=realIndex(location);
+		if(s.shape==RealIndexShape.realSquare) point=primitive(arena.pow(zero,2),[point]);
+		auto present=primitive(arena.not_(arena.boolean(false)),[awayFromAtom(point.id,query)]);
 		auto weight=apply(inheritHint(fn,lambda(at(s.weight))),candidate),mask=arena.at(row.data);
 		auto selected=primitive(mask,[present,weight]);
 		if(!finite) return selected;
@@ -14107,12 +14124,15 @@ final class Bindings{
 					string value(uint id){ return "("~name(id)~".eval ξ ρ)"; }
 					auto weight=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
 					auto f="(fun i : "~ity~" => "~atIndex(s.weight)~")",swap=to!string(s.swapped);
+					auto form=natural?"real_N ":"real_Z ";
+					if(s.shape!=RealIndexShape.linear)
+						form="chart_N Summation.NaturalIndexMap."~(s.shape==RealIndexShape.realSquare?"square ":"squareNat ");
 					string law;
 					if(finite){
 						auto shift=s.offset!=uint.max;
-						law="Summation."~(shift?"range_shifted_real_N ":"range_real_N ")~swap~(shift?" "~to!string(s.offsetFirst):"")~
+						law="Summation."~(shift?"range_shifted_":"range_")~form~swap~(shift?" "~to!string(s.offsetFirst):"")~
 							" "~f~" "~value(s.query)~(shift?" "~value(s.offset):"")~" "~value(n.b);
-					}else law="Summation.select_real_"~(natural?"N ":"Z ")~weight~
+					}else law="Summation.select_"~form~weight~
 						(sort==Sort.natural?" Summation.nat_weight_zero ":" norm_zero ")~swap~" "~f~" "~value(s.query);
 					if(s.addend!=uint.max){
 						auto observe=finite?"Summation.rangeValue (some v) "~value(n.b):"Summation.value "~weight~" (some v)";

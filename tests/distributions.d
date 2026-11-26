@@ -2239,6 +2239,26 @@ private Case[] cases(){
 	Case("ProductFibreUniformMillionMiss","densityAtD("~uniformCountdown~"(1000000),1000001)","ℝ","0"),
 	Case("ProductFibreUniformSymbolic","λ(k:ℕ).λ(x:ℝ).densityAtD("~uniformCountdown~"(k),x)","ℕ→ℝ→ℝ"),
 	Case("ProductFibreUnweighted","λ(k:ℕ).λ(x:ℝ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","n/(n+1)","k")~",x)","ℕ→ℝ→ℝ"),
+	Case("SquareSelectorNatural","λ(x:ℝ). ∑(i:ℕ). [x=(i:ℝ)^2]·(i+1:ℝ)","ℝ→ℝ"),
+	Case("SquareSelectorShifted","λ(k:ℕ).λ(x:ℝ).∑(i:ℕ).[i<k]·[x=(i+1:ℝ)^2]·(i+1:ℝ)","ℕ→ℝ→ℝ"),
+	Case("SquareSelectorColumn","λ(k:ℕ).λ(o:ℕ).λ(x:ℝ).∑(i:ℕ).[i<k]·[((o+i)^2:ℝ)=x]·(i+1:ℝ)","ℕ→ℕ→ℝ→ℝ"),
+	Case("SquareSelectorHit","∑(i:ℕ). [i<1000000]·[81=(i:ℝ)^2]·(i+1:ℝ)","ℝ","10"),
+	Case("SquareSelectorReverse","∑(i:ℕ). [(i^2:ℝ)=81]·(i+1:ℝ)","ℝ","10"),
+	Case("SquareSelectorGap","∑(i:ℕ). [i<1000000]·[82=(i:ℝ)^2]·undefined(ℝ)","ℝ"),
+	Case("SquareSelectorNegative","∑(i:ℕ). [i<1000000]·[-1=(i:ℝ)^2]·undefined(ℝ)","ℝ","0"),
+	Case("SquareSelectorExcluded","∑(i:ℕ). [i<9]·[81=(i:ℝ)^2]·undefined(ℝ)","ℝ","0"),
+	Case("SquareSelectorMissingWeight","∑(i:ℕ). [i<10]·[81=(i:ℝ)^2]·undefined(ℝ)","ℝ","undefined(ℝ)"),
+	Case("SquareSelectorEmpty","∑(i:ℕ).[i<0]·[undefined(ℝ)=(i:ℝ)^2]·undefined(ℝ)","ℝ","0"),
+	Case("SquareSelectorMissingQuery","defined(∑(i:ℕ).[i<1000000]·[undefined(ℝ)=(i:ℝ)^2]·(1:ℝ))","𝔹","false"),
+	Case("SquareSelectorCaptured","λ(k:ℕ).λ(o:ℕ).λ(f:ℕ→ℝ).λ(x:ℝ).∑(i:ℕ).[i<k]·[x=(i+o:ℝ)^2]·f(i)","ℕ→ℕ→(ℕ→ℝ)→ℝ→ℝ"),
+	Case("SquareSelectorInteger","λ(x:ℝ). ∑(i:ℤ). [(i:ℝ)^2=x]·(1:ℝ)","ℝ→ℝ"),
+	Case("SquareSelectorRecursive","λ(k:ℕ).λ(x:ℝ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ)^2)","","k")~",x)","ℕ→ℝ→ℝ"),
+	Case("SquareSelectorRecursiveHit","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ)^2)","","1000000")~",81)","ℝ","undefined(ℝ)"),
+	Case("SquareSelectorRecursiveOutside","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ)^2)","","8")~",81)","ℝ","1"),
+	Case("SquareSelectorRecursiveGap","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ)^2)","","1000000")~",82)","ℝ"),
+	Case("SquareSelectorRecursiveMissing","defined(densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ)^2)","","undefined(ℕ)")~",81))","𝔹","false"),
+	Case("SquareSelectorRecursiveZero","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ)^2)","","0")~",81)","ℝ","1"),
+	Case("SquareSelectorStrictBranch","λ(x:ℝ). ∑(i:ℕ). [x=(i:ℝ)^2]·(1/((i:ℝ)-9))","ℝ→ℝ"),
 	Case("SelectedRowReciprocal","∑(i:ℕ). [i<1000000]·mulR((i+1:ℝ)⁻¹,[999999=(i:ℝ)]·(3:ℝ))","ℝ","3/1000000"),
 	Case("SelectedRowRight","∑(i:ℕ). [i<1000000]·mulR([999999=(i:ℝ)]·(3:ℝ),(i+1:ℝ))","ℝ","3000000"),
 	Case("SelectedRowNested","∑(i:ℕ). [i<1000000]·mulR((i+1:ℝ),mulR([999999=(i:ℝ)]·(3:ℝ),((i+1:ℝ)^2+1)⁻¹))","ℝ","3000000/1000000000001"),
@@ -2693,6 +2713,11 @@ private void run(string directory){
 			enforce(text.indexOf("∑")<0,c.name);
 			if(c.name!="RangeProbeMissingEmpty"&&c.name!="RangeProbeMissingVisit"&&c.name!="RangeProbeLazy")
 				enforce(certificate.indexOf("Summation.range_real_N ")>=0||certificate.indexOf("Summation.range_shifted_real_N ")>=0,c.name);
+		}
+		if(c.name.indexOf("SquareSelector")==0){
+			bool selected=c.name!="SquareSelectorInteger";
+			enforce((certificate.indexOf("_chart_N Summation.NaturalIndexMap.square")>=0)==selected,c.name);
+			if(selected) enforce(text.indexOf("∑")<0,c.name);
 		}
 		if(c.name.indexOf("SelectedRow")==0||c.name.indexOf("ProductFibreUniformMillion")==0||
 			c.name=="ProductFibreUniformSymbolic"||c.name=="ProductFibreUnweighted"){
