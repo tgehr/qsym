@@ -20,10 +20,13 @@ bool integralCutPoints(Arena a,Term predicate,Term x,out Rational[] points){
 		if(n.op==Op.boolLit) return true;
 		if(n.op==Op.not_) return visit(a.viewChild(t,0),depth+1);
 		if(n.op==Op.and_||n.op==Op.or_) return visit(a.viewChild(t,0),depth+1)&&visit(a.viewChild(t,1),depth+1);
-		if(n.op!=Op.nonzero&&n.op!=Op.lt&&n.op!=Op.le) return false;
+		bool nz=n.op==Op.nonzero||n.op==Op.builtin&&(n.value==Builtin.nonzeroN||n.value==Builtin.nonzeroZ||n.value==Builtin.nonzeroQ);
+		bool order=n.op==Op.lt||n.op==Op.le||n.op==Op.builtin&&(n.value==Builtin.ltN||n.value==Builtin.leN||
+			n.value==Builtin.ltZ||n.value==Builtin.leZ||n.value==Builtin.ltQ||n.value==Builtin.leQ);
+		if(!nz&&!order) return false;
 		Rational sa,oa,sb,ob;
 		if(!affine(a,a.viewChild(t,0),x,sa,oa)) return false;
-		if(n.op!=Op.nonzero&&!affine(a,a.viewChild(t,1),x,sb,ob)) return false;
+		if(!nz&&!affine(a,a.viewChild(t,1),x,sb,ob)) return false;
 		auto slope=sa-sb;
 		if(!slope.zero){
 			auto cut=-(oa-ob)/slope; if(cut.words>128) return false;
@@ -45,10 +48,12 @@ private bool affine(Arena a,Term t,Term x,out Rational slope,out Rational offset
 	if(a.isNumber(t)){ offset=a.number(t).re; return a.number(t).im.zero; }
 	auto n=a.view(t);
 	if(n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castQR) return affine(a,a.viewChild(t,0),x,slope,offset,depth+1);
-	if(n.op!=Op.add&&n.op!=Op.mul) return false;
+	bool add=n.op==Op.add||n.op==Op.builtin&&(n.value==Builtin.addN||n.value==Builtin.addZ||n.value==Builtin.addQ);
+	bool mul=n.op==Op.mul||n.op==Op.builtin&&(n.value==Builtin.mulN||n.value==Builtin.mulZ||n.value==Builtin.mulQ);
+	if(!add&&!mul) return false;
 	Rational sa,oa,sb,ob;
 	if(!affine(a,a.viewChild(t,0),x,sa,oa,depth+1)||!affine(a,a.viewChild(t,1),x,sb,ob,depth+1)) return false;
-	if(n.op==Op.add){ slope=sa+sb; offset=oa+ob; return true; }
+	if(add){ slope=sa+sb; offset=oa+ob; return true; }
 	if(!sa.zero&&!sb.zero) return false;
 	slope=sa*ob+sb*oa; offset=oa*ob; return true;
 }

@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -5459,6 +5459,40 @@ final class Bindings{
 			auto out_=rebuild(t,context(t),n.b==uint.max?[at(x.output)]:[at(x.output),at(y.output)]);
 			return Result(out_.id,emit(BindingRule.congr,t.id,out_.id,x.proof,y.proof));
 		}
+		// Every lattice point is tested at its actual index and only a false
+		// guard is used. Neighbours of affine cuts cover open and closed edges.
+		BoundTerm missingGuardWitness(BoundTerm term){
+			auto sum=node(term),fn=nodes[sum.a];
+			if(fn.op!=BoundOp.lambda||nodes[fn.a].op!=BoundOp.guard) return BoundTerm.init;
+			auto body=nodes[fn.a],indexSort=elementSort(type(variable(context(at(fn.a)),0)));
+			bool finite=sum.op==BoundOp.finiteSum;
+			Rational count;
+			if(finite){
+				auto bound=nodes[sum.b];
+				if(bound.op!=BoundOp.scalar||!arena.isNumber(arena.at(bound.data))) return BoundTerm.init;
+				count=arena.number(arena.at(bound.data)).re;
+			}
+			auto marker=arena.variable(indexSort,freshScalarIndex(body.a));
+			auto pred=scalarBody(at(body.a),marker); Rational[] cuts;
+			if(pred==Term.init||!integralCutPoints(arena,pred,marker,cuts)) return BoundTerm.init;
+			BoundTerm test(Rational index){
+				if(indexSort==Sort.natural&&index<Rational(0)||finite&&index>=count) return BoundTerm.init;
+				auto k=arena.number(Number(index),indexSort),raw=scalarBody(at(body.a),k);
+				auto check=simplify(arena,raw);
+				if(check.exhausted||check.output!=arena.boolean(false)) return BoundTerm.init;
+				auto ctx=context(term); return tuple(ctx,[scalar(ctx,k),scalar(ctx,raw)]);
+			}
+			auto witness=test(Rational(0));
+			foreach(cut;cuts){
+				if(witness!=BoundTerm.init) break;
+				auto near=Rational(cut.numerator/cut.denominator,BigInt(1));
+				foreach(offset;[0,-1,1]){
+					witness=test(near+Rational(offset));
+					if(witness!=BoundTerm.init) break;
+				}
+			}
+			return witness;
+		}
 		bool boundedMask(BoundNode x){
 			if(x.op!=BoundOp.primitive||arena.view(arena.at(x.data)).op!=Op.mask) return false;
 			auto p=nodes[x.a]; if(p.op!=BoundOp.primitive) return false;
@@ -7118,6 +7152,12 @@ final class Bindings{
 				next=selectRealIndex(at(current.a),swap);
 				if(next!=BoundTerm.init){ rule=BindingRule.sumRealIndex; extra=swap; }
 			}
+			if(next==BoundTerm.init&&(current.op==BoundOp.summation||current.op==BoundOp.finiteSum)){
+				auto witness=missingGuardWitness(at(result.output));
+				if(witness!=BoundTerm.init){
+					next=bottom(ctx,types[current.type]);rule=BindingRule.sumMissingGuard;extra=witness.id;
+				}
+			}
 			if(next==BoundTerm.init&&current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
 				auto body=nodes[nodes[current.a].a],ty=types[current.type];
 				if(steps<budget){
@@ -7341,7 +7381,7 @@ final class Bindings{
 					}
 				}
 				if(next==BoundTerm.init){ next=solveFinite(at(result.output),extra,true); rule=BindingRule.rangeSolution; }
-			}else if(current.op==BoundOp.finiteSum&&nodes[current.a].op==BoundOp.lambda){
+			}else if(next==BoundTerm.init&&current.op==BoundOp.finiteSum&&nodes[current.a].op==BoundOp.lambda){
 				// Reduce applications introduced by recurrence solutions before
 				// lifting the summand to another numeric type.
 				Table!(uint,bool) inspected;
@@ -9741,7 +9781,7 @@ final class Bindings{
 		}
 		foreach(s;result.integrals) integralRoots(s);
 		foreach(s;result.solutions) if(s.divide){stack~=s.seedFunction;stack~=s.tollFunction;}
-		foreach(p;result.proofs) if(p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd||p.rule==BindingRule.distributionCoverAffine) stack~=p.extra;
+		foreach(p;result.proofs) if(p.rule==BindingRule.sumMissingGuard||p.rule==BindingRule.sumInterval||p.rule==BindingRule.sumBounds||p.rule==BindingRule.sumBoundedAdd||p.rule==BindingRule.distributionCoverAffine) stack~=p.extra;
 		while(stack.length){
 			auto id=stack[$-1]; --stack.length; if(used[id]) continue;
 			used[id]=true; auto n=nodes[id];
@@ -10643,6 +10683,24 @@ final class Bindings{
 					auto offset=p.extra?exponent.b:exponent.a,product=nodes[p.extra?exponent.a:exponent.b],iv=nodes[product.b].a;
 					auto m=-arena.number(arena.at(nodes[offset].data)).re.integer-1;
 					proof=".ofEq (fun ξ ρ => SummationPowers.negative"~(p.extra?"Reverse":"")~suffix~" ("~name(n.a)~".eval ξ ρ) ("~name(iv)~".eval ξ ρ) "~to!string(m)~" ("~name(offset)~".eval ξ ρ) ("~name(product.a)~".eval ξ ρ) rfl rfl)";break;
+				case BindingRule.sumMissingGuard:{
+					auto body=nodes[nodes[n.a].a],witness=nodes[p.extra],index=type(at(witness.a));
+					// Tuples store the remaining fields in their right child.
+					auto predicate=nodes[nodes[witness.b].a];
+					auto k=to!string(arena.number(arena.at(nodes[witness.a].data)).re.numerator);
+					auto ty=index==scalarType(Sort.natural)?"ℕ":"ℤ";
+					string fn(uint id){return "(fun i : "~ty~" => "~name(id)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") (some i) ρ))";}
+					auto args=fn(body.a)~" "~fn(body.b)~" ("~k~" : "~ty~") (Numeric.calculate_sound ξ n"~to!string(predicate.data)~" false rfl)";
+					if(n.op==BoundOp.summation){
+						auto weight=elementSort(types[n.type])==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
+						proof=".ofEq (fun ξ ρ => SummationLinearity.missing_guard "~weight~" "~args~")";
+					}else{
+						auto size=to!string(arena.number(arena.at(nodes[n.b].data)).re.numerator);
+						proof=".ofEq (fun ξ ρ => SummationLinearity.range_missing_guard "~args~" "~size~" (of_decide_eq_true rfl) (Numeric.calculate_sound ξ n"~
+							to!string(nodes[n.b].data)~" "~size~" rfl))";
+					}
+					break;
+				}
 				case BindingRule.sumMissingConstant:
 					auto idx=pool.view(types[nodes[n.a].type]).fields[0]==scalarType(Sort.natural)?"ℕ":"ℤ";
 					auto weight=elementSort(types[n.type])==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";

@@ -83,6 +83,22 @@ theorem distribute {R : Type} [Semiring R]
   rw [ha,hm]
   cases a <;> cases b <;> cases c <;> cases reverse <;> simp [Value.add,Value.mul,mul_add,add_mul]
 
+/-- One failed strict guard witnesses that the whole partial sum is missing. -/
+theorem missing_guard {R : Type} [AddCommMonoid R] [TopologicalSpace R] [T2Space R] (weight : R → ℝ)
+    (p : ι → Option Bool) (f : ι → Option R) (i : ι) (hi : p i = some false) :
+    value weight (some (fun j => Binding.guardValue (p j) (f j))) = none :=
+  undefined_term weight _ i (by rw [hi]; rfl)
+
+theorem range_missing_guard {R : Type} [AddCommMonoid R] [TopologicalSpace R] [T2Space R]
+    (p : ℕ → Option Bool) (f : ℕ → Option R) (i : ℕ) (hi : p i = some false)
+    (n : ℕ) (lt : i < n) {bound : Option ℕ} (hb : bound = some n) :
+    rangeValue (some (fun j => Binding.guardValue (p j) (f j))) bound = none := by
+  subst bound
+  have h : ¬ ∀ j ∈ Finset.range n, (Binding.guardValue (p j) (f j)).isSome = true := by
+    intro h
+    simpa [hi, Binding.guardValue] using h i (Finset.mem_range.mpr lt)
+  simp only [rangeValue, Option.bind, finite, if_neg h]
+
 theorem undefined_bound {R : Type} [AddCommMonoid R]
     (f : Option (ℕ → Option R)) (n : Option ℕ) (h : Domain.Correct n (some false)) :
     rangeValue f n = none := by
