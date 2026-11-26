@@ -76,6 +76,26 @@ theorem log_corner : densityAtValue (atCut (fun x : ℝ => Real.log (1 + |x|)) 0
   rw [ChangeOn.log.atCut hl hr h h]
   simp [corner_density]
 
+/-- Each actual input admits a logarithm. The omitted left trace at zero
+still sends the logarithm to minus infinity and prevents a finite jump. -/
+theorem positive_values_with_log_pole :
+    let f := fun x : ℝ => if x < 0 then -x else 1
+    (∀ x, 0 < f x) ∧ Tendsto (Real.log ∘ f) (𝓝[<] 0) atBot := by
+  dsimp only
+  constructor
+  · intro x; split <;> linarith
+  · apply Real.tendsto_log_nhdsGT_zero.comp
+    apply tendsto_nhdsWithin_iff.mpr
+    constructor
+    · have t : Tendsto (fun x : ℝ => -x) (𝓝[<] 0) (𝓝 0) := by
+        simpa using ((continuousAt_id.neg (x := (0:ℝ))).continuousWithinAt (s := Iio 0)).tendsto
+      apply t.congr'
+      filter_upwards [self_mem_nhdsWithin] with x (hx : x < 0)
+      simp [hx]
+    · filter_upwards [self_mem_nhdsWithin] with x (hx : x < 0)
+      simp [hx]
+
+#qsym_check_axioms positive_values_with_log_pole
 #qsym_check_axioms present_postcompose
 #qsym_check_axioms exp_step
 #qsym_check_axioms exp_step_observations

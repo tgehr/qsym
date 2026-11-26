@@ -202,6 +202,7 @@ private struct CoordinateGrid{
 	uint body,weight,predicate=uint.max,outerPredicate=uint.max,query=uint.max;
 	Rational sampledValue,sampledWeight;
 	CoordinateChange change;
+	bool traceRange;
 	CoordinateJoin[] joins;
 }
 private Rational polynomialAt(Rational[] p,Rational x) @safe {
@@ -1958,6 +1959,12 @@ final class Bindings{
 				if(op.op==Op.builtin&&(op.value==Builtin.expR||op.value==Builtin.coshR)){
 					e.sign=Sign.positive; law=op.value==Builtin.expR?"exp":"cosh";
 					if(cert !is null) args=cert.functionAt(n.a);
+				}else if(op.op==Op.mask){
+					auto a=lower(n.b,depth+1);
+					if(a.sign!=Sign.unknown){
+						e.sign=Sign.nonnegative; law="mask";
+						if(cert !is null) args=cert.functionAt(n.a)~" "~a.proof;
+					}
 				}else if(op.op==Op.abs){
 					e.sign=Sign.nonnegative; law="abs";
 					if(cert !is null) args=cert.functionAt(n.a);
@@ -6744,7 +6751,8 @@ final class Bindings{
 			auto body=nodes[nodes[row.a].a];
 			if(body.op!=BoundOp.primitive) return miss;
 			auto op=arena.view(arena.at(body.data)).op;
-			bool changed=gridChange(nodes[row.a].a)!=CoordinateChange.none;
+			auto change=gridChange(nodes[row.a].a);
+			bool changed=change!=CoordinateChange.none;
 			if(!gridNumerical(changed?body.a:nodes[row.a].a)) return miss;
 			if(!changed){
 				// Polynomials and elementary rays already have smaller specialized proofs.
@@ -6755,7 +6763,26 @@ final class Bindings{
 			auto sample=arena.number(arena.at(y.data)).re;
 			if(sample.words>128) return miss;
 			uint index;
-			if(polynomialCoordinate(at(row.a),index,BoundTerm.init,changed)==BoundTerm.init) return miss;
+			if(polynomialCoordinate(at(row.a),index,BoundTerm.init,changed)==BoundTerm.init){
+				// Query a changed jump directly from the inner chart. Both one-sided
+				// traces must lie in the domain, including a trace the source never takes.
+				if(!changed) return miss;
+				Rational[] global; string proof;
+				if(axisPolynomial(body.a,global)||!gridChangeRange(change,body.a,proof)) return miss;
+				if(polynomialCoordinate(lambda(at(body.a)),index)==BoundTerm.init) return miss;
+				auto inner=&coordinates[index]; bool jump;
+				bool admits(Rational r){
+					if(change==CoordinateChange.log||change==CoordinateChange.sqrt) return Rational(0)<r;
+					return change!=CoordinateChange.reciprocal||!r.zero;
+				}
+				foreach(j;inner.joins){
+					if(j.kind==JoinKind.smooth) continue;
+					if(!admits(j.left)||!admits(j.right)){coordinates.length=index; return miss;}
+					jump|=j.kind==JoinKind.jump;
+				}
+				if(!jump){coordinates.length=index; return miss;}
+				inner.change=change; inner.traceRange=true;
+			}
 			auto c=&coordinates[index];
 			size_t cell;
 			while(cell<c.grid.cuts.length&&c.grid.cuts[cell]<sample) ++cell;
@@ -9183,7 +9210,10 @@ final class Bindings{
 		bool changed=c.change!=CoordinateChange.none;
 		bool probing=c.query!=uint.max,hit;
 		Rational sample;
-		string probe,continuous;
+		bool positive=c.change==CoordinateChange.log||c.change==CoordinateChange.sqrt;
+		bool checkTraces=c.traceRange&&(positive||c.change==CoordinateChange.reciprocal);
+		string probe,continuous,traces;
+		if(checkTraces) traces=app("CutRange.nil",(positive?"(Set.Ioi (0 : ℝ))":"(fun u : ℝ => u ≠ 0)")~" "~f);
 		if(probing){
 			sample=arena.number(arena.at(nodes[c.query].data)).re;
 			probe=app("Probe.nil",q(sample));
@@ -9192,7 +9222,7 @@ final class Bindings{
 		if(changed){
 			cert.roots~=c.weight;
 			if(restricted) cert.roots~=c.predicate;
-			continuous=app("ContinuousCuts.nil",f);
+			if(!c.traceRange) continuous=app("ContinuousCuts.nil",f);
 		}
 		string events="([] : List "~grid~"Event)",selected="List.Forall₂.nil";
 		auto tail=app("last","(a := "~q(cuts[$-1])~") "~cells[$-1]);
@@ -9212,7 +9242,7 @@ final class Bindings{
 				if(j.kind==JoinKind.corner){
 					law=app("corner",point~germs~" "~pv~" rfl rfl (of_decide_eq_true rfl) "~zero);
 					eq=app("cornerTerm",q(a)~" "~apos);
-					if(changed){
+					if(changed&&!c.traceRange){
 						auto hc=app("continuousJoin",q(v)~" "~germs~" "~pv~" rfl rfl");
 						continuous=app("ContinuousCuts.cons","(d := "~name(j.event)~".eval ξ ρ) "~hc~" "~continuous);
 					}
@@ -9221,6 +9251,11 @@ final class Bindings{
 					auto side=v==j.left?"(Or.inl rfl)":"(Or.inr rfl)";
 					law=app("jump",point~"(l := "~q(j.left)~") (r := "~q(j.right)~") "~germs~" "~pv~" rfl rfl (of_decide_eq_true rfl) "~side~" "~zero);
 					eq=app("atomTerm",q(a)~" "~q(height)~" "~apos~" "~numeric(arena.real_(height),height));
+				}
+				if(checkTraces){
+					auto ends=app("traceEndpoints",q(j.left)~" "~q(j.right)~" "~germs~" rfl rfl");
+					string member(Rational v){return app(positive?"CutRange.positive":"CutRange.nonzero",q(v)~" rfl");}
+					traces=app("CutRange.cons","(d := "~name(j.event)~".eval ξ ρ) "~ends~" "~member(j.left)~" "~member(j.right)~" "~traces);
 				}
 				if(probing){
 					hit|=sample==a;
@@ -9263,7 +9298,11 @@ final class Bindings{
 		string args;
 		if(changed){
 			string range; enforce(gridChangeRange(c.change,c.body,range,cert),"missing coordinate range");
-			args=grid~"ScalarChange."~to!string(c.change)~" "~range~" ";
+			args=grid~"ScalarChange."~to!string(c.change)~" ";
+			if(c.traceRange){
+				continuous=checkTraces?app("Checked.rangeIn",tail~" "~range~" "~traces):
+					"(Distribution.GraphFibre.Coordinates.VariationChart.RangeIn.univ "~app("Checked.chart",tail)~")";
+			}else args~=range~" ";
 		}
 		if(probing){
 			string sampled(uint id,Rational v){
@@ -9276,7 +9315,7 @@ final class Bindings{
 				if(changed) args~=" "~sampled(c.body,c.sampledValue);
 				args~=" "~sampled(c.weight,c.sampledWeight);
 			}
-			return app((changed?"probeChange":"probe")~(hit?"Cut":"Regular"),args);
+			return app((c.traceRange?"probeRange":changed?"probeChange":"probe")~(hit?"Cut":"Regular"),args);
 		}
 		if(changed){
 			return restricted?app("finishChangeRestricted",args~cert.functionAt(c.outerPredicate)~" "~tail~" "~continuous~" "~selected):

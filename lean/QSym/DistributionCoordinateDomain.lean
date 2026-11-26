@@ -53,6 +53,20 @@ theorem centered (strict : Bool) (s : ℚ) {f p} (source : StepSource.Polynomial
   have h := evenLower_sound strict _ (x - s) check
   simpa only [StepSource.polyEval_translate, sub_add_cancel] using h
 
+theorem mask {strict f} (p : ℝ → Option Bool) (hf : Lower strict f) :
+    Lower false (fun x => Value.mask (p x) (f x)) := by
+  intro x v hv
+  cases e : p x with
+  | none => simp [e, Value.mask] at hv
+  | some b =>
+    cases b with
+    | false => simp [e, Value.mask] at hv; simp [← hv]
+    | true =>
+      have hi := hf x v (by simpa [e, Value.mask] using hv)
+      cases strict with
+      | false => exact hi
+      | true => exact (show 0 < v from hi).le
+
 theorem abs (f : Scalar) : Lower false (fun x => Value.abs (f x)) := by
   intro x v hv
   cases e : f x <;> simp [e, Value.abs] at hv

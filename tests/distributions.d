@@ -208,6 +208,16 @@ private Case[] cases(){
 	Case("CenteredCoordinateNested","densityAtD(Λx. λ[log((x^2-2*x+1)*exp(x)+1)],0)","ℝ","1/2"),
 	Case("CoordinateTouchingLog","Λx. λ[log(x^2-2*x+1)]","Distribution(ℝ)"),
 	Case("CoordinateSignChangeLog","Λx. λ[log(x^2-3*x+1)]","Distribution(ℝ)"),
+	Case("TraceCoordinateExpJump","densityAtD(Λx. λ[exp([0≤x]·2)],0)","ℝ","undefined(ℝ)"),
+	Case("TraceCoordinateExpRight","densityAtD(Λx. λ[exp(x+[0≤x]·2)],1)","ℝ","exp(3)"),
+	Case("TraceCoordinateExpLeft","densityAtD(Λx. λ[exp(x+[0≤x]·2)],-1)","ℝ","exp(-1)"),
+	Case("TraceCoordinateTwo","densityAtD(Λx. λ[exp([x<0]·2+[1<x]·3)],1)","ℝ","undefined(ℝ)"),
+	Case("TraceCoordinateLog","densityAtD(Λx. λ[log(1+abs(x)+[0≤x]·2)],1)","ℝ","1/4"),
+	Case("TraceCoordinateLogJump","densityAtD(Λx. λ[log(1+abs(x)+[0≤x]·2)],0)","ℝ","undefined(ℝ)"),
+	Case("TraceCoordinateRoot","densityAtD(Λx. λ[sqrt(1+[0≤x]·3)],1)","ℝ","0"),
+	Case("TraceCoordinateReciprocal","densityAtD(Λx. λ[(1+abs(x)+[0≤x]·2)⁻¹],1)","ℝ","1/16"),
+	Case("TraceCoordinateMixed","densityAtD(Λx. λ[log(1+abs(x)+[1≤x]·2)],0)","ℝ","undefined(ℝ)"),
+	Case("TraceCoordinateDomain","densityAtD(Λx. λ[([0≤x]·2)⁻¹],1)","ℝ"),
 	Case("ProbeGridJump","densityAtD(Λx. λ[x+[1≤x]·3],1)","ℝ","undefined(ℝ)"),
 	Case("ProbeGridJumpAway","densityAtD(Λx. λ[x+[1≤x]·3],2)","ℝ","1"),
 	Case("ProbeGridCorners","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],-1)","ℝ","undefined(ℝ)"),
@@ -1460,6 +1470,8 @@ private void run(string directory){
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
 		if(c.name=="CenteredCoordinateQuartic"||c.name=="PositiveCoordinateNestedInverse")
 			enforce(certificate.indexOf(".ofEq (fun ξ _ => (Numeric.calculate_sound ξ ")>=0,c.name~" direct rational evaluation");
+		if(c.name.indexOf("TraceCoordinate")==0)
+			enforce((certificate.indexOf("Grid.probeRange")>=0)==(c.name!="TraceCoordinateDomain"),c.name~" traced coordinate domain");
 		if(c.name.indexOf("ProbeGrid")==0)
 			enforce(certificate.indexOf("Grid.probe")>=0,c.name~" missing direct point observation");
 		if(c.name.indexOf("ChangedCoordinate")==0)
