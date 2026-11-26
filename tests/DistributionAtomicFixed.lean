@@ -1,4 +1,4 @@
-import QSym.DistributionAtomicProbes
+import QSym.DistributionAtomicIteration
 import QSym.AxiomCheck
 
 noncomputable section
@@ -31,6 +31,11 @@ theorem zeroWeightDiffers : ∃ t : ℝ → Option ℝ,
     integrate (.scale 0 (.dirac 0)) t ≠ integrate .zero t :=
   ⟨fun _ => none, by decide⟩
 
+#qsym_check_axioms fixed_of_step
+#qsym_check_axioms fixed_retry
+#qsym_check_axioms retry_point
+#qsym_check_axioms mass_retry
+#qsym_check_axioms density_retry
 #qsym_check_axioms Presents.eq_iff
 #qsym_check_axioms Presents.unfold_retry
 #qsym_check_axioms fairRetry

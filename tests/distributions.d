@@ -1109,6 +1109,21 @@ private Case[] cases(){ return [
 	Case("Capture","(λ(a:ℝ).Λ(x:ℝ).(a+x)*λ[x])(2)","Distribution(ℝ)"),
 	Case("Shadow","λ(x:ℝ).Λ(x:ℝ).x*λ[x]","ℝ→Distribution(ℝ)"),
 	Case("FormalIntegral","integralD(λ(x:ℝ).δ(x))","Distribution(ℝ)"),
+	Case("AtomicRetryFair","μ(d:Distribution(ℝ)).Λx. 1/2·δ(0)[x]+1/2·d[x]","Distribution(ℝ)","δ((0:ℝ))"),
+	Case("AtomicRetrySwapped","μ(d:Distribution(ℝ)).Λx. 1/2·d[x]+1/2·δ(0)[x]","Distribution(ℝ)","δ((0:ℝ))"),
+	Case("AtomicRetryFiniteWeight","μ(d:Distribution(ℝ)).addD(scaleD(1/4,δ(3)),scaleD(1/2,d))","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(3)[x]"),
+	Case("AtomicRetryCapture","λ(x:ℝ).μ(d:Distribution(ℝ)).addD(scaleD(1/2,δ(x)),scaleD(1/2,d))","ℝ→Distribution(ℝ)","λ(x:ℝ). δ(x)"),
+	Case("AtomicRetryFunction","μ(d:Distribution(ℕ→ℕ)).addD(scaleD(1/2,δ(λ(x:ℕ).x)),scaleD(1/2,d))","Distribution(ℕ→ℕ)","δ(λ(x:ℕ). x)"),
+	Case("AtomicRetryHigher","μ(d:Distribution(Distribution(ℕ))).addD(scaleD(1/2,δ(δ(3))),scaleD(1/2,d))","Distribution(Distribution(ℕ))","δ(δ(3))"),
+	Case("AtomicRetryZeroRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(0,d))","Distribution(ℝ)","δ((0:ℝ))"),
+	Case("AtomicRetryZeroSeed","μ(d:Distribution(ℝ)).addD(zeroD(ℝ),scaleD(1,d))","Distribution(ℝ)","Λ(x:ℝ). 0"),
+	Case("AtomicRetryMissing","μ(d:Distribution(ℝ)).addD(undefined(Distribution(ℝ)),scaleD(1/2,d))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("AtomicRetryZeroVisit","massD(weightD(λ(x:ℝ).undefined(ℝ),μ(d:Distribution(ℝ)).addD(scaleD(0,δ(0)),scaleD(1/2,d))))","ℝ","undefined(ℝ)"),
+	Case("AtomicRetryAtomDensity","densityAtD(μ(d:Distribution(ℝ)).Λx. 1/2·δ(0)[x]+1/2·d[x],0)","ℝ","undefined(ℝ)"),
+	Case("AtomicRetryTwo","μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d))","Distribution(ℝ)","μ(d:Distribution(ℝ)). addD(Λ(x:ℝ). 1/4·δ(0)[x]+1/4·δ(1)[x],scaleD(1/2,d))"),
+	Case("AtomicRetryMass","massD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)))","ℝ","1"),
+	Case("AtomicRetryDensity","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠1}). (0:ℝ)"),
+	Case("AtomicRetryUnitRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(1,d))","Distribution(ℝ)","μ(d:Distribution(ℝ)). addD(δ((0:ℝ)),scaleD(1,d))"),
 	Case("CountdownGeometric","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k:ℝ)"),
 	Case("CountdownSigned","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then scaleD(-3,δ((0:ℝ))) else scaleD(-2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). (-3·(-2)^k:ℝ)"),
 	Case("CountdownCapturedSeed","λ(d:Distribution(ℕ→ℕ)).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℕ→ℕ)).λ(n:ℕ).if n=0 then d else scaleD(1/2,f(n sub 1)))(k))",
@@ -1154,6 +1169,9 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
+		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
+			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
 		if(c.name.length>=9&&c.name[0..9]=="Countdown"){
 			bool fallback=c.name=="CountdownDifferentStride"||c.name=="CountdownPartialRatioZero"||c.name=="CountdownPartialRatioOne";
 			enforce((certificate.indexOf("Distribution.mass_scale_countdown")>=0)!=fallback,c.name~" countdown certificate");
@@ -2111,6 +2129,8 @@ private void run(string directory){
 	}
 	auto owner=Session.open(),a=owner.arena; FunctionSyntax s;
 	foreach(source;[
+		"μ(d:Distribution(ℝ)).addD(δ(0),scaleD(-1,d))", "μ(d:Distribution(ℝ)).addD(Λx.λ[x],scaleD(1/2,d))",
+		"μ(d:Distribution(ℝ)).addD(δ(massD(d)),scaleD(1/2,d))",
 		"if x<0 then δ(0)[x] else λ[x]", "(λ[x]·δ(x+y)[y])//λ[y]", "Λ(z:ℝ).(λ[x]·δ(x²)[y])//λ[y]",
 		"μ(f:ℝ→ℝ).λ(y:ℝ).massD((λ[x]·δ(f(x))[y])//λ[y])",
 		"([x<y]·λ[x]·δ(x)[y])//λ[y]", "([0<x]·λ[x]·δ(x+y)[y])//λ[y]",

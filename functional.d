@@ -304,6 +304,7 @@ struct FunctionSyntax{
 					if((op==BoundOp.distributionPushforwardOn||op==BoundOp.distributionMaskedGraph)&&i==0) want=pool.function_(scalarType(Sort.real_),scalarType(Sort.boolean));
 					if(p.name=="graphFibreD") want=i==0?pool.function_(scalarType(Sort.real_),scalarType(Sort.real_)):scalarType(Sort.real_);
 					if(p.name=="dirac"&&expected!=TypeId.init&&pool.view(expected).kind==TypeKind.distribution) want=pool.view(expected).fields[0];
+					if(expected!=TypeId.init&&pool.view(expected).kind==TypeKind.distribution&&(op==BoundOp.distributionAdd||op==BoundOp.distributionScale&&i==1)) want=expected;
 					if(p.name=="scaleD"&&i==0||p.name=="densityAtD"&&i==1) want=scalarType(Sort.real_);
 					if(p.name=="weightD"&&i==0){
 						enforce(p.args.length==2,"weightD takes two arguments");
@@ -366,8 +367,9 @@ struct FunctionSyntax{
 			}
 			if(p.name=="$fix"){
 				auto ty=type(p.annotation,locals,null,localTypes),v=pool.view(ty);
-				enforce(v.kind==TypeKind.function_,"fixed points currently require a function type");
+				enforce(v.kind==TypeKind.function_||v.kind==TypeKind.distribution,"a fixed point requires a supported function or distribution type");
 				auto inner=b.push(ctx,ty),body=build(p.args[0],inner,[p.binder]~locals,ty,depth+1);
+				if(v.kind==TypeKind.distribution) return finish(b.distributionFixed(b.hint(b.lambda(body),p.binder)));
 				if(b.node(body).op==BoundOp.variable&&b.node(body).data==0){
 					auto arg=b.push(inner,v.fields[0]); uint[] indices;
 					foreach(i;0..b.depth(inner)) indices~=i+1;
@@ -734,6 +736,15 @@ struct FunctionSyntax{
 						return "radiusImageD("~render(b.at(n.a),locals,depth+1,scalarType(Sort.real_))~","~child(n.b)~")";
 					goto case BoundOp.distributionZero;
 				case BoundOp.distributionInverseCover,BoundOp.distributionInversePart:goto case BoundOp.distributionZero;
+				case BoundOp.distributionFixed:{
+					auto fn=b.at(n.a),name=fresh(locals,b.binderHint(fn).name);
+					return "μ("~name~":"~typeName(b.type(t),locals)~"). "~render(b.at(b.node(fn).a),[name]~locals,depth+1);
+				}
+				case BoundOp.distributionRetry:{
+					auto h=b.binderHint(t).name,name=fresh(locals,h.length?h:"d");
+					return "μ("~name~":"~typeName(b.type(t),locals)~"). addD("~child(n.b)~",scaleD("~
+						render(b.at(n.a),locals,depth+1,scalarType(Sort.real_))~","~name~"))";
+				}
 				case BoundOp.distributionMaskedGraph:return "maskedGraphD("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.distributionDirac:return "δ("~child(n.a)~")";
 				case BoundOp.distributionMass:{
