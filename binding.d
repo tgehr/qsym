@@ -9377,7 +9377,9 @@ final class Bindings{
 			string law;
 			if(j.kind==JoinKind.smooth){
 				auto k=j.slope<Rational(0)?-j.slope:j.slope;
-				law=app("smooth",point~"(slope := "~q(j.slope)~") "~germs~" "~pv~" rfl rfl rfl rfl "~cert.numericProof(c.weight,a,q(k)));
+				auto weight=cert.numericProof(c.weight,a,q(k));
+				if(j.slope<Rational(0)) weight=app("magnitudeAt",q(j.slope)~" "~q(k)~" (of_decide_eq_true rfl) "~weight);
+				law=app("smooth",point~"(slope := "~q(j.slope)~") "~germs~" "~pv~" rfl rfl rfl rfl "~weight);
 			}else{
 				auto zero=cert.numericProof(c.weight,a,q(Rational(0)));
 				auto av=arena.real_(a),apos=numeric(av,a);

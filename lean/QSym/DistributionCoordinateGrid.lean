@@ -277,6 +277,10 @@ theorem continuousJoin {f a p q} (v : ℚ) (g : Germ f a p q) (hf : f a = some (
   unfold ContinuousWithinAt
   exact ⟨by rw [hv, value_eq hl]; exact traceL g, by rw [hv, value_eq hr]; exact traceR g⟩
 
+/-- Supply a normalized rational magnitude at a decreasing smooth join. -/
+theorem magnitudeAt (s k : ℚ) {v : Option ℝ} (hk : |s| = k) (hw : v = some (k:ℝ)) :
+    v = some ((|s|:ℚ):ℝ) := hk.symm ▸ hw
+
 theorem smooth {f w a p q} {v slope : ℚ} (g : Germ f a p q) (hf : f a = some (v:ℝ))
     (hv : v = polyEvalQ p a) (hr : v = polyEvalQ q a)
     (hd : slope = polyEvalQ (polyDerivative p) a) (he : slope = polyEvalQ (polyDerivative q) a)

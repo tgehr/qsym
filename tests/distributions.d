@@ -234,6 +234,8 @@ private Case[] cases(){
 	Case("ProbeGridCorners","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],-1)","ℝ","undefined(ℝ)"),
 	Case("ProbeGridMiddle","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],0)","ℝ","0"),
 	Case("ProbeGridAffine","densityAtD(Λx. λ[2*abs(x-1)],2/3)","ℝ","2"),
+	Case("DecreasingSmoothJoin","Λx. λ[[x<0]·(-2*x)+[0≤x]·(-2*x+x^2)]","Distribution(ℝ)","Λ(x:ℝ). ([0≤x]·abs(2·x-2)+[x<0]·2)·λ[x]"),
+	Case("DecreasingSmoothFraction","Λx. λ[[x<1]·(-x/2)+[1≤x]·((x-1)^2-x/2)]","Distribution(ℝ)"),
 	Case("ImageWindowInterior","Λx. λ[(1+[0≤x]·1)⁻¹ | u. 1/2<u<3/4]","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(0)[x]+0·λ[x]"),
 	Case("ImageWindowMass","∫dx λ[(1+[0≤x]·1)⁻¹ | u. 1/2<u<3/4]","ℝ","1/4"),
 	Case("ImageWindowUnit","Λx. λ[sqrt(1+[0≤x]·3) | u. 1≤u≤2]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
@@ -1515,6 +1517,8 @@ private void run(string directory){
 			enforce((certificate.indexOf("Grid.probeRange")>=0)==(c.name!="TraceCoordinateDomain"),c.name~" traced coordinate domain");
 		if(c.name.indexOf("ProbeGrid")==0)
 			enforce(certificate.indexOf("Grid.probe")>=0,c.name~" missing direct point observation");
+		if(c.name.indexOf("DecreasingSmooth")==0)
+			enforce(certificate.indexOf("Grid.magnitudeAt ")>=0,c.name~" normalized negative slope");
 		if(c.name.indexOf("WindowProbe")==0||c.name.indexOf("ImageWindowCorner")==0){
 			enforce(certificate.indexOf("Grid.probeImageAt ")>=0,c.name~" direct restricted point observation");
 			if(c.name.indexOf("ImageWindowCorner")==0)
