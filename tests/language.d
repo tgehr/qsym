@@ -1,5 +1,6 @@
 module language;
 import qsym;
+import qsym.proof:leanExportHeader;
 import qsym.derive:Derivation;
 import std.file:write,mkdirRecurse;
 import std.path:buildPath;
@@ -122,13 +123,13 @@ unittest{
 		auto result=simplify(a,s.parse(a,c.source),Options(DensityMode.preserve,true));
 		write(buildPath(args[1],c.name~".lean"),exportLean(a,result));
 	}
-	string all="import QSym\n";
+	string all=leanExportHeader;
 	foreach(i;0..cast(uint)Builtin.invalid){
 		auto owner=Session.open(); auto a=owner.arena;
 		auto f=cast(Builtin)i,info=builtinInfo(f); Term[] operands;
 		foreach(j,sort;info.args) operands~=a.variable(sort,cast(uint)j);
 		auto result=simplify(a,a.call(f,operands),Options(DensityMode.preserve,true));
-		all~=exportLean(a,result).replace("import QSym\n","").replace("QSym.Certificate","QSym.Builtin_"~info.code);
+		all~=exportLean(a,result).replace(leanExportHeader,"").replace("QSym.Certificate","QSym.Builtin_"~info.code);
 	}
 	write(buildPath(args[1],"Builtins.lean"),all);
 	writeln("Wrote language and built-in certificates.");

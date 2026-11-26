@@ -8,7 +8,7 @@ import qsym.spec:Parser,Pattern,TypePattern,Parameter,parseSort,isConstructor,el
 import qsym.table:Table;
 import qsym.simplify:Result,Options,simplify;
 import qsym.domain:simplifyDomain;
-import qsym.proof:ScalarClaims,exportLean,exportDomainLean;
+import qsym.proof:leanExportHeader,ScalarClaims,exportLean,exportDomainLean;
 import std.conv:to;
 import std.exception:enforce;
 import std.string:replace;
@@ -923,7 +923,7 @@ struct FunctionSyntax{
 		if(result.scalarOnly) return result.domainQuery?exportDomainLean(a,result.scalarInput,result.scalar):exportLean(a,result.scalar);
 		auto code=result.bindings.exportLean(result.reduction,result.lowered);
 		if(!result.lowered) return code;
-		auto part=replace(exportLean(a,result.scalar,ScalarClaims.refinement),"import QSym\n","");
+		auto part=replace(exportLean(a,result.scalar,ScalarClaims.refinement),leanExportHeader,"");
 		part=replace(part,"QSym.Certificate","QSym.FunctionScalar"); code~=part;
 		auto r=result.scalar,embedded=a.castTo(r.output,a.sort(r.proofInput));
 		string hypotheses,arguments;
@@ -955,7 +955,7 @@ struct FunctionSyntax{
 			if(f.origin.scalarOnly) source="("~main~".n"~to!string(f.term.id)~".eval ξ)";
 			else{
 				auto prefix="QSym.Assumption"~to!string(i),r=f.origin.reduction;
-				auto part=replace(f.origin.bindings.exportLean(r,true),"import QSym\n","");
+				auto part=replace(f.origin.bindings.exportLean(r,true),leanExportHeader,"");
 				part=replace(part,"QSym.BindingScalar",prefix~".BindingScalar");
 				part=replace(part,"QSym.BindingCertificate",prefix~".BindingCertificate"); code~=part;
 				auto binding="Assumption"~to!string(i)~".BindingCertificate";

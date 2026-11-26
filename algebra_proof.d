@@ -3,7 +3,7 @@ module qsym.algebra_proof;
 import qsym.ir;
 import qsym.budget:Budget;
 import qsym.polynomial:Arithmetic,Polynomial,Powers;
-import qsym.proof:leanSyntaxCode;
+import qsym.proof:leanExportHeader,leanSyntaxCode;
 import qsym.spec:leanSort;
 import std.algorithm:sort;
 import std.conv:to;
@@ -24,7 +24,7 @@ package class AlgebraExporter {
 		a=arena;arithmetic=new Arithmetic(a);
 		// Certificate construction includes shared intermediate arithmetic checks.
 		arithmetic.budget=new Budget(32_000_000,4096,512);namespace_=ns;
-		code="import QSym\nnamespace "~ns~"\nopen AlgebraCertificate\nset_option maxRecDepth 8192\nset_option linter.unusedVariables false\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
+		code=leanExportHeader~"namespace "~ns~"\nopen AlgebraCertificate\nset_option maxRecDepth 8192\nset_option linter.unusedVariables false\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\n";
 		auto ids=a.viewPostorder(input);
 		expression(input);
 		code~="noncomputable def atoms (ρ : Env) (i : ℕ) : ℂ := ";

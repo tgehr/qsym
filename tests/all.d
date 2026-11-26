@@ -7,7 +7,7 @@ import qsym.tools.unicode;
 
 @safe unittest{
 	import std.exception:assertThrown;
-	import std.algorithm:canFind;
+	import std.algorithm:canFind,count;
 	auto session=Session.open();
 	auto a=session.arena;
 	auto x=a.variable(Sort.real_,0),z=a.real_(0);
@@ -16,6 +16,8 @@ import qsym.tools.unicode;
 	assertThrown(exportLean(a,fast));
 	auto checked=simplify(a,t,Options(DensityMode.preserve,true));
 	assert(exportLean(a,checked).canFind("theorem simplification"));
+	auto equivalence=exportEquivalence(a,checked,checked);
+	assert(equivalence.count("import QSym\n")==1&&equivalence.count("set_option linter.dupNamespace false")==1);
 	assertThrown(simplify(a,x,Options(DensityMode.distributionOnly)));
 	// Traversal is iterative, even for input deeper than the process stack.
 	foreach(i;0..50_000) t=a.add(t,z);

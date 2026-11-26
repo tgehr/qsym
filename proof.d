@@ -9,6 +9,11 @@ import std.conv:to;
 import std.exception:enforce;
 @safe:
 
+// The generated namespaces and names are fixed by the exporter. Checking
+// them for repeated name components dominates some large certificates.
+package enum leanExportOptions="set_option linter.dupNamespace false\n";
+enum leanExportHeader="import QSym\n"~leanExportOptions;
+
 private string name(uint i){ return "n"~to!string(i); }
 private string exprEval(uint i){ return "(Expr.eval ρ "~name(i)~")"; }
 private string ev(uint i){ return "(v"~to!string(i)~" ρ)"; }
@@ -534,7 +539,7 @@ string exportLean(Arena a,Result result,ScalarClaims claims=ScalarClaims.all){
 			auto v=a.node(a.at(id)); if(v.region&&v.op==n.op) pending~=a.at(id);
 		}
 	}
-	string s="-- Generated certificate. Check with: lake env lean FILE.lean\nimport QSym\nnamespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nattribute [local irreducible] Value.add Value.mul\nset_option maxRecDepth 8192\n";
+	string s="-- Generated certificate. Check with: lake env lean FILE.lean\n"~leanExportHeader~"namespace QSym.Certificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nattribute [local irreducible] Value.add Value.mul\nset_option maxRecDepth 8192\n";
 	foreach(i,n;syntax) if(n||bags[i]) s~=leanSyntaxCode(a,a.at(cast(uint)i),n);
 	if(reflexive){
 		string assumptions;
@@ -677,7 +682,7 @@ string exportEquivalence(Arena a,Result left,Result right){
 	enforce(left.assumptions==right.assumptions,"equivalence requires the same assumptions");
 	auto l=exportLean(a,left).replace("QSym.Certificate","QSym.LeftCertificate");
 	auto r=exportLean(a,right).replace("QSym.Certificate","QSym.RightCertificate");
-	r=r.replace("import QSym\n","");
+	r=r.replace(leanExportHeader,"");
 	string hypotheses,arguments;
 	foreach(i,f;left.assumptions){
 		auto h="h"~to!string(i);

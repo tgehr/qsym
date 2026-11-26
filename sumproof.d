@@ -1,7 +1,7 @@
 module qsym.sumproof;
 import qsym.sum;
 import qsym.ir;
-import qsym.proof:leanConstructor;
+import qsym.proof:leanConstructor,leanExportOptions;
 import qsym.spec:leanSort;
 import qsym.table:Table;
 import std.conv:to;
@@ -27,7 +27,7 @@ string exportSumLean(SumPool pool,Sum input,Sum output){
 		}
 		return result~"]";
 	}
-	string s="import QSym.Sum\nimport QSym.AxiomCheck\nnamespace QSym.SumCertificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nset_option maxRecDepth 8192\n";
+	string s="import QSym.Sum\nimport QSym.AxiomCheck\n"~leanExportOptions~"namespace QSym.SumCertificate\nattribute [local semireducible] Rat.add Rat.mul Rat.sub Rat.inv\nset_option maxRecDepth 8192\n";
 	foreach(i,yes;needed) if(yes){
 		auto t=a.at(cast(uint)i);
 		s~="def n"~to!string(i)~" : Expr ."~leanSort(a.sort(t))~" := "~leanConstructor(a,a.view(t))~"\n";
