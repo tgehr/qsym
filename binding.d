@@ -46,7 +46,7 @@ private enum BindingRule:ubyte{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -232,7 +232,7 @@ private struct AffineChart{
 }
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
-private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max; }
+private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
@@ -6259,6 +6259,43 @@ final class Bindings{
 			scalarDomains~=checks;
 			extra=cast(uint)sums.length; sums~=SummationSolution(t.id,output.id,g.id,index,infinite?uint.max:start,infinite?start:start+1,tail,totals,convergence); return output;
 		}
+		// Abstract the tested subterm, including an arbitrary partial function
+		// application. Check the two inputs where a nonzero mask is not true.
+		BoundTerm maskedContext(BoundTerm term,out uint extra){
+			auto n=node(term);
+			if(!primitiveOp(term.id,Op.mask)||!primitiveOp(n.a,Op.nonzero)||type(term)!=scalarType(Sort.real_)) return BoundTerm.init;
+			auto hole=nodes[n.a].a,ctx=context(term);
+			if(type(at(hole))!=scalarType(Sort.real_)||nodes[hole].op==BoundOp.scalar||nodes[hole].op==BoundOp.variable)
+				return BoundTerm.init;
+			Rational slope,offset;
+			if(depth(ctx)&&type(variable(ctx,0))==scalarType(Sort.real_)&&affineBody(hole,slope,offset)) return BoundTerm.init;
+			auto inner=push(ctx,scalarType(Sort.real_)); bool found;
+			Table!(uint,uint) bodies;
+			BoundTerm abstractOperand(uint id){
+				if(id==hole){ found=true; return variable(inner,0); }
+				auto old=bodies.get(id,uint.max); if(old!=uint.max) return at(old);
+				auto v=nodes[id]; BoundTerm body;
+				if(v.op==BoundOp.scalar) body=scalar(inner,arena.at(v.data));
+				else if(v.op==BoundOp.primitive){
+					auto left=abstractOperand(v.a); if(left==BoundTerm.init) return left;
+					BoundTerm[] args=[left];
+					if(v.b!=uint.max){ auto right=abstractOperand(v.b); if(right==BoundTerm.init) return right; args~=right; }
+					body=primitive(arena.at(v.data),args);
+				}else return BoundTerm.init;
+				bodies.set(id,body.id); return body;
+			}
+			auto body=abstractOperand(n.b); if(body==BoundTerm.init||!found) return BoundTerm.init;
+			auto z=arena.real_(0),input=scalarBody(body,z),opts=Options(DensityMode.preserve,true);
+			auto value=simplify(arena,input,opts);
+			if(value.exhausted||!arena.isNumber(value.output)||!arena.number(value.output).zero) return BoundTerm.init;
+			auto domain=simplifyDomain(arena,input,[],opts);
+			if(domain.exhausted||domain.output!=arena.boolean(true)) return BoundTerm.init;
+			auto absent=scalarBody(body,arena.inv(z)),missing=simplifyDomain(arena,absent,[],opts);
+			if(missing.exhausted||missing.output!=arena.boolean(false)) return BoundTerm.init;
+			auto zero=ScalarDomain(input,domain,value); zero.maskBody=body.id;
+			extra=cast(uint)scalarDomains.length; scalarDomains~=zero; scalarDomains~=ScalarDomain(absent,missing);
+			return at(n.b);
+		}
 		BoundTerm pointwise(BoundTerm binder,out uint extra){
 			auto body=at(node(binder).a),ctx=context(body),param=type(variable(ctx,0)); Sort sort; bool scalarParam;
 			foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex,Sort.boolean])
@@ -8563,6 +8600,9 @@ final class Bindings{
 			}
 			if(next==BoundTerm.init&&current.op==BoundOp.primitive&&type(at(result.output))==scalarType(Sort.real_)){
 				auto op=arena.view(arena.at(current.data)).op;
+				if(op==Op.mask&&steps<budget){
+					next=maskedContext(at(result.output),extra); rule=BindingRule.scalarMaskContext;
+				}
 				if(op==Op.add||op==Op.mul) foreach(left;[true,false]){
 					auto lit=nodes[left?current.a:current.b],other=left?current.b:current.a;
 					Number v;
@@ -10743,6 +10783,7 @@ final class Bindings{
 		foreach(s;result.solutions) if(s.cfinite){ code~="attribute [local semireducible] Nat.div Nat.modCore\n"; break; }
 		Term[] stepNumerics;string stepDeclarations;string[] stepProofs=new string[result.integrals.length],stepOutputs=new string[result.integrals.length];
 		uint[] proofRoots;
+		foreach(d;result.domains) if(d.maskBody!=uint.max) proofRoots~=d.maskBody;
 		foreach(p;result.proofs) if(p.rule==BindingRule.closedRationalValue) stepNumerics~=arena.at(p.extra);
 		foreach(i,s;result.integrals) if(s.piecewise||s.ae){
 			auto c=new SourceCertificates("step"~to!string(i)~"_",s.from[0]);
@@ -12125,6 +12166,15 @@ final class Bindings{
 					auto f="(fun z => Value."~op~" "~(left?"z "~other:other~" z")~")";
 					proof=".ofEq (fun ξ ρ => Eq.trans (congrArg "~f~" (Numeric.calculate_real_"~v~" ξ n"~
 						to!string(literal)~" rfl)) (Value."~op~"_"~v~(left?"_left ":"_right ")~other~"))"; break;
+				}
+				case BindingRule.scalarMaskContext:{
+					auto d=result.domains[p.extra],z="n"~to!string(arena.real_(0).id);
+					auto literal=arena.castTo(d.value.output,Sort.real_),prefix="QSym.BindingScalar"~to!string(p.extra);
+					auto zero="(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct ξ) ("~prefix~
+						".ValueCertificate.refinement ξ)) (Numeric.calculate_real_zero ξ n"~to!string(literal.id)~" rfl))";
+					auto f="(fun (u : Option ℝ) => "~name(d.maskBody)~".eval ξ (Binding.Env.cons (a := .scalar .real) u ρ))";
+					proof=".ofEq (fun ξ ρ => Value.mask_nonzero_context "~f~" ("~z~".eval ξ) (Numeric.calculate_real_zero ξ "~z~" rfl) "~zero~
+						" (QSym.BindingScalar"~to!string(p.extra+1)~".DomainCertificate.domain_correct ξ) ("~name(nodes[n.a].a)~".eval ξ ρ))"; break;
 				}
 				case BindingRule.scalarSimplify:
 					auto d=result.domains[p.extra],prefix="QSym.BindingScalar"~to!string(p.extra);

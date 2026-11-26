@@ -1,6 +1,24 @@
 import QSym.Functions
+import QSym.Domain
 
 namespace QSym
+
+/-- Outside zero, a defined test leaves its operand untouched. At zero
+and at a missing test, check the partial scalar context itself. -/
+theorem Value.mask_nonzero_context {β : Type} [Zero β] (f : Option ℝ → Option β)
+    (z : Option ℝ) (hz : z = some 0) (h0 : f z = some 0)
+    (hm : Domain.Correct (f (Value.inv z)) (some false)) (u : Option ℝ) :
+    Value.mask (Value.nonzero u) (f u) = f u := by
+  classical
+  subst z
+  have inv : Value.inv (some (0 : ℝ)) = none := by simp [Value.inv]
+  rw [inv] at hm
+  cases u with
+  | none => cases he : f none <;> simp_all [Domain.Correct, Value.nonzero, Value.mask]
+  | some x =>
+    by_cases hx : x = 0
+    · subst x; simp [Value.nonzero, Value.mask, h0]
+    · simp [Value.nonzero, Value.mask, hx]
 
 /-- Removing a puncture is pointwise sound when the masked value is
 defined and zero at that point. Its value elsewhere may be partial. -/

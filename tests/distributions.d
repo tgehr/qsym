@@ -1419,6 +1419,16 @@ private Case[] cases(){
 	Case("ShiftOrbitStart","λ(a:ℕ).massD("~shift("a")~")","ℕ→ℝ","λ(a:ℕ). (1:ℝ)"),
 	Case("ShiftOrbitZeroCharge","massD("~shift("0","n+1","0","2")~")","ℝ","0"),
 	Case("ShiftOrbitMissingProbe","massD(weightD(λ(n:ℕ).undefined(ℝ),"~shift("0","n+1","0","0")~"))","ℝ","undefined(ℝ)"),
+	Case("MaskContextHigher","λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·abs(h(x))","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). (abs(h(x)):ℝ)"),
+	Case("MaskContextWeight","λ(h:ℝ→ℝ).Λx. [h(x)≠0]·(2·abs(h(x)))·λ[x]","(ℝ→ℝ)→Distribution(ℝ)","λ(h:ℝ→ℝ). Λ(x:ℝ). ((2·abs(h(x)):ℝ))·λ[x]"),
+	Case("MaskContextRepeated","λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·(h(x)·(h(x)-1))","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). (h(x)·(h(x)-1):ℝ)"),
+	Case("MaskContextSine","λ(x:ℝ).[sin(x)≠0]·abs(sin(x))","ℝ→ℝ","λ(x:ℝ). abs(sin(x))"),
+	Case("MaskContextCosine","λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·(cos(h(x))-1)","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). (cos(h(x))-1:ℝ)"),
+	Case("MaskContextReciprocal","λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·h(x)⁻¹","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). ([h(x)≠0]·h(x)⁻¹:ℝ)"),
+	Case("MaskContextNonstrict","λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·([false]·h(x))","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). ([h(x)≠0]·0:ℝ)"),
+	Case("MaskContextOtherPoint","λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·abs(h(x+1))","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). ([h(x)≠0]·abs(h(x+1)):ℝ)"),
+	Case("MaskContextMissing","defined((λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·abs(h(x)))(λ(x:ℝ).x⁻¹)(0))","𝔹","false"),
+	Case("MaskContextMissingGuard","defined((λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·([false]·h(x)))(λ(x:ℝ).x⁻¹)(0))","𝔹","false"),
 	Case("MaskRootCoordinate","Λx. [x≠3]·λ[(x-3)^2]","Distribution(ℝ)","Λ(x:ℝ). (abs(2·x-6))·λ[x]"),
 	Case("MaskRootFraction","Λx. [x≠1/2]·abs(2*x-1)·λ[x]","Distribution(ℝ)","Λ(x:ℝ). (abs(2·x-1))·λ[x]"),
 	Case("MaskRootPolynomial","λ(x:ℝ).[x^2≠1]·abs(x^2-1)","ℝ→ℝ","λ(x:ℝ). abs(x^2-1)"),
@@ -1596,6 +1606,10 @@ private void run(string directory){
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
 		if(c.name.indexOf("IndexedVisit")==0)
 			enforce(certificate.indexOf("Distribution.observe_indexed_countdown ")>=0&&text.indexOf("μ")<0,c.name);
+		if(c.name.indexOf("MaskContext")==0){
+			bool erased=c.name!="MaskContextReciprocal"&&c.name!="MaskContextNonstrict"&&c.name!="MaskContextOtherPoint"&&c.name!="MaskContextMissingGuard";
+			enforce((certificate.indexOf("Value.mask_nonzero_context ")>=0)==erased,c.name);
+		}
 		if(c.name=="MaskRootCoordinate"||c.name=="MaskRootFraction"||c.name=="MaskRootPolynomial"||
 			c.name=="MaskRootThree"||c.name=="MaskRootOneKept"||c.name=="MaskRootAfterPartial")
 			enforce(certificate.indexOf("Distribution.StepSource.affine_mask_of_zero ")>=0,c.name);
