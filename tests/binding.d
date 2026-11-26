@@ -1,7 +1,7 @@
 module binding_tests;
 import qsym;
 import qsym.binding;
-import qsym.types:TypeKind,TypePool;
+import qsym.types:TypeKind,TypePool,TypeId;
 import std.exception:enforce,assertThrown;
 import std.file:write,mkdirRecurse;
 import std.path:buildPath;
@@ -94,6 +94,16 @@ private Artifact[] run(){
 	assert(b.depth(b.push(s,b.typePool.primitive(TypeKind.unit)))==b.depth(s)+1);
 	assertThrown(b.push(s,b.typePool.array(nat)));
 	assertThrown(b.scalar(s,a.lebesgue()));
+	void missing(string name,Term operation,BoundTerm left,TypeId rightType){
+		auto ctx=b.context(left),rhs=b.bottom(ctx,rightType),input=b.primitive(operation,[left,rhs]);
+		enforce(b.normalize(input).output==b.bottom(ctx,b.type(input)),name~" kept a strict missing operand");
+		check(name,input);
+	}
+	auto r=b.variable(sr,0),nr=b.variable(sn,0),ri=a.real_(1),ni=a.natural_(1);
+	missing("StrictMissingLt",a.lt(ri,ri),r,realType);
+	missing("StrictMissingLe",a.le(ri,ri),r,realType);
+	missing("StrictMissingMaximum",a.call(Builtin.maxR,[ri,ri]),r,realType);
+	missing("StrictMissingNatural",a.call(Builtin.leN,[ni,ni]),nr,nat);
 	return artifacts;
 }
 

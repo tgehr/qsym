@@ -9095,6 +9095,10 @@ final class Bindings{
 				(nodes[current.a].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom)){
 				next=bottom(ctx,types[current.type]);rule=additive(current)?BindingRule.addBottom:BindingRule.mulBottom;
 			}
+			if(next==BoundTerm.init&&current.op==BoundOp.primitive&&current.b!=uint.max&&current.c==uint.max&&
+				nodes[current.b].op==BoundOp.bottom&&conditionalStrict(current,true)){
+				next=bottom(ctx,types[current.type]); rule=BindingRule.shortCircuit;
+			}
 			// Lift guards through strict tuple constructors and projections so a
 			// lambda can display the restriction once, on its parameter.
 			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.vectorCons||current.op==BoundOp.pair||current.op==BoundOp.get)){
@@ -12278,6 +12282,12 @@ final class Bindings{
 			auto proof="Summation.range_solution_partial "~f~" "~g~" "~add~" "~(sort==Sort.rational?"Summation.addQ":"Summation.add")~" "~initial~" "~hs~" ("~name(n.b)~".eval ξ ρ)";
 			code~="theorem summation"~to!string(j)~dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(n.context)~") : "~name(s.source)~".eval ξ ρ = "~name(s.target)~".eval ξ ρ := "~proof~"\n";
 		}
+		// A strict binary primitive can match its arguments together. Inspect
+		// the other optional value so both constructor cases reduce directly.
+		string binaryNone(string operation,string other,bool right){
+			return "(Option.rec (motive := fun other => "~operation~(right?" other none":" none other")~
+				" = none) rfl (fun _ => rfl) "~other~")";
+		}
 		string proofName(uint id){ return "(p"~to!string(id)~dimArg~" γ)"; }
 		string realBody(uint fn){ return "(fun x : ℝ => "~name(nodes[fn].a)~
 			".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
@@ -12642,9 +12652,7 @@ final class Bindings{
 						auto other="("~name(right?n.a:n.b)~".eval ξ ρ)";
 						auto binary=operation;
 						operation=right?"(fun v => "~operation~" "~other~" v)":"(fun v => "~operation~" v "~other~")";
-						// Case splitting also covers operations represented by a strict
-						// two-argument match, rather than nested Option.bind calls.
-						strict=n.op==BoundOp.tensor?"("~tensorDomainProof(n)~(right?".right ":".left ")~other~")":"(Option.rec (motive := fun other => "~binary~(right?" other none":" none other")~" = none) rfl (fun _ => rfl) "~other~")";
+						strict=n.op==BoundOp.tensor?"("~tensorDomainProof(n)~(right?".right ":".left ")~other~")":binaryNone(binary,other,right);
 					}
 					proof=".ofEq (fun ξ ρ => Binding.conditional_map "~operation~" "~strict~" ("~name(q.a)~".eval ξ ρ) ("~name(q.b)~".eval ξ ρ) ("~name(q.c)~".eval ξ ρ))"; break;
 				case BindingRule.conditionalDefined:
@@ -12655,6 +12663,9 @@ final class Bindings{
 				case BindingRule.seqLam:proof=".seqLam "~name(nodes[n.a].a)~" "~name(n.b); break;
 				case BindingRule.seqSelf:proof=".seqSelf "~name(n.a); break;
 				case BindingRule.shortCircuit:
+					if(n.op==BoundOp.primitive&&n.b!=uint.max&&n.c==uint.max&&nodes[n.b].op==BoundOp.bottom&&conditionalStrict(n,true)){
+						proof=".ofEq (fun ξ ρ => "~binaryNone(valueOperation(n),"("~name(n.a)~".eval ξ ρ)",true)~")"; break;
+					}
 					if(n.op==BoundOp.primitive&&nodes[n.a].op==BoundOp.scalar&&arena.view(arena.at(n.data)).op==Op.mask&&!arena.view(arena.at(nodes[n.a].data)).value){
 						auto sort=arena.sort(arena.at(n.data)),suffix=sort==Sort.rational?"Q":sort==Sort.real_?"R":sort==Sort.complex?"C":"";
 						if(suffix.length){ proof=".maskFalse"~suffix~" "~name(n.b); break; }
