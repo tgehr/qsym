@@ -5115,7 +5115,8 @@ final class Bindings{
 			auto outer=nodes[d.coordinate];
 			if(outer.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(outer.data));
-				if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&op.value==Builtin.coshR){
+				if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&
+					(op.value==Builtin.coshR||op.value==Builtin.sinR||op.value==Builtin.cosR)){
 					d.turning=d.coordinate; d.coordinate=outer.a;
 				}
 			}
@@ -5148,8 +5149,20 @@ final class Bindings{
 					if(op.value>2) mag=primitive(arena.pow(zero,cast(uint)op.value-1),[mag]);
 					return primitive(mul,[v,mag]);
 				}
-				auto scope_=context(v),minus=scalar(scope_,arena.real_(-1));
-				auto h=primitive(arena.at(outer.data),[v]),sum=arena.add(zero,zero,true);
+				auto scope_=context(v),minus=scalar(scope_,arena.real_(-1)),sum=arena.add(zero,zero,true);
+				if(op.value==Builtin.sinR||op.value==Builtin.cosR){
+					auto pi=scalar(scope_,arena.call(Builtin.pi,[])),two=scalar(scope_,arena.real_(2)),inv=arena.inv(zero);
+					auto u=v;
+					if(op.value==Builtin.sinR)
+						u=primitive(sum,[v,primitive(mul,[pi,primitive(inv,[two])])]);
+					auto cell=indexBuiltin(Builtin.floorR,primitive(mul,[u,primitive(inv,[pi])]));
+					auto power=arena.call(Builtin.powRZ,[zero,arena.integer(0)]);
+					auto parity=primitive(power,[minus,cell]);
+					auto height=primitive(mul,[parity,primitive(arena.at(outer.data),[v])]);
+					if(op.value==Builtin.cosR) height=primitive(mul,[minus,height]);
+					return primitive(sum,[primitive(mul,[two,realIndex(cell)]),height]);
+				}
+				auto h=primitive(arena.at(outer.data),[v]);
 				auto negative=primitive(arena.lt(zero,zero),[v,scalar(scope_,zero)]);
 				return conditional(negative,primitive(sum,[scalar(scope_,arena.real_(1)),primitive(mul,[minus,h])]),primitive(sum,[h,minus]));
 			}
@@ -10883,6 +10896,7 @@ final class Bindings{
 				auto op=arena.view(arena.at(nodes[d.turning].data));
 				if(op.op==Op.pow&&op.value==2) change=" "~grid~"VariationChange.square";
 				else if(op.op==Op.pow) change=" ("~grid~"VariationChange.evenPower "~to!string(op.value)~" (of_decide_eq_true rfl) rfl)";
+				else if(op.value==Builtin.sinR||op.value==Builtin.cosR) change=" "~grid~"VariationChange."~(op.value==Builtin.sinR?"sine":"cosine");
 				else{
 					auto ctx=context(at(d.minusOne)),z=scalar(ctx,arena.real_(0)),u=scalar(ctx,arena.real_(1));
 					change=" ("~grid~"VariationChange.cosh "~eval(z.id)~" "~eval(u.id)~" "~eval(d.minusOne)~" "~

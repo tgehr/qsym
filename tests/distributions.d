@@ -389,6 +389,25 @@ private Case[] cases(){
 	Case("VariationSquareShift","∫dx [0≤x≤1]·λ[(1-2*x)^2]","ℝ","2"),
 	Case("VariationSquareDown","∫dx [1<x≤3]·λ[(2-x)^2]","ℝ","2"),
 	Case("VariationSixth","∫dx [-1≤x≤2]·λ[x^6]","ℝ","65"),
+	Case("PeriodicSpanSine","∫dx [0≤x≤2*π]·λ[sin(x)]","ℝ","4"),
+	Case("PeriodicSpanCosine","∫dx [-π≤x≤π]·λ[cos(x)]","ℝ","4"),
+	Case("PeriodicSpanQuarter","∫dx [0<x<π/2]·λ[sin(x)]","ℝ","1"),
+	Case("PeriodicSpanCrest","∫dx [π/2≤x<3*π/2]·λ[sin(x)]","ℝ","2"),
+	Case("PeriodicSpanNegative","∫dx [-3*π/2<x≤-π/2]·λ[sin(x)]","ℝ","2"),
+	Case("PeriodicSpanMillion","∫dx [0≤x≤1000000*π]·λ[cos(x)]","ℝ","2000000"),
+	Case("PeriodicSpanAffine","∫dx [0≤x≤π]·λ[sin(-3*x)]","ℝ","6"),
+	Case("PeriodicSpanInside","∫dx [π/3≤x≤2*π/3]·λ[sin(x)]","ℝ","-sqrt(3)+2"),
+	Case("PeriodicSpanReverse","∫dx [π≤x<0]·λ[cos(x)]","ℝ","0"),
+	Case("PeriodicSpanPoint","∫dx [π/2≤x≤π/2]·λ[sin(x)]","ℝ","0"),
+	Case("PeriodicSpanMissing","defined(∫dx [0<x≤undefined(ℝ)]·λ[cos(x)])","𝔹","false"),
+	Case("PeriodicSpanSymbolic","λ(u:ℝ).∫dx [0<x≤u]·λ[cos(x)]","ℝ→ℝ"),
+	Case("PeriodicSpanSineSymbolic","λ(l:ℝ).λ(u:ℝ).∫dx [l≤x≤u]·λ[sin(x)]","ℝ→ℝ→ℝ"),
+	Case("PeriodicSpanWhole","∫dx λ[sin(atan(x))]","ℝ","2"),
+	Case("PeriodicSpanWholeCos","∫dx λ[cos(atan(x))]","ℝ","2"),
+	Case("PeriodicSpanRay","∫dx [x≤0]·λ[cos(atan(x))]","ℝ","1"),
+	Case("PeriodicSpanRayDown","∫dx [0≤x]·λ[sin(atan(-x))]","ℝ","1"),
+	Case("PeriodicSpanUnbounded","∫dx λ[cos(x)]","ℝ"),
+	Case("PeriodicSpanNonmonotone","∫dx [-π≤x≤π]·λ[sin(sin(x))]","ℝ"),
 	Case("VariationSquareSinh","∫dx [-1≤x≤1]·λ[sinh(x)^2]","ℝ","2·sinh(1)^2"),
 	Case("VariationSquareAtan","∫dx [-1≤x≤1]·λ[atan(x)^2]","ℝ","1/8·π^2"),
 	Case("VariationSquareExp","λ(u:ℝ).∫dx [0≤x<u]·λ[(exp(x)-2)^2]","ℝ→ℝ","λ(u:ℝ). [0<u]·((exp(u)-2)·abs(exp(u)-2)+1)"),
@@ -2272,6 +2291,11 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")
 			enforce(certificate.indexOf("observe_partial_scale_countdown")<0&&text.indexOf("μ")>=0,c.name~" index-dependent scale");
+		if(c.name.indexOf("PeriodicSpan")==0){
+			bool solved=c.name!="PeriodicSpanUnbounded"&&c.name!="PeriodicSpanNonmonotone";
+			enforce((text.indexOf("∫")<0)==solved,c.name~": "~text);
+			enforce((certificate.indexOf("Grid.VariationChange.sine")>=0||certificate.indexOf("Grid.VariationChange.cosine")>=0)==solved,c.name);
+		}
 		if(c.name.indexOf("DirectedTotal")==0){
 			bool closed=c.name!="DirectedTotalPole"&&c.name!="DirectedTotalOneEnd"&&
 				c.name!="DirectedTotalOscillation"&&c.name!="DirectedTotalTurning";
