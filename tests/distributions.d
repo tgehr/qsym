@@ -1271,7 +1271,7 @@ private Case[] cases(){
 	Case("StrictGuardLeft","∫dx λ[x]*exp(-(x-1/b)^2)*x","ℝ","guard(b≠0,b⁻¹·sqrt(π))"),
 	Case("StrictGuardPower","∫dx λ[x]*(exp(-(x-1/b)^2)*x)^2","ℝ","guard(b≠0,(1/4+(b^2)⁻¹)·sqrt(1/2·π))"),
 	Case("StrictGuardRetained","∫dx exp(-(x-1/a)^4)*λ[x]*x","ℝ","guard(a≠0,∫dx (x·exp(-(x-a⁻¹)^4))·λ[x])"),
-	Case("StrictGuardAxis","∫dx (x+1/a)*λ[x]*[0≤x]*[x≤1]","ℝ"),
+	Case("StrictGuardAxis","∫dx (x+1/a)*λ[x]*[0≤x]*[x≤1]","ℝ","guard(a≠0,1/2+a⁻¹)"),
 	Case("ExponentialShifted","∫dx [0≤x≤1]*exp(x+1)*λ[x]","ℝ","(e-1)·e"),
 	Case("ExponentialOffsetSum","∫dx [0≤x≤1]*exp(2*x+a+b)*λ[x]","ℝ","(1/2·exp(2)-1/2)·exp(a+b)"),
 	Case("ExponentialOffsetTerms","∫dx [0≤x≤1]*(x+exp(a+x))*λ[x]","ℝ","(e-1)·exp(a)+1/2"),
@@ -1581,13 +1581,27 @@ private Case[] cases(){
 	Case("BehindPiecesSpread","∫dx [0≤x]*[x≤1]*[0<a]*([x≤a]+[a<x]*2)*λ[x]","ℝ","[a≠0]·([a<1∧0<a]·a+[1≤a])+[0<a∧a<1]·(-2·a+2)"),
 	Case("BehindBetweenDomain","∫dx [0≤x]*[x≤1]*[c<1]*(1/b)*λ[x]","ℝ","[c<1]·(guard(b≠0,b⁻¹))"),
 	Case("BehindBoundDomain","∫dx [0≤x]*[c<1]*[x≤1]*(1/b)*λ[x]","ℝ","[c<1]·(guard(b≠0,b⁻¹))"),
-	Case("BehindBetweenDomainTwo","∫dx [0≤x]*[x≤1]*[c<1]*[0<d]*(1/b)*λ[x]","ℝ"),
+	Case("BehindBetweenDomainTwo","∫dx [0≤x]*[x≤1]*[c<1]*[0<d]*(1/b)*λ[x]","ℝ","guard(1≤c∨(d≤0∨b≠0),[c<1∧0<d]·(guard(b≠0,b⁻¹)))"),
 	Case("OriginUniform","∫dx [0≤x]*[x≤a]*(1/a)*λ[x]","ℝ","guard(a≠0,[0≤a])"),
 	Case("OriginLogarithm","∫dx [0≤x]*[x≤a]*log(a)*λ[x]","ℝ","guard(a≠0,[0≤a]·(a·log(a)))"),
 	Case("OriginBelow","∫dx [a≤x]*[x≤0]*(1/a)*λ[x]","ℝ","guard(a≠0,[a≤0]·-1)"),
 	Case("OriginMoment","∫dx [0≤x]*[x≤a]*x*(1/a)*λ[x]","ℝ","guard(a≠0,[0≤a]·(a·(1/2)))"),
 	Case("OriginCompeting","∫dx [0≤x]*[x≤a]*[x≤1]*(1/a)*λ[x]","ℝ","guard(a≠0,[0≤a]·([1<a]·(guard(a≠0,a⁻¹))+[a≤1]·([0≤a]·(a·a⁻¹))))"),
 	Case("OriginOther","∫dx [1≤x]*[x≤a]*(1/(a-1))*λ[x]","ℝ","[1≤a]·(guard(a≠1,(1:ℝ)))"),
+	Case("TermDomainLogarithm","∫dx [0≤x]*[x≤log(a)]*λ[x]","ℝ","guard(0<a,[1≤a]·log(a))"),
+	Case("TermDomainRoot","∫dx [0≤x]*[x≤sqrt(a)]*x*λ[x]","ℝ","guard(0≤a,a·(1/2))"),
+	Case("TermDomainLower","∫dx [x≤0]*[log(a)≤x]*λ[x]","ℝ","guard(0<a,[a≤1]·-log(a))"),
+	Case("TermDomainExponential","∫dx [0≤x]*[x≤log(a)]*e^(-x)*λ[x]","ℝ","guard(0<a,[1≤a]·(1-a⁻¹))"),
+	Case("TermDomainCondition","∫dx [0≤x]*[x≤1/a]*[0<a]*λ[x]","ℝ","guard(a≠0,[0<a]·a⁻¹)"),
+	Case("TermDomainBetween","∫dx [0≤x]*[x≤1]*[x≤1/a]*x*λ[x]","ℝ","guard(a≠0,[a⁻¹<1∧0≤a]·((a^2)⁻¹·(1/2))+[1≤a⁻¹]·(1/2))"),
+	Case("TermDomainBetweenLower","∫dx [0≤x]*[x≤1]*[log(a)≤x]*λ[x]","ℝ","guard(0<a,[1<a∧log(a)≤1]·(-log(a)+1)+[a≤1])"),
+	Case("TermDomainBetweenStrict","∫dx [0<x]*[x<1]*[x<1/a]*λ[x]","ℝ","guard(a≠0,[a⁻¹<1∧0<a]·a⁻¹+[1≤a⁻¹])"),
+	Case("TermDomainSum","∫dx ([0≤x]*[x≤log(a)]+[0≤x]*[x≤1]*2)*λ[x]","ℝ","guard(0<a,(guard(0<a,[1≤a]·log(a)))+2)"),
+	Case("TermDomainSumBetween","∫dx [0≤x]*[x≤1]*x*([x≤1/a]+2)*λ[x]","ℝ","guard(a≠0,(guard(a≠0,[a⁻¹<1∧0≤a]·((a^2)⁻¹·(1/2))+[1≤a⁻¹]·(1/2)))+1)"),
+	Case("TermDomainSumValue","∫dx [0≤x]*[x≤1]*([x≤c]+2)*(1/b)*λ[x]","ℝ","guard(b≠0,(guard(b≠0,2·b⁻¹))+(guard(b≠0,[c<1∧0≤c]·(c·b⁻¹)+[1≤c]·b⁻¹)))"),
+	Case("TermDomainSumApart","∫dx ([0≤x]*[x≤1]*[x≤1/a]+[1≤x]*[x≤2]*3)*λ[x]","ℝ"),
+	Case("TermDomainTwo","∫dx [0≤x]*[x≤log(a)]*[x≤log(b)]*λ[x]","ℝ"),
+	Case("TermDomainValue","∫dx [0≤x]*[x≤log(a)]*(1/b)*λ[x]","ℝ"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3285,6 +3299,32 @@ private void run(string directory){
 			enforce(has("third_second_piece ")==among("CastSumRational","CastSumCompeting","CastSumCompetingInteger","CastSumMany","CastSumOne","CastSumMixed","CastSumBound","CastSumWeight"),c.name~" bounds of a summand that compete");
 			enforce(has("same_side_piece ")==among("CastSumHalfLine"),c.name~" bounds of a summand on one side");
 		}
+		// A bound whose term is not total, behind other bounds: `[x≤log(a)]`,
+		// `[x≤1/a]`, `[x≤sqrt(a)]`. The term is asked for only where the bounds
+		// in front hold, and the domain of the weight says so: the negations
+		// of those bounds, or the domain of the term, which does not mention
+		// the axis. That guard leaves the observation as the guard by the
+		// domain of the term, under the test that the bounds in front leave a
+		// point: behind a single bound that its term exists, behind a lower
+		// and an upper one the test of a third bound. The same shape has the
+		// domain of a value that the interval does not read: a sum under its
+		// bounds, with such a term in a summand or with a value that is not
+		// total. There the guard leaves first, and the summands under the
+		// bounds are observed one by one, each under the guard of its own
+		// domain. A second such term, one together with the domain of the
+		// value, and a sum of summands with bounds of their own under one
+		// guard keep the integral: their domain is no longer of that shape.
+		if(c.name.indexOf("TermDomain")==0){
+			bool among(string[] names...){ foreach(name;names) if(c.name=="TermDomain"~name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(evidence)>=0; }
+			bool retained=among("Two","Value","SumApart");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			bool between=c.name.indexOf("TermDomainBetween")==0||among("SumBetween","SumValue");
+			enforce(has("Distribution.StepSource.between_domain_piece ")==among("SumBetween","SumValue"),c.name~" domain of a term of a summand behind two bounds");
+			enforce(has("Distribution.StepSource.beyond_domain_piece ")==among("Sum"),c.name~" domain of a term of a summand behind a bound");
+			enforce(has("Distribution.DensityProgram.mass_between_domain ")==between,c.name~" domain of a term behind a lower and an upper bound");
+			enforce(has("Distribution.DensityProgram.mass_beyond_domain ")==(!between&&!retained),c.name~" domain of a term behind a single bound");
+		}
 		// A weight between bounds that meet at the origin exactly where its
 		// value is missing: the density of a uniform variable on `[0,a]`,
 		// `[0≤x∧x≤a]·a⁻¹`. The simplifier writes its domain as `x≠0∨a≠0`, a
@@ -3306,12 +3346,15 @@ private void run(string directory){
 		// its bounds, the bounds of an outer variable behind those of the
 		// inner one. The same in a summand of a sum of observations, and
 		// under the guard of the domain of the value. Two such conditions
-		// behind the bounds under such a guard keep the integral.
+		// behind the bounds are one scalar under such a guard, and so is the
+		// rest of the guard: that leaves as a whole first, from behind the
+		// bounds, and then the conditions.
 		if(c.name.indexOf("Behind")==0){
 			bool among(string[] names...){ foreach(name;names) if(c.name=="Behind"~name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(evidence)>=0; }
-			bool retained=among("BetweenDomainTwo");
+			bool retained=false;
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce(has("Distribution.DensityProgram.mass_between_domain ")==among("BetweenDomainTwo"),c.name~" rest of the guard of a domain");
 			bool pieces=among("Pieces","PiecesHalfLine","PiecesSpread");
 			bool between=c.name.indexOf("BehindBetween")==0||among("BoundThenBetween","BoundStrict","Nested");
 			bool beyond=c.name.indexOf("BehindBound")==0;
@@ -3749,15 +3792,16 @@ private void run(string directory){
 		// A strict guard that does not mention the axis leaves the observation,
 		// from the top of a weight or of a factor of it, whether or not the
 		// rest is then observed; the scalar under it is simplified there. A
-		// guard that mentions the axis stays.
+		// guard that mentions the axis as the negation of the bound in front,
+		// or else the domain of the value, leaves from behind that bound.
 		if(c.name.indexOf("StrictGuard")==0){
 			enforce(certificate.indexOf("Distribution.DensityProgram.mass_strict_guard")>=0,c.name~" strict guard certificate");
 			enforce(certificate.indexOf("Distribution.DensityProgram.Hoists.here")>=0,c.name~" guard");
-			bool retained=c.name=="StrictGuardRetained"||c.name=="StrictGuardAxis";
+			bool retained=c.name=="StrictGuardRetained";
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
-			if(!retained) enforce(certificate.indexOf("presentation_mass_gaussian_")>=0&&certificate.indexOf(".scalarSimplify ")>=0,c.name~" under the guard");
+			if(!retained&&c.name!="StrictGuardAxis") enforce(certificate.indexOf("presentation_mass_gaussian_")>=0&&certificate.indexOf(".scalarSimplify ")>=0,c.name~" under the guard");
 			if(c.name=="StrictGuardTwo") enforce(certificate.indexOf("Hoists.right")>=0,c.name~" factor");
-			if(c.name=="StrictGuardAxis") enforce(certificate.indexOf("Hoists.left")>=0&&text.indexOf("guard(a≠0,∫dx (guard(")==0,c.name~": "~text);
+			if(c.name=="StrictGuardAxis") enforce(certificate.indexOf("Hoists.left")>=0&&certificate.indexOf("Distribution.DensityProgram.mass_beyond_domain ")>=0,c.name~": "~text);
 		}
 		// A limit is evaluated by structure with evidence for every term. A
 		// body that has no limit, or one outside the fragment, keeps its binder.

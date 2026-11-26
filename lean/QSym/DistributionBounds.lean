@@ -623,6 +623,123 @@ theorem beyond_guarded (lower s : Bool) (t : Option ℝ) (g : Option Bool)
     · rw [h x, hg, axisBound_real]
       by_cases h₁ : meets lower s a x <;> simp [h₁, Value.mask]
 
+/-- The negation of a bound is the bound from the other side with the other
+strictness. -/
+private theorem axisBound_negation (lower s : Bool) (a x : ℝ) :
+    axisBound (!lower) (!s) (some a) x = some (!decide (meets lower s a x)) := by
+  rw [axisBound_real]
+  cases lower <;> cases s <;> simp [meets, holds]
+  · exact decide_lt_not_le x a
+  · exact decide_le_not_lt x a
+  · exact decide_lt_not_le a x
+  · exact decide_le_not_lt a x
+
+/-- A weight under the guard of a domain that does not mention the axis.
+Under a test it is another weight where the domain holds, and missing at some
+point where the domain fails or is missing. Where the test fails it is a zero
+at every point, and where the test is missing it is missing at some point. -/
+structure Defended (w v : ℝ → Option ℝ) (n d : Option Bool) : Prop where
+  missing : n = none → ∃ x, w x = none
+  empty : n = some false → ∀ x, w x = some 0
+  fails : n = some true → d ≠ some true → ∃ x, w x = none
+  holds : n = some true → d = some true → ∀ x, w x = v x
+
+private theorem guard_fails {d : Option Bool} (h : d ≠ some true) (x : Option ℝ) :
+    Binding.guardValue d x = none := by
+  rcases d with _ | _ | _
+  · rfl
+  · rfl
+  · exact absurd rfl h
+
+/-- The observation of such a weight is that of the other weight under the
+guard, under the test. -/
+theorem Defended.integral {w v : ℝ → Option ℝ} {n d : Option Bool} (h : Defended w v n d) :
+    partialIntegral volume w =
+      Value.mask n (Binding.guardValue d (partialIntegral volume v)) := by
+  rcases n with _ | _ | _
+  · obtain ⟨x, hx⟩ := h.missing rfl
+    rw [partialIntegral_missing hx]; rfl
+  · rw [zero_observation w (h.empty rfl)]; rfl
+  by_cases hd : d = some true
+  · rw [funext (h.holds rfl hd), hd]; rfl
+  · obtain ⟨x, hx⟩ := h.fails rfl hd
+    rw [partialIntegral_missing hx, guard_fails hd]; rfl
+
+/-- The same for a summand of a sum of observations. -/
+theorem Defended.piece {w v : ℝ → Option ℝ} {n d : Option Bool} {o : Option ℝ}
+    (h : Defended w v n d) (p : Piece v o) :
+    Piece w (Value.mask n (Binding.guardValue d o)) := by
+  rcases n with _ | _ | _
+  · exact Or.inr ⟨h.missing rfl, rfl⟩
+  · have hw := h.empty rfl
+    refine Or.inl ⟨fun x => ⟨0, hw x⟩, ?_, ?_⟩
+    · rw [show (fun x => (w x).getD 0) = fun _ => (0 : ℝ) from funext fun x => by rw [hw x]; rfl]
+      exact integrable_zero ℝ ℝ volume
+    · rw [show (fun x => (w x).getD 0) = fun _ => (0 : ℝ) from funext fun x => by rw [hw x]; rfl]
+      simp [Value.mask]
+  by_cases hd : d = some true
+  · rw [funext (h.holds rfl hd), hd]; exact p
+  · refine Or.inr ⟨h.fails rfl hd, ?_⟩
+    rw [guard_fails hd]; rfl
+
+/-- The guard of the domain of a term behind a single bound: the negation of
+the bound, or a domain that does not mention the axis. A half-line is never
+empty, so the domain is asked for wherever the term of the bound exists. -/
+theorem beyond_defended (lower s : Bool) (t : Option ℝ) (d : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Binding.guardValue (Value.or (axisBound (!lower) (!s) t x) d) (v x))
+    (hv : ∀ x, v x = Value.mask (axisBound lower s t x) (r x)) :
+    Defended w v (Value.le t t) d := by
+  rcases t with _ | a
+  · refine ⟨fun _ => ⟨0, by rw [h 0, axisBound_missing]; rfl⟩, fun hN => ?_, fun hN => ?_,
+      fun hN => ?_⟩ <;> cases hN
+  · have hle : Value.le (some a) (some a) = some true := by simp [Value.le]
+    refine ⟨fun hN => ?_, fun hN => ?_, fun _ hd => ?_, fun _ hd x => ?_⟩
+    · rw [hle] at hN; cases hN
+    · rw [hle] at hN; cases hN
+    · obtain ⟨x, hx⟩ := meets_beyond lower s a
+      refine ⟨x, ?_⟩
+      rw [h x, axisBound_negation, decide_eq_true hx]
+      exact guard_fails hd _
+    · rw [h x, hd, axisBound_negation]
+      by_cases h₁ : meets lower s a x <;> simp [h₁, Value.or, Binding.guardValue]
+
+/-- The same behind a lower and an upper bound: the domain is asked for where
+a point is between them. -/
+theorem between_defended (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) (d : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Binding.guardValue (Value.or (axisBound (!lower) (!s₁) t₁ x)
+      (Value.or (axisBound (!(!lower)) (!s₂) t₂ x) d)) (v x))
+    (hv : ∀ x, v x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x))) :
+    Defended w v (boundsMeet lower s₁ s₂ t₁ t₂) d := by
+  rcases t₁ with _ | a
+  · refine ⟨fun _ => ⟨0, by rw [h 0, axisBound_missing]; rfl⟩, fun hN => ?_, fun hN => ?_,
+      fun hN => ?_⟩ <;> rw [boundsMeet_missing_left] at hN <;> cases hN
+  rcases t₂ with _ | b
+  · refine ⟨fun _ => ?_, fun hN => ?_, fun hN => ?_, fun hN => ?_⟩
+    · obtain ⟨x, hx⟩ := meets_beyond lower s₁ a
+      refine ⟨x, ?_⟩
+      rw [h x, axisBound_negation, decide_eq_true hx, axisBound_missing]; rfl
+    all_goals rw [boundsMeet_missing_right] at hN; cases hN
+  refine ⟨fun hN => ?_, fun hN x => ?_, fun hN hd => ?_, fun hN hd x => ?_⟩
+  · rw [boundsMeet_real] at hN; cases hN
+  · rw [boundsMeet_real] at hN
+    have hb : ¬ between lower s₁ s₂ a b := of_decide_eq_false (Option.some.inj hN)
+    rw [h x, hv x, axisBound_negation, axisBound_negation, axisBound_real, axisBound_real]
+    by_cases h₁ : meets lower s₁ a x
+    · have h₂ : ¬ meets (!lower) s₂ b x := fun h₂ => hb (between_of_meets h₁ h₂)
+      simp [h₁, h₂, Value.or, Value.mask, Binding.guardValue]
+    · simp [h₁, Value.or, Value.mask, Binding.guardValue]
+  · obtain ⟨a', b', x, ha, hb, h₁, h₂⟩ := meet_point hN
+    cases ha; cases hb
+    refine ⟨x, ?_⟩
+    rw [h x, axisBound_negation, axisBound_negation, decide_eq_true h₁, decide_eq_true h₂]
+    exact guard_fails hd _
+  · rw [h x, hd, axisBound_negation, axisBound_negation]
+    by_cases h₁ : meets lower s₁ a x <;> by_cases h₂ : meets (!lower) s₂ b x <;>
+      simp [h₁, h₂, Value.or, Binding.guardValue]
+
 /-- The same as observations that add: a summand of a sum of observations
 with several bounds on one side. -/
 theorem same_side_piece (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) {w w₁ w₂ : ℝ → Option ℝ}
@@ -671,6 +788,25 @@ bound of the axis by the difference of the other side and those terms,
 divided by the slope, from the other side where the slope is negative. Both
 are missing exactly where a term is, so this is an equation at every point
 for every definedness pattern. -/
+
+/-- The same for the guard of the domain of a term behind its bounds. -/
+theorem between_domain_piece (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) (d : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Binding.guardValue (Value.or (axisBound (!lower) (!s₁) t₁ x)
+      (Value.or (axisBound (!(!lower)) (!s₂) t₂ x) d)) (v x))
+    (hv : ∀ x, v x =
+      Value.mask (axisBound lower s₁ t₁ x) (Value.mask (axisBound (!lower) s₂ t₂ x) (r x)))
+    {o : Option ℝ} (p : Piece v o) :
+    Piece w (Value.mask (boundsMeet lower s₁ s₂ t₁ t₂) (Binding.guardValue d o)) :=
+  (between_defended lower s₁ s₂ t₁ t₂ d r h hv).piece p
+
+theorem beyond_domain_piece (lower s : Bool) (t : Option ℝ) (d : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Binding.guardValue (Value.or (axisBound (!lower) (!s) t x) d) (v x))
+    (hv : ∀ x, v x = Value.mask (axisBound lower s t x) (r x))
+    {o : Option ℝ} (p : Piece v o) :
+    Piece w (Value.mask (Value.le t t) (Binding.guardValue d o)) :=
+  (beyond_defended lower s t d r h hv).piece p
 
 /-- The same for a condition that does not mention the axis, behind its
 bounds. -/
@@ -986,6 +1122,34 @@ theorem mass_beyond_guard (lower s : Bool) (t : Option ℝ) (g : Option Bool)
         (Value.mask g (massValue (DensityProgram.weight v .lebesgue).presentation)) := by
   rw [mass_weight, mass_weight]
   exact (StepSource.beyond_guarded lower s t g r h hv).integral
+
+/-- The guard of the domain of a term of a bound leaves the observation from
+behind the bounds in front of that bound: the negations of those bounds, or
+a domain that does not mention the axis. Behind a lower and an upper bound
+under the test that a point is between them, and behind a single bound under
+the test that its term exists. -/
+theorem mass_between_domain (lower s₁ s₂ : Bool) (t₁ t₂ : Option ℝ) (d : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x = Binding.guardValue (Value.or (StepSource.axisBound (!lower) (!s₁) t₁ x)
+      (Value.or (StepSource.axisBound (!(!lower)) (!s₂) t₂ x) d)) (v x))
+    (hv : ∀ x, v x = Value.mask (StepSource.axisBound lower s₁ t₁ x)
+      (Value.mask (StepSource.axisBound (!lower) s₂ t₂ x) (r x))) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (StepSource.boundsMeet lower s₁ s₂ t₁ t₂)
+        (Binding.guardValue d (massValue (DensityProgram.weight v .lebesgue).presentation)) := by
+  rw [mass_weight, mass_weight]
+  exact (StepSource.between_defended lower s₁ s₂ t₁ t₂ d r h hv).integral
+
+theorem mass_beyond_domain (lower s : Bool) (t : Option ℝ) (d : Option Bool)
+    {w v : ℝ → Option ℝ} (r : ℝ → Option ℝ)
+    (h : ∀ x, w x =
+      Binding.guardValue (Value.or (StepSource.axisBound (!lower) (!s) t x) d) (v x))
+    (hv : ∀ x, v x = Value.mask (StepSource.axisBound lower s t x) (r x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Value.mask (Value.le t t)
+        (Binding.guardValue d (massValue (DensityProgram.weight v .lebesgue).presentation)) := by
+  rw [mass_weight, mass_weight]
+  exact (StepSource.beyond_defended lower s t d r h hv).integral
 
 /-- A guard of a weight that can fail at the origin only: `x ≠ 0` or a
 condition that does not mention the axis. Where the condition holds the guard

@@ -54,8 +54,10 @@ private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=u
 // the first; the strictness and the terms in order; the weights of the two
 // cases; and the Lean terms of the rest and of the three shapes. Or a
 // condition that does not mention the axis in the place of the last bound:
-// then there is one case, the weight without that condition.
-private struct BoundSplit{ bool third,first,lower,free; bool[3] strict; uint[3] terms; uint condition=uint.max; BoundTerm kept,changed; string rest,whole,one,other; }
+// then there is one case, the weight without that condition. Or, with
+// `domain`, the guard of the domain of a term of a later bound in that
+// place: then the one case is the weight without the guard.
+private struct BoundSplit{ bool third,first,lower,free,domain; bool[3] strict; uint[3] terms; uint condition=uint.max; BoundTerm kept,changed; string rest,whole,one,other; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
 private struct IntegralCell{ Rational lower,upper,sample; }
 // Rational coefficient lists, lowest degree first.
@@ -1949,6 +1951,66 @@ final class Bindings{
 		auto r=visit(body,0);
 		return r.id==body?Spread.init:r;
 	}
+	// The guard of the domain of a term of a bound. A guard is evaluated
+	// from the left, so the term of a bound is asked for only where the
+	// bounds in front of it hold, and the simplifier writes the domain of
+	// the weight so: the negations of those bounds, or the domain of the
+	// term, which does not mention the axis; `x<0∨0<a` around
+	// `[0≤x∧x≤log(a)]`. One bound in front, or a lower and an upper one. The
+	// weight inside is a mask or the cast of a bracket; the evidence is that
+	// it is the masks of its comparisons around its value. The same shape
+	// has the domain of a value that the interval does not read, a sum under
+	// a bound with such a term in a summand: `x<0∨0<a` around
+	// `[0≤x]·([x≤log(a)]+[x≤1]·2)`.
+	private bool boundDomain(uint weight,out BoundSplit s){
+		bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
+		bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
+		enum src="Distribution.StepSource.";
+		enum brackets=["Masks.bracket_rational","Masks.bracket_integer","Masks.bracket"];
+		string under(uint id){ return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
+		auto top=nodes[weight]; if(top.op!=BoundOp.guard) return false;
+		uint[] casts; auto inside=top.b;
+		if(call(nodes[inside],Builtin.castQR)){
+			casts=[inside]; inside=nodes[inside].a;
+			if(call(nodes[inside],Builtin.castZQ)){ casts~=inside; inside=nodes[inside].a; }
+			if(casts.length==2&&call(nodes[inside],Builtin.castNZ)){ casts~=inside; inside=nodes[inside].a; }
+		}
+		auto m=nodes[inside]; if(!isOp(m,Op.mask)) return false;
+		// The bounds in front, each with its negation in the guard. Behind
+		// them is the rest of the guard of the mask, or its value where the
+		// mask has no other comparison.
+		uint[] front; auto g=m.a,d=top.a; bool whole;
+		while(front.length<2&&!whole&&isOp(nodes[d],Op.or_)){
+			auto last=!isOp(nodes[g],Op.and_),c=last?g:nodes[g].a;
+			if(!negatedComparison(nodes[d].a,c)) break;
+			front~=c; d=nodes[d].b; whole=last;
+			if(!last) g=nodes[g].b;
+		}
+		if(!front.length||depends(at(d),0)) return false;
+		bool bound(uint id,out bool lower,out bool strict,out uint term){
+			auto c=nodes[id]; if(!isOp(c,Op.le)&&!isOp(c,Op.lt)) return false;
+			strict=isOp(c,Op.lt);
+			bool axis(uint i){auto v=nodes[i];return v.op==BoundOp.variable&&v.data==0;}
+			if(axis(c.b)&&!depends(at(c.a),0)){ lower=true; term=c.a; return true; }
+			if(axis(c.a)&&!depends(at(c.b),0)){ term=c.b; return true; }
+			return false;
+		}
+		bool[2] lower;
+		foreach(i,c;front) if(!bound(c,lower[i],s.strict[i],s.terms[i])) return false;
+		if(front.length==2&&lower[0]==lower[1]) return false;
+		s.lower=lower[0]; s.third=front.length==2; s.free=true; s.domain=true; s.condition=d; s.kept=at(top.b);
+		// The weight inside as the masks of the bounds in front around the rest.
+		auto conjunction="("~src~"Conjunction.one "~under(whole?front[$-1]:g)~")";
+		foreach_reverse(c;front[0..$-(whole?1:0)]) conjunction="("~src~"Conjunction.cons "~under(c)~" "~conjunction~")";
+		s.one=casts.length?"("~src~brackets[casts.length-1]~" "~conjunction~" "~under(m.b)~")":"("~src~"Masks.mask "~conjunction~" ("~src~"Masks.value "~under(m.b)~"))";
+		s.whole="rfl";
+		s.rest=under(m.b);
+		if(casts.length==3) s.rest="(Functions.castNZ.apply "~s.rest~")";
+		if(casts.length>=2) s.rest="(Functions.castZQ.apply "~s.rest~")";
+		if(casts.length) s.rest="(Functions.castQR.apply "~s.rest~")";
+		if(!whole) s.rest="(Value.mask "~under(g)~" "~s.rest~")";
+		return true;
+	}
 	// Bounds of the axis that compete at the front of the guard of the only
 	// weight of a Lebesgue observation: two on one side, or a third after a
 	// lower and an upper one. The weights of the two cases, each with one
@@ -1969,8 +2031,15 @@ final class Bindings{
 		auto n=nodes[mass]; uint[] bodies;
 		return n.op==BoundOp.distributionMass&&densityBodies(n.a,bodies)&&bodies.length==1&&competingBody(bodies[0],s);
 	}
-	// The same for a weight by itself, as a summand of a weight is one.
+	// The same for a weight by itself, as a summand of a weight is one. The
+	// guard of the domain of a term of a bound is read where the weight is
+	// not of the shapes above.
 	private bool competingBody(uint weight,out BoundSplit s){
+		if(competingChain(weight,s)) return true;
+		s=BoundSplit.init;
+		return boundDomain(weight,s);
+	}
+	private bool competingChain(uint weight,out BoundSplit s){
 		bool isOp(BoundNode q,Op op){return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op;}
 		bool call(BoundNode q,Builtin f){return isOp(q,Op.builtin)&&arena.view(arena.at(q.data)).value==f;}
 		enum src="Distribution.StepSource.";
@@ -6797,7 +6866,9 @@ final class Bindings{
 		}
 		// A condition that does not mention the axis, behind its bounds: the
 		// observation without it, under the condition, and that under the
-		// test that the bounds in front of it leave a point. Behind a lower
+		// test that the bounds in front of it leave a point. The same for
+		// the guard of the domain of a term behind its bounds, with the
+		// observation under the guard by that domain. Behind a lower
 		// and an upper bound that is the test for a third bound behind them;
 		// behind a single bound, whose half-line is never empty, it is only
 		// that the term of the bound exists, which `t≤t` says. Where the
@@ -6809,7 +6880,7 @@ final class Bindings{
 			BoundTerm term(size_t i){ return dropIndex(at(s.terms[i])); }
 			BoundTerm test(bool strict,BoundTerm a,BoundTerm b){ return primitive(strict?arena.lt(zero,zero):arena.le(zero,zero),[a,b]); }
 			BoundTerm masked(BoundTerm c,BoundTerm x){ return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[c,x]); }
-			auto inside=masked(dropIndex(at(s.condition)),kept);
+			auto inside=s.domain?guard(dropIndex(at(s.condition)),kept):masked(dropIndex(at(s.condition)),kept);
 			if(!s.third) return masked(test(false,term(0),term(0)),inside);
 			bool strict=s.strict[0]||s.strict[1];
 			return masked(s.lower?test(strict,term(0),term(1)):test(strict,term(1),term(0)),inside);
@@ -12150,7 +12221,7 @@ final class Bindings{
 				auto count=(b.third?3:2)-(b.free?1:0);string arguments=b.lower?"true":"false";
 				foreach(k;0..count)arguments~=b.strict[k]?" true":" false";
 				foreach(k;0..count)arguments~=" "~cert.outside(b.terms[k]);
-				if(b.free)return "(Distribution.StepSource."~(b.third?"between":"beyond")~"_guard_piece "~arguments~" "~cert.outside(b.condition)~" (w := "~functionAt(piece.from[0])~") (v := "~functionAt(b.kept.id)~
+				if(b.free)return "(Distribution.StepSource."~(b.third?"between":"beyond")~(b.domain?"_domain_piece ":"_guard_piece ")~arguments~" "~cert.outside(b.condition)~" (w := "~functionAt(piece.from[0])~") (v := "~functionAt(b.kept.id)~
 					") (fun x => "~b.rest~") (fun x => "~b.whole~") (fun x => "~b.one~") "~summand_(piece.pieces[0])~")";
 				auto lemma=!b.third?"same_side":b.first?"third_first":"third_second";
 				return "(Distribution.StepSource."~lemma~"_piece "~arguments~" (w := "~functionAt(piece.from[0])~") (w₁ := "~functionAt(b.kept.id)~") (w₂ := "~functionAt(b.changed.id)~
@@ -14610,7 +14681,7 @@ final class Bindings{
 					foreach(k;0..count)arguments~=" ("~name(dropIndex(at(s.terms[k])).id)~".eval ξ ρ)";
 					if(s.free){
 						// A condition that does not mention the axis, behind its bounds.
-						proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram."~(s.third?"mass_between_guard":"mass_beyond_guard")~" "~arguments~" ("~name(dropIndex(at(s.condition)).id)~".eval ξ ρ) (w := "~fn(nodes[nodes[n.a].a].a)~") (v := "~
+						proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram."~(s.third?"mass_between":"mass_beyond")~(s.domain?"_domain":"_guard")~" "~arguments~" ("~name(dropIndex(at(s.condition)).id)~".eval ξ ρ) (w := "~fn(nodes[nodes[n.a].a].a)~") (v := "~
 							fn(s.kept.id)~") (fun x => "~s.rest~") (fun x => "~s.whole~") (fun x => "~s.one~"); h)"; break;
 					}
 					auto lemma=!s.third?"mass_same_side":s.first?"mass_third_first":"mass_third_second";
