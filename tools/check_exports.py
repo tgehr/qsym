@@ -18,7 +18,7 @@ import time
 from export_audit import audit_export
 
 ROOT = Path(__file__).resolve().parents[1]
-IMPORTS = ["Binding", "Refinement", "ProofCache", "AxiomCheck", "Numeric", "Tensor", "AC", "Bag",
+IMPORTS = ["Binding", "BindingOpened", "Refinement", "ProofCache", "AxiomCheck", "Numeric", "Tensor", "AC", "Bag",
            "TensorDomains", "Conditionals", "Dependent", "SummationBounds", "SummationAlgebra", "SummationLinearity",
            "SummationAffine", "SummationPowers", "SummationPrefix", "SummationMasks",
            "SummationTails", "SummationElementary", "SummationRoots"]

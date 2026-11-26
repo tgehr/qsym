@@ -1655,8 +1655,8 @@ private Case[] cases(){
 	Case("TermPointNestedTwo","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*[y≠a]*λ[x]*λ[y]","ℝ","1"),
 	Case("TermPointNestedThree","∫dx ∫dy ∫dz [0≤x]*[x≤1]*[0≤y]*[y≤1]*[0≤z]*[z≤1]*[x≠y]*[y≠z]*λ[x]*λ[y]*λ[z]","ℝ","1"),
 	Case("TermPointNestedOnly","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x=y]*λ[x]*λ[y]","ℝ","0"),
-	Case("TermPointNestedValue","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*x*y*λ[x]*λ[y]","ℝ"),
-	Case("TermPointNestedCases","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*([x=y]*3+[x≠y]*2)*λ[x]*λ[y]","ℝ"),
+	Case("TermPointNestedValue","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*x*y*λ[x]*λ[y]","ℝ","1/4"),
+	Case("TermPointNestedCases","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*([x=y]*3+[x≠y]*2)*λ[x]*λ[y]","ℝ","2"),
 	Case("TermPointExcludedSquare","∫dx [0≤x]*[x≤1]*[x^2≠a]*λ[x]","ℝ"),
 	Case("MultipliedSquare","∫dx [0≤x]*[x≤1]*(a+x)^2*λ[x]","ℝ","a^2+a+1/3"),
 	Case("MultipliedCube","∫dx [0≤x]*[x≤1]*(a+x)^3*λ[x]","ℝ","a^3+3/2·a^2+a+1/4"),
@@ -1675,7 +1675,19 @@ private Case[] cases(){
 	Case("MultipliedNested","∫dx ∫dy [0≤x]*e^(-x)*[0≤y]*e^(-y)*[x+y≤a]*λ[x]*λ[y]","ℝ","[0≤a]·(-a·exp(-a)-exp(-a)+1)"),
 	Case("MultipliedNestedRates","∫dx ∫dy [0≤x]*e^(-x)*[0≤y]*e^(-2*y)*[y≤x]*λ[x]*λ[y]","ℝ","1/3"),
 	Case("MultipliedKept","∫dx [0≤x]*[x≤1]*(a+x)^2*sin(x)*λ[x]","ℝ","∫dx ([0≤x∧x≤1]·((a+x)^2·sin(x)))·λ[x]"),
-	Case("MultipliedOuter","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*(x+y)^2*λ[x]*λ[y]","ℝ"),
+	Case("MultipliedOuter","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*(x+y)^2*λ[x]*λ[y]","ℝ","7/6"),
+	Case("OpenedMaximum","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*([x≤y]*y+[y<x]*x)*λ[x]*λ[y]","ℝ","2/3"),
+	Case("OpenedDistance","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*([x≤y]*(y-x)+[y<x]*(x-y))*λ[x]*λ[y]","ℝ","1/3"),
+	Case("OpenedGaussian","∫dx ∫dy e^(-x^2/2)*e^(-(y-x)^2/2)*λ[x]*λ[y]","ℝ","2·π"),
+	Case("OpenedGaussianMoment","∫dx ∫dy e^(-x^2/2)*e^(-(y-x)^2/2)*y^2*λ[x]*λ[y]","ℝ","4·π"),
+	Case("OpenedExponential","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*e^(x+y)*λ[x]*λ[y]","ℝ","(e-1)^2"),
+	Case("OpenedRates","∫dx ∫dy [0≤x]*e^(-x)*[0≤y]*e^(-y)*(x-y)^2*λ[x]*λ[y]","ℝ","2"),
+	Case("OpenedCube","∫dx ∫dy ∫dz [0≤x]*[x≤1]*[0≤y]*[y≤1]*[0≤z]*[z≤1]*(x+y+z)^2*λ[x]*λ[y]*λ[z]","ℝ","5/2"),
+	Case("OpenedSimplex","∫dx ∫dy ∫dz [0≤x]*[0≤y]*[0≤z]*[x+y+z≤1]*λ[x]*λ[y]*λ[z]","ℝ","1/6"),
+	Case("OpenedFunction","λ(t:ℝ).∫dx [0≤x]*[x≤1]*(x+t)^2*λ[x]","ℝ→ℝ","λ(t:ℝ). t^2+t+1/3"),
+	Case("OpenedInner","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*e^(-x*y)*λ[x]*λ[y]","ℝ","∫dx ([0≤x∧x≤1]·([x≠0]·(-x⁻¹·exp(-x)+x⁻¹)+[x=0]))·λ[x]"),
+	Case("OpenedKept","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*abs(x-y)*λ[x]*λ[y]","ℝ","∫dx (∫dy ([0≤x]·([x≤1]·([0≤y]·([y≤1]·abs(x-y)))))·λ[y])·λ[x]"),
+	Case("OpenedDirect","∫dx ∫dy [0≤x]*[x≤1]*[x≤y]*[y≤2*x]*λ[x]*λ[y]","ℝ","1/2"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3406,6 +3418,26 @@ private void run(string directory){
 			enforce(has("Distribution.DensityProgram.mass_between_domain ")==between,c.name~" domain of a term behind a lower and an upper bound");
 			enforce(has("Distribution.DensityProgram.mass_beyond_domain ")==(!between&&!retained),c.name~" domain of a term behind a single bound");
 		}
+		// An integral inside the body of a function of a real number, as the
+		// inner one of two integrals is, with a weight that mentions the
+		// variable of the function. A step that asks the scalar simplifier
+		// does not reach that variable: it is a variable of the binding
+		// language, which may be missing, and not a term. But a function
+		// evaluates its body at arguments that exist only. So where the body
+		// keeps an observation, it is normalized once more with the variable
+		// as a scalar variable, a term in the context around the function,
+		// where every step treats it as a parameter; the result is the body
+		// again. Used where fewer observations are kept then: the weight of
+		// an inner integral that is a polynomial in both variables, the two
+		// branches of a comparison of the variables, a Gaussian around the
+		// outer variable. Where the inner integral is kept either way, the
+		// function stays as it is written, and where the steps reach the
+		// outer variable as it is, nothing is opened.
+		if(c.name.indexOf("Opened")==0){
+			bool retained=c.name=="OpenedKept";
+			enforce((text.indexOf("∫dy")>=0)==retained,c.name~": "~text);
+			enforce((certificate.indexOf(".lamOpened ")>=0)==(!retained&&c.name!="OpenedDirect"),c.name~" variable of the function as a parameter");
+		}
 		// A weight whose value is a product or a power of sums that mention
 		// the axis: `(a+x)^2`, `(a+x)·(b+x)`, `(1-e^(-2·x))·e^(-x)`. The
 		// scalar simplifier keeps such a value as it is written, and the
@@ -3416,9 +3448,11 @@ private void run(string directory){
 		// bounds or in front of a rate, and the product of exponentials that
 		// an inner integral leaves. A weight that cannot be observed either
 		// way stays as it is written. The variable of an outer integral is
-		// not a term for the simplifier.
+		// not a term for the simplifier; there the weight of the inner
+		// integral is read with that variable as a parameter, below.
 		if(c.name.indexOf("Multiplied")==0){
-			bool retained=c.name=="MultipliedKept"||c.name=="MultipliedOuter";
+			bool retained=c.name=="MultipliedKept";
+			enforce((certificate.indexOf(".lamOpened ")>=0)==(c.name=="MultipliedOuter"),c.name~" variable of the outer integral as a parameter");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_")>=0)!=retained,c.name~" certificate");
 		}
@@ -3446,20 +3480,25 @@ private void run(string directory){
 		// weight: an equation of partial values where both weights and the
 		// rest of the term exist at every point, three checks.
 		//
+		// A point that is the variable of an outer integral with a value
+		// behind it that mentions that variable, or in a summand, is neither:
+		// there the weight of the inner integral is read with that variable
+		// as a parameter, below.
+		//
 		// Kept are a weight with a value that is not total, where a missing
-		// value could be asked for at the excluded point only; a point that
-		// may be missing behind another exclusion, in a summand, or with a
-		// value behind it that mentions the variable of the outer integral;
-		// and an exclusion whose term is not of degree one.
+		// value could be asked for at the excluded point only; a term that
+		// may be missing behind another exclusion or in a summand; and an
+		// exclusion whose term is not of degree one.
 		if(c.name.indexOf("TermPoint")==0){
 			bool among(string[] names...){ foreach(name;names) if(c.name=="TermPoint"~name) return true; return false; }
 			import std.algorithm.searching:count;
 			size_t steps(string lemma){ return certificate.count("Distribution.DensityProgram."~lemma~" "); }
-			bool retained=among("ExcludedDomain","ExcludedSquare","MissingOrder","MissingSum","NestedValue","NestedCases");
+			bool retained=among("ExcludedDomain","ExcludedSquare","MissingOrder","MissingSum");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			if(among("ExcludedQuotient")) enforce(certificate.indexOf("Distribution.StepSource.IntervalTerms.cauchy ")>=0,c.name);
 			enforce((text.indexOf("≠")>=0)==retained,c.name~": "~text);
-			enforce(steps("mass_null_point")==(among("ExcludedSum")?2:among("OnlySummand","Cases")?1:0),c.name~" exclusion in a weight at every point");
+			enforce(steps("mass_null_point")==(among("ExcludedSum")?2:among("OnlySummand","Cases","NestedCases")?1:0),c.name~" exclusion in a weight at every point");
+			enforce((certificate.indexOf(".lamOpened ")>=0)==among("NestedValue","NestedCases"),c.name~" variable of the outer integral as a parameter");
 			bool only=c.name.indexOf("TermPointMissingOnly")==0||among("Only","OnlyValue","NestedOnly");
 			bool front=among("ExcludedFirst","ExcludedLine","MissingLine","MissingFront","MissingOnlyLine","NestedFront");
 			bool beyond=among("ExcludedBetween","ExcludedHalfLine","MissingHalfLine","MissingOnlyHalfLine");

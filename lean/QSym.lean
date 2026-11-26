@@ -69,6 +69,7 @@ import QSym.DistributionAtomicInvolution
 import QSym.DistributionAtomicShift
 import QSym.DistributionAtomicMoment
 import QSym.DistributionAtomicObservation
+import QSym.BindingOpened
 import QSym.Tensor
 import QSym.TensorDomains
 import QSym.MatrixBlocks

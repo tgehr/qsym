@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -4010,11 +4010,11 @@ final class Bindings{
 		ScalarDomain domain;
 		return totalRowDomain(n.a,domain,false);
 	}
-	private BoundTerm restoreBody(Term t,Scope ctx,Term argument){
-		if(t==argument) return variable(ctx,0);
+	private BoundTerm restoreBody(Term t,Scope ctx,Term argument,uint index=0){
+		if(t==argument) return variable(ctx,index);
 		auto n=arena.view(t); if(!n.arity) return scalar(ctx,t);
 		BoundTerm[] args; bool plain=true;
-		foreach(i;0..n.arity){ auto child=restoreBody(arena.viewChild(t,i),ctx,argument); args~=child; plain&=node(child).op==BoundOp.scalar; }
+		foreach(i;0..n.arity){ auto child=restoreBody(arena.viewChild(t,i),ctx,argument,index); args~=child; plain&=node(child).op==BoundOp.scalar; }
 		return plain?scalar(ctx,t):primitive(t,args);
 	}
 	// A quotient suggests its numerator or the reciprocal of its denominator
@@ -4336,6 +4336,43 @@ final class Bindings{
 		}else if(node(r).op==BoundOp.scalar&&arena.isNumber(arena.at(node(r).data))) return product;
 		env[0]=arg;
 		return conditional(substitute(at(branch.a),ctx,env),seed,product);
+	}
+	// A term with a scalar variable, as the body of a binder whose variable
+	// that is: the term below one more variable, `inner` being its context
+	// with that variable in front, and the scalar variable replaced by it
+	// wherever a scalar mentions it. The reverse of substituting a scalar
+	// with that variable for the variable of the binder.
+	private BoundTerm closeOver(BoundTerm term,Scope inner,Term argument){
+		uint[] shift; foreach(i;0..contexts[context(term).index].length) shift~=i+1;
+		bool mentions(Term t){ foreach(id;arena.viewPostorder(t)) if(arena.at(id)==argument) return true; return false; }
+		uint[ulong] memo;
+		BoundTerm visit(BoundTerm t,uint depth){
+			auto key=(cast(ulong)depth<<32)|t.id;
+			if(auto known=key in memo) return at(*known);
+			auto n=node(t); auto result=t;
+			if(n.op==BoundOp.scalar){
+				if(mentions(arena.at(n.data))) result=restoreBody(arena.at(n.data),context(t),argument,depth);
+			}else if(n.op==BoundOp.lambda||n.op==BoundOp.set||n.op==BoundOp.fixed){
+				auto body=visit(at(n.a),depth+1);
+				if(body.id!=n.a) result=inheritHint(t,n.op==BoundOp.lambda?lambda(body):n.op==BoundOp.set?set(body):fixed(body));
+			}else{
+				BoundTerm[] children; bool changed;
+				foreach(c;[n.a,n.b,n.c]) if(c!=uint.max){ auto child=visit(at(c),depth); changed|=child.id!=c; children~=child; }
+				if(changed) result=rebuild(t,context(t),children);
+			}
+			memo[key]=result.id; return result;
+		}
+		return visit(rename(term,inner,shift),0);
+	}
+	// The observations in a term that mention the variable with this index:
+	// the integrals that were kept under the binder of it. Counted as the
+	// term is written, a shared one once for each place.
+	private size_t keptObservations(uint id,uint index=0,uint depth=0){
+		auto q=nodes[id]; if(depth>64||!depends(at(id),index)) return 0;
+		auto below=q.op==BoundOp.lambda||q.op==BoundOp.set||q.op==BoundOp.fixed?index+1:index;
+		size_t count=q.op==BoundOp.distributionMass;
+		foreach(c;[q.a,q.b,q.c]) if(c!=uint.max) count+=keptObservations(c,below,depth+1);
+		return count;
 	}
 	private BoundTerm solveRecurrence(BoundTerm t,out RecurrenceSolution solution){
 		auto n=node(t),body=node(at(n.a)),ty=pool.view(type(t));
@@ -5505,6 +5542,9 @@ final class Bindings{
 		struct Result{ uint output,proof; }
 		Table!(uint,Result) memo;
 		Table!(uint,bool) active;
+		// The bodies of functions that were normalized with their variable
+		// as a scalar variable: once each.
+		Table!(uint,bool) opened;
 		uint emit(BindingRule rule,uint from,uint to,uint left=uint.max,uint right=uint.max,uint extra=uint.max){
 			enforce(proofs.length<1_000_000,"binding proof limit exceeded");
 			proofs~=BindingStep(rule,from,to,left,right,extra); return cast(uint)proofs.length-1;
@@ -10397,6 +10437,25 @@ final class Bindings{
 						next=set(holds(at(current.a))); rule=BindingRule.setHolds;
 					}else if((current.op==BoundOp.lambda||current.op==BoundOp.set)&&steps<budget){
 						next=pointwise(at(result.output),extra); rule=BindingRule.pointwise;
+						// The body of a function of a real number is evaluated at
+						// arguments that exist only. Where it keeps an observation
+						// that mentions the variable of the function, the variable
+						// is a scalar variable for once: the body with it, a term
+						// in the context around the function, is normalized there,
+						// where every step treats the variable as it treats a
+						// parameter, and the result is the body of the function
+						// again. Used where fewer observations are kept then.
+						auto binder=at(result.output),body=at(current.a);
+						auto kept=next==BoundTerm.init&&current.op==BoundOp.lambda&&type(variable(context(body),0))==scalarType(Sort.real_)&&
+							!opened.get(body.id,false)?keptObservations(body.id):0;
+						if(kept){
+							opened.set(body.id,true);
+							auto index=freshScalarIndex(body.id); auto argument=arena.variable(Sort.real_,index);
+							BoundTerm[] values=[scalar(ctx,argument)]; foreach(i;0..contexts[ctx.index].length) values~=variable(ctx,i);
+							auto source=substitute(body,ctx,values),inside=visit(source,depth+1);
+							auto closed=inside.output==source.id?body:closeOver(at(inside.output),context(body),argument);
+							if(keptObservations(closed.id)<kept){ next=inheritHint(binder,lambda(closed)); rule=BindingRule.lambdaOpened; predicateDomain=inside.proof; extra=index; }
+						}
 					}else if(current.op==BoundOp.scalar&&steps<budget&&!arena.isNumber(arena.at(current.data))){
 						auto source=arena.at(current.data),value=simplify(arena,source,Options(DensityMode.preserve,true));
 						auto embedded=arena.castTo(value.output,arena.sort(source));
@@ -14847,6 +14906,12 @@ final class Bindings{
 					auto body=nodes[nodes[n.a].a].a;uint condition;BoundTerm rest;
 					enforce(originGuard(body,condition,rest),"missing guard that can fail at the origin only");
 					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_guard_origin ("~name(dropIndex(at(condition)).id)~".eval ξ ρ) (w := "~fn(body)~") (m := "~fn(rest.id)~") (fun _ => rfl); h)"; break;
+				}
+				case BindingRule.lambdaOpened:{
+					// The two bodies are the terms of the reduction inside with
+					// the scalar variable set to the argument, by unfolding.
+					auto env="(fun (ξ : Env) (x : ℝ) => ({ ξ with real := fun i => if i = "~to!string(p.extra)~" then x else ξ.real i } : Env))";
+					proof=".lamOpened "~env~" "~proofName(p.left)~" (fun _ _ _ => rfl) (fun _ _ _ => rfl)"; break;
 				}
 				case BindingRule.distributionMassPoint:{
 					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
