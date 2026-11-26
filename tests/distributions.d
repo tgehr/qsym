@@ -1138,6 +1138,14 @@ private Case[] cases(){
 	Case("SeriesFibreMissing","densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("SeriesFibreMissingPoint","densityAtD(sumD(λ(i:ℕ).δ(undefined(ℝ))),2)","ℝ","undefined(ℝ)"),
 	Case("SeriesFibreMissingRow","densityAtD(sumD(λ(i:ℕ).undefined(Distribution(ℝ))),2)","ℝ","undefined(ℝ)"),
+	Case("LoopDensityCritical","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠2}). (0:ℝ)"),
+	Case("LoopDensityZeroRatio","densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),scaleD(0,d)),2)","ℝ","undefined(ℝ)"),
+	Case("LoopDensitySupercritical","densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),scaleD(3,d)),1)","ℝ","0"),
+	Case("LoopDensitySupercriticalAt","densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),scaleD(3,d)),0)","ℝ","undefined(ℝ)"),
+	Case("LoopDensityZeroWeight","densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ(0)),δ(2)),d),0)","ℝ","0"),
+	Case("LoopDensityZeroWeightAt","densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ(0)),δ(2)),d),2)","ℝ","undefined(ℝ)"),
+	Case("LoopDensityMissingSeed","densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(undefined(ℝ)),δ(2)),d),1)","ℝ","undefined(ℝ)"),
+	Case("LoopDensityMissingQuery","densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d),undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("LoopExistsCritical","defined(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d))","𝔹","true"),
 	Case("LoopExistsSupercritical","defined(μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ(0)),δ(2)),scaleD(3,d)))","𝔹","true"),
 	Case("LoopExistsContracting","defined("~retry~")","𝔹","true"),
@@ -1262,6 +1270,8 @@ private void run(string directory){
 		else if(c.name.indexOf("SeriesFibre")==0)
 			enforce(certificate.indexOf("Distribution.FibreCertificate.extract_sum")>=0||
 				certificate.indexOf("Distribution.FibreCertificate.extract_nat_sum")>=0,c.name);
+		if(c.name.indexOf("LoopDensity")==0&&c.name!="LoopDensityMissingSeed"&&c.name!="LoopDensityMissingQuery")
+			enforce(certificate.indexOf("Atomic.density_retry_seed")>=0,c.name);
 		if(c.name.indexOf("LoopExists")==0&&c.name!="LoopExistsMissing")
 			enforce(certificate.indexOf("Atomic.retry_isSome")>=0,c.name);
 		if(c.name.indexOf("InfiniteRetry")==0){

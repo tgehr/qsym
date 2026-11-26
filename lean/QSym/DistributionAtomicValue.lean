@@ -78,6 +78,18 @@ private theorem realize_infinite (a : α) : realize (infiniteModel a) = some (in
   have eq : a = i.choose := Set.singleton_eq_singleton_iff.mp (congrArg Prod.snd i.choose_spec)
   simp [realize, hs, h, i, ← eq]
 
+theorem realize_cases (m : Model α) :
+    (∃ d, realize m = some d ∧ Presents d m) ∨
+    (∃ a, m = infiniteModel a ∧ realize m = some (infiniteAtom a)) ∨ realize m = none := by
+  classical
+  by_cases finite : ∃ d, Presents d m
+  · exact Or.inl (realize_presents finite.choose_spec)
+  · by_cases single : ∃ a, m = infiniteModel a
+    · obtain ⟨a, rfl⟩ := single
+      exact Or.inr (Or.inl ⟨a, rfl, realize_infinite a⟩)
+    · have simple : ¬ ∃ d, Presents d m ∧ Simple d := fun ⟨d, hd, _⟩ => finite ⟨d, hd⟩
+      exact Or.inr (Or.inr (by simp [realize, simple, finite, single]))
+
 def incrementSeries (v : ℕ → Option (D α)) : Option (D α) :=
   sumNatValue (some (fun n => addValue (v (n+1)) (scaleValue (some (-1)) (v n))))
 

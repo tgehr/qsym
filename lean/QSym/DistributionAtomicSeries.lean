@@ -176,6 +176,22 @@ theorem density_incrementSeries {v : ℕ → Option (D ℝ)} {s : ℕ → Model 
   · rw [if_pos (law.mpr hz), if_pos hz]
   · rw [if_neg (mt law.mp hz), if_neg hz]
 
+/-- The pointwise density of an increasing atomic chain depends on the limiting
+weight at the query, even when its signed tests depend on the grouping. -/
+theorem density_realizeChain {m : Model ℝ} {v : ℕ → Option (D ℝ)} {s : ℕ → Model ℝ}
+    (hs : Approximates v s) (hm : (⨆ n, s n) = m) (x : ℝ) (h0 : (s 0).1 x = 0) :
+    densityAtValue (realizeChain m s) (some x) = if m.1 x = 0 then some 0 else none := by
+  rcases realize_cases m with ⟨d, hd, hp⟩ | ⟨a, rfl, ha⟩ | h
+  · rw [realizeChain_of_some hd]
+    exact hp.1.density x
+  · rw [realizeChain_of_some ha]
+    change densityAt (infiniteAtom a) x = _
+    rw [density_infiniteAtom]
+    by_cases e : x = a <;> simp [infiniteModel, atom, e]
+  · rw [realizeChain, h]
+    change densityAtValue (incrementSeries (fun n => realize (s n))) (some x) = _
+    rw [density_incrementSeries hs.realize x h0, ← hm, Prod.fst_iSup, iSup_apply]
+
 theorem kernelSeriesAt_density {body : (ι → Option (D ℝ)) → ι → Option (D ℝ)} {x : ι} {m : Model ℝ}
     (h : kernelModelAt body x = some m) (y : ℝ) :
     densityAtValue (kernelSeriesAt body x) (some y) = if m.1 y = 0 then some 0 else none := by
@@ -205,6 +221,29 @@ theorem Presents.approximates_retry {d : D α} {m : Model α} (hd : Presents d m
     rw [Function.iterate_succ_apply']
     exact ⟨hd.1.add (ih.1.scale hr),
       (visited_add _ _).trans (congrArg₂ (· ∪ ·) hd.2 ((visited_scale _ _).trans ih.2))⟩
+
+/-- Each retry visits exactly the same points of positive charge as its seed.
+This is pointwise and also covers ratios at or above one. -/
+theorem density_retry_seed {r : Option ℝ} (q : ℚ) (hq : 0 ≤ q) (hr : r = some (q : ℝ))
+    {seed : Option (D ℝ)} (hs : Admissible seed) (x : Option ℝ) :
+    densityAtValue (retryValue r seed) x = densityAtValue seed x := by
+  subst r
+  cases seed with
+  | none => rfl
+  | some d =>
+    obtain ⟨m, hd⟩ := hs d rfl
+    have q0 : 0 ≤ (q : ℝ) := by exact_mod_cast hq
+    let g := strictRetryStep m (ENNReal.ofReal (q : ℝ))
+    rw [retry_eq_chain hd q0]
+    cases x with
+    | none => cases realizeChain g.lfp (fun n => g^[n] ⊥) <;> rfl
+    | some x =>
+      have limit : (⨆ n : ℕ, g^[n] ⊥) = g.lfp :=
+        (fixedPoints.lfp_eq_sSup_iterate _ (strictRetry_continuous _ _)).symm
+      rw [density_realizeChain (hd.approximates_retry q0) limit x rfl]
+      change _ = densityAt d x
+      have fin : 1 - ENNReal.ofReal (q : ℝ) ≠ ⊤ := ne_of_lt (lt_of_le_of_lt tsub_le_self ENNReal.one_lt_top)
+      simp only [g, strictRetry_lfp, lfp_retry, mul_eq_zero, ENNReal.inv_eq_zero, fin, false_or, hd.1.density]
 
 /-- For a retry, the per-depth differences recover the ordinary weighted series
 of seed observations. This also holds for negative and missing observations. -/

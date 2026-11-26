@@ -7760,18 +7760,18 @@ final class Bindings{
 				bool mass=current.op==BoundOp.distributionMass;
 				uint[] operations;
 				auto loop=nodes[mass?observationInput(current.a,operations):current.a]; Rational r;
-				if(loop.op==BoundOp.distributionRetry&&nonnegativeReal(loop.a,r)&&r<Rational(1)&&atomicSeed(loop.b)){
-					auto gain=scalar(ctx,arena.real_(Rational(1)/(Rational(1)-r)));
-					auto d=distribution(ctx,BoundOp.distributionScale,[gain,at(loop.b)]);
-					foreach_reverse(id;operations){
-						auto op=nodes[id];
-						d=op.op==BoundOp.distributionWeight?distribution(ctx,op.op,[at(op.a),d]):distribution(ctx,op.op,[d,at(op.b)]);
-					}
+				if(loop.op==BoundOp.distributionRetry&&nonnegativeReal(loop.a,r)&&(!mass||r<Rational(1))&&atomicSeed(loop.b)){
 					if(mass){
+						auto gain=scalar(ctx,arena.real_(Rational(1)/(Rational(1)-r)));
+						auto d=distribution(ctx,BoundOp.distributionScale,[gain,at(loop.b)]);
+						foreach_reverse(id;operations){
+							auto op=nodes[id];
+							d=op.op==BoundOp.distributionWeight?distribution(ctx,op.op,[at(op.a),d]):distribution(ctx,op.op,[d,at(op.b)]);
+						}
 						next=distribution(ctx,current.op,[d]);
 						rule=operations.length?BindingRule.distributionRetryObservation:BindingRule.distributionRetryMass;
 					}else{
-						next=distribution(ctx,current.op,[d,at(current.b)]);rule=BindingRule.distributionRetryDensity;
+						next=distribution(ctx,current.op,[at(loop.b),at(current.b)]); rule=BindingRule.distributionRetryDensity;
 					}
 				}
 			}
@@ -10946,9 +10946,11 @@ final class Bindings{
 							else law=ns~"fixed_add_tail "~swap~q(parts.ratio)~" "~number(target.a)~" "~admissible(target.b)~
 								" "~tail(parts.tail,coefficient)~" (fun _ => rfl)";
 						}
-					}else if(p.rule==BindingRule.distributionDefinedRetry){
+					}else if(p.rule==BindingRule.distributionDefinedRetry||p.rule==BindingRule.distributionRetryDensity){
 						auto loop=nodes[n.a];
-						law="congrArg some ("~ns~"retry_isSome "~q(literal(loop.a))~yes~" "~number(loop.a)~" "~admissible(loop.b)~")";
+						auto args=q(literal(loop.a))~yes~" "~number(loop.a)~" "~admissible(loop.b);
+						law=p.rule==BindingRule.distributionDefinedRetry?"congrArg some ("~ns~"retry_isSome "~args~")":
+							ns~"density_retry_seed "~args~ev(n.b);
 					}else if(p.rule==BindingRule.distributionRetryMissing) law=ns~"retry_missing"~ev(n.a);
 					else if(p.rule==BindingRule.distributionRetryZero) law=ns~"retry_zero "~q(literal(n.a))~yes~" "~number(n.a);
 					else if(p.rule==BindingRule.distributionRetryPoint||p.rule==BindingRule.distributionRetryZeroPoint||p.rule==BindingRule.distributionRetryEmpty||p.rule==BindingRule.distributionRetryInfinitePoint){
@@ -10963,7 +10965,6 @@ final class Bindings{
 							law=ns~"retry_point "~scale~q(r)~" "~q(v.weight)~" "~q(z)~yes~yes~yes~yes~" "~number(n.a)~" "~hv~evidence;
 						}
 					}else{
-						bool density=p.rule==BindingRule.distributionRetryDensity;
 						uint source=n.a,target=nodes[p.to].a;
 						string observer;
 						if(p.rule==BindingRule.distributionRetryObservation){
@@ -10979,9 +10980,9 @@ final class Bindings{
 							}
 						}
 						auto loop=nodes[source],gain=nodes[target].a;
-						law=ns~(observer.length?"Observation.retry "~observer~" ":density?"density_retry ":"mass_retry ")~
+						law=ns~(observer.length?"Observation.retry "~observer~" ":"mass_retry ")~
 							q(literal(loop.a))~" "~q(literal(gain))~yes~yes~yes~
-							" "~number(loop.a)~" "~number(gain)~" "~admissible(loop.b)~(density?ev(n.b):"");
+							" "~number(loop.a)~" "~number(gain)~" "~admissible(loop.b);
 					}
 					proof=".ofEq (fun ξ ρ => "~law~")";break;
 				}
