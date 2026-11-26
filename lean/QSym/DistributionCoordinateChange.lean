@@ -1,6 +1,7 @@
 import QSym.DistributionCoordinateVariation
 import Mathlib.Analysis.SpecialFunctions.Arsinh
 import Mathlib.Analysis.SpecialFunctions.Sqrt
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.ArctanDeriv
 
 /-! Smooth changes of the displayed value of a piecewise coordinate. A left
 inverse on the values actually visited recovers differentiability of the inner
@@ -68,6 +69,10 @@ def exp : ChangeOn univ Real.exp :=
 def sinh : ChangeOn univ Real.sinh :=
   ⟨Real.arsinh, fun _ _ => Real.arsinh_sinh _, fun _ _ => Real.contDiff_sinh.contDiffAt,
     fun _ _ => Real.differentiable_arsinh _⟩
+
+def arctan : ChangeOn univ Real.arctan :=
+  ⟨Real.tan, fun _ _ => Real.tan_arctan _, fun _ _ => Real.contDiff_arctan.contDiffAt,
+    fun u _ => Real.differentiableAt_tan.mpr (Real.cos_arctan_pos u).ne'⟩
 
 def arsinh : ChangeOn univ Real.arsinh :=
   ⟨Real.sinh, fun _ _ => Real.sinh_arsinh _, fun _ _ => Real.contDiff_arsinh.contDiffAt,

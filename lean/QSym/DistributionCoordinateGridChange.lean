@@ -23,6 +23,12 @@ def sinh : ScalarChange univ Real.sinh Functions.sinhR.apply Functions.coshR.app
   ⟨.sinh, fun u _ => by simp [Function1.apply, Functions.sinhR],
     fun u _ => by simp [Function1.apply, Functions.coshR, (Real.hasDerivAt_sinh u).deriv, abs_of_pos (Real.cosh_pos u)]⟩
 
+def arctan : ScalarChange univ Real.arctan Functions.atanR.apply
+    (fun u => Value.inv (Value.add (some ((1:ℤ):ℝ)) (u.map (·^2)))) := by
+  refine ⟨.arctan, fun _ _ => by simp [Function1.apply, Functions.atanR], fun u _ => ?_⟩
+  have hp : 0 < 1 + u^2 := by positivity
+  simp [Value.add, Value.inv, hp.ne', (Real.hasDerivAt_arctan' u).deriv, abs_of_pos (inv_pos.2 hp)]
+
 def arsinh : ScalarChange univ Real.arsinh Functions.asinhR.apply (fun u =>
     Value.inv (Functions.sqrtR.apply (Value.add (some ((1:ℤ):ℝ)) (u.map (·^2))))) := by
   refine ⟨.arsinh, fun _ _ => by simp [Function1.apply, Functions.asinhR], fun u _ => ?_⟩
@@ -49,6 +55,20 @@ def reciprocal : ScalarChange {u : ℝ | u ≠ 0} (fun u => u⁻¹) Value.inv
   refine ⟨.reciprocal, fun u hu => by simp [Value.inv, (show u ≠ 0 from hu)], fun u hu => ?_⟩
   have hp := sq_pos_of_ne_zero (show u ≠ 0 from hu)
   simp [Value.inv, hp.ne', deriv_inv, abs_of_pos (inv_pos.2 hp)]
+
+/-- For an increasing change, the Jacobian it already certifies is also its
+signed derivative. Use it inside a larger smooth coordinate expression. -/
+theorem slope {g op jac f d} (c : ScalarChange univ g op jac) (inc : Monotone g) (inner : Slope f d) :
+    Slope (fun x => op (f x)) (fun x => Value.mul (jac (f x)) (d x)) := by
+  have diff (u : ℝ) := ((c.change.smooth u trivial).differentiableAt le_rfl).hasDerivAt
+  have nonneg (u : ℝ) : 0 ≤ deriv g u := by
+    apply ge_of_tendsto (diff u).tendsto_slope_zero_right
+    filter_upwards [self_mem_nhdsWithin (a := 0) (s := Ioi (0 : ℝ))] with t ht
+    have h : 0 ≤ t := le_of_lt ht
+    exact mul_nonneg (inv_nonneg.mpr h) (sub_nonneg.mpr (inc (le_add_of_nonneg_right h)))
+  exact Slope.chain inner op jac g (deriv g) (contDiff_iff_contDiffAt.mpr fun u => c.change.smooth u trivial)
+    diff (fun u => c.value u trivial)
+    (fun u => (c.weight u trivial).trans (congrArg some (abs_of_nonneg (nonneg u))))
 
 end ScalarChange
 

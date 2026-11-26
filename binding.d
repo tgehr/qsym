@@ -188,7 +188,7 @@ private struct PolynomialGrid{
 	Rational[][] cells;
 }
 private enum CoordinateGridMode { source, continuousChange, jumpChange }
-private enum CoordinateChange { none, exp, sinh, arsinh, log, sqrt, reciprocal }
+private enum CoordinateChange { none, exp, sinh, arsinh, log, sqrt, reciprocal, arctan }
 private enum JoinKind{ smooth,corner,jump }
 private enum CornerSelection { dynamic, active, inactive }
 private struct CoordinateJoin{
@@ -2128,6 +2128,7 @@ final class Bindings{
 			case Builtin.expR:return CoordinateChange.exp;
 			case Builtin.sinhR:return CoordinateChange.sinh;
 			case Builtin.asinhR:return CoordinateChange.arsinh;
+			case Builtin.atanR:return CoordinateChange.arctan;
 			case Builtin.logR:return CoordinateChange.log;
 			case Builtin.sqrtR:return CoordinateChange.sqrt;
 			default:return CoordinateChange.none;
@@ -2160,7 +2161,7 @@ final class Bindings{
 			case CoordinateChange.reciprocal:
 				auto h=(new CoordinateBounds(cert,calculated)).nonzero(input,0);
 				proof=h.proof; return h.found;
-			case CoordinateChange.exp:case CoordinateChange.sinh:case CoordinateChange.arsinh:
+			case CoordinateChange.exp:case CoordinateChange.sinh:case CoordinateChange.arsinh:case CoordinateChange.arctan:
 				if(cert !is null) proof="(Distribution.GraphFibre.Coordinates.Grid.SourceIn.univ "~cert.functionAt(input)~")";
 				return true;
 		}
@@ -2178,10 +2179,11 @@ final class Bindings{
 			case CoordinateChange.sqrt:
 				den=primitive(arena.mul(zero,zero,true),[scalar(ctx,arena.real_(2)),call(Builtin.sqrtR,f)]);
 				break;
-			case CoordinateChange.reciprocal:case CoordinateChange.arsinh:
+			case CoordinateChange.reciprocal:case CoordinateChange.arsinh:case CoordinateChange.arctan:
 				den=primitive(arena.pow(zero,2),[f]);
-				if(change==CoordinateChange.arsinh)
-					den=call(Builtin.sqrtR,primitive(arena.add(zero,zero,true),[scalar(ctx,arena.real_(1)),den]));
+				if(change!=CoordinateChange.reciprocal)
+					den=primitive(arena.add(zero,zero,true),[scalar(ctx,arena.real_(1)),den]);
+				if(change==CoordinateChange.arsinh) den=call(Builtin.sqrtR,den);
 				break;
 		}
 		return primitive(arena.inv(zero),[den]);
@@ -2214,6 +2216,7 @@ final class Bindings{
 				Builtin outer;
 				if(op.op==Op.builtin){
 					switch(op.value){
+						case Builtin.atanR:case Builtin.asinhR: break;
 						case Builtin.logR: lemma="log"; break;
 						case Builtin.sqrtR: lemma="sqrt"; break;
 						case Builtin.expR: outer=Builtin.expR; lemma="exp"; break;
@@ -2248,7 +2251,16 @@ final class Bindings{
 					if(op.op==Op.inv) outerSlope=primitive(product,[scalar(inner,arena.real_(-1)),outerSlope]);
 					d=primitive(product,[outerSlope,du]);
 				}else if(op.op==Op.builtin){
-					auto outerSlope=primitive(arena.call(outer,[zero]),[at(n.a)]);
+					BoundTerm outerSlope;
+					if(op.value==Builtin.atanR||op.value==Builtin.asinhR){
+						auto change=gridChange(id);
+						outerSlope=gridChangeJacobian(change,at(n.a));
+						lemma="chain";
+						if(cert !is null){
+							auto tag=to!string(change);
+							args=ns~"ScalarChange."~tag~" Real."~tag~"_strictMono.monotone "~args;
+						}
+					}else outerSlope=primitive(arena.call(outer,[zero]),[at(n.a)]);
 					if(op.value==Builtin.cosR) outerSlope=primitive(product,[scalar(inner,arena.real_(-1)),outerSlope]);
 					d=primitive(product,[outerSlope,du]);
 				}else if(op.op==Op.pow){
@@ -2267,7 +2279,7 @@ final class Bindings{
 			if(cert !is null){
 				cert.roots~=d.id;
 				proofs.set(id,cert.save(ns~"Slope "~cert.functionAt(id)~" "~cert.functionAt(d.id),
-					"("~ns~"Slope."~lemma~" "~args~")"));
+					"("~(lemma=="chain"?ns~"ScalarChange.slope":ns~"Slope."~lemma)~" "~args~")"));
 			}
 			return d;
 		}

@@ -121,7 +121,7 @@ theorem pow {f d} (n : ℕ) (h : Slope f d) :
   exact ⟨_, _, cu.pow n, fun x => (hu x).pow n, fun x => by simp [fu],
     fun x => by simp [fu, fd, Value.mul]⟩
 
-private theorem chain {f d} (h : Slope f d) (op jac : Option ℝ → Option ℝ)
+theorem chain {f d} (h : Slope f d) (op jac : Option ℝ → Option ℝ)
     (u du : ℝ → ℝ) (cu : ContDiff ℝ 1 u) (hu : ∀ x, HasDerivAt u (du x) x)
     (ev : ∀ z, op (some z) = some (u z)) (ej : ∀ z, jac (some z) = some (du z)) :
     Slope (fun x => op (f x)) (fun x => Value.mul (jac (f x)) (d x)) := by

@@ -299,6 +299,19 @@ private Case[] cases(){
 	Case("ChangedCoordinateRoot","densityAtD(Λx. λ[sqrt(1+abs(x))],3)","ℝ","1/4"),
 	Case("ChangedCoordinateReciprocal","densityAtD(Λx. λ[(1+abs(x))⁻¹],-1)","ℝ","1/4"),
 	Case("ChangedCoordinateSinh","densityAtD(Λx. λ[sinh(abs(x-2))],2)","ℝ","undefined(ℝ)"),
+	Case("AtanMeasure","Λx. λ[atan(x)]","Distribution(ℝ)","Λ(x:ℝ). ((x^2+1)⁻¹)·λ[x]"),
+	Case("AtanPoint","densityAtD(Λx. λ[atan(2*x+1)],0)","ℝ","1"),
+	Case("AtanAbs","densityAtD(Λx. λ[atan(abs(x))],1)","ℝ","1/2"),
+	Case("AtanCorner","densityAtD(Λx. λ[atan(abs(x))],0)","ℝ","undefined(ℝ)"),
+	Case("AtanAtom","∫dx λ[atan([0≤x]·1)]","ℝ","1/4·π"),
+	Case("AtanJump","densityAtD(Λx. λ[atan(x+[0≤x]·1)],0)","ℝ","undefined(ℝ)"),
+	Case("AtanLeft","densityAtD(Λx. λ[atan(x+[0≤x]·1)],-1)","ℝ","1/2"),
+	Case("AtanRight","densityAtD(Λx. λ[atan(x+[0≤x]·1)],1)","ℝ","1/5"),
+	Case("AtanWindow","densityAtD(Λx. λ[atan(abs(x)) | u. u<0],0)","ℝ","0"),
+	Case("AtanNested","densityAtD(Λx. λ[atan(sin(x)+x)],0)","ℝ","2"),
+	Case("AtanNestedDown","densityAtD(Λx. λ[atan(exp(-x))],0)","ℝ","1/2"),
+	Case("AtanAsinh","densityAtD(Λx. λ[asinh(atan(-x))],0)","ℝ","1"),
+	Case("AtanComposite","densityAtD(Λx. λ[atan(exp(-x))+2*x],0)","ℝ","3/2"),
 	Case("ChangedCoordinateArsinh","densityAtD(Λx. λ[asinh(abs(x))],3/4)","ℝ","4/5"),
 	Case("ChangedCoordinateMany","densityAtD(Λx. λ[log(1+abs(x-1)+abs(x+1))],2)","ℝ","2/5"),
 	Case("ChangedCoordinateIverson","densityAtD(Λx. λ[exp([0<x]·x)],-1)","ℝ","0"),
@@ -1731,6 +1744,8 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
+		if(c.name.indexOf("Atan")==0)
+			enforce(certificate.indexOf("ScalarChange.arctan")>=0&&text.indexOf("λ[atan(")<0,c.name);
 		if(c.name.indexOf("ObservedGuard")==0)
 			enforce((certificate.indexOf("Binding.map_guard_of_strict ")>=0)==(c.name!="ObservedGuardMasked"),c.name);
 		if(c.name.indexOf("AffineCycle")==0){
