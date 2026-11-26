@@ -118,7 +118,7 @@ theorem admissible_scale {x : Option (D α)} {w : Option ℝ} (c : ℚ) (hc : 0 
     obtain ⟨k, ha⟩ := hx a rfl
     exact represented (ha.1.scale (r := (c : ℝ)) (by exact_mod_cast hc))
 
-private theorem observe_retry (observe : D α → Option β)
+theorem observe_retry (observe : D α → Option β)
     (invariant : ∀ {d e : D α} {m : Model α}, Presents d m → Presents e m → observe d = observe e)
     {ratio gain : Option ℝ} (r c : ℚ) (h0 : 0 ≤ r) (h1 : r < 1) (hc : c = (1-r)⁻¹)
     (hr : ratio = some (r : ℝ)) (hk : gain = some (c : ℝ)) {seed : Option (D α)} (hs : Admissible seed) :

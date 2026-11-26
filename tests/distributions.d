@@ -7,7 +7,9 @@ import std.stdio:writeln;
 @safe:
 
 private struct Case{ string name,source,type,expected; }
-private Case[] cases(){ return [
+private Case[] cases(){
+	enum retry="(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d)))";
+	return [
 	Case("Dirac","δ(2)","Distribution(ℕ)"),
 	Case("NaturalDirac","(δ(2):Distribution(ℕ))","Distribution(ℕ)"),
 	Case("FunctionDirac","δ(λ(n:ℕ).n)","Distribution(ℕ→ℕ)"),
@@ -1109,6 +1111,18 @@ private Case[] cases(){ return [
 	Case("Capture","(λ(a:ℝ).Λ(x:ℝ).(a+x)*λ[x])(2)","Distribution(ℝ)"),
 	Case("Shadow","λ(x:ℝ).Λ(x:ℝ).x*λ[x]","ℝ→Distribution(ℝ)"),
 	Case("FormalIntegral","integralD(λ(x:ℝ).δ(x))","Distribution(ℝ)"),
+	Case("RetryObservationSigned","massD(weightD(λ(x:ℝ).x-3,"~retry~"))","ℝ","-2"),
+	Case("RetryObservationPartialOutside","massD(weightD(λ(x:ℝ).1/(x-1),"~retry~"))","ℝ","0"),
+	Case("RetryObservationZeroVisit","massD(weightD(λ(x:ℝ).1/x,μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d))))","ℝ","undefined(ℝ)"),
+	Case("RetryObservationPartialInside","massD(weightD(λ(x:ℝ).1/x,"~retry~"))","ℝ","undefined(ℝ)"),
+	Case("RetryObservationBind","massD(bindD("~retry~",λ(x:ℝ).scaleD(x+1,δ((1:ℕ)))))","ℝ","2"),
+	Case("RetryObservationRealBind","massD(bindD("~retry~",λ(x:ℝ).scaleD(x-4,δ(x))))","ℝ","-3"),
+	Case("RetryObservationMappedMoment","massD(weightD(λ(y:ℝ).y²,bindD("~retry~",λ(x:ℝ).δ(x+1))))","ℝ","5"),
+	Case("RetryObservationMappedNatural","massD(weightD(λ(y:ℕ).(y:ℝ),bindD("~retry~",λ(x:ℝ).δ((3:ℕ)))))","ℝ","3"),
+	Case("RetryObservationFreeProbe","λ(f:ℝ→ℝ).massD(weightD(f,"~retry~"))","(ℝ→ℝ)→ℝ","λ(f:ℝ→ℝ). (2·(f((0:ℝ))·(1/4)+f((2:ℝ))·(1/4)):ℝ)"),
+	Case("RetryObservationMissingProbe","massD(weightD(undefined(ℝ→ℝ),"~retry~"))","ℝ","undefined(ℝ)"),
+	Case("RetryObservationMissingKernel","massD(bindD("~retry~",undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
+	Case("RetryObservationContinuousOutput","massD(bindD("~retry~",λ(x:ℝ).Λy. [0≤y≤1]·λ[y]))","ℝ","1"),
 	Case("AtomicRetryFair","μ(d:Distribution(ℝ)).Λx. 1/2·δ(0)[x]+1/2·d[x]","Distribution(ℝ)","δ((0:ℝ))"),
 	Case("AtomicRetrySwapped","μ(d:Distribution(ℝ)).Λx. 1/2·d[x]+1/2·δ(0)[x]","Distribution(ℝ)","δ((0:ℝ))"),
 	Case("AtomicRetryFiniteWeight","μ(d:Distribution(ℝ)).addD(scaleD(1/4,δ(3)),scaleD(1/2,d))","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(3)[x]"),
@@ -1169,6 +1183,10 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name.indexOf("RetryObservation")==0&&c.name!="RetryObservationMissingProbe"&&c.name!="RetryObservationMissingKernel"){
+			enforce(certificate.indexOf("Distribution.Atomic.Observation.retry")>=0,c.name);
+			if(c.name=="RetryObservationMappedMoment") enforce(certificate.indexOf("Observation.realBind (Distribution.Atomic.Observation.weight")>=0,c.name);
+		}
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
