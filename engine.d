@@ -435,6 +435,49 @@ package final class Engine{
 			if(!rewritesLeft) throw new Limit;
 			--rewritesLeft; result=d.rule(i,[d.trans(p,f,ctx)],ctx); return true;
 		}
+		// The exclusion may be known the other way round, `y≠x` for `x≤y`.
+		Proof q;
+		if(!knownDistinct(p.after,ctx,q,false)) return false;
+		if(!rewritesLeft) throw new Limit;
+		--rewritesLeft; result=d.rule(i,[d.trans(p,q,ctx)],ctx); return true;
+	}
+	// Two terms are distinct where one is known to be less than the other,
+	// and where they are known to be distinct the other way round. The
+	// known fact need not be written with the same two sides: `x≠y+1` holds
+	// where `x-1<y` is known, and where `y-x≠-1` is. What is compared is the
+	// difference of the two sides as a polynomial, which the exclusion has
+	// with the same sign or the other. Like the tightening of a bound, only
+	// from an established fact, without a search.
+	private bool knownDistinct(Term t,uint ctx,out Proof result,bool order=true){
+		auto n=a.view(t);
+		if(n.op!=Op.nonzero||!ctx||a.sort(a.at(n.a))!=Sort.real_) return false;
+		auto difference=a.at(n.a); Term negative;
+		foreach(f;known(ctx)){
+			if(!f.known||f.after!=a.boolean(true)) continue;
+			auto m=a.view(f.before); Instance i;
+			if(m.op==Op.lt&&order&&a.sort(a.at(m.a))==Sort.real_){
+				budget.spend();
+				auto other=go(a.sub(a.at(m.a),a.at(m.b)),0,true).after;
+				if(other!=difference){
+					if(negative==Term.init) negative=go(a.neg(difference),0,true).after;
+					if(other!=negative) continue;
+				}
+				i=instantiate(a,other==difference?Law.real_less_distinct:Law.real_greater_distinct,[a.at(m.a),a.at(m.b),difference]);
+			}else if(m.op==Op.nonzero&&a.sort(a.at(m.a))==Sort.real_){
+				budget.spend();
+				if(negative==Term.init) negative=go(a.neg(difference),0,true).after;
+				if(a.at(m.a)!=negative) continue;
+				i=instantiate(a,Law.real_distinct_reverse,[a.at(m.a),difference]);
+			}else continue;
+			if(i.before!=t||i.conditions[0].term!=f.before) continue;
+			bool missing;
+			foreach(c;i.conditions) if(c.defined&&!d.domain(i.before,c.term,ctx).found) missing=true;
+			if(missing) continue;
+			auto equal=go(i.conditions[1].term,0,true);
+			if(equal.after!=a.boolean(true)) continue;
+			if(!rewritesLeft) throw new Limit;
+			--rewritesLeft; result=d.rule(i,[f,equal],ctx); return true;
+		}
 		return false;
 	}
 	private size_t guardCost(Term t){
@@ -634,6 +677,8 @@ package final class Engine{
 					p=d.trans(p,f,ctx); memoize(k,p); return p;
 				}
 			}
+			Proof distinct;
+			if(!probe&&knownDistinct(current,ctx,distinct)){ p=d.trans(p,distinct,ctx); memoize(k,p); return p; }
 			Proof strict;
 			if(!probe&&strictBound(current,ctx,strict)){
 				p=d.trans(p,strict,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;

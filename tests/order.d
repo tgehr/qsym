@@ -119,7 +119,29 @@ Example[] examples(){
 		Example("ChainRefuted","[0≤y]*[y≤x]*[x≤t]*[t<0]","0"),
 		Example("ChainRefutedOffset","[x≤y+1]*[y≤x+1]*[0≤x]*[x≤1]*[2<y]","0"),
 		Example("ChainContradiction","[0≤y]*[y≤x]*[x+1≤y]","0"),
-		Example("ChainContradictionThree","[x≤y]*[y≤t]*[t≤x]*[x<t]","0")
+		Example("ChainContradictionThree","[x≤y]*[y≤t]*[t≤x]*[x<t]","0"),
+		// Two terms that are known to be distinct: a bound by one of the
+		// other is strict, and the exclusion written again adds nothing,
+		// whichever of the two it has on the left and however their
+		// difference is split between its sides. Nor does it add to a
+		// strict bound.
+		Example("PunctureTerm","[x≤y]*[x≠y]","[x<y]"),
+		Example("PunctureTermSwapped","[x≤y]*[y≠x]","[x<y]"),
+		Example("PunctureTermLower","[y≤x]*[x≠y]","[y<x]"),
+		Example("PunctureTermFirst","[y≠x]*[x≤y]","[x<y]"),
+		Example("PunctureOffset","[x≤y+1]*[y+1≠x]","[x<y+1]"),
+		Example("PunctureOffsetSplit","[x≤y+1]*[x-y≠1]","[x<y+1]"),
+		Example("PunctureScaled","[2*x≤y]*[y≠2*x]","[2*x<y]"),
+		Example("PunctureSum","[x+y≤t]*[t-x≠y]","[x+y<t]"),
+		Example("PunctureBoth","[0≤x]*[0≠x]*[x≤y]*[y≠x]","[0<x∧x<y]"),
+		Example("DistinctBelow","[x<y]*[x≠y]","[x<y]"),
+		Example("DistinctAbove","[x<y]*[y≠x]","[x<y]"),
+		Example("DistinctOffset","[x-1<y]*[x≠y+1]","[x-1<y]"),
+		Example("DistinctSwapped","[x≠y]*[y≠x]","[x≠y]"),
+		Example("DistinctNegated","[x≠0]*[-x≠0]","[x≠0]"),
+		Example("DistinctSplit","[x≠y+1]*[y-x≠-1]","[x≠y+1]"),
+		Example("DistinctEqual","[x<y]*[y=x]","0"),
+		Example("DistinctEqualSwapped","[x≠y]*[y=x]","0")
 	];
 }
 private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,t:ℝ,z:ℂ,p:𝔹,q:𝔹"); return s; }

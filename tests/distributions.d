@@ -1602,6 +1602,15 @@ private Case[] cases(){
 	Case("TermDomainSumApart","∫dx ([0≤x]*[x≤1]*[x≤1/a]+[1≤x]*[x≤2]*3)*λ[x]","ℝ"),
 	Case("TermDomainTwo","∫dx [0≤x]*[x≤log(a)]*[x≤log(b)]*λ[x]","ℝ"),
 	Case("TermDomainValue","∫dx [0≤x]*[x≤log(a)]*(1/b)*λ[x]","ℝ"),
+	Case("ExcludedEnd","∫dx [0≤x]*[x≤a]*[x≠a]*λ[x]","ℝ","[0<a]·a"),
+	Case("ExcludedEndSwapped","∫dx [0≤x]*[x≤a]*[a≠x]*λ[x]","ℝ","[0<a]·a"),
+	Case("ExcludedEndStrict","∫dx [0≤x]*[x<a]*[x≠a]*λ[x]","ℝ","[0<a]·a"),
+	Case("ExcludedEnds","∫dx [a≤x]*[x≠a]*[x≤b]*[b≠x]*λ[x]","ℝ","[a<b]·(-a+b)"),
+	Case("ExcludedEndsOrigin","∫dx [0≤x]*[0≠x]*[x≤a]*[a≠x]*λ[x]","ℝ","[0<a]·a"),
+	Case("ExcludedEndMoment","∫dx [0≤x]*[x≤a]*[a≠x]*x*λ[x]","ℝ","[0<a]·(1/2·a^2)"),
+	Case("ExcludedEndOffset","∫dx [0≤x]*[x≤a+1]*[x-a≠1]*λ[x]","ℝ","[-1<a]·(a+1)"),
+	Case("ExcludedEndScaled","∫dx [0≤x]*[2*x≤a]*[a≠2*x]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
+	Case("ExcludedEndExponential","∫dx [0≤x]*[x≤a]*[x≠a]*[x≠0]*e^(-x)*λ[x]","ℝ","[0<a]·(-exp(-a)+1)"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3324,6 +3333,20 @@ private void run(string directory){
 			enforce(has("Distribution.StepSource.beyond_domain_piece ")==among("Sum"),c.name~" domain of a term of a summand behind a bound");
 			enforce(has("Distribution.DensityProgram.mass_between_domain ")==between,c.name~" domain of a term behind a lower and an upper bound");
 			enforce(has("Distribution.DensityProgram.mass_beyond_domain ")==(!between&&!retained),c.name~" domain of a term behind a single bound");
+		}
+		// An end of an interval that a condition excludes: `[x≤a]·[x≠a]`,
+		// `[x≤a]·[a≠x]`, `[x<a]·[x≠a]`. The scalar simplifier knows the two
+		// sides to be distinct from the exclusion or from the strict bound,
+		// whichever of them the exclusion has on the left and however their
+		// difference is split between its sides: the bound becomes strict,
+		// the exclusion goes, and what is left is a weight between bounds.
+		if(c.name.indexOf("Excluded")==0){
+			bool among(string[] names...){ foreach(name;names) if(c.name=="Excluded"~name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(evidence)>=0; }
+			enforce(text.indexOf("∫")<0,c.name~": "~text);
+			enforce(has("Generated.r_real_le_strict ")==!among("EndStrict"),c.name~" bound made strict");
+			enforce(has("Generated.r_real_distinct_reverse ")==among("EndSwapped","Ends","EndsOrigin","EndMoment","EndScaled"),c.name~" exclusion known the other way round");
+			enforce(has("Generated.r_real_less_distinct ")||has("Generated.r_real_greater_distinct ")||!among("EndStrict"),c.name~" distinct below a strict bound");
 		}
 		// A weight between bounds that meet at the origin exactly where its
 		// value is missing: the density of a uniform variable on `[0,a]`,

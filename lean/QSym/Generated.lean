@@ -1087,6 +1087,38 @@ theorem r_real_le_strict (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.deno
 
 #qsym_check_axioms r_real_le_strict
 
+theorem r_real_less_distinct (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_x v_y) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.add v_x (Value.mul (some (((-1) : Int) : ℝ)) v_y)))))) (some true))
+    (hp2 : Value.Defined v_x)
+    (hp3 : Value.Defined v_y) :
+    Value.Refines (Value.nonzero v_z) (some true) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_less_distinct
+
+theorem r_real_greater_distinct (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.lt v_x v_y) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x)))))) (some true))
+    (hp2 : Value.Defined v_x)
+    (hp3 : Value.Defined v_y) :
+    Value.Refines (Value.nonzero v_z) (some true) := qsym_cached% by
+  cases v_x <;> cases v_y <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_greater_distinct
+
+theorem r_real_distinct_reverse (v_x : Option (Ty.denote .real)) (v_z : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.nonzero v_x) (some true))
+    (hp1 : Value.Refines (Value.not (Value.nonzero (Value.add v_z (Value.mul (some (((-1) : Int) : ℝ)) (Value.mul (some (((-1) : Int) : ℝ)) v_x))))) (some true))
+    (hp2 : Value.Defined v_x) :
+    Value.Refines (Value.nonzero v_z) (some true) := qsym_cached% by
+  cases v_x <;> cases v_z
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_distinct_reverse
+
 theorem r_real_lt_self (v_x : Option (Ty.denote .real)) :
     Value.Refines (Value.lt v_x v_x) (some false) := qsym_cached% by
   cases v_x
