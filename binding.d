@@ -102,6 +102,7 @@ private struct CauchyData{
 private struct IntervalTerm{
 	uint value,primitive=uint.max; bool scaled,curved,vertex; Rational rate; uint order;
 	CauchyData cauchy;
+	uint trigPhase=uint.max; bool trigSine,trigAbsolute; Rational inverseSlope;
 	GaussianData bell; Rational point,half,rest; uint restLiteral=uint.max;
 	// With the error function: the offset of its argument, and the literals
 	// of the negated curvature, of that offset and of minus one. With
@@ -3160,6 +3161,22 @@ final class Bindings{
 		}
 	}
 
+	// The same period and parity expression denotes the variation of an
+	// inverse coordinate and the primitive of its absolute derivative.
+	private BoundTerm trigVariation(Term trig,BoundTerm v){
+		auto ctx=context(v),zero=arena.real_(0),mul=arena.mul(zero,zero,true);
+		auto minus=scalar(ctx,arena.real_(-1)),sum=arena.add(zero,zero,true);
+		auto pi=scalar(ctx,arena.call(Builtin.pi,[])),two=scalar(ctx,arena.real_(2)),inv=arena.inv(zero);
+		bool sine=arena.view(trig).value==Builtin.sinR;
+		auto phase=sine?primitive(sum,[v,primitive(mul,[pi,primitive(inv,[two])])]):v;
+		auto cell=indexBuiltin(Builtin.floorR,primitive(mul,[phase,primitive(inv,[pi])]));
+		auto power=arena.call(Builtin.powRZ,[zero,arena.integer(0)]);
+		auto parity=primitive(power,[minus,cell]);
+		auto height=primitive(mul,[parity,primitive(trig,[v])]);
+		if(!sine) height=primitive(mul,[minus,height]);
+		return primitive(sum,[primitive(mul,[two,realIndex(cell)]),height]);
+	}
+
 	// Each quarter-period traverses one span of the profile. The parity
 	// of its index orients the centered height of the final endpoint.
 	private BoundTerm wavePrimitive(uint profile,uint wave,BoundTerm v){
@@ -5914,18 +5931,7 @@ final class Bindings{
 					return primitive(mul,[v,mag]);
 				}
 				auto scope_=context(v),minus=scalar(scope_,arena.real_(-1)),sum=arena.add(zero,zero,true);
-				if(op.value==Builtin.sinR||op.value==Builtin.cosR){
-					auto pi=scalar(scope_,arena.call(Builtin.pi,[])),two=scalar(scope_,arena.real_(2)),inv=arena.inv(zero);
-					auto u=v;
-					if(op.value==Builtin.sinR)
-						u=primitive(sum,[v,primitive(mul,[pi,primitive(inv,[two])])]);
-					auto cell=indexBuiltin(Builtin.floorR,primitive(mul,[u,primitive(inv,[pi])]));
-					auto power=arena.call(Builtin.powRZ,[zero,arena.integer(0)]);
-					auto parity=primitive(power,[minus,cell]);
-					auto height=primitive(mul,[parity,primitive(arena.at(outer.data),[v])]);
-					if(op.value==Builtin.cosR) height=primitive(mul,[minus,height]);
-					return primitive(sum,[primitive(mul,[two,realIndex(cell)]),height]);
-				}
+				if(op.value==Builtin.sinR||op.value==Builtin.cosR) return trigVariation(arena.at(outer.data),v);
 				auto h=primitive(arena.at(outer.data),[v]);
 				auto negative=primitive(arena.lt(zero,zero),[v,scalar(scope_,zero)]);
 				return conditional(negative,primitive(sum,[scalar(scope_,arena.real_(1)),primitive(mul,[minus,h])]),primitive(sum,[h,minus]));
@@ -6246,6 +6252,19 @@ final class Bindings{
 				r.half=p[0]/Rational(2); if(r.half.words>128) return false;
 				r.bell.constant=p[0]; r.curvatureTerm=true; return true;
 			}
+			bool intervalTrig(uint id,ref IntervalTerm r){
+				if(d.half||d.unit!=uint.max||solution.from.length!=1) return false;
+				auto v=nodes[id];
+				r.trigAbsolute=isOp(v,Op.abs);
+				if(r.trigAbsolute) v=nodes[v.a];
+				if(!isOp(v,Op.builtin)) return false;
+				auto op=arena.view(arena.at(v.data)).value;
+				if(op!=Builtin.sinR&&op!=Builtin.cosR) return false;
+				Rational slope,offset;
+				if(!affineBody(v.a,slope,offset)) return false;
+				r.trigPhase=v.a; r.trigSine=op==Builtin.sinR; r.inverseSlope=slope.inverse;
+				return true;
+			}
 			bool intervalCauchy(uint id,ref IntervalTerm r){
 				return d.unit==uint.max&&solution.from.length==1&&cauchyWeight(id,uint.max,r.cauchy);
 			}
@@ -6255,7 +6274,7 @@ final class Bindings{
 				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order; IntervalTerm r;
 				if(scaledExponential(id,p,rate,scaled)) return !d.half||decays(rate+outerRate);
 				if(tailExponential(id,false,p,exponent,scaled,false,0,true)) return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r)||erf(p,exponent,r);
-				if(symbolicErf(id,r)||symbolicRateBetween(id,r)||intervalCauchy(id,r)) return true;
+				if(intervalTrig(id,r)||symbolicErf(id,r)||symbolicRateBetween(id,r)||intervalCauchy(id,r)) return true;
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
@@ -6600,8 +6619,21 @@ final class Bindings{
 				r.cauchy.leadingLiteral=a.id; r.cauchy.halfLinearLiteral=b.id; r.cauchy.radicand=k.id;
 				d.terms~=r; return diff;
 			}
+			BoundTerm trigDifference(IntervalTerm r){
+				auto z=arena.real_(0),inverse=scalar(ctx,arena.real_(r.inverseSlope));
+				auto trig=arena.call(r.trigSine?Builtin.cosR:Builtin.sinR,[z]);
+				BoundTerm atBound(BoundTerm bound){
+					auto phase=substituteArgument(at(r.trigPhase),bound);
+					auto height=r.trigAbsolute?trigVariation(trig,phase):primitive(trig,[phase]);
+					if(r.trigSine&&!r.trigAbsolute) height=primitive(mulOp,[minusOne,height]);
+					return primitive(mulOp,[inverse,height]);
+				}
+				d.terms~=r;
+				return primitive(addOp,[atBound(upper),primitive(mulOp,[minusOne,atBound(lower)])]);
+			}
 			BoundTerm build(uint id,uint depth){
 				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
+				if(intervalTrig(id,r)) return trigDifference(r);
 				if(intervalCauchy(id,r)) return cauchyDifference(r);
 				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
 				if(tailExponential(id,false,p,exponent,r.scaled,false,0,true)){
@@ -12492,6 +12524,15 @@ final class Bindings{
 					return "("~termsName~".add "~left~" "~right~")";
 				}
 				++next;
+				if(r.trigPhase!=uint.max){
+					auto phase=cert.affineProof(r.trigPhase);
+					auto inverse=scalar(context(at(d.minusOne)),arena.real_(r.inverseSlope));
+					auto extension="(fun z : Option ℝ => "~name(r.trigPhase)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
+					auto primitive=r.trigAbsolute?(r.trigSine?"absSine":"absCosine"):(r.trigSine?"sine":"cosine");
+					enum ns="Distribution.StepSource.HasPrimitive.";
+					return "("~ns~"interval "~ns~primitive~" "~extension~" "~phase.proof~" "~cert.q(r.inverseSlope)~
+						" ("~name(inverse.id)~".eval ξ ρ) "~cert.closedProof(inverse,r.inverseSlope)~" rfl)";
+				}
 				if(r.cauchy.inverse!=uint.max){
 					auto c=r.cauchy,poly=piece(nodes[c.inverse].a,cert.everywhere,"",Rational(0));
 					auto coefficients=cert.q(c.constant)~" "~cert.q(c.halfLinear)~" "~cert.q(c.leading)~" "~cert.q(c.determinant);

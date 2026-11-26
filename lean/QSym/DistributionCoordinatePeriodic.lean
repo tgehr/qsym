@@ -97,3 +97,57 @@ theorem sine : VariationChange Real.sin (fun x => cosineVariation (x + π/2)) Fu
   · intro x; simp [Functions.sinR, Function1.apply]
 
 end QSym.Distribution.GraphFibre.Coordinates.Grid.VariationChange
+
+namespace QSym.Distribution.StepSource
+open GraphFibre.Coordinates.Grid
+
+/-- A continuous integrand and its antiderivative in the source language. -/
+def HasPrimitive (w P : Option ℝ → Option ℝ) : Prop :=
+  ∃ g G : ℝ → ℝ, (∀ x, w (some x) = some (g x)) ∧
+    (∀ x, P (some x) = some (G x)) ∧ Continuous g ∧ ∀ x, HasDerivAt G (g x) x
+
+namespace HasPrimitive
+
+theorem cosine : HasPrimitive Functions.cosR.apply Functions.sinR.apply :=
+  ⟨Real.cos, Real.sin, (fun x => by simp [Functions.cosR, Function1.apply]), (fun x => by simp [Functions.sinR, Function1.apply]), Real.continuous_cos, Real.hasDerivAt_sin⟩
+
+theorem sine : HasPrimitive Functions.sinR.apply
+    (fun v => Value.mul (some ((-1:ℤ):ℝ)) (Functions.cosR.apply v)) := by
+  refine ⟨Real.sin, fun x => -Real.cos x, (fun x => by simp [Functions.sinR, Function1.apply]), ?_, Real.continuous_sin, ?_⟩
+  · intro x; simp [Value.mul, Functions.cosR, Function1.apply]
+  · intro x; simpa using (Real.hasDerivAt_cos x).neg
+
+theorem absCosine : HasPrimitive (fun v => Value.abs (Functions.cosR.apply v)) (VariationChange.trigPrimitive true) := by
+  let c := VariationChange.sine
+  refine ⟨fun x => |Real.cos x|, _, (fun x => by simp [Value.abs, Functions.cosR, Function1.apply]), c.endpoint, Real.continuous_cos.abs, ?_⟩
+  intro x
+  simpa only [c.slope, (Real.hasDerivAt_sin x).deriv] using (c.smoothPrimitive.differentiable le_rfl x).hasDerivAt
+
+theorem absSine : HasPrimitive (fun v => Value.abs (Functions.sinR.apply v)) (VariationChange.trigPrimitive false) := by
+  let c := VariationChange.cosine
+  refine ⟨fun x => |Real.sin x|, _, (fun x => by simp [Value.abs, Functions.sinR, Function1.apply]), c.endpoint, Real.continuous_sin.abs, ?_⟩
+  intro x
+  simpa only [c.slope, (Real.hasDerivAt_cos x).deriv, abs_neg] using (c.smoothPrimitive.differentiable le_rfl x).hasDerivAt
+
+/-- Apply the primitive to an affine phase and divide by its signed slope.
+Only the active interval requires its endpoint values. -/
+theorem interval {w P} (h : HasPrimitive w P) (F : Option ℝ → Option ℝ)
+    {a b : ℚ} (hf : Affine (fun x => F (some x)) a b) (r : ℚ) (R : Option ℝ)
+    (hR : R = some (Numeric.denote (s := .real) r)) (hr : decide (r*a=1) = true) {l u m} :
+    let G := fun z => Value.mul R (P (F z))
+    IntervalTerms l u m (fun x => w (F (some x))) (Value.add (G u) (Value.mul m (G l))) := by
+  obtain ⟨g, G, src, out, cont, deriv⟩ := h
+  have inv : (r:ℝ)*(a:ℝ)=1 := by exact_mod_cast of_decide_eq_true hr
+  apply IntervalTerms.primitive (G := fun z => Value.mul R (P (F z)))
+    (g := fun x => g ((a:ℝ)*x+b)) (F := fun x => (r:ℝ)*G ((a:ℝ)*x+b))
+  · intro x; rw [hf.equation]; exact src _
+  · intro x; rw [hf.equation, out, hR]; rfl
+  · exact cont.comp (continuous_const.mul continuous_id |>.add continuous_const)
+  · intro x
+    have phase : HasDerivAt (fun t : ℝ => (a:ℝ)*t+b) (a:ℝ) x := by simpa using (((hasDerivAt_id x).const_mul (a:ℝ)).add_const (b:ℝ))
+    have d := ((deriv _).comp x phase).const_mul (r:ℝ)
+    convert d using 1
+    rw [← mul_assoc, mul_comm _ (g _), mul_assoc, inv, mul_one]
+
+end HasPrimitive
+end QSym.Distribution.StepSource

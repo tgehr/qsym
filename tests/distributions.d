@@ -484,6 +484,25 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("TrigIntegralCosinePeriod","∫dx [0≤x≤2*π]·abs(cos(x))·λ[x]","ℝ","4"),
+	Case("TrigIntegralSinePeriod","∫dx [0≤x≤2*π]·abs(sin(x))·λ[x]","ℝ","4"),
+	Case("TrigIntegralAffinePeriod","∫dx [0≤x≤π]·abs(cos(2*x+1))·λ[x]","ℝ","2"),
+	Case("TrigIntegralNegativeSlope","∫dx [0≤x≤π]·abs(sin(1-2*x))·λ[x]","ℝ","2"),
+	Case("TrigIntegralFractionalSlope","∫dx [0≤x≤4*π]·abs(cos((x+1)/2))·λ[x]","ℝ","8"),
+	Case("TrigIntegralMillion","∫dx [0≤x≤2000000*π]·abs(cos(x))·λ[x]","ℝ","4000000"),
+	Case("TrigIntegralSignedSine","∫dx [0≤x≤π]·sin(x)·λ[x]","ℝ","2"),
+	Case("TrigIntegralSignedCosine","∫dx [0≤x≤π/2]·cos(x)·λ[x]","ℝ","1"),
+	Case("TrigIntegralSignedCancellation","∫dx [-π≤x≤π]·sin(3*x+1)·λ[x]","ℝ","0"),
+	Case("TrigIntegralMixed","∫dx [0≤x≤1]·(abs(cos(x))+abs(sin(x)))·λ[x]","ℝ","sin(1)-cos(1)+1"),
+	Case("TrigIntegralPartialPeriod","∫dx [0≤x≤2]·abs(cos(x))·λ[x]","ℝ","-sin(2)+2"),
+	Case("TrigIntegralPunctured","∫dx [0≤x≤2*π]·abs(cos(x))·[x≠a]·λ[x]","ℝ","4"),
+	Case("TrigIntegralFromSquare","∫dx [0≤x≤1]·sqrt(1-sin(x)^2)·λ[x]","ℝ","sin(1)"),
+	Case("TrigIntegralSymbolic","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·abs(cos(x))·λ[x]","ℝ→ℝ→ℝ"),
+	Case("TrigIntegralBounds","∫dx [1≤x≤0]·abs(sin(x))·λ[x]","ℝ","0"),
+	Case("TrigIntegralMissing","defined(∫dx [0≤x≤undefined(ℝ)]·cos(x)·λ[x])","𝔹"),
+	Case("TrigIntegralNonlinear","∫dx [0≤x≤1]·abs(cos(x²))·λ[x]","ℝ"),
+	Case("TrigIntegralHalfLine","∫dx [0≤x]·abs(sin(x))·λ[x]","ℝ"),
+	Case("TrigIntegralUnknownFrequency","λ(t:ℝ).∫dx [0≤x≤1]·abs(cos(t*x))·λ[x]","ℝ→ℝ"),
 	Case("RepeatedIversonAdjacent","λ(p:𝔹).λ(h:ℕ→ℝ).[p]·([p]·h(0))","𝔹→(ℕ→ℝ)→ℝ","λ(p:𝔹). λ(h:ℕ→ℝ). [p]·h(0)"),
 	Case("RepeatedIversonBetween","λ(p:𝔹).λ(q:𝔹).λ(h:ℕ→ℝ).[p]·([q]·([p]·h(0)))","𝔹→𝔹→(ℕ→ℝ)→ℝ","λ(p:𝔹). λ(q:𝔹). λ(h:ℕ→ℝ). [p]·([q]·h(0))"),
 	Case("RepeatedIversonThreeGuards","λ(p:𝔹).λ(q:𝔹).λ(r:𝔹).λ(h:ℕ→ℝ).[p]·([q]·([r]·([p]·h(0))))","𝔹→𝔹→𝔹→(ℕ→ℝ)→ℝ","λ(p:𝔹). λ(q:𝔹). λ(r:𝔹). λ(h:ℕ→ℝ). [p]·([q]·([r]·h(0)))"),
@@ -993,7 +1012,8 @@ private Case[] cases(){
 	Case("GuardedBoundVariable","λ(c:ℝ). ∫dx [0≤c]*[0≤x]*[x≤c]*x*λ[x]","ℝ→ℝ","λ(c:ℝ). [0≤c]·(1/2·c^2)"),
 	Case("GuardedJointTriangle","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤x]*λ[x]*λ[y]","ℝ","1/2"),
 	Case("GuardedJointMoment","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤x]*x*y*λ[x]*λ[y]","ℝ","1/8"),
-	Case("GuardedUnobserved","∫dx [c≤d]*sin(x)*[0≤x≤1]*λ[x]","ℝ"),
+	Case("GuardedSine","∫dx [c≤d]*sin(x)*[0≤x≤1]*λ[x]","ℝ","[c≤d]·(-cos(1)+1)"),
+	Case("GuardedUnobserved","∫dx [c≤d]*sin(x²)*[0≤x≤1]*λ[x]","ℝ"),
 	Case("ExponentialGuarded","∫dx [c≤d]*e^x*[0≤x≤1]*λ[x]","ℝ","[c≤d]·(e-1)"),
 	Case("ExponentialInterval","∫dx [0≤x≤1]*exp(2*x)*λ[x]","ℝ","1/2·exp(2)-1/2"),
 	Case("ExponentialSymbolicBounds","∫dx [a≤x≤b]*exp(-x)*λ[x]","ℝ","[a≤b]·(exp(-a)-exp(-b))"),
@@ -1827,7 +1847,7 @@ private Case[] cases(){
 	Case("QuotientExponential","∫dx [1≤x≤2]*(1/x)*exp(x)*λ[x]","ℝ"),
 	Case("SymbolicIntervalThreeBounds","∫dx [a≤x]*[x≤b]*[x≤c]*λ[x]","ℝ","[a≤b]·([c<b∧a≤c]·(-a+c)+[b≤c]·(-a+b))"),
 	Case("SymbolicIntervalUnbounded","∫dx [a≤x]*λ[x]","ℝ"),
-	Case("SymbolicIntervalSine","∫dx [a≤x≤b]*sin(x)*λ[x]","ℝ"),
+	Case("SymbolicIntervalSine","∫dx [a≤x≤b]*sin(x)*λ[x]","ℝ","[a≤b]·(cos(a)-cos(b))"),
 	Case("WeightedAffineChart","Λx. ∫dy [0≤y≤1]*y*λ[y]*δ(2*y+1)[x]","Distribution(ℝ)","Λ(y:ℝ). ([1≤y∧y≤3]·(y·(1/4)-1/4))·λ[y]"),
 	Case("WeightedAffineReflection","Λx. ∫dy [0≤y≤1]*2*y*λ[y]*δ(1-y)[x]","Distribution(ℝ)","Λ(y:ℝ). ([y≤1∧0≤y]·(-2·y+2))·λ[y]"),
 	Case("WeightedAffineMixture","Λx. ∫dy (1/2*δ(0)[y]+1/2*[0≤y≤1]*λ[y])*δ(y+1)[x]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(1)[x]+([1≤x∧x≤2]·(1/2))·λ[x]"),
@@ -2600,6 +2620,12 @@ private void run(string directory){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
 		}
+		if(c.name.indexOf("TrigIntegral")==0){
+			bool residual=c.name=="TrigIntegralMissing"||c.name=="TrigIntegralNonlinear"||
+				c.name=="TrigIntegralHalfLine"||c.name=="TrigIntegralUnknownFrequency";
+			enforce((certificate.indexOf("StepSource.HasPrimitive.interval ")>=0)==(!residual&&c.name!="TrigIntegralBounds"),c.name);
+			enforce((text.indexOf("∫")>=0)==residual,c.name);
+		}
 		if(c.name.indexOf("RepeatedIverson")==0){
 			bool repeated=c.name!="RepeatedIversonDistinct"&&c.name!="RepeatedIversonDifferentOrder"&&
 				c.name!="RepeatedIversonMissing"&&c.name!="RepeatedIversonHidden";
@@ -3143,7 +3169,7 @@ private void run(string directory){
 		// terms. An open side and other integrands keep their integral; a
 		// third bound is a case distinction with two such observations.
 		if(c.name.indexOf("SymbolicInterval")==0){
-			bool retained=c.name=="SymbolicIntervalUnbounded"||c.name=="SymbolicIntervalSine";
+			bool retained=c.name=="SymbolicIntervalUnbounded";
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0)!=retained,c.name~" interval certificate");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 		}
