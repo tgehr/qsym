@@ -545,29 +545,72 @@ final class Bindings{
 		if(type(i)==scalarType(Sort.natural)) i=indexBuiltin(Builtin.castNZ,i);
 		return indexBuiltin(Builtin.castQR,indexBuiltin(Builtin.castZQ,i));
 	}
-	// A real equality selects at most one integer or natural index. Test the
-	// recovered point before observing the weight, since the weight may be partial.
-	private BoundTerm selectRealIndex(BoundTerm function_,out bool swap){
-		auto root=node(function_).a;
-		if(!primitiveOp(root,Op.mask)) return BoundTerm.init;
+	private struct RealSelection{
+		uint weight,query,offset=uint.max;
+		bool swapped,offsetFirst;
+	}
+	// The equality tests the real image of an index. A finite natural
+	// range also permits translation by a captured natural offset.
+	private bool realSelection(BoundTerm fn,bool finite,out RealSelection s){
+		auto root=node(fn).a;
+		if(!primitiveOp(root,Op.mask)) return false;
 		auto row=nodes[root],pred=nodes[row.a];
-		if(!primitiveOp(row.a,Op.not_)||!primitiveOp(pred.a,Op.nonzero)) return BoundTerm.init;
+		if(!primitiveOp(row.a,Op.not_)||!primitiveOp(pred.a,Op.nonzero)) return false;
 		auto difference=nodes[pred.a].a;
-		if(!primitiveOp(difference,Op.add)) return BoundTerm.init;
+		if(!primitiveOp(difference,Op.add)) return false;
 		auto pair=nodes[difference];
-		if(!primitiveOp(pair.b,Op.mul)) return BoundTerm.init;
+		if(!primitiveOp(pair.b,Op.mul)) return false;
 		auto neg=nodes[pair.b],sign=nodes[neg.a];
-		if(sign.op!=BoundOp.scalar||arena.at(sign.data)!=arena.real_(-1)) return BoundTerm.init;
-		bool natural=naturalIndex(function_.id);
-		auto index=realIndex(variable(context(at(root)),0)).id;
-		swap=pair.a==index;
-		if(!swap&&neg.b!=index) return BoundTerm.init;
-		auto bound=at(swap?neg.b:pair.a);
-		if(depends(bound,0)) return BoundTerm.init;
-		auto query=dropIndex(bound),candidate=indexBuiltin(natural?Builtin.floorN:Builtin.floorR,query);
-		auto present=primitive(arena.not_(arena.boolean(false)),[awayFromAtom(realIndex(candidate).id,query)]);
-		auto weight=apply(inheritHint(function_,lambda(at(row.b))),candidate);
-		return primitive(arena.at(row.data),[present,weight]);
+		if(sign.op!=BoundOp.scalar||arena.at(sign.data)!=arena.real_(-1)) return false;
+		auto i=variable(context(at(root)),0);
+		foreach(swap;[false,true]){
+			auto expr=swap?pair.a:neg.b,bound=at(swap?neg.b:pair.a);
+			if(depends(bound,0)) continue;
+			if(expr!=realIndex(i).id){
+				if(!finite) continue;
+				bool builtin(uint id,Builtin op){
+					return nodes[id].op==BoundOp.primitive&&arena.view(arena.at(nodes[id].data)).op==Op.builtin&&
+						arena.view(arena.at(nodes[id].data)).value==op;
+				}
+				foreach(op;[Builtin.castQR,Builtin.castZQ,Builtin.castNZ]){
+					if(!builtin(expr,op)) return false;
+					expr=nodes[expr].a;
+				}
+				if(!builtin(expr,Builtin.addN)) return false;
+				auto add=nodes[expr];
+				s.offsetFirst=add.b==i.id;
+				if(!s.offsetFirst&&add.a!=i.id) return false;
+				auto offset=at(s.offsetFirst?add.a:add.b);
+				if(depends(offset,0)) return false;
+				s.offset=dropIndex(offset).id;
+			}
+			s.weight=row.b; s.query=dropIndex(bound).id; s.swapped=swap;
+			return true;
+		}
+		return false;
+	}
+	private BoundTerm selectRealIndex(BoundTerm fn,BoundTerm count,out bool swapped){
+		RealSelection s;
+		bool finite=count!=BoundTerm.init;
+		if(!realSelection(fn,finite,s)) return BoundTerm.init;
+		swapped=s.swapped;
+		auto row=nodes[node(fn).a],query=at(s.query),input=query;
+		auto zero=arena.real_(0),nat=arena.natural_(0);
+		if(s.offset!=uint.max){
+			auto neg=primitive(arena.mul(zero,zero,true),[scalar(context(query),arena.real_(-1)),realIndex(at(s.offset))]);
+			input=primitive(arena.add(zero,zero,true),[query,neg]);
+		}
+		auto candidate=indexBuiltin(naturalIndex(fn.id)?Builtin.floorN:Builtin.floorR,input),location=candidate;
+		if(s.offset!=uint.max){
+			auto off=at(s.offset);
+			location=primitive(arena.call(Builtin.addN,[nat,nat]),s.offsetFirst?[off,candidate]:[candidate,off]);
+		}
+		auto present=primitive(arena.not_(arena.boolean(false)),[awayFromAtom(realIndex(location).id,query)]);
+		auto weight=apply(inheritHint(fn,lambda(at(s.weight))),candidate),mask=arena.at(row.data);
+		auto selected=primitive(mask,[present,weight]);
+		if(!finite) return selected;
+		auto inside=primitive(arena.call(Builtin.ltN,[nat,nat]),[candidate,count]);
+		return primitive(mask,[indexBuiltin(Builtin.nonzeroN,count),primitive(mask,[inside,selected])]);
 	}
 	// Compile the signed singleton charge and regular weight together. Keeping
 	// one witness per source node also shares reused summands in the export.
@@ -6656,6 +6699,13 @@ final class Bindings{
 			auto op=arena.view(arena.at(p.data));
 			return op.op==Op.builtin&&(op.value==Builtin.ltN||op.value==Builtin.leN)&&nodes[p.a].op==BoundOp.variable&&nodes[p.a].data==0&&!depends(at(p.b),0);
 		}
+		BoundTerm boundedRange(BoundTerm fn,out BindingRule rule,out uint extra){
+			auto body=nodes[node(fn).a],pred=nodes[body.a],bound=dropIndex(at(pred.b));
+			bool inclusive=arena.view(arena.at(pred.data)).value==Builtin.leN;
+			auto end=inclusive?primitive(arena.add(arena.natural_(0),arena.natural_(0),true),[bound,scalar(context(fn),arena.natural_(1))]):bound;
+			rule=inclusive?BindingRule.sumRangeLe:BindingRule.sumRange; extra=bound.id;
+			return finiteSum(inheritHint(fn,lambda(at(body.b))),end);
+		}
 		bool zeroSelector(BoundNode x){
 			if(x.op!=BoundOp.primitive||arena.view(arena.at(x.data)).op!=Op.mask)return false;
 			auto p=nodes[x.a];if(p.op!=BoundOp.primitive||arena.view(arena.at(p.data)).op!=Op.not_)return false;
@@ -8765,10 +8815,16 @@ final class Bindings{
 					extra=cast(uint)limits.length; limits~=LimitSolution(body,next.id,bottom);
 				}
 			}
-			if(steps<budget&&current.op==BoundOp.summation&&nodes[current.a].op==BoundOp.lambda){
-				bool swap;
-				next=selectRealIndex(at(current.a),swap);
+			if(steps<budget&&(current.op==BoundOp.summation||current.op==BoundOp.finiteSum)&&nodes[current.a].op==BoundOp.lambda){
+				bool swap,finite=current.op==BoundOp.finiteSum;
+				next=selectRealIndex(at(current.a),finite?at(current.b):BoundTerm.init,swap);
 				if(next!=BoundTerm.init){ rule=BindingRule.sumRealIndex; extra=swap; }
+				else if(!finite){
+					auto row=nodes[nodes[current.a].a];
+					RealSelection inner;
+					if(boundedMask(row)&&realSelection(lambda(at(row.b)),true,inner))
+						next=boundedRange(at(current.a),rule,extra);
+				}
 			}
 			if(next==BoundTerm.init&&(current.op==BoundOp.summation||current.op==BoundOp.finiteSum)){
 				auto witness=missingGuardWitness(at(result.output));
@@ -8849,12 +8905,7 @@ final class Bindings{
 					}
 				}else if(body.op==BoundOp.primitive&&arena.view(arena.at(body.data)).op==Op.mask){
 					auto pred=nodes[body.a];
-					if(pred.op==BoundOp.primitive&&arena.view(arena.at(pred.data)).op==Op.builtin&&(arena.view(arena.at(pred.data)).value==Builtin.ltN||arena.view(arena.at(pred.data)).value==Builtin.leN)&&nodes[pred.a].op==BoundOp.variable&&nodes[pred.a].data==0&&!depends(at(pred.b),0)){
-						auto bound=dropIndex(at(pred.b)); extra=bound.id;
-						bool inclusive=arena.view(arena.at(pred.data)).value==Builtin.leN;
-						auto end=inclusive?primitive(arena.add(arena.natural_(0),arena.natural_(0),true),[bound,scalar(ctx,arena.natural_(1))]):bound;
-						next=finiteSum(inheritHint(at(current.a),lambda(at(body.b))),end); rule=inclusive?BindingRule.sumRangeLe:BindingRule.sumRange;
-					}
+					if(boundedMask(body)) next=boundedRange(at(current.a),rule,extra);
 					if(next==BoundTerm.init&&pred.op==BoundOp.primitive&&arena.view(arena.at(pred.data)).op==Op.builtin&&(arena.view(arena.at(pred.data)).value==Builtin.leN||arena.view(arena.at(pred.data)).value==Builtin.ltN)&&nodes[pred.b].op==BoundOp.variable&&nodes[pred.b].data==0&&!depends(at(pred.a),0)){
 						auto bound=dropIndex(at(pred.a)),inner=context(at(body.b)); extra=bound.id;
 						bool strict=arena.view(arena.at(pred.data)).value==Builtin.ltN;
@@ -12762,6 +12813,15 @@ final class Bindings{
 					auto f="(fun (i : Option "~(ns?"ℕ":"ℤ")~") => "~name(sourceBody.b)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") i ρ))";
 					proof=".ofEq (fun ξ ρ => Summation.interval_convert"~(ns?"N":"Z")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(bounds.a)~".eval ξ ρ) ("~name(nodes[bounds.b].a)~".eval ξ ρ))"; break;
 				case BindingRule.sumRealIndex:{
+					if(n.op==BoundOp.finiteSum){
+						RealSelection s;
+						enforce(realSelection(at(n.a),true,s),"missing finite index equality");
+						auto f="(fun i : ℕ => "~name(s.weight)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some i) ρ))";
+						string value(uint id){ return " ("~name(id)~".eval ξ ρ)"; }
+						auto law=s.offset==uint.max?"range_real_N ":"range_shifted_real_N ";
+						proof=".ofEq (fun ξ ρ => Summation."~law~to!string(s.swapped)~(s.offset==uint.max?"":" "~to!string(s.offsetFirst))~
+							" "~f~value(s.query)~(s.offset==uint.max?"":value(s.offset))~value(n.b)~")"; break;
+					}
 					auto resultApp=nodes[nodes[p.to].b],query=nodes[resultApp.b].a;
 					auto index=pool.view(type(at(n.a))).fields[0],sort=elementSort(types[n.type]);
 					bool natural=index==scalarType(Sort.natural);

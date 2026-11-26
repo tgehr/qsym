@@ -1866,11 +1866,25 @@ private Case[] cases(){
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
 	Case("CapturedScaleMissingIndex","λ(r:ℝ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(0 sub 1))","ℝ→ℝ","λ(r:ℝ). undefined(ℝ)"),
 	Case("VariableScaleByIndex","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD((n:ℝ),f(n sub 1)))(k))","ℝ→ℕ→ℝ"),
+	Case("VisitFibreMillion","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","1000000")~",1000001)","ℝ","1"),
+	Case("VisitFibreLast","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","1000000")~",1000000)","ℝ","undefined(ℝ)"),
+	Case("VisitFibreSymbolic","λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","k")~",2)","ℕ→ℝ","λ(k:{k:ℕ | k≤1}). (1:ℝ)"),
+	Case("RangeProbeBare","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([x=(i:ℝ)]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x)<n∧x=floorN(x))]"),
+	Case("RangeProbeShift","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([x=(i+3:ℝ)]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x-3)<n∧x=(floorN(x-3)+3))]"),
+	Case("RangeProbeFlipped","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([(3+i:ℝ)=x]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x-3)<n∧x=(floorN(x-3)+3))]"),
+	Case("RangeProbeCaptured","λ(o:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<1000000]·([x=(o+i:ℝ)]·(i:ℝ))","ℕ→ℝ→ℝ","λ(o:ℕ). λ(x:ℝ). [floorN(x-o)<1000000]·([x=(o+floorN(x-o))]·(guard(defined(floorN(x-o)),(floorN(x-o):ℝ))))"),
+	Case("RangeProbeLazy","∑(i:ℕ). [i<1000000]·([1/2=(i+3:ℝ)]·undefined(ℝ))","ℝ","0"),
+	Case("RangeProbeRight","∑(i:ℕ). [i<1000000]·([1000003=(i+3:ℝ)]·undefined(ℝ))","ℝ","0"),
+	Case("RangeProbeInside","∑(i:ℕ). [i<1000000]·([1000002=(i+3:ℝ)]·(i:ℝ))","ℝ","999999"),
+	Case("RangeProbeMissingEmpty","∑(i:ℕ). [i<0]·([undefined(ℝ)=(i:ℝ)]·undefined(ℝ))","ℝ","0"),
+	Case("RangeProbeMissingVisit","∑(i:ℕ). [i<2]·([undefined(ℝ)=(i:ℝ)]·1)","ℝ","undefined(ℝ)"),
+	Case("RangeProbePartialOffset","λ(o:ℕ). ∑(i:ℕ). [i<5]·([2=(i+(o sub 1):ℝ)]·1)","ℕ→ℝ","λ(o:ℕ). [(guard(o≠0,floorN(-(o-1)+2)≤4))]·([(guard(o≠0,(floorN(-(o-1)+2)+(o sub 1))=2))]·(guard(o≠0,(1:ℝ))))"),
+	Case("RangeProbeOpaque","λ(f:ℕ→ℝ). λ(x:ℝ). ∑(i:ℕ). [i<1000000]·([x=(i+1:ℝ)]·f(i))","(ℕ→ℝ)→ℝ→ℝ","λ(f:ℕ→ℝ). λ(x:ℝ). [floorN(x-1)≤999999]·([x=(floorN(x-1)+1)]·f(floorN(x-1)))"),
 	Case("VisitFibreStart","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","0")~",1)","ℝ","1"),
 	Case("VisitFibreEnd","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","1","5",true)~",5)","ℝ","undefined(ℝ)"),
 	Case("VisitFibreBetween","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","5")~",3/2)","ℝ","1"),
 	Case("VisitFibreBeyond","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","5")~",6)","ℝ","1"),
-	Case("VisitFibreQuery","λ(k:ℕ).λ(x:ℝ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","k")~",x)","ℕ→ℝ→ℝ","λ(k:ℕ). λ(x:{x:ℝ | (∑(i:ℕ). [i<k]·([x=(i+1)]))=0}). (guard(defined(k),(0:ℝ)))+1"),
+	Case("VisitFibreQuery","λ(k:ℕ).λ(x:ℝ).densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","k")~",x)","ℕ→ℝ→ℝ","λ(k:ℕ). λ(x:{x:ℝ | [k≠0∧(floorN(x-1)<k∧x=(floorN(x-1)+1))]=0}). (guard(defined(k),(0:ℝ)))+1"),
 	Case("VisitFibreSigned","densityAtD("~emittedSteps("addD(δ((2:ℝ)),lebesgueD())","scaleD(-1,δ((n:ℝ)))","","5")~",2)","ℝ","1"),
 	Case("VisitFibreBefore","densityAtD("~emittedSteps("addD(δ((2:ℝ)),lebesgueD())","scaleD(-1,δ((n:ℝ)))","","1")~",2)","ℝ","undefined(ℝ)"),
 	Case("VisitFibreRegular","densityAtD("~emittedSteps("lebesgueD()","(Λx. ((n:ℝ)+x)·λ[x])","","4")~",2)","ℝ","19"),
@@ -2196,6 +2210,11 @@ private void run(string directory){
 			bool uses=c.name!="ScalarAsymptoteLogisticRegular"&&c.name!="ScalarAsymptoteOpposite"&&
 				c.name!="ScalarAsymptoteOscillation"&&c.name!="ScalarAsymptoteOpaque"&&c.name!="ScalarAsymptoteMissing";
 			enforce((certificate.indexOf("Limit.Escapes.")>=0)==uses,c.name);
+		}
+		if(c.name.indexOf("RangeProbe")==0||c.name=="VisitFibreMillion"||c.name=="VisitFibreLast"||c.name=="VisitFibreSymbolic"){
+			enforce(text.indexOf("∑")<0,c.name);
+			if(c.name!="RangeProbeMissingEmpty"&&c.name!="RangeProbeMissingVisit"&&c.name!="RangeProbeLazy")
+				enforce(certificate.indexOf("Summation.range_real_N ")>=0||certificate.indexOf("Summation.range_shifted_real_N ")>=0,c.name);
 		}
 		if(c.name.indexOf("VisitFibre")==0){
 			bool indexed=c.name!="VisitFibreOpaqueSeed";

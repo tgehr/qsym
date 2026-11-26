@@ -70,4 +70,85 @@ theorem select_real_N (weight : α → ℝ) (hw : weight 0 = 0) (swap : Bool) (f
   simpa only [realIndexN_map, floorNat, Option.map_some, Option.map_map, Function.comp_def] using
     select_real_index weight hw ((↑) : ℕ → ℝ) Nat.floor Nat.floor_natCast swap f x
 
+/-- A finite range probes the recovered index only when it belongs to the range.
+An empty range also skips a missing query. -/
+theorem range_real_index (encode : ℕ → ℝ) (recover : ℝ → ℕ) (left : LeftInverse recover encode)
+    (swap : Bool) (f : ℕ → Option α) (x : Option ℝ) (n : Option ℕ) :
+    rangeValue (some (fun i => Value.mask
+      (if swap then realMatch (some (encode i)) x else realMatch x (some (encode i))) (f i))) n =
+      Value.mask (Functions.nonzeroN.apply n) (Value.mask (Functions.ltN.apply (x.map recover) n)
+        (Value.mask (realMatch x ((x.map recover).map encode)) ((x.map recover).bind f))) := by
+  cases n with
+  | none => rfl
+  | some n =>
+    cases n with
+    | zero => simp [rangeValue, finite_empty, Functions.nonzeroN, Function1.apply, Value.mask]
+    | succ n =>
+      cases x with
+      | none =>
+        change finite (Finset.range (n+1)) _ = _
+        rw [range_succ]
+        generalize finite (α := α) (Finset.range n) _ = prev
+        cases swap <;> cases prev <;>
+          simp [Functions.nonzeroN, Functions.ltN, Function1.apply, Function2.apply, realMatch, Value.mask, Value.nonzero, Value.add, Value.mul, Value.not]
+      | some x =>
+        let pred (i : ℕ) := if swap then realMatch (some (encode i)) (some x) else realMatch (some x) (some (encode i))
+        have mask (i : ℕ) : (if i < n+1 then Value.mask (pred i) (f i) else some 0) =
+            Value.mask (pred i) (if i < n+1 then f i else some 0) := by
+          by_cases hi : i < n+1
+          · simp [hi]
+          · by_cases hit : x = encode i <;> cases swap <;> simp_all [pred, realMatch_some, Value.mask, eq_comm]
+        change finite (Finset.range (n+1)) (fun i => Value.mask (pred i) (f i)) = _
+        rw [← range_mask (fun _ => 0) rfl]
+        simp_rw [mask]
+        have sel := select_real_index (fun _ : α => 0) rfl encode recover left swap
+          (fun i => if i < n+1 then f i else some 0) (some x)
+        refine sel.trans ?_
+        by_cases hi : recover x < n+1 <;>
+          simp [Functions.nonzeroN, Functions.ltN, Function1.apply, Function2.apply, Value.mask, realMatch_some, hi] <;>
+          cases decide (x = encode (recover x)) <;> rfl
+
+theorem range_real_N (swap : Bool) (f : ℕ → Option α) (x : Option ℝ) (n : Option ℕ) :
+    rangeValue (some (fun i => Value.mask
+      (if swap then realMatch (realIndexN (some i)) x else realMatch x (realIndexN (some i))) (f i))) n =
+      (let j := Functions.floorN.apply x
+       Value.mask (Functions.nonzeroN.apply n) (Value.mask (Functions.ltN.apply j n)
+         (Value.mask (realMatch x (realIndexN j)) (j.bind f)))) := by
+  simpa only [realIndexN_map, floorNat, Option.map_some] using
+    range_real_index ((↑) : ℕ → ℝ) Nat.floor Nat.floor_natCast swap f x n
+
+private def shiftedIndex (offFirst : Bool) (off i : Option ℕ) :=
+  if offFirst then Functions.addN.apply off i else Functions.addN.apply i off
+
+theorem range_shifted_real_N (swap offFirst : Bool) (f : ℕ → Option α) (x : Option ℝ) (off n : Option ℕ) :
+    rangeValue (some (fun i => Value.mask
+      (let z := realIndexN (shiftedIndex offFirst off (some i))
+       if swap then realMatch z x else realMatch x z) (f i))) n =
+      (let j := Functions.floorN.apply (Value.add x (Value.mul (some ((-1 : ℤ) : ℝ)) (realIndexN off)))
+       Value.mask (Functions.nonzeroN.apply n) (Value.mask (Functions.ltN.apply j n)
+         (Value.mask (realMatch x (realIndexN (shiftedIndex offFirst off j))) (j.bind f)))) := by
+  rcases off with _ | o
+  · rcases n with _ | n
+    · rfl
+    · cases n with
+      | zero => simp [rangeValue, finite_empty, Functions.nonzeroN, Function1.apply, Value.mask]
+      | succ n =>
+        change finite (Finset.range (n+1)) _ = _
+        rw [range_succ]
+        generalize finite (α := α) (Finset.range n) _ = prev
+        cases swap <;> cases offFirst <;> cases x <;> cases prev <;>
+          simp [shiftedIndex, floorNat, realIndexN_map, Functions.addN, Functions.nonzeroN, Functions.ltN, Function1.apply,
+            Function2.apply, Value.mask, realMatch, Value.add, Value.mul, Value.not, Value.nonzero]
+  · let recover (x : ℝ) := ⌊x - (o : ℝ)⌋₊
+    have left : LeftInverse recover (fun i : ℕ => ((i+o : ℕ) : ℝ)) := by
+      intro i
+      change ⌊((i+o : ℕ) : ℝ) - o⌋₊ = i
+      rw [Nat.cast_add, add_sub_cancel_right, Nat.floor_natCast]
+    have shift (i : Option ℕ) : realIndexN (shiftedIndex offFirst (some o) i) = i.map (fun j : ℕ => ((j+o : ℕ) : ℝ)) := by
+      cases i <;> cases offFirst <;> simp [realIndexN_map, shiftedIndex, Functions.addN, Function2.apply, Nat.add_comm]
+    have inv : Functions.floorN.apply (Value.add x (Value.mul (some ((-1 : ℤ) : ℝ)) (realIndexN (some o)))) = x.map recover := by
+      cases x <;> simp [floorNat, realIndexN_map, Value.add, Value.mul, recover, sub_eq_add_neg]
+    simpa only [shift, inv, Option.map_some] using
+      range_real_index (fun i : ℕ => ((i+o : ℕ) : ℝ)) recover left swap f x n
+
 end QSym.Summation
