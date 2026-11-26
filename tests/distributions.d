@@ -252,7 +252,11 @@ private Case[] cases(){
 	Case("ImageCoordinateRegular","Λx. λ[(1+abs(x)+[0≤x]·2)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). 2/3·δ(0)[x]+(((abs(x)+[0≤x]·2+1)^2)⁻¹·([x<0]+[0<x]))·λ[x]"),
 	Case("ImageCoordinateMixed","Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹]","Distribution(ℝ)"),
 	Case("ImageCoordinateHigher","λ(k:Distribution(ℝ)→ℝ). k(Λx. λ[(1+[0≤x]·1)⁻¹])","(Distribution(ℝ)→ℝ)→ℝ"),
-	Case("ImageCoordinateIrrational","Λx. λ[sqrt(1+[0≤x]·1)]","Distribution(ℝ)","Λ(x:ℝ). λ[(sqrt([0≤x]+1))]"),
+	Case("RootImageDescending","Λx. λ[sqrt(2+[x<0]·1)]","Distribution(ℝ)","Λ(x:ℝ). (-sqrt(2)+sqrt(3))·δ(0)[x]+0·λ[x]"),
+	Case("RootImageFraction","Λx. λ[sqrt(1/4+[0≤x]·1/4)]","Distribution(ℝ)","Λ(x:ℝ). (1/2·sqrt(2)-1/2)·δ(0)[x]+0·λ[x]"),
+	Case("RootImageTwo","Λx. λ[sqrt(2+[x<0]·2+[1<x]·3)]","Distribution(ℝ)","Λ(x:ℝ). (-sqrt(2)+2)·δ(0)[x]+((-sqrt(2)+sqrt(5))·δ(1)[x]+0·λ[x])"),
+	Case("RootImagePartial","Λx. λ[sqrt(1+[0≤x]·1) | u. 1<u<2]","Distribution(ℝ)","Λ(x:ℝ). λ[sqrt([0≤x]+1) | u. 1<u∧u<2]"),
+	Case("ImageCoordinateIrrational","Λx. λ[sqrt(1+[0≤x]·1)]","Distribution(ℝ)","Λ(x:ℝ). (sqrt(2)-1)·δ(0)[x]+0·λ[x]"),
 	Case("ChangedCoordinateExp","Λx. λ[exp(abs(x))]","Distribution(ℝ)","Λ(y:ℝ). (∫dx λ[x]·δ(x^2)[y]·[x=0])+(([y<0]+[0<y])·exp(abs(y)))·λ[y]"),
 	Case("ChangedCoordinateExpLeft","densityAtD(Λx. λ[exp(abs(x))],-1)","ℝ","e"),
 	Case("ChangedCoordinateLogLeft","densityAtD(Λx. λ[log(1+abs(x))],-3)","ℝ","1/4"),
@@ -1511,8 +1515,10 @@ private void run(string directory){
 			enforce((certificate.indexOf("Grid.finishImageRestricted ")>=0)==handled,c.name~" restricted change");
 			if(handled) enforce(certificate.indexOf("Grid.restrictedJumpFromLimits ")>=0,c.name~" clipped traversal");
 		}
+		if(c.name.indexOf("RootImage")==0||c.name=="ImageCoordinateIrrational")
+			enforce((certificate.indexOf("Grid.sqrtImageJump ")>=0)==(c.name!="RootImagePartial"),c.name~" exact radical jump");
 		if(c.name.indexOf("ImageCoordinate")==0)
-			enforce((certificate.indexOf("Grid.finishImage ")>=0)==(c.name!="ImageCoordinateIrrational"),c.name~" image events");
+			enforce(certificate.indexOf("Grid.finishImage ")>=0,c.name~" image events");
 		if(c.name.indexOf("ChangedCoordinate")==0)
 			enforce(certificate.indexOf("Grid.finishChange")>=0||certificate.indexOf("Grid.probeChange")>=0,c.name~" missing smooth change of a grid");
 		if(c.name=="UnchangedCoordinateLogZero")

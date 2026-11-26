@@ -46,6 +46,62 @@ theorem reciprocalTrace (q k : ℚ) (hk : k = q⁻¹) : (q:ℝ)⁻¹ = (k:ℝ) :
 theorem sqrtTrace (q k : ℚ) (hn : 0 ≤ k) (hs : k^2 = q) : Real.sqrt (q:ℝ) = (k:ℝ) := by
   rw [← hs, Rat.cast_pow, Real.sqrt_sq (Rat.cast_nonneg.mpr hn)]
 
+private theorem sqrt_gap_one {l r : ℝ} (hl : 0 ≤ l) (hr : 0 ≤ r) :
+    Real.sqrt r - Real.sqrt l = 1 ↔ 0 ≤ r - l - 1 ∧ (r - l - 1)^2 = 4*l := by
+  have sl := Real.sq_sqrt hl
+  have sr := Real.sq_sqrt hr
+  have nn := Real.sqrt_nonneg l
+  constructor
+  · intro h
+    have e : Real.sqrt r = Real.sqrt l + 1 := by linarith
+    rw [e] at sr
+    have d : r - l - 1 = 2 * Real.sqrt l := by nlinarith only [sr, sl]
+    rw [d]
+    exact ⟨by positivity, by nlinarith only [sl]⟩
+  · rintro ⟨hn, hs⟩
+    have d := (sq_eq_sq₀ hn (show 0 ≤ 2 * Real.sqrt l by positivity)).mp
+      (show (r - l - 1)^2 = (2 * Real.sqrt l)^2 by rw [hs]; nlinarith only [sl])
+    have e := (sq_eq_sq₀ (Real.sqrt_nonneg r) (show 0 ≤ Real.sqrt l + 1 by positivity)).mp
+      (show (Real.sqrt r)^2 = (Real.sqrt l + 1)^2 by nlinarith only [sl, sr, d])
+    linarith only [e]
+
+/-- Rational arithmetic decides whether a square-root jump is exactly one,
+even when the endpoint values cannot be written as rationals. -/
+def sqrtUnitGap (l r : ℚ) : Bool :=
+  let d := max l r - min l r - 1
+  decide (0 ≤ d ∧ d^2 = 4 * min l r)
+
+theorem sqrtImageJump {g : ℝ → ℝ} {a : ℝ} (l r : ℚ)
+    (ends : Tendsto g (𝓝[<] a) (𝓝 (l:ℝ)) ∧ Tendsto g (𝓝[>] a) (𝓝 (r:ℝ)))
+    (hl : (l:ℝ) ∈ Ioi (0:ℝ)) (hr : (r:ℝ) ∈ Ioi (0:ℝ)) (hne : l ≠ r)
+    {av lo hi minus : Option ℝ} (ha : av = some a) (hlo : lo = some ((min l r : ℚ):ℝ))
+    (hhi : hi = some ((max l r : ℚ):ℝ)) (hm : minus = some ((-1:ℚ):ℝ)) :
+    atCut (Real.sqrt ∘ g) a none =
+      if sqrtUnitGap l r then diracValue av else scaleValue
+        (Value.add (Functions.sqrtR.apply hi) (Value.mul minus (Functions.sqrtR.apply lo))) (diracValue av) := by
+  subst av; subst lo; subst hi; subst minus
+  change 0 < (l:ℝ) at hl
+  change 0 < (r:ℝ) at hr
+  have lo0 : 0 ≤ ((min l r : ℚ):ℝ) := by rw [Rat.cast_min]; exact le_min hl.le hr.le
+  have hi0 : 0 ≤ ((max l r : ℚ):ℝ) := by rw [Rat.cast_max]; exact hl.le.trans (le_max_left _ _)
+  have dist : |Real.sqrt (r:ℝ) - Real.sqrt (l:ℝ)| =
+      Real.sqrt ((max l r : ℚ):ℝ) - Real.sqrt ((min l r : ℚ):ℝ) := by
+    rcases le_total l r with h | h
+    · rw [max_eq_right h, min_eq_left h, abs_of_nonneg (sub_nonneg.mpr (Real.sqrt_le_sqrt (Rat.cast_le.mpr h)))]
+    · rw [max_eq_left h, min_eq_right h, abs_of_nonpos (sub_nonpos.mpr (Real.sqrt_le_sqrt (Rat.cast_le.mpr h))), neg_sub]
+  have unit : (Real.sqrt ((max l r : ℚ):ℝ) - Real.sqrt ((min l r : ℚ):ℝ) = 1) ↔ sqrtUnitGap l r = true := by
+    rw [sqrt_gap_one lo0 hi0]
+    simp only [sqrtUnitGap, decide_eq_true_eq]
+    norm_cast
+  rw [ChangeOn.sqrt.atCut ends.1 ends.2 hl hr, if_neg (Rat.cast_injective.ne hne)]
+  change atom a (some |Real.sqrt (r:ℝ) - Real.sqrt (l:ℝ)|) = _
+  rw [dist, atom]
+  have lp : 0 < ((min l r : ℚ):ℝ) := by rw [Rat.cast_min]; exact lt_min hl hr
+  have hp : 0 < ((max l r : ℚ):ℝ) := by rw [Rat.cast_max]; exact hl.trans_le (le_max_left _ _)
+  rw [ScalarChange.sqrt.value _ hp, ScalarChange.sqrt.value _ lp]
+  simp only [Option.some.injEq, unit]
+  simp only [Rat.cast_neg, Rat.cast_one, Value.add, Value.mul, neg_one_mul, sub_eq_add_neg]
+
 /-- The equality is of distributions, so the regular term is retained even
 when its Jacobian vanishes on every cell. -/
 theorem finishImage {s h op jac f w es ds} (c : ScalarChange s h op jac)

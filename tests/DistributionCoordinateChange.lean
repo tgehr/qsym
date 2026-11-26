@@ -1,4 +1,4 @@
-import QSym.DistributionCoordinateChange
+import QSym.DistributionCoordinateGridImage
 import QSym.DistributionCoordinateProbe
 import QSym.DistributionCoordinateMass
 import QSym.AxiomCheck
@@ -6,6 +6,11 @@ import QSym.AxiomCheck
 noncomputable section
 namespace QSym.Distribution.GraphFibre.Coordinates.ChangeTests
 open VariationChart Filter Set Topology
+
+-- Squaring alone accepts the first pair spuriously. The second pair jumps
+-- downwards by exactly one and still denotes a unit Dirac.
+example : Grid.sqrtUnitGap (1/16) (9/16) = false := rfl
+example : Grid.sqrtUnitGap (9/4) (1/4) = true := rfl
 
 private def step (x : ℝ) : ℝ := if x < 0 then 0 else 1
 
