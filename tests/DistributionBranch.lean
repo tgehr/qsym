@@ -193,6 +193,13 @@ theorem variation_coordinate_rule {ι : Type} {gs : ι → ℝ → Option ℝ} {
     Coordinates.value (some gs) = c.present none := by qsym_rule
 
 #qsym_check_axioms variation_coordinate_rule
+theorem variation_density_rule {ι : Type} {gs : ι → ℝ → Option ℝ} {c : Coordinates.VariationChart}
+    (hc : Coordinates.Displays gs c) (x : ℝ) :
+    densityAtValue (Coordinates.value (some gs)) (some x) =
+      if x ∈ c.cuts then none else some |deriv c.coord x| := by qsym_rule
+
+#qsym_check_axioms variation_density_rule
+#qsym_check_axioms Coordinates.VariationChart.charge_present
 #qsym_check_axioms Coordinates.VariationChart.atCut_of_limits
 #qsym_check_axioms jumping_coordinate_pieces
 #qsym_check_axioms joined_coordinate_rule
