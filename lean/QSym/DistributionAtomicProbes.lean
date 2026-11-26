@@ -61,7 +61,7 @@ theorem Represents.fill {d : D α} {k : Weights α} (h : Represents d k) (t : α
   | scale hr hd ih => simp only [integrate, ih (visited_scale _ _ ▸ ht)]
 
 /-- A signed test is the difference of two total nonnegative tests. -/
-private theorem Represents.split {d : D α} {k : Weights α} (h : Represents d k) (t : α → ℝ)
+theorem Represents.split {d : D α} {k : Weights α} (h : Represents d k) (t : α → ℝ)
     {a b : ℝ} (ha : integrate d (fun x => some (max (t x) 0)) = some a)
     (hb : integrate d (fun x => some (max (-t x) 0)) = some b) :
     integrate d (fun x => some (t x)) = some (a-b) := by

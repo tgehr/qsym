@@ -1,5 +1,5 @@
 import QSym.DistributionAtomicKernelRules
-import QSym.DistributionAtomicMonotone
+import QSym.DistributionAtomicLimit
 import QSym.AxiomCheck
 
 noncomputable section
@@ -72,6 +72,20 @@ theorem false_mass : (step.lfp false).1 () = 1/2 := by
 theorem observed_mass : massValue (kernelSeriesAt body false) = some (1/2) := by
   rw [kernel_mass (semantics false), tsum_eq_single () (fun y hy => (hy (Subsingleton.elim y ())).elim), false_mass]
   norm_num [finiteReal, ENNReal.toReal_div]
+
+theorem negative_reward : probe (kernelSeriesAt body false) (fun _ => some (-3)) = some (-3/2) := by
+  have charge (v : ℝ) : positiveCharge (step.lfp false).1 (fun _ => v) =
+      (1/2) * ENNReal.ofReal v := by
+    rw [positiveCharge, tsum_eq_single () (fun y hy => (hy (Subsingleton.elim y ())).elim), false_mass]
+  have finite (v : ℝ) : (1/2 : ℝ≥0∞) * ENNReal.ofReal v ≠ ∞ :=
+    ENNReal.mul_ne_top (by norm_num) ENNReal.ofReal_ne_top
+  rw [kernel_partial_signed (semantics false) _ (Or.inl (by rw [charge]; exact finite _))]
+  simp only [Option.getD_some, charge, finiteReal, if_neg (finite _), ENNReal.toReal_mul]
+  norm_num [ENNReal.toReal_div, ENNReal.ofReal_of_nonpos (by norm_num : (-3 : ℝ) ≤ 0),
+    QSym.Value.add, QSym.Value.mul]
+
+#qsym_check_axioms negative_reward
+#qsym_check_axioms probe_increments_presents
 
 private def zeroBody (_ : Unit → Option (D Bool)) (_ : Unit) : Option (D Bool) := scaleValue (some 0) (diracValue (some true))
 private def zeroKernel : Kernel Unit Bool := fun _ => scaleModel 0 (atom true, {true})

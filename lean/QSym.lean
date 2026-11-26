@@ -52,7 +52,7 @@ import QSym.Binding
 import QSym.DistributionRecursion
 import QSym.DistributionAtomicAffine
 import QSym.DistributionAtomicKernelRules
-import QSym.DistributionAtomicMonotone
+import QSym.DistributionAtomicLimit
 import QSym.DistributionAtomicDivergence
 import QSym.DistributionAtomicOrbit
 import QSym.DistributionAtomicTransport
