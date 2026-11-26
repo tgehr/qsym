@@ -1705,7 +1705,22 @@ private Case[] cases(){
 	Case("SolvedFunctionSum","λ(t:ℝ).∫dx [0≤x]*[2*x+t+3*x≤1]*λ[x]","ℝ→ℝ","λ(t:ℝ). [t≤1]·(-t·(1/5)+1/5)"),
 	Case("SolvedNested","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x+y≤1]*λ[x]*λ[y]","ℝ","1/2"),
 	Case("SolvedNestedSum","∫dy [0≤y]*[y≤1]*λ[y]*∫dx [0≤x]*[x+y+x≤1]*λ[x]","ℝ","1/4"),
-	Case("SolvedBothSides","∫dx [0≤x]*[x≤1]*[x+a≤2*x+b]*λ[x]","ℝ"),
+	Case("SolvedBothSides","∫dx [0≤x]*[x≤1]*[x+a≤2*x+b]*λ[x]","ℝ","[0<a-b∧a-b≤1]·(-a+b+1)+[a-b≤0]"),
+	Case("SolvedBothUpper","∫dx [0≤x]*[x≤1]*[3*x+a≤2*x+b]*λ[x]","ℝ","[-a+b<1∧0≤-a+b]·(-a+b)+[1≤-a+b]"),
+	Case("SolvedBothAxis","∫dx [0≤x]*[x≤1]*[x≤2*x+b]*λ[x]","ℝ","[b<0∧-1≤b]·(b+1)+[0≤b]"),
+	Case("SolvedBothStrict","∫dx [0≤x]*[x≤1]*[2*x+a<x/2+b]*λ[x]","ℝ","[-a·(2/3)+b·(2/3)≤1∧0<-a·(2/3)+b·(2/3)]·(-a·(2/3)+b·(2/3))+[1<-a·(2/3)+b·(2/3)]"),
+	Case("SolvedBothNegative","∫dx [0≤x]*[x≤1]*[a-x≤b-3*x]*λ[x]","ℝ","[-a·(1/2)+b·(1/2)<1∧0≤-a·(1/2)+b·(1/2)]·(-a·(1/2)+b·(1/2))+[1≤-a·(1/2)+b·(1/2)]"),
+	Case("SolvedBothValue","∫dx [0≤x]*[x+a≤2*x]*e^(-x)*λ[x]","ℝ","[0<a]·exp(-a)+[a≤0]"),
+	Case("SolvedBothMoment","∫dx [0≤x]*[x≤1]*[x+a≤2*x+b]*x*λ[x]","ℝ","[0<a-b∧a-b≤1]·(-(a-b)·(a·(1/2)-b·(1/2))+1/2)+[a-b≤0]·(1/2)"),
+	Case("SolvedBothTwo","∫dx [x+a≤2*x]*[3*x≤x+b]*λ[x]","ℝ","[a≤b·(1/2)]·(-a+b·(1/2))"),
+	Case("SolvedBothChain","∫dx [0≤x]*[x≤1]*[x+a<2*x+b]*[2*x+b≤3*x+c]*λ[x]","ℝ","[0≤a-b∧a-b<1]·([a-b<b-c∧b-c≤1]·(-b+c+1)+[b-c≤a-b]·(-a+b+1))+[a-b<0]·([0<b-c∧b-c≤1]·(-b+c+1)+[b-c≤0])"),
+	Case("SolvedBothDomain","∫dx [0≤x]*[x≤1]*[x≤2*x+b]*(1/c)*λ[x]","ℝ","[b<0]·([-1≤b]·(guard(c≠0,(b+1)·c⁻¹)))+[0≤b]·(guard(c≠0,c⁻¹))"),
+	Case("SolvedBothDomainUpper","∫dx [0≤x]*[x≤1]*[3*x+a≤2*x+b]*(1/c)*λ[x]","ℝ","[-a+b<1]·([0≤-a+b]·(guard(c≠0,(-a+b)·c⁻¹)))+[1≤-a+b]·(guard(c≠0,c⁻¹))"),
+	Case("SolvedBothPartial","∫dx [0≤x]*[x≤1]*[x+log(a)≤2*x]*λ[x]","ℝ","guard(0<a,[1<a∧log(a)≤1]·(-log(a)+1)+[a≤1])"),
+	Case("SolvedBothFunction","λ(t:ℝ).∫dx [0≤x]*[x≤1]*[x+t≤3*x]*λ[x]","ℝ→ℝ","λ(t:ℝ). [0<t∧t≤2]·(-t·(1/2)+1)+[t≤0]"),
+	Case("SolvedBothNested","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[2*x+y≤x+2*y]*λ[x]*λ[y]","ℝ","1/2"),
+	Case("SolvedBothNestedValue","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[2*x+y≤x+2*y]*x*y*λ[x]*λ[y]","ℝ","1/8"),
+	Case("SolvedBothEqual","∫dx [0≤x]*[x≤1]*[x+a≤x+b]*λ[x]","ℝ","[a≤b]"),
 	Case("SolvedSlope","∫dx [0≤x]*[x≤1]*[a*x≤1]*λ[x]","ℝ"),
 	Case("SolvedSquare","∫dx [0≤x]*[x≤1]*[x^2≤a]*λ[x]","ℝ"),
 	Case("QuotientPoleTwo","∫dx [1≤x≤2]*(1/(x+1)+1/x)*λ[x]","ℝ"),
@@ -3631,18 +3646,29 @@ private void run(string directory){
 		// a closed form, by whatever rule: a bound that competes with
 		// others, also below a binder. The domain of a value takes the
 		// negation of the comparison along, and that is solved with it. A
-		// comparison with the axis on both sides, a slope that is a term and
-		// a power of the axis keep their integral.
+		// comparison with the axis on both sides, each of degree one, is a
+		// bound too: an upper one where the larger slope is on the left, a
+		// lower one otherwise, by one term for the comparison and for its
+		// negation; with equal slopes the simplifier has taken the axis out
+		// before. A slope that is a term and a power of the axis keep their
+		// integral.
 		if(c.name.indexOf("Solved")==0){
 			enum src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
-			bool retained=among("SolvedBothSides","SolvedSlope","SolvedSquare");
+			bool retained=among("SolvedSlope","SolvedSquare");
+			bool both=c.name.indexOf("SolvedBoth")==0,cancelled=among("SolvedBothEqual");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
-			enforce(has("Linear.axis ")!=retained,c.name~" axis");
+			enforce(has("Linear.axis ")==(!retained&&!cancelled),c.name~" axis");
 			bool rightNegative=among("SolvedNegative","SolvedRightNegative","SolvedConvolution");
 			bool leftNegative=among("SolvedNegativeLeft","SolvedConvolution");
-			enforce(has("solve_left ")==(!retained&&!leftNegative&&!rightNegative&&!among("SolvedRight")),c.name~" upper bound from the left");
+			bool bothUpper=among("SolvedBothUpper","SolvedBothStrict","SolvedBothNegative","SolvedBothTwo","SolvedBothDomain","SolvedBothDomainUpper");
+			bool bothLower=both&&!cancelled&&!among("SolvedBothUpper","SolvedBothStrict","SolvedBothNegative");
+			enforce(has("solve_both ")==bothUpper,c.name~" upper bound from both sides");
+			enforce(has("solve_both_neg ")==bothLower,c.name~" lower bound from both sides");
+			enforce(has("solve_both true ")==among("SolvedBothStrict","SolvedBothDomain"),c.name~" strict upper bound from both sides");
+			enforce(has("solve_both_neg true ")==among("SolvedBothChain","SolvedBothDomainUpper"),c.name~" strict lower bound from both sides");
+			enforce(has("solve_left ")==(!retained&&!both&&!leftNegative&&!rightNegative&&!among("SolvedRight")),c.name~" upper bound from the left");
 			enforce(has("solve_left_neg ")==leftNegative,c.name~" lower bound from the left");
 			enforce(has("solve_right ")==among("SolvedRight","SolvedDomain"),c.name~" lower bound from the right");
 			enforce(has("solve_right_neg ")==rightNegative,c.name~" upper bound from the right");
@@ -3653,7 +3679,8 @@ private void run(string directory){
 			if(among("SolvedNegativeLeft")) enforce(has("Linear.scale "),c.name~" literal in front of the axis");
 			if(among("SolvedOffset")) enforce(has("Linear.add_left "),c.name~" term behind the axis");
 			if(among("SolvedNegative")) enforce(has("Linear.add_right "),c.name~" term in front of the axis");
-			enforce((certificate.indexOf("Distribution.DensityProgram.mass_third_")>=0)==among("SolvedCompeting","SolvedConvolution","SolvedNested"),c.name~" competing bounds");
+			enforce((certificate.indexOf("Distribution.DensityProgram.mass_third_")>=0)==(among("SolvedCompeting","SolvedConvolution","SolvedNested")||
+				both&&!cancelled&&!among("SolvedBothValue","SolvedBothTwo")),c.name~" competing bounds");
 		}
 		if(offset){
 			bool retained=c.name=="HalfLineOffsetGrowing"||c.name=="LimitOffsetGrowing",limit=c.name.indexOf("Limit")==0;

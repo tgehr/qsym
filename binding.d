@@ -1916,7 +1916,10 @@ final class Bindings{
 	// Such a comparison is a bound of the axis by the difference of the
 	// other side and those terms, times the inverse of the slope, from the
 	// other side where the slope is negative; both are missing exactly where
-	// a term is. The weight with every such comparison solved, equal to it
+	// a term is. Or both sides are of degree one, with different slopes,
+	// `x+a≤2·x+b`: a bound of the axis by the difference of what the two
+	// sides have beside it, times the inverse of the difference of the
+	// slopes. The weight with every such comparison solved, equal to it
 	// at every point; none where there is nothing to solve. With `under`,
 	// the evaluation of a subterm of the source at a point, the proof of
 	// that equation is built with it.
@@ -1933,6 +1936,27 @@ final class Bindings{
 			if(q.op==BoundOp.primitive&&(isOp(id,Op.le)||isOp(id,Op.lt))&&type(at(q.a))==real_){
 				bool da=depends(at(q.a),0),db=depends(at(q.b),0); auto side=da?q.a:q.b,other=da?q.b:q.a;
 				Rational p;
+				if(da&&db){
+					// The axis on both sides. With the larger slope on the left
+					// the axis is bounded from above, and from below otherwise,
+					// by the same term: what the side with the smaller slope has
+					// beside the axis minus what the other has, times the inverse
+					// of the difference of the slopes. So a comparison and its
+					// negation, which the domain of a value has, give one bound.
+					Rational r;
+					if(!slope(q.a,p,0)||!slope(q.b,r,0)||(p-r).zero) return Spread(id);
+					bool upper=r<p; auto kappa=Rational(1)/(upper?p-r:r-p); if(kappa.words>64) return Spread(id);
+					string e1,e2; auto left=offset(q.a,e1),right=offset(q.b,e2),zero=arena.real_(0);
+					auto addOp=arena.add(zero,zero,true),mulOp=arena.mul(arena.real_(1),arena.real_(1),true);
+					auto minus=scalar(inner,arena.real_(Rational(-1))),k=scalar(inner,arena.real_(kappa));
+					auto difference=upper?primitive(addOp,[right,primitive(mulOp,[minus,left])]):primitive(addOp,[left,primitive(mulOp,[minus,right])]);
+					auto solved=primitive(mulOp,[difference,k]),x=variable(inner,0);
+					auto result=primitive(arena.at(q.data),upper?[x,solved]:[solved,x]);
+					string proof;
+					if(under) proof="("~src~"solve_both"~(upper?"":"_neg")~(isOp(id,Op.lt)?" true":" false")~
+						" (f := fun x : ℝ => "~under(q.a)~") (g := fun x : ℝ => "~under(q.b)~") "~SourceCertificates.q(kappa)~" "~e1~" "~e2~" rfl "~literal(Rational(-1))~" "~literal(kappa)~" x)";
+					return Spread(result.id,proof);
+				}
 				if(da==db||axis(side)||!slope(side,p,0)||p.zero) return Spread(id);
 				auto kappa=Rational(1)/p; if(kappa.words>64) return Spread(id);
 				string e; auto terms=offset(side,e),zero=arena.real_(0);

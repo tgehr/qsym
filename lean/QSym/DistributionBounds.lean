@@ -1045,6 +1045,69 @@ theorem solve_right_neg (σ : Bool) {f : ℝ → Option ℝ} {p : ℚ} {s m k : 
   · rw [← div_eq_mul_inv, lt_div_iff_of_neg hp]
     constructor <;> intro h <;> linarith
 
+/-- The axis on both sides of a comparison, each of degree one, with a larger
+slope on the left: an upper bound of the axis by the difference of what the
+two sides have beside it, over the difference of the slopes. -/
+theorem solve_both (σ : Bool) {f g : ℝ → Option ℝ} {p q : ℚ} {s t m k : Option ℝ} (κ : ℚ)
+    (hf : Linear f p s) (hg : Linear g q t) (hκ : decide ((p - q) * κ = 1 ∧ 0 < κ) = true)
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ)) (x : ℝ) :
+    compare σ (f x) (g x) = compare σ (some x) (Value.mul (Value.add t (Value.mul m s)) k) := by
+  obtain ⟨hpk, hpos⟩ := of_decide_eq_true hκ
+  subst hm hk
+  rw [hf.equation, hg.equation]
+  rcases s with _ | c
+  · rw [solved_missing _ _ (Or.inr rfl), compare_missing_right]
+    exact compare_missing_left σ _
+  rcases t with _ | d
+  · rw [solved_missing _ _ (Or.inl rfl), compare_missing_right]
+    exact compare_missing_right σ _
+  rw [solved_value, slope_inverse hpk]
+  have hp := slope_positive hpk hpos
+  have hp' : (0 : ℝ) < (p : ℝ) - (q : ℝ) := by exact_mod_cast hp
+  show compare σ (some ((p : ℝ) * x + c)) (some ((q : ℝ) * x + d)) = _
+  rw [compare_real, compare_real]
+  congr 1
+  apply decide_eq_decide.2
+  have hcast : (((p - q : ℚ) : ℝ)) = (p : ℝ) - (q : ℝ) := by push_cast; ring
+  rw [hcast]
+  cases σ <;> simp only [holds, Bool.false_eq_true, if_false, if_true]
+  · rw [← div_eq_mul_inv, le_div_iff₀ hp']
+    constructor <;> intro h <;> nlinarith
+  · rw [← div_eq_mul_inv, lt_div_iff₀ hp']
+    constructor <;> intro h <;> nlinarith
+
+/-- With a larger slope on the right: a lower bound, by the term that is the
+upper bound in the comparison the other way round. -/
+theorem solve_both_neg (σ : Bool) {f g : ℝ → Option ℝ} {p q : ℚ} {s t m k : Option ℝ} (κ : ℚ)
+    (hf : Linear f p s) (hg : Linear g q t) (hκ : decide ((q - p) * κ = 1 ∧ 0 < κ) = true)
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ)))
+    (hk : k = some (Numeric.denote (s := .real) κ)) (x : ℝ) :
+    compare σ (f x) (g x) = compare σ (Value.mul (Value.add s (Value.mul m t)) k) (some x) := by
+  obtain ⟨hpk, hpos⟩ := of_decide_eq_true hκ
+  subst hm hk
+  rw [hf.equation, hg.equation]
+  rcases t with _ | d
+  · rw [solved_missing _ _ (Or.inr rfl), compare_missing_left]
+    exact compare_missing_right σ _
+  rcases s with _ | c
+  · rw [solved_missing _ _ (Or.inl rfl), compare_missing_left]
+    exact compare_missing_left σ _
+  rw [solved_value, slope_inverse hpk]
+  have hp := slope_positive hpk hpos
+  have hp' : (0 : ℝ) < (q : ℝ) - (p : ℝ) := by exact_mod_cast hp
+  show compare σ (some ((p : ℝ) * x + c)) (some ((q : ℝ) * x + d)) = _
+  rw [compare_real, compare_real]
+  congr 1
+  apply decide_eq_decide.2
+  have hcast : (((q - p : ℚ) : ℝ)) = (q : ℝ) - (p : ℝ) := by push_cast; ring
+  rw [hcast]
+  cases σ <;> simp only [holds, Bool.false_eq_true, if_false, if_true]
+  · rw [← div_eq_mul_inv, div_le_iff₀ hp']
+    constructor <;> intro h <;> nlinarith
+  · rw [← div_eq_mul_inv, div_lt_iff₀ hp']
+    constructor <;> intro h <;> nlinarith
+
 /-- At that one point it is zero. -/
 theorem Linear.zero_at {f : ℝ → Option ℝ} {p : ℚ} {s : Option ℝ} (h : Linear f p s)
     (hp : p ≠ 0) {c : ℝ} (hs : s = some c) : Value.nonzero (f (-c / p)) = some false := by
