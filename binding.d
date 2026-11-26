@@ -135,6 +135,9 @@ private struct IntervalTerm{
 	// coefficient over the curvature in the argument.
 	bool curvatureTerm; uint side=uint.max;
 }
+// One affine operation around a turning coordinate. The axis-independent
+// coefficient has the same scalar syntax at every endpoint.
+private struct CoordinateAffine{ Term coefficient; bool right,scale; }
 // With `domain` the value is under a strict guard that does not mention the
 // axis; with `hoisted` that guard stands around the mask, after the negations
 // of the comparisons of the mask. With `half` there is a single bound: a
@@ -159,6 +162,7 @@ private struct IntervalData{
 	bool direct;
 	IntervalTerm[] terms;
 	uint coordinate=uint.max,turning=uint.max,lowerLimit=uint.max,upperLimit=uint.max; bool decreasing;
+	CoordinateAffine[] affine;
 }
 // A Gaussian integral. With `symbolic` the constant and linear coefficients of
 // the exponent are terms: `vertex` is `-1/(4·c₂)`, `moments` is the polynomial
@@ -2451,6 +2455,28 @@ final class Bindings{
 				break;
 		}
 		return primitive(arena.inv(zero),[den]);
+	}
+
+	// Keep the directed coordinate intact unless the wrappers lead to a
+	// turning function with a known variation primitive.
+	private void turningCoordinate(uint body,ref IntervalData d){
+		d.coordinate=body;
+		CoordinateAffine[] affine;
+		while(nodes[body].op==BoundOp.primitive){
+			auto n=nodes[body],op=arena.view(arena.at(n.data));
+			if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&
+				(op.value==Builtin.coshR||op.value==Builtin.sinR||op.value==Builtin.cosR)){
+				d.turning=body; d.coordinate=n.a; d.affine=affine; return;
+			}
+			if(op.op!=Op.add&&op.op!=Op.mul) return;
+			bool right=!depends(at(n.b),0);
+			auto term=at(right?n.b:n.a),coefficient=scalarBody(term,Term.init);
+			if(coefficient==Term.init) return;
+			Rational q;
+			if(arena.view(coefficient).arity&&!closedRational(term,q,coefficient)) return;
+			affine~=CoordinateAffine(coefficient,right,op.op==Op.mul);
+			body=right?n.a:n.b;
+		}
 	}
 
 	private static string increasingChange(CoordinateChange change){
@@ -5111,15 +5137,7 @@ final class Bindings{
 				if(d.unit==uint.max&&(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
 					return BoundTerm.init;
 			}
-			d.coordinate=nodes[row.a].a;
-			auto outer=nodes[d.coordinate];
-			if(outer.op==BoundOp.primitive){
-				auto op=arena.view(arena.at(outer.data));
-				if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&
-					(op.value==Builtin.coshR||op.value==Builtin.sinR||op.value==Builtin.cosR)){
-					d.turning=d.coordinate; d.coordinate=outer.a;
-				}
-			}
+			turningCoordinate(nodes[row.a].a,d);
 			string evidence;
 			if(!directedCoordinate(d.coordinate,false,evidence)){
 				if(!directedCoordinate(d.coordinate,true,evidence)) return BoundTerm.init;
@@ -5141,8 +5159,9 @@ final class Bindings{
 			}
 			// Along a monotone inner chart the variation primitive accumulates
 			// absolute length, including where the outer coordinate turns.
-			BoundTerm primitiveAt(BoundTerm v){
+			BoundTerm turningPrimitive(BoundTerm v){
 				if(d.turning==uint.max) return v;
+				auto outer=nodes[d.turning];
 				auto mul=arena.mul(zero,zero,true),op=arena.view(arena.at(outer.data));
 				if(op.op==Op.pow){
 					auto mag=primitive(arena.abs(zero),[v]);
@@ -5165,6 +5184,14 @@ final class Bindings{
 				auto h=primitive(arena.at(outer.data),[v]);
 				auto negative=primitive(arena.lt(zero,zero),[v,scalar(scope_,zero)]);
 				return conditional(negative,primitive(sum,[scalar(scope_,arena.real_(1)),primitive(mul,[minus,h])]),primitive(sum,[h,minus]));
+			}
+			BoundTerm primitiveAt(BoundTerm v){
+				auto height=turningPrimitive(v);
+				foreach_reverse(layer;d.affine) if(layer.scale){
+					auto coefficient=scalar(context(v),layer.coefficient);
+					height=primitive(arena.mul(zero,zero,true),[primitive(arena.abs(zero),[coefficient]),height]);
+				}
+				return height;
 			}
 			BoundTerm edge(bool bottom){
 				if(d.turning==uint.max) return limit(at(row.a),bottom);
@@ -10902,6 +10929,18 @@ final class Bindings{
 					change=" ("~grid~"VariationChange.cosh "~eval(z.id)~" "~eval(u.id)~" "~eval(d.minusOne)~" "~
 						cert.closedProof(z,Rational(0))~" "~cert.closedProof(u,Rational(1))~" "~cert.closedProof(at(d.minusOne),Rational(-1))~")";
 				}
+			}
+			foreach_reverse(layer;d.affine){
+				auto c=scalar(context(at(d.minusOne)),layer.coefficient);
+				cert.roots~=c.id;
+				string value="rfl";
+				if(!totalScalar(c)){
+					Rational coefficient; Term number;
+					enforce(closedRational(c,coefficient,number),"missing affine coordinate coefficient");
+					value=cert.closedProof(c,coefficient);
+				}
+				change=" ("~grid~"VariationChange."~(layer.scale?"scale":"translate")~change~" "~
+					to!string(layer.right)~" "~eval(c.id)~" "~value~")";
 			}
 			string edge(bool bottom){
 				auto e=bottom?d.lowerLimit:d.upperLimit;

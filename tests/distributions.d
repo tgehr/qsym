@@ -408,6 +408,26 @@ private Case[] cases(){
 	Case("PeriodicSpanRayDown","∫dx [0≤x]·λ[sin(atan(-x))]","ℝ","1"),
 	Case("PeriodicSpanUnbounded","∫dx λ[cos(x)]","ℝ"),
 	Case("PeriodicSpanNonmonotone","∫dx [-π≤x≤π]·λ[sin(sin(x))]","ℝ"),
+	Case("AffineTurnScale","∫dx [0≤x≤2*π]·λ[3*sin(x)+4]","ℝ","12"),
+	Case("AffineTurnNegative","∫dx [0≤x≤2*π]·λ[7-2*cos(x)]","ℝ","8"),
+	Case("AffineTurnMillion","∫dx [0≤x≤1000000*π]·λ[3*cos(x)+7]","ℝ","6000000"),
+	Case("AffineTurnRight","∫dx [0≤x≤π]·λ[(cos(x)+4)*(-3)]","ℝ","6"),
+	Case("AffineTurnSquare","∫dx [-2≤x≤1]·λ[3*x²+7]","ℝ","15"),
+	Case("AffineTurnSymbolic","∫dx [0≤x≤2*π]·λ[a*sin(x)+b]","ℝ","4·abs(a)"),
+	Case("AffineTurnPi","∫dx [0≤x≤2*π]·λ[π*cos(x)+e]","ℝ","4·π"),
+	Case("AffineTurnFraction","∫dx [0≤x≤2*π]·λ[1/3*cos(x)-2/3]","ℝ","4/3"),
+	Case("AffineTurnWhole","∫dx λ[7-3*sin(atan(x))]","ℝ","6"),
+	Case("AffineTurnRay","∫dx [0≤x]·λ[5-3*cos(atan(x))]","ℝ","3"),
+	Case("AffineTurnDescending","∫dx λ[6-2*cos(atan(-x))]","ℝ","4"),
+	Case("AffineTurnCosh","∫dx [-1≤x≤1]·λ[3*cosh(x)+2]","ℝ","6·cosh(1)-6"),
+	Case("AffineTurnOffset","∫dx [-1≤x≤1]·λ[atan(x)^2+b]","ℝ","1/8·π^2"),
+	Case("AffineTurnEmpty","∫dx [1<x≤0]·λ[7-2*cos(x)]","ℝ","0"),
+	Case("AffineTurnMissingEndpoint","defined(∫dx [0≤x<undefined(ℝ)]·λ[a*cos(x)+b])","𝔹","false"),
+	Case("AffineTurnNonlinear","∫dx [0≤x≤2*π]·λ[x*sin(x)]","ℝ"),
+	Case("AffineTurnMissingCoefficient","∫dx [0≤x≤2*π]·λ[undefined(ℝ)*cos(x)+1]","ℝ"),
+	Case("AffineTurnOpaque","λ(h:ℕ→ℝ).∫dx [0≤x≤2*π]·λ[h(0)+sin(x)]","(ℕ→ℝ)→ℝ"),
+	Case("AffineTurnHolder","λ(u:ℝ).∫dx [0≤x≤u]·λ[7-2*cos(x)]","ℝ→ℝ"),
+	Case("AffineTurnClosedZero","∫dx [0≤x≤2*π]·λ[0*cos(x)+4]","ℝ","0"),
 	Case("VariationSquareSinh","∫dx [-1≤x≤1]·λ[sinh(x)^2]","ℝ","2·sinh(1)^2"),
 	Case("VariationSquareAtan","∫dx [-1≤x≤1]·λ[atan(x)^2]","ℝ","1/8·π^2"),
 	Case("VariationSquareExp","λ(u:ℝ).∫dx [0≤x<u]·λ[(exp(x)-2)^2]","ℝ→ℝ","λ(u:ℝ). [0<u]·((exp(u)-2)·abs(exp(u)-2)+1)"),
@@ -2296,6 +2316,12 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")
 			enforce(certificate.indexOf("observe_partial_scale_countdown")<0&&text.indexOf("μ")>=0,c.name~" index-dependent scale");
+		if(c.name.indexOf("AffineTurn")==0){
+			bool changed=c.name!="AffineTurnNonlinear"&&c.name!="AffineTurnMissingCoefficient"&&c.name!="AffineTurnOpaque";
+			enforce((certificate.indexOf("Grid.VariationChange.translate ")>=0)==changed,c.name);
+			enforce((certificate.indexOf("Grid.VariationChange.scale ")>=0)==(changed&&c.name!="AffineTurnOffset"),c.name);
+			enforce((text.indexOf("∫")<0)==changed,c.name);
+		}
 		if(c.name.indexOf("PeriodicSpan")==0){
 			bool solved=c.name!="PeriodicSpanUnbounded"&&c.name!="PeriodicSpanNonmonotone";
 			enforce((text.indexOf("∫")<0)==solved,c.name~": "~text);

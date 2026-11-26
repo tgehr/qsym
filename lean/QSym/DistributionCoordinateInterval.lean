@@ -155,6 +155,32 @@ structure VariationChange (h k : ℝ → ℝ) (op prim : Option ℝ → Option �
 
 namespace VariationChange
 
+/-- Translating a coordinate preserves its variation primitive. -/
+theorem translate {h k op prim b} (c : VariationChange h k op prim) (right : Bool)
+    (B : Option ℝ) (hb : B = some b) : VariationChange (fun x => h x + b) k
+      (fun v => if right then Value.add (op v) B else Value.add B (op v)) prim := by
+  refine ⟨c.smooth.add contDiff_const, c.smoothPrimitive, c.increasing, ?_, ?_, c.endpoint⟩
+  · intro x
+    rw [((c.smooth.differentiable le_rfl x).hasDerivAt.add_const b).deriv, c.slope]
+  · intro x
+    cases right <;> simp [hb, c.source, Value.add, add_comm]
+
+/-- A signed output scale multiplies the primitive by its absolute value.
+This includes a zero scale because the inner coordinate is everywhere smooth. -/
+theorem scale {h k op prim a} (c : VariationChange h k op prim) (right : Bool)
+    (A : Option ℝ) (ha : A = some a) : VariationChange (fun x => a * h x) (fun x => |a| * k x)
+      (fun v => if right then Value.mul (op v) A else Value.mul A (op v))
+      (fun v => Value.mul (Value.abs A) (prim v)) := by
+  refine ⟨contDiff_const.mul c.smooth, contDiff_const.mul c.smoothPrimitive,
+    fun _ _ hu => mul_le_mul_of_nonneg_left (c.increasing hu) (abs_nonneg a), ?_, ?_, ?_⟩
+  · intro x
+    rw [((c.smoothPrimitive.differentiable le_rfl x).hasDerivAt.const_mul |a|).deriv,
+      ((c.smooth.differentiable le_rfl x).hasDerivAt.const_mul a).deriv, abs_mul, c.slope]
+  · intro x
+    cases right <;> simp [ha, c.source, Value.mul, mul_comm]
+  · intro x
+    simp [ha, c.endpoint, Value.abs, Value.mul]
+
 /-- Reverse the descending part of a smooth function having its minimum at zero. -/
 def turn (h : ℝ → ℝ) (x : ℝ) := if x < 0 then h 0 - h x else h x - h 0
 
