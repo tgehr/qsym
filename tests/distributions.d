@@ -1434,6 +1434,15 @@ private Case[] cases(){
 	Case("MaskContextOtherPoint","λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·abs(h(x+1))","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(x:ℝ). [h(x)≠0]·abs(h(x+1))"),
 	Case("MaskContextMissing","defined((λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·abs(h(x)))(λ(x:ℝ).x⁻¹)(0))","𝔹","false"),
 	Case("MaskContextMissingGuard","defined((λ(h:ℝ→ℝ).λ(x:ℝ).[h(x)≠0]·([false]·h(x)))(λ(x:ℝ).x⁻¹)(0))","𝔹","false"),
+	Case("OrderedPunctureCoordinate","Λx. [x≠3∧x<4]·λ[(x-3)^2]","Distribution(ℝ)","Λ(x:ℝ). ([x<4]·abs(2·x-6))·λ[x]"),
+	Case("OrderedPunctureLeft","λ(x:ℝ).[x≠3∧cos(x-3)>0∧x≠4]·abs(x-3)","ℝ→ℝ","λ(x:ℝ). [0<cos(x-3)∧x≠4]·abs(x-3)"),
+	Case("OrderedPunctureRight","λ(x:ℝ).[x≠3∧(x≠4∧cos(x-3)>0)]·abs(x-3)","ℝ→ℝ","λ(x:ℝ). [x≠4∧0<cos(x-3)]·abs(x-3)"),
+	Case("OrderedPunctureHiddenPole","λ(x:ℝ).[x≠3∧cos(x-3)<0]·(x-3)⁻¹","ℝ→ℝ","λ(x:ℝ). [cos(x-3)<0]·(x-3)⁻¹"),
+	Case("OrderedPunctureExposedPole","λ(x:ℝ).[x≠3∧cos(x-3)>0]·(x-3)⁻¹","ℝ→ℝ","λ(x:ℝ). [x≠3∧0<cos(x-3)]·(x-3)⁻¹"),
+	Case("OrderedPunctureAfterPartial","λ(h:ℝ→𝔹).λ(x:ℝ).[h(x)∧(x≠3∧cos(x-3)>0)]·abs(x-3)","(ℝ→𝔹)→ℝ→ℝ","λ(h:ℝ→𝔹). λ(x:ℝ). [h(x)∧0<cos(x-3)]·abs(x-3)"),
+	Case("OrderedPunctureAt","densityAtD(Λx. [x≠3∧x<4]·λ[(x-3)^2],3)","ℝ","0"),
+	Case("OrderedPunctureCut","densityAtD(Λx. [x≠3∧x<4]·λ[(x-3)^2],4)","ℝ","0"),
+	Case("OrderedPunctureMass","∫dx [2≤x≤4]·[x≠3∧x<4]·λ[(x-3)^2]","ℝ","2"),
 	Case("MaskRootCoordinate","Λx. [x≠3]·λ[(x-3)^2]","Distribution(ℝ)","Λ(x:ℝ). (abs(2·x-6))·λ[x]"),
 	Case("MaskRootFraction","Λx. [x≠1/2]·abs(2*x-1)·λ[x]","Distribution(ℝ)","Λ(x:ℝ). (abs(2·x-1))·λ[x]"),
 	Case("MaskRootPolynomial","λ(x:ℝ).[x^2≠1]·abs(x^2-1)","ℝ→ℝ","λ(x:ℝ). abs(x^2-1)"),
@@ -1616,6 +1625,10 @@ private void run(string directory){
 			bool erased=c.name!="MaskContextReciprocal"&&c.name!="MaskContextNonstrict"&&c.name!="MaskContextOtherPoint"&&c.name!="MaskContextMissingGuard";
 			enforce((certificate.indexOf("Value.mask_nonzero_context ")>=0)==erased,c.name);
 		}
+		if(c.name=="OrderedPunctureCoordinate"||c.name=="OrderedPunctureLeft"||c.name=="OrderedPunctureRight"||
+			c.name=="OrderedPunctureHiddenPole"||c.name=="OrderedPunctureAfterPartial")
+			enforce(certificate.indexOf("Distribution.StepSource.affine_mask_of_zero ")>=0&&
+				certificate.indexOf("Distribution.StepSource.mask_mask ")>=0,c.name);
 		if(c.name=="MaskRootCoordinate"||c.name=="MaskRootFraction"||c.name=="MaskRootPolynomial"||
 			c.name=="MaskRootThree"||c.name=="MaskRootOneKept"||c.name=="MaskRootAfterPartial")
 			enforce(certificate.indexOf("Distribution.StepSource.affine_mask_of_zero ")>=0,c.name);

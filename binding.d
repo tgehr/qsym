@@ -232,7 +232,7 @@ private struct AffineChart{
 }
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
-private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max; }
+private struct ScalarDomain{ Term input; Result result,value; uint variable; Sort sort; uint[] path; BoundOp mode; bool polynomial,rational; Term[] rationalConditions; Term excludedPoint; uint affineInput=uint.max,maskBody=uint.max; bool[] conjunctPath; }
 private struct RecurrenceFact{ uint node,index; Term input; Result domain,value; }
 private struct RecurrenceSolution{ uint source,target,base,delta; Law law,zero; bool left,cutoff; ubyte band; uint lower; bool affine,prefix; uint order,variable; Term[] seeds; RecurrenceFact[] facts; uint width; uint[] components; bool indexed,cfinite; CFiniteSequence[] cfModels; CFiniteExpression[] cfExpressions; uint cfRoot,cfSize; bool divide,inclusive,mixed; uint radix,seedFunction,tollFunction; DivideExpression[] divideExpressions; }
 private enum CFiniteKind:ubyte{ zero,constant,index,geometric,add,mul,left,right,map,power,coordinate }
@@ -1574,10 +1574,7 @@ final class Bindings{
 		}
 		return "";
 	}
-	private uint lastConjunct(uint id,out uint[] conjunctions){
-		while(primitiveOp(id,Op.and_)){ conjunctions~=id; id=nodes[id].b; }
-		return id;
-	}
+
 	// The negation of a comparison: the other comparison of its operands in
 	// the other order. Both are primitives, or both scalars.
 	private bool negatedComparison(uint id,uint comparison){
@@ -6303,38 +6300,55 @@ final class Bindings{
 			if(!scalarParam) return BoundTerm.init;
 			auto index=freshScalarIndex(body.id);
 			auto argument=arena.variable(sort,index);
-			BoundTerm rewrite(BoundTerm t,uint[] path,bool masksOnly){
-				auto n=node(t),mode=n.op==BoundOp.defined||n.op==BoundOp.holds?n.op:BoundOp.scalar;
-				if(masksOnly&&primitiveOp(t.id,Op.mask)&&depends(at(n.b),0)){
-					uint[] conjunctions;
-					auto pred=lastConjunct(n.a,conjunctions);
+			// A later guard is evaluated at the exceptional point only when all
+			// earlier guards hold. Check the entire suffix before removing a test.
+			BoundTerm erasePuncture(BoundTerm t,uint[] path){
+				auto n=node(t),maskOp=arena.at(n.data);
+				BoundTerm search(uint pred,bool[] route){
+					auto c=nodes[pred];
+					if(primitiveOp(pred,Op.and_)){
+						auto right=search(c.b,route~true);
+						return right!=BoundTerm.init?right:search(c.a,route~false);
+					}
 					Term point; uint affine=uint.max;
 					if(binderNonzero(pred).length) point=arena.number(Number(0),sort);
-					else if(sort==Sort.real_&&primitiveOp(pred,Op.nonzero)&&type(at(nodes[pred].a))==scalarType(sort)){
+					else if(sort==Sort.real_&&primitiveOp(pred,Op.nonzero)&&type(at(c.a))==scalarType(sort)){
 						Rational slope,offset;
-						if(affineBody(nodes[pred].a,slope,offset)){
-							point=arena.real_((Rational(0)-offset)/slope);
-							affine=nodes[pred].a;
+						if(affineBody(c.a,slope,offset)){
+							point=arena.real_((Rational(0)-offset)/slope); affine=c.a;
 						}
 					}
-					auto input=point==Term.init?Term.init:scalarBody(at(n.b),point);
-					if(input!=Term.init){
-						auto opts=Options(DensityMode.preserve,true),value=simplify(arena,input,opts);
-						if(!value.exhausted&&arena.isNumber(value.output)&&arena.number(value.output).zero){
-							auto domain=simplifyDomain(arena,input,[],opts);
-							if(!domain.exhausted&&domain.output==arena.boolean(true)){
-								extra=cast(uint)scalarDomains.length;
-								auto d=ScalarDomain(input,domain,value,index,sort,path,BoundOp.primitive);
-								d.excludedPoint=point; d.affineInput=affine; scalarDomains~=d;
-								BoundTerm remaining;
-								foreach_reverse(id;conjunctions){
-									auto c=nodes[id];
-									remaining=remaining==BoundTerm.init?at(c.a):primitive(arena.at(c.data),[at(c.a),remaining]);
-								}
-								return remaining==BoundTerm.init?at(n.b):primitive(arena.at(n.data),[remaining,at(n.b)]);
-							}
-						}
+					if(point==Term.init) return BoundTerm.init;
+					auto suffix=at(n.b); uint[] ancestors; auto id=n.a;
+					foreach(right;route){
+						ancestors~=id; auto branch=nodes[id];
+						if(!right) suffix=primitive(maskOp,[at(branch.b),suffix]);
+						id=right?branch.b:branch.a;
 					}
+					if(!depends(suffix,0)) return BoundTerm.init;
+					auto input=scalarBody(suffix,point); if(input==Term.init) return BoundTerm.init;
+					auto opts=Options(DensityMode.preserve,true),value=simplify(arena,input,opts);
+					if(value.exhausted||!arena.isNumber(value.output)||!arena.number(value.output).zero) return BoundTerm.init;
+					auto domain=simplifyDomain(arena,input,[],opts);
+					if(domain.exhausted||domain.output!=arena.boolean(true)) return BoundTerm.init;
+					auto d=ScalarDomain(input,domain,value,index,sort,path,BoundOp.primitive);
+					d.excludedPoint=point; d.affineInput=affine; d.conjunctPath=route;
+					if(suffix.id!=n.b) d.maskBody=suffix.id;
+					extra=cast(uint)scalarDomains.length; scalarDomains~=d;
+					BoundTerm remaining;
+					foreach_reverse(i,parent;ancestors){
+						auto branch=nodes[parent],other=at(route[i]?branch.a:branch.b);
+						if(remaining==BoundTerm.init) remaining=other;
+						else remaining=primitive(arena.at(branch.data),route[i]?[other,remaining]:[remaining,other]);
+					}
+					return remaining==BoundTerm.init?at(n.b):primitive(maskOp,[remaining,at(n.b)]);
+				}
+				return search(n.a,[]);
+			}
+			BoundTerm rewrite(BoundTerm t,uint[] path,bool masksOnly){
+				auto n=node(t),mode=n.op==BoundOp.defined||n.op==BoundOp.holds?n.op:BoundOp.scalar;
+				if(masksOnly&&primitiveOp(t.id,Op.mask)&&(depends(at(n.b),0)||primitiveOp(n.a,Op.and_))){
+					auto changed=erasePuncture(t,path); if(changed!=BoundTerm.init) return changed;
 				}
 				auto source=masksOnly?Term.init:scalarBody(mode==BoundOp.scalar?t:at(n.a),argument);
 				if(source!=Term.init){
@@ -12127,8 +12141,9 @@ final class Bindings{
 						if(depth==d.path.length){
 							if(d.mode!=BoundOp.primitive) return equality;
 							auto mask=nodes[id],z=d.excludedPoint;
-							uint[] conjunctions;
-							auto pred=lastConjunct(mask.a,conjunctions);
+							auto pred=mask.a;
+							foreach(right;d.conjunctPath) pred=right?nodes[pred].b:nodes[pred].a;
+							auto suffix=d.maskBody==uint.max?mask.b:d.maskBody;
 							auto value=arena.castTo(d.value.output,arena.sort(d.input));
 							string zeroProof(Term a){
 								auto term="n"~to!string(a.id);
@@ -12140,17 +12155,25 @@ final class Bindings{
 							auto h0="(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct ξ) ("~prefix~".ValueCertificate.refinement ξ)) "~zeroProof(value)~")";
 							string law;
 							if(d.affineInput==uint.max)
-								law="(Value.mask_nonzero_of_zero "~fn(pred)~" "~binderNonzero(pred)~" "~fn(mask.b)~" (n"~to!string(z.id)~".eval ξ) "~zeroProof(z)~" "~h0~" x)";
+								law="(Value.mask_nonzero_of_zero "~fn(pred)~" "~binderNonzero(pred)~" "~fn(suffix)~" (n"~to!string(z.id)~".eval ξ) "~zeroProof(z)~" "~h0~" x)";
 							else{
 								auto point="n"~to!string(z.id),q=SourceCertificates.q(arena.number(z).re);
-								law="(Distribution.StepSource.affine_mask_of_zero "~affineMasks.get(p.extra,"")~" "~fn(mask.b)~" ("~point~".eval ξ) (Numeric.calculate_sound ξ "~point~" "~q~" rfl) "~h0~" x)";
+								law="(Distribution.StepSource.affine_mask_of_zero "~affineMasks.get(p.extra,"")~" "~fn(suffix)~" ("~point~".eval ξ) (Numeric.calculate_sound ξ "~point~" "~q~" rfl) "~h0~" x)";
 							}
-							foreach_reverse(i,conjunction;conjunctions){
-								auto left="("~name(nodes[conjunction].a)~".eval ξ (Binding.Env.cons (a := .scalar ."~field~") (some x) ρ))";
-								auto lemma=i+1==conjunctions.length?"mask_and_of_right":"mask_and_congr_right";
-								law="(Value."~lemma~" "~left~" "~law~")";
+							string evalAt(uint id){ return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar ."~field~") (some x) ρ))"; }
+							string liftGuard(uint id,size_t depth,string weight){
+								if(depth==d.conjunctPath.length) return law;
+								auto c=nodes[id]; bool leaf=depth+1==d.conjunctPath.length;
+								if(d.conjunctPath[depth]){
+									auto h=liftGuard(c.b,depth+1,weight);
+									return "(Value."~(leaf?"mask_and_of_right":"mask_and_congr_right")~" "~evalAt(c.a)~" "~h~")";
+								}
+								auto right=evalAt(c.b),h=liftGuard(c.a,depth+1,"(Value.mask "~right~" "~weight~")");
+								auto assoc="(Distribution.StepSource.mask_mask "~evalAt(c.a)~" "~right~" "~weight~")";
+								auto eq="(Eq.trans "~assoc~".symm "~h~")";
+								return leaf?eq:"(Eq.trans "~eq~" (Distribution.StepSource.mask_mask _ "~right~" "~weight~"))";
 							}
-							return law;
+							return liftGuard(mask.a,0,evalAt(mask.b));
 						}
 						auto q=nodes[id],left=d.path[depth]==0?wrap(q.a,depth+1):"rfl";
 						if(q.b==uint.max) return "(congrArg "~valueOperation(q)~" "~left~")";
