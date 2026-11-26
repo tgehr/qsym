@@ -3013,11 +3013,18 @@ final class Bindings{
 		witness=uint.max;
 		auto index=freshScalarIndex(rate),k=arena.variable(Sort.natural,index);
 		auto raw=scalarBody(at(rate),k);
-		if(raw==Term.init||arena.view(raw).op!=Op.mul) return BoundTerm.init;
-		auto product=arena.view(raw),num=arena.at(product.a),den=arena.at(product.b);
-		if(arena.view(num).op==Op.inv){ auto t=num; num=den; den=t; }
-		if(arena.view(den).op!=Op.inv) return BoundTerm.init;
-		den=arena.at(arena.view(den).a);
+		if(raw==Term.init) return BoundTerm.init;
+		auto product=arena.view(raw);
+		// Natural and integer quotients are formed in ℚ and then coerced to
+		// the real scale. Inspect that quotient when proposing a candidate.
+		if(product.op==Op.builtin&&product.value==Builtin.castQR) product=arena.view(arena.at(product.a));
+		if(product.op!=Op.mul&&!(product.op==Op.builtin&&product.value==Builtin.mulQ)) return BoundTerm.init;
+		bool inverse(Term t){ auto n=arena.view(t); return n.op==Op.inv||n.op==Op.builtin&&n.value==Builtin.invQ; }
+		auto num=arena.at(product.a),den=arena.at(product.b);
+		if(inverse(num)){ auto t=num; num=den; den=t; }
+		if(!inverse(den)) return BoundTerm.init;
+		den=arena.castTo(arena.at(arena.view(den).a),Sort.real_);
+		num=arena.castTo(num,Sort.real_);
 		auto ctx=context(arg),inner=push(ctx,scalarType(Sort.natural));
 		auto z=arena.natural_(0),one=arena.natural_(1);
 		auto succ=arena.call(Builtin.addN,[k,one]),nextRate=scalarBody(at(rate),succ);

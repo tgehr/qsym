@@ -1500,6 +1500,12 @@ private Case[] cases(){
 	Case("VaryingEmission","λ(k:ℕ).massD("~discountedAtoms("k")~")","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·(2·2^k-2):ℝ)"),
 	Case("ConvolutionSymbolic","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","r","δ((3:ℝ))")~"))","ℝ→ℕ→ℝ"),
 	Case("ConvolutionTwo","λ(r:ℝ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("2","r","δ((3:ℝ))")~"))","ℝ→ℝ","λ(r:ℝ). 3·r^2+r+2"),
+	Case("VisitQuotientNatural","λ(k:ℕ).massD("~scaledSteps("(n+1)/n")~")","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
+	Case("VisitQuotientReciprocal","λ(k:ℕ).massD("~scaledSteps("n/(n+1)")~")","ℕ→ℝ","λ(k:ℕ). ((k+1)⁻¹:ℝ)"),
+	Case("VisitQuotientSquare","λ(k:ℕ).massD("~scaledSteps("(n+1)^2/n^2")~")","ℕ→ℝ","λ(k:ℕ). ((k+1)^2:ℝ)"),
+	Case("VisitQuotientOffset","λ(k:ℕ).massD("~scaledSteps("(n+3)/(n+2)")~")","ℕ→ℝ","λ(k:ℕ). (1/3·(k+3):ℝ)"),
+	Case("VisitQuotientMillion","massD("~scaledSteps("n/(n+1)","1000000")~")","ℝ","1/1000001"),
+	Case("VisitQuotientCrossesZero","defined(massD("~scaledSteps("(n-1)/(n-2)","3")~"))","𝔹","false"),
 	Case("ProductScaleGrowing","λ(k:ℕ).massD("~scaledSteps(growing)~")","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
 	Case("ProductScaleShrinking","λ(k:ℕ).massD("~scaledSteps(shrinking)~")","ℕ→ℝ","λ(k:ℕ). ((k+1)⁻¹:ℝ)"),
 	Case("ProductScaleShifted","λ(k:ℕ).massD("~scaledSteps("(2*(n:ℝ)+5)/(2*(n:ℝ)+3)")~")","ℕ→ℝ","λ(k:ℕ). (2/5·k+1:ℝ)"),
@@ -1665,6 +1671,8 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name.indexOf("VisitQuotient")==0)
+			enforce((certificate.indexOf("Distribution.observe_product_countdown ")>=0)==(c.name!="VisitQuotientCrossesZero"),c.name);
 		if(c.name.indexOf("ProductScale")==0){
 			bool solved=c.name!="ProductScalePole"&&c.name!="ProductScaleHitsPole";
 			enforce((certificate.indexOf("Distribution.observe_product_countdown ")>=0)==solved,c.name);
