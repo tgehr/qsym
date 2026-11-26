@@ -441,8 +441,34 @@ theorem finishRestricted {f w es ds} (pred : ℝ → Option Bool) (h : Checked f
   | nil => rfl
   | cons he _ ih => exact congrArg₂ addValue he ih
 
-/-- Clip a jump on its whole closed traversal. Reuse the ordinary mass
-certificate for the clipped indicator, including its endpoint probes. -/
+/-- Test a partial predicate at every point of the closed traversal. The
+outer interval mask forgets the predicate entirely outside the traversal. -/
+theorem traversalMass (pred : ℝ → Option Bool) (l r : ℝ) {lo hi unit : Option ℝ}
+    (hlo : lo = some (min l r)) (hhi : hi = some (max l r)) (hu : unit = some 1) :
+    branchIntegral (uIcc l r) (fun x => Value.mask (pred x) (some 1)) =
+      massValue (weightValue (some fun x => Value.mask
+        (Value.and (Value.le lo (some x)) (Value.le (some x) hi)) (Value.mask (pred x) unit))
+        lebesgueValue) := by
+  classical
+  subst lo; subst hi; subst unit
+  rw [weighted_lebesgue_mass_bridge, Model.densityMassValue_eq]
+  let s := uIcc l r
+  let v := fun x : ℝ => Value.mask (pred x) (some (1:ℝ))
+  let clipped := fun x : ℝ => Value.mask
+    (Value.and (Value.le (some (min l r)) (some x))
+      (Value.le (some x) (some (max l r)))) (v x)
+  have clip (b c x : ℝ) (t : Option ℝ) : Value.mask
+      (Value.and (Value.le (some b) (some x)) (Value.le (some x) (some c))) t =
+      if b ≤ x ∧ x ≤ c then t else some 0 := by
+    by_cases h : b ≤ x <;> by_cases j : x ≤ c <;> simp [Value.and, Value.le, Value.mask, h, j]
+  have atPoint x : clipped x = if x ∈ s then v x else some 0 := by
+    simp only [clipped, clip]
+    by_cases hx : x ∈ s
+    · exact (if_pos hx).trans (if_pos hx).symm
+    · exact (if_neg hx).trans (if_neg hx).symm
+  exact (branchIntegral_congr measurableSet_uIcc (fun x hx => ((atPoint x).trans (if_pos hx)).symm)).trans
+    (branchIntegral_eq_full measurableSet_uIcc clipped (fun x hx => (atPoint x).trans (if_neg hx)))
+
 theorem restrictedJumpFromLimits {g : ℝ → ℝ} {a : ℝ} (pred : ℝ → Option Bool) (l r k : ℚ)
     (ends : Tendsto g (𝓝[<] a) (𝓝 (l:ℝ)) ∧ Tendsto g (𝓝[>] a) (𝓝 (r:ℝ))) (hne : l ≠ r)
     {lo hi unit : Option ℝ} (hlo : lo = some ((min l r : ℚ):ℝ))
@@ -451,29 +477,67 @@ theorem restrictedJumpFromLimits {g : ℝ → ℝ} {a : ℝ} (pred : ℝ → Opt
       (Value.and (Value.le lo (some x)) (Value.le (some x) hi)) (Value.mask (pred x) unit))
       lebesgueValue) = some (k:ℝ)) :
     VariationChart.atCut g a (some pred) = VariationChart.atom a (some (k:ℝ)) := by
-  classical
   rw [VariationChart.atCut_of_limits ends.1 ends.2, if_neg (Rat.cast_injective.ne hne)]
-  congr 1
-  subst lo; subst hi; subst unit
-  simp only [Rat.cast_one] at hm
-  rw [weighted_lebesgue_mass_bridge, Model.densityMassValue_eq] at hm
-  apply Eq.trans _ hm
-  let s := uIcc (l:ℝ) (r:ℝ)
-  let v := fun x : ℝ => Value.mask (pred x) (some (1:ℝ))
-  let clipped := fun x : ℝ => Value.mask
-    (Value.and (Value.le (some ((min l r : ℚ):ℝ)) (some x))
-      (Value.le (some x) (some ((max l r : ℚ):ℝ)))) (v x)
-  have clip (b c x : ℝ) (t : Option ℝ) : Value.mask
-      (Value.and (Value.le (some b) (some x)) (Value.le (some x) (some c))) t =
-      if b ≤ x ∧ x ≤ c then t else some 0 := by
-    by_cases h : b ≤ x <;> by_cases j : x ≤ c <;> simp [Value.and, Value.le, Value.mask, h, j]
-  have atPoint x : clipped x = if x ∈ s then v x else some 0 := by
-    simp only [clipped, Rat.cast_min, Rat.cast_max, clip]
-    by_cases hx : x ∈ s
-    · exact (if_pos hx).trans (if_pos hx).symm
-    · exact (if_neg hx).trans (if_neg hx).symm
-  exact (branchIntegral_congr measurableSet_uIcc (fun x hx => ((atPoint x).trans (if_pos hx)).symm)).trans
-    (branchIntegral_eq_full measurableSet_uIcc clipped (fun x hx => (atPoint x).trans (if_neg hx)))
+  apply congrArg (VariationChart.atom a)
+  exact (traversalMass pred l r (hlo.trans (congrArg some (Rat.cast_min l r)))
+    (hhi.trans (congrArg some (Rat.cast_max l r))) (by simpa only [Rat.cast_one] using hu)).trans hm
+
+/-- A defined portion of a jump can weigh at most the full traversal.
+Missing endpoint probes still make the integral undefined. -/
+theorem traversalMass_le {l r k : ℝ} (pred : ℝ → Option Bool)
+    (hk : branchIntegral (uIcc l r) (fun x => Value.mask (pred x) (some 1)) = some k) :
+    k ≤ |r-l| := by
+  classical
+  unfold branchIntegral at hk
+  split at hk
+  · rename_i h
+    rw [← Option.some.inj hk, ← Real.volume_real_interval]
+    have total : MeasureTheory.IntegrableOn (fun _ : ℝ => (1:ℝ)) (uIcc l r) :=
+      MeasureTheory.integrableOn_const.mpr (Or.inr isCompact_uIcc.measure_lt_top)
+    have le := MeasureTheory.integral_mono h.2 total (fun x => by
+      cases v : pred x with
+      | none => simp [v, Value.mask]
+      | some b => cases b <;> simp_all [Value.mask])
+    simpa only [MeasureTheory.setIntegral_const, smul_eq_mul, mul_one] using le
+  · contradiction
+
+private theorem atomConditional (a : ℝ) (w : Option ℝ) :
+    VariationChart.atom a w = Binding.conditionalValue (Value.not (Value.nonzero (Value.add w (some (-1:ℝ)))))
+      (diracValue (some a)) (scaleValue w (diracValue (some a))) := by
+  cases w with
+  | none => rfl
+  | some k =>
+    by_cases h : k = 1
+    · subst k; simp [VariationChart.atom, Binding.conditionalValue, Value.add, Value.nonzero, Value.not]
+    · have hn : k + -1 ≠ 0 := by simpa only [← sub_eq_add_neg, sub_ne_zero] using h
+      simp [VariationChart.atom, Binding.conditionalValue, Value.add, Value.nonzero, Value.not, h, hn]
+
+/-- Leave an unsolved source restriction as an ordinary scalar integral.
+On a short jump its weight cannot be the unit weight of a bare Dirac. -/
+theorem restrictedPartialJump {g : ℝ → ℝ} {a : ℝ} (pred : ℝ → Option Bool) (l r : ℚ)
+    (ends : Tendsto g (𝓝[<] a) (𝓝 (l:ℝ)) ∧ Tendsto g (𝓝[>] a) (𝓝 (r:ℝ))) (hne : l ≠ r)
+    {av lo hi unit minus : Option ℝ} (ha : av = some a)
+    (hlo : lo = some ((min l r : ℚ):ℝ)) (hhi : hi = some ((max l r : ℚ):ℝ))
+    (hu : unit = some ((1:ℚ):ℝ)) (hm : minus = some ((-1:ℚ):ℝ)) :
+    let w := massValue (weightValue (some fun x => Value.mask
+      (Value.and (Value.le lo (some x)) (Value.le (some x) hi)) (Value.mask (pred x) unit)) lebesgueValue)
+    VariationChart.atCut g a (some pred) =
+      if |r-l| < 1 then scaleValue w (diracValue av)
+      else Binding.conditionalValue (Value.not (Value.nonzero (Value.add w minus)))
+        (diracValue av) (scaleValue w (diracValue av)) := by
+  subst av; subst minus
+  dsimp only
+  rw [VariationChart.atCut_of_limits ends.1 ends.2, if_neg (Rat.cast_injective.ne hne),
+    ← traversalMass pred l r (hlo.trans (congrArg some (Rat.cast_min l r)))
+      (hhi.trans (congrArg some (Rat.cast_max l r))) (by simpa only [Rat.cast_one] using hu)]
+  simp only [Option.elim_some, Rat.cast_neg, Rat.cast_one]
+  by_cases short : |r-l| < 1
+  · rw [if_pos short, VariationChart.atom, if_neg]
+    intro one
+    have small : |(r:ℝ)-(l:ℝ)| < 1 := by exact_mod_cast short
+    exact (not_le_of_gt small) (traversalMass_le pred one)
+  · rw [if_neg short]
+    exact atomConditional _ _
 
 theorem restrictedJump {f a p q} (pred : ℝ → Option Bool) (l r k : ℚ)
     (g : Germ f a p q) (hl : l = polyEvalQ p a) (hr : r = polyEvalQ q a) (hne : l ≠ r)

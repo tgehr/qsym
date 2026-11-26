@@ -196,6 +196,7 @@ private struct CoordinateJoin{
 	Rational left,right,slope;
 	uint event=uint.max;
 	IntegralSolution* clipped;
+	uint traversal=uint.max;
 	CornerSelection selection;
 	Rational leftImage,rightImage;
 	bool symbolicRoot;
@@ -6224,6 +6225,15 @@ final class Bindings{
 			auto d=distribution(ctx,BoundOp.distributionDirac,[scalar(ctx,arena.real_(a))]);
 			return height==Rational(1)?d:distribution(ctx,BoundOp.distributionScale,[scalar(ctx,arena.real_(height)),d]);
 		}
+		BoundTerm partialJumpAtom(Scope ctx,Rational a,Rational l,Rational r,BoundTerm mass){
+			auto atom=distribution(ctx,BoundOp.distributionDirac,[scalar(ctx,arena.real_(a))]);
+			auto scaled=distribution(ctx,BoundOp.distributionScale,[mass,atom]);
+			if((l<r?r-l:l-r)<Rational(1)) return scaled;
+			auto zero=arena.real_(0);
+			auto gap=primitive(arena.add(zero,zero,true),[mass,scalar(ctx,arena.real_(-1))]);
+			auto unit=primitive(arena.not_(arena.boolean(true)),[primitive(arena.nonzero(zero),[gap])]);
+			return conditional(unit,atom,scaled);
+		}
 		BoundTerm sqrtJumpAtom(Scope ctx,Rational a,Rational l,Rational r){
 			auto lo=l<r?l:r,hi=l<r?r:l;
 			auto delta=hi-lo-Rational(1);
@@ -6307,9 +6317,12 @@ final class Bindings{
 					auto selected=primitive(mask,[at(cert.image?cert.outerPredicate:cert.predicate),scalar(inner,arena.real_(1))]);
 					auto w=primitive(mask,[between,selected]);
 					auto d=distribution(ctx,BoundOp.distributionWeight,[lambda(w),distribution(ctx,BoundOp.distributionLebesgue)]);
+					auto mass=distribution(ctx,BoundOp.distributionMass,[d]);
 					j.clipped=new IntegralSolution;
-					if(integratePolynomials(distribution(ctx,BoundOp.distributionMass,[d]),*j.clipped)==BoundTerm.init)
-						return BoundTerm.init;
+					if(integratePolynomials(mass,*j.clipped)==BoundTerm.init){
+						j.clipped=null;
+						j.traversal=mass.id;
+					}
 				}
 			}
 			BoundTerm weight;
@@ -6358,7 +6371,9 @@ final class Bindings{
 					event=gridAtom(ctx,a,k<Rational(0)?-k:k);
 				}
 				if(pred!=BoundTerm.init){
-					if(join.kind==JoinKind.jump) event=gridAtom(ctx,a,join.clipped.value);
+					if(join.traversal!=uint.max){
+						event=partialJumpAtom(ctx,a,cert.image?join.leftImage:join.left,cert.image?join.rightImage:join.right,at(join.traversal));
+					}else if(join.kind==JoinKind.jump) event=gridAtom(ctx,a,join.clipped.value);
 					else final switch(join.selection){
 						case CornerSelection.active:break;
 						case CornerSelection.inactive:
@@ -9464,31 +9479,37 @@ final class Bindings{
 					}
 					if(!pointProbe) selected="(List.Forall₂.cons (Eq.trans "~cut~" "~shape~") "~selected~")";
 				}else if(restricted){
-					auto mass=*j.clipped;
-					cert.roots~=mass.from[0];
-					string unused;
-					auto hm=stepGridProof(mass,cert,unused);
 					auto l=c.image?j.leftImage:j.left,r=c.image?j.rightImage:j.right;
 					auto lower=l<r?l:r,upper=l<r?r:l;
-					auto args=cert.functionAt(c.image?c.outerPredicate:c.predicate)~" "~q(l)~" "~q(r)~" "~q(mass.value)~" ";
-					string lemma;
-					if(c.image){
-						lemma="restrictedJumpFromLimits";
-						args~=app("imageTraces",op~" "~q(j.left)~" "~q(j.right)~" "~q(l)~" "~q(r)~" "~ends~" "~
-							member(j.left)~" "~member(j.right)~" "~trace(j.left,l)~" "~trace(j.right,r));
-					}else{
-						lemma="restrictedJump";
-						args~=germs~" rfl rfl";
+					auto prefix=cert.functionAt(c.image?c.outerPredicate:c.predicate)~" "~q(l)~" "~q(r)~" ";
+					string limits(){
+						return c.image?app("imageTraces",op~" "~q(j.left)~" "~q(j.right)~" "~q(l)~" "~q(r)~" "~ends~" "~
+							member(j.left)~" "~member(j.right)~" "~trace(j.left,l)~" "~trace(j.right,r)):
+							app("traceValues",q(l)~" "~q(r)~" "~germs~" rfl rfl");
 					}
-					auto clipped=app(lemma,args~" (of_decide_eq_true rfl) "~numeric(arena.real_(lower),lower)~" "~numeric(arena.real_(upper),upper)~
-						" "~numeric(arena.real_(1),Rational(1))~" ("~hm~")");
-					if(pointProbe){
-						hit|=a==sample&&!mass.value.zero;
-						probe=app("PointCuts.atom",q(sample)~" "~q(a)~" "~q(mass.value)~" "~clipped~" "~probe);
-					}else{
-						auto atom=app("atomTerm",q(a)~" "~q(mass.value)~" "~apos~" "~numeric(arena.real_(mass.value),mass.value));
-						selected="(List.Forall₂.cons (Eq.trans "~clipped~" "~atom~") "~selected~")";
+					string boundsProof(){
+						return numeric(arena.real_(lower),lower)~" "~numeric(arena.real_(upper),upper)~" "~numeric(arena.real_(1),Rational(1));
 					}
+					string eventProof;
+					if(j.traversal!=uint.max){
+						eventProof=app("restrictedPartialJump",prefix~limits()~" (of_decide_eq_true rfl) "~apos~" "~boundsProof()~" "~numeric(arena.real_(-1),Rational(-1)));
+					}else{
+						auto mass=*j.clipped;
+						cert.roots~=mass.from[0];
+						string unused;
+						auto hm=stepGridProof(mass,cert,unused);
+						auto evidence=c.image?limits():germs~" rfl rfl";
+						auto clipped=app(c.image?"restrictedJumpFromLimits":"restrictedJump",prefix~q(mass.value)~" "~evidence~
+							" (of_decide_eq_true rfl) "~boundsProof()~" ("~hm~")");
+						if(pointProbe){
+							hit|=a==sample&&!mass.value.zero;
+							probe=app("PointCuts.atom",q(sample)~" "~q(a)~" "~q(mass.value)~" "~clipped~" "~probe);
+						}else{
+							auto atom=app("atomTerm",q(a)~" "~q(mass.value)~" "~apos~" "~numeric(arena.real_(mass.value),mass.value));
+							eventProof="(Eq.trans "~clipped~" "~atom~")";
+						}
+					}
+					if(!pointProbe) selected="(List.Forall₂.cons "~eventProof~" "~selected~")";
 				}
 				law=app("moveBreak",law~" "~eq);
 				events="((("~q(a)~" : ℝ), "~name(j.event)~".eval ξ ρ) :: "~events~")";

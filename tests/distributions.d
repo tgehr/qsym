@@ -252,6 +252,10 @@ private Case[] cases(){
 	Case("WindowProbeRoot","densityAtD(Λx. λ[sqrt(4+[x<0]·5) | u. 3<u],0)","ℝ","0"),
 	Case("ImageWindowPartial","λ(k:ℝ→𝔹). Λx. λ[(1+[0≤x]·1)⁻¹ | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
 	Case("ImageWindowEndpoint","Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-1/2)⁻¹<2]","Distribution(ℝ)"),
+	Case("SymbolicJumpLong","λ(k:ℝ→𝔹). Λx. λ[2·[0≤x] | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
+	Case("SymbolicJumpReversed","λ(k:ℝ→𝔹). Λx. λ[sqrt(4+5·[x<0]) | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
+	Case("SymbolicJumpDistant","densityAtD(Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-1/2)⁻¹<2],2)","ℝ"),
+	Case("SymbolicJumpOutside","Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-2)⁻¹<0]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+0·λ[x]"),
 	Case("ImageCoordinateReciprocal","Λx. λ[(1+[0≤x]·1)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+0·λ[x]"),
 	Case("ImageCoordinateUnit","Λx. λ[sqrt(1+[0≤x]·3)]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
 	Case("ImageCoordinateReverse","Λx. λ[sqrt(4+[x<0]·5)]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
@@ -1505,7 +1509,13 @@ private void run(string directory){
 			bool fallback=c.name=="CountdownDifferentStride"||c.name=="CountdownPartialRatioZero"||c.name=="CountdownPartialRatioOne";
 			enforce((certificate.indexOf("Distribution.mass_scale_countdown")>=0)!=fallback,c.name~" countdown certificate");
 		}
-		if(c.name=="JumpPartialRestriction") enforce(certificate.indexOf("Grid.restrictedJump")<0&&text.indexOf("∫")>=0,c.name);
+		if(c.name.indexOf("SymbolicJump")==0||c.name=="JumpPartialRestriction"||c.name=="ImageWindowPartial"||c.name=="ImageWindowEndpoint"){
+			enforce(certificate.indexOf("Grid.restrictedPartialJump ")>=0,c.name~" partial traversal");
+			enforce(text.indexOf("∫")>=0||c.name=="SymbolicJumpOutside",c.name~" retained a partial integrand");
+			if(c.name=="SymbolicJumpLong"||c.name=="SymbolicJumpReversed") enforce(text.indexOf("if ")>=0,c.name~" unit weight");
+			if(c.name=="ImageWindowPartial") enforce(text.indexOf("if ")<0,c.name~" subunit jump");
+			if(c.name=="SymbolicJumpDistant") enforce(certificate.indexOf("Grid.probeImageAt ")<0,c.name~" unchecked distant traversal");
+		}
 		if(c.name=="UnsplitAbsolute") enforce(text.indexOf("∫")>=0,c.name~": "~text);
 		if(c.name.indexOf("PositiveCoordinate")==0)
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
@@ -1524,9 +1534,9 @@ private void run(string directory){
 			if(c.name.indexOf("ImageWindowCorner")==0)
 				enforce(certificate.length<120_000,c.name~" expanded a whole distribution for one point");
 		}else if(c.name.indexOf("ImageWindow")==0){
-			bool handled=c.name!="ImageWindowPartial"&&c.name!="ImageWindowEndpoint";
-			enforce((certificate.indexOf("Grid.finishImageRestricted ")>=0)==handled,c.name~" restricted change");
-			if(handled) enforce(certificate.indexOf("Grid.restrictedJumpFromLimits ")>=0,c.name~" clipped traversal");
+			enforce(certificate.indexOf("Grid.finishImageRestricted ")>=0,c.name~" restricted change");
+			if(c.name!="ImageWindowPartial"&&c.name!="ImageWindowEndpoint")
+				enforce(certificate.indexOf("Grid.restrictedJumpFromLimits ")>=0,c.name~" clipped traversal");
 		}
 		if(c.name.indexOf("RootImage")==0||c.name=="ImageCoordinateIrrational")
 			enforce((certificate.indexOf("Grid.sqrtImageJump ")>=0)==(c.name!="RootImagePartial"),c.name~" exact radical jump");
