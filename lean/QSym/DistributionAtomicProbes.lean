@@ -47,7 +47,7 @@ theorem Represents.defined_probe {d : D α} {k : Weights α} (h : Represents d k
     change (Value.mul _ _).isSome = true ↔ _
     cases integrate _ t <;> simp [Value.mul]
 
-private theorem Represents.fill {d : D α} {k : Weights α} (h : Represents d k) (t : α → Option ℝ)
+theorem Represents.fill {d : D α} {k : Weights α} (h : Represents d k) (t : α → Option ℝ)
     (ht : ∀ x ∈ visited d, (t x).isSome = true) :
     integrate d t = integrate d (fun x => some ((t x).getD 0)) := by
   induction h with

@@ -1,4 +1,5 @@
 import QSym.DistributionAtomicKernelRules
+import QSym.DistributionAtomicMonotone
 import QSym.AxiomCheck
 
 noncomputable section
@@ -68,6 +69,34 @@ theorem false_mass : (step.lfp false).1 () = 1/2 := by
   norm_num [ENNReal.toReal_mul, ENNReal.toReal_div] at e ⊢
   linarith
 
+theorem observed_mass : massValue (kernelSeriesAt body false) = some (1/2) := by
+  rw [kernel_mass (semantics false), tsum_eq_single () (fun y hy => (hy (Subsingleton.elim y ())).elim), false_mass]
+  norm_num [finiteReal, ENNReal.toReal_div]
+
+private def zeroBody (_ : Unit → Option (D Bool)) (_ : Unit) : Option (D Bool) := scaleValue (some 0) (diracValue (some true))
+private def zeroKernel : Kernel Unit Bool := fun _ => scaleModel 0 (atom true, {true})
+private theorem zero_limit : kernelModelAt zeroBody () = some (zeroKernel ()) := by
+  have rule : KernelRule Set.univ Set.univ zeroBody (OrderHom.const _ zeroKernel) := by
+    apply KernelRule.seed
+    intro _ _
+    exact ⟨_, rfl, by simpa [zeroKernel] using
+      (presents_scale (c := 0) (show Presents (.dirac true) (atom true, {true}) from
+        ⟨Represents.dirac _, visited_dirac _⟩) le_rfl)⟩
+  have e : (OrderHom.const (Kernel Unit Bool) zeroKernel).lfp = zeroKernel :=
+    (OrderHom.const _ zeroKernel).map_lfp.symm
+  simpa [e] using rule.lfp (Set.mem_univ ())
+
+theorem missing_at_zero_weight : probe (kernelSeriesAt zeroBody ()) (fun a => if a then none else some 1) = none := by
+  rw [kernel_fill zero_limit]
+  simp [zeroKernel, scaleModel]
+
+theorem missing_outside_visits : probe (kernelSeriesAt zeroBody ()) (fun a => if a then some 2 else none) = some 0 := by
+  rw [kernel_partial_nonnegative zero_limit _ (fun a => by cases a <;> norm_num)]
+  simp [zeroKernel, scaleModel, finiteReal]
+
+#qsym_check_axioms observed_mass
+#qsym_check_axioms missing_at_zero_weight
+#qsym_check_axioms missing_outside_visits
 -- A missing argument at the unreachable state does not prevent a call.
 theorem partial_argument : KernelRule (α := Unit) {true} {true}
     (fun k x => (if x then some true else none).bind k) (KernelMap.call id) :=
