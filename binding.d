@@ -3405,7 +3405,12 @@ final class Bindings{
 		bool bare=emission!=uint.max&&scale.op==BoundOp.apply;
 		if(!bare&&(scale.op!=BoundOp.distributionScale||depends(at(scale.a),1))) return BoundTerm.init;
 		bool indexedRate=!bare&&depends(at(scale.a),0);
-		if(pointwise&&emission!=uint.max&&(indexedRate||depends(at(emission),0))) return BoundTerm.init;
+		Number rate;
+		bool literalScale=!bare&&nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),rate);
+		bool unitScale=bare||literalScale&&rate.one;
+		bool indexedEmission=emission!=uint.max&&depends(at(emission),0);
+		if(pointwise&&emission!=uint.max&&(indexedRate||indexedEmission&&(!unitScale||
+			nodes[emission].op!=BoundOp.distributionScale||depends(at(nodes[emission].b),0)))) return BoundTerm.init;
 		auto call=bare?scale:nodes[scale.b];
 		if(call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
 		auto pred=nodes[call.b],one=nodes[pred.b],base=at(branch.b);
@@ -3423,16 +3428,13 @@ final class Bindings{
 			if(cumulative==BoundTerm.init) return BoundTerm.init;
 			if(pointwise) return density(distribution(ctx,BoundOp.distributionScale,[apply(cumulative,arg),seedDistribution]));
 		}
-		Number rate;
-		bool literalScale=!bare&&nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),rate);
-		bool unitScale=bare||literalScale&&rate.one;
 		BoundTerm geometricSum(BoundTerm ratio){
 			auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
 			uint[] shift; foreach(j;0..depth(ctx)) shift~=j+1;
 			auto powers=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[rename(ratio,inner,shift),i]);
 			return finiteSum(lambda(powers),arg);
 		}
-		if(pointwise&&emission!=uint.max){
+		if(pointwise&&emission!=uint.max&&!indexedEmission){
 			auto e=substitute(at(emission),ctx,env);
 			BoundTerm add(BoundTerm a,BoundTerm b){ return distribution(ctx,BoundOp.distributionAdd,[a,b]); }
 			BoundTerm scaled(BoundTerm r,BoundTerm d){ return distribution(ctx,BoundOp.distributionScale,[r,d]); }
@@ -3452,7 +3454,7 @@ final class Bindings{
 			env[0]=arg;
 			return conditional(substitute(at(branch.a),ctx,env),density(seedDistribution),density(summed));
 		}
-		if(pointwise){
+		if(pointwise&&emission==uint.max){
 			auto ratio=substitute(at(scale.a),ctx,env);
 			auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[ratio,arg]);
 			Rational q; Term term;
@@ -3467,12 +3469,22 @@ final class Bindings{
 		}
 		if(indexedRate&&emission==uint.max)
 			return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[apply(cumulative,arg),seed]);
-		if(emission!=uint.max&&(indexedRate||depends(at(emission),0))){
+		if(emission!=uint.max&&(indexedRate||indexedEmission)){
 			auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
 			auto oneN=arena.natural_(1);
 			auto successor=primitive(arena.call(Builtin.addN,[oneN,oneN]),[i,scalar(inner,oneN)]);
 			BoundTerm[] rowEnv=[successor,bottom(inner,type(f))];
 			foreach(j;0..depth(ctx)) rowEnv~=variable(inner,j+1);
+			if(pointwise){
+				// Keep the seed and the common emission as distributions until
+				// the accumulated scalar has multiplied both fibre components.
+				auto row=nodes[emission],e=substitute(at(row.b),ctx,env);
+				auto amount=finiteSum(hint(lambda(substitute(at(row.a),inner,rowEnv)),"i"),arg);
+				auto contribution=distribution(ctx,BoundOp.distributionScale,[amount,e]);
+				auto combined=distribution(ctx,BoundOp.distributionAdd,[seedDistribution,contribution]);
+				env[0]=arg;
+				return conditional(substitute(at(branch.a),ctx,env),density(seedDistribution),density(combined));
+			}
 			auto row=observedMass(substitute(at(emission),inner,rowEnv),operations,true);
 			BoundTerm total(BoundTerm initial,BoundTerm summand){
 				auto visits=finiteSum(hint(lambda(summand),"i"),arg);
@@ -13223,6 +13235,11 @@ final class Bindings{
 					bool emitting=step.op==BoundOp.distributionAdd;
 					bool swapped=emitting&&depends(at(step.a),1);
 					string value(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+					auto emission=swapped?step.b:step.a;
+					bool indexed=emitting&&depends(at(emission),0);
+					string indexedFunction(uint id){
+						return "(fun (u : Option ℕ) => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .natural) u (Binding.Env.cons (a := "~leanType(type(at(call.a)))~") none ρ)))";
+					}
 					if(pointwise&&emitting){
 						auto base=nodes[target.b].a,sum=nodes[nodes[target.c].a],tail=nodes[swapped?step.a:step.b];
 						Number rate;
@@ -13230,11 +13247,12 @@ final class Bindings{
 						string law,scale; uint visit;
 						Rational q; Term raw;
 						if(unit){
-							law="unit_countdown"; visit=nodes[sum.b].b;
+							law=indexed?"factored_countdown":"unit_countdown"; visit=nodes[sum.b].b;
 							if(tail.op==BoundOp.distributionScale){
 								auto one="n"~to!string(nodes[tail.a].data);
 								scale="("~one~".eval ξ) (Numeric.calculate_real_one ξ "~one~" rfl) true";
 							}else scale="(some 1) rfl false";
+							if(indexed) scale=indexedFunction(nodes[emission].a)~" "~scale;
 						}else if(nodes[tail.a].op==BoundOp.scalar&&closedRational(at(tail.a),q,raw)&&q!=Rational(1)){
 							law="centered_countdown";
 							auto limit=nodes[sum.a],delta=nodes[nodes[sum.b].b],minus=nodes[delta.b];
@@ -13274,11 +13292,6 @@ final class Bindings{
 						foreach(id;ops) d=nodes[id].op==BoundOp.distributionWeight?nodes[d].b:nodes[d].a;
 						return d;
 					}
-					auto emission=swapped?step.b:step.a;
-					bool indexed=emitting&&depends(at(emission),0);
-					string indexedVisit(){
-						return "(fun (u : Option ℕ) => "~name(emission)~".eval ξ (Binding.Env.cons (a := .scalar .natural) u (Binding.Env.cons (a := "~leanType(type(at(call.a)))~") none ρ)))";
-					}
 					if(p.rule==BindingRule.distributionProductCountdown){
 						auto formula=pointwise?nodes[target.a]:target,candidate=nodes[nodes[formula.a].a].a;
 						auto base=pointwise?formula.b:observedInput(emitting?nodes[formula.b].a:formula.b);
@@ -13310,7 +13323,7 @@ final class Bindings{
 						}
 						auto law=pointwise?"RealDensityFibre.product_countdown":emitting?"observe_product_emitting_countdown":"observe_product_countdown";
 						auto observer=pointwise?"":" "~massObserver(ops,false),query=pointwise?" ("~name(n.b)~".eval ξ ρ)":"";
-						auto visit=emitting?indexedVisit()~" ":"";
+						auto visit=emitting?indexedFunction(emission)~" ":"";
 						string nonzero;
 						if(emitting){
 							auto inverseCheck=p.extra+(d.product is null?2:3);
@@ -13323,7 +13336,7 @@ final class Bindings{
 					if(indexed&&partial){
 						auto positive=nodes[target.c],ratio=nodes[nodes[positive.a].a].a;
 						proof=".ofEq (fun ξ ρ => Distribution.observe_convolution_countdown "~massObserver(ops,false)~" (rec"~f~") (fixed"~f~") ("~
-							name(observedInput(target.b))~".eval ξ ρ) "~indexedVisit()~" ("~name(ratio)~".eval ξ ρ) "~(swapped?"true":"false")~
+							name(observedInput(target.b))~".eval ξ ρ) "~indexedFunction(emission)~" ("~name(ratio)~".eval ξ ρ) "~(swapped?"true":"false")~
 							" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))";
 						break;
 					}
@@ -13344,7 +13357,7 @@ final class Bindings{
 							factor="(n"~id~".eval ξ) (Numeric.calculate_real_one ξ n"~id~" rfl) true";
 						}
 						string visit;
-						if(indexed) visit=indexedVisit();
+						if(indexed) visit=indexedFunction(emission);
 						else{
 							auto mask=nodes[target.b],amount=nodes[mask.b];
 							visit="("~name(observedInput(amount.b))~".eval ξ ρ)";

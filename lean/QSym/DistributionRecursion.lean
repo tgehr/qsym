@@ -741,5 +741,39 @@ theorem centered_countdown
   exact (observe_emitting_countdown (observation c x) p hf b e r swap step arg).trans
     (geometric_emission q hq hr hg hm (component c x b) (component c x e) arg)
 
+/-- Each positive visit emits a source-dependent scalar multiple of the same
+distribution. Sum the scalars before combining its fibre with the seed. -/
+theorem factored_countdown
+    (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b e : Option (D ℝ))
+    (w : Option ℕ → Option ℝ) (r : Option ℝ) (hr : r = some 1) (scaled swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let tail := (Functions.subN.apply (some n) (some 1)).bind g
+       let d := if scaled then scaleValue r tail else tail
+       let row := scaleValue (w (some n)) e
+       if swap then addValue d row else addValue row d))
+    (arg : Option ℕ) (x : Option ℝ) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg))) (densityAtValue b x)
+      (densityAtValue (addValue b (scaleValue
+        (Summation.rangeValue (some (fun i => w (Functions.addN.apply (some i) (some 1)))) arg) e)) x) := by
+  apply density_cases
+  intro c
+  rw [observe_indexed_countdown (observation c x) p hf b (fun k => scaleValue (w k) e) r hr scaled swap step arg]
+  simp only [component_scale, component_add]
+  rw [SummationElementary.scale_rev Value.mul rfl (component c x e)
+    (fun i => w (Functions.addN.apply (some i) (some 1))) arg]
+  rcases arg with _ | n
+  · cases component c x b <;> rfl
+  · cases n with
+    | zero =>
+      simpa [Functions.castNZ, Function1.apply, Functions.nonzeroZ, Functions.nonzeroN,
+        Value.not, Value.mask, Binding.conditionalValue] using Value.add_zero_right (component c x b)
+    | succ n =>
+      have hn : (n : ℤ) + 1 ≠ 0 := by omega
+      simp [Functions.nonzeroZ, Functions.nonzeroN, Functions.castNZ, Function1.apply,
+        Value.not, Value.mask, Binding.conditionalValue, hn, SummationElementary.mul_swap (component c x e)]
+
 end RealDensityFibre
 end QSym.Distribution

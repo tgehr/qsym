@@ -1866,6 +1866,22 @@ private Case[] cases(){
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
 	Case("CapturedScaleMissingIndex","λ(r:ℝ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(0 sub 1))","ℝ→ℝ","λ(r:ℝ). undefined(ℝ)"),
 	Case("VariableScaleByIndex","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD((n:ℝ),f(n sub 1)))(k))","ℝ→ℕ→ℝ"),
+	Case("FibreWeightsCancellation","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","2")~",0)","ℝ","1"),
+	Case("FibreWeightsBefore","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","1","1",true)~",0)","ℝ","undefined(ℝ)"),
+	Case("FibreWeightsAfter","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","3")~",0)","ℝ","undefined(ℝ)"),
+	Case("FibreWeightsSymbolic","λ(k:ℕ).densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","k")~",0)","ℕ→ℝ","λ(k:ℕ). [k=0]·(undefined(ℝ))+[k≠0]·(guard(k·(-1/2·k-1/2)=-3,(1:ℝ)))"),
+	Case("FibreWeightsMillion","densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ),lebesgueD())","","1000000",true)~",2)","ℝ","500000500001"),
+	Case("FibreWeightsPolynomial","λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ)^2,lebesgueD())","","k")~",0)","ℕ→ℝ","λ(k:ℕ). ([k=0]+[k≠0]·(k·(k·(1/3·k+1/2)+1/6)+1):ℝ)"),
+	Case("FibreWeightsZero","densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ),undefined(Distribution(ℝ)))","","0")~",0)","ℝ","1"),
+	Case("FibreWeightsMissing","defined(densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ),undefined(Distribution(ℝ)))","","1")~",0))","𝔹","false"),
+	Case("FibreWeightsDefinedPrefix","densityAtD("~emittedSteps("lebesgueD()","scaleD(((n:ℝ)-3)⁻¹,lebesgueD())","","2")~",0)","ℝ","-1/2"),
+	Case("FibreWeightsPole","defined(densityAtD("~emittedSteps("lebesgueD()","scaleD(((n:ℝ)-3)⁻¹,lebesgueD())","","3")~",0))","𝔹","false"),
+	Case("FibreWeightsPartialCore","defined(densityAtD("~emittedSteps("(Λx. x⁻¹·λ[x])","scaleD((n:ℝ),lebesgueD())","","2")~",0))","𝔹","false"),
+	Case("FibreWeightsMissingIndex","defined(densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ),lebesgueD())","","0 sub 1")~",0))","𝔹","false"),
+	Case("FibreWeightsMissingQuery","defined(densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ),lebesgueD())","","2")~",undefined(ℝ)))","𝔹","false"),
+	Case("FibreWeightsFunction","λ(w:ℕ→ℝ).λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","scaleD(w(n),lebesgueD())","","k")~",0)","(ℕ→ℝ)→ℕ→ℝ","λ(w:ℕ→ℝ). λ(k:ℕ). [k≠0]·(guard(0·(∑(i:ℕ). [i<k]·(w(i+1)))=0,(∑(i:ℕ). [i<k]·(w(i+1)))+1))+[k=0]"),
+	Case("FibreWeightsDistribution","λ(b:Distribution(ℝ)).λ(v:Distribution(ℝ)).λ(w:ℕ→ℝ).λ(k:ℕ).densityAtD("~emittedSteps("b","scaleD(w(n),v)","1","k",true)~",0)","Distribution(ℝ)→Distribution(ℝ)→(ℕ→ℝ)→ℕ→ℝ"),
+	Case("FibreWeightsMoving","densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ),δ((n:ℝ)))","","2")~",1)","ℝ","undefined(ℝ)"),
 	Case("FibreEmissionAtCancellation","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","scaleD(-1,δ((0:ℝ)))","","1")~",0)","ℝ","1"),
 	Case("FibreEmissionBeforeCancellation","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","scaleD(-1,δ((0:ℝ)))","","0")~",0)","ℝ","undefined(ℝ)"),
 	Case("FibreEmissionAfterCancellation","densityAtD("~emittedSteps("addD(δ((0:ℝ)),lebesgueD())","scaleD(-1,δ((0:ℝ)))","","2")~",0)","ℝ","undefined(ℝ)"),
@@ -2162,6 +2178,11 @@ private void run(string directory){
 			bool uses=c.name!="ScalarAsymptoteLogisticRegular"&&c.name!="ScalarAsymptoteOpposite"&&
 				c.name!="ScalarAsymptoteOscillation"&&c.name!="ScalarAsymptoteOpaque"&&c.name!="ScalarAsymptoteMissing";
 			enforce((certificate.indexOf("Limit.Escapes.")>=0)==uses,c.name);
+		}
+		if(c.name.indexOf("FibreWeights")==0){
+			bool factored=c.name!="FibreWeightsMoving";
+			enforce((certificate.indexOf("Distribution.RealDensityFibre.factored_countdown ")>=0)==factored,c.name);
+			if(factored) enforce(text.indexOf("μ")<0,c.name);
 		}
 		if(c.name.indexOf("FibreEmission")==0){
 			bool constant=c.name.indexOf("Geometric")>=0||c.name.indexOf("Signed")>=0||c.name.indexOf("Zero")>=0;
