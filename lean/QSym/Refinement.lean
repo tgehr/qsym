@@ -815,8 +815,28 @@ macro "qsym_sqrt_product" : tactic => `(tactic| (
   | solve | apply Value.refines_sqrt_div_pi <;> assumption
   | solve | apply Value.refines_sqrt_div_neg_pi <;> assumption))
 
+open Lean Meta Elab Tactic in
+elab "qsym_imaginary_argument" : tactic => do
+  let goal ← getMainTarget
+  unless goal.isAppOfArity ``Value.Refines 3 do throwError "not a refinement"
+  let lhs := goal.appFn!.appArg!
+  unless lhs.isAppOf ``Function1.apply do throwError "not a unary function"
+  let functions := #[``Functions.sinC, ``Functions.cosC, ``Functions.tanC,
+    ``Functions.sinhC, ``Functions.coshC, ``Functions.tanhC]
+  let arg := lhs.appArg!
+  unless functions.any (fun n => lhs.appFn!.appArg!.isConstOf n) && arg.isAppOf ``Value.mul &&
+      (arg.appFn!.appArg!.find? (·.isConstOf ``Complex.I)).isSome do
+    throwError "not a complex trigonometric function at an imaginary multiple"
+  evalTactic (← `(tactic| (
+    apply Value.refines_of_eq
+    simp [Function1.apply, Value.mul, Functions.cosC, Functions.sinC, Functions.tanC,
+      Functions.coshC, Functions.sinhC, Functions.tanhC, Elementary.sin_imaginary, Elementary.cos_imaginary,
+      Elementary.tan_imaginary, Elementary.sinh_imaginary, Elementary.cosh_imaginary, Elementary.tanh_imaginary]
+    all_goals split <;> simp_all [Value.mul])))
+
 macro "qsym_rule" : tactic => `(tactic| (
   first
+  | solve | qsym_imaginary_argument
   | solve | qsym_distribution
   | solve | apply Value.refines_of_eq; apply Value.powerR_add_pos; assumption
   | solve | apply Value.refines_of_eq; symm; apply Value.powerR_add_pos; assumption
