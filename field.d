@@ -254,7 +254,9 @@ package final class Field{
 		auto f=factor(t),s=a.sort(t);
 		auto e=f.exponent<0?-f.exponent:f.exponent;
 		auto p=d.refl(f.atom,ctx);
-		if(e==1){
+		// A factor may be written as the first power already.
+		auto written=f.exponent<0?a.at(a.view(t).a):t;
+		if(e==1&&written==f.atom){
 			auto i=instantiate(a,s==Sort.real_?Law.real_power_one:Law.complex_power_one,[f.atom]);
 			auto old=i.before; i.before=i.result; i.result=old; i.reversed=true;
 			p=d.rule(i,[],ctx);

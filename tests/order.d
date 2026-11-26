@@ -179,7 +179,16 @@ Example[] examples(){
 		Example("OrderedAbsPartial","[log(y)≤x]*abs(x-log(y))","[log(y)≤x]*(x-log(y))"),
 		Example("OrderedAbsOther","[y≤x]*abs(x-t)","[y≤x]*abs(x-t)"),
 		Example("OrderedRoot","[y≤x]*sqrt((x-y)^2)","[y≤x]*(x-y)"),
-		Example("OrderedMaximum","[y≤x]*max(x-y,0)","[y≤x]*(x-y)")
+		Example("OrderedMaximum","[y≤x]*max(x-y,0)","[y≤x]*(x-y)"),
+		// A comparison with a square root whose argument has the square of a
+		// sum. Where powers are multiplied out the square is split into two
+		// first powers, and it is met again in a premise while one half is
+		// normalized. There the halves come back as they are, and the two
+		// first powers are joined again, which ended in an internal error.
+		// The comparisons stay as they are written.
+		Example("FirstPowerRoot","[0≤y+sqrt((y+1)^2+1)]","[0≤y+sqrt((y+1)^2+1)]"),
+		Example("FirstPowerSum","[0≤y+sqrt((y+t)^2+x)]","[0≤y+sqrt((y+t)^2+x)]"),
+		Example("FirstPowerBounds","[0≤x]*[y-sqrt((y+1)^2+t)≤x]*[x≤y+sqrt((y+1)^2+t)]","[0≤x]*[y-sqrt((y+1)^2+t)≤x]*[x≤y+sqrt((y+1)^2+t)]")
 	];
 }
 private Syntax syntax(){ Syntax s; s.declare("x:ℝ,y:ℝ,t:ℝ,z:ℂ,p:𝔹,q:𝔹"); return s; }
