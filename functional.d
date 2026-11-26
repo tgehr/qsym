@@ -824,7 +824,9 @@ struct FunctionSyntax{
 				case BoundOp.apply:
 					auto f=b.node(b.at(n.a));
 					if(f.op==BoundOp.distributionMaskedGraph) goto case BoundOp.distributionGraphFibre;
-					return (f.op==BoundOp.variable||f.op==BoundOp.global?child(n.a):"("~child(n.a)~")")~"("~child(n.b)~")";
+					auto parameter=pool.view(b.type(b.at(n.a))).fields[0];
+					return (f.op==BoundOp.variable||f.op==BoundOp.global?child(n.a):"("~child(n.a)~")")~
+						"("~render(b.at(n.b),locals,depth+1,parameter)~")";
 				case BoundOp.sequence:return "seq("~child(n.a)~","~child(n.b)~")";
 				case BoundOp.subset:return "("~child(n.a)~"⊆"~child(n.b)~")";
 				case BoundOp.member:return "("~child(n.b)~"∈"~child(n.a)~")";
@@ -838,6 +840,32 @@ struct FunctionSyntax{
 				default:assert(0);
 			}
 			auto printer=scalar; printer.variables=printer.variables.dup; Table!(uint,uint) memo;
+			// Use identifiers of the known operand types while checking scalar
+			// overloads. An application or binder is printed in its own scope.
+			Table!(string,string) spelling; uint serial;
+			string placeholder(string display){
+				string token;
+				for(;;){
+					token=fresh(locals,"qsymOperand"~to!string(serial++)); bool used;
+					foreach(p;printer.variables) if(p.name==token){ used=true; break; }
+					if(!used) break;
+				}
+				spelling.set(token,display); return token;
+			}
+			string restore(string text){
+				if(!serial) return text;
+				import qsym.lexer:Lexer,TokenKind;
+				import std.array:appender;
+				auto lexer=Lexer(text),out_=appender!string(); size_t start;
+				for(;;){
+					auto token=lexer.next(); if(token.kind==TokenKind.end) break;
+					if(token.kind!=TokenKind.identifier) continue;
+					auto display=spelling.get(token.text,""); if(!display.length) continue;
+					out_.put(text[start..token.offset]); out_.put(display);
+					start=token.offset+token.text.length;
+				}
+				out_.put(text[start..$]); return out_.data;
+			}
 			// A range sum reparses from its masked, unbounded spelling. This can
 			// reverse its position in the scalar syntax tree. Allocate its
 			// printing variable after the other operands, in either spelling.
@@ -859,7 +887,8 @@ struct FunctionSyntax{
 				if(v.op==BoundOp.finiteSum||v.op==BoundOp.summation){
 					sums~=SumOperand(x.id,name,sort);
 				}else{
-					memo.set(x.id,a.variable(sort,cast(uint)printer.variables.length).id); printer.variables~=Parameter(name,sort);
+					memo.set(x.id,a.variable(sort,cast(uint)printer.variables.length).id);
+					printer.variables~=Parameter(v.op==BoundOp.variable?name:placeholder(name),sort);
 				}
 			}
 			allocate(t);
@@ -867,7 +896,7 @@ struct FunctionSyntax{
 			sort!((x,y)=>x.text<y.text)(sums);
 			foreach(s;sums){
 				memo.set(s.id,a.variable(s.sort,cast(uint)printer.variables.length).id);
-				printer.variables~=Parameter(s.text,s.sort);
+				printer.variables~=Parameter(placeholder(s.text),s.sort);
 			}
 			Term flatten(BoundTerm x){
 				auto found=memo.get(x.id,uint.max); if(found!=uint.max) return a.at(found);
@@ -875,10 +904,11 @@ struct FunctionSyntax{
 				auto r=a.viewRebuild(a.at(v.data),args,true);
 				memo.set(x.id,r.id); return r;
 			}
-			auto flat=flatten(t),text=printer.format(a,flat);
-			if(expected==b.type(t)&&numericLiteral(text)) return text;
+			auto flat=flatten(t),typed=printer.format(a,flat);
+			if(expected==b.type(t)&&numericLiteral(typed)) return typed;
 			bool same;
-			try{ auto check=printer; same=a.sort(check.parse(a,text))==a.sort(flat); }catch(Exception){}
+			try{ auto check=printer; same=a.sort(check.parse(a,typed))==a.sort(flat); }catch(Exception){}
+			auto text=restore(typed);
 			return same?text:"("~text~":"~typeName(scalarType(a.sort(flat)))~")";
 		}
 		if(result.outputAxis.length&&pool.view(b.type(result.reduction.output)).kind==TypeKind.distribution){

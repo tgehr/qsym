@@ -27,7 +27,7 @@ private Case[] cases(){
 		Case("LimitApplied","(λ(c:ℝ). lim[x→∞] c+exp(-x))(2)","2"),
 		Case("LimitScaleDomain","lim[x→∞] exp(-x)/a","a≠0","",true),
 		Case("LimitSymbolicFunction","lim[x→∞] f(x)","lim[x→∞] f(x)","f:ℝ→ℝ"),
-		Case("LimitInProduct","2·lim[x→∞] sin(x)","(2·(lim[x→∞] sin(x)):ℝ)"),
+		Case("LimitInProduct","2·lim[x→∞] sin(x)","2·(lim[x→∞] sin(x))"),
 		Case("FunctionBody","λ(x:ℝ). x/x"),
 		Case("GlobalBodyDomain","λ(x:ℝ). y/y","","y:ℝ"),
 		Case("FunctionValueDefined","defined(λ(x:ℝ). 1/x)","true"),

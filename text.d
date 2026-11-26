@@ -78,7 +78,7 @@ struct Syntax{
 	/// Prints without scalar injections. Reparse and simplify to recover the
 	/// normal form; the spelling need not retain a redundant original sort.
 	string format(Arena a,Term root){
-		struct Piece{ string text; uint precedence=100; bool negative,iverson; }
+		struct Piece{ string text; uint precedence=100; bool negative,iverson; string indicatorConjunct; }
 		Piece[] memo=new Piece[a.length];
 		bool[] symbolic=new bool[a.length];
 		string render(Piece p,uint precedence=0,bool magnitude=false){
@@ -265,9 +265,12 @@ struct Syntax{
 				case Op.mask:
 					if(a.isNumber(a.at(n.b))&&a.number(a.at(n.b)).one){
 						p.text="["~arg(n.a)~"]";
-						p.iverson=true;
-					}
-					else p=Piece("["~arg(n.a)~"]·"~arg(n.b,71),70);
+						p.indicatorConjunct=arg(n.a,41);
+					}else if(memo[n.b].indicatorConjunct.length&&!memo[n.b].negative){
+						// Adjacent indicators evaluate their predicates from left to right.
+						auto test=arg(n.a,40)~"∧"~memo[n.b].indicatorConjunct;
+						p.text="["~test~"]"; p.indicatorConjunct="("~test~")";
+					}else p=Piece("["~arg(n.a)~"]·"~arg(n.b,71),70);
 					p.iverson=true;
 					break;
 				case Op.builtin:
