@@ -1,5 +1,6 @@
 import QSym.Binding
 import QSym.DistributionAtomicObservation
+import QSym.DistributionFibreCertificate
 import QSym.SummationElementary
 
 /-! Scalar observations of recursive distributions. The recursive value is a
@@ -553,4 +554,102 @@ theorem mass_scale_countdown {α : Type} (p : Recursion.Program ℕ (D α) (D α
     massValue (fn.bind (fun g => arg.bind g)) = Value.mul (Functions.powRN.apply r arg) (massValue base) :=
   observe_scale_countdown .mass p hf base r hr step arg
 
+namespace RealDensityFibre
+
+/-- Both observations are linear, including when signed atoms cancel.
+Extract the pointwise density only after computing the two components. -/
+def component (charge : Bool) (x : Option ℝ) (d : Option (D ℝ)) : Option ℝ := do
+  let v ← d
+  let y ← x
+  let fibre := realFibre v y
+  if charge then some fibre.charge else fibre.regular
+
+theorem observation (c : Bool) (x : Option ℝ) : Atomic.Observation (component c x) := by
+  cases x with
+  | none => exact .absent fun d => by cases d <;> rfl
+  | some x =>
+    apply Atomic.Observation.linear
+    refine ⟨rfl, ?_, ?_, ?_⟩
+    · cases c <;> rfl
+    · intro a b
+      cases a <;> cases b <;> cases c <;> simp [component, addValue, realFibre, add, Value.add]
+    · intro r d
+      cases r <;> cases d <;> cases c <;> simp [component, scaleValue, realFibre, scale, Value.mul]
+
+theorem component_scale (c : Bool) (x r : Option ℝ) (d : Option (D ℝ)) :
+    component c x (scaleValue r d) = Value.mul r (component c x d) :=
+  observe_scale (observation c x) r d
+
+private theorem certificate (d : Option (D ℝ)) (x : Option ℝ) :
+    FibreCertificate d x (component true x d) (component false x d) := by
+  cases d <;> cases x <;> constructor <;> rfl
+
+theorem density_congr {d e : Option (D ℝ)} {x : Option ℝ}
+    (h : ∀ c, component c x d = component c x e) : densityAtValue d x = densityAtValue e x := by
+  rw [(certificate d x).extract, (certificate e x).extract, h true, h false]
+
+private theorem density_cases (p : Option Bool) {d a b : Option (D ℝ)} {x : Option ℝ}
+    (h : ∀ c, component c x d = Binding.conditionalValue p (component c x a) (component c x b)) :
+    densityAtValue d x = Binding.conditionalValue p (densityAtValue a x) (densityAtValue b x) := by
+  rcases p with _ | p
+  · exact density_congr (e := none) h
+  · cases p <;> exact density_congr h
+
+theorem scale_countdown (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (base : Option (D ℝ)) (r : Option ℝ)
+    {v : ℝ} (hr : r = some v)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) base
+      (scaleValue r ((Functions.subN.apply (some n) (some 1)).bind g)))
+    (arg : Option ℕ) (x : Option ℝ) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x =
+      densityAtValue (scaleValue (Functions.powRN.apply r arg) base) x := by
+  apply density_congr
+  intro c
+  exact (observe_scale_countdown (observation c x) p hf base r hr step arg).trans
+    (component_scale c x _ base).symm
+
+theorem partial_scale_countdown (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (base : Option (D ℝ)) (r : Option ℝ)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) base
+      (scaleValue r ((Functions.subN.apply (some n) (some 1)).bind g)))
+    (arg : Option ℕ) (x : Option ℝ) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x =
+      Binding.conditionalValue (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply arg)))
+        (densityAtValue base x) (densityAtValue (scaleValue (Functions.powRN.apply r arg) base) x) := by
+  apply density_cases
+  intro c
+  rw [component_scale]
+  exact observe_partial_scale_countdown (observation c x) p hf base r step arg
+
+/-- A nonzero scalar preserves the pointwise obstruction from a nonzero
+atomic charge. A zero scalar requires the full fibre calculation. -/
+theorem density_scale_nonzero (r : ℝ) (hr : r ≠ 0) (d : Option (D ℝ)) (x : Option ℝ) :
+    densityAtValue (scaleValue (some r) d) x = Value.mul (some r) (densityAtValue d x) := by
+  rcases d with _ | d
+  · rfl
+  rcases x with _ | x
+  · rfl
+  change (scale r (realFibre d x)).density = Value.mul (some r) (realFibre d x).density
+  by_cases hc : (realFibre d x).charge = 0 <;> simp [scale, density, hc, hr, Value.mul]
+
+theorem nonzero_scale_countdown (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (base : Option (D ℝ)) (r : Option ℝ)
+    (q : ℚ) (hr : r = some (Numeric.denote (s := .real) q)) (hq : q ≠ 0)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) base
+      (scaleValue r ((Functions.subN.apply (some n) (some 1)).bind g)))
+    (arg : Option ℕ) (x : Option ℝ) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x =
+      Value.mul (Functions.powRN.apply r arg) (densityAtValue base x) := by
+  rw [scale_countdown p hf base r hr step arg x, hr]
+  have h : (q : ℝ) ≠ 0 := by exact_mod_cast hq
+  cases arg with
+  | none => rfl
+  | some n =>
+    simpa [Functions.powRN, Function2.apply, Numeric.denote] using
+      density_scale_nonzero ((q : ℝ) ^ n) (pow_ne_zero n h) base x
+
+end RealDensityFibre
 end QSym.Distribution

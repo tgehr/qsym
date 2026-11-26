@@ -3312,10 +3312,11 @@ final class Bindings{
 	}
 	// Observe a countdown without constructing each finite presentation.
 	// A captured scale is inspected only on positive indices.
-	private BoundTerm countdownMass(BoundTerm mass,ref ScalarDomain[] checks,out uint witness){
+	private BoundTerm countdownObservation(BoundTerm observation,ref ScalarDomain[] checks,out uint witness){
 		witness=uint.max;
 		uint[] operations;
-		auto application=nodes[observationInput(node(mass).a,operations)];
+		auto n=node(observation); bool pointwise=n.op==BoundOp.distributionDensityAt;
+		auto application=nodes[pointwise?n.a:observationInput(n.a,operations)];
 		if(application.op!=BoundOp.apply||nodes[application.a].op!=BoundOp.fixed) return BoundTerm.init;
 		auto f=at(application.a),signature=pool.view(type(f));
 		if(signature.fields[0]!=scalarType(Sort.natural)) return BoundTerm.init;
@@ -3341,16 +3342,31 @@ final class Bindings{
 		bool bare=emission!=uint.max&&scale.op==BoundOp.apply;
 		if(!bare&&(scale.op!=BoundOp.distributionScale||depends(at(scale.a),1))) return BoundTerm.init;
 		bool indexedRate=!bare&&depends(at(scale.a),0);
+		if(pointwise&&(emission!=uint.max||indexedRate)) return BoundTerm.init;
 		auto call=bare?scale:nodes[scale.b];
 		if(call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
 		auto pred=nodes[call.b],one=nodes[pred.b],base=at(branch.b);
 		if(!variableAt(pred.a,0)||one.op!=BoundOp.scalar||arena.at(one.data)!=arena.natural_(1)||depends(base,0)||depends(base,1))
 			return BoundTerm.init;
-		auto ctx=context(mass);
+		auto ctx=context(observation);
 		BoundTerm[] env=[scalar(ctx,arena.natural_(0)),bottom(ctx,type(f))];
 		foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
-		auto seed=observedMass(substitute(base,ctx,env),operations);
-		auto arg=at(application.b),zero=arena.real_(0);
+		auto seedDistribution=substitute(base,ctx,env),arg=at(application.b),zero=arena.real_(0);
+		if(pointwise){
+			auto ratio=substitute(at(scale.a),ctx,env);
+			auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[ratio,arg]);
+			BoundTerm density(BoundTerm d){ return distribution(ctx,BoundOp.distributionDensityAt,[d,at(n.b)]); }
+			Rational q; Term term;
+			bool known=node(ratio).op==BoundOp.scalar&&closedRational(ratio,q,term);
+			if(known&&!q.zero) return primitive(arena.mul(zero,zero,true),[power,density(seedDistribution)]);
+			// A zero coefficient cancels an atom even at its support. Compute
+			// the density of the scaled fibre before testing its charge.
+			auto collapsed=density(distribution(ctx,BoundOp.distributionScale,[power,seedDistribution]));
+			if(known) return collapsed;
+			env[0]=arg;
+			return conditional(substitute(at(branch.a),ctx,env),density(seedDistribution),collapsed);
+		}
+		auto seed=observedMass(seedDistribution,operations);
 		BoundTerm cumulative;
 		if(indexedRate){
 			cumulative=countdownProduct(scale.a,ctx,emission!=uint.max,checks,witness);
@@ -7726,23 +7742,26 @@ final class Bindings{
 					return Result(target.id,uint.max);
 				}
 			}
-			if(n.op==BoundOp.distributionMass&&steps<budget){
-				// Retain a pole witness before scalar simplification puts a
-				// zero times a reciprocal under the domain of the denominator.
-				IntegralSolution observation;
-				auto value=integrateMissingPoint(t,observation);
-				if(value==BoundTerm.init) value=integrateCoordinateInterval(t,observation);
-				if(value!=BoundTerm.init){
-					auto index=cast(uint)integrals.length; integrals~=observation; ++steps;
-					auto proof=emit(BindingRule.distributionInterval,t.id,value.id,uint.max,uint.max,index);
-					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
-					return Result(value.id,uint.max);
+			if((n.op==BoundOp.distributionMass||n.op==BoundOp.distributionDensityAt)&&steps<budget){
+				BindingRule rule; BoundTerm target;
+				if(n.op==BoundOp.distributionMass){
+					// Retain a pole witness before scalar simplification puts a
+					// zero times a reciprocal under the domain of the denominator.
+					IntegralSolution observation;
+					auto value=integrateMissingPoint(t,observation);
+					if(value==BoundTerm.init) value=integrateCoordinateInterval(t,observation);
+					if(value!=BoundTerm.init){
+						auto index=cast(uint)integrals.length; integrals~=observation; ++steps;
+						auto proof=emit(BindingRule.distributionInterval,t.id,value.id,uint.max,uint.max,index);
+						chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
+						return Result(value.id,uint.max);
+					}
+					target=shiftMass(t,rule);
+					if(target==BoundTerm.init) target=involutionMass(t,rule);
 				}
-				BindingRule rule; auto target=shiftMass(t,rule);
-				if(target==BoundTerm.init) target=involutionMass(t,rule);
 				uint witness=uint.max;
 				if(target==BoundTerm.init){
-					target=countdownMass(t,scalarDomains,witness);
+					target=countdownObservation(t,scalarDomains,witness);
 					rule=witness==uint.max?BindingRule.distributionMassCountdown:BindingRule.distributionProductCountdown;
 				}
 				if(target!=BoundTerm.init){
@@ -13052,8 +13071,29 @@ final class Bindings{
 				}
 				case BindingRule.distributionProductCountdown,BindingRule.distributionMassCountdown:{
 					uint[] ops;
-					auto call=nodes[observationInput(n.a,ops)],target=nodes[p.to];
+					bool pointwise=n.op==BoundOp.distributionDensityAt;
+					auto call=nodes[pointwise?n.a:observationInput(n.a,ops)],target=nodes[p.to];
 					bool partial=target.op==BoundOp.conditional;
+					auto f=to!string(call.a)~dimArg~" γ ξ ρ";
+					if(pointwise){
+						auto observed=partial?nodes[target.c]:target;
+						bool scalar=observed.op==BoundOp.primitive;
+						auto scaled=scalar?observed:nodes[observed.a],power=nodes[scaled.a];
+						auto base=scalar?nodes[observed.b].a:scaled.b;
+						string value(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+						auto law=partial?"partial_scale_countdown":scalar?"nonzero_scale_countdown":"scale_countdown";
+						string ratioProof;
+						if(!partial){
+							Rational q; Term term;
+							enforce(closedRational(at(power.a),q,term),"missing recursive scalar coefficient");
+							auto v=SourceCertificates.q(q);
+							auto calc="(Numeric.calculate_sound ξ n"~to!string(term.id)~" "~v~" rfl)";
+							ratioProof=scalar?" "~v~" "~calc~" (of_decide_eq_true rfl)":" "~calc;
+						}
+						proof=".ofEq (fun ξ ρ => Distribution.RealDensityFibre."~law~" (rec"~f~") (fixed"~f~") "~value(base)~
+							" "~value(power.a)~ratioProof~" (fun _ _ => rfl) "~value(call.b)~" "~value(n.b)~")";
+						break;
+					}
 					auto branch=nodes[nodes[nodes[call.a].a].a],step=nodes[branch.c];
 					bool emitting=step.op==BoundOp.distributionAdd;
 					uint observedInput(uint mass){
@@ -13061,7 +13101,6 @@ final class Bindings{
 						foreach(id;ops) d=nodes[id].op==BoundOp.distributionWeight?nodes[d].b:nodes[d].a;
 						return d;
 					}
-					auto f=to!string(call.a)~dimArg~" γ ξ ρ";
 					bool swapped=emitting&&depends(at(step.a),1);
 					auto emission=swapped?step.b:step.a;
 					bool indexed=emitting&&depends(at(emission),0);

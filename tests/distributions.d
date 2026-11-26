@@ -1765,6 +1765,21 @@ private Case[] cases(){
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
 	Case("CapturedScaleMissingIndex","λ(r:ℝ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(0 sub 1))","ℝ→ℝ","λ(r:ℝ). undefined(ℝ)"),
 	Case("VariableScaleByIndex","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD((n:ℝ),f(n sub 1)))(k))","ℝ→ℕ→ℝ"),
+	Case("FibreCountdownRegular","λ(k:ℕ).λ(y:ℝ).densityAtD("~scaledSteps("1/2","k","(Λx. [x≠0]·λ[x])")~",y)","ℕ→ℝ→ℝ","λ(k:ℕ). λ(y:ℝ). mulR([y≠0],powRN(1/2,k))"),
+	Case("FibreCountdownHole","densityAtD("~scaledSteps("1/2","31","(Λx. [x≠0]·λ[x])")~",0)","ℝ","0"),
+	Case("FibreCountdownSigned","densityAtD("~scaledSteps("-2","9","addD(lebesgueD(),δ((0:ℝ)))")~",1)","ℝ","-512"),
+	Case("FibreCountdownSingular","densityAtD("~scaledSteps("-2","9","addD(lebesgueD(),δ((0:ℝ)))")~",0)","ℝ","undefined(ℝ)"),
+	Case("FibreCountdownZeroAtom","densityAtD("~scaledSteps("0","37","δ((0:ℝ))")~",0)","ℝ","0"),
+	Case("FibreCountdownZeroAtZero","densityAtD("~scaledSteps("0","0","δ((0:ℝ))")~",0)","ℝ","undefined(ℝ)"),
+	Case("FibreCountdownPartialRegular","defined("~"densityAtD("~scaledSteps("0","9","(Λx. (1/x)·λ[x])")~",0)"~")","𝔹","false"),
+	Case("FibreCountdownCancelled","densityAtD("~scaledSteps("-2","7","addD(addD(lebesgueD(),δ((0:ℝ))),scaleD(-1,δ((0:ℝ))))")~",0)","ℝ","-128"),
+	Case("FibreCountdownParameter","λ(d:Distribution(ℝ)).λ(k:ℕ).λ(y:ℝ).densityAtD("~scaledSteps("1/2","k","d")~",y)","Distribution(ℝ)→ℕ→ℝ→ℝ"),
+	Case("FibreCountdownCaptured","λ(h:ℝ→ℝ).λ(t:ℝ).λ(k:ℕ).densityAtD("~scaledSteps("h(t)","k","δ((0:ℝ))")~",0)","(ℝ→ℝ)→ℝ→ℕ→ℝ"),
+	Case("FibreCountdownCapturedZero","densityAtD("~scaledSteps("undefined(ℝ)","0","lebesgueD()")~",2)","ℝ","1"),
+	Case("FibreCountdownCapturedOne","densityAtD("~scaledSteps("undefined(ℝ)","1","lebesgueD()")~",2)","ℝ","undefined(ℝ)"),
+	Case("FibreCountdownMissingIndex","defined("~"densityAtD("~scaledSteps("-2","0 sub 1","lebesgueD()")~",4)"~")","𝔹","false"),
+	Case("FibreCountdownMissingPoint","densityAtD("~scaledSteps("-2","4","lebesgueD()")~",undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("FibreCountdownMillion","densityAtD("~scaledSteps("-1","1000000","lebesgueD()")~",1)","ℝ","1"),
 	Case("CountdownTestMoment","λ(k:ℕ).massD(weightD(λ(x:ℝ). x^2,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ). if n=0 then δ((3:ℝ)) else scaleD(1/2,f(n sub 1)))(k)))","ℕ→ℝ","λ(k:ℕ). (9·(1/2)^k:ℝ)"),
 	Case("CountdownTestFree","λ(h:ℝ→ℝ). λ(k:ℕ).massD(weightD(h,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ). if n=0 then δ((3:ℝ)) else scaleD(-2,f(n sub 1)))(k)))","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(k:ℕ). h(3)·(-2)^k"),
 	Case("CountdownTestBind","λ(k:ℕ).massD(weightD(λ(y:ℝ).y^2,bindD((μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ). if n=0 then δ((2:ℕ)) else scaleD(1/2,f(n sub 1)))(k),λ(x:ℕ).δ((x:ℝ)+1))))","ℕ→ℝ","λ(k:ℕ). (9·(1/2)^k:ℝ)"),
@@ -1985,6 +2000,12 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")
 			enforce(certificate.indexOf("observe_partial_scale_countdown")<0&&text.indexOf("μ")>=0,c.name~" index-dependent scale");
+		if(c.name.indexOf("FibreCountdown")==0){
+			auto law=c.name.indexOf("Captured")>=0?"partial_scale_countdown":
+				(c.name=="FibreCountdownPartialRegular"||c.name.indexOf("Zero")>=0)?"scale_countdown":"nonzero_scale_countdown";
+			enforce(certificate.indexOf("Distribution.RealDensityFibre."~law~" ")>=0&&text.indexOf("μ")<0,c.name);
+			if(c.name=="FibreCountdownMillion") enforce(certificate.length<65_000,c.name);
+		}
 		if(c.name.indexOf("CountdownTest")==0)
 			enforce(certificate.indexOf("Distribution.observe_scale_countdown ")>=0,c.name~" checked homogeneous observation");
 		else if(c.name.length>=9&&c.name[0..9]=="Countdown"){
