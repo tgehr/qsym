@@ -161,7 +161,7 @@ private struct IntervalData{
 	// it may be defined without being integrable.
 	bool direct;
 	IntervalTerm[] terms;
-	uint coordinate=uint.max,turning=uint.max,lowerLimit=uint.max,upperLimit=uint.max; bool decreasing;
+	uint coordinate=uint.max,turning=uint.max,wave=uint.max,lowerLimit=uint.max,upperLimit=uint.max; bool decreasing;
 	CoordinateAffine[] affine;
 }
 // A Gaussian integral. With `symbolic` the constant and linear coefficients of
@@ -2464,9 +2464,13 @@ final class Bindings{
 		CoordinateAffine[] affine;
 		while(nodes[body].op==BoundOp.primitive){
 			auto n=nodes[body],op=arena.view(arena.at(n.data));
-			if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&
+			if(op.op==Op.pow&&op.value>=2&&nodes[n.a].op==BoundOp.primitive){
+				auto inner=arena.view(arena.at(nodes[n.a].data));
+				if(inner.op==Op.builtin&&(inner.value==Builtin.sinR||inner.value==Builtin.cosR)) d.wave=n.a;
+			}
+			if(d.wave!=uint.max||op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&
 				(op.value==Builtin.coshR||op.value==Builtin.sinR||op.value==Builtin.cosR)){
-				d.turning=body; d.coordinate=n.a; d.affine=affine; return;
+				d.turning=body; d.coordinate=d.wave==uint.max?n.a:nodes[d.wave].a; d.affine=affine; return;
 			}
 			if(op.op!=Op.add&&op.op!=Op.mul) return;
 			bool right=!depends(at(n.b),0);
@@ -2477,6 +2481,23 @@ final class Bindings{
 			affine~=CoordinateAffine(coefficient,right,op.op==Op.mul);
 			body=right?n.a:n.b;
 		}
+	}
+
+	// Each quarter-period traverses one span of the profile. The parity
+	// of its index orients the centered height of the final endpoint.
+	private BoundTerm wavePrimitive(uint profile,uint wave,BoundTerm v){
+		auto ctx=context(v),z=arena.real_(0),sum=arena.add(z,z,true),mul=arena.mul(z,z,true),inv=arena.inv(z);
+		auto two=scalar(ctx,arena.real_(2)),minus=scalar(ctx,arena.real_(-1)),pi=scalar(ctx,arena.call(Builtin.pi,[]));
+		auto trig=arena.at(nodes[wave].data),op=arena.at(nodes[profile].data);
+		BoundTerm difference(BoundTerm a,BoundTerm b){return primitive(sum,[a,primitive(mul,[minus,b])]);}
+		auto half=primitive(inv,[two]),halfPi=primitive(mul,[pi,half]);
+		auto phase=arena.view(trig).value==Builtin.sinR?v:primitive(sum,[v,halfPi]);
+		auto cell=indexBuiltin(Builtin.floorR,primitive(mul,[primitive(mul,[two,phase]),primitive(inv,[pi])]));
+		auto parity=primitive(arena.call(Builtin.powRZ,[z,arena.integer(0)]),[minus,cell]);
+		auto base=primitive(op,[scalar(ctx,z)]),span=difference(primitive(op,[scalar(ctx,arena.real_(1))]),base);
+		auto height=difference(primitive(op,[primitive(arena.abs(z),[primitive(trig,[v])])]),base);
+		auto centered=difference(height,primitive(mul,[span,half]));
+		return primitive(sum,[primitive(mul,[span,realIndex(cell)]),primitive(mul,[parity,centered])]);
 	}
 
 	private static string increasingChange(CoordinateChange change){
@@ -5161,6 +5182,7 @@ final class Bindings{
 			// absolute length, including where the outer coordinate turns.
 			BoundTerm turningPrimitive(BoundTerm v){
 				if(d.turning==uint.max) return v;
+				if(d.wave!=uint.max) return wavePrimitive(d.turning,d.wave,v);
 				auto outer=nodes[d.turning];
 				auto mul=arena.mul(zero,zero,true),op=arena.view(arena.at(outer.data));
 				if(op.op==Op.pow){
@@ -10921,7 +10943,11 @@ final class Bindings{
 			string change;
 			if(d.turning!=uint.max){
 				auto op=arena.view(arena.at(nodes[d.turning].data));
-				if(op.op==Op.pow&&op.value==2) change=" "~grid~"VariationChange.square";
+				if(d.wave!=uint.max){
+					bool sine=arena.view(arena.at(nodes[d.wave].data)).value==Builtin.sinR;
+					auto profile=grid~"VariationChange.WaveProfile.";
+					change=" ("~profile~"variation ("~profile~"power "~to!string(op.value)~") "~to!string(sine)~")";
+				}else if(op.op==Op.pow&&op.value==2) change=" "~grid~"VariationChange.square";
 				else if(op.op==Op.pow) change=" ("~grid~"VariationChange.evenPower "~to!string(op.value)~" (of_decide_eq_true rfl) rfl)";
 				else if(op.value==Builtin.sinR||op.value==Builtin.cosR) change=" "~grid~"VariationChange."~(op.value==Builtin.sinR?"sine":"cosine");
 				else{

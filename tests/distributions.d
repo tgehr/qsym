@@ -428,6 +428,25 @@ private Case[] cases(){
 	Case("AffineTurnOpaque","λ(h:ℕ→ℝ).∫dx [0≤x≤2*π]·λ[h(0)+sin(x)]","(ℕ→ℝ)→ℝ"),
 	Case("AffineTurnHolder","λ(u:ℝ).∫dx [0≤x≤u]·λ[7-2*cos(x)]","ℝ→ℝ"),
 	Case("AffineTurnClosedZero","∫dx [0≤x≤2*π]·λ[0*cos(x)+4]","ℝ","0"),
+	Case("PowerWaveSquare","∫dx [-π≤x≤π]·λ[sin(x)^2]","ℝ","4"),
+	Case("PowerWaveOdd","∫dx [0<x≤π]·λ[sin(x)^3]","ℝ","2"),
+	Case("PowerWaveCrest","∫dx [π/3≤x≤2*π/3]·λ[sin(x)^2]","ℝ","1/2"),
+	Case("PowerWaveQuarter","∫dx [0≤x≤π/3]·λ[cos(x)^3]","ℝ","7/8"),
+	Case("PowerWaveNegative","∫dx [-π/2≤x≤0]·λ[cos(x)^4]","ℝ","1"),
+	Case("PowerWaveHalfTurn","∫dx [π/2≤x≤3*π/2]·λ[sin(x)^4]","ℝ","2"),
+	Case("PowerWaveMillion","∫dx [-1000000*π≤x≤0]·λ[cos(x)^7]","ℝ","2000000"),
+	Case("PowerWavePower","∫dx [0≤x≤2*π]·λ[sin(x)^32]","ℝ","4"),
+	Case("PowerWaveScaled","∫dx [0≤x≤π]·λ[a*cos(x)^5+b]","ℝ","2·abs(a)"),
+	Case("PowerWaveReverseInner","∫dx [0≤x≤π]·λ[cos(-3*x)^5]","ℝ","6"),
+	Case("PowerWaveWhole","∫dx λ[sin(atan(x))^2]","ℝ","2"),
+	Case("PowerWaveWholeOdd","∫dx λ[cos(atan(x))^3]","ℝ","2"),
+	Case("PowerWaveRay","∫dx [0≤x]·λ[cos(atan(-x))^4]","ℝ","1"),
+	Case("PowerWaveSymbolic","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·λ[sin(x)^4]","ℝ→ℝ→ℝ"),
+	Case("PowerWavePartial","defined(∫dx [0≤x<undefined(ℝ)]·λ[cos(x)^5])","𝔹","false"),
+	Case("PowerWaveReverse","∫dx [π<x≤0]·λ[sin(x)^2]","ℝ","0"),
+	Case("PowerWavePoint","∫dx [π/2≤x≤π/2]·λ[cos(x)^6]","ℝ","0"),
+	Case("PowerWaveUnknownVelocity","λ(h:ℝ→ℝ).∫dx [0≤x<1]·λ[sin(h(x))^2]","(ℝ→ℝ)→ℝ"),
+	Case("PowerWaveInfinite","∫dx λ[cos(x)^3]","ℝ"),
 	Case("VariationSquareSinh","∫dx [-1≤x≤1]·λ[sinh(x)^2]","ℝ","2·sinh(1)^2"),
 	Case("VariationSquareAtan","∫dx [-1≤x≤1]·λ[atan(x)^2]","ℝ","1/8·π^2"),
 	Case("VariationSquareExp","λ(u:ℝ).∫dx [0≤x<u]·λ[(exp(x)-2)^2]","ℝ→ℝ","λ(u:ℝ). [0<u]·((exp(u)-2)·abs(exp(u)-2)+1)"),
@@ -2209,7 +2228,7 @@ private void run(string directory){
 			enforce(integrated==changed,c.name);
 		}
 		if(c.name.indexOf("Variation")==0){
-			bool changed=c.name!="VariationOscillating"&&c.name!="VariationJump";
+			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
 		}
 		if(c.name.indexOf("CoordinateInterval")==0||c.name=="CauchyWindowAtan"||c.name=="CauchyWindowAtanScaled"){
@@ -2321,6 +2340,11 @@ private void run(string directory){
 			enforce((certificate.indexOf("Grid.VariationChange.translate ")>=0)==changed,c.name);
 			enforce((certificate.indexOf("Grid.VariationChange.scale ")>=0)==(changed&&c.name!="AffineTurnOffset"),c.name);
 			enforce((text.indexOf("∫")<0)==changed,c.name);
+		}
+		if(c.name.indexOf("PowerWave")==0||c.name=="VariationOscillating"){
+			bool solved=c.name!="PowerWaveUnknownVelocity"&&c.name!="PowerWaveInfinite";
+			enforce((certificate.indexOf("WaveProfile.power ")>=0)==solved,c.name);
+			enforce((text.indexOf("∫")<0)==solved,c.name);
 		}
 		if(c.name.indexOf("PeriodicSpan")==0){
 			bool solved=c.name!="PeriodicSpanUnbounded"&&c.name!="PeriodicSpanNonmonotone";
