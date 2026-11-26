@@ -3,7 +3,7 @@ import qsym.ir;
 import qsym.binding;
 import qsym.distribution_syntax:distributionSyntax,distributionOutputAxis,distributionOccurs;
 import qsym.types:TypeId,TypeView,TypeKind,TypePool,Dimension;
-import qsym.text:Syntax;
+import qsym.text:Syntax,scalarSymbol;
 import qsym.spec:Parser,Pattern,TypePattern,Parameter,parseSort,isConstructor,elaborate,pattern;
 import qsym.table:Table;
 import qsym.simplify:Result,Options,simplify;
@@ -96,17 +96,7 @@ struct FunctionSyntax{
 			auto base=typeName(v.fields[0],locals); if(element.kind==TypeKind.function_||element.kind==TypeKind.pi||element.kind==TypeKind.tuple) base="("~base~")";
 			return base~"^"~v.dimension.format(locals);
 		}
-		if(scalarSort(t,sort)){
-			switch(sort){
-				case Sort.natural:return "ℕ";
-				case Sort.integer:return "ℤ";
-				case Sort.rational:return "ℚ";
-				case Sort.real_:return "ℝ";
-				case Sort.complex:return "ℂ";
-				case Sort.boolean:return "𝔹";
-				default:assert(0);
-			}
-		}
+		if(scalarSort(t,sort)) return scalarSymbol(sort);
 		if(v.kind==TypeKind.set) return "Set("~typeName(v.fields[0],locals)~")";
 		if(v.kind==TypeKind.distribution) return "Distribution("~typeName(v.fields[0],locals)~")";
 		enforce(v.kind==TypeKind.function_,"unsupported function type");

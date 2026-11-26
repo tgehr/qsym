@@ -8,6 +8,18 @@ import std.conv:to;
 import std.exception:enforce;
 @safe:
 
+package string scalarSymbol(Sort sort){
+	final switch(sort){
+		case Sort.natural:return "ℕ";
+		case Sort.integer:return "ℤ";
+		case Sort.rational:return "ℚ";
+		case Sort.real_:return "ℝ";
+		case Sort.complex:return "ℂ";
+		case Sort.boolean:return "𝔹";
+		case Sort.density,Sort.measure:return sortName(sort);
+	}
+}
+
 // Symbol indices stay stable across inputs. Arenas can be fresh for each line.
 struct Syntax{
 	Parameter[] variables;
@@ -332,16 +344,19 @@ struct Syntax{
 					else if(code=="leN"||code=="leZ"||code=="leQ") p=comparison(n.a,n.b,"≤");
 					else if(f==Builtin.eqB) p=Piece(arg(n.a,51)~"="~arg(n.b,51),50);
 					else if(code=="powerR"||code=="powerC"||code.length==5&&code[0..3]=="pow"){
-						p=Piece(arg(n.a,91)~"^"~render(exponent(n.b),91),90);
-						// Check the overload selected by the injection-free spelling.
-						// Binder operands may print as applications that the scalar
-						// parser cannot type on its own. Keep the operator explicit
-						// whenever that parser cannot confirm the overload.
-						auto names=variables.dup;
-						bool confirmed;
-						try{ confirmed=Parser(p.text).parseExpression(names).name==code; }catch(Exception){}
-						if(!confirmed)
-							p=Piece(info.name~"("~arg(n.a)~","~arg(n.b)~")");
+						auto base=arg(n.a,91),power=render(exponent(n.b),91);
+						bool selects(string expression){
+							auto names=variables.dup;
+							try{ return Parser(expression).parseExpression(names).name==code; }catch(Exception){ return false; }
+						}
+						p=Piece(base~"^"~power,90);
+						if(!selects(p.text)){
+							// A numeric base can hide which integer-power overload
+							// the source used. Reparse the ascription before using it.
+							auto typed="("~arg(n.a)~":"~scalarSymbol(info.args[0])~")^"~power;
+							if(code.length==5&&code[0..3]=="pow"&&selects(typed)) p=Piece(typed,90);
+							else p=Piece(info.name~"("~arg(n.a)~","~arg(n.b)~")");
+						}
 					}
 					else p.text=info.name~"("~arg(n.a)~(n.arity==2?","~arg(n.b):"")~")";
 					break;
@@ -419,8 +434,8 @@ unittest{
 		["conj(toℂ(x))","conj(x)"],
 		["carg(toℂ(x))","carg(x)"],
 		["cpow(z,toℂ(toℝ(toℚ(toℤ(n)))))","cpow(z,n)"],
-		["z*toℂ(powRN(3,n))","z·powRN(3,n)"],
-		["z*toℂ(powRZ(3,k))","z·powRZ(3,k)"],
+		["z*toℂ(powRN(3,n))","z·(3:ℝ)^n"],
+		["z*toℂ(powRZ(3,k))","z·(3:ℝ)^k"],
 		["cexp(toℂ(toℝ(toℚ(toℤ(n)))))","cexp(n)"],
 		["x+toℝ(q)","x+q"],
 		["q*toℚ(k)","q·k"],
