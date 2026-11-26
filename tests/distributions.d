@@ -1765,6 +1765,20 @@ private Case[] cases(){
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
 	Case("CapturedScaleMissingIndex","λ(r:ℝ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(0 sub 1))","ℝ→ℝ","λ(r:ℝ). undefined(ℝ)"),
 	Case("VariableScaleByIndex","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD((n:ℝ),f(n sub 1)))(k))","ℝ→ℕ→ℝ"),
+	Case("FibreProductGrowing","λ(k:ℕ).densityAtD("~scaledSteps("(n+1)/n","k","lebesgueD()")~",1)","ℕ→ℝ","λ(k:ℕ). (k+1:ℝ)"),
+	Case("FibreProductShrinking","λ(k:ℕ).densityAtD("~scaledSteps("n/(n+1)","k","lebesgueD()")~",1)","ℕ→ℝ","λ(k:ℕ). ((k+1)⁻¹:ℝ)"),
+	Case("FibreProductMixed","densityAtD("~scaledSteps("(n+2)/n","4","addD(lebesgueD(),δ((0:ℝ)))")~",2)","ℝ","15"),
+	Case("FibreProductSupport","densityAtD("~scaledSteps("(n+2)/n","4","addD(lebesgueD(),δ((0:ℝ)))")~",0)","ℝ","undefined(ℝ)"),
+	Case("FibreProductCancelled","densityAtD("~scaledSteps("n/(n+3)","4","addD(addD(lebesgueD(),δ((0:ℝ))),scaleD(-1,δ((0:ℝ))))")~",0)","ℝ","1/35"),
+	Case("FibreProductPuncture","densityAtD("~scaledSteps("(n+2)/n","4","(Λx. [x≠0]·λ[x])")~",0)","ℝ","0"),
+	Case("FibreProductPole","defined(densityAtD("~scaledSteps("(n+2)/n","4","(Λx. (1/x)·λ[x])")~",0))","𝔹","false"),
+	Case("FibreProductOffset","densityAtD("~scaledSteps("(2*n+3)/(2*n+5)","3","lebesgueD()")~",0)","ℝ","5/11"),
+	Case("FibreProductMissingIndex","defined(densityAtD("~scaledSteps("(n+1)^2/n^2","0 sub 1","lebesgueD()")~",1))","𝔹","false"),
+	Case("FibreProductMissingPoint","defined(densityAtD("~scaledSteps("(n+3)/(n+2)","3","lebesgueD()")~",undefined(ℝ)))","𝔹","false"),
+	Case("FibreProductMissingSeed","defined(densityAtD("~scaledSteps("(n+1)/n","0","undefined(Distribution(ℝ))")~",1))","𝔹","false"),
+	Case("FibreProductParameter","λ(d:Distribution(ℝ)).λ(k:ℕ).λ(y:ℝ).densityAtD("~scaledSteps("(n+1)/n","k","d")~",y)","Distribution(ℝ)→ℕ→ℝ→ℝ"),
+	Case("FibreProductMillion","densityAtD("~scaledSteps("n/(n+1)","1000000","lebesgueD()")~",4)","ℝ","1/1000001"),
+	Case("FibreProductCrossesPole","defined(densityAtD("~scaledSteps("(n+1)/(n-1)","2","lebesgueD()")~",1))","𝔹","false"),
 	Case("FibreCountdownRegular","λ(k:ℕ).λ(y:ℝ).densityAtD("~scaledSteps("1/2","k","(Λx. [x≠0]·λ[x])")~",y)","ℕ→ℝ→ℝ","λ(k:ℕ). λ(y:ℝ). mulR([y≠0],powRN(1/2,k))"),
 	Case("FibreCountdownHole","densityAtD("~scaledSteps("1/2","31","(Λx. [x≠0]·λ[x])")~",0)","ℝ","0"),
 	Case("FibreCountdownSigned","densityAtD("~scaledSteps("-2","9","addD(lebesgueD(),δ((0:ℝ)))")~",1)","ℝ","-512"),
@@ -2000,6 +2014,11 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")
 			enforce(certificate.indexOf("observe_partial_scale_countdown")<0&&text.indexOf("μ")>=0,c.name~" index-dependent scale");
+		if(c.name.indexOf("FibreProduct")==0){
+			bool solved=c.name!="FibreProductCrossesPole";
+			enforce((certificate.indexOf("Distribution.RealDensityFibre.product_countdown ")>=0)==solved,c.name);
+			if(solved) enforce(text.indexOf("μ")<0,c.name);
+		}
 		if(c.name.indexOf("FibreCountdown")==0){
 			auto law=c.name.indexOf("Captured")>=0?"partial_scale_countdown":
 				(c.name=="FibreCountdownPartialRegular"||c.name.indexOf("Zero")>=0)?"scale_countdown":"nonzero_scale_countdown";

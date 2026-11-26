@@ -651,5 +651,23 @@ theorem nonzero_scale_countdown (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn 
     simpa [Functions.powRN, Function2.apply, Numeric.denote] using
       density_scale_nonzero ((q : ℝ) ^ n) (pow_ne_zero n h) base x
 
+/-- A candidate cumulative scale is certified at zero and at every successor of the source recurrence. -/
+theorem product_countdown
+    (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (base : Option (D ℝ))
+    (r w : Option ℕ → Option ℝ) (hw0 : w (some 0) = some 1)
+    (hw : ∀ n, let next := Functions.addN.apply (some n) (some 1)
+      Value.mul (r next) (w (some n)) = w next)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) base
+      (scaleValue (r (some n)) ((Functions.subN.apply (some n) (some 1)).bind g)))
+    (arg : Option ℕ) (x : Option ℝ) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x =
+      densityAtValue (scaleValue (arg.bind (fun n => w (some n))) base) x := by
+  apply density_congr
+  intro c
+  exact (observe_product_countdown (observation c x) p hf base r w hw0 hw step arg).trans
+    (component_scale c x _ base).symm
+
 end RealDensityFibre
 end QSym.Distribution
