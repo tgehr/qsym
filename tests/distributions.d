@@ -15,6 +15,12 @@ private Case[] cases(){
 		if(mass.length) seed="scaleD("~mass~","~seed~")";
 		return "(μ(d:Distribution(ℕ)).addD("~seed~",scaleD("~ratio~",bindD(d,λ(n:ℕ).δ("~step~")))))";
 	}
+	string flip(string seed="δ(false)",string rate="1/2"){
+		return "(μ(d:Distribution(𝔹)).addD("~seed~",scaleD("~rate~",bindD(d,λ(b:𝔹).δ(¬b)))))";
+	}
+	string reflect(string seed="δ((2:ℝ))",string rate="1/2"){
+		return "(μ(d:Distribution(ℝ)).addD("~seed~",scaleD("~rate~",bindD(d,λ(x:ℝ).δ(-x)))))";
+	}
 	auto counter=shift("0");
 	enum endless="(μ(d:Distribution(ℝ)).addD(δ(0),d))";
 	enum twoArms="(μ(d:Distribution(ℝ)).addD(scaleD(1/4,addD(δ(0),d)),scaleD(1/4,addD(d,δ(2)))))";
@@ -1260,6 +1266,18 @@ private Case[] cases(){
 	Case("AtomicRetryDensity","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠1}). (0:ℝ)"),
 	Case("AtomicRetryUnitRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(1,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("CountdownGeometric","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k:ℝ)"),
+	Case("CycleBoolMass","massD("~flip()~")","ℝ","2"),
+	Case("CycleBoolFalse","massD(weightD(λ(b:𝔹).[¬b],"~flip("scaleD(1/2,δ(false))")~"))","ℝ","2/3"),
+	Case("CycleBoolTrue","massD(weightD(λ(b:𝔹).[b],"~flip("scaleD(1/2,δ(false))")~"))","ℝ","1/3"),
+	Case("CycleBoolZero","massD(weightD(λ(b:𝔹).if b then undefined(ℝ) else 1,"~flip("δ(false)","0")~"))","ℝ","undefined(ℝ)"),
+	Case("CycleBoolMissing","massD("~flip("δ(undefined(𝔹))")~")","ℝ","undefined(ℝ)"),
+	Case("InvolutionCriticalResidual","massD("~flip("δ(false)","1")~")","ℝ"),
+	Case("InvolutionBare","μ(d:Distribution(ℝ)).addD(δ((1:ℝ)),bindD(d,λ(x:ℝ).δ(-x)))","Distribution(ℝ)"),
+	Case("CycleRealMean","massD(weightD(λ(x:ℝ).x,"~reflect()~"))","ℝ","4/3"),
+	Case("CycleRealConstant","massD(weightD(λ(x:ℝ).x^2,"~reflect()~"))","ℝ","8"),
+	Case("CycleRealFixedPoint","massD(weightD(λ(x:ℝ).x+1,"~reflect("δ((0:ℝ))")~"))","ℝ","2"),
+	Case("CycleRealMixture","massD(weightD(λ(x:ℝ).x,"~reflect("addD(δ((2:ℝ)),scaleD(1/2,δ((-2:ℝ))))")~"))","ℝ","2/3"),
+	Case("CycleRealBind","massD(bindD("~reflect()~",λ(x:ℝ).scaleD(x,δ((0:ℕ)))))","ℝ","4/3"),
 	Case("ReemitNat","massD("~shift("3","n")~")","ℝ","1"),
 	Case("ReemitNatZeroRight","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3","n+0")~"))","ℝ","3"),
 	Case("ReemitNatZeroLeft","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3","0+n")~"))","ℝ","3"),
@@ -1357,6 +1375,10 @@ private void run(string directory){
 			enforce(certificate.indexOf("SummationElementary.PowerAt.product")>=0,c.name);
 		if(c.name=="ShiftOrbitPole"||c.name=="ShiftOrbitPoleAfterZero")
 			enforce(certificate.indexOf("SummationLinearity.missing_guard")>=0,c.name);
+		if(c.name=="InvolutionCriticalResidual"||c.name=="InvolutionBare")
+			enforce(text.indexOf("μ")>=0&&certificate.indexOf("fixed_involution_q")<0,c.name~" noncontracting source");
+		if(c.name.indexOf("CycleBool")==0||c.name.indexOf("CycleReal")==0)
+			enforce(certificate.indexOf("CountableObservation.fixed_involution_q")>=0,c.name~" involution certificate");
 		if(c.name.indexOf("Reemit")==0)
 			enforce(certificate.indexOf("Affine.bind_self")>=0||certificate.indexOf("Affine.realBind_self")>=0,c.name~" identity kernel");
 		if(c.name.indexOf("ShiftOrbit")==0&&c.name!="ShiftOrbitBare")
