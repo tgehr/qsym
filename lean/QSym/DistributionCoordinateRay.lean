@@ -146,4 +146,51 @@ theorem ray {f w : Scalar} (down below strict : Bool) (b m : Option ℝ)
       rw [if_neg hi, lim]
       cases below <;> cases down <;> rfl
 
+/-- On the whole line the two actual finite limits determine the length.
+If either end has unbounded variation there is no real total mass. -/
+theorem whole {f : Scalar} (down : Bool) (m : Option ℝ)
+    (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ))) (h : Directed down f) :
+    massValue (value (Tensor.consValue (some f) Tensor.nilValue)) =
+      (let lo := Limit.value atBot (some f)
+       let hi := Limit.value atTop (some f)
+       if down then Value.add lo (Value.mul m hi) else Value.add hi (Value.mul m lo)) := by
+  classical
+  obtain ⟨g, sm, mon, src⟩ := h
+  let j := fun x => |deriv g x|
+  rw [singleton_length sm src (w := fun x => some (j x)) (fun _ => rfl),
+    weighted_lebesgue_mass_bridge, Model.densityMassValue_eq]
+  change partialIntegral volume (fun x => some (j x)) = (if down then
+    Value.add (Limit.along atBot f) (Value.mul m (Limit.along atTop f))
+    else Value.add (Limit.along atTop f) (Value.mul m (Limit.along atBot f)))
+  rw [hm]
+  by_cases hi : Integrable j volume
+  · have hb : Tendsto g atBot (𝓝 (limUnder atBot g)) := ray_limit true 0 sm hi.integrableOn
+    have ht : Tendsto g atTop (𝓝 (limUnder atTop g)) := ray_limit false 0 sm hi.integrableOn
+    rw [Limit.along_eq_some (Eventually.of_forall src) hb, Limit.along_eq_some (Eventually.of_forall src) ht,
+      partialIntegral_valid volume (fun x => some (j x)) (fun x => ⟨_, rfl⟩) hi]
+    change some (∫ x, j x) = _
+    have total : (∫ x, j x) = (∫ x in Iic 0, j x) + (∫ x in Ioi 0, j x) := by
+      rw [← setIntegral_univ, ← Iic_union_Ioi (a := 0),
+        setIntegral_union (Iic_disjoint_Ioi le_rfl) measurableSet_Ioi hi.integrableOn hi.integrableOn]
+    have left : (∫ x in Iic 0, j x) = if true != down then g 0 - limUnder atBot g else limUnder atBot g - g 0 :=
+      (coordinate_ray down true 0 sm mon hb).2
+    have right : (∫ x in Ioi 0, j x) = if false != down then g 0 - limUnder atTop g else limUnder atTop g - g 0 :=
+      (coordinate_ray down false 0 sm mon ht).2
+    rw [total, left, right]
+    cases down <;> simp [Value.add, Value.mul, Numeric.denote, endFilter] <;> ring
+  · rw [partialIntegral_invalid volume (fun x => some (j x)) hi]
+    cases hb : Limit.along atBot f with
+    | none => cases down <;> cases Limit.along atTop f <;> rfl
+    | some lb =>
+      cases ht : Limit.along atTop f with
+      | none => cases down <;> rfl
+      | some rt =>
+        have lb' : Tendsto g atBot (𝓝 lb) :=
+          (Limit.along_eq_some_iff.mp hb).2.congr fun x => by simp [src x]
+        have rt' : Tendsto g atTop (𝓝 rt) :=
+          (Limit.along_eq_some_iff.mp ht).2.congr fun x => by simp [src x]
+        have l := (coordinate_ray down true 0 sm mon lb').1
+        have r := (coordinate_ray down false 0 sm mon rt').1
+        exact False.elim (hi (by simpa [raySet, j] using l.union r))
+
 end QSym.Distribution.GraphFibre.Coordinates.Grid.Directed

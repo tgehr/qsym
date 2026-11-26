@@ -4893,20 +4893,23 @@ final class Bindings{
 			}
 			return true;
 		}
-		BoundTerm integrateCoordinateInterval(BoundTerm t,out IntegralSolution solution){
+		BoundTerm integrateCoordinateMass(BoundTerm t,out IntegralSolution solution){
 			auto w=nodes[node(t).a];
-			if(w.op!=BoundOp.distributionWeight||nodes[w.a].op!=BoundOp.lambda||
-				nodes[w.b].op!=BoundOp.distributionInverseCover) return BoundTerm.init;
-			auto row=nodes[nodes[w.b].a];
+			bool whole=w.op==BoundOp.distributionInverseCover;
+			if(!whole&&(w.op!=BoundOp.distributionWeight||nodes[w.a].op!=BoundOp.lambda||
+				nodes[w.b].op!=BoundOp.distributionInverseCover)) return BoundTerm.init;
+			auto chart=whole?w:nodes[w.b],row=nodes[chart.a];
 			if(row.op!=BoundOp.vectorCons||nodes[row.b].op!=BoundOp.vectorNil||nodes[row.a].op!=BoundOp.lambda)
 				return BoundTerm.init;
 			IntervalData d; AxisBounds bounds;
-			if(!intervalMask(nodes[w.a].a,d,bounds)||bounds.around!=uint.max) return BoundTerm.init;
-			if(d.unit==uint.max&&(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
-				return BoundTerm.init;
+			if(!whole){
+				if(!intervalMask(nodes[w.a].a,d,bounds)||bounds.around!=uint.max) return BoundTerm.init;
+				if(d.unit==uint.max&&(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
+					return BoundTerm.init;
+			}
 			d.coordinate=nodes[row.a].a;
 			auto outer=nodes[d.coordinate];
-			if(!d.half&&outer.op==BoundOp.primitive){
+			if(!whole&&!d.half&&outer.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(outer.data));
 				if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&op.value==Builtin.coshR){
 					d.turning=d.coordinate; d.coordinate=outer.a;
@@ -4918,16 +4921,27 @@ final class Bindings{
 				d.decreasing=true;
 			}
 			// Introduce an infinite endpoint only when the source limit rules can close it.
-			if(d.half&&limitTerms(d.coordinate,d.below,false)==BoundTerm.init) return BoundTerm.init;
-			auto a=dropIndex(at(bounds.lower)),b=dropIndex(at(bounds.upper)),ctx=context(t),zero=arena.real_(0);
+			if(whole&&(limitTerms(d.coordinate,false,false)==BoundTerm.init||limitTerms(d.coordinate,true,false)==BoundTerm.init)||
+				d.half&&limitTerms(d.coordinate,d.below,false)==BoundTerm.init) return BoundTerm.init;
+			BoundTerm a,b;
+			if(!whole){
+				a=dropIndex(at(bounds.lower)); b=dropIndex(at(bounds.upper));
+				d.lower=a.id; d.upper=b.id;
+			}
+			auto ctx=context(t),zero=arena.real_(0);
 			auto m=scalar(ctx,arena.real_(-1));
 			BoundTerm difference(BoundTerm hi,BoundTerm lo){
 				auto neg=primitive(arena.mul(zero,zero,true),[m,lo]);
 				return primitive(arena.add(zero,zero,true),[hi,neg]);
 			}
-			d.lower=a.id; d.upper=b.id; d.minusOne=m.id;
-			solution.from=[nodes[w.a].a]; solution.bounds=d;
+			d.minusOne=m.id;
+			solution.from=[whole?d.coordinate:nodes[w.a].a]; solution.bounds=d;
 			solution.interval=true; solution.piecewise=true;
+			if(whole){
+				auto lo=limit(at(row.a),true),hi=limit(at(row.a),false);
+				auto value=d.decreasing?difference(lo,hi):difference(hi,lo);
+				solution.output=value.id; return value;
+			}
 			if(d.half){
 				auto edge=limit(at(row.a),d.below),endpoint=apply(at(row.a),a);
 				auto value=d.below!=d.decreasing?difference(endpoint,edge):difference(edge,endpoint);
@@ -7843,7 +7857,7 @@ final class Bindings{
 					// zero times a reciprocal under the domain of the denominator.
 					IntegralSolution observation;
 					auto value=integrateMissingPoint(t,observation);
-					if(value==BoundTerm.init) value=integrateCoordinateInterval(t,observation);
+					if(value==BoundTerm.init) value=integrateCoordinateMass(t,observation);
 					if(value!=BoundTerm.init){
 						auto index=cast(uint)integrals.length; integrals~=observation; ++steps;
 						auto proof=emit(BindingRule.distributionInterval,t.id,value.id,uint.max,uint.max,index);
@@ -10628,6 +10642,9 @@ final class Bindings{
 			auto d=s.bounds; string evidence;
 			enforce(directedCoordinate(d.coordinate,d.decreasing,evidence,cert),"missing coordinate orientation");
 			string eval(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+			enum grid="Distribution.GraphFibre.Coordinates.Grid.";
+			if(d.guard==uint.max) return grid~"Directed.whole (f := "~functionAt(d.coordinate)~") "~to!string(d.decreasing)~
+				" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence;
 			string shape;
 			if(d.unit!=uint.max) shape="(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")";
 			else{
@@ -10635,7 +10652,6 @@ final class Bindings{
 				shape=d.nested?"(fun _ => (Distribution.StepSource.mask_mask _ _ _).trans "~one~")":"(fun _ => "~one~")";
 			}
 			auto extension="(fun z : Option ℝ => "~name(d.coordinate)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
-			enum grid="Distribution.GraphFibre.Coordinates.Grid.";
 			if(d.half){
 				return grid~"Directed.ray (f := "~functionAt(d.coordinate)~") (w := "~functionAt(s.from[0])~") "~to!string(d.decreasing)~
 					" "~to!string(d.below)~" "~to!string(d.below?d.strictUpper:d.strictLower)~" "~eval(d.lower)~" "~eval(d.minusOne)~
@@ -11618,7 +11634,10 @@ final class Bindings{
 			stack~=s.from; stack~=s.to; foreach(r;s.bounds.terms) if(r.primitive!=uint.max) stack~=r.primitive;
 			// The bounds and the literal of a difference are named by the theorem
 			// also where the result does not mention them.
-			if(s.interval&&!s.pieces.length){ stack~=[s.bounds.lower,s.bounds.upper]; if(!s.bounds.below) stack~=s.bounds.minusOne; }
+			if(s.interval&&!s.pieces.length){
+				if(s.bounds.coordinate==uint.max||s.bounds.guard!=uint.max) stack~=[s.bounds.lower,s.bounds.upper];
+				if(!s.bounds.below) stack~=s.bounds.minusOne;
+			}
 			// The masks of a split weight are named by its certificate.
 			if(s.split!=uint.max) stack~=s.split;
 			// So is the literal of `h` under a curvature that is a term, also

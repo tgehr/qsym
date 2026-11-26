@@ -333,6 +333,23 @@ private Case[] cases(){
 	Case("StrictBoundMask","[false]·undefined(ℝ)","ℝ","0"),
 	Case("StrictBoundAnd","false∧undefined(𝔹)","𝔹","false"),
 	Case("StrictBoundOr","true∨undefined(𝔹)","𝔹","true"),
+	Case("DirectedTotalLogistic","∫dx λ[(1+exp(-x))⁻¹]","ℝ","1"),
+	Case("DirectedTotalReflected","∫dx λ[(1+exp(x))⁻¹]","ℝ","1"),
+	Case("DirectedTotalSteep","∫dx λ[(1+exp(-7*x+3))⁻¹]","ℝ","1"),
+	Case("DirectedTotalScaled","∫dx λ[-3*(1+exp(-x))⁻¹]","ℝ","3"),
+	Case("DirectedTotalAtanExp","∫dx λ[atan(exp(x))]","ℝ","1/2·π"),
+	Case("DirectedTotalAtanReflected","∫dx λ[atan(exp(-x))]","ℝ","1/2·π"),
+	Case("DirectedTotalHalfRange","∫dx λ[atan((1+exp(-x))⁻¹)]","ℝ","1/4·π"),
+	Case("DirectedTotalAdd","∫dx λ[(1+exp(-x))⁻¹+atan(x)]","ℝ","π+1"),
+	Case("DirectedTotalShift","∫dx λ[atan(exp(x))+7]","ℝ","1/2·π"),
+	Case("DirectedTotalLog","∫dx λ[log(1+(1+exp(-x))⁻¹)]","ℝ","log(2)"),
+	Case("DirectedTotalRoot","∫dx λ[sqrt(1+(1+exp(-x))⁻¹)]","ℝ","sqrt(2)-1"),
+	Case("DirectedTotalNested","∫dx λ[(2+(1+exp(x))⁻¹)⁻¹]","ℝ","1/6"),
+	Case("DirectedTotalConstant","∫dx λ[3]","ℝ","0"),
+	Case("DirectedTotalPole","∫dx λ[x⁻¹]","ℝ","∫dx λ[(x⁻¹)]"),
+	Case("DirectedTotalOneEnd","∫dx λ[exp(-x)]","ℝ","∫dx (exp(-x))·λ[x]"),
+	Case("DirectedTotalOscillation","∫dx λ[sin(x)]","ℝ","∫dx (abs(cos(x)))·λ[x]"),
+	Case("DirectedTotalTurning","∫dx λ[exp(-(x²))]","ℝ","2"),
 	Case("DirectedRayCDF","λ(u:ℝ).∫dx [x≤u]·λ[(1+exp(-x))⁻¹]","ℝ→ℝ","λ(u:ℝ). (exp(-u)+1)⁻¹"),
 	Case("DirectedRaySurvival","λ(l:ℝ).∫dx [l<x]·λ[(1+exp(-x))⁻¹]","ℝ→ℝ","λ(l:ℝ). 1-(exp(-l)+1)⁻¹"),
 	Case("DirectedRayDecreasingCDF","λ(u:ℝ).∫dx [x<u]·λ[(exp(x)+1)⁻¹]","ℝ→ℝ","λ(u:ℝ). 1-(exp(u)+1)⁻¹"),
@@ -1998,6 +2015,8 @@ private void run(string directory){
 			bool integrated=c.name!="CauchyWindowReverse"&&c.name!="CauchyWindowSingleton"&&c.name!="CauchyWindowZeroMask"&&
 				c.name!="CauchyWindowMissing"&&c.name!="CauchyWindowPole";
 			enforce((certificate.indexOf("IntervalTerms.cauchy")>=0)==integrated,c.name);
+		}else if(c.name=="CauchyScaledAtan"||c.name=="CauchyAtanWhole"){
+			enforce(certificate.indexOf("Grid.Directed.whole ")>=0,c.name);
 		}else if(c.name.indexOf("CauchyScale")==0&&c.name!="CauchyScaledAxis"){
 			bool scaled=c.name!="CauchyScalePole"&&c.name!="CauchyScaleZero";
 			enforce((certificate.indexOf("StepSource.cauchy_scaled_mass ")>=0)==scaled,c.name);
@@ -2081,6 +2100,12 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")
 			enforce(certificate.indexOf("observe_partial_scale_countdown")<0&&text.indexOf("μ")>=0,c.name~" index-dependent scale");
+		if(c.name.indexOf("DirectedTotal")==0){
+			bool closed=c.name!="DirectedTotalPole"&&c.name!="DirectedTotalOneEnd"&&
+				c.name!="DirectedTotalOscillation"&&c.name!="DirectedTotalTurning";
+			enforce((certificate.indexOf("Grid.Directed.whole ")>=0)==closed,c.name);
+			if(closed) enforce(text.indexOf("∫")<0&&text.indexOf("lim[")<0,c.name);
+		}
 		if(c.name.indexOf("DirectedRay")==0){
 			bool closed=c.name!="DirectedRayPole"&&c.name!="DirectedRayUnbounded";
 			enforce((certificate.indexOf("Grid.Directed.ray ")>=0)==closed,c.name);
