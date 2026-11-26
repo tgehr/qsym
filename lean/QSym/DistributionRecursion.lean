@@ -829,26 +829,26 @@ private theorem recorded_regular {d x c w} (h : FibreCertificate d x c w) (hc : 
     component false x d = w := by
   cases d <;> cases x <;> simp_all [FibreCertificate, component, Value.Defined]
 
-/-- The same finite linear combination acts on charge and regular weight.
-A successful charge observation ensures all visited regular certificates apply. -/
-theorem finite_combination {d b : Option (D ℝ)} {rows : ℕ → Option (D ℝ)}
-    {x bc bw : Option ℝ} {cs ws : ℕ → Option ℝ} (gain : Option ℝ) (weights : ℕ → Option ℝ) (n : Option ℕ)
+/-- A common outer scale acts on both components, including at zero scale. -/
+private theorem scaled_finite_combination {d b : Option (D ℝ)} {rows : ℕ → Option (D ℝ)}
+    {x bc bw : Option ℝ} {cs ws : ℕ → Option ℝ} (outer gain : Option ℝ) (weights : ℕ → Option ℝ) (n : Option ℕ)
     (hb : FibreCertificate b x bc bw) (hr : ∀ i, FibreCertificate (rows i) x (cs i) (ws i))
-    (obs : ∀ c, component c x d = Value.add (Value.mul gain (component c x b))
-      (Summation.rangeValue (some fun i => Value.mul (weights i) (component c x (rows i))) n)) :
+    (obs : ∀ c, component c x d = Value.mul outer (Value.add (Value.mul gain (component c x b))
+      (Summation.rangeValue (some fun i => Value.mul (weights i) (component c x (rows i))) n))) :
     FibreCertificate d x
-      (Value.add (Value.mul gain bc) (Summation.rangeValue (some fun i => Value.mul (weights i) (cs i)) n))
-      (Value.add (Value.mul gain bw) (Summation.rangeValue (some fun i => Value.mul (weights i) (ws i)) n)) := by
+      (Value.mul outer (Value.add (Value.mul gain bc) (Summation.rangeValue (some fun i => Value.mul (weights i) (cs i)) n)))
+      (Value.mul outer (Value.add (Value.mul gain bw) (Summation.rangeValue (some fun i => Value.mul (weights i) (ws i)) n))) := by
   classical
   have charges (i : ℕ) := recorded_charge (hr i)
   have charge := obs true
   simp only [recorded_charge hb, charges] at charge
   have regular (valid : Value.Defined (component true x d)) :
-      component false x d = Value.add (Value.mul gain bw)
-        (Summation.rangeValue (some fun i => Value.mul (weights i) (ws i)) n) := by
+      component false x d = Value.mul outer (Value.add (Value.mul gain bw)
+        (Summation.rangeValue (some fun i => Value.mul (weights i) (ws i)) n)) := by
     rw [charge] at valid
-    obtain ⟨base, sum⟩ := (Value.defined_add _ _).mp valid
+    obtain ⟨base, sum⟩ := (Value.defined_add _ _).mp ((Value.defined_mul _ _).mp valid).2
     rw [obs false, recorded_regular hb ((Value.defined_mul _ _).mp base).2]
+    apply congrArg (Value.mul outer)
     cases n with
     | none => rfl
     | some n =>
@@ -869,6 +869,19 @@ theorem finite_combination {d b : Option (D ℝ)} {rows : ℕ → Option (D ℝ)
     cases x with
     | none => exact charge.symm
     | some x => exact ⟨charge.symm, (regular ⟨_, rfl⟩).symm⟩
+
+/-- The same finite linear combination acts on charge and regular weight.
+A successful charge observation ensures all visited regular certificates apply. -/
+theorem finite_combination {d b : Option (D ℝ)} {rows : ℕ → Option (D ℝ)}
+    {x bc bw : Option ℝ} {cs ws : ℕ → Option ℝ} (gain : Option ℝ) (weights : ℕ → Option ℝ) (n : Option ℕ)
+    (hb : FibreCertificate b x bc bw) (hr : ∀ i, FibreCertificate (rows i) x (cs i) (ws i))
+    (obs : ∀ c, component c x d = Value.add (Value.mul gain (component c x b))
+      (Summation.rangeValue (some fun i => Value.mul (weights i) (component c x (rows i))) n)) :
+    FibreCertificate d x
+      (Value.add (Value.mul gain bc) (Summation.rangeValue (some fun i => Value.mul (weights i) (cs i)) n))
+      (Value.add (Value.mul gain bw) (Summation.rangeValue (some fun i => Value.mul (weights i) (ws i)) n)) := by
+  simpa only [Value.mul_one_left] using scaled_finite_combination (d := d) (some 1) gain weights n hb hr
+    (fun c => (obs c).trans (Value.mul_one_left _).symm)
 
 /-- A captured or zero discount uses nonnegative powers on the visited rows.
 At zero visits neither the discount nor the emission is forced. -/
@@ -903,6 +916,48 @@ theorem convolution_countdown
       apply density_congr
       intro c
       simpa only [eq] using obs c
+
+/-- Pointwise density of an emitting countdown with a nonvanishing integrating
+factor. The factor scales the regular value and the zero-charge test uses the
+normalized signed contributions of the seed and all visited rows. -/
+theorem product_emitting_countdown
+    (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b : Option (D ℝ)) (e : Option ℕ → Option (D ℝ))
+    (r w : Option ℕ → Option ℝ) (hw0 : w (some 0) = some 1)
+    (hw : ∀ n, let next := Functions.addN.apply (some n) (some 1)
+      Value.mul (r next) (w (some n)) = w next)
+    (hi : ∀ n, Domain.Correct (Value.inv (w (Functions.addN.apply (some n) (some 1)))) (some true))
+    (swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let tail := scaleValue (r (some n)) ((Functions.subN.apply (some n) (some 1)).bind g)
+       if swap then addValue tail (e (some n)) else addValue (e (some n)) tail))
+    (arg : Option ℕ) {x bc bw : Option ℝ} {charge regular : ℕ → Option ℝ}
+    (hb : FibreCertificate b x bc bw)
+    (rows : ∀ i, FibreCertificate (e (Functions.addN.apply (some i) (some 1))) x (charge i) (regular i)) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x =
+      (let total := fun a (col : ℕ → Option ℝ) => Value.add a (Summation.rangeValue
+         (some fun i => Value.mul (Value.inv (w (Functions.addN.apply (some i) (some 1)))) (col i)) arg)
+       Value.mul (arg.bind (fun i => w (some i)))
+         (Binding.guardValue (Value.not (Value.nonzero (total bc charge))) (total bw regular))) := by
+  cases arg with
+  | none => cases fn <;> rfl
+  | some k =>
+    obtain ⟨scale, hs, hn⟩ : ∃ s : ℝ, w (some k) = some s ∧ s ≠ 0 := by
+      cases k with
+      | zero => exact ⟨1, hw0, one_ne_zero⟩
+      | succ i =>
+        simpa [Functions.addN, Function2.apply] using (Value.defined_inv _).mp ((hi i).iff.mpr rfl)
+    let weights (i : ℕ) := Value.inv (w (Functions.addN.apply (some i) (some 1)))
+    have obs (c : Bool) := observe_product_emitting_countdown (observation c x) p hf b e r w hw0 hw hi swap step (some k)
+    have fibre := scaled_finite_combination (d := fn.bind (fun g => (some k).bind g)) (some scale) (some 1)
+      weights (some k) hb rows (fun c => by simpa only [Value.mul_one_left, Option.some_bind, hs, weights] using obs c)
+    rw [fibre.extract]
+    simp only [Value.mul_one_left, Option.some_bind, hs, weights]
+    generalize Value.add bc _ = c
+    generalize Value.add bw _ = v
+    cases c <;> cases v <;> simp [Value.mul, Value.nonzero, Value.not, Binding.guardValue, hn]
+    split <;> rfl
 
 end RealDensityFibre
 end QSym.Distribution
