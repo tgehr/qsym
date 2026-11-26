@@ -30,6 +30,31 @@ theorem affine_right (a b c x : Option R) :
   cases a <;> cases b <;> cases c <;> cases x <;>
     simp [add, mul] <;> ring
 
+/- The discrete scalar frontends present addition and multiplication as
+everywhere-defined Function2 operations. Transport the affine identities once,
+before any case split on the five partial operands. -/
+private noncomputable abbrev totalAdd := (⟨(·+·), fun _ _ => True⟩ : Function2 R R R).apply
+private noncomputable abbrev totalMul := (⟨(·*·), fun _ _ => True⟩ : Function2 R R R).apply
+
+private theorem totalAdd_eq : totalAdd (R := R) = add := by
+  funext x y; cases x <;> cases y <;> simp [totalAdd, Function2.apply, add]
+
+private theorem totalMul_eq : totalMul (R := R) = mul := by
+  funext x y; cases x <;> cases y <;> simp [totalMul, Function2.apply, mul]
+
+theorem affine_add_total (a b c d x : Option R) :
+    totalAdd (totalAdd (totalMul a x) b) (totalAdd (totalMul c x) d) =
+      totalAdd (totalMul (totalAdd a c) x) (totalAdd b d) := by
+  simpa only [totalAdd_eq, totalMul_eq] using affine_add a b c d x
+
+theorem affine_left_total (c a b x : Option R) :
+    totalMul c (totalAdd (totalMul a x) b) = totalAdd (totalMul (totalMul c a) x) (totalMul c b) := by
+  simpa only [totalAdd_eq, totalMul_eq] using affine_left c a b x
+
+theorem affine_right_total (a b c x : Option R) :
+    totalMul (totalAdd (totalMul a x) b) c = totalAdd (totalMul (totalMul a c) x) (totalMul b c) := by
+  simpa only [totalAdd_eq, totalMul_eq] using affine_right a b c x
+
 end QSym.Value
 
 namespace QSym.Value
