@@ -195,4 +195,134 @@ theorem IntervalTerms.cauchy_scaled {f p} (scale : Option ℝ) (right : Bool) (c
   rw [v x]
   cases scale <;> cases right <;> simp [Value.mul, mul_comm]
 
+private theorem primitiveReal_limits {a b k h : ℝ} (ha : a ≠ 0) (hk : 0 < k)
+    (hh : h = if 0 < a then 1/2 else -(1/2)) :
+    Tendsto (primitiveReal a b k) atTop (nhds (h*Real.pi/√k)) ∧
+    Tendsto (primitiveReal a b k) atBot (nhds (-(h*Real.pi/√k))) := by
+  have plus := tendsto_nhds_of_tendsto_nhdsWithin Real.tendsto_arctan_atTop
+  have minus := tendsto_nhds_of_tendsto_nhdsWithin Real.tendsto_arctan_atBot
+  have eq : primitiveReal a b k = fun x : ℝ => (√k)⁻¹ * Real.arctan (a/√k*x+b/√k) := by
+    funext x
+    unfold primitiveReal
+    rw [show (a*x+b)/√k = a/√k*x+b/√k by ring]
+  rw [eq, hh]
+  by_cases pos : 0 < a
+  · rw [if_pos pos]
+    have hs := div_pos pos (Real.sqrt_pos.2 hk)
+    have top := tendsto_atTop_add_const_right atTop (b/√k) ((tendsto_const_mul_atTop_of_pos hs).mpr tendsto_id)
+    have bot := tendsto_atBot_add_const_right atBot (b/√k) ((tendsto_const_mul_atBot_of_pos hs).mpr tendsto_id)
+    constructor
+    · convert (plus.comp top).const_mul (√k)⁻¹ using 1
+      congr 1
+      ring
+    · convert (minus.comp bot).const_mul (√k)⁻¹ using 1
+      congr 1
+      ring
+  · rw [if_neg pos]
+    have hs := div_neg_of_neg_of_pos (lt_of_le_of_ne (le_of_not_gt pos) ha) (Real.sqrt_pos.2 hk)
+    have top := tendsto_atBot_add_const_right atTop (b/√k) ((tendsto_const_mul_atBot_of_neg hs).mpr tendsto_id)
+    have bot := tendsto_atTop_add_const_right atBot (b/√k) ((tendsto_const_mul_atTop_of_neg hs).mpr tendsto_id)
+    constructor
+    · convert (minus.comp top).const_mul (√k)⁻¹ using 1
+      congr 1
+      ring
+    · convert (plus.comp bot).const_mul (√k)⁻¹ using 1
+      congr 1
+      ring
+
+/-- An integral on a ray with a partial endpoint. The strict endpoint and
+integrability hypotheses are the ones used by the ordinary interval rules. -/
+def RayValue (sets : ℝ → Set ℝ) (t : Option ℝ) (v : ℝ → Option ℝ) (out : Option ℝ) : Prop :=
+  ∃ g : ℝ → ℝ, (∀ x, v x = some (g x)) ∧ (∀ x, IntegrableOn g (sets x) volume) ∧
+    (t = none → out = none) ∧ (∀ x, t = some x → out = some (∫ y in sets x, g y))
+
+namespace RayValue
+
+theorem lower {t m v out} (h : RayValue Ioi t v out) : HalfLineTerms t m v out := by
+  obtain ⟨_, hv, hi, hm, he⟩ := h
+  exact .value hv hi hm he
+
+theorem upper {t v out} (h : RayValue Iic t v out) : UpperTerms t v out := by
+  obtain ⟨_, hv, hi, hm, he⟩ := h
+  exact .value hv hi hm he
+
+private theorem product {v : ℝ → Option ℝ} {g : ℝ → ℝ} (c : Option ℝ) (right : Bool)
+    (hv : ∀ x, v x = some (g x)) (x : ℝ) :
+    (if right then Value.mul (v x) c else Value.mul c (v x)) = Value.mul c (some (g x)) := by
+  rw [hv x]
+  cases c <;> cases right <;> simp [Value.mul, mul_comm]
+
+theorem scaledLower {t m v out} (c : Option ℝ) (right : Bool) (h : RayValue Ioi t v out) :
+    HalfLineTerms t m (fun x => if right then Value.mul (v x) c else Value.mul c (v x)) (Value.mul c out) := by
+  obtain ⟨_, hv, hi, hm, he⟩ := h
+  exact .scaledValue (product c right hv) hi hm he
+
+theorem scaledUpper {t v out} (c : Option ℝ) (right : Bool) (h : RayValue Iic t v out) :
+    UpperTerms t (fun x => if right then Value.mul (v x) c else Value.mul c (v x)) (Value.mul c out) := by
+  obtain ⟨_, hv, hi, hm, he⟩ := h
+  exact .scaledValue (product c right hv) hi hm he
+
+end RayValue
+
+/-- One-sided mass uses the Cauchy primitive at the endpoint and its signed
+limit at the corresponding infinity. -/
+theorem cauchyRay (below : Bool) (bound : Option ℝ) {f p} (c b a k h : ℚ)
+    {A B K H pi m : Option ℝ} (src : PolynomialOn (fun _ => True) f p)
+    (shape : polyZero (polyAdd p (polyScale (-1) [c, 2*b, a])) = true)
+    (check : decide (a ≠ 0 ∧ 0 < k ∧ k = a*c-b^2) = true)
+    (side : decide (h = if 0 < a then 1/2 else -(1/2)) = true)
+    (hA : A = some (Numeric.denote (s := .real) a)) (hB : B = some (Numeric.denote (s := .real) b))
+    (hK : K = some (Numeric.denote (s := .real) k)) (hH : H = some (Numeric.denote (s := .real) h))
+    (hpi : pi = some Functions.pi) (hm : m = some (Numeric.denote (s := .real) (-1 : ℚ))) :
+    let edge := Value.mul (Value.mul H pi) (Value.inv (Functions.sqrtR.apply K))
+    let endpoint := cauchyPrimitive A B K bound
+    RayValue (if below then Iic else Ioi) bound (fun x => Value.inv (f x))
+      (if below then Value.add endpoint edge else Value.add edge (Value.mul m endpoint)) := by
+  obtain ⟨hv, endpoints, _, hd⟩ := cauchy_calculus c b a k src shape check hA hB hK
+  obtain ⟨ha, hk, he⟩ := of_decide_eq_true check
+  have hn : (a : ℝ) ≠ 0 := by exact_mod_cast ha
+  have hp : 0 < (k : ℝ) := by exact_mod_cast hk
+  have key : (k : ℝ) = a*c-b^2 := by exact_mod_cast he
+  have hh : (h : ℝ) = if 0 < (a : ℝ) then 1/2 else -(1/2) := by
+    have eq := of_decide_eq_true side
+    by_cases pos : 0 < a
+    · rw [if_pos pos] at eq
+      rw [if_pos (show 0 < (a : ℝ) by exact_mod_cast pos)]
+      rw [eq]
+      norm_num
+    · rw [if_neg pos] at eq
+      have nonpos : (a : ℝ) ≤ 0 := by exact_mod_cast le_of_not_gt pos
+      rw [if_neg (not_lt_of_ge nonpos)]
+      rw [eq]
+      norm_num
+  have limits := primitiveReal_limits (b := (b : ℝ)) hn hp hh
+  have hi := (quadratic_integral hn hp key).1
+  have edge : Value.mul (Value.mul H pi) (Value.inv (Functions.sqrtR.apply K)) = some ((h : ℝ)*Real.pi/√(k : ℝ)) := by
+    rw [hH, hpi, hK]
+    change Value.mul (Value.mul (some (h : ℝ)) (some Real.pi)) (Value.inv (Functions.sqrtR.apply (some (k : ℝ)))) = _
+    simp [Value.mul, Value.inv, Function1.apply, Functions.sqrtR, hp.le, (Real.sqrt_pos.2 hp).ne', div_eq_mul_inv]
+  have absent : cauchyPrimitive A B K none = none := by
+    rw [hA, hB, hK]
+    change cauchyPrimitive (some (a : ℝ)) (some (b : ℝ)) (some (k : ℝ)) none = none
+    simp [cauchyPrimitive, Value.mul, Value.inv, Value.add, Function1.apply, Functions.sqrtR,
+      Functions.atanR, hp.le, (Real.sqrt_pos.2 hp).ne']
+  have minus : m = some (-1 : ℝ) := by rw [hm]; simp [Numeric.denote]
+  dsimp only
+  rw [edge, minus]
+  refine ⟨_, hv, fun _ => hi.integrableOn, ?_, ?_⟩
+  · rintro rfl
+    rw [absent]
+    cases below <;> rfl
+  · rintro x rfl
+    rw [endpoints]
+    cases below with
+    | false =>
+      simp only [Bool.false_eq_true, if_false]
+      rw [integral_Ioi_of_hasDerivAt_of_tendsto' (fun x _ => hd x) hi.integrableOn limits.1]
+      simp [Value.add, Value.mul, sub_eq_add_neg]
+    | true =>
+      simp only [if_true]
+      rw [integral_Iic_of_hasDerivAt_of_tendsto' (fun x _ => hd x) hi.integrableOn limits.2]
+      simp [Value.add]
+
 end QSym.Distribution.StepSource

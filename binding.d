@@ -4996,7 +4996,7 @@ final class Bindings{
 				r.bell.constant=p[0]; r.curvatureTerm=true; return true;
 			}
 			bool intervalCauchy(uint id,ref IntervalTerm r){
-				return !d.half&&d.unit==uint.max&&solution.from.length==1&&cauchyWeight(id,uint.max,r.cauchy);
+				return d.unit==uint.max&&solution.from.length==1&&cauchyWeight(id,uint.max,r.cauchy);
 			}
 			// Decide before building anything: a refused integral leaves no
 			// terms behind. Beyond a single bound every term must decay.
@@ -5337,7 +5337,14 @@ final class Bindings{
 					auto arg=primitive(mulOp,[width,affine]);
 					return primitive(mulOp,[width,primitive(arena.call(Builtin.atanR,[zero]),[arg])]);
 				}
-				auto diff=primitive(addOp,[endpoint(upper),primitive(mulOp,[minusOne,endpoint(lower)])]);
+				BoundTerm diff;
+				if(d.half){
+					auto half=scalar(ctx,arena.real_(Rational(c.leading<Rational(0)?-1:1)/Rational(2)));
+					auto pi=scalar(ctx,arena.call(Builtin.pi,[])),edge=primitive(mulOp,[primitive(mulOp,[half,pi]),width]);
+					auto finite=endpoint(d.below?upper:lower);
+					diff=d.below?primitive(addOp,[finite,edge]):primitive(addOp,[edge,primitive(mulOp,[minusOne,finite])]);
+					r.cauchy.sign=half.id;
+				}else diff=primitive(addOp,[endpoint(upper),primitive(mulOp,[minusOne,endpoint(lower)])]);
 				if(c.factor!=uint.max) diff=primitive(mulOp,[dropIndex(at(c.factor)),diff]);
 				r.cauchy.leadingLiteral=a.id; r.cauchy.halfLinearLiteral=b.id; r.cauchy.radicand=k.id;
 				d.terms~=r; return diff;
@@ -10783,10 +10790,19 @@ final class Bindings{
 				++next;
 				if(r.cauchy.inverse!=uint.max){
 					auto c=r.cauchy,poly=piece(nodes[c.inverse].a,cert.everywhere,"",Rational(0));
-					auto tag=c.factor==uint.max?"cauchy ":"cauchy_scaled ("~name(dropIndex(at(c.factor)).id)~".eval ξ ρ) "~(c.right?"true ":"false ");
-					return "("~termsName~"."~tag~cert.q(c.constant)~" "~cert.q(c.halfLinear)~" "~cert.q(c.leading)~" "~cert.q(c.determinant)~
-						" "~poly.proof~" rfl rfl "~cert.closedProof(at(c.leadingLiteral),c.leading)~" "~cert.closedProof(at(c.halfLinearLiteral),c.halfLinear)~
-						" "~cert.closedProof(at(c.radicand),c.determinant)~")";
+					auto coefficients=cert.q(c.constant)~" "~cert.q(c.halfLinear)~" "~cert.q(c.leading)~" "~cert.q(c.determinant);
+					auto literals=cert.closedProof(at(c.leadingLiteral),c.leading)~" "~cert.closedProof(at(c.halfLinearLiteral),c.halfLinear)~
+						" "~cert.closedProof(at(c.radicand),c.determinant);
+					auto scale=c.factor==uint.max?"":" ("~name(dropIndex(at(c.factor)).id)~".eval ξ ρ) "~(c.right?"true":"false");
+					if(d.half){
+						auto half=Rational(c.leading<Rational(0)?-1:1)/Rational(2);
+						auto ray="(Distribution.StepSource.cauchyRay "~(d.below?"true":"false")~" ("~name(d.below?d.upper:d.lower)~".eval ξ ρ) "~
+							coefficients~" "~cert.q(half)~" "~poly.proof~" rfl rfl rfl "~literals~" "~cert.closedProof(at(c.sign),half)~
+							" rfl "~cert.closedProof(at(d.minusOne),Rational(-1))~")";
+						auto law=d.below?(scale.length?"scaledUpper":"upper"):(scale.length?"scaledLower":"lower");
+						return "(Distribution.StepSource.RayValue."~law~scale~" "~ray~")";
+					}
+					return "("~termsName~(scale.length?".cauchy_scaled":".cauchy")~scale~" "~coefficients~" "~poly.proof~" rfl rfl "~literals~")";
 				}
 				if(r.vertex){
 					// The term everywhere, the bound at the vertex, the checks of

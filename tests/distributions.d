@@ -324,6 +324,19 @@ private Case[] cases(){
 	Case("MissingQuadraticSafe","∫dx (2+x²)⁻¹·λ[x]","ℝ","1/2·sqrt(2)·π"),
 	Case("MissingQuadraticBottom","defined(∫dx undefined(ℝ)·λ[x])","𝔹","false"),
 	Case("MissingQuadraticZeroArg","defined((λ(a:ℝ).∫dx a⁻¹*(1+x²)⁻¹·λ[x])(0))","𝔹","false"),
+	Case("CauchyRayLower","∫dx [1≤x]·(1+x²)⁻¹·λ[x]","ℝ","1/4·π"),
+	Case("CauchyRayUpper","∫dx [x<1]·(1+x²)⁻¹·λ[x]","ℝ","3/4·π"),
+	Case("CauchyRayLowerNegative","∫dx [-1<x]·(-1-x²)⁻¹·λ[x]","ℝ","-3/4·π"),
+	Case("CauchyRayUpperNegative","∫dx [x≤-1]·(-1-x²)⁻¹·λ[x]","ℝ","-1/4·π"),
+	Case("CauchyRayUpperZero","∫dx [x≤0]·λ[atan(x)]","ℝ","1/2·π"),
+	Case("CauchyRayTranslate","∫dx [3/2<x]·(1+(2*x-3)^2)⁻¹·λ[x]","ℝ","1/4·π"),
+	Case("CauchyRayScaledAtan","∫dx [x≤3/2]·λ[atan(2*x-3)]","ℝ","1/2·π"),
+	Case("CauchyRaySymbolic","λ(u:ℝ).∫dx [x≤u]·(1+x²)⁻¹·λ[x]","ℝ→ℝ","λ(u:ℝ). atan(u)+1/2·π"),
+	Case("CauchyRayNormalized","λ(u:ℝ).∫dx [x≤u]·π⁻¹*(1+x²)⁻¹·λ[x]","ℝ→ℝ","λ(u:ℝ). (atan(u)+1/2·π)·π⁻¹"),
+	Case("CauchyRayPartialFactor","λ(h:ℝ→ℝ).λ(t:ℝ).∫dx [1<x]·(h(t)*(1+x²)⁻¹)·λ[x]","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(t:ℝ). h(t)·(1/4)·π"),
+	Case("CauchyRayBoth","λ(z:ℝ).(∫dx [x<z]·(1+x²)⁻¹·λ[x])+(∫dx [z≤x]·(1+x²)⁻¹·λ[x])","ℝ→ℝ","λ(z:ℝ). π"),
+	Case("CauchyRayMissing","defined(∫dx [undefined(ℝ)<x]·(1+x²)⁻¹·λ[x])","𝔹","false"),
+	Case("CauchyRayPole","∫dx [2<x]·(x²-2)⁻¹·λ[x]","ℝ"),
 	Case("CauchyWindowUnit","∫dx [-1≤x≤1]·(1+x²)⁻¹·λ[x]","ℝ","1/2·π"),
 	Case("CauchyWindowAtan","∫dx [-1≤x≤1]·λ[atan(x)]","ℝ","1/2·π"),
 	Case("CauchyWindowAtanScaled","∫dx [1<x<2]·λ[atan(2*x-3)]","ℝ","1/2·π"),
@@ -1818,7 +1831,10 @@ private void run(string directory){
 				c.name!="MissingQuadraticHoleHidden"&&c.name!="MissingQuadraticSafe";
 			enforce((certificate.indexOf("MissingPoint.InDensity.mass ")>=0)==witness,c.name);
 		}
-		if(c.name.indexOf("CauchyWindow")==0||c.name=="QuotientPoleQuadratic"){
+		if(c.name.indexOf("CauchyRay")==0){
+			bool integrated=c.name!="CauchyRayMissing"&&c.name!="CauchyRayPole";
+			enforce((certificate.indexOf("Distribution.StepSource.cauchyRay ")>=0)==integrated,c.name);
+		}else if(c.name.indexOf("CauchyWindow")==0||c.name=="QuotientPoleQuadratic"){
 			bool integrated=c.name!="CauchyWindowReverse"&&c.name!="CauchyWindowSingleton"&&c.name!="CauchyWindowZeroMask"&&
 				c.name!="CauchyWindowMissing"&&c.name!="CauchyWindowPole";
 			enforce((certificate.indexOf("IntervalTerms.cauchy")>=0)==integrated,c.name);
