@@ -9,7 +9,7 @@ noncomputable section
 namespace QSym.Distribution.GraphFibre.Coordinates.Grid
 open Set Filter Topology StepSource
 abbrev Scalar := ℝ → Option ℝ
-private def coord (f : Scalar) (x : ℝ) := (f x).getD 0
+def coord (f : Scalar) (x : ℝ) := (f x).getD 0
 
 private theorem smoothPoly (p : List ℚ) : ContDiff ℝ 1 (polyEval p) := by
   induction p with
@@ -255,6 +255,14 @@ private theorem traceR {f a p q} (g : Germ f a p q) :
 private theorem value_eq {v : ℚ} {p : List ℚ} {a : ℚ} (h : v = polyEvalQ p a) :
     (v : ℝ) = polyEval p a := h ▸ polyEvalQ_cast p a
 
+/-- Both open germs tend to the actual value at a continuous join. -/
+theorem continuousJoin {f a p q} (v : ℚ) (g : Germ f a p q) (hf : f a = some (v:ℝ))
+    (hl : v = polyEvalQ p a) (hr : v = polyEvalQ q a) : ContinuousAt (coord f) (a:ℝ) := by
+  have hv : coord f a = (v:ℝ) := by simp [coord, hf]
+  apply continuousAt_iff_continuous_left'_right'.2
+  unfold ContinuousWithinAt
+  exact ⟨by rw [hv, value_eq hl]; exact traceL g, by rw [hv, value_eq hr]; exact traceR g⟩
+
 theorem smooth {f w a p q} {v slope : ℚ} (g : Germ f a p q) (hf : f a = some (v:ℝ))
     (hv : v = polyEvalQ p a) (hr : v = polyEvalQ q a)
     (hd : slope = polyEvalQ (polyDerivative p) a) (he : slope = polyEvalQ (polyDerivative q) a)
@@ -366,7 +374,7 @@ private theorem foldEvents {f w : Scalar} (es : List Event)
     simp only [List.map_cons, List.foldr_cons]
     rw [(hb e List.mem_cons_self).event, ih (fun _ h => hb _ (List.mem_cons_of_mem _ h))]
 
-private def chartOf {f w es} (h : Checked f w none es) : VariationChart := by
+def Checked.chart {f w es} (h : Checked f w none es) : VariationChart := by
   have exceptional x : x ∈ es.map Prod.fst ↔ ¬ DifferentiableAt ℝ (coord f) x := by
     constructor
     · intro hx; obtain ⟨e, he, rfl⟩ := List.mem_map.mp hx
@@ -377,18 +385,22 @@ private def chartOf {f w es} (h : Checked f w none es) : VariationChart := by
     fun _ hx => (h.regular _ trivial hx).smooth, fun _ hx => by
       obtain ⟨e, he, rfl⟩ := List.mem_map.mp hx; exact (h.breaks e he).traces⟩
 
-private theorem gridValues {f w es} (h : Checked f w none es) (x : ℝ) : f x = some (coord f x) ∧ w x = some |deriv (coord f) x| := by
+theorem Checked.values {f w es} (h : Checked f w none es) (x : ℝ) : f x = some (coord f x) ∧ w x = some |deriv (coord f) x| := by
   by_cases hx : x ∈ es.map Prod.fst
   · obtain ⟨e, he, rfl⟩ := List.mem_map.mp hx
     exact ⟨(h.breaks e he).total, (h.breaks e he).weight⟩
   · exact ⟨(h.regular _ trivial hx).total, (h.regular _ trivial hx).weight⟩
 
+theorem Checked.fold_events {f w es} (h : Checked f w none es) (z : Option (D ℝ)) :
+    (es.map Prod.fst).foldr (fun a d => addValue (VariationChart.atCut (coord f) a none) d) z =
+      es.foldr (fun e d => addValue e.2 d) z := foldEvents es h.breaks z
+
 theorem finish {f w es} (h : Checked f w none es) :
     value (Tensor.consValue (some f) Tensor.nilValue) =
       es.foldr (fun e d => addValue e.2 d) (weightValue (some w) lebesgueValue) := by
-  rw [singleton_pieces (chartOf h) (fun x => (gridValues h x).1)]
+  rw [singleton_pieces (h.chart) (fun x => (h.values x).1)]
   change (es.map Prod.fst).foldr _ (weightValue (some fun x => some |deriv (coord f) x|) _) = _
-  rw [← funext (fun x => (gridValues h x).2)]
+  rw [← funext (fun x => (h.values x).2)]
   exact foldEvents es h.breaks _
 
 /-- The same checked coordinate grid can be used with a restriction on its
@@ -400,11 +412,11 @@ theorem finishRestricted {f w es ds} (pred : ℝ → Option Bool) (h : Checked f
     (events : List.Forall₂ (RestrictedEvent f pred) es ds) :
     restricted (some pred) (Tensor.consValue (some f) Tensor.nilValue) =
       ds.foldr addValue (weightValue (some fun x => Value.mask ((f x).bind pred) (w x)) lebesgueValue) := by
-  refine (restricted_pieces_eq (singleton_displays (chartOf h) (fun x => (gridValues h x).1)) pred).trans ?_
+  refine (restricted_pieces_eq (singleton_displays (h.chart) (fun x => (h.values x).1)) pred).trans ?_
   change (es.map Prod.fst).foldr (fun a d => addValue (VariationChart.atCut (coord f) a (some pred)) d)
     (weightValue (some fun x => Value.mask (pred (coord f x)) (some |deriv (coord f) x|)) _) = _
   have eq x : Value.mask (pred (coord f x)) (some |deriv (coord f) x|) =
-      Value.mask ((f x).bind pred) (w x) := by rw [(gridValues h x).1, (gridValues h x).2]; rfl
+      Value.mask ((f x).bind pred) (w x) := by rw [(h.values x).1, (h.values x).2]; rfl
   rw [funext eq]
   clear h
   induction events with

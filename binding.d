@@ -187,6 +187,7 @@ private struct PolynomialGrid{
 	Rational[] cuts,points;
 	Rational[][] cells;
 }
+private enum CoordinateChange { none, exp, sinh, arsinh, log, sqrt, reciprocal }
 private enum JoinKind{ smooth,corner,jump }
 private enum CornerSelection { dynamic, active, inactive }
 private struct CoordinateJoin{
@@ -198,7 +199,8 @@ private struct CoordinateJoin{
 }
 private struct CoordinateGrid{
 	PolynomialGrid grid;
-	uint body,weight,predicate=uint.max;
+	uint body,weight,predicate=uint.max,outerPredicate=uint.max;
+	CoordinateChange change;
 	CoordinateJoin[] joins;
 }
 private Rational polynomialAt(Rational[] p,Rational x) @safe {
@@ -1899,12 +1901,13 @@ final class Bindings{
 		return sum==BoundTerm.init?scalar(inner,zero):sum;
 	}
 
-	// Construct a signed derivative. Replay the identical traversal when
-	// emitting evidence so every accepted operation has a checked chain rule.
-	private BoundTerm smoothSlope(BoundTerm body,out string witness,SourceCertificates cert=null){
+	// Sign information is conditional on definedness. Both globally smooth
+	// coordinates and continuous polynomial grids supply totality separately.
+	private final class CoordinateBounds{
+		@safe:
 		enum ns="Distribution.GraphFibre.Coordinates.Grid.";
-		auto zero=arena.real_(0),sum=arena.add(zero,zero,true),product=arena.mul(zero,zero,true);
-		Table!(uint,uint) slopes; Table!(uint,string) proofs;
+		SourceCertificates cert;
+		this(SourceCertificates c){cert=c;}
 		enum Sign { unknown, nonnegative, positive }
 		struct Evidence { Sign sign; string proof; }
 		Evidence[uint] signs;
@@ -1953,6 +1956,9 @@ final class Bindings{
 				auto op=arena.view(arena.at(n.data));
 				if(op.op==Op.builtin&&(op.value==Builtin.expR||op.value==Builtin.coshR)){
 					e.sign=Sign.positive; law=op.value==Builtin.expR?"exp":"cosh";
+					if(cert !is null) args=cert.functionAt(n.a);
+				}else if(op.op==Op.abs){
+					e.sign=Sign.nonnegative; law="abs";
 					if(cert !is null) args=cert.functionAt(n.a);
 				}else if(op.op==Op.add||op.op==Op.mul){
 					auto a=lower(n.a,depth+1),b=lower(n.b,depth+1);
@@ -2023,6 +2029,65 @@ final class Bindings{
 			if(cert !is null&&evidence.found) evidence.proof=cert.save(ns~"Nonzero "~cert.functionAt(id),"("~ns~"Nonzero."~law~" "~args~")");
 			return exclusions[id]=evidence;
 		}
+	}
+	private CoordinateChange gridChange(uint id){
+		auto n=nodes[id];
+		if(n.op!=BoundOp.primitive) return CoordinateChange.none;
+		auto op=arena.view(arena.at(n.data));
+		if(op.op==Op.inv) return CoordinateChange.reciprocal;
+		if(op.op!=Op.builtin) return CoordinateChange.none;
+		switch(cast(Builtin)op.value){
+			case Builtin.expR:return CoordinateChange.exp;
+			case Builtin.sinhR:return CoordinateChange.sinh;
+			case Builtin.asinhR:return CoordinateChange.arsinh;
+			case Builtin.logR:return CoordinateChange.log;
+			case Builtin.sqrtR:return CoordinateChange.sqrt;
+			default:return CoordinateChange.none;
+		}
+	}
+	private bool gridChangeRange(CoordinateChange change,uint input,out string proof,SourceCertificates cert=null){
+		final switch(change){
+			case CoordinateChange.none:return false;
+			case CoordinateChange.log:case CoordinateChange.sqrt:
+				auto h=(new CoordinateBounds(cert)).lower(input,0);
+				proof=h.proof; return h.sign==CoordinateBounds.Sign.positive;
+			case CoordinateChange.reciprocal:
+				auto h=(new CoordinateBounds(cert)).nonzero(input,0);
+				proof=h.proof; return h.found;
+			case CoordinateChange.exp:case CoordinateChange.sinh:case CoordinateChange.arsinh:
+				if(cert !is null) proof="(Distribution.GraphFibre.Coordinates.Grid.SourceIn.univ "~cert.functionAt(input)~")";
+				return true;
+		}
+	}
+	// The inner grid supplies |f′|. Multiply it by the outer magnitude.
+	private BoundTerm gridChangeJacobian(CoordinateChange change,BoundTerm f){
+		auto zero=arena.real_(0),ctx=context(f);
+		BoundTerm call(Builtin b,BoundTerm v){return primitive(arena.call(b,[zero]),[v]);}
+		BoundTerm den;
+		final switch(change){
+			case CoordinateChange.none:assert(0);
+			case CoordinateChange.exp:return call(Builtin.expR,f);
+			case CoordinateChange.sinh:return call(Builtin.coshR,f);
+			case CoordinateChange.log:den=f; break;
+			case CoordinateChange.sqrt:
+				den=primitive(arena.mul(zero,zero,true),[scalar(ctx,arena.real_(2)),call(Builtin.sqrtR,f)]);
+				break;
+			case CoordinateChange.reciprocal:case CoordinateChange.arsinh:
+				den=primitive(arena.pow(zero,2),[f]);
+				if(change==CoordinateChange.arsinh)
+					den=call(Builtin.sqrtR,primitive(arena.add(zero,zero,true),[scalar(ctx,arena.real_(1)),den]));
+				break;
+		}
+		return primitive(arena.inv(zero),[den]);
+	}
+
+	// Construct a signed derivative. Replay the identical traversal when
+	// emitting evidence so every accepted operation has a checked chain rule.
+	private BoundTerm smoothSlope(BoundTerm body,out string witness,SourceCertificates cert=null){
+		enum ns="Distribution.GraphFibre.Coordinates.Grid.";
+		auto zero=arena.real_(0),sum=arena.add(zero,zero,true),product=arena.mul(zero,zero,true);
+		Table!(uint,uint) slopes; Table!(uint,string) proofs;
+		auto bounds=new CoordinateBounds(cert);
 		BoundTerm visit(uint id,uint depth){
 			if(depth>64) return BoundTerm.init;
 			if(slopes.contains(id)) return at(slopes.get(id,uint.max));
@@ -2057,18 +2122,18 @@ final class Bindings{
 				if(du==BoundTerm.init) return BoundTerm.init;
 				if(cert !is null) args=proofs.get(n.a,"");
 				if(op.op==Op.inv||op.op==Op.builtin&&(op.value==Builtin.logR||op.value==Builtin.sqrtR)){
-					auto sign=lower(n.a,depth+1);
-					if(sign.sign==Sign.positive){
+					auto sign=bounds.lower(n.a,depth+1);
+					if(sign.sign==CoordinateBounds.Sign.positive){
 						if(cert !is null) args~=" "~sign.proof;
 					}else{
 						if(op.op!=Op.inv) return BoundTerm.init;
-						auto evidence=nonzero(n.a,depth+1);
+						auto evidence=bounds.nonzero(n.a,depth+1);
 						if(!evidence.found) return BoundTerm.init;
 						if(cert !is null) args~=" "~evidence.proof;
 					}
 					auto denominator=at(n.a);
 					if(op.op==Op.inv){
-						lemma=sign.sign==Sign.positive?"inv":"inv_nonzero";
+						lemma=sign.sign==CoordinateBounds.Sign.positive?"inv":"inv_nonzero";
 						denominator=primitive(arena.pow(zero,2),[denominator]);
 					}else if(op.value==Builtin.sqrtR){
 						denominator=primitive(product,[scalar(inner,arena.real_(2)),f]);
@@ -6110,13 +6175,20 @@ final class Bindings{
 			return distribution(ctx,BoundOp.distributionWeight,
 				[inheritHint(fn,lambda(w)),distribution(ctx,BoundOp.distributionLebesgue)]);
 		}
-		BoundTerm polynomialCoordinate(BoundTerm fn,out uint index,BoundTerm pred=BoundTerm.init){
+		BoundTerm polynomialCoordinate(BoundTerm fn,out uint index,BoundTerm pred=BoundTerm.init,bool changed=false){
 			auto body=at(node(fn).a),inner=context(body),ctx=context(fn),x=variable(inner,0);
 			CoordinateGrid cert;
+			auto outerBody=body;
+			if(changed){
+				cert.change=gridChange(body.id);
+				if(cert.change==CoordinateChange.none) return BoundTerm.init;
+				body=at(node(body).a);
+			}
 			Rational[] global;
 			if(axisPolynomial(body.id,global)) cert.grid.cells~=global;
 			else if(!polynomialGrid([body.id],cert.grid)) return BoundTerm.init;
 			auto cuts=cert.grid.cuts;
+			if(changed&&!cuts.length) return BoundTerm.init;
 			// A global polynomial needs no cuts or region certificates.
 			Rational[][] slopes;
 			foreach(p;cert.grid.cells) slopes~=derivativeCoefficients(p);
@@ -6124,10 +6196,21 @@ final class Bindings{
 				auto l=polynomialAt(cert.grid.cells[i],a),r=polynomialAt(cert.grid.cells[i+1],a);
 				auto dl=polynomialAt(slopes[i],a),dr=polynomialAt(slopes[i+1],a),v=cert.grid.points[i];
 				if((v!=l&&v!=r)||l.words>128||r.words>128||dl.words>128||dr.words>128) return BoundTerm.init;
+				if(changed&&l!=r) return BoundTerm.init;
 				cert.joins~=CoordinateJoin(l!=r?JoinKind.jump:dl!=dr?JoinKind.corner:JoinKind.smooth,l,r,dl);
 			}
 			auto zero=arena.real_(0),mul=arena.mul(zero,zero,true),add=arena.add(zero,zero,true);
 			auto lt=arena.lt(zero,zero),le=arena.le(zero,zero),mask=arena.mask(arena.boolean(true),zero);
+			BoundTerm originalPred;
+			if(changed){
+				string proof; if(!gridChangeRange(cert.change,body.id,proof)) return BoundTerm.init;
+				if(pred!=BoundTerm.init){
+					cert.outerPredicate=node(pred).a;
+					uint[] shift; foreach(i;0..contexts[ctx.index].length) shift~=i+1;
+					originalPred=rename(pred,inner,shift);
+					pred=lambda(apply(originalPred,primitive(arena.at(node(outerBody).data),[x])));
+				}
+			}
 			if(pred!=BoundTerm.init){
 				// Restrict a jump in its traversed coordinate. Only commit the
 				// rewrite when every exceptional contribution has a certificate.
@@ -6166,11 +6249,13 @@ final class Bindings{
 			}
 			if(weight==BoundTerm.init) weight=scalar(inner,zero);
 			cert.weight=weight.id;
+			if(changed) weight=primitive(mul,[gridChangeJacobian(cert.change,body),weight]);
 			BoundTerm localPred;
 			if(pred!=BoundTerm.init){
 				uint[] shift; foreach(i;0..contexts[ctx.index].length) shift~=i+1;
 				localPred=rename(pred,inner,shift);
-				weight=primitive(mask,[apply(localPred,body),weight]);
+				auto guard=changed?apply(originalPred,outerBody):apply(localPred,body);
+				weight=primitive(mask,[guard,weight]);
 			}
 			auto result=distribution(ctx,BoundOp.distributionWeight,[inheritHint(fn,lambda(weight)),distribution(ctx,BoundOp.distributionLebesgue)]);
 			BoundTerm atom(Rational a,Rational height){
@@ -6211,6 +6296,14 @@ final class Bindings{
 			}
 			cert.body=body.id;index=cast(uint)coordinates.length;coordinates~=cert;
 			return result;
+		}
+		BoundTerm singletonCoordinate(BoundTerm fn,out uint index,out BindingRule rule,BoundTerm pred=BoundTerm.init){
+			rule=BindingRule.distributionCoordinateGrid;
+			auto result=polynomialCoordinate(fn,index,pred);
+			if(result!=BoundTerm.init) return result;
+			result=smoothCoordinate(fn,pred);
+			if(result!=BoundTerm.init){rule=BindingRule.distributionSmoothCoordinate; return result;}
+			return polynomialCoordinate(fn,index,pred,true);
 		}
 		BoundTerm jumpCoordinate(BoundTerm fn,JumpRays rays){
 			auto x=at(rays.x),ctx=context(fn),inner=context(x),zero=arena.real_(0);
@@ -6995,9 +7088,7 @@ final class Bindings{
 			if(current.op==BoundOp.distributionInversePart&&nodes[current.a].op==BoundOp.lambda){
 				auto first=nodes[current.b];
 				if(first.op==BoundOp.vectorCons&&nodes[first.b].op==BoundOp.vectorNil&&nodes[first.a].op==BoundOp.lambda){
-					next=polynomialCoordinate(at(first.a),extra,at(current.a));
-					if(next!=BoundTerm.init) rule=BindingRule.distributionCoordinateGrid;
-					else{ next=smoothCoordinate(at(first.a),at(current.a)); rule=BindingRule.distributionSmoothCoordinate; }
+					next=singletonCoordinate(at(first.a),extra,rule,at(current.a));
 				}
 			}
 			if(current.op==BoundOp.distributionInverseCover){
@@ -7040,11 +7131,7 @@ final class Bindings{
 								distribution(ctx,BoundOp.distributionLebesgue)]);
 						}
 					}
-					if(next==BoundTerm.init){
-						next=polynomialCoordinate(at(first.a),extra);
-						if(next!=BoundTerm.init) rule=BindingRule.distributionCoordinateGrid;
-						else{ next=smoothCoordinate(at(first.a)); rule=BindingRule.distributionSmoothCoordinate; }
-					}
+					if(next==BoundTerm.init) next=singletonCoordinate(at(first.a),extra,rule);
 				}
 			}
 			if(current.op==BoundOp.distributionBind||current.op==BoundOp.distributionIntegral){
@@ -9043,6 +9130,13 @@ final class Bindings{
 		string pred;
 		if(restricted){ cert.roots~=c.weight; pred=cert.functionAt(c.predicate); }
 		if(!cuts.length) return restricted?app("polynomialRestricted",pred~" "~cells[0]):app("polynomial",cells[0]);
+		bool changed=c.change!=CoordinateChange.none;
+		string continuous;
+		if(changed){
+			cert.roots~=c.weight;
+			if(restricted) cert.roots~=c.predicate;
+			continuous=app("ContinuousCuts.nil",f);
+		}
 		string events="([] : List "~grid~"Event)",selected="List.Forall₂.nil";
 		auto tail=app("last","(a := "~q(cuts[$-1])~") "~cells[$-1]);
 		foreach_reverse(i,a;cuts){
@@ -9061,6 +9155,10 @@ final class Bindings{
 				if(j.kind==JoinKind.corner){
 					law=app("corner",point~germs~" "~pv~" rfl rfl (of_decide_eq_true rfl) "~zero);
 					eq=app("cornerTerm",q(a)~" "~apos);
+					if(changed){
+						auto hc=app("continuousJoin",q(v)~" "~germs~" "~pv~" rfl rfl");
+						continuous=app("ContinuousCuts.cons","(d := "~name(j.event)~".eval ξ ρ) "~hc~" "~continuous);
+					}
 				}else{
 					auto height=j.right-j.left;if(height<Rational(0))height=-height;
 					auto side=v==j.left?"(Or.inl rfl)":"(Or.inr rfl)";
@@ -9100,6 +9198,12 @@ final class Bindings{
 				events="((("~q(a)~" : ℝ), "~name(j.event)~".eval ξ ρ) :: "~events~")";
 			}
 			tail=cert.save(grid~"Checked "~f~" "~w~" "~lo~" "~events,app(j.kind==JoinKind.smooth?"pass":"cut",bounds~"rfl "~cells[i]~" "~law~" "~tail));
+		}
+		if(changed){
+			string range; enforce(gridChangeRange(c.change,c.body,range,cert),"missing coordinate range");
+			auto args=grid~"ScalarChange."~to!string(c.change)~" "~range~" ";
+			return restricted?app("finishChangeRestricted",args~cert.functionAt(c.outerPredicate)~" "~tail~" "~continuous~" "~selected):
+				app("finishChange",args~tail~" "~continuous);
 		}
 		return restricted?app("finishRestricted",pred~" "~tail~" "~selected):app("finish",tail);
 	}

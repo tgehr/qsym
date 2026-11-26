@@ -53,6 +53,12 @@ theorem centered (strict : Bool) (s : ℚ) {f p} (source : StepSource.Polynomial
   have h := evenLower_sound strict _ (x - s) check
   simpa only [StepSource.polyEval_translate, sub_add_cancel] using h
 
+theorem abs (f : Scalar) : Lower false (fun x => Value.abs (f x)) := by
+  intro x v hv
+  cases e : f x <;> simp [e, Value.abs] at hv
+  subst v
+  exact abs_nonneg _
+
 theorem evenPow (f : Scalar) (k : ℕ) (even : k % 2 = 0) :
     Lower false (fun x => (f x).map (fun y => y^k)) := by
   intro x v h

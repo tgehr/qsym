@@ -208,6 +208,20 @@ private Case[] cases(){
 	Case("CenteredCoordinateNested","densityAtD(Λx. λ[log((x^2-2*x+1)*exp(x)+1)],0)","ℝ","1/2"),
 	Case("CoordinateTouchingLog","Λx. λ[log(x^2-2*x+1)]","Distribution(ℝ)"),
 	Case("CoordinateSignChangeLog","Λx. λ[log(x^2-3*x+1)]","Distribution(ℝ)"),
+	Case("ChangedCoordinateExp","Λx. λ[exp(abs(x))]","Distribution(ℝ)","Λ(y:ℝ). (∫dx λ[x]·δ(x^2)[y]·[x=0])+(([y<0]+[0<y])·exp(abs(y)))·λ[y]"),
+	Case("ChangedCoordinateExpLeft","densityAtD(Λx. λ[exp(abs(x))],-1)","ℝ","e"),
+	Case("ChangedCoordinateLogLeft","densityAtD(Λx. λ[log(1+abs(x))],-3)","ℝ","1/4"),
+	Case("ChangedCoordinateLogCorner","densityAtD(Λx. λ[log(1+abs(x))],0)","ℝ","undefined(ℝ)"),
+	Case("ChangedCoordinateRoot","densityAtD(Λx. λ[sqrt(1+abs(x))],3)","ℝ","1/4"),
+	Case("ChangedCoordinateReciprocal","densityAtD(Λx. λ[(1+abs(x))⁻¹],-1)","ℝ","1/4"),
+	Case("ChangedCoordinateSinh","densityAtD(Λx. λ[sinh(abs(x-2))],2)","ℝ","undefined(ℝ)"),
+	Case("ChangedCoordinateArsinh","densityAtD(Λx. λ[asinh(abs(x))],3/4)","ℝ","4/5"),
+	Case("ChangedCoordinateMany","densityAtD(Λx. λ[log(1+abs(x-1)+abs(x+1))],2)","ℝ","2/5"),
+	Case("ChangedCoordinateIverson","densityAtD(Λx. λ[exp([0<x]·x)],-1)","ℝ","0"),
+	Case("ChangedCoordinateInactive","densityAtD(Λx. λ[exp(abs(x)) | u. u<1],0)","ℝ","0"),
+	Case("ChangedCoordinateActive","densityAtD(Λx. λ[exp(abs(x)) | u. 1≤u],0)","ℝ","undefined(ℝ)"),
+	Case("ChangedCoordinatePredicate","λ(k:ℝ→𝔹). Λx. λ[log(1+abs(x)) | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
+	Case("UnchangedCoordinateLogZero","densityAtD(Λx. λ[log(abs(x))],0)","ℝ"),
 	Case("NegativeCoordinateQuadratic","densityAtD(Λx. λ[(-x^2+x-1)⁻¹],0)","ℝ","1"),
 	Case("NegativeCoordinateStationary","densityAtD(Λx. λ[(-x^2+x-1)⁻¹],1/2)","ℝ","0"),
 	Case("NegativeCoordinateProduct","densityAtD(Λx. λ[(-exp(x)*cosh(x))⁻¹],0)","ℝ","1"),
@@ -1441,6 +1455,10 @@ private void run(string directory){
 			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
 		if(c.name=="CenteredCoordinateQuartic"||c.name=="PositiveCoordinateNestedInverse")
 			enforce(certificate.indexOf(".ofEq (fun ξ _ => (Numeric.calculate_sound ξ ")>=0,c.name~" direct rational evaluation");
+		if(c.name.indexOf("ChangedCoordinate")==0)
+			enforce(certificate.indexOf("Grid.finishChange")>=0,c.name~" missing smooth change of a grid");
+		if(c.name=="UnchangedCoordinateLogZero")
+			enforce(certificate.indexOf("Grid.finishChange")<0,c.name~" lost a domain boundary");
 		if(c.name.indexOf("NegativeCoordinate")==0)
 			enforce(certificate.indexOf("Grid.Slope.inv_nonzero")>=0,c.name~" certified denominator");
 		if(c.name=="CoordinateReciprocalPole"||c.name=="CoordinateNegativeLog")
