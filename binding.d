@@ -5834,9 +5834,14 @@ final class Bindings{
 			IntervalData d; AxisBounds bounds;
 			if(!whole){
 				if(!intervalMask(nodes[w.a].a,d,bounds)||bounds.around!=uint.max) return BoundTerm.init;
-				if(d.unit!=uint.max?(d.unitCasts!=3||!d.unitValue.one):
-					(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
-					return BoundTerm.init;
+				if(d.unit==uint.max){
+					auto v=nodes[d.value];
+					if(v.op!=BoundOp.scalar) return BoundTerm.init;
+					auto term=arena.at(v.data);
+					if(arena.isNumber(term)) d.unitValue=arena.number(term).re;
+					else if(!closedRational(at(d.value),d.unitValue,term)) return BoundTerm.init;
+				}
+				if(d.unitValue.zero||d.unitValue.words>64) return BoundTerm.init;
 			}
 			turningCoordinate(nodes[row.a].a,d);
 			string evidence;
@@ -5919,6 +5924,8 @@ final class Bindings{
 				auto diff=d.decreasing?difference(below,above):difference(above,below);
 				result=primitive(arena.mask(arena.boolean(true),zero),[comparison,diff]);
 			}
+			if(!whole&&!d.unitValue.one)
+				result=primitive(arena.mul(zero,zero,true),[scalar(ctx,arena.real_(d.unitValue)),result]);
 			solution.bounds=d; solution.output=result.id;
 			return result;
 		}
@@ -11704,6 +11711,12 @@ final class Bindings{
 	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof){
 		auto q=&cert.q,app=&cert.app,atPoint=&cert.atPoint,functionAt=&cert.functionAt;
 		auto save=&cert.save,numericProof=&cert.numericProof,affineProof=&cert.affineProof;
+		string bracket(IntervalData d){
+			if(d.unitCasts==3&&d.unitValue.one)return "(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")";
+			auto integer="("~to!string(d.unitValue.numerator)~")";
+			if(d.unitCasts==1)return "(fun _ => Distribution.StepSource.bracket_rational _ _ "~cert.q(d.unitValue)~" "~numericProof(d.unit,Rational(0),cert.q(d.unitValue))~")";
+			return "(fun _ => Distribution.StepSource.bracket_"~(d.unitCasts==3?"natural":"integer")~" _ _ "~integer~" "~cert.q(d.unitValue)~" "~numericProof(d.unit,Rational(0),integer)~" rfl)";
+		}
 		alias Linear=SourceCertificates.Linear;
 		alias Piece=SourceCertificates.Piece;
 		auto uniform=&cert.uniform,piece=&cert.piece,exponential=&cert.exponential;
@@ -11920,21 +11933,31 @@ final class Bindings{
 			if(d.guard==uint.max) return grid~law~"whole (f := "~functionAt(d.coordinate)~")"~change~" "~to!string(d.decreasing)~
 				" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~
 				(change.length?edge(true)~edge(false):"");
+			bool scaled=!d.unitValue.one;
 			string shape;
-			if(d.unit!=uint.max) shape="(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")";
+			if(d.unit!=uint.max) shape=bracket(d);
 			else{
-				auto one="(congrArg (Value.mask _) (Numeric.calculate_real_one ξ n"~to!string(nodes[d.value].data)~" rfl))";
-				shape=d.nested?"(fun _ => (Distribution.StepSource.mask_mask _ _ _).trans "~one~")":"(fun _ => "~one~")";
+				auto literal=scaled?numericProof(d.value,Rational(0),cert.q(d.unitValue)):
+					"(Numeric.calculate_real_one ξ n"~to!string(nodes[d.value].data)~" rfl)";
+				auto eq="(congrArg (Value.mask _) "~literal~")";
+				shape=d.nested?"(fun _ => (Distribution.StepSource.mask_mask _ _ _).trans "~eq~")":"(fun _ => "~eq~")";
 			}
+			auto input=" (w := "~(scaled?"_":functionAt(s.from[0]))~")";
+			auto unitShape=scaled?"(fun _ => rfl)":shape;
 			auto extension="(fun z : Option ℝ => "~name(d.coordinate)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
+			string unitMass;
 			if(d.half){
-				return grid~law~"ray (f := "~functionAt(d.coordinate)~") (w := "~functionAt(s.from[0])~")"~change~" "~to!string(d.decreasing)~
+				unitMass=grid~law~"ray (f := "~functionAt(d.coordinate)~")"~input~change~" "~to!string(d.decreasing)~
 					" "~to!string(d.below)~" "~to!string(d.below?d.strictUpper:d.strictLower)~" "~eval(d.lower)~" "~eval(d.minusOne)~
-					" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~(change.length?edge(d.below):"")~" "~shape;
-			}
-			return grid~law~"interval (w := "~functionAt(s.from[0])~") "~extension~change~" "~
+					" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~(change.length?edge(d.below):"")~" "~unitShape;
+			}else unitMass=grid~law~"interval"~input~" "~extension~change~" "~
 				to!string(d.decreasing)~" "~to!string(d.swap)~" "~to!string(d.strictLower)~" "~to!string(d.strictUpper)~
-				" "~eval(d.lower)~" "~eval(d.upper)~" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~" "~shape;
+				" "~eval(d.lower)~" "~eval(d.upper)~" "~eval(d.minusOne)~" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~" "~unitShape;
+			if(!scaled) return unitMass;
+			auto factor=scalar(context(at(d.minusOne)),arena.real_(d.unitValue));
+			auto smooth="("~grid~law~"smoothSource"~change~" "~evidence~")";
+			return grid~"scale_masked_mass (w := "~functionAt(s.from[0])~") "~smooth~" "~eval(factor.id)~
+				" "~cert.closedProof(factor,d.unitValue)~" (Rat.cast_ne_zero.mpr (of_decide_eq_true rfl)) "~shape~" ("~unitMass~")";
 		}
 		if(s.missingWeight!=uint.max){
 			enum ns="Distribution.StepSource.MissingPoint.";
@@ -12124,12 +12147,7 @@ final class Bindings{
 			// before other numbers were brackets.
 			bool one=d.unit!=uint.max&&d.unitCasts==3&&d.unitValue==Rational(1);
 			auto body=q.from[0],value=d.unit==uint.max?functionAt(d.value):one?"(fun _ : ℝ => some (1 : ℝ))":"(fun _ : ℝ => some ("~cert.q(d.unitValue)~" : ℝ))";
-			string bracket(){
-				if(one)return "(fun _ => Distribution.StepSource.bracket_real _ _ "~numericProof(d.unit,Rational(0),"1")~")";
-				auto integer="("~to!string(d.unitValue.numerator)~")";
-				if(d.unitCasts==1)return "(fun _ => Distribution.StepSource.bracket_rational _ _ "~cert.q(d.unitValue)~" "~numericProof(d.unit,Rational(0),cert.q(d.unitValue))~")";
-				return "(fun _ => Distribution.StepSource.bracket_"~(d.unitCasts==3?"natural":"integer")~" _ _ "~integer~" "~cert.q(d.unitValue)~" "~numericProof(d.unit,Rational(0),integer)~" rfl)";
-			}
+
 			// A value under the strict guard of its domain. Around the mask that
 			// guard follows the negations of the comparisons of the mask.
 			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
@@ -12156,7 +12174,7 @@ final class Bindings{
 				}else if(d.joined) domain=d.nested?"(fun x => (Distribution.StepSource.mask_mask _ _ _).trans "~regroup~")":"(fun x => "~regroup~")";
 			}
 			auto shape=save("∀ x : ℝ, "~functionAt(body)~" x = Value.mask ("~guard~" x) ("~value~" x)",
-				d.unit!=uint.max?bracket():
+				d.unit!=uint.max?bracket(d):
 				domain.length?domain:d.nested?"(fun _ => Distribution.StepSource.mask_mask _ _ _)":"(fun _ => rfl)");
 			auto program="(Distribution.DensityProgram.weight "~functionAt(body)~" Distribution.DensityProgram.lebesgue)";
 			auto masked=summand?save("Distribution.StepSource.Masked "~functionAt(body)~" "~guard~" "~value,"(Distribution.StepSource.Masked.mk "~shape~")"):

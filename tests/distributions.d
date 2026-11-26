@@ -484,6 +484,20 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("CoordinateWeightPeriod","∫dx [0≤x≤2*π]·2·λ[sin(x)]","ℝ","8"),
+	Case("CoordinateWeightSigned","∫dx [0≤x≤2*π]·(-3/2)·λ[sin(x)]","ℝ","-6"),
+	Case("CoordinateWeightCrest","∫dx [0≤x≤2]·(-3/2)·λ[sin(x)^2]","ℝ","-3/2·cos(2)^2-3/2"),
+	Case("CoordinateWeightMonotone","∫dx [0≤x≤1]·(3/4)·λ[exp(x)]","ℝ","3/4·e-3/4"),
+	Case("CoordinateWeightTangent","∫dx [0≤x≤π/2]·(-3/2)·λ[tan(sin(x))]","ℝ","-3/2·tan(1)"),
+	Case("CoordinateWeightRay","∫dx [x≤1]·(2/3)·λ[atan(x)]","ℝ","1/2·π"),
+	Case("CoordinateWeightNatural","∫dx toℝ(maskN(0≤x∧x≤2*π,3))·λ[sin(x)]","ℝ","12"),
+	Case("CoordinateWeightInteger","∫dx toℝ(maskZ(0≤x∧x≤2*π,(-3:ℤ)))·λ[sin(x)]","ℝ","-12"),
+	Case("CoordinateWeightRational","∫dx toℝ(maskQ(0≤x∧x≤2*π,(3/2:ℚ)))·λ[sin(x)]","ℝ","6"),
+	Case("CoordinateWeightMissing","defined(∫dx [0≤x≤undefined(ℝ)]·2·λ[sin(x)])","𝔹","false"),
+	Case("CoordinateWeightEmpty","∫dx [2<x≤1]·(-3/2)·λ[sin(x)]","ℝ","0"),
+	Case("CoordinateWeightSymbolic","λ(l:ℝ).λ(u:ℝ).∫dx ([l<x]·[x≤u]·(-3/2:ℝ))·λ[sinh(exp(x))]","ℝ→ℝ→ℝ"),
+	Case("CoordinateWeightInfinite","∫dx [-π≤x]·2·λ[sin(x)]","ℝ"),
+	Case("CoordinateWeightZero","∫dx [0≤x≤1]·0·λ[sin(x)]","ℝ","0"),
 	Case("CoordinateIntervalSinhExp","∫dx [0≤x≤1]·λ[sinh(exp(x))]","ℝ","-sinh(1)+sinh(e)"),
 	Case("CoordinateIntervalArsinhExp","∫dx [-1≤x≤1]·λ[asinh(exp(2*x-3))]","ℝ","-asinh(exp(-5))+asinh(exp(-1))"),
 	Case("CoordinateIntervalDecreasing","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·λ[atan(exp(-x))]","ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). [l<u]·(atan(exp(-l))-atan(exp(-u)))"),
@@ -2522,6 +2536,11 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("CoordinateWeight")==0){
+			bool scaled=c.name!="CoordinateWeightInfinite"&&c.name!="CoordinateWeightZero";
+			enforce((certificate.indexOf("Grid.scale_masked_mass ")>=0)==scaled,c.name);
+			if(scaled) enforce(text.indexOf("∫")<0,c.name);
 		}
 		if(c.name.indexOf("CoordinateInterval")==0||c.name=="CauchyWindowAtan"||c.name=="CauchyWindowAtanScaled"){
 			bool directed=c.name!="CoordinateIntervalTurning"&&c.name!="CoordinateIntervalOpposite"&&c.name!="CoordinateIntervalJump";

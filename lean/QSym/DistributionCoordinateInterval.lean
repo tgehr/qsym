@@ -1,5 +1,6 @@
 import QSym.DistributionCoordinateGridChange
 import QSym.DistributionInterval
+import QSym.IntegrationLaws
 
 /-! Total variation on a finite interval for a smooth monotone coordinate.
 The interval endpoints may themselves be partial qsym values. -/
@@ -283,4 +284,41 @@ theorem cosh (zero one minus : Option ℝ)
         Value.add, turn, hx, sub_eq_add_neg]
 
 end VariationChange
+
+/-- The real source evaluates everywhere to one smooth coordinate. -/
+def SmoothSource (f : Scalar) : Prop :=
+  ∃ g : ℝ → ℝ, ContDiff ℝ 1 g ∧ ∀ x, f x = some (g x)
+
+theorem Directed.smoothSource {down f} (v : Directed down f) : SmoothSource f := by
+  obtain ⟨g, hg, _, src⟩ := v
+  exact ⟨g, hg, src⟩
+
+theorem VariationChange.smoothSource {h k op prim down f} (c : VariationChange h k op prim)
+    (v : Directed down f) : SmoothSource (fun x => op (f x)) := by
+  obtain ⟨g, hg, _, src⟩ := v
+  exact ⟨h ∘ g, c.smooth.comp hg, fun x => by change op (f x) = some (h (g x)); rw [src]; exact c.source _⟩
+
+/-- A nonzero signed weight can be taken out of a masked smooth-coordinate
+mass even if the guard is partial or the unweighted integral diverges. -/
+theorem scale_masked_mass {f w : Scalar} (hf : SmoothSource f) {c : ℝ} (C : Option ℝ) (hC : C = some c) (hc : c ≠ 0)
+    {g : ℝ → Option Bool} (hw : ∀ x, w x = Value.mask (g x) (some c))
+    {z : Option ℝ}
+    (hz : massValue (weightValue (some fun x => Value.mask (g x) (some (1:ℝ)))
+      (value (Tensor.consValue (some f) Tensor.nilValue))) = z) :
+    massValue (weightValue (some w) (value (Tensor.consValue (some f) Tensor.nilValue))) =
+      Value.mul C z := by
+  subst C
+  obtain ⟨k, hk, src⟩ := hf
+  rw [← hz, singleton_length hk src (w := fun x => some |deriv k x|) (fun _ => rfl)]
+  simp only [weight_weight_lebesgue, weighted_lebesgue_mass_bridge, Model.densityMassValue_eq]
+  change partialIntegral volume (fun x : ℝ => Value.mul (some |deriv k x|) (w x)) =
+    Value.mul (some c) (partialIntegral volume
+      (fun x : ℝ => Value.mul (some |deriv k x|) (Value.mask (g x) (some 1))))
+  have factor (x : ℝ) : Value.mul (some |deriv k x|) (w x) =
+      Value.mul (some c) (Value.mul (some |deriv k x|) (Value.mask (g x) (some 1))) := by
+    rw [hw]
+    rcases g x with _ | _ | _ <;> simp [Value.mask, Value.mul, mul_comm]
+  simp_rw [factor]
+  exact partialIntegral_scale_nonzero volume c hc _
+
 end QSym.Distribution.GraphFibre.Coordinates.Grid
