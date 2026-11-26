@@ -142,6 +142,16 @@ theorem DensityProgram.extractedWeight_eq (p : DensityProgram) (x : ℝ) :
   | weight f p ih =>
     cases p <;> simp only [extractedWeight, density, Value.mul_one_left, ih]
 
+/-- Combining consecutive density factors preserves the represented distribution
+at every point, including the domain of each strict product. -/
+theorem DensityProgram.presentation_extractedWeight (p : DensityProgram) :
+    p.presentation = (DensityProgram.weight p.extractedWeight .lebesgue).presentation := by
+  rw [DensityProgram.presentation_eq, DensityProgram.presentation_eq]
+  apply congrArg (fun w => densityValue (some w))
+  funext x
+  exact (p.extractedWeight_eq x).symm.trans (Value.mul_one_left _).symm
+
+
 theorem model_density_atom_add (atomFirst : Bool) (p : DensityProgram) (a x : Option ℝ) :
     densityAtValue (if atomFirst then addValue (diracValue a) p.presentation
       else addValue p.presentation (diracValue a)) x =

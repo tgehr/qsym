@@ -484,6 +484,21 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("CombinedMassJump","∫dx [0≤x≤1]·[x=a]·λ[[0≤x]·1]","ℝ","[a=0]"),
+	Case("CombinedMassJumpPeriod","∫dx [0≤x≤2*π]·[x≠0]·λ[[0≤x]·1]","ℝ","0"),
+	Case("CombinedMassJumpHit","∫dx [0≤x≤1]·[x=0]·λ[[0≤x]·1]","ℝ","1"),
+	Case("CombinedMassZero","massD(weightD(λ(x:ℝ). [x≠a],weightD(λ(x:ℝ). 0,lebesgueD())))","ℝ","0"),
+	Case("CombinedMassThree","massD(weightD(λ(x:ℝ). [0≤x≤1],weightD(λ(x:ℝ). (1+x²)⁻¹,weightD(λ(x:ℝ). 2,lebesgueD()))))","ℝ","1/2·π"),
+	Case("CombinedMassFour","massD(weightD(λ(x:ℝ). [0≤x≤1],weightD(λ(x:ℝ). (1+x²)⁻¹,weightD(λ(x:ℝ). 2,weightD(λ(x:ℝ). -3,lebesgueD())))))","ℝ","-3/2·π"),
+	Case("CombinedMassAfterMask","massD(weightD(λ(x:ℝ). 2,weightD(λ(x:ℝ). (1+x²)⁻¹,weightD(λ(x:ℝ). [0≤x≤1],lebesgueD()))))","ℝ","1/2·π"),
+	Case("CombinedMassSignedInterval","massD(weightD(λ(x:ℝ). [a≤x≤b],weightD(λ(x:ℝ). (1+x²)⁻¹,weightD(λ(x:ℝ). -3/2,lebesgueD()))))","ℝ","[a≤b]·(3/2·atan(a)-3/2·atan(b))"),
+	Case("CombinedMassWhole","massD(weightD(λ(x:ℝ). (1+x²)⁻¹,weightD(λ(x:ℝ). -3/2,lebesgueD())))","ℝ","-3/2·π"),
+	Case("CombinedMassPole","defined(massD(weightD(λ(x:ℝ). 0,weightD(λ(x:ℝ). x⁻¹,lebesgueD()))))","𝔹","false"),
+	Case("CombinedMassFalseOuter","defined(massD(weightD(λ(x:ℝ). [2≤x≤1],weightD(λ(x:ℝ). x⁻¹,lebesgueD()))))","𝔹","false"),
+	Case("CombinedMassMissingGuard","defined(massD(weightD(λ(x:ℝ). [x≤undefined(ℝ)],weightD(λ(x:ℝ). 0,lebesgueD()))))","𝔹","false"),
+	Case("CombinedMassOpaque","λ(h:ℝ→ℝ).massD(weightD(h,weightD(λ(x:ℝ). 0,lebesgueD())))","(ℝ→ℝ)→ℝ"),
+	Case("CombinedMassDensity","densityAtD(weightD(λ(x:ℝ). [x≠0],weightD(λ(x:ℝ). 2,lebesgueD())),0)","ℝ","0"),
+	Case("CombinedMassOtherBase","massD(weightD(λ(x:ℝ). [x=0],weightD(λ(x:ℝ). 2,δ((0:ℝ)))))","ℝ","2"),
 	Case("CoordinatePuncturePeriod","∫dx [0≤x≤2*π]·[x≠a]·λ[sin(x)]","ℝ","4"),
 	Case("CoordinatePunctureFront","∫dx [x≠a]·[0≤x≤2*π]·λ[sin(x)]","ℝ","4"),
 	Case("CoordinatePunctureClosedPoint","∫dx [0≤x≤2*π]·[x≠1]·λ[sin(x)]","ℝ","4"),
@@ -2574,6 +2589,11 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("CombinedMass")==0){
+			bool combined=c.name=="CombinedMassJump"||c.name=="CombinedMassJumpPeriod"||c.name=="CombinedMassZero"||
+				c.name=="CombinedMassThree"||c.name=="CombinedMassFour"||c.name=="CombinedMassSignedInterval";
+			enforce((certificate.indexOf("DensityProgram.presentation_extractedWeight ")>=0)==combined,c.name);
 		}
 		if(c.name.indexOf("CoordinatePuncture")==0){
 			bool smooth=c.name!="CoordinatePuncturePointDensity"&&c.name!="CoordinatePunctureJumpHit"&&

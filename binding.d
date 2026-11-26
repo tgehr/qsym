@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -552,11 +552,15 @@ final class Bindings{
 		if(d.op!=BoundOp.distributionWeight||nodes[d.a].op!=BoundOp.lambda||!densityBodies(d.b,bodies)) return false;
 		bodies~=nodes[d.a].a; return true;
 	}
-	private BoundTerm retainedWeight(uint[] bodies,BoundTerm query){
-		if(!bodies.length) return sequence(query,scalar(context(query),arena.real_(1)));
+	// Match DensityProgram.extractedWeight: strict products in source order.
+	private BoundTerm combinedWeight(uint[] bodies){
 		auto weight=at(bodies[0]),mul=scalarOperator(scalarType(Sort.real_),TensorOp.mul);
 		foreach(body;bodies[1..$]) weight=primitive(mul,[weight,at(body)]);
-		return apply(lambda(weight),query);
+		return lambda(weight);
+	}
+	private BoundTerm retainedWeight(uint[] bodies,BoundTerm query){
+		if(!bodies.length) return sequence(query,scalar(context(query),arena.real_(1)));
+		return apply(combinedWeight(bodies),query);
 	}
 	private BoundTerm awayFromAtom(uint location,BoundTerm query){
 		auto zero=arena.real_(0);
@@ -7384,6 +7388,26 @@ final class Bindings{
 			BoundTerm mass(BoundTerm w){ return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[w,at(nodes[n.a].b)])]); }
 			return observable(mass(settled),depth+1)?mass(wide):BoundTerm.init;
 		}
+		// A product of successive weights can expose an integral that the row
+		// rules recognize. Keep the original representation if it still has no
+		// computable mass after pointwise simplification.
+		BoundTerm combinedMass(BoundTerm t){
+			auto source=nodes[node(t).a]; uint[] bodies;
+			if(source.op!=BoundOp.distributionWeight||nodes[source.b].op!=BoundOp.distributionWeight||
+				!densityBodies(node(t).a,bodies)) return BoundTerm.init;
+			auto ctx=context(t),base=distribution(ctx,BoundOp.distributionLebesgue);
+			BoundTerm mass(BoundTerm fn){
+				return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[fn,base])]);
+			}
+			auto weight=inheritHint(at(source.a),combinedWeight(bodies)),settled=weight;
+			foreach(round;0..4){
+				if(observable(mass(settled),0)) return mass(weight);
+				auto next=rewritten(settled,false);
+				if(next==BoundTerm.init||next==settled) break;
+				settled=next;
+			}
+			return BoundTerm.init;
+		}
 		bool observed(BoundTerm inside,uint depth) @safe {
 			IntegralSolution trial; bool found=integrateSteps(inside,trial)!=BoundTerm.init;
 			if(!found){ trial=IntegralSolution.init; found=integratePolynomials(inside,trial)!=BoundTerm.init; }
@@ -9607,6 +9631,10 @@ final class Bindings{
 					}
 				}
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }
+				else if(next==BoundTerm.init){
+					auto combined=combinedMass(at(result.output));
+					if(combined!=BoundTerm.init){ next=combined; rule=BindingRule.distributionMassCombine; }
+				}
 			}
 			if(current.op==BoundOp.distributionMass&&nodes[current.a].op==BoundOp.distributionDirac){
 				next=sequence(at(nodes[current.a].a),scalar(ctx,arena.real_(1))); rule=BindingRule.distributionMassDirac;
@@ -15043,6 +15071,10 @@ final class Bindings{
 					auto evidence="("~program_~"Guarded.here "~hoist(nodes[weights[position]].a)~" "~program~")";
 					foreach(w;weights[position+1..$])evidence="("~program_~"Guarded.there "~fn(nodes[w].a)~" "~evidence~")";
 					proof=".ofEq (fun ξ ρ => "~program_~"mass_strict_guard "~evidence~")"; break;
+				}
+				case BindingRule.distributionMassCombine:{
+					uint[] bodies; enforce(densityBodies(n.a,bodies)&&bodies.length>=2,"missing weights to combine");
+					proof=".ofEq (fun ξ ρ => congrArg Distribution.massValue (Distribution.DensityProgram.presentation_extractedWeight "~densityProgram(bodies)~"))"; break;
 				}
 				case BindingRule.distributionMassSpread:{
 					auto s=result.integrals[p.extra];
