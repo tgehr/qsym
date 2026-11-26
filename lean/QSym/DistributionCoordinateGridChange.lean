@@ -67,7 +67,7 @@ theorem ContinuousCuts.cons {f es a} {d : Option (D ℝ)} (ha : ContinuousAt (co
   · exact ha
   · exact t e he
 
-private theorem foldCuts {as : List Event} {ds : List (Option (D ℝ))}
+theorem foldCuts {as : List Event} {ds : List (Option (D ℝ))}
     {eval : ℝ → Option (D ℝ)} (eqs : List.Forall₂ (fun e d => eval e.1 = d) as ds)
     (z : Option (D ℝ)) : (as.map Prod.fst).foldr (fun a d => addValue (eval a) d) z = ds.foldr addValue z := by
   induction eqs with

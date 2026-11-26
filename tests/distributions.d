@@ -234,6 +234,14 @@ private Case[] cases(){
 	Case("ProbeGridCorners","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],-1)","ℝ","undefined(ℝ)"),
 	Case("ProbeGridMiddle","densityAtD(Λx. λ[abs(x-1)+abs(x+1)],0)","ℝ","0"),
 	Case("ProbeGridAffine","densityAtD(Λx. λ[2*abs(x-1)],2/3)","ℝ","2"),
+	Case("ImageCoordinateReciprocal","Λx. λ[(1+[0≤x]·1)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+0·λ[x]"),
+	Case("ImageCoordinateUnit","Λx. λ[sqrt(1+[0≤x]·3)]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
+	Case("ImageCoordinateReverse","Λx. λ[sqrt(4+[x<0]·5)]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
+	Case("ImageCoordinateTwo","Λx. λ[(1+[x<0]·1+[1<x]·3)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+(3/4·δ(1)[x]+0·λ[x])"),
+	Case("ImageCoordinateRegular","Λx. λ[(1+abs(x)+[0≤x]·2)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). 2/3·δ(0)[x]+(((abs(x)+[0≤x]·2+1)^2)⁻¹·([x<0]+[0<x]))·λ[x]"),
+	Case("ImageCoordinateMixed","Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹]","Distribution(ℝ)"),
+	Case("ImageCoordinateHigher","λ(k:Distribution(ℝ)→ℝ). k(Λx. λ[(1+[0≤x]·1)⁻¹])","(Distribution(ℝ)→ℝ)→ℝ"),
+	Case("ImageCoordinateIrrational","Λx. λ[sqrt(1+[0≤x]·1)]","Distribution(ℝ)","Λ(x:ℝ). λ[(sqrt([0≤x]+1))]"),
 	Case("ChangedCoordinateExp","Λx. λ[exp(abs(x))]","Distribution(ℝ)","Λ(y:ℝ). (∫dx λ[x]·δ(x^2)[y]·[x=0])+(([y<0]+[0<y])·exp(abs(y)))·λ[y]"),
 	Case("ChangedCoordinateExpLeft","densityAtD(Λx. λ[exp(abs(x))],-1)","ℝ","e"),
 	Case("ChangedCoordinateLogLeft","densityAtD(Λx. λ[log(1+abs(x))],-3)","ℝ","1/4"),
@@ -1487,6 +1495,8 @@ private void run(string directory){
 			enforce((certificate.indexOf("Grid.probeRange")>=0)==(c.name!="TraceCoordinateDomain"),c.name~" traced coordinate domain");
 		if(c.name.indexOf("ProbeGrid")==0)
 			enforce(certificate.indexOf("Grid.probe")>=0,c.name~" missing direct point observation");
+		if(c.name.indexOf("ImageCoordinate")==0)
+			enforce((certificate.indexOf("Grid.finishImage ")>=0)==(c.name!="ImageCoordinateIrrational"),c.name~" image events");
 		if(c.name.indexOf("ChangedCoordinate")==0)
 			enforce(certificate.indexOf("Grid.finishChange")>=0||certificate.indexOf("Grid.probeChange")>=0,c.name~" missing smooth change of a grid");
 		if(c.name=="UnchangedCoordinateLogZero")
