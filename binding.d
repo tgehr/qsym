@@ -2990,8 +2990,9 @@ final class Bindings{
 			if(depends(at(emission),0)||depends(at(emission),1)) return BoundTerm.init;
 			scale=nodes[first?scale.a:scale.b];
 		}
-		if(scale.op!=BoundOp.distributionScale||depends(at(scale.a),0)||depends(at(scale.a),1)) return BoundTerm.init;
-		auto call=nodes[scale.b];
+		bool bare=emission!=uint.max&&scale.op==BoundOp.apply;
+		if(!bare&&(scale.op!=BoundOp.distributionScale||depends(at(scale.a),0)||depends(at(scale.a),1))) return BoundTerm.init;
+		auto call=bare?scale:nodes[scale.b];
 		if(call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
 		auto pred=nodes[call.b],one=nodes[pred.b],base=at(branch.b);
 		if(!variableAt(pred.a,0)||one.op!=BoundOp.scalar||arena.at(one.data)!=arena.natural_(1)||depends(base,0)||depends(base,1))
@@ -3000,7 +3001,19 @@ final class Bindings{
 		BoundTerm[] env=[scalar(ctx,arena.natural_(0)),bottom(ctx,type(f))];
 		foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
 		auto seed=observedMass(substitute(base,ctx,env),operations);
-		auto r=substitute(at(scale.a),ctx,env),arg=at(application.b),zero=arena.real_(0);
+		auto arg=at(application.b),zero=arena.real_(0);
+		Number unit;
+		bool unitScale=bare||nodes[scale.a].op==BoundOp.scalar&&literalNumber(arena.at(nodes[scale.a].data),unit)&&unit.one;
+		if(emission!=uint.max&&unitScale){
+			auto visits=observedMass(substitute(at(emission),ctx,env),operations);
+			auto casted=arg;
+			foreach(c;[Builtin.castNZ,Builtin.castZQ,Builtin.castQR])
+				casted=primitive(arena.call(c,[arena.number(Number(0),builtinInfo(c).args[0])]),[casted]);
+			auto nonzero=primitive(arena.call(Builtin.nonzeroN,[arena.natural_(0)]),[arg]);
+			auto amount=primitive(arena.mul(zero,zero,true),[casted,visits]);
+			return primitive(arena.add(zero,zero,true),[seed,primitive(arena.mask(arena.boolean(true),zero),[nonzero,amount])]);
+		}
+		auto r=substitute(at(scale.a),ctx,env);
 		auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[r,arg]);
 		auto product=primitive(arena.mul(zero,zero,true),[power,seed]);
 		if(emission!=uint.max){
@@ -12200,15 +12213,29 @@ final class Bindings{
 					bool partial=target.op==BoundOp.conditional;
 					auto branch=nodes[nodes[nodes[call.a].a].a],step=nodes[branch.c];
 					bool emitting=step.op==BoundOp.distributionAdd;
-					auto positive=partial?nodes[target.c]:target;
-					bool centered=emitting&&nodes[nodes[positive.a].a].op==BoundOp.scalar;
-					auto product=emitting?nodes[centered?positive.b:positive.a]:positive,ratio=nodes[product.a].a;
 					uint observedInput(uint mass){
 						auto d=nodes[mass].a;
 						foreach(id;ops) d=nodes[id].op==BoundOp.distributionWeight?nodes[d].b:nodes[d].a;
 						return d;
 					}
-					auto base=observedInput(partial?target.b:product.b),f=to!string(call.a)~dimArg~" γ ξ ρ";
+					auto f=to!string(call.a)~dimArg~" γ ξ ρ";
+					if(emitting&&!partial){
+						bool swapped=depends(at(step.a),1);
+						auto tail=nodes[swapped?step.a:step.b],mask=nodes[target.b],amount=nodes[mask.b];
+						string factor="(some 1) rfl false";
+						if(tail.op==BoundOp.distributionScale){
+							auto id=to!string(nodes[tail.a].data);
+							factor="(n"~id~".eval ξ) (Numeric.calculate_real_one ξ n"~id~" rfl) true";
+						}
+						proof=".ofEq (fun ξ ρ => Distribution.observe_unit_countdown "~massObserver(ops,false)~" (rec"~f~") (fixed"~f~") ("~
+							name(observedInput(target.a))~".eval ξ ρ) ("~name(observedInput(amount.b))~".eval ξ ρ) "~factor~" "~
+							(swapped?"true":"false")~" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))";
+						break;
+					}
+					auto positive=partial?nodes[target.c]:target;
+					bool centered=emitting&&nodes[nodes[positive.a].a].op==BoundOp.scalar;
+					auto product=emitting?nodes[centered?positive.b:positive.a]:positive,ratio=nodes[product.a].a;
+					auto base=observedInput(partial?target.b:product.b);
 					string law,scale;
 					if(emitting){
 						law="observe_emitting_countdown "~massObserver(ops,false);
