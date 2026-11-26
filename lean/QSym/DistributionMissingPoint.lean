@@ -36,15 +36,70 @@ theorem MissingPoint.guard (p : ℝ → Option Bool) {f} (hf : MissingPoint f) :
   obtain ⟨x, hx⟩ := hf
   exact ⟨x, by simp [hx, Binding.guardValue]⟩
 
-theorem MissingPoint.mass (p : DensityProgram) (h : MissingPoint p.density) : massValue p.presentation = none := by
-  obtain ⟨x, hx⟩ := h
-  rw [DensityProgram.mass_bridge, DensityProgram.mass, Model.densityMassValue_eq]
-  change partialIntegral volume p.density = none
-  apply if_neg
-  intro hd
-  obtain ⟨v, hv⟩ := hd.1 x
-  rw [hx] at hv
-  cases hv
+namespace MissingPoint
+
+/-- An ordinary real density, possibly missing as a distribution. -/
+def IsDensity (d : Option (D ℝ)) : Prop := ∃ f, d = densityValue f
+
+/-- A missing distribution or a real density missing at a source point. -/
+def InDensity (d : Option (D ℝ)) : Prop :=
+  ∃ f, d = densityValue f ∧ ∃ x, f.bind (fun w => w x) = none
+
+private theorem weight_density (w f : Option (ℝ → Option ℝ)) :
+    weightValue w (densityValue f) = densityValue (do
+      let g ← f
+      let h ← w
+      pure (fun x => Value.mul (g x) (h x))) := by
+  cases f <;> cases w <;> rfl
+
+theorem IsDensity.lebesgue : IsDensity lebesgueValue := ⟨_, rfl⟩
+
+theorem IsDensity.weight (w : Option (ℝ → Option ℝ)) {d} (hd : IsDensity d) : IsDensity (weightValue w d) := by
+  obtain ⟨f, rfl⟩ := hd
+  exact ⟨_, weight_density w f⟩
+
+theorem InDensity.of_weight {d} (hd : IsDensity d) {w} (hw : MissingPoint w) :
+    InDensity (weightValue (some w) d) := by
+  obtain ⟨f, rfl⟩ := hd
+  obtain ⟨x, hx⟩ := hw
+  refine ⟨_, weight_density (some w) f, x, ?_⟩
+  cases f with
+  | none => rfl
+  | some f =>
+    change Value.mul (f x) (w x) = none
+    rw [hx]; cases f x <;> rfl
+
+theorem InDensity.weight (w : Option (ℝ → Option ℝ)) {d} (hd : InDensity d) : InDensity (weightValue w d) := by
+  obtain ⟨f, rfl, x, hx⟩ := hd
+  refine ⟨_, weight_density w f, x, ?_⟩
+  cases f with
+  | none => rfl
+  | some f =>
+    change f x = none at hx
+    cases w with
+    | none => rfl
+    | some w =>
+      change Value.mul (f x) (w x) = none
+      rw [hx]; rfl
+
+theorem InDensity.mass {d} (hd : InDensity d) : massValue d = none := by
+  obtain ⟨f, rfl, x, hx⟩ := hd
+  rw [density_mass_bridge, Model.densityMassValue_eq]
+  cases f with
+  | none => rfl
+  | some f =>
+    change f x = none at hx
+    change partialIntegral volume f = none
+    apply if_neg
+    intro v
+    obtain ⟨y, hy⟩ := v.1 x
+    rw [hx] at hy
+    cases hy
+
+theorem mass (p : DensityProgram) (h : MissingPoint p.density) : massValue p.presentation = none :=
+  InDensity.mass ⟨some p.density, p.presentation_eq, h⟩
+
+end MissingPoint
 
 theorem quadratic_source {f p} (c b a : ℚ) (src : PolynomialOn (fun _ => True) f p)
     (shape : polyZero (polyAdd p (polyScale (-1) [c, 2*b, a])) = true) (x : ℝ) :

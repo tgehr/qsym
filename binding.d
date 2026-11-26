@@ -179,7 +179,7 @@ private struct CauchyData{
 	uint sign=uint.max,radicand=uint.max,inverse=uint.max,factor=uint.max; bool right;
 }
 private struct IntegralSolution{
-	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max,missingWeight=uint.max; IntervalData bounds; GaussianData bell; CauchyData cauchy;
+	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max,missingWeight=uint.max; uint[] weightFunctions; IntervalData bounds; GaussianData bell; CauchyData cauchy;
 	// The summands of a sum of observations between bounds, each with its own.
 	IntegralSolution[] pieces;
 	// The summands of a weight with a factor under its sum: for each the
@@ -5534,10 +5534,18 @@ final class Bindings{
 		}
 		BoundTerm integrateMissingPoint(BoundTerm t,out IntegralSolution solution){
 			auto n=node(t);
-			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)) return BoundTerm.init;
-			foreach(i,id;solution.from){
+			if(n.op!=BoundOp.distributionMass) return BoundTerm.init;
+			uint[] weights;
+			auto base=n.a;
+			while(nodes[base].op==BoundOp.distributionWeight){
+				weights~=nodes[base].a; base=nodes[base].b;
+			}
+			if(nodes[base].op!=BoundOp.distributionLebesgue) return BoundTerm.init;
+			foreach_reverse(i,id;weights){
+				auto w=nodes[id];
 				string proof;
-				if(!missingPoint(id,proof)) continue;
+				if(w.op!=BoundOp.lambda||!missingPoint(w.a,proof)) continue;
+				solution.from=[w.a]; solution.weightFunctions=weights;
 				solution.missingWeight=cast(uint)i; solution.piecewise=true;
 				return bottom(context(t),type(t));
 			}
@@ -10332,16 +10340,18 @@ final class Bindings{
 		}
 		if(s.missingWeight!=uint.max){
 			enum ns="Distribution.StepSource.MissingPoint.";
-			string proof,program="Distribution.DensityProgram.lebesgue";
-			foreach(i,id;s.from){
-				auto weight=functionAt(id);
+			string proof=ns~"IsDensity.lebesgue";
+			foreach_reverse(i,id;s.weightFunctions){
 				if(i==s.missingWeight){
-					enforce(missingPoint(id,proof,cert),"missing weight witness");
-					proof="("~ns~"mul_right (Distribution.DensityProgram.density "~program~") "~proof~")";
-				}else if(i>s.missingWeight) proof="("~ns~"mul_left "~weight~" "~proof~")";
-				program="(Distribution.DensityProgram.weight "~weight~" "~program~")";
+					string witness;
+					enforce(missingPoint(s.from[0],witness,cert),"missing weight witness");
+					proof="("~ns~"InDensity.of_weight "~proof~" "~witness~")";
+				}else{
+					auto law=i>s.missingWeight?"IsDensity.weight":"InDensity.weight";
+					proof="("~ns~law~" ("~name(id)~".eval ξ ρ) "~proof~")";
+				}
 			}
-			return ns~"mass "~program~" "~proof;
+			return ns~"InDensity.mass "~proof;
 		}
 		if(s.cauchy.sign!=uint.max){
 			auto d=s.cauchy,source=piece(nodes[d.inverse].a,cert.everywhere,"",Rational(0));

@@ -299,6 +299,15 @@ private Case[] cases(){
 	Case("ChangedCoordinateRoot","densityAtD(Λx. λ[sqrt(1+abs(x))],3)","ℝ","1/4"),
 	Case("ChangedCoordinateReciprocal","densityAtD(Λx. λ[(1+abs(x))⁻¹],-1)","ℝ","1/4"),
 	Case("ChangedCoordinateSinh","densityAtD(Λx. λ[sinh(abs(x-2))],2)","ℝ","undefined(ℝ)"),
+	Case("DensityHoleBefore","λ(h:ℝ→ℝ).massD(weightD(h,weightD(λ(x:ℝ).(x²-2)⁻¹,lebesgueD())))","(ℝ→ℝ)→ℝ","λ(h:ℝ→ℝ). undefined(ℝ)"),
+	Case("DensityHoleAfter","λ(h:ℝ→ℝ).massD(weightD(λ(x:ℝ).(x²-2)⁻¹,weightD(h,lebesgueD())))","(ℝ→ℝ)→ℝ","λ(h:ℝ→ℝ). undefined(ℝ)"),
+	Case("DensityHoleBoth","λ(h:ℝ→ℝ).λ(g:ℝ→ℝ).massD(weightD(h,weightD(λ(x:ℝ).(x²-2)⁻¹,weightD(g,lebesgueD()))))","(ℝ→ℝ)→(ℝ→ℝ)→ℝ","λ(h:ℝ→ℝ). λ(g:ℝ→ℝ). undefined(ℝ)"),
+	Case("DensityHoleCaptures","λ(h:ℝ→ℝ→ℝ).λ(t:ℝ).massD(weightD(h(t),weightD(λ(x:ℝ).(x²-2)⁻¹,lebesgueD())))","(ℝ→ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ→ℝ). λ(t:ℝ). undefined(ℝ)"),
+	Case("DensityHoleMissing","defined(massD(weightD(undefined(ℝ→ℝ),weightD(λ(x:ℝ).(x²-2)⁻¹,lebesgueD()))))","𝔹","false"),
+	Case("DensityHoleDirac","massD(weightD(λ(x:ℝ).(x²-2)⁻¹,δ((0:ℝ))))","ℝ","-1/2"),
+	Case("DensityHoleAbstract","λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).(x²-2)⁻¹,d))","Distribution(ℝ)→ℝ"),
+	Case("DensityHoleUnknown","λ(h:ℝ→ℝ).massD(weightD(h,lebesgueD()))","(ℝ→ℝ)→ℝ"),
+	Case("DensityHoleMasked","λ(h:ℝ→ℝ).massD(weightD(h,weightD(λ(x:ℝ).[false]·(x²-2)⁻¹,lebesgueD())))","(ℝ→ℝ)→ℝ"),
 	Case("MissingQuadraticPositive","∫dx (x²-2)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
 	Case("MissingQuadraticTranslated","∫dx ((2*x-3)^2-2)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
 	Case("MissingQuadraticNegative","∫dx (2-x²)⁻¹·λ[x]","ℝ","undefined(ℝ)"),
@@ -1785,10 +1794,14 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
+		if(c.name.indexOf("DensityHole")==0){
+			bool witness=c.name!="DensityHoleDirac"&&c.name!="DensityHoleAbstract"&&c.name!="DensityHoleUnknown"&&c.name!="DensityHoleMasked";
+			enforce((certificate.indexOf("MissingPoint.InDensity.mass ")>=0)==witness,c.name);
+		}
 		if(c.name.indexOf("MissingQuadratic")==0){
 			bool witness=c.name!="MissingQuadraticInactive"&&c.name!="MissingQuadraticOutside"&&
 				c.name!="MissingQuadraticHoleHidden"&&c.name!="MissingQuadraticSafe";
-			enforce((certificate.indexOf("MissingPoint.mass ")>=0)==witness,c.name);
+			enforce((certificate.indexOf("MissingPoint.InDensity.mass ")>=0)==witness,c.name);
 		}
 		if(c.name.indexOf("CauchyScale")==0&&c.name!="CauchyScaledAxis"){
 			bool scaled=c.name!="CauchyScalePole"&&c.name!="CauchyScaleZero";
