@@ -1408,6 +1408,12 @@ private Case[] cases(){
 	Case("ShiftOrbitStart","λ(a:ℕ).massD("~shift("a")~")","ℕ→ℝ","λ(a:ℕ). (1:ℝ)"),
 	Case("ShiftOrbitZeroCharge","massD("~shift("0","n+1","0","2")~")","ℝ","0"),
 	Case("ShiftOrbitMissingProbe","massD(weightD(λ(n:ℕ).undefined(ℝ),"~shift("0","n+1","0","0")~"))","ℝ","undefined(ℝ)"),
+	Case("CountdownTestMoment","λ(k:ℕ).massD(weightD(λ(x:ℝ). x^2,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ). if n=0 then δ((3:ℝ)) else scaleD(1/2,f(n sub 1)))(k)))","ℕ→ℝ","λ(k:ℕ). (9·(1/2)^k:ℝ)"),
+	Case("CountdownTestFree","λ(h:ℝ→ℝ). λ(k:ℕ).massD(weightD(h,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ). if n=0 then δ((3:ℝ)) else scaleD(-2,f(n sub 1)))(k)))","(ℝ→ℝ)→ℕ→ℝ","λ(h:ℝ→ℝ). λ(k:ℕ). (h((3:ℝ))·(-2)^k:ℝ)"),
+	Case("CountdownTestBind","λ(k:ℕ).massD(weightD(λ(y:ℝ).y^2,bindD((μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ). if n=0 then δ((2:ℕ)) else scaleD(1/2,f(n sub 1)))(k),λ(x:ℕ).δ((x:ℝ)+1))))","ℕ→ℝ","λ(k:ℕ). (9·(1/2)^k:ℝ)"),
+	Case("CountdownTestMissing","λ(k:ℕ). massD(bindD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ). if n=0 then δ((2:ℝ)) else scaleD(1/2,f(n sub 1)))(k),undefined(ℝ→Distribution(ℕ))))","ℕ→ℝ","λ(k:ℕ). undefined(ℝ)"),
+	Case("CountdownTestPole","λ(k:ℕ).massD(weightD(λ(x:ℝ).1/x,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ). if n=0 then δ((0:ℝ)) else scaleD(0,f(n sub 1)))(k)))","ℕ→ℝ","λ(k:ℕ). undefined(ℝ)"),
+	Case("CountdownTestSeedWeight","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then weightD(λ(x:ℝ).x+1,δ((2:ℝ))) else scaleD(1/2,f(n sub 1)))(k)))","ℕ→ℝ","λ(k:ℕ). (6·(1/2)^k:ℝ)"),
 	Case("CountdownSigned","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then scaleD(-3,δ((0:ℝ))) else scaleD(-2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). (-3·(-2)^k:ℝ)"),
 	Case("CountdownCapturedSeed","λ(d:Distribution(ℕ→ℕ)).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℕ→ℕ)).λ(n:ℕ).if n=0 then d else scaleD(1/2,f(n sub 1)))(k))",
 		"Distribution(ℕ→ℕ)→ℕ→ℝ","λ(d:Distribution(ℕ→ℕ)). λ(k:ℕ). ((∫(x:ℕ→ℕ). (d)[x])·(1/2)^k:ℝ)"),
@@ -1510,7 +1516,9 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
-		if(c.name.length>=9&&c.name[0..9]=="Countdown"){
+		if(c.name.indexOf("CountdownTest")==0)
+			enforce(certificate.indexOf("Distribution.observe_scale_countdown ")>=0,c.name~" checked homogeneous observation");
+		else if(c.name.length>=9&&c.name[0..9]=="Countdown"){
 			bool fallback=c.name=="CountdownDifferentStride"||c.name=="CountdownPartialRatioZero"||c.name=="CountdownPartialRatioOne";
 			enforce((certificate.indexOf("Distribution.mass_scale_countdown")>=0)!=fallback,c.name~" countdown certificate");
 		}

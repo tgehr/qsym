@@ -1022,13 +1022,7 @@ final class Bindings{
 		if(loop.op!=BoundOp.distributionFixed||nodes[loop.a].op!=BoundOp.lambda||!involutiveLoop(nodes[loop.a].a,source)) return BoundTerm.init;
 		auto ctx=context(mass);
 		BoundTerm seed,reflected; involutionEmissions(ctx,loop,source,seed,reflected);
-		BoundTerm observe(BoundTerm d){
-			foreach_reverse(id;ops){
-				auto op=nodes[id];
-				d=op.op==BoundOp.distributionWeight?distribution(ctx,op.op,[at(op.a),d]):distribution(ctx,op.op,[d,at(op.b)]);
-			}
-			return distribution(ctx,BoundOp.distributionMass,[d]);
-		}
+		BoundTerm observe(BoundTerm d){return observedMass(d,ops);}
 		auto r=source.ratio==uint.max?Rational(1):arena.number(arena.at(nodes[source.ratio].data)).re;
 		if(r>=Rational(1)){
 			rule=BindingRule.distributionInvolutionUnbounded;
@@ -1220,6 +1214,14 @@ final class Bindings{
 			operations~=id;
 			id=n.op==BoundOp.distributionWeight?n.b:n.a;
 		}
+	}
+	private BoundTerm observedMass(BoundTerm d,uint[] operations){
+		auto ctx=context(d);
+		foreach_reverse(id;operations){
+			auto op=nodes[id];
+			d=op.op==BoundOp.distributionWeight?distribution(ctx,op.op,[at(op.a),d]):distribution(ctx,op.op,[d,at(op.b)]);
+		}
+		return distribution(ctx,BoundOp.distributionMass,[d]);
 	}
 	private enum VisitKind { other, empty, one }
 	private struct AtomicVisits { VisitKind kind; uint point; Rational weight; }
@@ -2956,7 +2958,8 @@ final class Bindings{
 	// Observe a countdown without constructing each finite presentation.
 	// Every seed may be partial. A total literal ratio permits powRN even at n=0.
 	private BoundTerm countdownMass(BoundTerm mass){
-		auto application=nodes[node(mass).a];
+		uint[] operations;
+		auto application=nodes[observationInput(node(mass).a,operations)];
 		if(application.op!=BoundOp.apply||nodes[application.a].op!=BoundOp.fixed) return BoundTerm.init;
 		auto f=at(application.a),signature=pool.view(type(f));
 		if(signature.fields[0]!=scalarType(Sort.natural)) return BoundTerm.init;
@@ -2981,7 +2984,7 @@ final class Bindings{
 		auto ctx=context(mass),r=scalar(ctx,ratio);
 		BoundTerm[] env=[scalar(ctx,arena.natural_(0)),bottom(ctx,type(f))];
 		foreach(i;0..contexts[ctx.index].length) env~=variable(ctx,i);
-		auto seed=distribution(ctx,BoundOp.distributionMass,[substitute(base,ctx,env)]);
+		auto seed=observedMass(substitute(base,ctx,env),operations);
 		auto zero=arena.real_(0);
 		auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[r,at(application.b)]);
 		return primitive(arena.mul(zero,zero,true),[power,seed]);
@@ -8652,11 +8655,7 @@ final class Bindings{
 							auto gain=scalar(ctx,arena.real_(Rational(1)/(Rational(1)-r)));
 							d=distribution(ctx,BoundOp.distributionScale,[gain,d]);
 						}
-						foreach_reverse(id;operations){
-							auto op=nodes[id];
-							d=op.op==BoundOp.distributionWeight?distribution(ctx,op.op,[at(op.a),d]):distribution(ctx,op.op,[d,at(op.b)]);
-						}
-						next=distribution(ctx,current.op,[d]);
+						next=observedMass(d,operations);
 						if(unbounded){
 							auto zero=arena.real_(0);
 							auto nonzero=primitive(arena.nonzero(zero),[next]);
@@ -8748,6 +8747,16 @@ final class Bindings{
 			memo.set(t.id,result.id); return result;
 		}
 		return visit(term);
+	}
+	private string massObserver(uint[] operations,bool countable){
+		auto prefix="Distribution.Atomic."~(countable?"CountableObservation.":"Observation.");
+		string observer=prefix~"mass";
+		foreach(id;operations){
+			auto op=nodes[id]; bool weight=op.op==BoundOp.distributionWeight;
+			auto theorem=weight?"weight":types[op.type]==pool.distribution(scalarType(Sort.real_))?"realBind":"bind";
+			observer="("~prefix~theorem~" "~observer~" ("~name(weight?op.a:op.b)~".eval ξ ρ))";
+		}
+		return observer;
 	}
 	private string name(uint id){ return "(t"~to!string(id)~(dependent_?" δ":"")~" γ)"; }
 	private string ctxName(uint id){ auto s="c"~to!string(id); return dependent_?"("~s~" δ)":s; }
@@ -11950,16 +11959,6 @@ final class Bindings{
 					Rational literal(uint id){return arena.number(arena.at(nodes[id].data)).re;}
 					string number(uint id){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~q(literal(id))~" rfl)";}
 					enum yes=" (of_decide_eq_true rfl)";
-					string massObserver(uint[] operations,bool countable){
-						auto prefix=ns~(countable?"CountableObservation.":"Observation.");
-						string observer=prefix~"mass";
-						foreach(id;operations){
-							auto op=nodes[id]; bool weight=op.op==BoundOp.distributionWeight;
-							auto theorem=weight?"weight":types[op.type]==pool.distribution(scalarType(Sort.real_))?"realBind":"bind";
-							observer="("~prefix~theorem~" "~observer~ev(weight?op.a:op.b)~")";
-						}
-						return observer;
-					}
 					string admissible(uint id){
 						auto v=nodes[id];
 						switch(v.op){
@@ -12143,10 +12142,14 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => "~law~")";break;
 				}
 				case BindingRule.distributionMassCountdown:{
-					auto call=nodes[n.a],target=nodes[p.to],ratio=nodes[nodes[target.a].a];
+					uint[] ops;
+					auto call=nodes[observationInput(n.a,ops)],target=nodes[p.to],ratio=nodes[nodes[target.a].a];
+					auto base=nodes[target.b].a;
+					foreach(id;ops) base=nodes[id].op==BoundOp.distributionWeight?nodes[base].b:nodes[base].a;
 					auto literal=arena.at(ratio.data),q=SourceCertificates.q(arena.number(literal).re),f=to!string(call.a)~dimArg~" γ ξ ρ";
-					proof=".ofEq (fun ξ ρ => Distribution.mass_scale_countdown (rec"~f~") (fixed"~f~") ("~
-						name(nodes[target.b].a)~".eval ξ ρ) (n"~to!string(literal.id)~".eval ξ) (Numeric.calculate_sound ξ n"~
+					auto law=ops.length?"observe_scale_countdown "~massObserver(ops,false):"mass_scale_countdown";
+					proof=".ofEq (fun ξ ρ => Distribution."~law~" (rec"~f~") (fixed"~f~") ("~
+						name(base)~".eval ξ ρ) (n"~to!string(literal.id)~".eval ξ) (Numeric.calculate_sound ξ n"~
 						to!string(literal.id)~" "~q~" rfl) (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))"; break;
 				}
 				case BindingRule.distributionDefinedDirac:
