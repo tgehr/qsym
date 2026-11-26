@@ -40,6 +40,12 @@ theorem imageRestrictedCorner {s h op jac f a} (c : ScalarChange s h op jac)
   rw [c.change.atCut ends.1 ends.2 hv hv, if_pos rfl]
   simp [coord, hf, c.value _ hv]
 
+theorem imageTest {s h op jac} (c : ScalarChange s h op jac) (pred : ℝ → Option Bool)
+    (v u : ℚ) (hv : (v:ℝ) ∈ s) (hu : h (v:ℝ) = (u:ℝ)) {b : Bool}
+    (hp : pred u = some b) : (op (some (v:ℝ))).bind pred = some b := by
+  rw [c.value _ hv, hu]
+  exact hp
+
 theorem reciprocalTrace (q k : ℚ) (hk : k = q⁻¹) : (q:ℝ)⁻¹ = (k:ℝ) := by
   simp [hk]
 

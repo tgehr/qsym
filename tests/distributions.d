@@ -243,6 +243,11 @@ private Case[] cases(){
 	Case("ImageWindowMixed","Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹ | u. 0<u]","Distribution(ℝ)"),
 	Case("ImageWindowCornerExcluded","densityAtD(Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹ | u. u<1],0)","ℝ","0"),
 	Case("ImageWindowCornerIncluded","densityAtD(Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹ | u. u≤1],0)","ℝ","undefined(ℝ)"),
+	Case("WindowProbeRegular","densityAtD(Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹ | u. 0<u],2)","ℝ","1/25"),
+	Case("WindowProbeEmpty","densityAtD(Λx. λ[(1+abs(x)+[1≤x]·2)⁻¹ | u. 2<u],1)","ℝ","0"),
+	Case("WindowProbeJump","densityAtD(Λx. λ[(1+[0≤x]·1)⁻¹ | u. u<1],0)","ℝ","undefined(ℝ)"),
+	Case("WindowProbeTwo","densityAtD(Λx. λ[(1+[x<0]·1+[1<x]·3)⁻¹ | u. 1/4<u<3/4],1)","ℝ","undefined(ℝ)"),
+	Case("WindowProbeRoot","densityAtD(Λx. λ[sqrt(4+[x<0]·5) | u. 3<u],0)","ℝ","0"),
 	Case("ImageWindowPartial","λ(k:ℝ→𝔹). Λx. λ[(1+[0≤x]·1)⁻¹ | u. k(u)]","(ℝ→𝔹)→Distribution(ℝ)"),
 	Case("ImageWindowEndpoint","Λx. λ[(1+[0≤x]·1)⁻¹ | u. (u-1/2)⁻¹<2]","Distribution(ℝ)"),
 	Case("ImageCoordinateReciprocal","Λx. λ[(1+[0≤x]·1)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(0)[x]+0·λ[x]"),
@@ -1510,7 +1515,11 @@ private void run(string directory){
 			enforce((certificate.indexOf("Grid.probeRange")>=0)==(c.name!="TraceCoordinateDomain"),c.name~" traced coordinate domain");
 		if(c.name.indexOf("ProbeGrid")==0)
 			enforce(certificate.indexOf("Grid.probe")>=0,c.name~" missing direct point observation");
-		if(c.name.indexOf("ImageWindow")==0){
+		if(c.name.indexOf("WindowProbe")==0||c.name.indexOf("ImageWindowCorner")==0){
+			enforce(certificate.indexOf("Grid.probeImageAt ")>=0,c.name~" direct restricted point observation");
+			if(c.name.indexOf("ImageWindowCorner")==0)
+				enforce(certificate.length<120_000,c.name~" expanded a whole distribution for one point");
+		}else if(c.name.indexOf("ImageWindow")==0){
 			bool handled=c.name!="ImageWindowPartial"&&c.name!="ImageWindowEndpoint";
 			enforce((certificate.indexOf("Grid.finishImageRestricted ")>=0)==handled,c.name~" restricted change");
 			if(handled) enforce(certificate.indexOf("Grid.restrictedJumpFromLimits ")>=0,c.name~" clipped traversal");

@@ -6289,9 +6289,14 @@ final class Bindings{
 				// rewrite when every exceptional contribution has a certificate.
 				cert.predicate=node(pred).a;
 				foreach(ref j;cert.joins){
-					if(j.kind==JoinKind.corner&&gridNumerical(cert.predicate)){
+					if(j.kind==JoinKind.corner){
+						// A source restriction is tested after the outer change.
+						auto test=cert.image?cert.outerPredicate:cert.predicate;
+						auto value=j.left;
+						if(cert.image&&!rationalImage(cert.change,j.left,j.leftImage)) continue;
+						if(cert.image) value=j.leftImage;
 						Term v;
-						if(gridValue(cert.predicate,j.left,v)&&arena.view(v).op==Op.boolLit)
+						if(gridNumerical(test)&&gridValue(test,value,v)&&arena.view(v).op==Op.boolLit)
 							j.selection=v==arena.boolean(true)?CornerSelection.active:CornerSelection.inactive;
 					}
 					if(j.kind!=JoinKind.jump) continue;
@@ -6861,15 +6866,17 @@ final class Bindings{
 		Result literalGridDensity(BoundTerm t){
 			auto n=node(t),cover=nodes[n.a],y=nodes[n.b];
 			auto miss=Result(uint.max,uint.max);
-			if(cover.op!=BoundOp.distributionInverseCover||y.op!=BoundOp.scalar||!arena.isNumber(arena.at(y.data))) return miss;
-			auto row=nodes[cover.a];
+			if(y.op!=BoundOp.scalar||!arena.isNumber(arena.at(y.data))) return miss;
+			bool restricted=cover.op==BoundOp.distributionInversePart;
+			if(!restricted&&cover.op!=BoundOp.distributionInverseCover) return miss;
+			auto row=nodes[restricted?cover.b:cover.a];
 			if(row.op!=BoundOp.vectorCons||nodes[row.b].op!=BoundOp.vectorNil||nodes[row.a].op!=BoundOp.lambda) return miss;
 			auto body=nodes[nodes[row.a].a];
 			if(body.op!=BoundOp.primitive) return miss;
 			auto op=arena.view(arena.at(body.data)).op;
 			auto change=gridChange(nodes[row.a].a);
 			bool changed=change!=CoordinateChange.none;
-			if(!gridNumerical(changed?body.a:nodes[row.a].a)) return miss;
+			if(!restricted&&!gridNumerical(changed?body.a:nodes[row.a].a)) return miss;
 			if(!changed){
 				// Polynomials and elementary rays already have smaller specialized proofs.
 				if(op!=Op.abs&&op!=Op.add&&op!=Op.mul) return miss;
@@ -6879,23 +6886,40 @@ final class Bindings{
 			auto sample=arena.number(arena.at(y.data)).re;
 			if(sample.words>128) return miss;
 			uint index;
-			if(polynomialCoordinate(at(row.a),index,BoundTerm.init,changed?CoordinateGridMode.continuousChange:CoordinateGridMode.source)==BoundTerm.init&&
+			if(restricted){
+				if(changedJumpCoordinate(at(n.a),index)==BoundTerm.init) return miss;
+				foreach(j;coordinates[index].joins){
+					if(j.kind==JoinKind.corner&&j.selection==CornerSelection.dynamic||j.kind==JoinKind.jump&&!j.clipped){
+						coordinates.length=index; return miss;
+					}
+				}
+			}else if(polynomialCoordinate(at(row.a),index,BoundTerm.init,changed?CoordinateGridMode.continuousChange:CoordinateGridMode.source)==BoundTerm.init&&
 				!changedJumpGrid(change,body.a,index,false)) return miss;
 			auto c=&coordinates[index];
 			size_t cell;
 			while(cell<c.grid.cuts.length&&c.grid.cuts[cell]<sample) ++cell;
 			bool seam=cell<c.grid.cuts.length&&c.grid.cuts[cell]==sample;
 			auto ctx=context(t); BoundTerm answer;
-			if(seam&&c.joins[cell].kind!=JoinKind.smooth) answer=bottom(ctx,type(t));
+			bool exceptional=seam&&c.joins[cell].kind!=JoinKind.smooth;
+			bool missing=exceptional;
+			if(restricted&&exceptional){
+				auto j=c.joins[cell];
+				missing=j.kind==JoinKind.corner?j.selection==CornerSelection.active:!j.clipped.value.zero;
+			}
+			if(missing) answer=bottom(ctx,type(t));
 			else{
 				c.sampledValue=seam?c.grid.points[cell]:polynomialAt(c.grid.cells[cell],sample);
-				auto slope=polynomialAt(derivativeCoefficients(c.grid.cells[cell]),sample);
+				auto slope=exceptional?Rational(0):polynomialAt(derivativeCoefficients(c.grid.cells[cell]),sample);
 				c.sampledWeight=slope<Rational(0)?-slope:slope;
 				if(c.sampledValue.words>128||c.sampledWeight.words>128){coordinates.length=index; return miss;}
 				answer=scalar(ctx,arena.real_(c.sampledWeight));
 				if(changed){
 					auto inner=scalar(ctx,arena.real_(c.sampledValue));
 					answer=primitive(arena.mul(arena.real_(0),arena.real_(0),true),[gridChangeJacobian(c.change,inner),answer]);
+					if(restricted){
+						auto guard=apply(at(cover.a),primitive(arena.at(body.data),[inner]));
+						answer=primitive(arena.mask(arena.boolean(true),arena.real_(0)),[guard,answer]);
+					}
 				}
 			}
 			c.query=n.b;
@@ -9323,7 +9347,7 @@ final class Bindings{
 		if(restricted){ cert.roots~=c.weight; pred=cert.functionAt(c.predicate); }
 		if(!cuts.length) return restricted?app("polynomialRestricted",pred~" "~cells[0]):app("polynomial",cells[0]);
 		bool changed=c.change!=CoordinateChange.none;
-		bool probing=c.query!=uint.max,hit;
+		bool probing=c.query!=uint.max&&!restricted,pointProbe=c.query!=uint.max&&restricted,hit;
 		Rational sample;
 		bool positive=c.change==CoordinateChange.log||c.change==CoordinateChange.sqrt;
 		bool checkTraces=c.traceRange&&(positive||c.change==CoordinateChange.reciprocal);
@@ -9333,9 +9357,9 @@ final class Bindings{
 			return checkTraces?app(positive?"CutRange.positive":"CutRange.nonzero",q(v)~" rfl"):"True.intro";
 		}
 		if(checkTraces) traces=app("CutRange.nil",(positive?"(Set.Ioi (0 : ℝ))":"(fun u : ℝ => u ≠ 0)")~" "~f);
-		if(probing){
+		if(probing||pointProbe){
 			sample=arena.number(arena.at(nodes[c.query].data)).re;
-			probe=app("Probe.nil",q(sample));
+			probe=pointProbe?app("PointCuts.nil","_ "~q(sample)):app("Probe.nil",q(sample));
 			cert.roots~=c.weight;
 		}
 		if(changed){
@@ -9419,15 +9443,24 @@ final class Bindings{
 						case CornerSelection.active:
 						case CornerSelection.inactive:
 							bool active=j.selection==CornerSelection.active;
-							auto h=cert.numericProof(c.predicate,v,active?"true":"false");
-							auto term=active?eq:app("cornerInactive",q(a)~" "~numeric(arena.real_(0),Rational(0)));
-							shape="(Eq.trans (congrArg (Distribution.GraphFibre.Coordinates.VariationChart.corner ("~q(a)~" : ℝ)) "~h~") "~term~")";
+							auto result=active?"true":"false";
+							auto h=c.image?app("imageTest",op~" "~cert.functionAt(c.outerPredicate)~" "~q(v)~" "~q(j.leftImage)~" "~member(v)~
+								" "~trace(v,j.leftImage)~" "~cert.numericProof(c.outerPredicate,j.leftImage,result)):
+								cert.numericProof(c.predicate,v,result);
+							auto tested="(congrArg (Distribution.GraphFibre.Coordinates.VariationChart.corner ("~q(a)~" : ℝ)) "~h~")";
+							if(pointProbe){
+								hit|=a==sample&&active;
+								probe=app("PointCuts.corner",q(sample)~" "~q(a)~" "~result~" (Eq.trans "~cut~" "~tested~") "~probe);
+							}else{
+								auto term=active?eq:app("cornerInactive",q(a)~" "~numeric(arena.real_(0),Rational(0)));
+								shape="(Eq.trans "~tested~" "~term~")";
+							}
 							break;
 						case CornerSelection.dynamic:
 							shape=app("cornerGuarded",pred~" "~q(a)~" "~q(v)~" "~apos~" "~numeric(arena.real_(v),v));
 							break;
 					}
-					selected="(List.Forall₂.cons (Eq.trans "~cut~" "~shape~") "~selected~")";
+					if(!pointProbe) selected="(List.Forall₂.cons (Eq.trans "~cut~" "~shape~") "~selected~")";
 				}else if(restricted){
 					auto mass=*j.clipped;
 					cert.roots~=mass.from[0];
@@ -9447,8 +9480,13 @@ final class Bindings{
 					}
 					auto clipped=app(lemma,args~" (of_decide_eq_true rfl) "~numeric(arena.real_(lower),lower)~" "~numeric(arena.real_(upper),upper)~
 						" "~numeric(arena.real_(1),Rational(1))~" ("~hm~")");
-					auto atom=app("atomTerm",q(a)~" "~q(mass.value)~" "~apos~" "~numeric(arena.real_(mass.value),mass.value));
-					selected="(List.Forall₂.cons (Eq.trans "~clipped~" "~atom~") "~selected~")";
+					if(pointProbe){
+						hit|=a==sample&&!mass.value.zero;
+						probe=app("PointCuts.atom",q(sample)~" "~q(a)~" "~q(mass.value)~" "~clipped~" "~probe);
+					}else{
+						auto atom=app("atomTerm",q(a)~" "~q(mass.value)~" "~apos~" "~numeric(arena.real_(mass.value),mass.value));
+						selected="(List.Forall₂.cons (Eq.trans "~clipped~" "~atom~") "~selected~")";
+					}
 				}
 				law=app("moveBreak",law~" "~eq);
 				events="((("~q(a)~" : ℝ), "~name(j.event)~".eval ξ ρ) :: "~events~")";
@@ -9464,15 +9502,19 @@ final class Bindings{
 					"(Distribution.GraphFibre.Coordinates.VariationChart.RangeIn.univ "~app("Checked.chart",tail)~")";
 			}else args~=range~" ";
 		}
+		string sampled(uint id,Rational v){
+			return "(Eq.trans "~cert.numericProof(id,sample,q(v))~" (Eq.symm "~numeric(arena.real_(v),v)~"))";
+		}
 		if(c.image){
 			if(restricted) args~=cert.functionAt(c.outerPredicate)~" ";
+			if(pointProbe){
+				auto answer=hit?"rfl":app("sampleImage",args~sampled(c.body,c.sampledValue)~" "~sampled(c.weight,c.sampledWeight));
+				return app("probeImageAt",args~q(sample)~" "~numeric(arena.at(nodes[c.query].data),sample)~" "~tail~" "~continuous~" "~probe~" "~answer);
+			}
 			return app(restricted?"finishImageRestricted":"finishImage",args~tail~" "~continuous~" "~selected);
 		}
 		if(c.flatMass) return app("massFlatChange",args~numeric(arena.real_(0),Rational(0))~" "~tail~" "~continuous~" "~jumps);
 		if(probing){
-			string sampled(uint id,Rational v){
-				return "(Eq.trans "~cert.numericProof(id,sample,q(v))~" (Eq.symm "~numeric(arena.real_(v),v)~"))";
-			}
 			args~=q(sample)~" "~numeric(arena.at(nodes[c.query].data),sample)~" "~tail~" ";
 			if(changed) args~=continuous~" ";
 			args~=probe;

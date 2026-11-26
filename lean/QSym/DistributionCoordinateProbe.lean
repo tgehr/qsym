@@ -11,7 +11,7 @@ private def cutFibre (g : ℝ → ℝ) (a : ℝ) : RealDensityFibre :=
   ⟨|Function.rightLim g a - Function.leftLim g a|,
     if Function.leftLim g a = Function.rightLim g a then none else some 0⟩
 
-private theorem atom_fibre (a k x : ℝ) : ∃ d, atom a (some k) = some d ∧
+theorem atom_fibre (a k x : ℝ) : ∃ d, atom a (some k) = some d ∧
     realFibre d x = ⟨if x = a then k else 0, some 0⟩ := by
   by_cases hk : k = 1
   · subst k; refine ⟨.dirac a, by simp [atom, diracValue], ?_⟩
