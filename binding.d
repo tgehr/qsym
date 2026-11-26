@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -954,10 +954,77 @@ final class Bindings{
 		if(!affineForm(id,forms)) return false;
 		parts=RetryParts(uint.max,id,forms[id].ratio,false,false,false,forms); return true;
 	}
+	private struct NatShift {
+		uint start, stride, ratio, mass=uint.max;
+		bool strideLeft,zeroStart,unitStride;
+	}
+	private bool naturalShift(uint id,out NatShift shift){
+		auto root=nodes[id]; Rational factor;
+		if(root.op!=BoundOp.distributionAdd) return false;
+		auto emit=nodes[root.a],tail=nodes[root.b];
+		if(emit.op==BoundOp.distributionScale){
+			if(!nonnegativeReal(emit.a,factor)) return false;
+			shift.mass=emit.a; emit=nodes[emit.b];
+		}
+		if(emit.op!=BoundOp.distributionDirac||type(at(emit.a))!=scalarType(Sort.natural)||depends(at(emit.a),0)||
+			tail.op!=BoundOp.distributionScale||!nonnegativeReal(tail.a,factor)) return false;
+		auto advance=nodes[tail.b];
+		if(advance.op!=BoundOp.distributionBind||nodes[advance.a].op!=BoundOp.variable||nodes[advance.a].data!=0||
+			nodes[advance.b].op!=BoundOp.lambda) return false;
+		auto atom=nodes[nodes[advance.b].a];
+		if(atom.op!=BoundOp.distributionDirac||!primitiveOp(atom.a,Op.builtin)) return false;
+		auto add=nodes[atom.a];
+		if(arena.view(arena.at(add.data)).value!=Builtin.addN) return false;
+		shift.strideLeft=nodes[add.a].op==BoundOp.scalar;
+		auto argument=nodes[shift.strideLeft?add.b:add.a];
+		shift.stride=shift.strideLeft?add.a:add.b;
+		auto stride=nodes[shift.stride];
+		if(argument.op!=BoundOp.variable||argument.data!=0||stride.op!=BoundOp.scalar) return false;
+		auto k=arena.at(stride.data);
+		if(arena.sort(k)!=Sort.natural||!arena.isNumber(k)||arena.number(k).re<=Rational(0)) return false;
+		shift.ratio=tail.a; shift.start=emit.a; shift.unitStride=k==arena.natural_(1);
+		shift.zeroStart=nodes[emit.a].op==BoundOp.scalar&&arena.at(nodes[emit.a].data)==arena.natural_(0);
+		return true;
+	}
+	/// Replace an observed shift loop by its orbit while keeping the starting
+	/// point strict, including when an outer weight or kernel is missing.
+	private BoundTerm shiftMass(BoundTerm mass){
+		uint[] ops; auto loop=nodes[observationInput(node(mass).a,ops)]; NatShift shift;
+		if(loop.op!=BoundOp.distributionFixed||nodes[loop.a].op!=BoundOp.lambda||!naturalShift(nodes[loop.a].a,shift))
+			return BoundTerm.init;
+		auto ctx=context(mass),inner=push(ctx,scalarType(Sort.natural));
+		BoundTerm[] env=[bottom(ctx,types[loop.type])]; uint[] lifted;
+		foreach(i;0..contexts[ctx.index].length){ env~=variable(ctx,i); lifted~=i+1; }
+		auto start=substitute(at(shift.start),ctx,env);
+		if(!ops.length){
+			auto w=shift.mass==uint.max?Rational(1):arena.number(arena.at(nodes[shift.mass].data)).re;
+			auto q=arena.number(arena.at(nodes[shift.ratio].data)).re;
+			auto total=!w.zero&&q>=Rational(1)?bottom(ctx,scalarType(Sort.real_)):
+				scalar(ctx,arena.real_(w.zero?w:w/(Rational(1)-q)));
+			return sequence(start,total);
+		}
+		auto zero=arena.natural_(0),n=variable(inner,0);
+		auto offset=shift.unitStride?n:primitive(arena.call(Builtin.mulN,[zero,zero]),[n,scalar(inner,arena.at(nodes[shift.stride].data))]);
+		auto point=shift.zeroStart?offset:primitive(arena.call(Builtin.addN,[zero,zero]),[rename(start,inner,lifted),offset]);
+		auto d=distribution(inner,BoundOp.distributionDirac,[point]);
+		auto power=primitive(arena.call(Builtin.powRN,[arena.real_(0),zero]),[scalar(inner,arena.at(nodes[shift.ratio].data)),n]);
+		auto product=arena.mul(arena.real_(0),arena.real_(0),true);
+		bool factored=shift.mass!=uint.max&&!arena.number(arena.at(nodes[shift.mass].data)).re.zero;
+		auto coefficient=shift.mass==uint.max||factored?power:primitive(product,[scalar(inner,arena.at(nodes[shift.mass].data)),power]);
+		foreach_reverse(id;ops){
+			auto op=nodes[id]; bool weight=op.op==BoundOp.distributionWeight;
+			auto argument=rename(at(weight?op.a:op.b),inner,lifted);
+			d=distribution(inner,op.op,weight?[argument,d]:[d,argument]);
+		}
+		auto row=primitive(product,[coefficient,distribution(inner,BoundOp.distributionMass,[d])]);
+		auto total=summation(hint(lambda(row),"i"));
+		if(factored) total=primitive(product,[scalar(ctx,arena.at(nodes[shift.mass].data)),total]);
+		return sequence(start,total);
+	}
 	BoundTerm distributionFixed(BoundTerm fn){
-		auto n=node(fn); RetryParts parts;
-		enforce(n.op==BoundOp.lambda&&retrySource(n.a,parts),
-			"a distribution fixed point currently supports atoms, zero, addition and nonnegative literal scaling of the recursive variable and its emissions");
+		auto n=node(fn); RetryParts parts; NatShift shift;
+		enforce(n.op==BoundOp.lambda&&(retrySource(n.a,parts)||naturalShift(n.a,shift)),
+			"a distribution fixed point requires a supported atomic retry or positive natural shift");
 		return distribution(context(fn),BoundOp.distributionFixed,[fn]);
 	}
 	/// Follow the input of an observed chain of weight and bind operations.
@@ -5412,13 +5479,18 @@ final class Bindings{
 			auto a=arena.view(arena.at(x.data));
 			return a.op==Op.add||a.op==Op.builtin&&(a.value==Builtin.addN||a.value==Builtin.addZ||a.value==Builtin.addQ);
 		}
+		bool multiplicative(BoundNode x){
+			if(x.op!=BoundOp.primitive) return false;
+			auto op=arena.view(arena.at(x.data));
+			return op.op==Op.mul||op.op==Op.builtin&&(op.value==Builtin.mulN||op.value==Builtin.mulZ||op.value==Builtin.mulQ);
+		}
 		// Expose finite masks across numeric embeddings, but commit this direction
 		// only when the resulting sum can immediately become a finite sum.
 		Result exposeSumMasks(BoundTerm t){
 			auto n=node(t); if(n.op!=BoundOp.primitive) return Result(t.id,emit(BindingRule.refl,t.id,t.id));
 			auto op=arena.view(arena.at(n.data));
 			bool cast_=op.op==Op.builtin&&op.value>=Builtin.castNZ&&op.value<=Builtin.castRC;
-			bool mul=op.op==Op.mul||op.op==Op.builtin&&(op.value==Builtin.mulN||op.value==Builtin.mulZ||op.value==Builtin.mulQ);
+			bool mul=multiplicative(n);
 			if(!cast_&&!mul&&!additive(n)) return Result(t.id,emit(BindingRule.refl,t.id,t.id));
 			auto x=exposeSumMasks(at(n.a)),y=n.b==uint.max?Result(uint.max,uint.max):exposeSumMasks(at(n.b));
 			auto out_=rebuild(t,context(t),n.b==uint.max?[at(x.output)]:[at(x.output),at(y.output)]);
@@ -6215,10 +6287,12 @@ final class Bindings{
 				}
 			}
 			if(n.op==BoundOp.distributionMass&&steps<budget){
-				auto target=countdownMass(t);
+				auto target=shiftMass(t);
+				auto rule=BindingRule.distributionShiftObservation;
+				if(target==BoundTerm.init){ target=countdownMass(t); rule=BindingRule.distributionMassCountdown; }
 				if(target!=BoundTerm.init){
 					++steps;
-					auto proof=emit(BindingRule.distributionMassCountdown,t.id,target.id),tail=visit(target,depth+1);
+					auto proof=emit(rule,t.id,target.id),tail=visit(target,depth+1);
 					result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,proof,tail.proof));
 					active.set(t.id,false); memo.set(t.id,result); return result;
 				}
@@ -7090,7 +7164,9 @@ final class Bindings{
 					}
 				}
 				if(next!=BoundTerm.init){}
-				else if(body.op==BoundOp.scalar&&arena.isNumber(arena.at(body.data))&&arena.number(arena.at(body.data)).zero){
+				else if(body.op==BoundOp.bottom){
+					next=bottom(ctx,ty);rule=BindingRule.sumMissingConstant;
+				}else if(body.op==BoundOp.scalar&&arena.isNumber(arena.at(body.data))&&arena.number(arena.at(body.data)).zero){
 					next=scalar(ctx,arena.number(Number(0),elementSort(ty))); rule=BindingRule.sumZero;
 				}else if(!depends(at(nodes[current.a].a),0)){
 					auto c=dropIndex(at(nodes[current.a].a)),sort=elementSort(ty),placeholder=arena.number(Number(0),sort);
@@ -7508,8 +7584,9 @@ final class Bindings{
 					rule=BindingRule.conditionalRight;
 				}
 			}
-			if(next==BoundTerm.init&&additive(current)&&(nodes[current.a].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom)){
-				next=bottom(ctx,types[current.type]);rule=BindingRule.addBottom;
+			if(next==BoundTerm.init&&(additive(current)||multiplicative(current))&&
+				(nodes[current.a].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom)){
+				next=bottom(ctx,types[current.type]);rule=additive(current)?BindingRule.addBottom:BindingRule.mulBottom;
 			}
 			// Lift guards through strict tuple constructors and projections so a
 			// lambda can display the restriction once, on its parameter.
@@ -10566,6 +10643,15 @@ final class Bindings{
 					auto offset=p.extra?exponent.b:exponent.a,product=nodes[p.extra?exponent.a:exponent.b],iv=nodes[product.b].a;
 					auto m=-arena.number(arena.at(nodes[offset].data)).re.integer-1;
 					proof=".ofEq (fun ξ ρ => SummationPowers.negative"~(p.extra?"Reverse":"")~suffix~" ("~name(n.a)~".eval ξ ρ) ("~name(iv)~".eval ξ ρ) "~to!string(m)~" ("~name(offset)~".eval ξ ρ) ("~name(product.a)~".eval ξ ρ) rfl rfl)";break;
+				case BindingRule.sumMissingConstant:
+					auto idx=pool.view(types[nodes[n.a].type]).fields[0]==scalarType(Sort.natural)?"ℕ":"ℤ";
+					auto weight=elementSort(types[n.type])==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
+					proof=".ofEq (fun _ _ => Summation.undefined_term "~weight~" (fun _ : "~idx~" => none) 0 rfl)";break;
+				case BindingRule.mulBottom:
+					auto sort=elementSort(types[n.type]),mul=tensorOperation(types[n.type],TensorOp.mul);
+					auto hm=sort==Sort.natural?"AffineRecurrence.mulN":sort==Sort.integer?"AffineRecurrence.mulZ":sort==Sort.rational?"AffineRecurrence.mulQ":"rfl";
+					auto left=nodes[n.a].op==BoundOp.bottom;
+					proof=".ofEq (fun ξ ρ => SummationLinearity.mul_missing "~mul~" "~hm~" "~(left?"true":"false")~" ("~name(left?n.b:n.a)~".eval ξ ρ))";break;
 				case BindingRule.addBottom:
 					auto sort=elementSort(types[n.type]),add=tensorOperation(types[n.type],TensorOp.add),ha=sort==Sort.natural?"Summation.addN":sort==Sort.integer?"Summation.addZ":sort==Sort.rational?"Summation.addQ":"Summation.add";
 					auto left=nodes[n.a].op==BoundOp.bottom;
@@ -10867,6 +10953,7 @@ final class Bindings{
 				case BindingRule.distributionDefinedRetry:
 				case BindingRule.distributionRetryMass:
 				case BindingRule.distributionRetryDensity:
+				case BindingRule.distributionShiftObservation:
 				case BindingRule.distributionRetryUnbounded:
 				case BindingRule.distributionRetryObservation:{
 					enum ns="Distribution.Atomic.";
@@ -10875,6 +10962,16 @@ final class Bindings{
 					Rational literal(uint id){return arena.number(arena.at(nodes[id].data)).re;}
 					string number(uint id){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~q(literal(id))~" rfl)";}
 					enum yes=" (of_decide_eq_true rfl)";
+					string massObserver(uint[] operations,bool countable){
+						auto prefix=ns~(countable?"CountableObservation.":"Observation.");
+						string observer=prefix~"mass";
+						foreach(id;operations){
+							auto op=nodes[id]; bool weight=op.op==BoundOp.distributionWeight;
+							auto theorem=weight?"weight":types[op.type]==pool.distribution(scalarType(Sort.real_))?"realBind":"bind";
+							observer="("~prefix~theorem~" "~observer~ev(weight?op.a:op.b)~")";
+						}
+						return observer;
+					}
 					string admissible(uint id){
 						auto v=nodes[id];
 						switch(v.op){
@@ -10956,6 +11053,28 @@ final class Bindings{
 							else law=ns~"fixed_add_tail "~swap~q(parts.ratio)~" "~number(target.a)~" "~admissible(target.b)~
 								" "~tail(parts.tail,coefficient)~" (fun _ => rfl)";
 						}
+					}else if(p.rule==BindingRule.distributionShiftObservation){
+						uint[] ops; auto loop=nodes[observationInput(n.a,ops)],seq=nodes[p.to];
+						NatShift parts; enforce(naturalShift(nodes[loop.a].a,parts));
+						bool weighted=parts.mass!=uint.max;
+						auto mass=weighted?literal(parts.mass):Rational(1);
+						auto witness=weighted?number(parts.mass):ns~"one_weight";
+						auto stride=to!string(literal(parts.stride).numerator);
+						auto args=(parts.strideLeft?"true ":"false ")~stride~yes~" "~q(mass)~" "~q(literal(parts.ratio))~yes~yes~
+							" "~witness~" "~number(parts.ratio)~ev(seq.a);
+						if(!ops.length){
+							bool missing=nodes[seq.b].op==BoundOp.bottom;
+							auto total=missing?"none":"(some "~q(literal(seq.b))~")";
+							law=ns~"nat_shift_mass "~(weighted?"true ":"false ")~args~" (fun _ => rfl) "~total~yes~
+								(missing?" rfl":" "~number(seq.b));
+						}else{
+							auto index=parts.zeroStart?(parts.unitStride?ns~"ShiftIndex.self":"("~ns~"ShiftIndex.mul "~stride~")"):
+								parts.unitStride?"("~ns~"ShiftIndex.add"~ev(seq.a)~")":"("~ns~"ShiftIndex.add_mul"~ev(seq.a)~" "~stride~")";
+							bool factored=weighted&&!mass.zero;
+							law=ns~(factored?"CountableObservation.nat_shift_factored ":"CountableObservation.nat_shift ")~
+								massObserver(ops,true)~(factored?" ":weighted?" true ":" false ")~args~
+								" "~index~" (fun _ => rfl) (fun _ => rfl)";
+						}
 					}else if(p.rule==BindingRule.distributionDefinedRetry||p.rule==BindingRule.distributionRetryDensity){
 						auto loop=nodes[n.a];
 						auto args=q(literal(loop.a))~yes~" "~number(loop.a)~" "~admissible(loop.b);
@@ -10981,15 +11100,8 @@ final class Bindings{
 						if(unbounded||p.rule==BindingRule.distributionRetryObservation){
 							uint[] ops;
 							source=observationInput(source,ops);
-							auto prefix=ns~(unbounded?"CountableObservation.":"Observation.");
-							observer=prefix~"mass";
-							foreach(id;ops){
-								auto op=nodes[id];
-								bool weight=op.op==BoundOp.distributionWeight;
-								auto theorem=weight?"weight":types[op.type]==pool.distribution(scalarType(Sort.real_))?"realBind":"bind";
-								observer="("~prefix~theorem~" "~observer~ev(weight?op.a:op.b)~")";
-								if(!unbounded) target=weight?nodes[target].b:nodes[target].a;
-							}
+							observer=massObserver(ops,unbounded);
+							if(!unbounded) foreach(id;ops) target=nodes[id].op==BoundOp.distributionWeight?nodes[target].b:nodes[target].a;
 						}
 						auto loop=nodes[source];
 						if(unbounded) law=ns~"CountableObservation.retry_noncontracting "~observer~" "~q(literal(loop.a))~yes~

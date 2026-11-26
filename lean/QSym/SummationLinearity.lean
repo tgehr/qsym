@@ -56,6 +56,25 @@ theorem add_known_right (op : Option α → Option α → Option α)
   simp_rw [hc (f _) (g _)]
   rw [add_known op hop g f hknown, hc]
 
+/-- A nonzero constant preserves and reflects absolute convergence, even for
+partial summands. A zero multiplier still checks each term and need not
+reflect divergence. -/
+theorem scale_nonzero {K : Type} [NormedDivisionRing K] (c : K) (hc : c ≠ 0) (f : ι → Option K) :
+    value norm (some (fun i => Value.mul (some c) (f i))) = Value.mul (some c) (value norm (some f)) := by
+  classical
+  have ht (i : ι) : (Value.mul (some c) (f i)).isSome = (f i).isSome := by
+    cases f i <;> rfl
+  have hv (i : ι) : (Value.mul (some c) (f i)).getD 0 = c * (f i).getD 0 := by
+    cases f i <;> simp [Value.mul]
+  simp only [value, Option.bind, ht, hv, norm_mul, summable_mul_left_iff (norm_ne_zero_iff.mpr hc),
+    summable_mul_left_iff hc, tsum_mul_left]
+  split <;> rfl
+
+theorem mul_missing {R : Type} [Mul R] (op : Option R → Option R → Option R)
+    (hm : op = Value.mul) (left : Bool) (x : Option R) :
+    (if left then op none x else op x none) = none := by
+  subst op; cases left <;> cases x <;> rfl
+
 theorem distribute {R : Type} [Semiring R]
     (add mul : Option R → Option R → Option R) (ha : add = Value.add) (hm : mul = Value.mul)
     (a b c : Option R) (reverse : Bool) :

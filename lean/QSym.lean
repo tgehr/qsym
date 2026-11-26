@@ -56,6 +56,7 @@ import QSym.DistributionAtomicSeries
 import QSym.DistributionAtomicDivergence
 import QSym.DistributionAtomicOrbit
 import QSym.DistributionAtomicTransport
+import QSym.DistributionAtomicShift
 import QSym.DistributionAtomicObservation
 import QSym.Tensor
 import QSym.TensorDomains

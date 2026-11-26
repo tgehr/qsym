@@ -10,6 +10,12 @@ private struct Case{ string name,source,type,expected; }
 private Case[] cases(){
 	enum mixedLoop="(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d))";
 	enum retry="(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d)))";
+	string shift(string start,string step="n+1",string mass="1/2",string ratio="1/2"){
+		auto seed="δ(("~start~":ℕ))";
+		if(mass.length) seed="scaleD("~mass~","~seed~")";
+		return "(μ(d:Distribution(ℕ)).addD("~seed~",scaleD("~ratio~",bindD(d,λ(n:ℕ).δ("~step~")))))";
+	}
+	auto counter=shift("0");
 	enum endless="(μ(d:Distribution(ℝ)).addD(δ(0),d))";
 	enum twoArms="(μ(d:Distribution(ℝ)).addD(scaleD(1/4,addD(δ(0),d)),scaleD(1/4,addD(d,δ(2)))))";
 	return [
@@ -1233,6 +1239,24 @@ private Case[] cases(){
 	Case("AtomicRetryDensity","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠1}). (0:ℝ)"),
 	Case("AtomicRetryUnitRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(1,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("CountdownGeometric","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k:ℝ)"),
+	Case("ShiftOrbitBare",counter,"Distribution(ℕ)"),
+	Case("ShiftOrbitMass","massD("~counter~")","ℝ","1"),
+	Case("ShiftOrbitMean","massD(weightD(λ(n:ℕ).(n:ℝ),"~counter~"))","ℝ","1"),
+	Case("ShiftOrbitSecond","massD(weightD(λ(n:ℕ).(n:ℝ)^2,"~counter~"))","ℝ","3"),
+	Case("ShiftOrbitStride","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3","2+n")~"))","ℝ","5"),
+	Case("ShiftOrbitEven","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("0","n+2")~"))","ℝ","2"),
+	Case("ShiftOrbitOffset","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3")~"))","ℝ","4"),
+	Case("ShiftOrbitUnnormalized","massD("~shift("0","n+1","2")~")","ℝ","4"),
+	Case("ShiftOrbitUnitEmission","massD("~shift("0","n+1","")~")","ℝ","2"),
+	Case("ShiftOrbitNoRetry","massD("~shift("0","n+1","1/2","0")~")","ℝ","1/2"),
+	Case("ShiftOrbitDiverges","massD("~shift("0","n+1","1","1")~")","ℝ","undefined(ℝ)"),
+	Case("ShiftOrbitMissing","massD("~shift("undefined(ℕ)")~")","ℝ","undefined(ℝ)"),
+	Case("ShiftOrbitProbe","λ(f:ℕ→ℝ).massD(weightD(f,"~counter~"))","(ℕ→ℝ)→ℝ"),
+	Case("ShiftOrbitPole","massD(weightD(λ(n:ℕ).1/((n:ℝ)-2),"~counter~"))","ℝ"),
+	Case("ShiftOrbitBind","massD(bindD("~counter~",λ(n:ℕ).scaleD(2,δ(n))))","ℝ"),
+	Case("ShiftOrbitStart","λ(a:ℕ).massD("~shift("a")~")","ℕ→ℝ","λ(a:ℕ). (1:ℝ)"),
+	Case("ShiftOrbitZeroCharge","massD("~shift("0","n+1","0","2")~")","ℝ","0"),
+	Case("ShiftOrbitMissingProbe","massD(weightD(λ(n:ℕ).undefined(ℝ),"~shift("0","n+1","0","0")~"))","ℝ","undefined(ℝ)"),
 	Case("CountdownSigned","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then scaleD(-3,δ((0:ℝ))) else scaleD(-2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). (-3·(-2)^k:ℝ)"),
 	Case("CountdownCapturedSeed","λ(d:Distribution(ℕ→ℕ)).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℕ→ℕ)).λ(n:ℕ).if n=0 then d else scaleD(1/2,f(n sub 1)))(k))",
 		"Distribution(ℕ→ℕ)→ℕ→ℝ","λ(d:Distribution(ℕ→ℕ)). λ(k:ℕ). ((∫(x:ℕ→ℕ). (d)[x])·(1/2)^k:ℝ)"),
@@ -1283,6 +1307,8 @@ private void run(string directory){
 		else if(c.name.indexOf("SeriesFibre")==0)
 			enforce(certificate.indexOf("Distribution.FibreCertificate.extract_sum")>=0||
 				certificate.indexOf("Distribution.FibreCertificate.extract_nat_sum")>=0,c.name);
+		if(c.name.indexOf("ShiftOrbit")==0&&c.name!="ShiftOrbitBare")
+			enforce(certificate.indexOf("CountableObservation.nat_shift")>=0||certificate.indexOf("Atomic.nat_shift_mass")>=0,c.name~" shift observation");
 		if(c.name.indexOf("RetryUnbounded")==0&&c.name!="RetryUnboundedMissingProbe")
 			enforce(certificate.indexOf("CountableObservation.retry_noncontracting")>=0,c.name);
 		if(c.name.indexOf("LoopDensity")==0&&c.name!="LoopDensityMissingSeed"&&c.name!="LoopDensityMissingQuery")
@@ -2271,6 +2297,9 @@ private void run(string directory){
 	}
 	auto owner=Session.open(),a=owner.arena; FunctionSyntax s;
 	foreach(source;[
+		"μ(d:Distribution(ℕ)).addD(δ(0),scaleD(-1,bindD(d,λ(n:ℕ).δ(n+1))))",
+		"μ(d:Distribution(ℕ)).addD(scaleD(-1,δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))",
+		"μ(d:Distribution(ℕ)).addD(δ(0),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+n))))",
 		"μ(d:Distribution(ℝ)).scaleD(1/2,addD(δ(massD(d)),d))", "μ(d:Distribution(ℝ)).scaleD(-1,addD(δ(0),d))",
 		"μ(d:Distribution(ℝ)).addD(scaleD(-1,d),d)", "μ(d:Distribution(ℝ)).Λx. x·d[x]",
 		"μ(d:Distribution(ℝ)).addD(δ(0),scaleD(-1,d))", "μ(d:Distribution(ℝ)).addD(Λx.λ[x],scaleD(1/2,d))",

@@ -1,4 +1,4 @@
-import QSym.DistributionAtomicTransport
+import QSym.DistributionAtomicShift
 import QSym.AxiomCheck
 
 noncomputable section
@@ -167,6 +167,9 @@ theorem shifted_counter_mass : massValue (fixedValue (some shiftCounter)) = some
 #qsym_check_axioms orbit_limit_on
 #qsym_check_axioms probe_kernel_orbit
 #qsym_check_axioms walk_all_probes
+#qsym_check_axioms nat_shift_mass
+#qsym_check_axioms CountableObservation.nat_shift
+#qsym_check_axioms CountableObservation.nat_shift_factored
 #qsym_check_axioms walk_mass
 #qsym_check_axioms walk_alternating
 #qsym_check_axioms missing_after_zero
