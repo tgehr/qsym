@@ -299,6 +299,18 @@ private Case[] cases(){
 	Case("ChangedCoordinateRoot","densityAtD(Λx. λ[sqrt(1+abs(x))],3)","ℝ","1/4"),
 	Case("ChangedCoordinateReciprocal","densityAtD(Λx. λ[(1+abs(x))⁻¹],-1)","ℝ","1/4"),
 	Case("ChangedCoordinateSinh","densityAtD(Λx. λ[sinh(abs(x-2))],2)","ℝ","undefined(ℝ)"),
+	Case("CauchyScaledAtan","∫dx λ[atan(2*x-3)]","ℝ","π"),
+	Case("CauchyScaleNormal","∫dx (π⁻¹)·(1+x²)⁻¹·λ[x]","ℝ","1"),
+	Case("CauchyScaleQuotient","∫dx 1/(π*(1+x²))·λ[x]","ℝ","1"),
+	Case("CauchyScaleLeft","λ(a:ℝ).∫dx a*(1+x²)⁻¹·λ[x]","ℝ→ℝ","λ(a:ℝ). a·π"),
+	Case("CauchyScaleRight","λ(a:ℝ).∫dx (1+x²)⁻¹*a·λ[x]","ℝ→ℝ","λ(a:ℝ). a·π"),
+	Case("CauchyScaleSigned","λ(a:ℝ).∫dx a*(-2*x²-2*x-3)⁻¹·λ[x]","ℝ→ℝ","λ(a:ℝ). -a·(1/5)·sqrt(5)·π"),
+	Case("CauchyScalePartial","λ(a:ℝ).∫dx a⁻¹*(1+x²)⁻¹·λ[x]","ℝ→ℝ","λ(a:ℝ). a⁻¹·π"),
+	Case("CauchyScaleProbe","λ(h:ℝ→ℝ).λ(t:ℝ).∫dx h(t)*(1+x²)⁻¹·λ[x]","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(t:ℝ). h(t)·π"),
+	Case("CauchyScaleZero","∫dx 0*(1+x²)⁻¹·λ[x]","ℝ","0"),
+	Case("CauchyScalePole","λ(a:ℝ).∫dx a*(x²-1)⁻¹·λ[x]","ℝ→ℝ"),
+	Case("CauchyScaleInner","λ(a:ℝ).massD(weightD(λ(x:ℝ).a,weightD(λ(x:ℝ).(1+x²)⁻¹,lebesgueD())))","ℝ→ℝ","λ(a:ℝ). a·π"),
+	Case("CauchyScaleOuter","λ(a:ℝ).massD(weightD(λ(x:ℝ).(1+x²)⁻¹,weightD(λ(x:ℝ).a,lebesgueD())))","ℝ→ℝ","λ(a:ℝ). a·π"),
 	Case("CauchyWhole","∫dx (1+x²)⁻¹·λ[x]","ℝ","π"),
 	Case("CauchyScaledAxis","∫dx (1+4*x²)⁻¹·λ[x]","ℝ","1/2·π"),
 	Case("CauchyTranslated","∫dx (1+(2*x-3)^2)⁻¹·λ[x]","ℝ","1/2·π"),
@@ -1757,7 +1769,10 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
-		if(c.name.indexOf("Cauchy")==0){
+		if(c.name.indexOf("CauchyScale")==0&&c.name!="CauchyScaledAxis"){
+			bool scaled=c.name!="CauchyScalePole"&&c.name!="CauchyScaleZero";
+			enforce((certificate.indexOf("StepSource.cauchy_scaled_mass ")>=0)==scaled,c.name);
+		}else if(c.name.indexOf("Cauchy")==0){
 			bool finite=c.name!="CauchyPole"&&c.name!="CauchyTouch"&&c.name!="CauchyQuartic"&&c.name!="CauchyAffine"&&c.name!="CauchyMeasure";
 			enforce((certificate.indexOf("StepSource.cauchy_mass ")>=0)==finite,c.name);
 		}

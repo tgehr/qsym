@@ -1,5 +1,6 @@
 import QSym.DistributionPolynomialGrid
 import QSym.DistributionModelBridge
+import QSym.IntegrationLaws
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 
 /-! Integrals of reciprocals of quadratics without real roots. The sign of
@@ -92,5 +93,37 @@ theorem cauchy_mass {f : ℝ → Option ℝ} {p : List ℚ} (c b a k s : ℚ)
     Value.mul (Value.mul (some (s : ℝ)) (some Real.pi)) (Value.inv (Functions.sqrtR.apply (some (k : ℝ))))
   rw [← (eq_div_iff (abs_ne_zero.mpr hn)).mpr hsg]
   simp [Function1.apply, Functions.sqrtR, Value.mul, Value.inv, hp.le, (Real.sqrt_pos.2 hp).ne', div_eq_mul_inv]
+
+/-- A scalar may be partial or zero. A finite inner mass lets either order
+of strict multiplication move outside the integral. -/
+theorem factor_finite_mass {f : ℝ → Option ℝ} {out : Option ℝ} (c : Option ℝ) (right : Bool)
+    (mass : massValue (weightValue (some f) lebesgueValue) = out) (finite : Value.Defined out) :
+    massValue (weightValue (some fun x => if right then Value.mul (f x) c else Value.mul c (f x))
+      lebesgueValue) = Value.mul c out := by
+  rw [weighted_lebesgue_mass_bridge, Model.densityMassValue_eq] at mass ⊢
+  change partialIntegral volume f = out at mass
+  subst out
+  have order (x : ℝ) : (if right then Value.mul (f x) c else Value.mul c (f x)) = Value.mul c (f x) := by
+    cases right <;> cases c <;> cases f x <;> simp [Value.mul, mul_comm]
+  change partialIntegral volume (fun x => if right then _ else _) = _
+  simp_rw [order]
+  cases c with
+  | none => simp [Value.mul, partialIntegral, Value.Defined]
+  | some v => exact partialIntegral_scale_defined volume v f finite
+
+theorem cauchy_scaled_mass {f : ℝ → Option ℝ} {p : List ℚ} (scale : Option ℝ) (right : Bool)
+    (c b a k s : ℚ) (src : PolynomialOn (fun _ => True) f p) (check : cauchyCheck p c b a k s = true)
+    {sign pi disc : Option ℝ} (hs : sign = some (Numeric.denote (s := .real) s))
+    (hpi : pi = some Functions.pi) (hk : disc = some (Numeric.denote (s := .real) k)) :
+    massValue (weightValue (some fun x => if right then Value.mul (Value.inv (f x)) scale
+      else Value.mul scale (Value.inv (f x))) lebesgueValue) =
+      Value.mul scale (Value.mul (Value.mul sign pi) (Value.inv (Functions.sqrtR.apply disc))) := by
+  apply factor_finite_mass scale right (cauchy_mass c b a k s src check hs hpi hk)
+  simp only [cauchyCheck, Bool.and_eq_true, decide_eq_true_eq] at check
+  have hp : (0 : ℝ) < k := by exact_mod_cast check.2.2.1
+  rw [hs, hpi, hk]
+  change Value.Defined (Value.mul (Value.mul (some (s : ℝ)) (some Real.pi))
+    (Value.inv (Functions.sqrtR.apply (some (k : ℝ)))))
+  simp [Value.Defined, Value.mul, Value.inv, Function1.apply, Functions.sqrtR, hp.le, (Real.sqrt_pos.2 hp).ne']
 
 end QSym.Distribution.StepSource

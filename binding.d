@@ -176,7 +176,7 @@ private struct GaussianData{
 }
 private struct CauchyData{
 	Rational constant,halfLinear,leading,determinant;
-	uint sign=uint.max,radicand=uint.max;
+	uint sign=uint.max,radicand=uint.max,inverse=uint.max,factor=uint.max; bool right;
 }
 private struct IntegralSolution{
 	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max; IntervalData bounds; GaussianData bell; CauchyData cauchy;
@@ -5498,8 +5498,18 @@ final class Bindings{
 		// with k=ac-b² for ax²+2bx+c. Poles are kept in the source domain.
 		BoundTerm integrateCauchy(BoundTerm t,out IntegralSolution solution){
 			auto n=node(t);
-			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||solution.from.length!=1) return BoundTerm.init;
+			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||!solution.from.length||solution.from.length>2) return BoundTerm.init;
 			auto id=solution.from[0];
+			uint factor=uint.max; bool right;
+			if(solution.from.length==2||primitiveOp(id,Op.mul)){
+				auto left=solution.from.length==2?id:nodes[id].a;
+				auto other=solution.from.length==2?solution.from[1]:nodes[id].b;
+				bool leftFree=!depends(at(left),0);
+				right=!depends(at(other),0);
+				if(leftFree==right) return BoundTerm.init;
+				factor=right?other:left;
+				id=right?left:other;
+			}
 			Rational[] p;
 			if(!primitiveOp(id,Op.inv)||!axisPolynomial(nodes[id].a,p,0,true)) return BoundTerm.init;
 			while(p.length&&p[$-1].zero) p.length=p.length-1;
@@ -5511,7 +5521,12 @@ final class Bindings{
 			auto root=primitive(arena.call(Builtin.sqrtR,[zero]),[radicand]);
 			auto pi=scalar(ctx,arena.call(Builtin.pi,[])),mul=arena.mul(zero,zero,true);
 			auto answer=primitive(mul,[primitive(mul,[sign,pi]),primitive(arena.inv(zero),[root])]);
-			solution.cauchy=CauchyData(p[0],half,p[2],k,sign.id,radicand.id);
+			solution.cauchy=CauchyData(p[0],half,p[2],k,sign.id,radicand.id,id);
+			if(factor!=uint.max){
+				auto coefficient=dropIndex(at(factor));
+				solution.cauchy.factor=coefficient.id; solution.cauchy.right=right;
+				answer=primitive(mul,[coefficient,answer]);
+			}
 			solution.piecewise=true; solution.output=answer.id;
 			return answer;
 		}
@@ -10255,10 +10270,14 @@ final class Bindings{
 				" "~cert.closedProof(at(d.curvature),d.c2)~" rfl "~monomials~" "~sums(count)~" "~literal(d.exponent,d.vertex)~" "~literal(d.scale,d.width)~" rfl";
 		}
 		if(s.cauchy.sign!=uint.max){
-			auto d=s.cauchy,source=piece(nodes[s.from[0]].a,cert.everywhere,"",Rational(0));
+			auto d=s.cauchy,source=piece(nodes[d.inverse].a,cert.everywhere,"",Rational(0));
 			auto sign=d.leading<Rational(0)?Rational(-1):Rational(1);
-			return "Distribution.StepSource.cauchy_mass "~q(d.constant)~" "~q(d.halfLinear)~" "~q(d.leading)~" "~q(d.determinant)~" "~q(sign)~
+			auto rule=d.factor==uint.max?"cauchy_mass ":"cauchy_scaled_mass ("~name(d.factor)~".eval ξ ρ) "~(d.right?"true ":"false ");
+			auto proof="Distribution.StepSource."~rule~q(d.constant)~" "~q(d.halfLinear)~" "~q(d.leading)~" "~q(d.determinant)~" "~q(sign)~
 				" "~source.proof~" rfl "~cert.closedProof(at(d.sign),sign)~" rfl "~cert.closedProof(at(d.radicand),d.determinant);
+			if(s.from.length==2)
+				proof="Eq.trans (congrArg Distribution.massValue (Distribution.weight_weight_lebesgue "~functionAt(s.from[0])~" "~functionAt(s.from[1])~")) ("~proof~")";
+			return proof;
 		}
 		if(s.gaussian){
 			// The density is a polynomial times the exponential of a quadratic
