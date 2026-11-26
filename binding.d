@@ -1532,6 +1532,29 @@ final class Bindings{
 		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument); if(y==Term.init) return Term.init; args~=y; }
 		return arena.viewRebuild(arena.at(n.data),args,true);
 	}
+	// A comparison that excludes exactly zero of the innermost argument.
+	// Surface natural equality can introduce an integer coercion.
+	private string binderNonzero(uint id){
+		auto pred=nodes[id];
+		if(pred.op!=BoundOp.primitive) return "";
+		auto op=arena.view(arena.at(pred.data));
+		bool argument(uint i){return nodes[i].op==BoundOp.variable&&nodes[i].data==0;}
+		if(argument(pred.a)){
+			if(op.op==Op.nonzero) return "rfl";
+			if(op.op==Op.builtin) switch(cast(Builtin)op.value){
+				case Builtin.nonzeroN:return "Functions.nonzeroN_eq";
+				case Builtin.nonzeroZ:return "Functions.nonzeroZ_eq";
+				case Builtin.nonzeroQ:return "Summation.nonzeroQ";
+				default:break;
+			}
+		}
+		if(op.op==Op.builtin&&op.value==Builtin.nonzeroZ&&primitiveOp(pred.a,Op.builtin)){
+			auto cast_=nodes[pred.a];
+			if(arena.view(arena.at(cast_.data)).value==Builtin.castNZ&&argument(cast_.a))
+				return "Functions.nonzeroCastNZ_eq";
+		}
+		return "";
+	}
 	// The negation of a comparison: the other comparison of its operands in
 	// the other order. Both are primitives, or both scalars.
 	private bool negatedComparison(uint id,uint comparison){
@@ -6192,9 +6215,23 @@ final class Bindings{
 			if(!scalarParam) return BoundTerm.init;
 			auto index=freshScalarIndex(body.id);
 			auto argument=arena.variable(sort,index);
-			BoundTerm rewrite(BoundTerm t,uint[] path){
+			BoundTerm rewrite(BoundTerm t,uint[] path,bool masksOnly){
 				auto n=node(t),mode=n.op==BoundOp.defined||n.op==BoundOp.holds?n.op:BoundOp.scalar;
-				auto source=scalarBody(mode==BoundOp.scalar?t:at(n.a),argument);
+				if(masksOnly&&primitiveOp(t.id,Op.mask)&&binderNonzero(n.a).length&&depends(at(n.b),0)){
+					auto z=arena.number(Number(0),sort),input=scalarBody(at(n.b),z);
+					if(input!=Term.init){
+						auto opts=Options(DensityMode.preserve,true),value=simplify(arena,input,opts);
+						if(!value.exhausted&&arena.isNumber(value.output)&&arena.number(value.output).zero){
+							auto domain=simplifyDomain(arena,input,[],opts);
+							if(!domain.exhausted&&domain.output==arena.boolean(true)){
+								extra=cast(uint)scalarDomains.length;
+								scalarDomains~=ScalarDomain(input,domain,value,index,sort,path,BoundOp.primitive);
+								return at(n.b);
+							}
+						}
+					}
+				}
+				auto source=masksOnly?Term.init:scalarBody(mode==BoundOp.scalar?t:at(n.a),argument);
 				if(source!=Term.init){
 					ScalarResult value; BoundTerm simplified;
 					if(mode==BoundOp.scalar){
@@ -6215,13 +6252,14 @@ final class Bindings{
 				if(n.op==BoundOp.conditional||n.op==BoundOp.guard||n.op==BoundOp.primitive||n.op==BoundOp.defined||n.op==BoundOp.holds||n.op==BoundOp.vectorCons||n.op==BoundOp.pair||n.op==BoundOp.get||n.op==BoundOp.first||n.op==BoundOp.rest||n.op==BoundOp.tensor){
 					BoundTerm[] children=[at(n.a)]; if(n.b!=uint.max) children~=at(n.b); if(n.c!=uint.max) children~=at(n.c);
 					foreach(i,child;children){
-						auto changed=rewrite(child,path~cast(uint)i);
+						auto changed=rewrite(child,path~cast(uint)i,masksOnly);
 						if(changed!=BoundTerm.init){ children[i]=changed; return rebuild(t,ctx,children); }
 					}
 				}
 				return BoundTerm.init;
 			}
-			auto output=rewrite(body,[]);
+			auto output=rewrite(body,[],false);
+			if(output==BoundTerm.init&&sort!=Sort.boolean) output=rewrite(body,[],true);
 			return output==BoundTerm.init?output:inheritHint(binder,node(binder).op==BoundOp.lambda?lambda(output):set(output));
 		}
 		BoundTerm rayCoordinate(BoundTerm fn,out uint orientation,out BindingRule rule){
@@ -10765,6 +10803,7 @@ final class Bindings{
 		foreach(d;result.domains){
 			scalarNodes~=arena.viewPostorder(d.input); if(d.result.output!=Term.init)scalarNodes~=arena.viewPostorder(d.result.output);
 			if(d.value.traced) scalarNodes~=arena.viewPostorder(arena.castTo(d.value.output,arena.sort(d.input)));
+			if(d.mode==BoundOp.primitive) scalarNodes~=arena.viewPostorder(arena.number(Number(0),d.sort));
 		}
 		foreach(r;result.ranks) foreach(step;r.iterations) scalarNodes~=arena.viewPostorder(step.output);
 		foreach(r;result.ranks) if(r.lower.output!=Term.init) scalarNodes~=arena.viewPostorder(r.result.output);
@@ -11965,10 +12004,23 @@ final class Bindings{
 					string equality;
 					if(d.mode==BoundOp.defined) equality=hd~".symm";
 					else if(d.mode==BoundOp.holds) equality="(Binding.holdsDomain "~input~" "~domain~" "~hd~")";
-					else equality="(Binding.preserveDomain "~input~" (n"~to!string(arena.castTo(d.value.output,arena.sort(d.input)).id)~".eval "~env~") "~domain~
+					else if(d.mode!=BoundOp.primitive) equality="(Binding.preserveDomain "~input~" (n"~to!string(arena.castTo(d.value.output,arena.sort(d.input)).id)~".eval "~env~") "~domain~
 						" "~hd~" ("~prefix~".ValueCertificate.refinement "~env~"))";
 					string wrap(uint id,size_t depth){
-						if(depth==d.path.length) return equality;
+						if(depth==d.path.length){
+							if(d.mode!=BoundOp.primitive) return equality;
+							auto mask=nodes[id],z=arena.number(Number(0),d.sort);
+							auto value=arena.castTo(d.value.output,arena.sort(d.input));
+							string zeroProof(Term a){
+								auto term="n"~to!string(a.id);
+								if(arena.sort(a)==Sort.real_) return "(Numeric.calculate_real_zero ξ "~term~" rfl)";
+								if(arena.sort(a)==Sort.complex) return "(Eq.trans (Numeric.calculate_sound ξ "~term~" (0, 0) rfl) (congrArg some ((Numeric.complex_zero (0, 0)).mpr rfl)))";
+								return "(Numeric.calculate_sound ξ "~term~" 0 rfl)";
+							}
+							string fn(uint child){return "(fun u => "~name(child)~".eval ξ (Binding.Env.cons (a := .scalar ."~field~") u ρ))";}
+							auto h0="(Eq.trans (LinearRecurrence.known ("~prefix~".DomainCertificate.domain_correct ξ) ("~prefix~".ValueCertificate.refinement ξ)) "~zeroProof(value)~")";
+							return "(Value.mask_nonzero_of_zero "~fn(mask.a)~" "~binderNonzero(mask.a)~" "~fn(mask.b)~" (n"~to!string(z.id)~".eval ξ) "~zeroProof(z)~" "~h0~" x)";
+						}
 						auto q=nodes[id],left=d.path[depth]==0?wrap(q.a,depth+1):"rfl";
 						if(q.b==uint.max) return "(congrArg "~valueOperation(q)~" "~left~")";
 						auto right=d.path[depth]==1?wrap(q.b,depth+1):"rfl";
