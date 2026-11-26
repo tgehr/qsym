@@ -281,6 +281,60 @@ theorem cast_add_rational (a b : Option ℚ) :
   rcases a with _ | a <;> rcases b with _ | b <;>
     simp [Value.add, Function1.apply, Function2.apply, Functions.addQ, Functions.castQR]
 
+/-- The casts are multiplicative for every definedness pattern: those of a
+product of natural numbers, of integers and of rationals are the product of
+the casts. -/
+theorem cast_mul_natural (a b : Option ℕ) :
+    Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply
+        (Functions.mulN.apply a b))) =
+      Value.mul (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply a)))
+        (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply b))) := by
+  rcases a with _ | a <;> rcases b with _ | b <;>
+    simp [Value.mul, Function1.apply, Function2.apply, Functions.mulN, Functions.castNZ,
+      Functions.castZQ, Functions.castQR]
+
+theorem cast_mul_integer (a b : Option ℤ) :
+    Functions.castQR.apply (Functions.castZQ.apply (Functions.mulZ.apply a b)) =
+      Value.mul (Functions.castQR.apply (Functions.castZQ.apply a))
+        (Functions.castQR.apply (Functions.castZQ.apply b)) := by
+  rcases a with _ | a <;> rcases b with _ | b <;>
+    simp [Value.mul, Function1.apply, Function2.apply, Functions.mulZ, Functions.castZQ,
+      Functions.castQR]
+
+theorem cast_mul_rational (a b : Option ℚ) :
+    Functions.castQR.apply (Functions.mulQ.apply a b) =
+      Value.mul (Functions.castQR.apply a) (Functions.castQR.apply b) := by
+  rcases a with _ | a <;> rcases b with _ | b <;>
+    simp [Value.mul, Function1.apply, Function2.apply, Functions.mulQ, Functions.castQR]
+
+/-- So the casts of a power are the power of the casts. -/
+theorem cast_pow_natural (a : Option ℕ) (n : ℕ) :
+    Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply
+        (a.map (fun x => x ^ n)))) =
+      (Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply a))).map
+        (fun x => x ^ n) := by
+  rcases a with _ | a <;>
+    simp [Function1.apply, Functions.castNZ, Functions.castZQ, Functions.castQR]
+
+theorem cast_pow_integer (a : Option ℤ) (n : ℕ) :
+    Functions.castQR.apply (Functions.castZQ.apply (a.map (fun x => x ^ n))) =
+      (Functions.castQR.apply (Functions.castZQ.apply a)).map (fun x => x ^ n) := by
+  rcases a with _ | a <;> simp [Function1.apply, Functions.castZQ, Functions.castQR]
+
+theorem cast_pow_rational (a : Option ℚ) (n : ℕ) :
+    Functions.castQR.apply (a.map (fun x => x ^ n)) =
+      (Functions.castQR.apply a).map (fun x => x ^ n) := by
+  rcases a with _ | a <;> simp [Function1.apply, Functions.castQR]
+
+/-- A square and a cube are two and three factors, for every definedness
+pattern. -/
+theorem power_two (v : Option ℝ) : v.map (fun x => x ^ 2) = Value.mul v v := by
+  rcases v with _ | v <;> simp [Value.mul, pow_two]
+
+theorem power_three (v : Option ℝ) :
+    v.map (fun x => x ^ 3) = Value.mul v (Value.mul v v) := by
+  rcases v with _ | v <;> simp [Value.mul]; ring
+
 /-- A cast bracket of a number is a real mask of that number: a natural
 number below all three casts, an integer below two, a rational below one. -/
 theorem bracket_natural (g : Option Bool) (k : Option ℕ) (n : ℕ) (q : ℚ)

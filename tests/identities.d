@@ -91,7 +91,13 @@ Example[] examples(){
 		Example("ImaginarySquare","cimag(z^2)","2*creal(z)*cimag(z)"),
 		Example("ConjugateEquality","z=conj(z)","cimag(z)=0"),
 		Example("ComplexSqrtBranch","csqrt(z)*csqrt(w)","csqrt(z)*csqrt(w)"),
-		Example("ComplexOddPowerUnsafe","z^3=w^3","z^3=w^3")
+		Example("ComplexOddPowerUnsafe","z^3=w^3","z^3=w^3"),
+		// A power of a masked term is the masked power, so equal masked
+		// factors that are joined into a power keep their mask in front.
+		Example("MaskPower","([p]*x)^3","[p]*x^3"),
+		Example("MaskPowerFactors","([p]*x)*([p]*x)","[p]*x^2"),
+		Example("MaskPowerScope","[q]*(([p]*x)*([p]*x))","[q∧p]*x^2"),
+		Example("MaskPowerComplement","([y≤t]*x)^2+[t<y]*x^2","x^2")
 	];
 }
 private Term deepSum(Arena a,uint count=512){

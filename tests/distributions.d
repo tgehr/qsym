@@ -1546,7 +1546,24 @@ private Case[] cases(){
 	Case("CastSumExponential","∫dx [0≤x]*[x≤2]*e^(-x)*([x≤1]+[1<x]*2)*λ[x]","ℝ","-2·exp(-2)+exp(-1)+1"),
 	Case("CastSumHalfLine","∫dx [0≤x]*e^(-x)*([x≤a]+[a<x]*2)*λ[x]","ℝ","[0≤a]·(exp(-a)+1)+[a<0]·2"),
 	Case("CastSumUnbounded","∫dx ([0≤x]*[x≤a]+[0≤x]*2)*λ[x]","ℝ"),
-	Case("CastSumProduct","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)*([x≤b]+[b<x]*3)*λ[x]","ℝ"),
+	Case("SumFactorsProduct","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)*([x≤b]+[b<x]*3)*λ[x]","ℝ",
+		"[a<1∧0≤a]·([b<a∧0≤b]·b+[a≤b]·a)+[0≤a∧a<1]·([a<b∧b<1]·(-6·b+6)+[b<1∧a<b]·(-2·a+2·b)+[1≤b]·(-2·a+2)+[b≤a]·(-6·a+6))+[0≤b∧b<1]·([a<1∧b<a]·(3·a-3·b)+[1≤a]·(-3·b+3))+[a<0]·([b<1∧0≤b]·(2·b)+[0≤b∧b<1]·(-6·b+6)+[b<0]·6+[1≤b]·2)+[b<0]·([a<1∧0≤a]·(3·a)+[1≤a]·3)+[1≤a]·([b<1∧0≤b]·b+[1≤b])"),
+	Case("SumFactorsProductSame","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)*([x≤a]+[a<x]*3)*λ[x]","ℝ","[a<1∧0≤a]·a+[0≤a∧a<1]·(-6·a+6)+[a<0]·6+[1≤a]"),
+	Case("SumFactorsOnes","∫dx [0≤x]*[x≤1]*(1+[x≤a])*(1+[x≤b])*λ[x]","ℝ","[a<1∧0≤a]·(a+[b<a∧0≤b]·b+[a≤b]·a)+[b<1∧0≤b]·b+[1≤a]·([b<1∧0≤b]·b+[1≤b]+1)+[1≤b]+1"),
+	Case("SumFactorsInteger","∫dx [0≤x]*[x≤1]*(1-[x≤a])*(1-[x≤b])*λ[x]","ℝ","[a<1∧0≤a]·(-a+[b<a∧0≤b]·b+[a≤b]·a)+[b<1∧0≤b]·-b+[1≤a]·([b<1∧0≤b]·b+[1≤b]-1)+[1≤b]·-1+1"),
+	Case("SumFactorsRational","∫dx [0≤x]*[x≤1]*([x≤a]/2+[a<x]/3)*([x≤a]/5+[a<x]/7)*λ[x]","ℝ","[a<1∧0≤a]·(a·(1/10))+[0≤a∧a<1]·(-a·(1/21)+1/21)+[a<0]·(1/21)+[1≤a]·(1/10)"),
+	Case("SumFactorsSquare","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)^2*λ[x]","ℝ","[a<1∧0≤a]·a+[0≤a∧a<1]·(-4·a+4)+[a<0]·4+[1≤a]"),
+	Case("SumFactorsSquareInteger","∫dx [0≤x]*[x≤1]*([x≤a]-[a<x]*2)^2*λ[x]","ℝ","[a<1∧0≤a]·a+[0≤a∧a<1]·(-4·a+4)+[a<0]·4+[1≤a]"),
+	Case("SumFactorsSquareRational","∫dx [0≤x]*[x≤1]*([x≤a]/2+[a<x]/3)^2*λ[x]","ℝ","[a<1∧0≤a]·(a·(1/4))+[0≤a∧a<1]·(-a·(1/9)+1/9)+[a<0]·(1/9)+[1≤a]·(1/4)"),
+	Case("SumFactorsSquareWeight","∫dx [0≤x]*[x≤1]*x*([x≤a]+[a<x]*2)^2*λ[x]","ℝ","[a<1∧0≤a]·(1/2·a^2)+[0≤a∧a<1]·(-2·a^2+2)+[1≤a]·(1/2)+[a<0]·2"),
+	Case("SumFactorsSquareBounds","∫dx ([0≤x]*[x≤a]+[1≤x]*[x≤b]*2)^2*λ[x]","ℝ","[0≤a]·a+[1≤a]·([b<a∧1≤b]·(4·b-4)+[a≤b]·(4·a-4))+[1≤b]·(4·b-4)"),
+	Case("SumFactorsCube","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)^3*λ[x]","ℝ","[a<1∧0≤a]·a+[0≤a∧a<1]·(-8·a+8)+[a<0]·8+[1≤a]"),
+	Case("SumFactorsMixed","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)^2*([x≤a]+3)*λ[x]","ℝ","[a<1∧0≤a]·(4·a)+[0≤a∧a<1]·(-12·a+12)+[a<0]·12+[1≤a]·4"),
+	Case("SumFactorsFourth","∫dx [0≤x]*[x≤1]*([x≤a]+[a<x]*2)^4*λ[x]","ℝ"),
+	Case("SumFactorsReal","∫dx [0≤x]*[x≤1]*([x≤a]*x+[a<x]*2)*([x≤a]*x+[a<x]*3)*λ[x]","ℝ","[a<1∧0≤a]·(1/3·a^3)+[0≤a∧a<1]·(-6·a+6)+[1≤a]·(1/3)+[a<0]·6"),
+	Case("SumFactorsRealSquare","∫dx [0≤x]*[x≤1]*([x≤a]*x+[a<x]*2)^2*λ[x]","ℝ","[a<1∧0≤a]·(1/3·a^3)+[0≤a∧a<1]·(-4·a+4)+[1≤a]·(1/3)+[a<0]·4"),
+	Case("SumFactorsRealCube","∫dx [0≤x]*[x≤1]*([x≤a]*x+[a<x]*2)^3*λ[x]","ℝ","[a<1∧0≤a]·(1/4·a^4)+[0≤a∧a<1]·(-8·a+8)+[1≤a]·(1/4)+[a<0]·8"),
+	Case("SumFactorsMasked","∫dx [0≤x]*[x≤1]*([x≤a]*x)^2*λ[x]","ℝ","[a<1∧0≤a]·(1/3·a^3)+[1≤a]·(1/3)"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3227,13 +3244,12 @@ private void run(string directory){
 		// numbers, each an observation between bounds of its own. Under a
 		// common mask that mask goes under the sum first, and so does a factor
 		// of the sum; the bounds of a summand may then compete. A summand
-		// beyond a single bound keeps the integral, and so does a product of
-		// two such sums, which stays below the casts.
+		// beyond a single bound keeps the integral.
 		if(c.name.indexOf("CastSum")==0){
 			enum src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
-			bool retained=among("CastSumUnbounded","CastSumProduct");
+			bool retained=among("CastSumUnbounded");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0)!=retained,c.name~" sum of observations");
 			enforce(has("cast_add_natural ")==among("CastSum","CastSumThree","CastSumCompeting","CastSumClosed","CastSumMany","CastSumOne","CastSumMixed","CastSumBound","CastSumWeight","CastSumExponential","CastSumHalfLine"),c.name~" sum of natural numbers below three casts");
@@ -3244,6 +3260,32 @@ private void run(string directory){
 			enforce((certificate.indexOf("Value.mul_add ")>=0)==among("CastSumWeight","CastSumExponential","CastSumHalfLine"),c.name~" factor of the sum");
 			enforce(has("third_second_piece ")==among("CastSumRational","CastSumCompeting","CastSumCompetingInteger","CastSumMany","CastSumOne","CastSumMixed","CastSumBound","CastSumWeight"),c.name~" bounds of a summand that compete");
 			enforce(has("same_side_piece ")==among("CastSumHalfLine"),c.name~" bounds of a summand on one side");
+		}
+		// A product and a power of sums of brackets. Below the casts they are
+		// a product and a power of a lesser sort; the casts are multiplicative
+		// for every definedness pattern, so they go to the factors and to the
+		// base, where they meet the sums. A square and a cube of a sum with a
+		// masked summand are two and three factors, and a product of such sums
+		// goes under them, one summand of each at a time. The simplifier joins
+		// the masks of each product, where a power of a masked term is the
+		// masked power, and the summands whose masks exclude each other
+		// vanish. A fourth power keeps the integral.
+		if(c.name.indexOf("SumFactors")==0){
+			enum src="Distribution.StepSource.";
+			bool among(string[] names...){ foreach(name;names) if(c.name=="SumFactors"~name) return true; return false; }
+			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
+			bool retained=among("Fourth");
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_pieces")>=0)==(!retained&&!among("Masked")),c.name~" sum of observations");
+			enforce(has("cast_mul_natural ")==among("Product","ProductSame","Ones","Mixed"),c.name~" product of natural numbers below three casts");
+			enforce(has("cast_mul_integer ")==among("Integer"),c.name~" product of integers below two casts");
+			enforce(has("cast_mul_rational ")==among("Rational"),c.name~" product of rationals below one cast");
+			enforce(has("cast_pow_natural ")==among("Square","SquareWeight","SquareBounds","Cube","Mixed"),c.name~" power of a natural number below three casts");
+			enforce(has("cast_pow_integer ")==among("SquareInteger"),c.name~" power of an integer below two casts");
+			enforce(has("cast_pow_rational ")==among("SquareRational"),c.name~" power of a rational below one cast");
+			enforce(has("power_two ")==among("Square","SquareInteger","SquareRational","SquareWeight","SquareBounds","Mixed","RealSquare"),c.name~" square of a sum");
+			enforce(has("power_three ")==among("Cube","RealCube"),c.name~" cube of a sum");
+			if(among("Masked","Real")) enforce(certificate.indexOf("r_real_mask_pow")>=0,c.name~" power of a masked term");
 		}
 		// A summand of a sum of observations with several bounds on one side:
 		// the two cases of the order of two of its bounds, each such a summand

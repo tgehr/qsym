@@ -346,6 +346,13 @@ theorem r_real_mask_power (v_p : Option (Ty.denote .bool)) (v_n : Nat) :
 
 #qsym_check_axioms r_real_mask_power
 
+theorem r_real_mask_pow (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_n : Nat) :
+    Value.Refines ((Value.mask v_p v_x).map (fun x => x ^ (v_n + (1)))) (Value.mask v_p (v_x.map (fun x => x ^ (v_n + (1))))) := qsym_cached% by
+  cases v_p <;> cases v_x
+  all_goals qsym_rule
+
+#qsym_check_axioms r_real_mask_pow
+
 theorem r_real_mask_mul_left (v_p : Option (Ty.denote .bool)) (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) :
     Value.Refines (Value.mul (Value.mask v_p v_x) v_y) (Value.mask v_p (Value.mul v_x v_y)) := qsym_cached% by
   cases v_p <;> cases v_x <;> cases v_y

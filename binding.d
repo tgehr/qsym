@@ -2150,16 +2150,20 @@ final class Bindings{
 		if(tail.proof.length) proof="(Eq.trans "~proof~" (congrArg₂ Value.add rfl "~tail.proof~"))";
 		return Spread(sum.id,proof);
 	}
-	// A sum of a lesser sort below its casts to the reals, also under masks:
-	// of natural numbers below all three casts, of integers below two, of
-	// rationals below one. The simplifier writes a sum of brackets so. The
-	// number of casts so far says which sum is meant.
+	// A sum of a lesser sort below its casts to the reals, also under masks,
+	// as a factor of a product and as the base of a power of that sort: of
+	// natural numbers below all three casts, of integers below two, of
+	// rationals below one. The simplifier writes a sum of brackets so, and a
+	// product and a power of such sums. The number of casts so far says
+	// which sum is meant.
 	private bool sumBelowCasts(uint x,size_t casts,uint depth=0){
 		bool call(uint i,Builtin f){ auto q=nodes[i]; if(q.op!=BoundOp.primitive) return false; auto v=arena.view(arena.at(q.data)); return v.op==Op.builtin&&v.value==f; }
 		if(depth>64||nodes[x].op!=BoundOp.primitive) return false;
 		auto q=nodes[x];
 		if(casts==1&&call(x,Builtin.castZQ)||casts==2&&call(x,Builtin.castNZ)) return sumBelowCasts(q.a,casts+1,depth+1);
 		if(arena.view(arena.at(q.data)).op==Op.mask) return sumBelowCasts(q.b,casts,depth+1);
+		if(arena.view(arena.at(q.data)).op==Op.pow) return sumBelowCasts(q.a,casts,depth+1);
+		if(call(x,casts==3?Builtin.mulN:casts==2?Builtin.mulZ:Builtin.mulQ)) return sumBelowCasts(q.a,casts,depth+1)||sumBelowCasts(q.b,casts,depth+1);
 		return call(x,casts==3?Builtin.addN:casts==2?Builtin.addZ:Builtin.addQ);
 	}
 	// Whether a weight has such a sum. Decided without building anything.
@@ -2172,8 +2176,9 @@ final class Bindings{
 		}
 		return castsSum(q.a,depth+1)||q.b!=uint.max&&castsSum(q.b,depth+1);
 	}
-	// The casts of such a sum go to its summands, through the masks around
-	// it: a cast is additive and commutes with a mask for every definedness
+	// The casts of such a sum go to its summands, through the masks, the
+	// products and the powers around it: a cast is additive and
+	// multiplicative, and it commutes with a mask, for every definedness
 	// pattern, so the weight is the same at every point. What remains below
 	// the casts is a bracket of a number, or whatever the sum has that is
 	// not such a sum. None where the weight has no such sum. With `under`,
@@ -2204,6 +2209,22 @@ final class Bindings{
 					auto proof="("~src~"cast_add_"~kind~" "~under(q.a)~" "~under(q.b)~")",rest=congr("Value.add",a.proof,b.proof);
 					return Spread(result.id,rest.length?"(Eq.trans "~proof~" "~rest~")":proof);
 				}
+				if(call(x,casts.length==3?Builtin.mulN:casts.length==2?Builtin.mulZ:Builtin.mulQ)&&sumBelowCasts(x,casts.length)){
+					auto a=push(casts,q.a,depth+1),b=push(casts,q.b,depth+1);
+					auto result=primitive(arena.mul(arena.real_(1),arena.real_(1),true),[at(a.id),at(b.id)]);
+					if(!under) return Spread(result.id);
+					auto proof="("~src~"cast_mul_"~kind~" "~under(q.a)~" "~under(q.b)~")",rest=congr("Value.mul",a.proof,b.proof);
+					return Spread(result.id,rest.length?"(Eq.trans "~proof~" "~rest~")":proof);
+				}
+				if(isOp(x,Op.pow)&&sumBelowCasts(q.a,casts.length)){
+					auto exponent=arena.view(arena.at(q.data)).value;
+					auto inner=push(casts,q.a,depth+1);
+					auto result=primitive(arena.pow(arena.real_(0),cast(uint)exponent),[at(inner.id)]);
+					if(!under) return Spread(result.id);
+					auto proof="("~src~"cast_pow_"~kind~" "~under(q.a)~" "~to!string(exponent)~")";
+					if(inner.proof.length) proof="(Eq.trans "~proof~" (congrArg "~valueOperation(nodes[result.id])~" "~inner.proof~"))";
+					return Spread(result.id,proof);
+				}
 			}
 			auto leaf=at(x); foreach_reverse(c;casts) leaf=primitive(arena.at(nodes[c].data),[leaf]);
 			return Spread(leaf.id);
@@ -2223,12 +2244,14 @@ final class Bindings{
 		return r.id==id?Spread.init:r;
 	}
 	// Whether a product or a mask in a weight has a sum with a masked
-	// summand to go under. Decided without building anything.
+	// summand to go under, or a power with a small exponent has such a sum
+	// as its base. Decided without building anything.
 	private bool spreadsSum(uint id){
 		auto real_=scalarType(Sort.real_);
 		bool isOp(uint i,Op op){ auto q=nodes[i]; return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op&&type(at(i))==real_; }
 		bool sum(uint i){ return isOp(i,Op.add)&&(maskedSummand(nodes[i].a)||maskedSummand(nodes[i].b)); }
 		auto q=nodes[id];
+		if(isOp(id,Op.pow)){ auto exponent=arena.view(arena.at(q.data)).value; return exponent>=2&&exponent<=3&&(sum(q.a)||spreadsSum(q.a)); }
 		if(isOp(id,Op.add)) return spreadsSum(q.a)||spreadsSum(q.b);
 		if(isOp(id,Op.mul)) return sum(q.a)||sum(q.b)||spreadsSum(q.a)||spreadsSum(q.b);
 		return isOp(id,Op.mask)&&(sum(q.b)||spreadsSum(q.b));
@@ -2251,7 +2274,7 @@ final class Bindings{
 		void mark(uint i){
 			if(source.get(i,false)) return;
 			source.set(i,true); auto mask=isOp(i,Op.mask);
-			if(mask) source.set(nodes[i].a,true); else if(isOp(i,Op.add)||isOp(i,Op.mul)) mark(nodes[i].a);
+			if(mask) source.set(nodes[i].a,true); else if(isOp(i,Op.add)||isOp(i,Op.mul)||isOp(i,Op.pow)) mark(nodes[i].a);
 			if(mask||isOp(i,Op.add)||isOp(i,Op.mul)) mark(nodes[i].b);
 		}
 		if(under) mark(id);
@@ -2276,6 +2299,24 @@ final class Bindings{
 		}
 		Spread visit(uint i){
 			auto mul=isOp(i,Op.mul),mask=isOp(i,Op.mask);
+			if(isOp(i,Op.pow)){
+				// A power of a sum with a masked summand, with a small exponent,
+				// is that many factors, and the product goes under the sums.
+				auto exponent=arena.view(arena.at(nodes[i].data)).value;
+				if(exponent<2||exponent>3) return Spread(i);
+				auto base=visit(nodes[i].a); if(base.id==uint.max) return base;
+				if(!sum(base.id)) return Spread(i);
+				enum names=["power_two","power_three"];
+				auto step=!under?"":"(Distribution.StepSource."~names[cast(size_t)exponent-2]~" "~value(base.id)~")";
+				if(under&&base.proof.length) step=trans("(congrArg "~valueOperation(nodes[i])~" "~base.proof~")",step);
+				auto p=Spread(base.id);
+				foreach(k;1..exponent){
+					auto next=product(base.id,p.id,false); if(next.id==uint.max) return next;
+					// The factors so far are spread first, under the one in front.
+					p=Spread(next.id,trans(k==1?"":congr("Value.mul","",p.proof),next.proof));
+				}
+				return Spread(p.id,trans(step,p.proof));
+			}
 			if(!mul&&!mask&&!isOp(i,Op.add)) return Spread(i);
 			auto l=mask?Spread(nodes[i].a):visit(nodes[i].a); if(l.id==uint.max) return l;
 			auto r=visit(nodes[i].b); if(r.id==uint.max) return r;
@@ -6789,7 +6830,7 @@ final class Bindings{
 			auto body=solution.from[0],kinks=absoluteKinks(body);
 			if(!kinks.length&&!spreadsSum(body)&&!castsSum(body)) return BoundTerm.init;
 			auto cut=kinks.length?splitAt(body,kinks,null).id:body,lifted=liftCasts(cut,null);
-			auto source=lifted.id!=uint.max?lifted.id:cut,spread=spreadProducts(source,16,null);
+			auto source=lifted.id!=uint.max?lifted.id:cut,spread=spreadProducts(source,32,null);
 			if(spread.id==uint.max||spread.id==body) return BoundTerm.init;
 			auto opts=Options(DensityMode.preserve,true),inner=context(at(body));
 			auto index=freshScalarIndex(body),argument=arena.variable(Sort.real_,index);
@@ -14427,7 +14468,7 @@ final class Bindings{
 						auto lift=liftCasts(source,&under);enforce(lift.id==s.lifted&&lift.proof.length,"missing casts of a sum");
 						cut=cut.length?"(Eq.trans "~cut~" "~lift.proof~")":lift.proof;source=s.lifted;
 					}
-					auto spread=spreadProducts(source,16,&under);
+					auto spread=spreadProducts(source,32,&under);
 					enforce(spread.id!=uint.max&&(cut.length||spread.proof.length),"missing factor of a sum");
 					if(cut.length)spread.proof=spread.proof.length?"(Eq.trans "~cut~" "~spread.proof~")":cut;
 					// Each summand in its normal form, under the guard of its domain;

@@ -48,6 +48,7 @@ rewrite real_mask_add(p:𝔹,x:ℝ,y:ℝ):[p]·x+[p]·y⇒[p]·(x+y);
 rewrite real_mask_complement(p:𝔹,x:ℝ):[p]·x+[¬p]·x⇒x;
 rewrite real_mask_le_complement(a:ℝ,b:ℝ,x:ℝ):[a≤b]·x+[b<a]·x⇒x;
 rewrite real_mask_power(p:𝔹,n:NatParam):[p]^(n+1)⇒[p];
+rewrite real_mask_pow(p:𝔹,x:ℝ,n:NatParam):([p]·x)^(n+1)⇒[p]·x^(n+1);
 rewrite real_mask_mul_left(p:𝔹,x:ℝ,y:ℝ):mulR(maskR(p,x),y)⇒[p]·(x·y);
 rewrite real_mask_mul_right(p:𝔹,x:ℝ,y:ℝ):mulR(x,maskR(p,y))⇒[p]·(x·y);
 rewrite real_mask_nested(p:𝔹,q:𝔹,x:ℝ):[p]·([q]·x)⇒[p∧q]·x;
