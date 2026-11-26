@@ -3034,13 +3034,13 @@ final class Bindings{
 		auto a=scalarBody(restoreBody(num,inner,k),succ),b=scalarBody(restoreBody(den,inner,k),succ),minus=arena.real_(-1);
 		auto opts=Options(DensityMode.preserve,true); opts.expandScalarEmbeddings=true;
 		opts.maxRewrites=2048; opts.maxAlgebraWork=65536;
-		foreach(i,factor;[num,den]){
+		BoundTerm certify(Term factor,bool reverse){
 			auto body=restoreBody(factor,inner,k);
-			if(!depends(body,0)) continue;
+			if(!depends(body,0)) return BoundTerm.init;
 			auto initial=simplify(arena,scalarBody(body,z));
-			if(initial.exhausted||!arena.isNumber(initial.output)||arena.number(initial.output).zero) continue;
+			if(initial.exhausted||!arena.isNumber(initial.output)||arena.number(initial.output).zero) return BoundTerm.init;
 			auto q=arena.number(initial.output).re;
-			auto gain=arena.real_(i?q:Rational(1)/q),w=i?arena.inv(factor):factor;
+			auto gain=arena.real_(reverse?q:Rational(1)/q),w=reverse?arena.inv(factor):factor;
 			if(q!=Rational(1)) w=arena.mul(gain,w,true);
 			auto candidate=restoreBody(w,inner,k),base=scalarBody(candidate,z);
 			bool checked(Term term,long wanted,out ScalarDomain cert){
@@ -3051,14 +3051,14 @@ final class Bindings{
 				cert=ScalarDomain(term,domain,value,index,Sort.natural); return true;
 			}
 			ScalarDomain baseProof;
-			if(!checked(base,1,baseProof)) continue;
+			if(!checked(base,1,baseProof)) return BoundTerm.init;
 			auto u=factor,v=scalarBody(body,succ);
 			// Move the variable denominators out of the equality. Their actual
 			// domains still need to hold at every positive source index.
-			auto cross=arena.add(arena.mul(a,i?v:u,true),arena.mul(minus,arena.mul(b,i?u:v,true),true),true);
+			auto cross=arena.add(arena.mul(a,reverse?v:u,true),arena.mul(minus,arena.mul(b,reverse?u:v,true),true),true);
 			ScalarDomain[] evidence=[baseProof];
 			if(polynomialZero(arena,cross)){
-				auto denominator=i?arena.mul(b,arena.mul(u,v,true),true):b;
+				auto denominator=reverse?arena.mul(b,arena.mul(u,v,true),true):b;
 				auto reciprocal=arena.inv(denominator),domainOpts=opts;
 				// Retain the nonnegativity visible in natural operands first.
 				domainOpts.expandScalarEmbeddings=false;
@@ -3066,7 +3066,7 @@ final class Bindings{
 				if(domain.exhausted||domain.output!=arena.boolean(true)) domain=simplifyDomain(arena,reciprocal,[],opts);
 				if(!domain.exhausted&&domain.output==arena.boolean(true)){
 					auto valid=ScalarDomain(reciprocal,domain);
-					valid.product=new ProductStep(nextRate.id,gain.id,rational,swapped,i!=0,q!=Rational(1));
+					valid.product=new ProductStep(nextRate.id,gain.id,rational,swapped,reverse,q!=Rational(1));
 					auto identity=ScalarDomain(cross); identity.polynomial=true;
 					evidence~=[valid,identity];
 				}
@@ -3074,14 +3074,48 @@ final class Bindings{
 			if(evidence.length==1){
 				auto next=scalarBody(candidate,succ);
 				auto residual=arena.add(arena.mul(nextRate,w,true),arena.mul(minus,next,true),true);
-				ScalarDomain step; if(!checked(residual,0,step)) continue;
+				ScalarDomain step; if(!checked(residual,0,step)) return BoundTerm.init;
 				evidence~=step;
 			}
 			witness=cast(uint)checks.length; checks~=evidence;
 			auto f=hint(lambda(candidate),"n");
 			return primitive(arena.mul(arena.real_(1),arena.real_(1),true),[apply(f,arg),seed]);
 		}
-		return BoundTerm.init;
+		foreach(i,factor;[num,den]){
+			auto solved=certify(factor,i!=0); if(solved!=BoundTerm.init) return solved;
+		}
+		// A ratio of equally sloped affine factors shifted by m visits leaves
+		// m endpoint factors. Build the polynomial in Horner form and use
+		// the same base and successor certificates as for a single factor.
+		Rational slope,offset,otherSlope,otherOffset;
+		if(!integralAffine(arena,num,k,slope,offset)||!integralAffine(arena,den,k,otherSlope,otherOffset)||
+			slope.zero||slope!=otherSlope) return BoundTerm.init;
+		auto gap=(offset-otherOffset)/slope;
+		// Bound the size of the explicit polynomial independently of the recursion depth.
+		if(!gap.small||gap.integer < -8||gap.integer > 8) return BoundTerm.init;
+		bool reverse=gap.integer<0; auto width=reverse?-gap.integer:gap.integer;
+		if(width<2) return BoundTerm.init;
+		Rational[] coefficients=[Rational(1)];
+		foreach(j;1..width+1){
+			auto intercept=(reverse?offset:otherOffset)+slope*Rational(j);
+			auto productCoefficients=new Rational[coefficients.length+1];
+			foreach(power,q;coefficients){
+				productCoefficients[power]=productCoefficients[power]+intercept*q;
+				productCoefficients[power+1]=productCoefficients[power+1]+slope*q;
+			}
+			coefficients=productCoefficients;
+		}
+		// Normalize direct weights before building the expression. For a
+		// reciprocal, retain the integer factors for the nonzero-domain proof.
+		auto atZero=coefficients[0];
+		if(atZero.zero) return BoundTerm.init;
+		if(!reverse) foreach(ref q;coefficients) q=q/atZero;
+		auto factor=arena.real_(coefficients[$-1]),realIndex=arena.castTo(k,Sort.real_);
+		foreach_reverse(q;coefficients[0..$-1]){
+			factor=arena.mul(realIndex,factor,true);
+			if(!q.zero) factor=arena.add(factor,arena.real_(q),true);
+		}
+		return certify(factor,reverse);
 	}
 	// Observe a countdown without constructing each finite presentation.
 	// A captured scale is inspected only on positive indices.

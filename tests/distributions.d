@@ -1500,6 +1500,18 @@ private Case[] cases(){
 	Case("VaryingEmission","λ(k:ℕ).massD("~discountedAtoms("k")~")","ℕ→ℝ","λ(k:ℕ). ((1/2)^k·(2·2^k-2):ℝ)"),
 	Case("ConvolutionSymbolic","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("k","r","δ((3:ℝ))")~"))","ℝ→ℕ→ℝ"),
 	Case("ConvolutionTwo","λ(r:ℝ).massD(weightD(λ(x:ℝ).x,"~discountedAtoms("2","r","δ((3:ℝ))")~"))","ℝ→ℝ","λ(r:ℝ). 3·r^2+r+2"),
+	Case("GapProductPair","λ(k:ℕ).massD("~scaledSteps("(n+2)/n")~")","ℕ→ℝ","λ(k:ℕ). (k·(1/2·k+3/2)+1:ℝ)"),
+	Case("GapProductReverse","λ(k:ℕ).massD("~scaledSteps("n/(n+3)")~")","ℕ→ℝ","λ(k:ℕ). (6·(k·(k·(k+6)+11)+6)⁻¹:ℝ)"),
+	Case("GapProductShift","λ(k:ℕ).massD("~scaledSteps("(n+5)/(n+2)")~")","ℕ→ℝ","λ(k:ℕ). (k·(k·(1/60·k+1/5)+47/60)+1:ℝ)"),
+	Case("GapProductMillion","massD("~scaledSteps("(n+2)/n","1000000")~")","ℝ","500001500001"),
+	Case("GapProductReciprocalAt","massD("~scaledSteps("n/(n+3)","4")~")","ℝ","1/35"),
+	Case("GapProductNonunitSlope","massD("~scaledSteps("(3*n+7)/(3*n+1)","1")~")","ℝ","5/2"),
+	Case("GapProductWide","λ(k:ℕ).massD("~scaledSteps("(n+8)/n")~")","ℕ→ℝ"),
+	Case("GapProductWideInverse","λ(k:ℕ).massD("~scaledSteps("n/(n+8)")~")","ℕ→ℝ"),
+	Case("GapProductSeed","defined(massD("~scaledSteps("(n+2)/n","3","undefined(Distribution(ℝ))")~"))","𝔹","false"),
+	Case("GapProductPole","λ(k:ℕ).massD("~scaledSteps("(n+1)/(n-1)")~")","ℕ→ℝ"),
+	Case("GapProductHitsPole","defined(massD("~scaledSteps("(n+1)/(n-1)","2")~"))","𝔹","false"),
+	Case("GapProductHalfStep","λ(k:ℕ).massD("~scaledSteps("(2*n+4)/(2*n+1)")~")","ℕ→ℝ"),
 	Case("ProductCrossForward","λ(k:ℕ).massD("~scaledSteps("(2*n+5)/(2*n+3)")~")","ℕ→ℝ","λ(k:ℕ). (1/5·(2·k+5):ℝ)"),
 	Case("ProductCrossReverse","λ(k:ℕ).massD("~scaledSteps("(2*n+3)/(2*n+5)")~")","ℕ→ℝ","λ(k:ℕ). (5·(2·k+5)⁻¹:ℝ)"),
 	Case("ProductCrossSquared","λ(k:ℕ).massD("~scaledSteps("(2*n+5)^2/(2*n+3)^2")~")","ℕ→ℝ","λ(k:ℕ). (1/25·(2·k+5)^2:ℝ)"),
@@ -1677,6 +1689,12 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name.indexOf("GapProduct")==0){
+			bool solved=c.name!="GapProductPole"&&c.name!="GapProductHitsPole"&&c.name!="GapProductHalfStep";
+			enforce((certificate.indexOf("Distribution.product_step_cross ")>=0)==solved,c.name);
+			if(c.name!="GapProductHitsPole") enforce((text.indexOf("μ")<0)==solved,c.name);
+			if(c.name=="GapProductMillion") enforce(certificate.length<125_000,c.name~" expanded visits");
+		}
 		if(c.name.indexOf("ProductCross")==0){
 			enforce(certificate.indexOf("Distribution.product_step_cross ")>=0&&text.indexOf("μ")<0,c.name);
 			if(c.name=="ProductCrossReversedR") enforce(certificate.indexOf("Distribution.product_ratio_comm ")>=0,c.name);
