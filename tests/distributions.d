@@ -1413,6 +1413,14 @@ private Case[] cases(){
 	Case("ShiftOrbitStart","λ(a:ℕ).massD("~shift("a")~")","ℕ→ℝ","λ(a:ℕ). (1:ℝ)"),
 	Case("ShiftOrbitZeroCharge","massD("~shift("0","n+1","0","2")~")","ℝ","0"),
 	Case("ShiftOrbitMissingProbe","massD(weightD(λ(n:ℕ).undefined(ℝ),"~shift("0","n+1","0","0")~"))","ℝ","undefined(ℝ)"),
+	Case("EmittingSeries","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((3:ℝ)),scaleD(1/2,f(n sub 1))))(k))","ℕ→ℝ","λ(k:ℕ). [k≠0]·(-2·(1/2)^k+2)"),
+	Case("EmittingWeighted","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((5:ℝ)) else addD(scaleD(1/2,f(n sub 1)),δ((2:ℝ))))(k)))","ℕ→ℝ","λ(k:ℕ). [k=0]·5+[k≠0]·((1/2)^k+4)"),
+	Case("EmittingThousand","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else addD(δ((2:ℝ)),scaleD(1,f(n sub 1))))(1000))","ℝ","1001"),
+	Case("EmittingSigned","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((3:ℝ)),scaleD(-1,f(n sub 1))))(k))","ℕ→ℝ","λ(k:ℕ). [k≠0]·(-1/2·(-1)^k+1/2)"),
+	Case("EmittingUnused","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else addD(undefined(Distribution(ℝ)),scaleD(undefined(ℝ),f(n sub 1))))(0))","ℝ","1"),
+	Case("EmittingMissing","defined(massD(weightD(λ(x:ℝ).x⁻¹,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((2:ℝ)) else addD(δ((0:ℝ)),scaleD(0,f(n sub 1))))(2))))","𝔹","false"),
+	Case("EmittingParameter","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((1:ℝ)),scaleD(r,f(n sub 1))))(k))","ℝ→ℕ→ℝ"),
+	Case("VaryingEmission","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then zeroD(ℝ) else addD(δ((n:ℝ)),scaleD(1/2,f(n sub 1))))(k))","ℕ→ℝ"),
 	Case("CapturedScale","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(k))","ℝ→ℕ→ℝ","λ(r:ℝ). λ(k:ℕ). [k≠0]·r^k+[k=0]"),
 	Case("CapturedScaleMoment","λ(r:ℝ).λ(k:ℕ).massD(weightD(λ(x:ℝ).x^2,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r⁻¹,f(n sub 1)))(k)))","ℝ→ℕ→ℝ","λ(r:ℝ). λ(k:ℕ). [k≠0]·(9·(r⁻¹)^k)+[k=0]·9"),
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
@@ -1526,6 +1534,10 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
+		if(c.name.indexOf("Emitting")==0)
+			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name=="VaryingEmission")
+			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")<0,c.name~" index-dependent emission");
 		if(c.name.indexOf("CapturedScale")==0||c.name=="CountdownPartialRatioZero"||c.name=="CountdownPartialRatioOne")
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")

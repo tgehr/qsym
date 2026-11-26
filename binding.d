@@ -2983,6 +2983,13 @@ final class Bindings{
 		if(!builtin(nz,Builtin.nonzeroZ)||!builtin(nodes[nz].a,Builtin.castNZ)||!variableAt(nodes[nodes[nz].a].a,0))
 			return BoundTerm.init;
 		auto scale=nodes[branch.c];
+		uint emission=uint.max;
+		if(scale.op==BoundOp.distributionAdd){
+			bool first=depends(at(scale.a),1);
+			emission=first?scale.b:scale.a;
+			if(depends(at(emission),0)||depends(at(emission),1)) return BoundTerm.init;
+			scale=nodes[first?scale.a:scale.b];
+		}
 		if(scale.op!=BoundOp.distributionScale||depends(at(scale.a),0)||depends(at(scale.a),1)) return BoundTerm.init;
 		auto call=nodes[scale.b];
 		if(call.op!=BoundOp.apply||!variableAt(call.a,1)||!builtin(call.b,Builtin.subN)) return BoundTerm.init;
@@ -2996,7 +3003,24 @@ final class Bindings{
 		auto r=substitute(at(scale.a),ctx,env),arg=at(application.b),zero=arena.real_(0);
 		auto power=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[r,arg]);
 		auto product=primitive(arena.mul(zero,zero,true),[power,seed]);
-		if(node(r).op==BoundOp.scalar&&arena.isNumber(arena.at(node(r).data))) return product;
+		if(emission!=uint.max){
+			auto visits=observedMass(substitute(at(emission),ctx,env),operations);
+			auto lit=node(r);
+			if(lit.op==BoundOp.scalar&&arena.isNumber(arena.at(lit.data))&&arena.number(arena.at(lit.data)).re!=Rational(1)){
+				auto gain=Rational(1)/(Rational(1)-arena.number(arena.at(lit.data)).re);
+				auto mul=arena.mul(zero,zero,true),add=arena.add(zero,zero,true);
+				auto limit=primitive(mul,[scalar(ctx,arena.real_(gain)),visits]);
+				auto neg=primitive(mul,[scalar(ctx,arena.real_(-1)),limit]);
+				product=primitive(add,[limit,primitive(mul,[power,primitive(add,[seed,neg])])]);
+			}else{
+				auto inner=push(ctx,scalarType(Sort.natural)),i=variable(inner,0);
+				uint[] shift; foreach(j;0..depth(ctx)) shift~=j+1;
+				auto powers=primitive(arena.call(Builtin.powRN,[zero,arena.natural_(0)]),[rename(r,inner,shift),i]);
+				auto total=finiteSum(lambda(powers),arg);
+				auto term=primitive(arena.mul(zero,zero,true),[total,visits]);
+				product=primitive(arena.add(zero,zero,true),[product,term]);
+			}
+		}else if(node(r).op==BoundOp.scalar&&arena.isNumber(arena.at(node(r).data))) return product;
 		env[0]=arg;
 		return conditional(substitute(at(branch.a),ctx,env),seed,product);
 	}
@@ -12174,12 +12198,23 @@ final class Bindings{
 					uint[] ops;
 					auto call=nodes[observationInput(n.a,ops)],target=nodes[p.to];
 					bool partial=target.op==BoundOp.conditional;
-					auto product=partial?nodes[target.c]:target,ratio=nodes[product.a].a;
-					auto base=nodes[product.b].a;
-					foreach(id;ops) base=nodes[id].op==BoundOp.distributionWeight?nodes[base].b:nodes[base].a;
-					auto f=to!string(call.a)~dimArg~" γ ξ ρ";
+					auto branch=nodes[nodes[nodes[call.a].a].a],step=nodes[branch.c];
+					bool emitting=step.op==BoundOp.distributionAdd;
+					auto positive=partial?nodes[target.c]:target;
+					bool centered=emitting&&nodes[nodes[positive.a].a].op==BoundOp.scalar;
+					auto product=emitting?nodes[centered?positive.b:positive.a]:positive,ratio=nodes[product.a].a;
+					uint observedInput(uint mass){
+						auto d=nodes[mass].a;
+						foreach(id;ops) d=nodes[id].op==BoundOp.distributionWeight?nodes[d].b:nodes[d].a;
+						return d;
+					}
+					auto base=observedInput(partial?target.b:product.b),f=to!string(call.a)~dimArg~" γ ξ ρ";
 					string law,scale;
-					if(partial){
+					if(emitting){
+						law="observe_emitting_countdown "~massObserver(ops,false);
+						auto e=observedInput(nodes[centered?positive.a:positive.b].b);
+						scale="("~name(e)~".eval ξ ρ) ("~name(ratio)~".eval ξ ρ) "~(depends(at(step.a),1)?"true":"false");
+					}else if(partial){
 						law="observe_partial_scale_countdown "~massObserver(ops,false);
 						scale="("~name(ratio)~".eval ξ ρ)";
 					}else{
@@ -12187,8 +12222,19 @@ final class Bindings{
 						auto literal=arena.at(nodes[ratio].data),q=SourceCertificates.q(arena.number(literal).re),id=to!string(literal.id);
 						scale="(n"~id~".eval ξ) (Numeric.calculate_sound ξ n"~id~" "~q~" rfl)";
 					}
-					proof=".ofEq (fun ξ ρ => Distribution."~law~" (rec"~f~") (fixed"~f~") ("~
-						name(base)~".eval ξ ρ) "~scale~" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ))"; break;
+					auto application="Distribution."~law~" (rec"~f~") (fixed"~f~") ("~name(base)~".eval ξ ρ) "~scale~
+						" (fun _ _ => rfl) ("~name(call.b)~".eval ξ ρ)";
+					if(centered){
+						auto limit=nodes[positive.a],q=arena.number(arena.at(nodes[ratio].data)).re;
+						auto neg=nodes[nodes[product.b].b];
+						string numeric(uint d){
+							auto id=nodes[d].data,v=arena.number(arena.at(id)).re;
+							return "(Numeric.calculate_sound ξ n"~to!string(id)~" "~SourceCertificates.q(v)~" rfl)";
+						}
+						application="Eq.trans ("~application~") (Distribution.geometric_emission "~SourceCertificates.q(q)~" (of_decide_eq_true rfl) "~
+							numeric(ratio)~" "~numeric(limit.a)~" "~numeric(neg.a)~" ("~name(target.b)~".eval ξ ρ) ("~name(limit.b)~".eval ξ ρ) ("~name(call.b)~".eval ξ ρ))";
+					}
+					proof=".ofEq (fun ξ ρ => "~application~")"; break;
 				}
 				case BindingRule.distributionDefinedDirac:
 					proof=".ofEq (fun ξ ρ => congrArg some (Option.isSome_map' (f := Distribution.Presentation.dirac) (x := "~name(nodes[n.a].a)~".eval ξ ρ)))"; break;
