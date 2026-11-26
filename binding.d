@@ -1957,6 +1957,15 @@ final class Bindings{
 		auto r=visit(body,0);
 		return r.id==body?Spread.init:r;
 	}
+	// A product with a sum that mentions the axis, or a power of such a
+	// sum, somewhere in a weight: what the expanding mode of the scalar
+	// simplifier multiplies out.
+	private bool multipliable(uint id,uint depth=0){
+		auto q=nodes[id]; if(depth>64||q.op!=BoundOp.primitive&&q.op!=BoundOp.guard||!depends(at(id),0)) return false;
+		bool sum(uint i){ return primitiveOp(i,Op.add)&&depends(at(i),0); }
+		if(primitiveOp(id,Op.mul)&&(sum(q.a)||sum(q.b))||primitiveOp(id,Op.pow)&&sum(q.a)) return true;
+		return multipliable(q.a,depth+1)||q.b!=uint.max&&multipliable(q.b,depth+1);
+	}
 	// A point of the axis that a weight excludes: `x≠a`, which is the term
 	// `x-a` being not zero, and in general a term of degree one in the axis
 	// with a slope that is not zero. Such a term vanishes at one point, so
@@ -7118,6 +7127,10 @@ final class Bindings{
 		// an observation inside a larger term: such a step is taken only if
 		// what it leaves can be observed. Defined after those steps, below.
 		bool delegate(BoundTerm,uint) @safe observable;
+		// The weight of an observation as the scalar simplifier rewrites it,
+		// in its usual mode or with products and powers of sums multiplied
+		// out; none where that changes nothing. Defined below.
+		BoundTerm delegate(BoundTerm,bool) @safe rewritten;
 		// A guard that does not mention the axis leaves the observation. The
 		// mask is not strict, so this is an equation even where the inner
 		// observation is missing. Used only if the rest can then be observed.
@@ -7181,6 +7194,28 @@ final class Bindings{
 			auto ctx=context(inside),weight=lambda(restoreBody(arena.castTo(value.output,arena.sort(source)),inner,argument));
 			return observable(distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]),depth+1);
 		}
+		// The observation of a weight whose value is a product or a power of
+		// sums that mention the axis, `(a+x)^2`, `(1-e^(-x))·e^(-x)`: the
+		// observation of the weight with these multiplied out, which is the
+		// same weight at every point. The scalar simplifier keeps such a
+		// value as it is written, and the steps above read a sum of terms;
+		// so this is tried where they have failed, and used only if the
+		// result can then be observed.
+		BoundTerm multipliedMass(BoundTerm t,uint depth) @safe {
+			auto n=node(t);
+			if(depth>8||n.op!=BoundOp.distributionMass||nodes[n.a].op!=BoundOp.distributionWeight||nodes[nodes[n.a].b].op!=BoundOp.distributionLebesgue) return BoundTerm.init;
+			auto weight=nodes[nodes[n.a].a]; if(weight.op!=BoundOp.lambda||!multipliable(weight.a)) return BoundTerm.init;
+			auto wide=rewritten(at(nodes[n.a].a),true); if(wide==BoundTerm.init) return BoundTerm.init;
+			// The steps will see what the simplifier makes of the result in
+			// its usual mode. Where that is the weight as it was, nothing is
+			// gained.
+			auto settled=wide;
+			foreach(round;0..4){ auto again=rewritten(settled,false); if(again==BoundTerm.init) break; settled=again; }
+			if(settled.id==nodes[n.a].a) return BoundTerm.init;
+			auto ctx=context(t);
+			BoundTerm mass(BoundTerm w){ return distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[w,at(nodes[n.a].b)])]); }
+			return observable(mass(settled),depth+1)?mass(wide):BoundTerm.init;
+		}
 		bool observed(BoundTerm inside,uint depth) @safe {
 			IntegralSolution trial; bool found=integrateSteps(inside,trial)!=BoundTerm.init;
 			if(!found){ trial=IntegralSolution.init; found=integratePolynomials(inside,trial)!=BoundTerm.init; }
@@ -7190,7 +7225,8 @@ final class Bindings{
 			if(!found){ trial=IntegralSolution.init; found=integrateMissingPoint(inside,trial)!=BoundTerm.init; }
 			if(!found){ trial=IntegralSolution.init; found=integratePieces(inside,trial)!=BoundTerm.init; }
 			if(!found){ trial=IntegralSolution.init; found=distributeMass(inside,trial,false)!=BoundTerm.init; }
-			return found||massGuard(inside,depth)!=BoundTerm.init||splitBounds(inside,depth)!=BoundTerm.init||solveMass(inside,depth)!=BoundTerm.init||pointObserved(inside,depth);
+			return found||massGuard(inside,depth)!=BoundTerm.init||splitBounds(inside,depth)!=BoundTerm.init||solveMass(inside,depth)!=BoundTerm.init||pointObserved(inside,depth)||
+				multipliedMass(inside,depth)!=BoundTerm.init;
 		}
 		observable=&observed;
 		bool affineNaturalParts(BoundTerm t,out BoundTerm coefficient,out BoundTerm offset,out BoundTerm index){
@@ -7802,7 +7838,10 @@ final class Bindings{
 			extra=cast(uint)scalarDomains.length; scalarDomains~=zero; scalarDomains~=ScalarDomain(absent,missing);
 			return at(n.b);
 		}
-		BoundTerm pointwise(BoundTerm binder,out uint extra){
+		// With `expand`, in the mode of the scalar simplifier that multiplies
+		// products and powers of sums out. Without `commit` nothing is
+		// recorded: the result only, to see whether it helps.
+		BoundTerm pointwise(BoundTerm binder,out uint extra,bool expand=false,bool commit=true){
 			auto body=at(node(binder).a),ctx=context(body),param=type(variable(ctx,0)); Sort sort; bool scalarParam;
 			foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex,Sort.boolean])
 				if(param==scalarType(s)){ sort=s; scalarParam=true; break; }
@@ -7906,15 +7945,18 @@ final class Bindings{
 					ScalarResult value; BoundTerm simplified;
 					if(mode==BoundOp.scalar){
 						if(arena.isNumber(source)) return BoundTerm.init;
-						value=simplify(arena,source,Options(DensityMode.preserve,true)); exhausted|=value.exhausted;
+						auto options=Options(DensityMode.preserve,commit); options.expandPowers=expand;
+						value=simplify(arena,source,options);
+						if(commit) exhausted|=value.exhausted; else if(value.exhausted) return BoundTerm.init;
 						if(arena.castTo(value.output,arena.sort(source))==source) return BoundTerm.init;
 						simplified=restoreBody(arena.castTo(value.output,arena.sort(source)),ctx,argument);
 						// Re-embedding may change only where closed scalar subtrees
 						// are split into binder primitives. Do not cycle on that split.
 						if(simplified==t||scalarBody(simplified,argument)==source) return BoundTerm.init;
 					}
-					auto d=simplifyDomain(arena,source,[],Options(DensityMode.preserve,true)); exhausted|=d.exhausted;
-					extra=cast(uint)scalarDomains.length; scalarDomains~=ScalarDomain(source,d,value,index,sort,path,mode);
+					auto d=simplifyDomain(arena,source,[],Options(DensityMode.preserve,commit));
+					if(commit){ exhausted|=d.exhausted; extra=cast(uint)scalarDomains.length; scalarDomains~=ScalarDomain(source,d,value,index,sort,path,mode); }
+					else if(d.exhausted) return BoundTerm.init;
 					if(mode==BoundOp.defined) return restoreBody(d.output,ctx,argument);
 					if(mode==BoundOp.holds) return restoreBody(arena.and_(d.output,source),ctx,argument);
 					return d.output==arena.boolean(true)?simplified:guard(restoreBody(d.output,ctx,argument),simplified);
@@ -7935,6 +7977,7 @@ final class Bindings{
 			if(output==BoundTerm.init&&sort!=Sort.boolean) output=rewrite(body,[],true);
 			return output==BoundTerm.init?output:inheritHint(binder,node(binder).op==BoundOp.lambda?lambda(output):set(output));
 		}
+		rewritten=(BoundTerm weight,bool expand) @safe { uint none; return pointwise(weight,none,expand,false); };
 		BoundTerm rayCoordinate(BoundTerm fn,out uint orientation,out BindingRule rule){
 			auto f=node(fn);
 			if(f.op!=BoundOp.lambda||!primitiveOp(f.a,Op.mask)) return BoundTerm.init;
@@ -9364,6 +9407,17 @@ final class Bindings{
 						solution=IntegralSolution.init; evaluated=normalizeNullEdits(at(result.output),solution);
 						uint[3] domains; auto point=evaluated==BoundTerm.init?excludePoint(at(result.output),domains):BoundTerm.init;
 						if(point!=BoundTerm.init){ next=point; rule=BindingRule.distributionMassPoint; predicateDomain=domains[0]; excludedZero=domains[1]; extra=domains[2]; }
+						auto wide=evaluated==BoundTerm.init&&point==BoundTerm.init?multipliedMass(at(result.output),0):BoundTerm.init;
+						if(wide!=BoundTerm.init){
+							// The weight changes pointwise, and the observation
+							// by congruence around it.
+							auto source=nodes[current.a]; uint index;
+							auto weight=pointwise(at(source.a),index,true);
+							enforce(weight.id==nodes[nodes[wide.id].a].a,"the multiplied weight changed");
+							auto inner=emit(BindingRule.pointwise,source.a,weight.id,uint.max,uint.max,index);
+							next=wide; rule=BindingRule.congr;
+							predicateDomain=emit(BindingRule.congr,current.a,nodes[wide.id].a,inner,emit(BindingRule.refl,source.b,source.b));
+						}
 					}
 				}
 				if(evaluated!=BoundTerm.init){ next=evaluated; extra=cast(uint)integrals.length; integrals~=solution; rule=solution.ae?BindingRule.distributionIntegralAE:BindingRule.distributionInterval; }

@@ -1335,7 +1335,8 @@ private Case[] cases(){
 	Case("RateBetweenTermsProduct","∫dx [0≤x≤t]*(m*x+1)*(x-1)*exp(-x/s)*λ[x]","ℝ",
 		"[0≤t]·(guard(s≠0,2·m·s^3-m·s^2+s^2+(-m·s·t^2-2·t·m·s^2-2·m·s^3+t·m·s+m·s^2-t·s-s^2+s)·exp(-t·s⁻¹)-s))"),
 	Case("RateBetweenTermsDegree","∫dx [0≤x≤1]*(x^17+m)*exp(-r*x)*λ[x]","ℝ"),
-	Case("RateBetweenTermsFactor","∫dx [0≤x≤1]*(x+m)*(exp(-r*x)+1)*λ[x]","ℝ"),
+	Case("RateBetweenTermsFactor","∫dx [0≤x≤1]*(x+m)*(exp(-r*x)+1)*λ[x]","ℝ",
+		"m·([r≠0]·(-r⁻¹·exp(-r)+r⁻¹)+[r=0])+m+[r≠0]·((-r⁻¹-(r^2)⁻¹)·exp(-r)+(r^2)⁻¹)+[r=0]·(1/2)+1/2"),
 	Case("RateSum","∫dx [0≤x]*(exp(-r*x)+exp(-x))*λ[x]","ℝ"),
 	Case("LimitOffset","lim[x→∞] exp(a-x)","ℝ","0"),
 	Case("LimitOffsetBottom","lim[x→-∞] x*exp(a+b+3*x)","ℝ","0"),
@@ -1362,7 +1363,7 @@ private Case[] cases(){
 	Case("CurveOffsetLinear","∫dx [0≤x]*x*exp(a-x)*exp(-x^2+x)*λ[x]","ℝ","1/2·exp(a)"),
 	Case("CurveOffsetSum","∫dx [0≤x]*(x*exp(-x^2+a)+exp(b-x))*λ[x]","ℝ","1/2·exp(a)+exp(b)"),
 	Case("CurveOffsetBounds","∫dx [u≤x≤v]*(2*x+1)*exp(x^2+x+w)*λ[x]","ℝ","[u≤v]·((-exp(u·(u+1))+exp(v·(v+1)))·exp(w))"),
-	Case("CurveMean","∫dx [m≤x]*(x-m)*exp(-(x-m)^2)*λ[x]","ℝ"),
+	Case("CurveMean","∫dx [m≤x]*(x-m)*exp(-(x-m)^2)*λ[x]","ℝ","1/2"),
 	Case("CurveCurvature","∫dx [0≤x]*x*exp(-a*x^2)*λ[x]","ℝ"),
 	Case("DomainHalfLine","∫dx [0≤x]*exp(-x)/a*λ[x]","ℝ","guard(a≠0,a⁻¹)"),
 	Case("DomainInterval","∫dx [0≤x]*[x≤1]*exp(x)/a*λ[x]","ℝ","guard(a≠0,(e-1)·a⁻¹)"),
@@ -1657,6 +1658,24 @@ private Case[] cases(){
 	Case("TermPointNestedValue","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*[x≠y]*x*y*λ[x]*λ[y]","ℝ"),
 	Case("TermPointNestedCases","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*([x=y]*3+[x≠y]*2)*λ[x]*λ[y]","ℝ"),
 	Case("TermPointExcludedSquare","∫dx [0≤x]*[x≤1]*[x^2≠a]*λ[x]","ℝ"),
+	Case("MultipliedSquare","∫dx [0≤x]*[x≤1]*(a+x)^2*λ[x]","ℝ","a^2+a+1/3"),
+	Case("MultipliedCube","∫dx [0≤x]*[x≤1]*(a+x)^3*λ[x]","ℝ","a^3+3/2·a^2+a+1/4"),
+	Case("MultipliedProduct","∫dx [0≤x]*[x≤1]*(a+x)*(b+x)*λ[x]","ℝ","a·b+a·(1/2)+b·(1/2)+1/3"),
+	Case("MultipliedFactor","∫dx [0≤x]*[x≤1]*a*(b+x)*λ[x]","ℝ","a·b+a·(1/2)"),
+	Case("MultipliedSlope","∫dx [0≤x]*[x≤1]*(a*x+b)^2*λ[x]","ℝ","1/3·a^2+a·b+b^2"),
+	Case("MultipliedBound","∫dx [0≤x]*[x≤a]*(x-a)^2*λ[x]","ℝ","[0≤a]·(1/3·a^3)"),
+	Case("MultipliedCompeting","∫dx [0≤x]*[x≤1]*[x≤b]*(a+x)^2*λ[x]","ℝ","[b<1∧0≤b]·(1/3·b^3+a·b^2+b·a^2)+[1≤b]·(a^2+a+1/3)"),
+	Case("MultipliedCondition","∫dx [0≤x]*[x≤1]*[0<c]*(a+x)^2*λ[x]","ℝ","[0<c]·(a^2+a+1/3)"),
+	Case("MultipliedExcluded","∫dx [0≤x]*[x≤1]*[x≠b]*(a+x)^2*λ[x]","ℝ","a^2+a+1/3"),
+	Case("MultipliedDomain","∫dx [0≤x]*[x≤1]*(a+x)^2*(1/a)*λ[x]","ℝ","guard(a≠0,a+1+a⁻¹·(1/3))"),
+	Case("MultipliedTermDomain","∫dx [0≤x]*[x≤1]*(x+a)*(x+log(b))*λ[x]","ℝ","guard(0<b,a·log(b)+a·(1/2)+1/2·log(b)+1/3)"),
+	Case("MultipliedSum","∫dx ([0≤x]*[x≤1]*(a+x)^2+[1≤x]*[x≤2]*3)*λ[x]","ℝ","a^2+a+10/3"),
+	Case("MultipliedHalfLine","∫dx [0≤x]*e^(-x)*(a+x)^2*λ[x]","ℝ","a^2+2·a+2"),
+	Case("MultipliedExponentials","∫dx [0≤x]*(1-e^(-2*x))*e^(-x)*λ[x]","ℝ","2/3"),
+	Case("MultipliedNested","∫dx ∫dy [0≤x]*e^(-x)*[0≤y]*e^(-y)*[x+y≤a]*λ[x]*λ[y]","ℝ","[0≤a]·(-a·exp(-a)-exp(-a)+1)"),
+	Case("MultipliedNestedRates","∫dx ∫dy [0≤x]*e^(-x)*[0≤y]*e^(-2*y)*[y≤x]*λ[x]*λ[y]","ℝ","1/3"),
+	Case("MultipliedKept","∫dx [0≤x]*[x≤1]*(a+x)^2*sin(x)*λ[x]","ℝ","∫dx ([0≤x∧x≤1]·((a+x)^2·sin(x)))·λ[x]"),
+	Case("MultipliedOuter","∫dx ∫dy [0≤x]*[x≤1]*[0≤y]*[y≤1]*(x+y)^2*λ[x]*λ[y]","ℝ"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3023,11 +3042,18 @@ private void run(string directory){
 		// shape: R'+E'·R=P has a polynomial solution. Above a bound the exponent
 		// must descend. The constant part of an exponent of degree at most two
 		// may be a term that does not mention the axis: its exponential is a
-		// scale. With an exponent that grows above a bound and with a mean or
-		// a curvature that is such a term the integral stays, and without such
-		// a solution away from the vertex of a Gaussian.
-		if(c.name.indexOf("Curve")==0){
-			bool retained=c.name=="CurveHalfLineGrowing"||c.name=="CurveMean"||c.name=="CurveCurvature";
+		// scale. With an exponent that grows above a bound and with a
+		// curvature that is such a term the integral stays, and without such
+		// a solution away from the vertex of a Gaussian. With a mean that is
+		// such a term the weight is not of this shape as it is written; it is
+		// multiplied out, and is then a sum of moments of a Gaussian above a
+		// bound.
+		if(c.name=="CurveMean"){
+			enforce(text.indexOf("∫")<0,c.name~": "~text);
+			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_halfline")>=0&&certificate.indexOf("Distribution.StepSource.HalfLineTerms.symbolicErfPolynomial")>=0,
+				c.name~" moments above a bound");
+		}else if(c.name.indexOf("Curve")==0){
+			bool retained=c.name=="CurveHalfLineGrowing"||c.name=="CurveCurvature";
 			bool half=c.name!="CurveInterval"&&c.name!="CurveSymbolicBounds"&&c.name!="CurveGrowing"&&c.name!="CurveTwoScales"&&c.name!="CurveCdf"&&
 				c.name!="CurveOffsetInterval"&&c.name!="CurveOffsetBounds";
 			bool shifted=c.name.indexOf("CurveOffset")==0,scaled=c.name=="CurveScaled"||c.name=="CurveTwoScales"||shifted;
@@ -3379,6 +3405,22 @@ private void run(string directory){
 			enforce(has("Distribution.StepSource.beyond_domain_piece ")==among("Sum"),c.name~" domain of a term of a summand behind a bound");
 			enforce(has("Distribution.DensityProgram.mass_between_domain ")==between,c.name~" domain of a term behind a lower and an upper bound");
 			enforce(has("Distribution.DensityProgram.mass_beyond_domain ")==(!between&&!retained),c.name~" domain of a term behind a single bound");
+		}
+		// A weight whose value is a product or a power of sums that mention
+		// the axis: `(a+x)^2`, `(a+x)·(b+x)`, `(1-e^(-2·x))·e^(-x)`. The
+		// scalar simplifier keeps such a value as it is written, and the
+		// steps of an observation read a sum of terms. So where they have
+		// failed, the weight is multiplied out by the expanding mode of the
+		// simplifier, the same weight at every point, if it can then be
+		// observed: a polynomial whose coefficients are terms, between
+		// bounds or in front of a rate, and the product of exponentials that
+		// an inner integral leaves. A weight that cannot be observed either
+		// way stays as it is written. The variable of an outer integral is
+		// not a term for the simplifier.
+		if(c.name.indexOf("Multiplied")==0){
+			bool retained=c.name=="MultipliedKept"||c.name=="MultipliedOuter";
+			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
+			enforce((certificate.indexOf("Distribution.DensityProgram.presentation_mass_")>=0)!=retained,c.name~" certificate");
 		}
 		// A point that a weight excludes, `[x≠a]`, and a weight on a point
 		// only, `[x=a]`: the exclusion is the term `x-a` being not zero, and
@@ -3854,12 +3896,17 @@ private void run(string directory){
 		// difference of an antiderivative of the polynomial. The two stand
 		// under the masks of that test. The certificate has the table and
 		// that antiderivative, and at each bound the monomials of both.
-		if(c.name.indexOf("RateBetween")==0){
-			bool retained=c.name=="RateBetweenDegree"||c.name=="RateBetweenTermsDegree"||c.name=="RateBetweenTermsFactor";
+		if(c.name=="RateBetweenTermsFactor"){
+			// A product with a sum of such terms is not read as it is
+			// written: it is multiplied out, and is then a sum of them.
+			enforce(text.indexOf("∫")<0,c.name~": "~text);
+			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_interval")>=0&&certificate.indexOf("Distribution.StepSource.IntervalTerms.rate (")>=0&&
+				certificate.indexOf("Distribution.StepSource.IntervalTerms.add")>=0,c.name~" sum of rates between bounds");
+		}else if(c.name.indexOf("RateBetween")==0){
+			bool retained=c.name=="RateBetweenDegree"||c.name=="RateBetweenTermsDegree";
 			// Under a polynomial whose coefficients are terms the integral is
 			// linear in them: each meets the table and the antiderivative of
-			// its power times the rational polynomial. A product with a sum is
-			// not distributed.
+			// its power times the rational polynomial.
 			bool terms=c.name.indexOf("RateBetweenTerms")==0&&!retained;
 			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.rate (")>=0)==(!retained&&!terms),c.name~" rate between bounds");
 			enforce((certificate.indexOf("Distribution.StepSource.IntervalTerms.rateTerms (")>=0)==terms,c.name~" coefficients that are terms");
