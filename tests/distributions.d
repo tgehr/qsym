@@ -484,6 +484,16 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("RepeatedIversonAdjacent","λ(p:𝔹).λ(h:ℕ→ℝ).[p]·([p]·h(0))","𝔹→(ℕ→ℝ)→ℝ","λ(p:𝔹). λ(h:ℕ→ℝ). [p]·h(0)"),
+	Case("RepeatedIversonBetween","λ(p:𝔹).λ(q:𝔹).λ(h:ℕ→ℝ).[p]·([q]·([p]·h(0)))","𝔹→𝔹→(ℕ→ℝ)→ℝ","λ(p:𝔹). λ(q:𝔹). λ(h:ℕ→ℝ). [p]·([q]·h(0))"),
+	Case("RepeatedIversonThreeGuards","λ(p:𝔹).λ(q:𝔹).λ(r:𝔹).λ(h:ℕ→ℝ).[p]·([q]·([r]·([p]·h(0))))","𝔹→𝔹→𝔹→(ℕ→ℝ)→ℝ","λ(p:𝔹). λ(q:𝔹). λ(r:𝔹). λ(h:ℕ→ℝ). [p]·([q]·([r]·h(0)))"),
+	Case("RepeatedIversonNatural","λ(p:𝔹).λ(q:𝔹).λ(h:ℕ→ℕ).[p]·([q]·([p]·h(0)))","𝔹→𝔹→(ℕ→ℕ)→ℕ","λ(p:𝔹). λ(q:𝔹). λ(h:ℕ→ℕ). [p]·([q]·h(0))"),
+	Case("RepeatedIversonOpaquePredicate","λ(h:ℕ→𝔹).λ(k:ℕ).λ(f:ℕ→ℝ).[h(k)]·([h(k)]·f(k))","(ℕ→𝔹)→ℕ→(ℕ→ℝ)→ℝ","λ(h:ℕ→𝔹). λ(k:ℕ). λ(f:ℕ→ℝ). [h(k)]·f(k)"),
+	Case("RepeatedIversonDistinct","λ(p:𝔹).λ(q:𝔹).λ(h:ℕ→ℝ).[p]·([q]·h(0))","𝔹→𝔹→(ℕ→ℝ)→ℝ","λ(p:𝔹). λ(q:𝔹). λ(h:ℕ→ℝ). [p]·([q]·h(0))"),
+	Case("RepeatedIversonDifferentOrder","λ(p:𝔹).λ(q:𝔹).λ(h:ℕ→ℝ).[p∨q]·([q∨p]·h(0))","𝔹→𝔹→(ℕ→ℝ)→ℝ","λ(p:𝔹). λ(q:𝔹). λ(h:ℕ→ℝ). [p∨q]·([q∨p]·h(0))"),
+	Case("RepeatedIversonMissing","defined([undefined(𝔹)]·([undefined(𝔹)]·(1:ℝ)))","𝔹","false"),
+	Case("RepeatedIversonHidden","defined([false]·([undefined(𝔹)]·([false]·undefined(ℝ))))","𝔹","true"),
+	Case("RepeatedIversonCoordinate","λ(l:ℝ).λ(u:ℝ).∫dx [l≤x<u]·[x≠a]·λ[sinh(exp(x))]","ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). [l<u]·(-sinh(exp(l))+sinh(exp(u)))"),
 	Case("CombinedMassJump","∫dx [0≤x≤1]·[x=a]·λ[[0≤x]·1]","ℝ","[a=0]"),
 	Case("CombinedMassJumpPeriod","∫dx [0≤x≤2*π]·[x≠0]·λ[[0≤x]·1]","ℝ","0"),
 	Case("CombinedMassJumpHit","∫dx [0≤x≤1]·[x=0]·λ[[0≤x]·1]","ℝ","1"),
@@ -2589,6 +2599,12 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("RepeatedIverson")==0){
+			bool repeated=c.name!="RepeatedIversonDistinct"&&c.name!="RepeatedIversonDifferentOrder"&&
+				c.name!="RepeatedIversonMissing"&&c.name!="RepeatedIversonHidden";
+			enforce((certificate.indexOf("Value.UnderMask.sound ")>=0)==repeated,c.name);
+			if(c.name=="RepeatedIversonThreeGuards") enforce(certificate.indexOf("Value.UnderMask.nested ")>=0,c.name);
 		}
 		if(c.name.indexOf("CombinedMass")==0){
 			bool combined=c.name=="CombinedMassJump"||c.name=="CombinedMassJumpPeriod"||c.name=="CombinedMassZero"||

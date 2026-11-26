@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -526,6 +526,21 @@ final class Bindings{
 	private bool primitiveOp(uint id,Op op){
 		auto n=nodes[id];
 		return n.op==BoundOp.primitive&&arena.view(arena.at(n.data)).op==op;
+	}
+	// The outer mask already tests this guard. Any intervening masks keep
+	// their original order and can still hide a missing predicate or payload.
+	private BoundTerm repeatedMask(uint id,out uint[] path,out uint matched){
+		auto outer=nodes[id];
+		for(auto atMask=outer.b;primitiveOp(atMask,Op.mask);atMask=nodes[atMask].b){
+			auto current=nodes[atMask];
+			if(current.a==outer.a){
+				matched=atMask; auto inner=at(current.b);
+				foreach_reverse(k;path) inner=primitive(arena.at(nodes[k].data),[at(nodes[k].a),inner]);
+				return primitive(arena.at(outer.data),[at(outer.a),inner]);
+			}
+			path~=atMask;
+		}
+		return BoundTerm.init;
 	}
 	private struct JumpRays{ uint x,leftTest,rightTest; Term a,b; bool swap; }
 	private bool jumpRays(uint fn,out JumpRays outRays){
@@ -10820,6 +10835,11 @@ final class Bindings{
 				}
 			}
 			if(next!=BoundTerm.init&&steps>=budget){ next=BoundTerm.init; exhausted=true; }
+			if(next==BoundTerm.init&&primitiveOp(result.output,Op.mask)&&primitiveOp(current.b,Op.mask)){
+				uint[] path; uint matched;
+				next=repeatedMask(result.output,path,matched); rule=BindingRule.maskRepeated;
+			}
+
 			if(next!=BoundTerm.init){
 				if(node(next).op==current.op&&(current.op==BoundOp.lambda||current.op==BoundOp.set||current.op==BoundOp.fixed)) inheritHint(at(result.output),next);
 				++steps; auto step=emit(rule,result.output,next.id,predicateDomain,excludedZero,extra);
@@ -14319,6 +14339,14 @@ final class Bindings{
 				case BindingRule.seqScalar:proof=".seqScalar n"~to!string(nodes[n.a].data)~" "~name(n.b)~" (fun _ => ⟨_, rfl⟩)"; break;
 				case BindingRule.seqLam:proof=".seqLam "~name(nodes[n.a].a)~" "~name(n.b); break;
 				case BindingRule.seqSelf:proof=".seqSelf "~name(n.a); break;
+				case BindingRule.maskRepeated:{
+					uint[] path; uint matched;
+					enforce(repeatedMask(p.from,path,matched).id==p.to,"missing repeated mask");
+					string eval(uint id){return " ("~name(id)~".eval ξ ρ)";}
+					auto evidence="(Value.UnderMask.same"~eval(n.a)~eval(nodes[matched].b)~")";
+					foreach_reverse(k;path) evidence="(Value.UnderMask.nested"~eval(nodes[k].a)~" "~evidence~")";
+					proof=".ofEq (fun ξ ρ => Value.UnderMask.sound "~evidence~")"; break;
+				}
 				case BindingRule.shortCircuit:
 					if(n.op==BoundOp.primitive&&n.b!=uint.max&&n.c==uint.max&&nodes[n.b].op==BoundOp.bottom&&conditionalStrict(n,true)){
 						proof=".ofEq (fun ξ ρ => "~binaryNone(valueOperation(n),"("~name(n.a)~".eval ξ ρ)",true)~")"; break;

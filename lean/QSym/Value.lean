@@ -61,6 +61,24 @@ theorem mul_one_right {α : Type} [MulOneClass α] (x : Option α) :
 theorem mul_one_left {α : Type} [MulOneClass α] (x : Option α) :
     mul (some 1) x = x := by cases x <;> simp [mul]
 
+/-- The action of an outer Iverson bracket on its active branch. -/
+def UnderMask {α : Type} (p : Option Bool) (x y : Option α) : Prop :=
+  p = some true → x = y
+
+namespace UnderMask
+variable {α : Type} [Zero α]
+theorem same (p : Option Bool) (v : Option α) : UnderMask p (mask p v) v :=
+  fun hp => hp ▸ rfl
+theorem nested {p : Option Bool} (q : Option Bool) {u v : Option α} (h : UnderMask p u v) :
+    UnderMask p (mask q u) (mask q v) := fun hp => congrArg (mask q) (h hp)
+theorem sound {p : Option Bool} {u v : Option α} (h : UnderMask p u v) :
+    mask p u = mask p v := by
+  rcases p with _ | _ | _
+  · rfl
+  · rfl
+  · exact h rfl
+end UnderMask
+
 theorem mask_true {α : Type} [Zero α] (x : Option α) :
     mask (some true) x = x := rfl
 
