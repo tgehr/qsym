@@ -1372,6 +1372,18 @@ private Case[] cases(){
 	Case("AtomicRetryDensity","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠1}). (0:ℝ)"),
 	Case("AtomicRetryUnitRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(1,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("CountdownGeometric","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k:ℝ)"),
+	Case("ObservedGuardSeed","λ(t:ℝ).massD(weightD(λ(x:ℝ).x,"~reflectAcross("5-x","δ(t)")~"))","ℝ→ℝ","λ(t:ℝ). t·(2/3)+10/3"),
+	Case("ObservedGuardWeight","λ(p:𝔹).massD(weightD(λ(x:ℝ).x,guard(p,δ((3:ℝ)))))","𝔹→ℝ","λ(p:{p:𝔹 | p}). (3:ℝ)"),
+	Case("ObservedGuardMass","λ(p:𝔹).massD(guard(p,δ((3:ℝ))))","𝔹→ℝ","λ(p:{p:𝔹 | p}). (1:ℝ)"),
+	Case("ObservedGuardBind","λ(p:𝔹).massD(bindD(guard(p,δ((3:ℝ))),λ(x:ℝ).scaleD(x,δ(x))))","𝔹→ℝ","λ(p:{p:𝔹 | p}). (3:ℝ)"),
+	Case("ObservedGuardDensity","λ(p:𝔹).densityAtD(guard(p,Λx.[x≠0]·λ[x]),0)","𝔹→ℝ","λ(p:{p:𝔹 | p}). (0:ℝ)"),
+	Case("ObservedGuardPoint","λ(p:𝔹).densityAtD(Λx.[x≠0]·λ[x],guard(p,(1:ℝ)))","𝔹→ℝ","λ(p:{p:𝔹 | p}). (1:ℝ)"),
+	Case("ObservedGuardCritical","defined(densityAtD(guard(true,δ((0:ℝ))),0))","𝔹","false"),
+	Case("ObservedGuardAbsent","defined(massD(weightD(λ(x:ℝ).x,guard(undefined(𝔹),δ((3:ℝ))))))","𝔹","false"),
+	Case("ObservedGuardEmpty","defined(massD(weightD(undefined(ℝ→ℝ),guard(true,zeroD(ℝ)))))","𝔹","false"),
+	Case("ObservedGuardMasked","λ(p:𝔹).∫dx [p]·λ[x]","𝔹→ℝ","λ(p:𝔹). ∫dx [p]·λ[x]"),
+	Case("ObservedGuardUnknown","λ(h:ℝ→ℝ).λ(t:ℝ).massD(weightD(h,guard(t≠0,δ(t))))","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(t:{t:ℝ | t≠0}). h(t)"),
+	Case("ObservedGuardPartialPoint","defined(densityAtD(guard(false,Λx. λ[x]),(1:ℝ)))","𝔹","false"),
 	Case("AffineCycleMass","massD("~reflectAcross()~")","ℝ","2"),
 	Case("AffineCycleFirst","massD(weightD(λ(x:ℝ).x,"~reflectAcross()~"))","ℝ","4"),
 	Case("AffineCycleSecond","massD(weightD(λ(x:ℝ).x^2,"~reflectAcross()~"))","ℝ","12"),
@@ -1719,6 +1731,8 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
+		if(c.name.indexOf("ObservedGuard")==0)
+			enforce((certificate.indexOf("Binding.map_guard_of_strict ")>=0)==(c.name!="ObservedGuardMasked"),c.name);
 		if(c.name.indexOf("AffineCycle")==0){
 			enforce(certificate.indexOf("Distribution.Atomic.dirac_reflection ")>=0&&text.indexOf("μ")<0,c.name);
 			if(c.name=="AffineCyclePartial") enforce(text.indexOf("h(1)")>=0&&text.indexOf("h(4)")>=0,c.name);

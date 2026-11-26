@@ -46,7 +46,7 @@ private enum BindingRule:ubyte{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -7441,6 +7441,22 @@ final class Bindings{
 					return Result(target.id,uint.max);
 				}
 			}
+			if((n.op==BoundOp.distributionMass||n.op==BoundOp.distributionDensityAt)&&steps<budget){
+				bool mass=n.op==BoundOp.distributionMass; uint[] ops;
+				auto source=mass?observationInput(n.a,ops):n.a;
+				bool point=!mass&&nodes[source].op!=BoundOp.guard&&nodes[n.b].op==BoundOp.guard;
+				auto restriction=nodes[point?n.b:source];
+				if(restriction.op==BoundOp.guard){
+					auto d=at(restriction.b),ctx=context(t);
+					auto observed=mass?observedMass(d,ops):distribution(ctx,BoundOp.distributionDensityAt,
+						point?[at(n.a),d]:[d,at(n.b)]);
+					auto target=guard(at(restriction.a),observed);
+					++steps;
+					auto proof=emit(BindingRule.distributionObserveGuard,t.id,target.id,uint.max,uint.max,point?1u:0u);
+					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
+					return Result(target.id,uint.max);
+				}
+			}
 			if(n.op==BoundOp.distributionMass&&steps<budget){
 				BindingRule rule; auto target=shiftMass(t,rule);
 				if(target==BoundTerm.init) target=involutionMass(t,rule);
@@ -12657,6 +12673,20 @@ final class Bindings{
 						}
 					}
 					proof=".ofEq (fun ξ ρ => "~law~")";break;
+				}
+				case BindingRule.distributionObserveGuard:{
+					uint[] ops;
+					bool mass=n.op==BoundOp.distributionMass,point=p.extra==1;
+					auto source=mass?observationInput(n.a,ops):(point?n.b:n.a),g=nodes[source];
+					string observer="_",missing;
+					if(mass) missing="(Distribution.Atomic.Observation.missing "~massObserver(ops,false)~")";
+					else{
+						auto other="("~name(point?n.a:n.b)~".eval ξ ρ)";
+						observer="(fun x => Distribution.densityAtValue "~(point?other~" x":"x "~other)~")";
+						missing="(Distribution.densityAt_none_"~(point?"right ":"left ")~other~")";
+					}
+					proof=".ofEq (fun ξ ρ => Binding.map_guard_of_strict "~observer~" "~missing~" ("~name(g.a)~".eval ξ ρ) ("~name(g.b)~".eval ξ ρ))";
+					break;
 				}
 				case BindingRule.distributionProductCountdown,BindingRule.distributionMassCountdown:{
 					uint[] ops;

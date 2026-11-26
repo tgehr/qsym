@@ -1,7 +1,14 @@
 import QSym.Functions
+import QSym.Binding
 import QSym.Domain
 
 namespace QSym
+
+/-- A strict observation of a guarded input uses exactly the same guard. -/
+theorem Binding.map_guard_of_strict {α β : Type} (o : Option α → Option β) (hn : o none = none)
+    (p : Option Bool) (x : Option α) : o (guardValue p x) = guardValue p (o x) := by
+  unfold guardValue
+  split <;> simp_all
 
 /-- Two strict factors whose product refines one can be removed on its
 certified domain, even when the intervening observation is missing. -/
