@@ -775,5 +775,52 @@ theorem factored_countdown
       simp [Functions.nonzeroZ, Functions.nonzeroN, Functions.castNZ, Function1.apply,
         Value.not, Value.mask, Binding.conditionalValue, hn, SummationElementary.mul_swap (component c x e)]
 
+/-- Fold the charge and the regular part of each visited emission. A missing
+row poisons the charge check only if that row is actually visited. -/
+theorem indexed_countdown
+    (p : Recursion.Program ℕ (D ℝ) (D ℝ)) {fn : Option (ℕ → Option (D ℝ))}
+    (hf : fn = some (FixedPoint.value p.functional)) (b : Option (D ℝ)) (e : Option ℕ → Option (D ℝ))
+    (r : Option ℝ) (hr : r = some 1) (scaled swap : Bool)
+    (step : ∀ g n, p.eval g n = Binding.conditionalValue
+      (Value.not (Functions.nonzeroZ.apply (Functions.castNZ.apply (some n)))) b
+      (let tail := (Functions.subN.apply (some n) (some 1)).bind g
+       let d := if scaled then scaleValue r tail else tail
+       if swap then addValue d (e (some n)) else addValue (e (some n)) d))
+    (arg : Option ℕ) {x bc bw : Option ℝ} {charge regular : ℕ → Option ℝ}
+    (hb : FibreCertificate b x bc bw)
+    (rows : ∀ i, FibreCertificate (e (Functions.addN.apply (some i) (some 1))) x (charge i) (regular i)) :
+    densityAtValue (fn.bind (fun g => arg.bind g)) x =
+      Binding.guardValue (Value.not (Value.nonzero (Value.add bc (Summation.rangeValue (some charge) arg))))
+        (Value.add bw (Summation.rangeValue (some regular) arg)) := by
+  subst fn r
+  let g := FixedPoint.value p.functional
+  obtain ⟨h0, hs⟩ := countdown_equations p b (fun n tail =>
+    let d := if scaled then scaleValue (some 1) tail else tail
+    if swap then addValue d (e (some n)) else addValue (e (some n)) d) step
+  have total (n : ℕ) : FibreCertificate (g n) x
+      (Value.add bc (Summation.finite (Finset.range n) charge))
+      (Value.add bw (Summation.finite (Finset.range n) regular)) := by
+    induction n with
+    | zero => simpa [g, h0, Summation.finite_empty, Value.add_zero_right] using hb
+    | succ n ih =>
+      have prior : FibreCertificate (if scaled then scaleValue (some 1) (g n) else g n) x
+          (Value.add bc (Summation.finite (Finset.range n) charge))
+          (Value.add bw (Summation.finite (Finset.range n) regular)) := by
+        cases scaled
+        · exact ih
+        · simpa only [Value.mul_one_left] using FibreCertificate.scale (some 1) ih
+      have row : FibreCertificate (e (some (n+1))) x (charge n) (regular n) := by
+        simpa [Functions.addN, Function2.apply] using rows n
+      rw [show g (n+1) = _ from hs n, Summation.range_succ, Summation.range_succ, ← Summation.add, ← Summation.add,
+        Summation.add_assoc Value.add Summation.add, Summation.add_assoc Value.add Summation.add]
+      cases swap
+      · exact (Summation.add_comm Value.add Summation.add _ (charge n)) ▸
+          (Summation.add_comm Value.add Summation.add _ (regular n)) ▸ FibreCertificate.add row prior
+      · exact FibreCertificate.add prior row
+  apply FibreCertificate.extract
+  cases arg with
+  | none => cases bc <;> rfl
+  | some n => exact total n
+
 end RealDensityFibre
 end QSym.Distribution
