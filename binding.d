@@ -46,7 +46,7 @@ private enum BindingRule:ubyte{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -1513,6 +1513,14 @@ final class Bindings{
 				return closedFixedArgument(at(n.a))&&closedFixedArgument(at(n.b));
 			default:return false;
 		}
+	}
+	// An application or a reference to an outer binder keeps this operand
+	// outside the single-variable scalar normalizer.
+	private bool needsBindingScalar(uint id){
+		auto n=nodes[id];
+		if(n.op==BoundOp.scalar) return false;
+		if(n.op==BoundOp.variable) return n.data!=0;
+		return n.op!=BoundOp.primitive||needsBindingScalar(n.a)||(n.b!=uint.max&&needsBindingScalar(n.b));
 	}
 	private Term scalarBody(BoundTerm term,Term argument){
 		auto n=node(term);
@@ -8413,6 +8421,16 @@ final class Bindings{
 			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.first||current.op==BoundOp.rest)&&nodes[current.a].op==BoundOp.guard&&guardReady(nodes[current.a].a)){
 				auto g=nodes[current.a]; next=guard(at(g.a),rebuild(at(result.output),ctx,[at(g.b)])); rule=BindingRule.guardMap;
 			}
+			if(next==BoundTerm.init&&current.op==BoundOp.primitive&&type(at(result.output))==scalarType(Sort.real_)){
+				auto op=arena.view(arena.at(current.data)).op;
+				if(op==Op.add||op==Op.mul) foreach(left;[true,false]){
+					auto lit=nodes[left?current.a:current.b],other=left?current.b:current.a;
+					Number v;
+					if(lit.op==BoundOp.scalar&&literalNumber(arena.at(lit.data),v)&&(op==Op.add?v.zero:v.one)&&needsBindingScalar(other)){
+						next=at(other); rule=BindingRule.scalarNeutral; break;
+					}
+				}
+			}
 			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.primitive||current.op==BoundOp.guard)&&current.a!=uint.max&&nodes[current.a].op==BoundOp.bottom){ next=bottom(ctx,type(at(result.output))); rule=BindingRule.shortCircuit; }
 			if(domains&&next==BoundTerm.init){
 				if(current.op==BoundOp.get&&nodes[current.b].op==BoundOp.scalar&&!totalScalar(at(current.b))){
@@ -11921,6 +11939,14 @@ final class Bindings{
 						return "(congrArg₂ "~valueOperation(q)~" "~left~" "~right~")";
 					}
 					proof=(n.op==BoundOp.lambda?".lamPointwise":".setPointwise")~" (fun ξ ρ x => "~wrap(n.a,0)~")"; break;
+				case BindingRule.scalarNeutral:{
+					bool left=n.b==p.to,add=arena.view(arena.at(n.data)).op==Op.add;
+					auto literal=nodes[left?n.a:n.b].data,other="("~name(p.to)~".eval ξ ρ)";
+					auto op=add?"add":"mul",v=add?"zero":"one";
+					auto f="(fun z => Value."~op~" "~(left?"z "~other:other~" z")~")";
+					proof=".ofEq (fun ξ ρ => Eq.trans (congrArg "~f~" (Numeric.calculate_real_"~v~" ξ n"~
+						to!string(literal)~" rfl)) (Value."~op~"_"~v~(left?"_left ":"_right ")~other~"))"; break;
+				}
 				case BindingRule.scalarSimplify:
 					auto d=result.domains[p.extra],prefix="QSym.BindingScalar"~to!string(p.extra);
 					proof=".scalarSimplify n"~to!string(d.input.id)~" n"~to!string(d.result.output.id)~" n"~to!string(arena.castTo(d.value.output,arena.sort(d.input)).id)~
