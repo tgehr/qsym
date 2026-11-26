@@ -110,4 +110,49 @@ theorem probe_increments_presents {v : ℕ → Option (D α)} {s : ℕ → Model
     | none => rfl
     | some z => exact False.elim (absent ((hd.1.defined_probe t).mp (by simp [eq])))
 
+private theorem positiveCharge_infinite (a : α) (t : α → ℝ) :
+    positiveCharge (infiniteModel a).1 t = if 0 < t a then ∞ else 0 := by
+  rw [positiveCharge, tsum_eq_single a (fun x hx => by simp [infiniteModel, atom, hx])]
+  by_cases h : 0 < t a
+  · simp [infiniteModel, atom, h, ENNReal.ofReal_ne_zero_iff.mpr h]
+  · simp [infiniteModel, atom, h, ENNReal.ofReal_of_nonpos (le_of_not_gt h)]
+
+private theorem probe_increments_infinite {v : ℕ → Option (D α)} {s : ℕ → Model α} {a : α}
+    (track : Approximates v s) (zero : v 0 = some .zero) (sup : ⨆ n, s n = infiniteModel a)
+    (t : α → Option ℝ) : probe (incrementSeries v) t = integrate (infiniteAtom a) t := by
+  have dom : (∀ n x, x ∈ (s n).2 → (t x).isSome = true) ↔ (t a).isSome = true := by
+    simpa [infiniteModel] using stage_visits sup t
+  rw [probe_increments_fill track t, if_congr dom rfl rfl, integrate_infiniteAtom]
+  cases ht : t a with
+  | none => simp
+  | some v =>
+    simp only [Option.isSome_some, if_true, Option.some.injEq]
+    let g (y : α) := (t y).getD 0
+    have hval : g a = v := by simp [g, ht]
+    have p := positiveCharge_infinite a g
+    have q := positiveCharge_infinite a (fun y => -g y)
+    rw [hval] at p q
+    have one : positiveCharge (infiniteModel a).1 g ≠ ∞ ∨ positiveCharge (infiniteModel a).1 (fun y => -g y) ≠ ∞ := by
+      rw [p, q]
+      rcases le_total v 0 with h | h
+      · exact Or.inl (by simp [not_lt.mpr h])
+      · exact Or.inr (by simp [not_lt.mpr (neg_nonpos.mpr h)])
+    rw [probe_increments_signed track zero sup g one, p, q]
+    rcases lt_trichotomy v 0 with h | rfl | h
+    · simp [h.ne, not_lt.mpr h.le, neg_pos.mpr h, finiteReal, Value.add, Value.mul]
+    · simp [finiteReal, Value.add, Value.mul]
+    · simp [h.ne', h, not_lt.mpr (neg_nonpos.mpr h.le), finiteReal, Value.add, Value.mul]
+
+/-- The canonical presentation of a chain supremum and its source increments
+give the same partial signed observations, including at an infinite atom. -/
+theorem probe_realizeChain_limit {m : Model α} {s : ℕ → Model α} {v : ℕ → Option (D α)}
+    (track : Approximates v s) (zero : v 0 = some .zero) (sup : ⨆ n, s n = m) (t : α → Option ℝ) :
+    probe (realizeChain m s) t = probe (incrementSeries v) t := by
+  rcases realize_cases m with ⟨d, e, hd⟩ | ⟨a, rfl, e⟩ | e
+  · rw [realizeChain_of_some e, probe_increments_presents track zero sup hd]
+    rfl
+  · rw [realizeChain_of_some e, probe_increments_infinite track zero sup]
+    rfl
+  · exact probe_realizeChain e track t
+
 end QSym.Distribution.Atomic

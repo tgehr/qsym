@@ -161,6 +161,35 @@ theorem shifted_counter_mass : massValue (fixedValue (some shiftCounter)) = some
   have e := probe_kernel_orbit (b := emission) (r := fun _ => 1/2) (next := Nat.succ) (walk_limit 0) (fun _ => some 1)
   exact e.symm.trans walk_mass
 
+-- The two visits repeat forever, so a proof of infinitely many distinct
+-- visited atoms is impossible. The fixed point can still use the orbit.
+private def flipBody (r : ℝ) (d : D Bool) : Option (D Bool) :=
+  addValue (diracValue (some false))
+    (scaleValue (some r) (bindValue (some d) (some fun b => diracValue (some (!b)))))
+
+private theorem flip_orbit {o : Option (D Bool) → Option ℝ} (h : CountableObservation o) (r : ℝ) (hr : 0 ≤ r) :
+    o (fixedValue (some (flipBody r))) = o (orbitSeries (fun b => diracValue (some b)) (fun _ => r) Bool.not false) := by
+  exact h.forward_orbit_on (Transport.bind (fun b => diracValue (some (!b)))) _ r hr Bool.not
+    (fun b => (atom b, {b})) Set.univ (fun _ _ => Set.mem_univ _)
+    (fun b _ => ⟨_, rfl, Represents.dirac b, visited_dirac b⟩) (fun _ _ => rfl) (Set.mem_univ false) (fun _ => rfl)
+
+theorem flip_mass : massValue (fixedValue (some (flipBody (1/2)))) = some 2 := by
+  rw [flip_orbit CountableObservation.mass _ (by norm_num), orbitSeries, CountableObservation.mass.natSum]
+  simp only [reachWeight_const, mass_scaleValue, mass_dirac, QSym.Value.mul, mul_one]
+  rw [QSym.Summation.geometric]
+  norm_num
+
+theorem flip_missing_after_zero :
+    massValue (weightValue (some (fun b => if b then none else some 1)) (fixedValue (some (flipBody 0)))) = none := by
+  let o := fun d => massValue (weightValue (some (fun b : Bool => if b then none else some 1)) d)
+  have obs : CountableObservation o := CountableObservation.mass.weight _
+  change o _ = _
+  rw [flip_orbit obs 0 le_rfl, orbitSeries, obs.natSum]
+  exact QSym.Summation.undefined_term norm _ 1 rfl
+
+#qsym_check_axioms probe_realizeChain_limit
+#qsym_check_axioms flip_mass
+#qsym_check_axioms flip_missing_after_zero
 #qsym_check_axioms CountableObservation.forward_orbit
 #qsym_check_axioms shifted_counter
 #qsym_check_axioms shifted_counter_mass

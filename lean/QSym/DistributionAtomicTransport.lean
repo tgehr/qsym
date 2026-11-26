@@ -1,5 +1,6 @@
 import QSym.DistributionAtomicDivergence
 import QSym.DistributionAtomicOrbit
+import QSym.DistributionAtomicLimit
 
 /-! Transport the recursive distribution before adding this round's emission.
 For example, mapping every emitted natural number to its successor produces
@@ -59,29 +60,22 @@ theorem realize_of_infinite_visits {m : Model α} (h : m.2.Infinite) : realize m
   · exact e
 
 /-- Moving the recursive value along an orbit gives the explicit countable sum
-under every supported scalar observer. Infinite visits rule out the finite and
-single-atom representations, even when the total mass is finite. -/
-theorem CountableObservation.forward_orbit {o : Option (D α) → Option ℝ} (h : CountableObservation o)
+under every supported scalar observer, including when states repeat. -/
+theorem CountableObservation.forward_orbit_on {o : Option (D α) → Option ℝ} (h : CountableObservation o)
     {push : Option (D α) → Option (D α)} (hp : Transport push) (b : ι → Option (D α)) (r : ℝ)
     (hr : 0 ≤ r) (next : ι → ι) (m : Kernel ι α) (states : Set ι) (closed : Set.MapsTo next states states)
     (seed : ∀ a ∈ states, ∃ d, b a = some d ∧ Presents d (m a)) (move : ∀ a ∈ states, push (b a) = b (next a))
-    {x : ι} (hx : x ∈ states) (infinite : (⋃ n : ℕ, (m (next^[n] x)).2).Infinite)
+    {x : ι} (hx : x ∈ states)
     {f : D α → Option (D α)} (body : ∀ d, f d = addValue (b x) (scaleValue (some r) (push (some d)))) :
     o (fixedValue (some f)) = o (orbitSeries b (fun _ => r) next x) := by
-  let g := kernelStep m (fun _ => ENNReal.ofReal r) next
   have lim := orbit_limit_on b (fun _ => r) next m states closed seed (fun _ _ => hr) hx
-  obtain ⟨s, hs, hm⟩ := limitModel_eq_some_iff.mp lim
+  obtain ⟨s, hs, _⟩ := limitModel_eq_some_iff.mp lim
   have actual := funext (hp.fixed_stages b r next states closed move hx body)
   have track : Tracks f s := by rw [Tracks, actual]; exact hs
-  have visits : (g.lfp x).2 = ⋃ n : ℕ, (m (next^[n] x)).2 := by
-    ext y
-    exact (kernel_lfp_visits m _ next x y).trans Set.mem_iUnion.symm
-  have unrepresented : realize (⨆ n, s n) = none := realize_of_infinite_visits (by rw [hm]; exact visits ▸ infinite)
   cases h.finite with
   | absent absent => rw [absent, absent]
   | linear p =>
-    let t := fun a => o (some (.dirac a))
-    rw [fixed_chain track, h.at_chain p _ hs, probe_realizeChain unrepresented hs, probe_orbit_increments]
+    rw [fixed_chain track, h.at_chain p _ hs, probe_realizeChain_limit hs rfl rfl, probe_orbit_increments]
     rw [orbitSeries, probe_nat_sum, h.natSum]
     congr 1
     congr 1
@@ -89,5 +83,15 @@ theorem CountableObservation.forward_orbit {o : Option (D α) → Option ℝ} (h
     obtain ⟨d, hd, pres⟩ := seed (next^[n] x) (closed.iterate n hx)
     rw [probe_scale, p.scale, hd]
     exact congrArg (QSym.Value.mul _) (p.atoms pres.1).symm
+
+/-- Compatibility with certificates that provide an infinite-visit witness. -/
+theorem CountableObservation.forward_orbit {o : Option (D α) → Option ℝ} (h : CountableObservation o)
+    {push : Option (D α) → Option (D α)} (hp : Transport push) (b : ι → Option (D α)) (r : ℝ)
+    (hr : 0 ≤ r) (next : ι → ι) (m : Kernel ι α) (states : Set ι) (closed : Set.MapsTo next states states)
+    (seed : ∀ a ∈ states, ∃ d, b a = some d ∧ Presents d (m a)) (move : ∀ a ∈ states, push (b a) = b (next a))
+    {x : ι} (hx : x ∈ states) (_infinite : (⋃ n : ℕ, (m (next^[n] x)).2).Infinite)
+    {f : D α → Option (D α)} (body : ∀ d, f d = addValue (b x) (scaleValue (some r) (push (some d)))) :
+    o (fixedValue (some f)) = o (orbitSeries b (fun _ => r) next x) :=
+  h.forward_orbit_on hp b r hr next m states closed seed move hx body
 
 end QSym.Distribution.Atomic
