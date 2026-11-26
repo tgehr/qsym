@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionRetryPoint,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionDefinedDirac,distributionDefinedBinary,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -885,14 +885,35 @@ final class Bindings{
 			id=n.op==BoundOp.distributionWeight?n.b:n.a;
 		}
 	}
-	private bool retryPoint(uint id,out uint point,out Rational weight){
-		auto n=nodes[id];
-		if(n.op==BoundOp.distributionDirac){point=n.a;weight=Rational(1);return true;}
-		Rational r;
-		if(n.op==BoundOp.distributionScale&&nonnegativeReal(n.a,r)&&retryPoint(n.b,point,weight)){
-			weight=r*weight;return true;
+	private enum VisitKind { other, empty, one }
+	private struct AtomicVisits { VisitKind kind; uint point; Rational weight; }
+	/// Compute the total weight only when all visited atoms coincide. Scaling
+	/// by zero keeps the visited set, even when a second atom is present.
+	private AtomicVisits atomicVisits(uint id,ref AtomicVisits[uint] memo){
+		if(auto hit=id in memo) return *hit;
+		auto n=nodes[id]; AtomicVisits v;
+		switch(n.op){
+			case BoundOp.distributionZero:v.kind=VisitKind.empty; break;
+			case BoundOp.distributionDirac:v=AtomicVisits(VisitKind.one,n.a,Rational(1)); break;
+			case BoundOp.distributionScale:{
+				Rational weight;
+				if(nonnegativeReal(n.a,weight)){
+					v=atomicVisits(n.b,memo);
+					if(v.kind==VisitKind.one) v.weight=weight*v.weight;
+				}
+				break;
+			}
+			case BoundOp.distributionAdd:{
+				auto a=atomicVisits(n.a,memo),b=atomicVisits(n.b,memo);
+				if(a.kind==VisitKind.empty) v=b;
+				else if(b.kind==VisitKind.empty) v=a;
+				else if(a.kind==VisitKind.one&&b.kind==VisitKind.one&&a.point==b.point)
+					v=AtomicVisits(VisitKind.one,a.point,a.weight+b.weight);
+				break;
+			}
+			default:break;
 		}
-		return false;
+		return memo[id]=v;
 	}
 	BoundTerm fixed(BoundTerm body){
 		auto n=node(body),v=pool.view(type(body));
@@ -7589,15 +7610,21 @@ final class Bindings{
 				}
 			}
 			if(next==BoundTerm.init&&current.op==BoundOp.distributionRetry){
-				Rational r,w; uint point;
+				Rational r;
 				if(nodes[current.b].op==BoundOp.bottom){
 					next=at(current.b);rule=BindingRule.distributionRetryMissing;
 				}else if(nonnegativeReal(current.a,r)){
-					if(nodes[current.b].op==BoundOp.distributionZero){ next=at(current.b);rule=BindingRule.distributionRetryZero; }
-					else if(r<Rational(1)&&retryPoint(current.b,point,w)){
-						auto z=w/(Rational(1)-r);next=distribution(ctx,BoundOp.distributionDirac,[at(point)]);
+					AtomicVisits[uint] shapes;
+					auto v=atomicVisits(current.b,shapes);
+					if(v.kind==VisitKind.empty){
+						next=distribution(ctx,BoundOp.distributionZero,[],pool.view(type(t)).fields[0]);
+						rule=nodes[current.b].op==BoundOp.distributionZero?BindingRule.distributionRetryZero:BindingRule.distributionRetryEmpty;
+					}else if(v.kind==VisitKind.one&&(r<Rational(1)||v.weight==Rational(0))){
+						bool contracts=r<Rational(1);
+						auto z=contracts?v.weight/(Rational(1)-r):Rational(0);
+						next=distribution(ctx,BoundOp.distributionDirac,[at(v.point)]);
 						if(z!=Rational(1)) next=distribution(ctx,BoundOp.distributionScale,[scalar(ctx,arena.real_(z)),next]);
-						rule=BindingRule.distributionRetryPoint;
+						rule=contracts?BindingRule.distributionRetryPoint:BindingRule.distributionRetryZeroPoint;
 					}
 				}
 			}
@@ -10685,6 +10712,8 @@ final class Bindings{
 				case BindingRule.distributionFixedAffine:
 				case BindingRule.distributionFixedTail:
 				case BindingRule.distributionRetryPoint:
+				case BindingRule.distributionRetryEmpty:
+				case BindingRule.distributionRetryZeroPoint:
 				case BindingRule.distributionRetryZero:
 				case BindingRule.distributionRetryMissing:
 				case BindingRule.distributionRetryMass:
@@ -10707,11 +10736,26 @@ final class Bindings{
 							default:throw new Exception("missing atomic seed certificate");
 						}
 					}
-					string point(uint id,out Rational weight){
-						auto v=nodes[id];
-						if(v.op==BoundOp.distributionDirac){weight=Rational(1);return " ("~ns~"point_dirac"~ev(v.a)~")";}
-						auto w=literal(v.a);auto rest=point(v.b,weight);weight=w*weight;
-						return " ("~ns~"point_scale "~q(w)~" "~q(weight)~yes~yes~" "~number(v.a)~rest~")";
+					AtomicVisits[uint] shapes;
+					string visitProof(uint id){
+						auto v=nodes[id],shape=shapes[id];
+						switch(v.op){
+							case BoundOp.distributionZero:return " "~ns~"EmptySeed.zero";
+							case BoundOp.distributionDirac:return " ("~ns~"point_dirac"~ev(v.a)~")";
+							case BoundOp.distributionScale:{
+								auto w=q(literal(v.a)),sub=visitProof(v.b);
+								if(shape.kind==VisitKind.empty) return " ("~ns~"EmptySeed.scale "~w~yes~" "~number(v.a)~sub~")";
+								return " ("~ns~"point_scale "~w~" "~q(shape.weight)~yes~yes~" "~number(v.a)~sub~")";
+							}
+							case BoundOp.distributionAdd:{
+								auto left=visitProof(v.a),right=visitProof(v.b);
+								if(shape.kind==VisitKind.empty) return " ("~ns~"EmptySeed.add"~left~right~")";
+								if(shapes[v.a].kind==VisitKind.empty) return " ("~ns~"point_add_empty true"~right~left~")";
+								if(shapes[v.b].kind==VisitKind.empty) return " ("~ns~"point_add_empty false"~left~right~")";
+								return " ("~ns~"point_add "~q(shape.weight)~yes~yes~yes~left~right~")";
+							}
+							default:throw new Exception("missing atomic visit certificate");
+						}
 					}
 					string tail(uint id,out Rational coefficient){
 						auto v=nodes[id];
@@ -10742,11 +10786,16 @@ final class Bindings{
 						}
 					}else if(p.rule==BindingRule.distributionRetryMissing) law=ns~"retry_missing"~ev(n.a);
 					else if(p.rule==BindingRule.distributionRetryZero) law=ns~"retry_zero "~q(literal(n.a))~yes~" "~number(n.a);
-					else if(p.rule==BindingRule.distributionRetryPoint){
-						Rational w; auto evidence=point(n.b,w),r=literal(n.a),z=w/(Rational(1)-r);
-						auto scale=z==Rational(1)?"(weight := some (1 : ℝ)) ":"";
-						auto hv=z==Rational(1)?ns~"one_weight":number(nodes[p.to].a);
-						law=ns~"retry_point "~scale~q(r)~" "~q(w)~" "~q(z)~yes~yes~yes~yes~" "~number(n.a)~" "~hv~evidence;
+					else if(p.rule==BindingRule.distributionRetryPoint||p.rule==BindingRule.distributionRetryZeroPoint||p.rule==BindingRule.distributionRetryEmpty){
+						auto v=atomicVisits(n.b,shapes),r=literal(n.a),evidence=visitProof(n.b);
+						if(p.rule==BindingRule.distributionRetryEmpty) law=ns~"retry_empty "~q(r)~yes~" "~number(n.a)~evidence;
+						else if(p.rule==BindingRule.distributionRetryZeroPoint) law=ns~"retry_zero_point "~q(r)~yes~" "~number(n.a)~" "~number(nodes[p.to].a)~evidence;
+						else{
+							auto z=v.weight/(Rational(1)-r);
+							auto scale=z==Rational(1)?"(weight := some (1 : ℝ)) ":"";
+							auto hv=z==Rational(1)?ns~"one_weight":number(nodes[p.to].a);
+							law=ns~"retry_point "~scale~q(r)~" "~q(v.weight)~" "~q(z)~yes~yes~yes~yes~" "~number(n.a)~" "~hv~evidence;
+						}
 					}else{
 						bool density=p.rule==BindingRule.distributionRetryDensity;
 						uint source=n.a,target=nodes[p.to].a;

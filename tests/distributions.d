@@ -1123,6 +1123,15 @@ private Case[] cases(){
 	Case("RetryObservationMissingProbe","massD(weightD(undefined(ℝ→ℝ),"~retry~"))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationMissingKernel","massD(bindD("~retry~",undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationContinuousOutput","massD(bindD("~retry~",λ(x:ℝ).Λy. [0≤y≤1]·λ[y]))","ℝ","1"),
+	Case("RetryVisitsCoincident","μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(2)),scaleD(1/4,δ(2))),scaleD(1/2,d))","Distribution(ℝ)","δ((2:ℝ))"),
+	Case("RetryVisitsLeftEmpty","μ(d:Distribution(ℝ)).addD(addD(zeroD(ℝ),scaleD(1/2,δ(2))),scaleD(1/2,d))","Distribution(ℝ)","δ((2:ℝ))"),
+	Case("RetryVisitsRightEmpty","μ(d:Distribution(ℝ)).addD(addD(scaleD(1/2,δ(2)),scaleD(8,zeroD(ℝ))),scaleD(1/2,d))","Distribution(ℝ)","δ((2:ℝ))"),
+	Case("RetryVisitsEmpty","μ(d:Distribution(ℝ)).addD(addD(zeroD(ℝ),scaleD(2,zeroD(ℝ))),scaleD(3,d))","Distribution(ℝ)","Λ(x:ℝ). 0"),
+	Case("RetryVisitsCritical","μ(d:Distribution(ℝ)).addD(scaleD(0,δ(2)),scaleD(1,d))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(2)[x]"),
+	Case("RetryVisitsSupercritical","massD(weightD(λ(x:ℝ).1/(2-x),μ(d:Distribution(ℝ)).addD(scaleD(0,δ(2)),scaleD(3,d))))","ℝ","undefined(ℝ)"),
+	Case("RetryVisitsZeroDensity","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(scaleD(0,δ(2)),scaleD(3,d)),x)","ℝ→ℝ","λ(x:ℝ). (0:ℝ)"),
+	Case("RetryVisitsCapture","λ(x:ℝ).μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(x)),scaleD(1/4,δ(x))),scaleD(1/2,d))","ℝ→Distribution(ℝ)","λ(x:ℝ). δ(x)"),
+	Case("RetryVisitsDistinct","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ(2)),scaleD(0,δ(3))),scaleD(2,d))","Distribution(ℝ)","μ(d:Distribution(ℝ)). addD(Λ(x:ℝ). 0·δ(2)[x]+0·δ(3)[x],scaleD(2,d))"),
 	Case("LinearTailSelf","μ(d:Distribution(ℝ)).d","Distribution(ℝ)","Λ(x:ℝ). 0"),
 	Case("LinearTailScaled","μ(d:Distribution(ℝ)).scaleD(2,d)","Distribution(ℝ)","Λ(x:ℝ). 0"),
 	Case("LinearTailCopied","μ(d:Distribution(ℝ)).addD(d,d)","Distribution(ℝ)","Λ(x:ℝ). 0"),
@@ -1193,6 +1202,13 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name.indexOf("RetryVisits")==0){
+			if(c.name=="RetryVisitsEmpty") enforce(certificate.indexOf("Atomic.retry_empty")>=0,c.name);
+			else if(c.name=="RetryVisitsDistinct") enforce(certificate.indexOf("Atomic.retry_zero_point")<0&&text.indexOf("μ")>=0,c.name);
+			else if(c.name=="RetryVisitsCritical"||c.name=="RetryVisitsSupercritical"||c.name=="RetryVisitsZeroDensity")
+				enforce(certificate.indexOf("Atomic.retry_zero_point")>=0,c.name);
+			else enforce(certificate.indexOf("Atomic.point_add")>=0,c.name);
+		}
 		if(c.name.indexOf("LinearTail")==0){
 			bool empty=c.name=="LinearTailSelf"||c.name=="LinearTailScaled"||c.name=="LinearTailCopied"||c.name=="LinearTailFunction";
 			enforce(certificate.indexOf(empty?"Distribution.Atomic.fixed_tail":"Distribution.Atomic.fixed_add_tail")>=0,c.name);

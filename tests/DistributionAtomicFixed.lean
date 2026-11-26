@@ -40,6 +40,10 @@ theorem zeroWeightDiffers : ∃ t : ℝ → Option ℝ,
 #qsym_check_axioms fixed_add_tail
 #qsym_check_axioms fixed_of_step
 #qsym_check_axioms fixed_retry
+#qsym_check_axioms retry_empty
+#qsym_check_axioms retry_zero_point
+#qsym_check_axioms point_add
+#qsym_check_axioms point_add_empty
 #qsym_check_axioms retry_point
 #qsym_check_axioms mass_retry
 #qsym_check_axioms density_retry

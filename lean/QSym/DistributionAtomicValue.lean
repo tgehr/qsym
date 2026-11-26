@@ -223,4 +223,89 @@ theorem retry_zero {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q :
     rw [strictRetry_lfp]; exact Prod.ext (funext fun x => by simp [m, lfp_retry]) rfl
   rw [he, realize_simple h .zero]
 
+private abbrev emptyModel (α : Type) : Model α := (fun _ => 0, ∅)
+
+/-- An atomic seed with no visited outcomes. A zero-weight atom still visits
+its outcome and therefore cannot supply this certificate. -/
+def EmptySeed (s : Option (D α)) := ∃ d, s = some d ∧ Presents d (emptyModel α)
+
+theorem EmptySeed.zero : EmptySeed (zeroValue (α := α)) := ⟨_, rfl, Represents.zero, visited_zero⟩
+
+theorem EmptySeed.add {s t : Option (D α)} (hs : EmptySeed s) (ht : EmptySeed t) : EmptySeed (addValue s t) := by
+  obtain ⟨d, rfl, hd⟩ := hs
+  obtain ⟨e, rfl, he⟩ := ht
+  exact ⟨_, rfl, by simpa [emptyModel] using hd.1.add he.1, by simp [hd.2, he.2, emptyModel]⟩
+
+theorem EmptySeed.scale {s : Option (D α)} {mass : Option ℝ} (c : ℚ) (hc : 0 ≤ c)
+    (hm : mass = some (c : ℝ)) (hs : EmptySeed s) : EmptySeed (scaleValue mass s) := by
+  subst mass
+  obtain ⟨d, rfl, hd⟩ := hs
+  have h0 : 0 ≤ (c : ℝ) := by exact_mod_cast hc
+  exact ⟨_, rfl, by simpa [emptyModel] using hd.1.scale h0, (visited_scale _ _).trans hd.2⟩
+
+theorem retry_empty {s : Option (D α)} {ratio : Option ℝ} (q : ℚ) (h0 : 0 ≤ q)
+    (hr : ratio = some (q : ℝ)) (hs : EmptySeed s) : retryValue ratio s = zeroValue := by
+  subst ratio
+  obtain ⟨d, rfl, hd⟩ := hs
+  have he : Presents (.zero : D α) (emptyModel α) := ⟨Represents.zero, visited_zero⟩
+  have qr : 0 ≤ (q : ℝ) := by exact_mod_cast h0
+  exact (retry_eq_realize hd qr).trans ((retry_eq_realize he qr).symm.trans (retry_zero q h0 rfl))
+
+theorem point_add_empty {s t : Option (D α)} {p : Option α} {w : ℚ} (swap : Bool)
+    (hs : PointSeed s w p) (ht : EmptySeed t) :
+    PointSeed (if swap then addValue t s else addValue s t) w p := by
+  obtain ⟨e, rfl, he⟩ := ht
+  cases p with
+  | none =>
+    change s = none at hs
+    subst s
+    cases swap <;> rfl
+  | some a =>
+    obtain ⟨d, rfl, hd⟩ := hs
+    cases swap with
+    | false => exact ⟨_, rfl, by simpa [emptyModel, pointModel] using hd.1.add he.1,
+        by simp [hd.2, he.2, emptyModel, pointModel]⟩
+    | true => exact ⟨_, rfl, by simpa [emptyModel, pointModel] using he.1.add hd.1,
+        by simp [hd.2, he.2, emptyModel, pointModel]⟩
+
+theorem point_add {s t : Option (D α)} {p : Option α} {a b : ℚ} (z : ℚ)
+    (ha : 0 ≤ a) (hb : 0 ≤ b) (hz : z = a+b) (hs : PointSeed s a p) (ht : PointSeed t b p) :
+    PointSeed (addValue s t) z p := by
+  subst z
+  cases p with
+  | none =>
+    change s = none at hs
+    subst s
+    rfl
+  | some x =>
+    obtain ⟨d, rfl, hd⟩ := hs
+    obtain ⟨e, rfl, he⟩ := ht
+    have a0 : 0 ≤ (a : ℝ) := by exact_mod_cast ha
+    have b0 : 0 ≤ (b : ℝ) := by exact_mod_cast hb
+    exact ⟨_, rfl, by simpa [pointModel, ENNReal.ofReal_add a0 b0, add_mul] using hd.1.add he.1,
+      by simp [hd.2, he.2, pointModel]⟩
+
+/-- Even a noncontracting loop has zero weight at a visited atom that never
+receives positive mass. The visit remains observable by partial integrands. -/
+theorem retry_zero_point {s : Option (D α)} {p : Option α} {r weight : Option ℝ}
+    (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q : ℝ)) (hw : weight = some ((0 : ℚ) : ℝ))
+    (hs : PointSeed s 0 p) : retryValue r s = scaleValue weight (diracValue p) := by
+  subst r weight
+  cases p with
+  | none =>
+    change s = none at hs
+    rw [hs]
+    rfl
+  | some a =>
+    obtain ⟨d, rfl, hd⟩ := hs
+    simp only [Rat.cast_zero] at hd ⊢
+    have h : (strictRetryStep (pointModel 0 a) (ENNReal.ofReal (q : ℝ))).lfp = pointModel 0 a := by
+      rw [strictRetry_lfp]
+      refine Prod.ext (funext fun x => ?_) rfl
+      change (retryStep _ _).lfp x = _
+      rw [lfp_retry]
+      simp [pointModel]
+    rw [retry_eq_realize hd (by exact_mod_cast h0), h, realize_simple (point_presents (le_refl 0) a) (.point _ _)]
+    simp [point, diracValue, scaleValue]
+
 end QSym.Distribution.Atomic
