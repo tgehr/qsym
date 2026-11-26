@@ -132,7 +132,7 @@ private theorem nonnegative_sum_zero (a : ℕ → ℝ) (hn : ∀ n, 0 ≤ a n) :
   · intro h
     simpa only [h] using (Summation.zero (ι := ℕ) (α := ℝ) norm norm_zero)
 
-private theorem guard_zero (c : Option ℝ) :
+theorem guard_zero (c : Option ℝ) :
     Binding.guardValue (Value.not (Value.nonzero c)) (some (0 : ℝ)) = if c = some 0 then some 0 else none := by
   classical
   cases c with

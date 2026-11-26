@@ -8,6 +8,7 @@ import std.stdio:writeln;
 
 private struct Case{ string name,source,type,expected; }
 private Case[] cases(){
+	enum mixedLoop="(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d))";
 	enum retry="(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(2))),scaleD(1/2,d)))";
 	enum endless="(μ(d:Distribution(ℝ)).addD(δ(0),d))";
 	enum twoArms="(μ(d:Distribution(ℝ)).addD(scaleD(1/4,addD(δ(0),d)),scaleD(1/4,addD(d,δ(2)))))";
@@ -1138,6 +1139,18 @@ private Case[] cases(){
 	Case("SeriesFibreMissing","densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("SeriesFibreMissingPoint","densityAtD(sumD(λ(i:ℕ).δ(undefined(ℝ))),2)","ℝ","undefined(ℝ)"),
 	Case("SeriesFibreMissingRow","densityAtD(sumD(λ(i:ℕ).undefined(Distribution(ℝ))),2)","ℝ","undefined(ℝ)"),
+	Case("RetryUnboundedMass","massD("~mixedLoop~")","ℝ","undefined(ℝ)"),
+	Case("RetryUnboundedCancel","massD(weightD(λ(x:ℝ).x-1,"~mixedLoop~"))","ℝ","0"),
+	Case("RetryUnboundedNegative","massD(weightD(λ(x:ℝ).x-3,"~mixedLoop~"))","ℝ","undefined(ℝ)"),
+	Case("RetryUnboundedPartial","massD(weightD(λ(x:ℝ).x⁻¹,"~mixedLoop~"))","ℝ","undefined(ℝ)"),
+	Case("RetryUnboundedPartialAway","massD(weightD(λ(x:ℝ).(x-1)⁻¹,"~mixedLoop~"))","ℝ","0"),
+	Case("RetryUnboundedSupercritical","massD(weightD(λ(x:ℝ).x-1,μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),scaleD(3,d))))","ℝ","0"),
+	Case("RetryUnboundedZeroWeightMissing","massD(weightD(λ(x:ℝ).x⁻¹,μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ(0)),scaleD(0,δ(2))),d)))","ℝ","undefined(ℝ)"),
+	Case("RetryUnboundedZeroWeights","massD(μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ(0)),scaleD(0,δ(2))),d))","ℝ","0"),
+	Case("RetryUnboundedBind","massD(bindD("~mixedLoop~",λ(x:ℝ).scaleD(x-1,δ((2:ℕ)))))","ℝ","0"),
+	Case("RetryUnboundedRealBind","massD(weightD(λ(y:ℝ).y,bindD("~mixedLoop~",λ(x:ℝ).δ(x-1))))","ℝ","0"),
+	Case("RetryUnboundedFreeProbe","λ(f:ℝ→ℝ).massD(weightD(f,"~mixedLoop~"))","(ℝ→ℝ)→ℝ","λ(f:{f:ℝ→ℝ | (f((0:ℝ))+f((2:ℝ))=0:𝔹)}). (0:ℝ)"),
+	Case("RetryUnboundedMissingProbe","massD(weightD(undefined(ℝ→ℝ),"~mixedLoop~"))","ℝ","undefined(ℝ)"),
 	Case("LoopDensityCritical","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠2}). (0:ℝ)"),
 	Case("LoopDensityZeroRatio","densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),scaleD(0,d)),2)","ℝ","undefined(ℝ)"),
 	Case("LoopDensitySupercritical","densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),scaleD(3,d)),1)","ℝ","0"),
@@ -1270,6 +1283,8 @@ private void run(string directory){
 		else if(c.name.indexOf("SeriesFibre")==0)
 			enforce(certificate.indexOf("Distribution.FibreCertificate.extract_sum")>=0||
 				certificate.indexOf("Distribution.FibreCertificate.extract_nat_sum")>=0,c.name);
+		if(c.name.indexOf("RetryUnbounded")==0&&c.name!="RetryUnboundedMissingProbe")
+			enforce(certificate.indexOf("CountableObservation.retry_noncontracting")>=0,c.name);
 		if(c.name.indexOf("LoopDensity")==0&&c.name!="LoopDensityMissingSeed"&&c.name!="LoopDensityMissingQuery")
 			enforce(certificate.indexOf("Atomic.density_retry_seed")>=0,c.name);
 		if(c.name.indexOf("LoopExists")==0&&c.name!="LoopExistsMissing")

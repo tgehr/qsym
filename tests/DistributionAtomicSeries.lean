@@ -1,4 +1,4 @@
-import QSym.DistributionAtomicSeries
+import QSym.DistributionAtomicDivergence
 import QSym.AxiomCheck
 
 noncomputable section
@@ -84,6 +84,8 @@ theorem direct_cancellation : probe direct (fun x => some (if x=0 then 1 else -1
 
 theorem direct_mass : massValue direct = none := (direct_agrees _).trans divergent_mass
 
+#qsym_check_axioms probe_retry_noncontracting
+#qsym_check_axioms CountableObservation.retry_noncontracting
 #qsym_check_axioms density_realizeChain
 #qsym_check_axioms density_retry_seed
 #qsym_check_axioms retry_isSome

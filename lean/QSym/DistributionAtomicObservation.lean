@@ -21,7 +21,7 @@ inductive Observation (o : Option (D α) → Option ℝ) : Prop where
 theorem Observation.mass : Observation (massValue (α := α)) :=
   .linear ⟨rfl, rfl, mass_addValue, mass_scaleValue⟩
 
-private theorem Observation.missing {o : Option (D α) → Option ℝ} (h : Observation o) :
+theorem Observation.missing {o : Option (D α) → Option ℝ} (h : Observation o) :
     o none = none := by
   cases h with
   | absent h => exact h none
@@ -58,7 +58,7 @@ theorem Observation.realBind {o : Option (D ℝ) → Option ℝ} (h : Observatio
     exact h.through (fun d => GraphFibre.realBindValue d (some k)) rfl rfl
       (fun _ _ => GraphFibre.realBind_addValue _ _ _) (fun _ _ => GraphFibre.realBind_scaleValue _ _ _)
 
-private theorem LinearObservation.atoms {o : Option (D α) → Option ℝ} (h : LinearObservation o)
+theorem LinearObservation.atoms {o : Option (D α) → Option ℝ} (h : LinearObservation o)
     {d : D α} {k : Weights α} (hd : Represents d k) :
     o (some d) = integrate d (fun a => o (some (.dirac a))) := by
   induction hd with
