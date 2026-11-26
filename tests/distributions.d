@@ -333,6 +333,25 @@ private Case[] cases(){
 	Case("StrictBoundMask","[false]·undefined(ℝ)","ℝ","0"),
 	Case("StrictBoundAnd","false∧undefined(𝔹)","𝔹","false"),
 	Case("StrictBoundOr","true∨undefined(𝔹)","𝔹","true"),
+	Case("DirectedRayCDF","λ(u:ℝ).∫dx [x≤u]·λ[(1+exp(-x))⁻¹]","ℝ→ℝ","λ(u:ℝ). (exp(-u)+1)⁻¹"),
+	Case("DirectedRaySurvival","λ(l:ℝ).∫dx [l<x]·λ[(1+exp(-x))⁻¹]","ℝ→ℝ","λ(l:ℝ). 1-(exp(-l)+1)⁻¹"),
+	Case("DirectedRayDecreasingCDF","λ(u:ℝ).∫dx [x<u]·λ[(exp(x)+1)⁻¹]","ℝ→ℝ","λ(u:ℝ). 1-(exp(u)+1)⁻¹"),
+	Case("DirectedRayDecreasingSurvival","λ(l:ℝ).∫dx [l≤x]·λ[(exp(x)+1)⁻¹]","ℝ→ℝ","λ(l:ℝ). (exp(l)+1)⁻¹"),
+	Case("DirectedRayAtZero","∫dx [x≤0]·λ[(1+exp(-x))⁻¹]","ℝ","1/2"),
+	Case("DirectedRayReverseAtZero","∫dx [0<x]·λ[(exp(x)+1)⁻¹]","ℝ","1/2"),
+	Case("DirectedRayNested","∫dx [0<x]·λ[atan(exp(x))]","ℝ","1/4·π"),
+	Case("DirectedRayArctanLeft","∫dx [x<0]·λ[atan(exp(x))]","ℝ","1/4·π"),
+	Case("DirectedRayReflected","∫dx [x<0]·λ[atan(exp(-x))]","ℝ","1/4·π"),
+	Case("DirectedRayDecaying","λ(l:ℝ).∫dx [l<x]·λ[exp(-2*x)]","ℝ→ℝ","λ(l:ℝ). exp(-2·l)"),
+	Case("DirectedRayOppositeEnd","λ(u:ℝ).∫dx [x≤u]·λ[exp(3*x-1)]","ℝ→ℝ","λ(u:ℝ). exp(3·u-1)"),
+	Case("DirectedRayScaled","∫dx [0≤x]·λ[2*atan(exp(x))]","ℝ","1/2·π"),
+	Case("DirectedRayLogPath","∫dx [x≤0]·λ[log(1+exp(x))]","ℝ","log(2)"),
+	Case("DirectedRayComposite","∫dx [x≤0]·λ[atan((1+exp(-x))⁻¹)]","ℝ","atan(1/2)"),
+	Case("DirectedRayPartial","λ(h:ℝ→ℝ).λ(t:ℝ).∫dx [x<h(t)]·λ[(1+exp(-x))⁻¹]","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(t:{t:ℝ | holds((t∈domain(h)))}). (exp(-h(t))+1)⁻¹"),
+	Case("DirectedRayMissingUpper","defined(∫dx [x≤undefined(ℝ)]·λ[(1+exp(-x))⁻¹])","𝔹","false"),
+	Case("DirectedRayMissingLower","defined(∫dx [undefined(ℝ)<x]·λ[(exp(x)+1)⁻¹])","𝔹","false"),
+	Case("DirectedRayPole","∫dx [x<1]·λ[x⁻¹]","ℝ","∫dx [x<1]·λ[(x⁻¹)]"),
+	Case("DirectedRayUnbounded","∫dx [0<x]·λ[exp(x)]","ℝ","∫dx ([0<x]·exp(x))·λ[x]"),
 	Case("DirectedRangeRoot","∫dx [0≤x≤1]·λ[sqrt(exp(x)+1)]","ℝ","-sqrt(2)+sqrt(e+1)"),
 	Case("DirectedRangeLog","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·λ[log(1+exp(x))]","ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). [l<u]·(-log(exp(l)+1)+log(exp(u)+1))"),
 	Case("DirectedRangeInverse","λ(u:ℝ).∫dx [0<x≤u]·λ[(1+exp(x))⁻¹]","ℝ→ℝ","λ(u:ℝ). [0<u]·(1/2-(exp(u)+1)⁻¹)"),
@@ -1973,7 +1992,8 @@ private void run(string directory){
 			enforce((certificate.indexOf("Grid.Directed.interval ")>=0)==directed,c.name);
 		}else if(c.name.indexOf("CauchyRay")==0){
 			bool integrated=c.name!="CauchyRayMissing"&&c.name!="CauchyRayPole";
-			enforce((certificate.indexOf("Distribution.StepSource.cauchyRay ")>=0)==integrated,c.name);
+			auto law=c.name=="CauchyRayUpperZero"||c.name=="CauchyRayScaledAtan"?"Grid.Directed.ray ":"Distribution.StepSource.cauchyRay ";
+			enforce((certificate.indexOf(law)>=0)==integrated,c.name);
 		}else if(c.name.indexOf("CauchyWindow")==0||c.name=="QuotientPoleQuadratic"){
 			bool integrated=c.name!="CauchyWindowReverse"&&c.name!="CauchyWindowSingleton"&&c.name!="CauchyWindowZeroMask"&&
 				c.name!="CauchyWindowMissing"&&c.name!="CauchyWindowPole";
@@ -2061,6 +2081,11 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.observe_partial_scale_countdown ")>=0,c.name~" captured recursive scale");
 		if(c.name=="VariableScaleByIndex")
 			enforce(certificate.indexOf("observe_partial_scale_countdown")<0&&text.indexOf("μ")>=0,c.name~" index-dependent scale");
+		if(c.name.indexOf("DirectedRay")==0){
+			bool closed=c.name!="DirectedRayPole"&&c.name!="DirectedRayUnbounded";
+			enforce((certificate.indexOf("Grid.Directed.ray ")>=0)==closed,c.name);
+			if(closed) enforce(text.indexOf("∫")<0&&text.indexOf("lim[")<0,c.name);
+		}
 		if(c.name.indexOf("ScalarAsymptote")==0){
 			bool uses=c.name!="ScalarAsymptoteLogisticRegular"&&c.name!="ScalarAsymptoteOpposite"&&
 				c.name!="ScalarAsymptoteOscillation"&&c.name!="ScalarAsymptoteOpaque"&&c.name!="ScalarAsymptoteMissing";

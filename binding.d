@@ -4901,12 +4901,12 @@ final class Bindings{
 			if(row.op!=BoundOp.vectorCons||nodes[row.b].op!=BoundOp.vectorNil||nodes[row.a].op!=BoundOp.lambda)
 				return BoundTerm.init;
 			IntervalData d; AxisBounds bounds;
-			if(!intervalMask(nodes[w.a].a,d,bounds)||d.half||bounds.around!=uint.max) return BoundTerm.init;
+			if(!intervalMask(nodes[w.a].a,d,bounds)||bounds.around!=uint.max) return BoundTerm.init;
 			if(d.unit==uint.max&&(nodes[d.value].op!=BoundOp.scalar||arena.at(nodes[d.value].data)!=arena.real_(1)))
 				return BoundTerm.init;
 			d.coordinate=nodes[row.a].a;
 			auto outer=nodes[d.coordinate];
-			if(outer.op==BoundOp.primitive){
+			if(!d.half&&outer.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(outer.data));
 				if(op.op==Op.pow&&op.value>=2&&op.value%2==0||op.op==Op.builtin&&op.value==Builtin.coshR){
 					d.turning=d.coordinate; d.coordinate=outer.a;
@@ -4917,8 +4917,22 @@ final class Bindings{
 				if(!directedCoordinate(d.coordinate,true,evidence)) return BoundTerm.init;
 				d.decreasing=true;
 			}
+			// Introduce an infinite endpoint only when the source limit rules can close it.
+			if(d.half&&limitTerms(d.coordinate,d.below,false)==BoundTerm.init) return BoundTerm.init;
 			auto a=dropIndex(at(bounds.lower)),b=dropIndex(at(bounds.upper)),ctx=context(t),zero=arena.real_(0);
 			auto m=scalar(ctx,arena.real_(-1));
+			BoundTerm difference(BoundTerm hi,BoundTerm lo){
+				auto neg=primitive(arena.mul(zero,zero,true),[m,lo]);
+				return primitive(arena.add(zero,zero,true),[hi,neg]);
+			}
+			d.lower=a.id; d.upper=b.id; d.minusOne=m.id;
+			solution.from=[nodes[w.a].a]; solution.bounds=d;
+			solution.interval=true; solution.piecewise=true;
+			if(d.half){
+				auto edge=limit(at(row.a),d.below),endpoint=apply(at(row.a),a);
+				auto value=d.below!=d.decreasing?difference(endpoint,edge):difference(edge,endpoint);
+				solution.output=value.id; return value;
+			}
 			auto comparison=primitive(d.strictLower||d.strictUpper?arena.lt(zero,zero):arena.le(zero,zero),[a,b]);
 			// Evaluate a primitive of the absolute derivative in the inner
 			// coordinate. The inner chart may cross the outer critical value.
@@ -4936,12 +4950,9 @@ final class Bindings{
 				return conditional(negative,primitive(sum,[scalar(ctx,arena.real_(1)),primitive(mul,[m,h])]),primitive(sum,[h,m]));
 			}
 			auto below=endpoint(a),above=endpoint(b);
-			auto neg=primitive(arena.mul(zero,zero,true),[m,d.decreasing?above:below]);
-			auto diff=primitive(arena.add(zero,zero,true),[d.decreasing?below:above,neg]);
+			auto diff=d.decreasing?difference(below,above):difference(above,below);
 			auto out_=primitive(arena.mask(arena.boolean(true),zero),[comparison,diff]);
-			d.lower=a.id; d.upper=b.id; d.minusOne=m.id;
-			solution.from=[nodes[w.a].a]; solution.bounds=d;
-			solution.interval=true; solution.piecewise=true; solution.output=out_.id;
+			solution.output=out_.id;
 			return out_;
 		}
 		BoundTerm integratePolynomials(BoundTerm t,out IntegralSolution solution){
@@ -10625,6 +10636,11 @@ final class Bindings{
 			}
 			auto extension="(fun z : Option ℝ => "~name(d.coordinate)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
 			enum grid="Distribution.GraphFibre.Coordinates.Grid.";
+			if(d.half){
+				return grid~"Directed.ray (f := "~functionAt(d.coordinate)~") (w := "~functionAt(s.from[0])~") "~to!string(d.decreasing)~
+					" "~to!string(d.below)~" "~to!string(d.below?d.strictUpper:d.strictLower)~" "~eval(d.lower)~" "~eval(d.minusOne)~
+					" "~cert.closedProof(at(d.minusOne),Rational(-1))~" "~evidence~" "~shape;
+			}
 			string law="Directed.interval",change;
 			if(d.turning!=uint.max){
 				law="VariationChange.interval";

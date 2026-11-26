@@ -19,6 +19,7 @@ import QSym.DistributionCoordinateDomain
 import QSym.DistributionCoordinateGridMass
 import QSym.DistributionCoordinateGridPoint
 import QSym.DistributionCoordinateInterval
+import QSym.DistributionCoordinateRay
 import QSym.DistributionWeightedAffine
 import QSym.Limit
 import QSym.LimitExponential
