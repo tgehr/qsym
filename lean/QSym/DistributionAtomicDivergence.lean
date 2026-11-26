@@ -8,7 +8,7 @@ noncomputable section
 namespace QSym.Distribution.Atomic
 open scoped ENNReal Classical
 
-private theorem geometric_noncontracting (v : Option ℝ) {r : ℝ} (hr : 1 ≤ r) :
+theorem geometric_noncontracting (v : Option ℝ) {r : ℝ} (hr : 1 ≤ r) :
     Summation.value norm (some (fun n : ℕ => Value.mul (some (r^n)) v)) =
       if v = some 0 then some 0 else none := by
   cases v with

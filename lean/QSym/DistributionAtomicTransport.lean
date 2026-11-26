@@ -25,7 +25,7 @@ theorem Transport.bind (k : α → Option (D α)) : Transport (fun d => bindValu
 theorem Transport.realBind (k : ℝ → Option (D ℝ)) : Transport (fun d => GraphFibre.realBindValue d (some k)) :=
   ⟨rfl, rfl, fun _ _ => GraphFibre.realBind_addValue _ _ _, fun _ _ => GraphFibre.realBind_scaleValue _ _ _⟩
 
-private theorem Transport.reemit {push : Option (D α) → Option (D α)} (tr : Transport push)
+theorem Transport.reemit {push : Option (D α) → Option (D α)} (tr : Transport push)
     (point : ∀ a, push (some (.dirac a)) = some (.dirac a)) {d : D α} {k : Weights α}
     (hd : Represents d k) : push (some d) = some d := by
   induction hd with

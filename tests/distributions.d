@@ -1271,7 +1271,13 @@ private Case[] cases(){
 	Case("CycleBoolTrue","massD(weightD(λ(b:𝔹).[b],"~flip("scaleD(1/2,δ(false))")~"))","ℝ","1/3"),
 	Case("CycleBoolZero","massD(weightD(λ(b:𝔹).if b then undefined(ℝ) else 1,"~flip("δ(false)","0")~"))","ℝ","undefined(ℝ)"),
 	Case("CycleBoolMissing","massD("~flip("δ(undefined(𝔹))")~")","ℝ","undefined(ℝ)"),
-	Case("InvolutionCriticalResidual","massD("~flip("δ(false)","1")~")","ℝ"),
+	Case("CycleDivergentMass","massD("~flip("δ(false)","1")~")","ℝ","undefined(ℝ)"),
+	Case("CycleDivergentAlternation","massD(weightD(λ(x:ℝ).x,"~reflect("δ((2:ℝ))","2")~"))","ℝ","undefined(ℝ)"),
+	Case("CycleDivergentBalanced","massD(weightD(λ(x:ℝ).x,"~reflect("addD(δ((2:ℝ)),δ((-2:ℝ)))","2")~"))","ℝ","0"),
+	Case("CycleDivergentMissing","massD(weightD(λ(b:𝔹).if b then undefined(ℝ) else 0,"~flip("scaleD(0,δ(false))","2")~"))","ℝ","undefined(ℝ)"),
+	Case("CycleDivergentZeroCharge","massD("~flip("scaleD(0,δ(false))","3")~")","ℝ","0"),
+	Case("CycleDivergentBareAlternation","massD(weightD(λ(x:ℝ).x,μ(d:Distribution(ℝ)).addD(δ((2:ℝ)),bindD(d,λ(x:ℝ).δ(-x)))))","ℝ","undefined(ℝ)"),
+	Case("CycleDivergentBareBalanced","massD(weightD(λ(x:ℝ).x,μ(d:Distribution(ℝ)).addD(addD(δ((2:ℝ)),δ((-2:ℝ))),bindD(d,λ(x:ℝ).δ(-x)))))","ℝ","0"),
 	Case("InvolutionBare","μ(d:Distribution(ℝ)).addD(δ((1:ℝ)),bindD(d,λ(x:ℝ).δ(-x)))","Distribution(ℝ)"),
 	Case("CycleRealMean","massD(weightD(λ(x:ℝ).x,"~reflect()~"))","ℝ","4/3"),
 	Case("CycleRealConstant","massD(weightD(λ(x:ℝ).x^2,"~reflect()~"))","ℝ","8"),
@@ -1375,8 +1381,10 @@ private void run(string directory){
 			enforce(certificate.indexOf("SummationElementary.PowerAt.product")>=0,c.name);
 		if(c.name=="ShiftOrbitPole"||c.name=="ShiftOrbitPoleAfterZero")
 			enforce(certificate.indexOf("SummationLinearity.missing_guard")>=0,c.name);
-		if(c.name=="InvolutionCriticalResidual"||c.name=="InvolutionBare")
+		if(c.name=="InvolutionBare")
 			enforce(text.indexOf("μ")>=0&&certificate.indexOf("fixed_involution_q")<0,c.name~" noncontracting source");
+		if(c.name.indexOf("CycleDivergent")==0)
+			enforce(certificate.indexOf(c.name.indexOf("CycleDivergentBare")==0?"fixed_involution_unscaled":"fixed_involution_noncontracting")>=0,c.name~" separate parity tests");
 		if(c.name.indexOf("CycleBool")==0||c.name.indexOf("CycleReal")==0)
 			enforce(certificate.indexOf("CountableObservation.fixed_involution_q")>=0,c.name~" involution certificate");
 		if(c.name.indexOf("Reemit")==0)
