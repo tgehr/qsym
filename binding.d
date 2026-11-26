@@ -1818,6 +1818,59 @@ final class Bindings{
 		enum ns="Distribution.GraphFibre.Coordinates.Grid.";
 		auto zero=arena.real_(0),sum=arena.add(zero,zero,true),product=arena.mul(zero,zero,true);
 		Table!(uint,uint) slopes; Table!(uint,string) proofs;
+		enum Sign { unknown, nonnegative, positive }
+		struct Evidence { Sign sign; string proof; }
+		Evidence[uint] signs;
+		Evidence lower(uint id,uint depth){
+			if(depth>64) return Evidence.init;
+			if(auto hit=id in signs) return *hit;
+			signs[id]=Evidence.init;
+			auto n=nodes[id];
+			Evidence e;
+			string law,args;
+			if(n.op==BoundOp.scalar){
+				auto t=arena.at(n.data);
+				if(arena.sort(t)!=Sort.real_||!arena.isNumber(t)||arena.number(t).re<Rational(0)) return e;
+				auto q=arena.number(t).re;
+				e.sign=q.zero?Sign.nonnegative:Sign.positive;
+				if(cert !is null){
+					auto v=cert.q(q),strict=q.zero?"false":"true";
+					law="constant"; args=strict~" "~cert.atPoint(id,Rational(0))~" "~v~" (of_decide_eq_true rfl) "~cert.numericProof(id,Rational(0),v);
+				}
+			}else if(n.op==BoundOp.primitive){
+				auto op=arena.view(arena.at(n.data));
+				if(op.op==Op.builtin&&(op.value==Builtin.expR||op.value==Builtin.coshR)){
+					e.sign=Sign.positive; law=op.value==Builtin.expR?"exp":"cosh";
+					if(cert !is null) args=cert.functionAt(n.a);
+				}else if(op.op==Op.add||op.op==Op.mul){
+					auto a=lower(n.a,depth+1),b=lower(n.b,depth+1);
+					if(a.sign==Sign.unknown||b.sign==Sign.unknown) return e;
+					bool pos=op.op==Op.add?a.sign==Sign.positive||b.sign==Sign.positive:a.sign==Sign.positive&&b.sign==Sign.positive;
+					e.sign=pos?Sign.positive:Sign.nonnegative;law=op.op==Op.add?"add":"mul";
+					if(cert !is null) args=a.proof~" "~b.proof;
+				}else if(op.op==Op.pow){
+					auto a=lower(n.a,depth+1);
+					if(a.sign!=Sign.unknown){
+						law="pow";e.sign=a.sign;
+						if(cert !is null) args=to!string(op.value)~" "~a.proof;
+					}else if(op.value%2==0){
+						law="evenPow";e.sign=Sign.nonnegative;
+						if(cert !is null) args=cert.functionAt(n.a)~" "~to!string(op.value)~" rfl";
+					}
+				}else if(op.op==Op.inv||op.op==Op.builtin&&op.value==Builtin.sqrtR){
+					auto a=lower(n.a,depth+1);
+					if(a.sign==Sign.positive){
+						e.sign=Sign.positive;law=op.op==Op.inv?"inv":"sqrt";
+						if(cert !is null) args=a.proof;
+					}
+				}
+			}
+			if(cert !is null&&e.sign!=Sign.unknown){
+				auto strict=e.sign==Sign.positive?"true ":"false ";
+				e.proof=cert.save(ns~"Lower "~strict~cert.functionAt(id),"("~ns~"Lower."~law~" "~args~")");
+			}
+			return signs[id]=e;
+		}
 		BoundTerm visit(uint id,uint depth){
 			if(depth>64) return BoundTerm.init;
 			if(slopes.contains(id)) return at(slopes.get(id,uint.max));
@@ -1834,10 +1887,12 @@ final class Bindings{
 			}else{
 				if(n.op!=BoundOp.primitive) return BoundTerm.init;
 				auto op=arena.view(arena.at(n.data));
-				if(op.op!=Op.add&&op.op!=Op.mul&&op.op!=Op.builtin&&op.op!=Op.pow) return BoundTerm.init;
+				if(op.op!=Op.add&&op.op!=Op.mul&&op.op!=Op.builtin&&op.op!=Op.pow&&op.op!=Op.inv) return BoundTerm.init;
 				Builtin outer;
 				if(op.op==Op.builtin){
 					switch(op.value){
+						case Builtin.logR: lemma="log"; break;
+						case Builtin.sqrtR: lemma="sqrt"; break;
 						case Builtin.expR: outer=Builtin.expR; lemma="exp"; break;
 						case Builtin.sinR: outer=Builtin.cosR; lemma="sin"; break;
 						case Builtin.cosR: outer=Builtin.sinR; lemma="cos"; break;
@@ -1849,7 +1904,21 @@ final class Bindings{
 				auto du=visit(n.a,depth+1);
 				if(du==BoundTerm.init) return BoundTerm.init;
 				if(cert !is null) args=proofs.get(n.a,"");
-				if(op.op==Op.builtin){
+				if(op.op==Op.inv||op.op==Op.builtin&&(op.value==Builtin.logR||op.value==Builtin.sqrtR)){
+					auto sign=lower(n.a,depth+1);
+					if(sign.sign!=Sign.positive) return BoundTerm.init;
+					if(cert !is null) args~=" "~sign.proof;
+					auto denominator=at(n.a);
+					if(op.op==Op.inv){
+						lemma="inv";
+						denominator=primitive(arena.pow(zero,2),[denominator]);
+					}else if(op.value==Builtin.sqrtR){
+						denominator=primitive(product,[scalar(inner,arena.real_(2)),f]);
+					}
+					auto outerSlope=primitive(arena.inv(zero),[denominator]);
+					if(op.op==Op.inv) outerSlope=primitive(product,[scalar(inner,arena.real_(-1)),outerSlope]);
+					d=primitive(product,[outerSlope,du]);
+				}else if(op.op==Op.builtin){
 					auto outerSlope=primitive(arena.call(outer,[zero]),[at(n.a)]);
 					if(op.value==Builtin.cosR) outerSlope=primitive(product,[scalar(inner,arena.real_(-1)),outerSlope]);
 					d=primitive(product,[outerSlope,du]);

@@ -184,6 +184,17 @@ private Case[] cases(){
 	Case("CoordinateHyperbolic","densityAtD(Λy. λ[cosh(sinh(y))+sinh(2*y)],0)","ℝ","2"),
 	Case("CoordinateRestrictedSin","Λy. λ[sin(y) | x. 0<x]","Distribution(ℝ)","Λ(y:ℝ). ([0<sin(y)]·abs(cos(y)))·λ[y]"),
 	Case("CoordinateRestrictedSinAtZero","densityAtD(Λy. λ[sin(y) | x. 0<x],0)","ℝ","0"),
+	Case("PositiveCoordinateLog","densityAtD(Λx. λ[log(1+x²)],1)","ℝ","1"),
+	Case("PositiveCoordinateStationary","densityAtD(Λx. λ[log(1+x²)],0)","ℝ","0"),
+	Case("PositiveCoordinateRoot","densityAtD(Λx. λ[sqrt(9+16*x²)],1)","ℝ","16/5"),
+	Case("PositiveCoordinateInverse","densityAtD(Λx. λ[(1+x²)⁻¹],1)","ℝ","1/2"),
+	Case("PositiveCoordinateMixed","densityAtD(Λx. λ[log(exp(sin(x))+cosh(x))],0)","ℝ","1/2"),
+	Case("PositiveCoordinateNestedRoot","densityAtD(Λx. λ[log(sqrt(9+16*x²))],1)","ℝ","16/25"),
+	Case("PositiveCoordinateNestedInverse","densityAtD(Λx. λ[log((1+x²)⁻¹)],1)","ℝ","1"),
+	Case("PositiveCoordinatePower","densityAtD(Λx. λ[log((exp(x)+1)^3)],0)","ℝ","3/2"),
+	Case("PositiveCoordinateRestricted","densityAtD(Λx. λ[sqrt(9+16*x²) | u. 0<u<5],1)","ℝ","0"),
+	Case("PositiveCoordinateClosed","densityAtD(Λx. λ[sqrt(9+16*x²) | u. 0<u≤5],1)","ℝ","16/5"),
+	Case("CoordinateLogPole","Λx. λ[log(x²)]","Distribution(ℝ)"),
 	Case("CoordinatePartialSqrt","Λy. λ[sqrt(y)]","Distribution(ℝ)","Λ(y:ℝ). λ[(sqrt(y))]"),
 	Case("CoordinatePartialLog","Λy. λ[log(y)]","Distribution(ℝ)","Λ(y:ℝ). λ[(log(y))]"),
 	Case("RestrictedSmoothMass","∫dy λ[2*y+1 | x. 0<x<1]","ℝ","1"),
@@ -1367,6 +1378,10 @@ private void run(string directory){
 		}
 		if(c.name=="JumpPartialRestriction") enforce(certificate.indexOf("Grid.restrictedJump")<0&&text.indexOf("∫")>=0,c.name);
 		if(c.name=="UnsplitAbsolute") enforce(text.indexOf("∫")>=0,c.name~": "~text);
+		if(c.name.indexOf("PositiveCoordinate")==0)
+			enforce(certificate.indexOf("Coordinates.Grid.Lower")>=0&&certificate.indexOf("Grid.Slope.")>=0,c.name);
+		if(c.name=="CoordinateLogPole")
+			enforce(certificate.indexOf("Grid.Slope.log")<0,c.name~" lost the domain boundary");
 		if(c.name.indexOf("RestrictedSmooth")==0) enforce(certificate.indexOf("Grid.polynomialRestricted")>=0,c.name);
 		if(c.name.indexOf("RestrictedCorner")==0) enforce(certificate.indexOf("Grid.restrictedCorner")>=0,c.name);
 		if(c.name.indexOf("RestrictedJump")==0) enforce(certificate.indexOf("Grid.restrictedJump")>=0,c.name);
