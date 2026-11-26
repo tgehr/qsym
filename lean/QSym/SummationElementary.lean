@@ -321,6 +321,43 @@ theorem powC_mul_rev (x : Option ℂ) (m n : Option ℕ) :
   cases x <;> cases m <;> cases n <;>
     simp [Function2.apply, Functions.powCN, Functions.mulN, pow_mul, Nat.mul_comm]
 
+/-- A power with a natural exponent, with its base transported through any
+scalar embeddings present in the source. Missing bases and indices are strict. -/
+def PowerAt {K : Type} [CommSemiring K] (value base : Option K) (n : Option ℕ) :=
+  value = Spectral.power base n
+
+theorem PowerAt.source {K : Type} [CommSemiring K] (pow : Option K → Option ℕ → Option K)
+    (hp : pow = Spectral.power) (b : Option K) (n : Option ℕ) : PowerAt (pow b n) b n :=
+  congrFun (congrFun hp b) n
+
+theorem PowerAt.castNZ {v b : Option ℕ} {n : Option ℕ} (h : PowerAt v b n) :
+    PowerAt (Functions.castNZ.apply v) (Functions.castNZ.apply b) n := by
+  change v = _ at h
+  subst v; cases b <;> cases n <;> simp [PowerAt, Spectral.power, Function1.apply, Functions.castNZ]
+
+theorem PowerAt.castZQ {v b : Option ℤ} {n : Option ℕ} (h : PowerAt v b n) :
+    PowerAt (Functions.castZQ.apply v) (Functions.castZQ.apply b) n := by
+  change v = _ at h
+  subst v; cases b <;> cases n <;> simp [PowerAt, Spectral.power, Function1.apply, Functions.castZQ]
+
+theorem PowerAt.castQR {v b : Option ℚ} {n : Option ℕ} (h : PowerAt v b n) :
+    PowerAt (Functions.castQR.apply v) (Functions.castQR.apply b) n := by
+  change v = _ at h
+  subst v; cases b <;> cases n <;> simp [PowerAt, Spectral.power, Function1.apply, Functions.castQR]
+
+theorem PowerAt.castRC {v b : Option ℝ} {n : Option ℕ} (h : PowerAt v b n) :
+    PowerAt (Functions.castRC.apply v) (Functions.castRC.apply b) n := by
+  change v = _ at h
+  subst v; cases b <;> cases n <;> simp [PowerAt, Spectral.power, Function1.apply, Functions.castRC]
+
+theorem PowerAt.product {K : Type} [CommSemiring K] (mul : Option K → Option K → Option K) (hm : mul = Value.mul)
+    (pow : Option K → Option ℕ → Option K) (hp : pow = Spectral.power) {x y a b : Option K} {n : Option ℕ}
+    (hx : PowerAt x a n) (hy : PowerAt y b n) : mul x y = pow (mul a b) n := by
+  change x = _ at hx
+  change y = _ at hy
+  subst x y mul pow
+  cases a <;> cases b <;> cases n <;> simp [Value.mul, Spectral.power, mul_pow]
+
 theorem mul_swap {K : Type} [CommSemigroup K] (x y : Option K) :
     Value.mul x y = Value.mul y x := by
   cases x <;> cases y <;> simp [Value.mul, mul_comm]

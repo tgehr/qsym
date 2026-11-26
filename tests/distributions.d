@@ -1242,6 +1242,8 @@ private Case[] cases(){
 	Case("ShiftOrbitBare",counter,"Distribution(ℕ)"),
 	Case("ShiftOrbitMass","massD("~counter~")","ℝ","1"),
 	Case("ShiftOrbitMean","massD(weightD(λ(n:ℕ).(n:ℝ),"~counter~"))","ℝ","1"),
+	Case("ShiftOrbitAlternating","massD(weightD(λ(n:ℕ).(-1:ℝ)^n,"~counter~"))","ℝ","1/3"),
+	Case("ShiftOrbitAmplified","massD(weightD(λ(n:ℕ).(2:ℝ)^n,"~counter~"))","ℝ","undefined(ℝ)"),
 	Case("ShiftOrbitSecond","massD(weightD(λ(n:ℕ).(n:ℝ)^2,"~counter~"))","ℝ","3"),
 	Case("ShiftOrbitStride","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("3","2+n")~"))","ℝ","5"),
 	Case("ShiftOrbitEven","massD(weightD(λ(n:ℕ).(n:ℝ),"~shift("0","n+2")~"))","ℝ","2"),
@@ -1308,6 +1310,8 @@ private void run(string directory){
 		else if(c.name.indexOf("SeriesFibre")==0)
 			enforce(certificate.indexOf("Distribution.FibreCertificate.extract_sum")>=0||
 				certificate.indexOf("Distribution.FibreCertificate.extract_nat_sum")>=0,c.name);
+		if(c.name=="ShiftOrbitAlternating"||c.name=="ShiftOrbitAmplified")
+			enforce(certificate.indexOf("SummationElementary.PowerAt.product")>=0,c.name);
 		if(c.name=="ShiftOrbitPole"||c.name=="ShiftOrbitPoleAfterZero")
 			enforce(certificate.indexOf("SummationLinearity.missing_guard")>=0,c.name);
 		if(c.name.indexOf("ShiftOrbit")==0&&c.name!="ShiftOrbitBare")
