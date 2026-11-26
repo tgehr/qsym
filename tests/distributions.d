@@ -1126,6 +1126,17 @@ private Case[] cases(){
 	Case("RetryObservationMissingKernel","massD(bindD("~retry~",undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
 	Case("RetryObservationContinuousOutput","massD(bindD("~retry~",λ(x:ℝ).Λy. [0≤y≤1]·λ[y]))","ℝ","1"),
 	Case("InfiniteSeriesVarying","λ(x:ℝ).densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),x)","ℝ→ℝ"),
+	Case("SeriesFibreIntegerHit","densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),2)","ℝ","undefined(ℝ)"),
+	Case("SeriesFibreIntegerGap","densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),1/2)","ℝ","0"),
+	Case("SeriesFibreNaturalHit","densityAtD(sumD(λ(i:ℕ).δ((i:ℝ))),2)","ℝ","undefined(ℝ)"),
+	Case("SeriesFibreNaturalGap","densityAtD(sumD(λ(i:ℕ).δ((i:ℝ))),-1)","ℝ","0"),
+	Case("SeriesFibreNaturalRepeat","densityAtD(sumD(λ(i:ℕ).δ((0:ℝ))),0)","ℝ","undefined(ℝ)"),
+	Case("SeriesFibreSigned","densityAtD(sumD(λ(i:ℤ).addD(δ((i:ℝ)),scaleD(-1,δ((i:ℝ))))),1)","ℝ","0"),
+	Case("SeriesFibreLebesgue","densityAtD(sumD(λ(n:ℕ).scaleD((1/2)^(n+1),lebesgueD())),0)","ℝ","1"),
+	Case("SeriesFibreParameter","λ(a:ℝ).λ(x:ℝ).densityAtD(sumD(λ(i:ℤ).δ(a+(i:ℝ))),x)","ℝ→ℝ→ℝ"),
+	Case("SeriesFibreMissing","densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("SeriesFibreMissingPoint","densityAtD(sumD(λ(i:ℕ).δ(undefined(ℝ))),2)","ℝ","undefined(ℝ)"),
+	Case("SeriesFibreMissingRow","densityAtD(sumD(λ(i:ℕ).undefined(Distribution(ℝ))),2)","ℝ","undefined(ℝ)"),
 	Case("InfiniteRetryFunction","μ(d:Distribution(ℕ→ℕ)).addD(δ(λ(n:ℕ).n),d)","Distribution(ℕ→ℕ)","Λ(x:ℕ→ℕ). (∑(i:ℤ). δ(λ(n:ℕ). n)[x])"),
 	Case("InfiniteRetrySupercritical","μ(d:Distribution(ℝ)).addD(scaleD(3/4,δ(2)),scaleD(4,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(2)[x])"),
 	Case("InfiniteRetryMass","massD("~endless~")","ℝ","undefined(ℝ)"),
@@ -1237,7 +1248,9 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
-		if(c.name=="InfiniteSeriesVarying") enforce(certificate.indexOf("Atomic.density_constant_dirac_series")<0&&text.indexOf("∑")>=0,c.name);
+		if(c.name=="InfiniteSeriesVarying"||c.name.indexOf("SeriesFibre")==0)
+			enforce(certificate.indexOf("Distribution.FibreCertificate.extract_sum")>=0||
+				certificate.indexOf("Distribution.FibreCertificate.extract_nat_sum")>=0,c.name);
 		if(c.name.indexOf("InfiniteRetry")==0){
 			if(c.name!="InfiniteRetryDirectSeries") enforce(certificate.indexOf("Atomic.retry_infinite_point")>=0,c.name);
 			if(c.name=="InfiniteRetryAt"||c.name=="InfiniteRetryAway"||c.name=="InfiniteRetryDensity"||c.name=="InfiniteRetryDirectSeries")

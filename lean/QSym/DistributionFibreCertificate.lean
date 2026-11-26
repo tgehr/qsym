@@ -37,6 +37,9 @@ theorem dirac (a x : Option ℝ) :
         simp [FibreCertificate, diracValue, realFibre, Value.mask, Value.not,
           Value.nonzero, Value.add, Value.mul, ← sub_eq_add_neg, sub_eq_zero, h]
 
+theorem missing (x : Option ℝ) : FibreCertificate none x none (some 0) := by
+  cases x <;> rfl
+
 theorem zero (x : Option ℝ) :
     FibreCertificate zeroValue x (x.bind (fun _ => some ((0 : ℤ) : ℝ))) (some ((0 : ℤ) : ℝ)) := by
   cases x <;> simp [FibreCertificate, zeroValue, realFibre]

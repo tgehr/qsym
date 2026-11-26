@@ -40,7 +40,7 @@ private enum BindingRule:ubyte{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionDefinedDirac,distributionDefinedBinary,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -542,6 +542,8 @@ final class Bindings{
 				auto child=visit(d.b); if(child==uint.max) return uint.max;
 				charge=primitive(mul,[at(d.a),at(steps[child].charge)]);
 				regular=primitive(mul,[at(d.a),at(steps[child].regular)]);
+			}else if(d.op==BoundOp.bottom||(d.op==BoundOp.distributionDirac&&nodes[d.a].op==BoundOp.bottom)){
+				charge=bottom(ctx,type(zero)); regular=zero;
 			}else if(d.op==BoundOp.distributionDirac||
 					d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionDirac){
 				auto location=d.op==BoundOp.distributionDirac?d.a:nodes[d.b].a;
@@ -6927,12 +6929,23 @@ final class Bindings{
 						next=squareObservation(squareBranch,query,at(d.a),true,extra);
 						rule=BindingRule.distributionAffineSquare;
 					}
-				}else if(d.op==BoundOp.distributionSum&&!naturalIndex(d.a)&&nodes[d.a].op==BoundOp.lambda){
-					auto row=nodes[nodes[d.a].a];
-					if(row.op==BoundOp.distributionDirac&&!depends(at(row.a),0)){
+				}else if(d.op==BoundOp.distributionSum&&nodes[d.a].op==BoundOp.lambda){
+					auto body=at(nodes[d.a].a),row=node(body);
+					if(!naturalIndex(d.a)&&row.op==BoundOp.distributionDirac&&!depends(at(row.a),0)){
 						auto atom=distribution(ctx,BoundOp.distributionDirac,[dropIndex(at(row.a))]);
 						next=distribution(ctx,BoundOp.distributionDensityAt,[atom,query]);
 						rule=BindingRule.distributionDensityInfiniteSeries;
+					}else{
+						uint[] shift; foreach(i;0..this.depth(ctx)) shift~=i+1;
+						FibreStep[] witness;
+						if(extractFibre(body.id,rename(query,context(body),shift),witness)!=BoundTerm.init){
+							auto root=witness[$-1];
+							auto charge=summation(lambda(at(root.charge))),regular=summation(lambda(at(root.regular)));
+							auto nonzero=primitive(arena.nonzero(arena.real_(0)),[charge]);
+							next=guard(primitive(arena.not_(arena.boolean(false)),[nonzero]),regular);
+							rule=BindingRule.distributionDensitySum;
+							extra=cast(uint)fibres.length; fibres~=witness;
+						}
 					}
 				}else if(d.op==BoundOp.distributionDirac){
 					next=guard(awayFromAtom(d.a,query),scalar(ctx,arena.real_(0)));
@@ -11325,15 +11338,28 @@ final class Bindings{
 						" ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ))"; break;
 				case BindingRule.distributionSquareGraph:
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre."~(p.extra?"square_mul_rule":"square_rule")~" ("~name(n.b)~".eval ξ ρ))"; break;
-				case BindingRule.distributionDensityFibre:{
+				case BindingRule.distributionDensitySum,BindingRule.distributionDensityFibre:{
 					string ev(uint id){ return "("~name(id)~".eval ξ ρ)"; }
 					string witness(uint id){ return "h"~to!string(id); }
-					auto q=ev(n.b);
+					auto series=p.rule==BindingRule.distributionDensitySum;
+					auto q=series?"query":ev(n.b);
+					auto rows=result.fibres[p.extra];
 					proof=".ofEq (fun ξ ρ =>\n";
-					foreach(f;result.fibres[p.extra]){
+					string indent="  ";
+					if(series){
+						bool natural=naturalIndex(nodes[n.a].a);
+						auto env="(Binding.Env.cons (a := .scalar ."~(natural?"natural":"integer")~") (some i) ρ)";
+						string row(uint id){return "(fun i => "~name(id)~".eval ξ "~env~")";}
+						auto root=rows[$-1];
+						proof~="  let query := "~ev(n.b)~"\n  Distribution.FibreCertificate."~(natural?"extract_nat_sum":"extract_sum")~
+							" (x := query) (d := "~row(root.source)~") (c := "~row(root.charge)~") (w := "~row(root.regular)~") (fun i =>\n    let ρ : Binding.Env "~ctxName(nodes[root.source].context)~" := "~env~"\n";
+						indent="    ";
+					}
+					foreach(f;rows){
 						auto d=nodes[f.source]; string lemma; Term offset; bool swap;
 						if(d.op==BoundOp.distributionAdd) lemma="add "~witness(d.a)~" "~witness(d.b);
 						else if(d.op==BoundOp.distributionScale) lemma="scale "~ev(d.a)~" "~witness(d.b);
+						else if(d.op==BoundOp.bottom||(d.op==BoundOp.distributionDirac&&nodes[d.a].op==BoundOp.bottom)) lemma="missing "~q;
 						else if(d.op==BoundOp.distributionDirac) lemma="dirac "~ev(d.a)~" "~q;
 						else if(d.op==BoundOp.distributionZero) lemma="zero "~q;
 						else if(d.op==BoundOp.distributionWeight&&nodes[d.b].op==BoundOp.distributionDirac)
@@ -11346,9 +11372,9 @@ final class Bindings{
 							auto shape="Distribution.GraphFibre.Coordinates.Grid."~(bare?"cornerBare":(swap?"cornerSwapped ":"cornerTerm ")~a~" "~hv);
 							lemma="corner "~a~" "~hv~" ("~shape~") "~q;
 						}else lemma="chart "~densityProgram(f.weights)~" "~q;
-						proof~="  let "~witness(f.source)~" : Distribution.FibreCertificate "~ev(f.source)~" "~q~" "~ev(f.charge)~" "~ev(f.regular)~" := Distribution.FibreCertificate."~lemma~"\n";
+						proof~=indent~"let "~witness(f.source)~" : Distribution.FibreCertificate "~ev(f.source)~" "~q~" "~ev(f.charge)~" "~ev(f.regular)~" := Distribution.FibreCertificate."~lemma~"\n";
 					}
-					proof~="  Distribution.FibreCertificate.extract "~witness(n.a)~")";
+					proof~=series?indent~witness(rows[$-1].source)~"))":"  Distribution.FibreCertificate.extract "~witness(n.a)~")";
 					break;
 				}
 				case BindingRule.distributionDensityInfiniteSeries:

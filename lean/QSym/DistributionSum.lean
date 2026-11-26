@@ -62,7 +62,7 @@ theorem bind_sumValue {α β : Type} (k : ℤ → Option (D α)) (g : Option (α
 
 /-- A series over ℤ that vanishes at negative indices is the series over ℕ,
 with the same definedness and absolute convergence. -/
-private theorem natural_tests (m : ℕ → Option ℝ) :
+theorem partialSum_nat (m : ℕ → Option ℝ) :
     partialSum (fun i : ℤ => if 0 ≤ i then m i.toNat else some 0) = Summation.value norm (some m) := by
   classical
   let a : ℕ → ℝ := fun n => (m n).getD 0
@@ -106,7 +106,7 @@ private theorem natural_tests (m : ℕ → Option ℝ) :
 
 theorem mass_sumNatValue {α : Type} (k : ℕ → Option (D α)) :
     massValue (sumNatValue (some k)) = Summation.value norm (some (fun n => massValue (k n))) := by
-  rw [← natural_tests]
+  rw [← partialSum_nat]
   change partialSum (fun i => integrate (if 0 ≤ i then (k i.toNat).getD .invalid else .zero) _) = _
   congr 1
   funext i
