@@ -324,6 +324,21 @@ private Case[] cases(){
 	Case("MissingQuadraticSafe","∫dx (2+x²)⁻¹·λ[x]","ℝ","1/2·sqrt(2)·π"),
 	Case("MissingQuadraticBottom","defined(∫dx undefined(ℝ)·λ[x])","𝔹","false"),
 	Case("MissingQuadraticZeroArg","defined((λ(a:ℝ).∫dx a⁻¹*(1+x²)⁻¹·λ[x])(0))","𝔹","false"),
+	Case("CauchyWindowUnit","∫dx [-1≤x≤1]·(1+x²)⁻¹·λ[x]","ℝ","1/2·π"),
+	Case("CauchyWindowAtan","∫dx [-1≤x≤1]·λ[atan(x)]","ℝ","1/2·π"),
+	Case("CauchyWindowAtanScaled","∫dx [1<x<2]·λ[atan(2*x-3)]","ℝ","1/2·π"),
+	Case("CauchyWindowShift","∫dx [1≤x≤2]·(1+(2*x-3)^2)⁻¹·λ[x]","ℝ","1/4·π"),
+	Case("CauchyWindowNegative","∫dx [0≤x≤1]·(-1-x²)⁻¹·λ[x]","ℝ","-1/4·π"),
+	Case("CauchyWindowRational","∫dx [0<x<1/2]·(x²+1/4)⁻¹·λ[x]","ℝ","1/2·π"),
+	Case("CauchyWindowUnknown","λ(l:ℝ).λ(u:ℝ).∫dx [l<x≤u]·(1+x²)⁻¹·λ[x]","ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). [l<u]·(-atan(l)+atan(u))"),
+	Case("CauchyWindowReverse","∫dx [2≤x≤1]·(1+x²)⁻¹·λ[x]","ℝ","0"),
+	Case("CauchyWindowSingleton","∫dx [1≤x≤1]·(1+x²)⁻¹·λ[x]","ℝ","0"),
+	Case("CauchyWindowMean","∫dx [0≤x≤1]·(1+(1+x²)⁻¹)·λ[x]","ℝ","1/4·π+1"),
+	Case("CauchyWindowFactor","λ(h:ℝ→ℝ).λ(t:ℝ).∫dx [-1<x<1]·(h(t)*(1+x²)⁻¹)·λ[x]","(ℝ→ℝ)→ℝ→ℝ","λ(h:ℝ→ℝ). λ(t:ℝ). h(t)·(1/2)·π"),
+	Case("CauchyWindowZeroMask","∫dx [1<x<0]·undefined(ℝ)*(1+x²)⁻¹·λ[x]","ℝ","0"),
+	Case("CauchyWindowMissing","defined(∫dx [undefined(ℝ)<x<1]·(1+x²)⁻¹·λ[x])","𝔹","false"),
+	Case("CauchyWindowIrrational","∫dx [0≤x≤1]·(2*x²+2*x+3)⁻¹·λ[x]","ℝ","-1/5·sqrt(5)·atan(1/5·sqrt(5))+1/5·sqrt(5)·atan(3/5·sqrt(5))"),
+	Case("CauchyWindowPole","∫dx [2<x<3]·(x²-2)⁻¹·λ[x]","ℝ"),
 	Case("CauchyScaledAtan","∫dx λ[atan(2*x-3)]","ℝ","π"),
 	Case("CauchyScaleNormal","∫dx (π⁻¹)·(1+x²)⁻¹·λ[x]","ℝ","1"),
 	Case("CauchyScaleQuotient","∫dx 1/(π*(1+x²))·λ[x]","ℝ","1"),
@@ -1213,7 +1228,7 @@ private Case[] cases(){
 	Case("SummandAbove","∫dx [1≤x]*(1/x^2+c)*λ[x]","ℝ"),
 	Case("SummandNested","∫dx [1≤x≤2]*(log(2*x)+x)*λ[x]","ℝ"),
 	Case("QuotientPoleTwo","∫dx [1≤x≤2]*(1/(x+1)+1/x)*λ[x]","ℝ"),
-	Case("QuotientPoleQuadratic","∫dx [1≤x≤2]*(1/(x^2+1))*λ[x]","ℝ"),
+	Case("QuotientPoleQuadratic","∫dx [1≤x≤2]*(1/(x^2+1))*λ[x]","ℝ","atan(2)-1/4·π"),
 	Case("QuotientScale","∫dx [1≤x≤2]*c/x*λ[x]","ℝ","c·log(2)"),
 	Case("QuotientScaleBounds","∫dx [a≤x≤b]*c/x*λ[x]","ℝ","[a≤b]·(guard(0<a∧b≠0∨b<0∧a≠0,c·(-log(abs(a))+log(abs(b)))))"),
 	Case("QuotientScaleStrict","∫dx [a<x≤b]*c/x*λ[x]","ℝ","[a<b]·(guard(c=0∧0≤a∨(0<a∧b≠0∨b<0∧a≠0),[c≠0]·(c·(-log(abs(a))+log(abs(b))))))"),
@@ -1803,7 +1818,11 @@ private void run(string directory){
 				c.name!="MissingQuadraticHoleHidden"&&c.name!="MissingQuadraticSafe";
 			enforce((certificate.indexOf("MissingPoint.InDensity.mass ")>=0)==witness,c.name);
 		}
-		if(c.name.indexOf("CauchyScale")==0&&c.name!="CauchyScaledAxis"){
+		if(c.name.indexOf("CauchyWindow")==0||c.name=="QuotientPoleQuadratic"){
+			bool integrated=c.name!="CauchyWindowReverse"&&c.name!="CauchyWindowSingleton"&&c.name!="CauchyWindowZeroMask"&&
+				c.name!="CauchyWindowMissing"&&c.name!="CauchyWindowPole";
+			enforce((certificate.indexOf("IntervalTerms.cauchy")>=0)==integrated,c.name);
+		}else if(c.name.indexOf("CauchyScale")==0&&c.name!="CauchyScaledAxis"){
 			bool scaled=c.name!="CauchyScalePole"&&c.name!="CauchyScaleZero";
 			enforce((certificate.indexOf("StepSource.cauchy_scaled_mass ")>=0)==scaled,c.name);
 		}else if(c.name.indexOf("Cauchy")==0){
@@ -2317,12 +2336,12 @@ private void run(string directory){
 		// domain is then that the axis is not at the pole. Two poles, a
 		// denominator without a root and the domain around a mask of closed
 		// bounds with the pole between them keep their integral.
-		if(c.name.indexOf("Quotient")==0||c.name=="DomainAxis"){
+		if(c.name.indexOf("Quotient")==0&&c.name!="QuotientPoleQuadratic"||c.name=="DomainAxis"){
 			enum src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
 			bool retained=among("QuotientDiverges","QuotientAbovePolynomial","QuotientRemovable","QuotientExponential","QuotientScaleSum","QuotientScaleDiverges",
-				"QuotientPoleInside","QuotientPoleTwo","QuotientPoleQuadratic");
+				"QuotientPoleInside","QuotientPoleTwo");
 			bool pole=c.name.indexOf("QuotientPole")==0&&!retained;
 			bool scaled=c.name.indexOf("QuotientScale")==0&&c.name!="QuotientScaled"||c.name.indexOf("QuotientPoleScale")==0||c.name=="QuotientPoleUniform";
 			bool above=c.name.indexOf("QuotientAbove")==0||c.name.indexOf("QuotientScaleAbove")==0||c.name.indexOf("QuotientPoleAbove")==0||

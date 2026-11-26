@@ -1,5 +1,6 @@
 import QSym.DistributionMissingPoint
 import QSym.IntegrationLaws
+import QSym.DistributionInterval
 import Mathlib.Analysis.SpecialFunctions.ImproperIntegrals
 
 /-! Integrals of reciprocals of quadratics without real roots. The sign of
@@ -9,6 +10,13 @@ namespace QSym.Distribution.StepSource
 open MeasureTheory Set Filter
 
 private def kernel (x : ℝ) := (1 + x^2)⁻¹
+
+private theorem quadratic_nonzero {a b c k : ℝ} (hk : 0 < k) (key : k = a*c - b^2) (x : ℝ) :
+    c + 2*b*x + a*x^2 ≠ 0 := by
+  intro zero
+  have h : a*(c+2*b*x+a*x^2) = (a*x+b)^2+k := by rw [key]; ring
+  rw [zero, mul_zero] at h
+  linarith [sq_nonneg (a*x+b)]
 
 private theorem quadratic_kernel {a b c k : ℝ} (ha : a ≠ 0) (hk : 0 < k)
     (he : k = a*c - b^2) (x : ℝ) :
@@ -66,11 +74,7 @@ theorem cauchy_mass {f : ℝ → Option ℝ} {p : List ℚ} (c b a k s : ℚ)
   let q := fun x : ℝ => (c : ℝ) + 2*b*x + a*x^2
   have eq (x : ℝ) : f x = some (q x) := quadratic_source c b a src coeff x
   have total (x : ℝ) : Value.inv (f x) = some ((q x)⁻¹) := by
-    have nz : q x ≠ 0 := by
-      have h : (a : ℝ)*q x = (a*x+b)^2+k := by dsimp [q]; rw [key]; ring
-      intro zero
-      rw [zero, mul_zero] at h
-      linarith [sq_nonneg ((a : ℝ)*x+b)]
+    have nz : q x ≠ 0 := quadratic_nonzero hp key x
     rw [eq x]
     simp [Value.inv, nz]
   obtain ⟨hi, hv⟩ := quadratic_integral hn hp key
@@ -117,5 +121,78 @@ theorem cauchy_scaled_mass {f : ℝ → Option ℝ} {p : List ℚ} (scale : Opti
   change Value.Defined (Value.mul (Value.mul (some (s : ℝ)) (some Real.pi))
     (Value.inv (Functions.sqrtR.apply (some (k : ℝ)))))
   simp [Value.Defined, Value.mul, Value.inv, Function1.apply, Functions.sqrtR, hp.le, (Real.sqrt_pos.2 hp).ne']
+
+/-- The antiderivative used at either partial endpoint of a root-free
+reciprocal quadratic. The sign comes from the slope of the arctangent. -/
+def cauchyPrimitive (a b k t : Option ℝ) : Option ℝ :=
+  let w := Value.inv (Functions.sqrtR.apply k)
+  Value.mul w (Functions.atanR.apply (Value.mul w (Value.add (Value.mul a t) b)))
+
+private def primitiveReal (a b k x : ℝ) : ℝ := (√k)⁻¹ * Real.arctan ((a*x+b)/√k)
+
+private theorem primitiveReal_deriv {a b c k : ℝ} (ha : a ≠ 0) (hk : 0 < k) (he : k = a*c-b^2) (x : ℝ) :
+    HasDerivAt (primitiveReal a b k) ((c + 2*b*x + a*x^2)⁻¹) x := by
+  have arg : HasDerivAt (fun t : ℝ => (a*t+b)/√k) (a/√k) x := by
+    simpa using (((hasDerivAt_id x).const_mul a).add_const b).div_const (√k)
+  have d := ((Real.hasDerivAt_arctan' _).comp x arg).const_mul ((√k)⁻¹)
+  have hw := (Real.sqrt_pos.2 hk).ne'
+  have width : (√k)⁻¹*(a/√k) = a/k := by
+    field_simp [hw, hk.ne']
+  have rearrange : (a*x+b)/√k = a/√k*x+b/√k := by ring
+  have slope : (√k)⁻¹ * ((1+((a*x+b)/√k)^2)⁻¹ * (a/√k)) = (c+2*b*x+a*x^2)⁻¹ := by
+    rw [quadratic_kernel ha hk he x, rearrange]
+    unfold kernel
+    rw [← width]
+    ring
+  simpa only [primitiveReal, slope, Function.comp_def] using d
+
+private theorem cauchy_calculus {f p} (c b a k : ℚ)
+    (src : PolynomialOn (fun _ => True) f p)
+    (shape : polyZero (polyAdd p (polyScale (-1) [c, 2*b, a])) = true)
+    (check : decide (a ≠ 0 ∧ 0 < k ∧ k = a*c-b^2) = true) {A B K : Option ℝ}
+    (hA : A = some (Numeric.denote (s := .real) a)) (hB : B = some (Numeric.denote (s := .real) b))
+    (hK : K = some (Numeric.denote (s := .real) k)) :
+    let g := fun x : ℝ => ((c : ℝ)+2*b*x+a*x^2)⁻¹
+    (∀ x, Value.inv (f x) = some (g x)) ∧
+    (∀ t, cauchyPrimitive A B K (some t) = some (primitiveReal a b k t)) ∧ Continuous g ∧
+    ∀ x, HasDerivAt (primitiveReal a b k) (g x) x := by
+  obtain ⟨ha, hk, he⟩ := of_decide_eq_true check
+  have hn : (a : ℝ) ≠ 0 := by exact_mod_cast ha
+  have hp : 0 < (k : ℝ) := by exact_mod_cast hk
+  have key : (k : ℝ) = a*c-b^2 := by exact_mod_cast he
+  have nz := quadratic_nonzero hp key
+  refine ⟨fun x => ?_, fun t => ?_, ?_, primitiveReal_deriv hn hp key⟩
+  · rw [quadratic_source c b a src shape x]
+    simp [Value.inv, nz x]
+  · rw [hA, hB, hK]
+    change cauchyPrimitive (some (a : ℝ)) (some (b : ℝ)) (some (k : ℝ)) (some t) = _
+    simp [cauchyPrimitive, primitiveReal, Value.inv, Value.mul, Value.add, Function1.apply,
+      Functions.sqrtR, Functions.atanR, hp.le, (Real.sqrt_pos.2 hp).ne', div_eq_mul_inv, mul_comm]
+  · exact (by fun_prop : Continuous (fun x : ℝ => (c : ℝ)+2*b*x+a*x^2)).inv₀ nz
+
+theorem IntervalTerms.cauchy {f p} (c b a k : ℚ) {l u m A B K : Option ℝ}
+    (src : PolynomialOn (fun _ => True) f p)
+    (shape : polyZero (polyAdd p (polyScale (-1) [c, 2*b, a])) = true)
+    (check : decide (a ≠ 0 ∧ 0 < k ∧ k = a*c-b^2) = true)
+    (hA : A = some (Numeric.denote (s := .real) a)) (hB : B = some (Numeric.denote (s := .real) b))
+    (hK : K = some (Numeric.denote (s := .real) k)) :
+    IntervalTerms l u m (fun x => Value.inv (f x))
+      (Value.add (cauchyPrimitive A B K u) (Value.mul m (cauchyPrimitive A B K l))) := by
+  obtain ⟨v, endpoints, cont, deriv⟩ := cauchy_calculus c b a k src shape check hA hB hK
+  exact .primitive v endpoints cont deriv
+
+theorem IntervalTerms.cauchy_scaled {f p} (scale : Option ℝ) (right : Bool) (c b a k : ℚ) {l u m A B K : Option ℝ}
+    (src : PolynomialOn (fun _ => True) f p)
+    (shape : polyZero (polyAdd p (polyScale (-1) [c, 2*b, a])) = true)
+    (check : decide (a ≠ 0 ∧ 0 < k ∧ k = a*c-b^2) = true)
+    (hA : A = some (Numeric.denote (s := .real) a)) (hB : B = some (Numeric.denote (s := .real) b))
+    (hK : K = some (Numeric.denote (s := .real) k)) :
+    IntervalTerms l u m (fun x => if right then Value.mul (Value.inv (f x)) scale else Value.mul scale (Value.inv (f x)))
+      (Value.mul scale (Value.add (cauchyPrimitive A B K u) (Value.mul m (cauchyPrimitive A B K l)))) := by
+  obtain ⟨v, endpoints, cont, deriv⟩ := cauchy_calculus c b a k src shape check hA hB hK
+  apply IntervalTerms.scaledPrimitive (c := scale) _ endpoints cont deriv
+  intro x
+  rw [v x]
+  cases scale <;> cases right <;> simp [Value.mul, mul_comm]
 
 end QSym.Distribution.StepSource

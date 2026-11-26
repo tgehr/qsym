@@ -85,8 +85,14 @@ private Rational[] polyTranslate(Rational[] q,Rational s) @safe {
 // coefficients are terms there is a table and an antiderivative for each of
 // them, with the literals of those that are present.
 private struct RateEnd{ uint[][] rows; uint[] primitive; bool zero; uint[][][] tables; uint[][] primitives; }
+private struct CauchyData{
+	Rational constant,halfLinear,leading,determinant;
+	uint inverse=uint.max,factor=uint.max; bool right;
+	uint sign=uint.max,radicand=uint.max,leadingLiteral=uint.max,halfLinearLiteral=uint.max;
+}
 private struct IntervalTerm{
 	uint value,primitive=uint.max; bool scaled,curved,vertex; Rational rate; uint order;
+	CauchyData cauchy;
 	GaussianData bell; Rational point,half,rest; uint restLiteral=uint.max;
 	// With the error function: the offset of its argument, and the literals
 	// of the negated curvature, of that offset and of minus one. With
@@ -173,10 +179,6 @@ private struct GaussianData{
 	// A scale that may vanish, and a polynomial whose coefficients may all
 	// vanish: the result is under their mask.
 	bool maskScale,maskPolynomial;
-}
-private struct CauchyData{
-	Rational constant,halfLinear,leading,determinant;
-	uint sign=uint.max,radicand=uint.max,inverse=uint.max,factor=uint.max; bool right;
 }
 private struct IntegralSolution{
 	uint[] from,to; Rational[] exceptions,probes; IntegralCell[] cells; bool ae,piecewise,closed,polynomial,interval,gaussian; Rational value; Rational[] values; uint output=uint.max,missingWeight=uint.max; uint[] weightFunctions; IntervalData bounds; GaussianData bell; CauchyData cauchy;
@@ -1958,6 +1960,26 @@ final class Bindings{
 		}
 		if(p.length>64) return false;
 		foreach(c;p) if(c.words>128) return false;
+		return true;
+	}
+	// One reciprocal of a rational quadratic and, optionally, an axis-free
+	// factor. For separate weights the first one is the inner density.
+	private bool cauchyWeight(uint first,uint second,out CauchyData d){
+		auto id=first;
+		if(second!=uint.max||primitiveOp(id,Op.mul)){
+			auto left=second!=uint.max?id:nodes[id].a,other=second!=uint.max?second:nodes[id].b;
+			bool leftFree=!depends(at(left),0);
+			d.right=!depends(at(other),0);
+			if(leftFree==d.right) return false;
+			d.factor=d.right?other:left; id=d.right?left:other;
+		}
+		Rational[] p;
+		if(!primitiveOp(id,Op.inv)||!axisPolynomial(nodes[id].a,p,0,true)) return false;
+		while(p.length&&p[$-1].zero) p.length=p.length-1;
+		if(p.length!=3) return false;
+		auto half=p[1]/Rational(2),k=p[2]*p[0]-half*half;
+		if(k<=Rational(0)||k.words>128) return false;
+		d.constant=p[0]; d.halfLinear=half; d.leading=p[2]; d.determinant=k; d.inverse=id;
 		return true;
 	}
 	// Find a point where a strict weight is missing. Iverson masks can
@@ -4973,13 +4995,16 @@ final class Bindings{
 				r.half=p[0]/Rational(2); if(r.half.words>128) return false;
 				r.bell.constant=p[0]; r.curvatureTerm=true; return true;
 			}
+			bool intervalCauchy(uint id,ref IntervalTerm r){
+				return !d.half&&d.unit==uint.max&&solution.from.length==1&&cauchyWeight(id,uint.max,r.cauchy);
+			}
 			// Decide before building anything: a refused integral leaves no
 			// terms behind. Beyond a single bound every term must decay.
 			bool admissible(uint id,uint depth){
 				Rational[] p,exponent,R,E; Rational rate; bool scaled; size_t order; IntervalTerm r;
 				if(scaledExponential(id,p,rate,scaled)) return !d.half||decays(rate+outerRate);
 				if(tailExponential(id,false,p,exponent,scaled,false,0,true)) return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r)||erf(p,exponent,r);
-				if(symbolicErf(id,r)||symbolicRateBetween(id,r)) return true;
+				if(symbolicErf(id,r)||symbolicRateBetween(id,r)||intervalCauchy(id,r)) return true;
 				auto q=nodes[id];
 				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
@@ -5302,8 +5327,24 @@ final class Bindings{
 				if(built.scaled) result=primitive(mulOp,[built.scale,result]);
 				d.terms~=r; return result;
 			}
+			BoundTerm cauchyDifference(IntervalTerm r){
+				auto c=r.cauchy;
+				auto a=scalar(ctx,arena.real_(c.leading)),b=scalar(ctx,arena.real_(c.halfLinear)),k=scalar(ctx,arena.real_(c.determinant));
+				auto zero=arena.real_(0),root=primitive(arena.call(Builtin.sqrtR,[zero]),[k]);
+				auto width=primitive(arena.inv(zero),[root]);
+				BoundTerm endpoint(BoundTerm t){
+					auto affine=primitive(addOp,[primitive(mulOp,[a,t]),b]);
+					auto arg=primitive(mulOp,[width,affine]);
+					return primitive(mulOp,[width,primitive(arena.call(Builtin.atanR,[zero]),[arg])]);
+				}
+				auto diff=primitive(addOp,[endpoint(upper),primitive(mulOp,[minusOne,endpoint(lower)])]);
+				if(c.factor!=uint.max) diff=primitive(mulOp,[dropIndex(at(c.factor)),diff]);
+				r.cauchy.leadingLiteral=a.id; r.cauchy.halfLinearLiteral=b.id; r.cauchy.radicand=k.id;
+				d.terms~=r; return diff;
+			}
 			BoundTerm build(uint id,uint depth){
 				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
+				if(intervalCauchy(id,r)) return cauchyDifference(r);
 				if(scaledExponential(id,p,rate,r.scaled)) return difference(r,p,rate);
 				if(tailExponential(id,false,p,exponent,r.scaled,false,0,true)){
 					auto curved=curveDifference(r,p,exponent);
@@ -5556,34 +5597,15 @@ final class Bindings{
 		BoundTerm integrateCauchy(BoundTerm t,out IntegralSolution solution){
 			auto n=node(t);
 			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,solution.from)||!solution.from.length||solution.from.length>2) return BoundTerm.init;
-			auto id=solution.from[0];
-			uint factor=uint.max; bool right;
-			if(solution.from.length==2||primitiveOp(id,Op.mul)){
-				auto left=solution.from.length==2?id:nodes[id].a;
-				auto other=solution.from.length==2?solution.from[1]:nodes[id].b;
-				bool leftFree=!depends(at(left),0);
-				right=!depends(at(other),0);
-				if(leftFree==right) return BoundTerm.init;
-				factor=right?other:left;
-				id=right?left:other;
-			}
-			Rational[] p;
-			if(!primitiveOp(id,Op.inv)||!axisPolynomial(nodes[id].a,p,0,true)) return BoundTerm.init;
-			while(p.length&&p[$-1].zero) p.length=p.length-1;
-			if(p.length!=3) return BoundTerm.init;
-			auto half=p[1]/Rational(2),k=p[2]*p[0]-half*half;
-			if(k<=Rational(0)||k.words>128) return BoundTerm.init;
+			CauchyData d;
+			if(!cauchyWeight(solution.from[0],solution.from.length==2?solution.from[1]:uint.max,d)) return BoundTerm.init;
 			auto ctx=context(t),zero=arena.real_(0);
-			auto sign=scalar(ctx,arena.real_(p[2]<Rational(0)?-1:1)),radicand=scalar(ctx,arena.real_(k));
+			auto sign=scalar(ctx,arena.real_(d.leading<Rational(0)?-1:1)),radicand=scalar(ctx,arena.real_(d.determinant));
 			auto root=primitive(arena.call(Builtin.sqrtR,[zero]),[radicand]);
 			auto pi=scalar(ctx,arena.call(Builtin.pi,[])),mul=arena.mul(zero,zero,true);
 			auto answer=primitive(mul,[primitive(mul,[sign,pi]),primitive(arena.inv(zero),[root])]);
-			solution.cauchy=CauchyData(p[0],half,p[2],k,sign.id,radicand.id,id);
-			if(factor!=uint.max){
-				auto coefficient=dropIndex(at(factor));
-				solution.cauchy.factor=coefficient.id; solution.cauchy.right=right;
-				answer=primitive(mul,[coefficient,answer]);
-			}
+			if(d.factor!=uint.max) answer=primitive(mul,[dropIndex(at(d.factor)),answer]);
+			d.sign=sign.id; d.radicand=radicand.id; solution.cauchy=d;
 			solution.piecewise=true; solution.output=answer.id;
 			return answer;
 		}
@@ -10356,7 +10378,7 @@ final class Bindings{
 		if(s.cauchy.sign!=uint.max){
 			auto d=s.cauchy,source=piece(nodes[d.inverse].a,cert.everywhere,"",Rational(0));
 			auto sign=d.leading<Rational(0)?Rational(-1):Rational(1);
-			auto rule=d.factor==uint.max?"cauchy_mass ":"cauchy_scaled_mass ("~name(d.factor)~".eval ξ ρ) "~(d.right?"true ":"false ");
+			auto rule=d.factor==uint.max?"cauchy_mass ":"cauchy_scaled_mass ("~name(dropIndex(at(d.factor)).id)~".eval ξ ρ) "~(d.right?"true ":"false ");
 			auto proof="Distribution.StepSource."~rule~q(d.constant)~" "~q(d.halfLinear)~" "~q(d.leading)~" "~q(d.determinant)~" "~q(sign)~
 				" "~source.proof~" rfl "~cert.closedProof(at(d.sign),sign)~" rfl "~cert.closedProof(at(d.radicand),d.determinant);
 			if(s.from.length==2)
@@ -10759,6 +10781,13 @@ final class Bindings{
 					return "("~termsName~".add "~left~" "~right~")";
 				}
 				++next;
+				if(r.cauchy.inverse!=uint.max){
+					auto c=r.cauchy,poly=piece(nodes[c.inverse].a,cert.everywhere,"",Rational(0));
+					auto tag=c.factor==uint.max?"cauchy ":"cauchy_scaled ("~name(dropIndex(at(c.factor)).id)~".eval ξ ρ) "~(c.right?"true ":"false ");
+					return "("~termsName~"."~tag~cert.q(c.constant)~" "~cert.q(c.halfLinear)~" "~cert.q(c.leading)~" "~cert.q(c.determinant)~
+						" "~poly.proof~" rfl rfl "~cert.closedProof(at(c.leadingLiteral),c.leading)~" "~cert.closedProof(at(c.halfLinearLiteral),c.halfLinear)~
+						" "~cert.closedProof(at(c.radicand),c.determinant)~")";
+				}
 				if(r.vertex){
 					// The term everywhere, the bound at the vertex, the checks of
 					// the Gaussian integral there, and the literals of the result.
