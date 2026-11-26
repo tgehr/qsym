@@ -3,7 +3,8 @@ import QSym.DistributionAtomicInfinite
 /-! Interpretation of an atomic retry as a least fixed point. A model with a
 single visited point has a unique weighted-atom normal form, including at
 weight zero. More general finite models use a representative of their complete
-partial-probe semantics. -/
+partial-probe semantics. When the limit has several visits and unbounded mass,
+keep the countable series of increments of the finite approximants. -/
 noncomputable section
 namespace QSym.Distribution.Atomic
 open scoped ENNReal
@@ -40,7 +41,7 @@ def realize (m : Model α) : Option (D α) := by
     if h : ∃ d, Presents d m then some h.choose else
     if i : ∃ a, m = infiniteModel a then some (infiniteAtom i.choose) else none
 
-private theorem realize_presents {d : D α} {m : Model α} (hd : Presents d m) :
+theorem realize_presents {d : D α} {m : Model α} (hd : Presents d m) :
     ∃ e, realize m = some e ∧ Presents e m := by
   classical
   unfold realize
@@ -57,6 +58,16 @@ private theorem realize_simple {d : D α} {m : Model α} (hd : Presents d m) (sd
   have h : ∃ e, Presents e m ∧ Simple e := ⟨d, hd, sd⟩
   rw [realize, dif_pos h, simple_unique h.choose_spec.1 hd h.choose_spec.2 sd]
 
+theorem realize_eq_none_of_infinite_visits {m : Model α} {a b c : α}
+    (ha : m.1 a = ⊤) (hb : b ∈ m.2) (hc : c ∈ m.2) (hne : b ≠ c) : realize m = none := by
+  classical
+  have finite : ¬ ∃ d, Presents d m := fun ⟨_, hd⟩ => hd.1.finite_weight a ha
+  have simple : ¬ ∃ d, Presents d m ∧ Simple d := fun ⟨d, hd, _⟩ => finite ⟨d, hd⟩
+  have singleton : ¬ ∃ x, m = infiniteModel x := by
+    rintro ⟨x, rfl⟩
+    exact hne ((Set.mem_singleton_iff.mp hb).trans (Set.mem_singleton_iff.mp hc).symm)
+  simp [realize, simple, finite, singleton]
+
 private theorem realize_infinite (a : α) : realize (infiniteModel a) = some (infiniteAtom a) := by
   classical
   have h : ¬ ∃ d, Presents d (infiniteModel a) := by
@@ -66,6 +77,20 @@ private theorem realize_infinite (a : α) : realize (infiniteModel a) = some (in
   have i : ∃ b, infiniteModel a = infiniteModel b := ⟨a, rfl⟩
   have eq : a = i.choose := Set.singleton_eq_singleton_iff.mp (congrArg Prod.snd i.choose_spec)
   simp [realize, hs, h, i, ← eq]
+
+def incrementSeries (v : ℕ → Option (D α)) : Option (D α) :=
+  sumNatValue (some (fun n => addValue (v (n+1)) (scaleValue (some (-1)) (v n))))
+
+/-- Finite models and infinite singletons have direct presentations. For other
+limits, keep the change in weights and visits at each depth together. -/
+def realizeChain (m : Model α) (s : ℕ → Model α) : Option (D α) :=
+  (realize m).orElse fun _ => incrementSeries (fun n => realize (s n))
+
+theorem realizeChain_of_some {m : Model α} {d : D α} (h : realize m = some d) (s : ℕ → Model α) :
+    realizeChain m s = some d := by rw [realizeChain, h]; rfl
+
+theorem realizeChain_defined (m : Model α) (s : ℕ → Model α) : (realizeChain m s).isSome = true := by
+  cases h : realize m <;> rw [realizeChain, h] <;> rfl
 
 private def modelOf (d : D α) : Option (Model α) := by
   classical exact if h : ∃ m, Presents d m then some h.choose else none
@@ -80,10 +105,12 @@ def retryValue (ratio : Option ℝ) (seed : Option (D α)) : Option (D α) := do
   let r ← ratio
   let d ← seed
   let m ← modelOf d
-  if 0 ≤ r then realize ((strictRetryStep m (ENNReal.ofReal r)).lfp) else none
+  let g := strictRetryStep m (ENNReal.ofReal r)
+  if 0 ≤ r then realizeChain g.lfp (fun n => g^[n] ⊥) else none
 
-theorem retry_eq_realize {d : D α} {m : Model α} (hd : Presents d m) {r : ℝ} (h0 : 0 ≤ r) :
-    retryValue (some r) (some d) = realize ((strictRetryStep m (ENNReal.ofReal r)).lfp) := by
+theorem retry_eq_chain {d : D α} {m : Model α} (hd : Presents d m) {r : ℝ} (h0 : 0 ≤ r) :
+    let g := strictRetryStep m (ENNReal.ofReal r)
+    retryValue (some r) (some d) = realizeChain g.lfp (fun n => g^[n] ⊥) := by
   simp [retryValue, modelOf_eq hd, h0]
 
 /-- Every successful evaluation of this source term yields finite nonnegative
@@ -129,6 +156,17 @@ theorem admissible_scale {x : Option (D α)} {w : Option ℝ} (c : ℚ) (hc : 0 
     obtain ⟨k, ha⟩ := hx a rfl
     exact represented (ha.1.scale (r := (c : ℝ)) (by exact_mod_cast hc))
 
+theorem retry_isSome {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q : ℝ))
+    {seed : Option (D α)} (hs : Admissible seed) :
+    (retryValue r seed).isSome = seed.isSome := by
+  subst r
+  cases seed with
+  | none => rfl
+  | some d =>
+    obtain ⟨m, hm⟩ := hs d rfl
+    rw [retry_eq_chain hm (by exact_mod_cast h0)]
+    exact realizeChain_defined _ _
+
 theorem observe_retry (observe : D α → Option β)
     (invariant : ∀ {d e : D α} {m : Model α}, Presents d m → Presents e m → observe d = observe e)
     {ratio gain : Option ℝ} (r c : ℚ) (h0 : 0 ≤ r) (h1 : r < 1) (hc : c = (1-r)⁻¹)
@@ -142,7 +180,7 @@ theorem observe_retry (observe : D α → Option β)
     have r0 : 0 ≤ (r : ℝ) := by exact_mod_cast h0
     have result := hd.retry r0 (by exact_mod_cast h1)
     obtain ⟨e, eq, he⟩ := realize_presents result
-    rw [retry_eq_realize hd r0, eq]
+    rw [retry_eq_chain hd r0, realizeChain_of_some eq]
     simpa [scaleValue] using invariant he result
 
 theorem mass_retry {r g : Option ℝ} (q c : ℚ) (h0 : 0 ≤ q) (h1 : q < 1) (hc : c = (1-q)⁻¹)
@@ -216,7 +254,7 @@ theorem retry_point {s : Option (D α)} {p : Option α} {ratio weight : Option �
       rw [lfp_retry]
       simp [pointModel, hz, ENNReal.ofReal_mul (inv_nonneg.mpr gain.le), ENNReal.ofReal_inv_of_pos gain,
         ENNReal.ofReal_sub _ r0, mul_assoc]
-    rw [retry_eq_realize hd r0, he, realize_simple (point_presents (by exact_mod_cast z0) a) (.point _ _)]
+    rw [retry_eq_chain hd r0, he, realizeChain_of_some (realize_simple (point_presents (by exact_mod_cast z0) a) (.point _ _))]
     by_cases h : z=1
     · simp [h, point, diracValue]
     · have h' : (z : ℝ) ≠ 1 := by exact_mod_cast h
@@ -229,10 +267,10 @@ theorem retry_zero {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q :
   have h : Presents (.zero : D α) m := ⟨Represents.zero, visited_zero⟩
   have r0 : 0 ≤ (q : ℝ) := by exact_mod_cast h0
   change retryValue _ (some .zero) = some .zero
-  rw [retry_eq_realize h r0]
+  rw [retry_eq_chain h r0]
   have he : (strictRetryStep m (ENNReal.ofReal q)).lfp = m := by
     rw [strictRetry_lfp]; exact Prod.ext (funext fun x => by simp [m, lfp_retry]) rfl
-  rw [he, realize_simple h .zero]
+  rw [he, realizeChain_of_some (realize_simple h .zero)]
 
 private abbrev emptyModel (α : Type) : Model α := (fun _ => 0, ∅)
 
@@ -260,7 +298,7 @@ theorem retry_empty {s : Option (D α)} {ratio : Option ℝ} (q : ℚ) (h0 : 0 �
   obtain ⟨d, rfl, hd⟩ := hs
   have he : Presents (.zero : D α) (emptyModel α) := ⟨Represents.zero, visited_zero⟩
   have qr : 0 ≤ (q : ℝ) := by exact_mod_cast h0
-  exact (retry_eq_realize hd qr).trans ((retry_eq_realize he qr).symm.trans (retry_zero q h0 rfl))
+  exact (retry_eq_chain hd qr).trans ((retry_eq_chain he qr).symm.trans (retry_zero q h0 rfl))
 
 theorem point_add_empty {s t : Option (D α)} {p : Option α} {w : ℚ} (swap : Bool)
     (hs : PointSeed s w p) (ht : EmptySeed t) :
@@ -316,7 +354,7 @@ theorem retry_zero_point {s : Option (D α)} {p : Option α} {r weight : Option 
       change (retryStep _ _).lfp x = _
       rw [lfp_retry]
       simp [pointModel]
-    rw [retry_eq_realize hd (by exact_mod_cast h0), h, realize_simple (point_presents (le_refl 0) a) (.point _ _)]
+    rw [retry_eq_chain hd (by exact_mod_cast h0), h, realizeChain_of_some (realize_simple (point_presents (le_refl 0) a) (.point _ _))]
     simp [point, diracValue, scaleValue]
 
 /-- A positive emission at one point with a noncontracting return produces
@@ -342,7 +380,7 @@ theorem retry_infinite_point {s : Option (D α)} {p : Option α} {ratio : Option
       rw [lfp_retry, tsub_eq_zero_of_le r1, ENNReal.inv_zero]
       classical
       by_cases e : x=a <;> simp [pointModel, infiniteModel, atom, e, ENNReal.ofReal_ne_zero_iff.mpr w0]
-    rw [retry_eq_realize hd (le_trans zero_le_one q1), limit, realize_infinite]
+    rw [retry_eq_chain hd (le_trans zero_le_one q1), limit, realizeChain_of_some (realize_infinite a)]
     rfl
 
 end QSym.Distribution.Atomic

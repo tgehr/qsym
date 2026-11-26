@@ -24,15 +24,21 @@ private theorem Approximates.unique {v : ℕ → Option (D α)} {s t : ℕ → M
   cases Option.some.inj (hd.symm.trans he)
   exact (hm.eq_iff hk).mpr (fun _ => rfl)
 
+private def trackedChain (v : ℕ → Option (D α)) : Option (ℕ → Model α) := by
+  classical exact if h : ∃ s, Approximates v s then some h.choose else none
+
+private theorem trackedChain_eq {v : ℕ → Option (D α)} {s : ℕ → Model α} (h : Approximates v s) :
+    trackedChain v = some s := by
+  classical
+  have ex : ∃ t, Approximates v t := ⟨s, h⟩
+  rw [trackedChain, dif_pos ex, ex.choose_spec.unique h]
+
 /-- The semantic limit exists even when its support has no finite presentation. -/
-def limitModel (v : ℕ → Option (D α)) : Option (Model α) := by
-  classical exact if h : ∃ s, Approximates v s then some (⨆ n, h.choose n) else none
+def limitModel (v : ℕ → Option (D α)) : Option (Model α) :=
+  (trackedChain v).map (fun s => ⨆ n, s n)
 
 theorem limitModel_eq {v : ℕ → Option (D α)} {s : ℕ → Model α} (h : Approximates v s) :
-    limitModel v = some (⨆ n, s n) := by
-  classical
-  have hex : ∃ t, Approximates v t := ⟨s, h⟩
-  simp only [limitModel, dif_pos hex, hex.choose_spec.unique h]
+    limitModel v = some (⨆ n, s n) := by rw [limitModel, trackedChain_eq h]; rfl
 
 theorem limitModel_eq_some_iff {v : ℕ → Option (D α)} {m : Model α} :
     limitModel v = some m ↔ ∃ s, Approximates v s ∧ (⨆ n, s n) = m := by
@@ -41,44 +47,43 @@ theorem limitModel_eq_some_iff {v : ℕ → Option (D α)} {m : Model α} :
   · intro h
     by_cases ex : ∃ s, Approximates v s
     · exact ⟨ex.choose, ex.choose_spec, Option.some.inj ((limitModel_eq ex.choose_spec).symm.trans h)⟩
-    · simp [limitModel, ex] at h
+    · simp [limitModel, trackedChain, ex] at h
   · rintro ⟨s, hs, rfl⟩
     exact limitModel_eq hs
 
-theorem limitModel_missing {v : ℕ → Option (D α)} {n : ℕ} (h : v n = none) : limitModel v = none := by
+private theorem trackedChain_missing {v : ℕ → Option (D α)} {n : ℕ} (h : v n = none) : trackedChain v = none := by
   classical
   have missing : ¬ ∃ s, Approximates v s := by
     rintro ⟨s, hs⟩
     obtain ⟨d, hd, _⟩ := hs.2 n
     rw [h] at hd
     contradiction
-  simp [limitModel, missing]
+  simp [trackedChain, missing]
 
-/-- A missing approximant or a limit without a supported atomic presentation
-gives a partial value. Zero approximants are genuine distributions. -/
+theorem limitModel_missing {v : ℕ → Option (D α)} {n : ℕ} (h : v n = none) : limitModel v = none := by
+  rw [limitModel, trackedChain_missing h]; rfl
+
+/-- A partial fixed point from the source body's actual finite approximants.
+Retain their order when the set of visits and limiting weights alone do not
+determine how a signed observation of an infinite result converges. -/
 def fixedValue (body : Option (D α → Option (D α))) : Option (D α) :=
-  body.bind fun f => (limitModel (iterateBody f)).bind realize
+  body.bind fun f => (trackedChain (iterateBody f)).bind fun s => realizeChain (⨆ n, s n) s
 
 theorem fixed_chain {f : D α → Option (D α)} {s : ℕ → Model α} (h : Tracks f s) :
-    fixedValue (some f) = realize (⨆ n, s n) := by
-  simp only [fixedValue, Option.some_bind, limitModel_eq h]
+    fixedValue (some f) = realizeChain (⨆ n, s n) s := by
+  simp only [fixedValue, Option.some_bind, trackedChain_eq h]
 
 theorem fixed_missing {f : D α → Option (D α)} {n : ℕ} (h : iterateBody f n = none) :
     fixedValue (some f) = none := by
-  simp only [fixedValue, Option.some_bind, limitModel_missing h, Option.none_bind]
+  simp only [fixedValue, Option.some_bind, trackedChain_missing h, Option.none_bind]
 
 /-- A compositional certificate for the source body suffices to compute its
 least fixed point in the atomic model. -/
 theorem fixed_of_step_on (f : D α → Option (D α)) (g : Model α →o Model α) (hg : ωScottContinuous g)
     (P : Model α → Prop) (initial : P ⊥) (keep : ∀ m, P m → P (g m))
     (lift : ∀ d m, P m → Presents d m → ∃ e, f d = some e ∧ Presents e (g m)) :
-    fixedValue (some f) = realize g.lfp := by
+    fixedValue (some f) = realizeChain g.lfp (fun n => g^[n] ⊥) := by
   let s := fun n : ℕ => g^[n] ⊥
-  have steps : ∀ n, s n ≤ s (n+1) := by
-    intro n
-    induction n with
-    | zero => exact bot_le
-    | succ n ih => simpa only [s, Function.iterate_succ_apply'] using g.monotone ih
   have invariant : ∀ n, P (s n) := by
     intro n
     induction n with
@@ -92,11 +97,11 @@ theorem fixed_of_step_on (f : D α → Option (D α)) (g : Model α →o Model �
       obtain ⟨d, hd, hm⟩ := ih
       obtain ⟨e, he, hk⟩ := lift d _ (invariant n) hm
       exact ⟨e, by simpa [iterateBody, hd] using he, by simpa [s, Function.iterate_succ_apply'] using hk⟩
-  rw [fixed_chain (⟨monotone_nat_of_le_succ steps, data⟩ : Tracks f s), fixedPoints.lfp_eq_sSup_iterate _ hg]
+  rw [fixed_chain (⟨g.monotone.monotone_iterate_of_le_map bot_le, data⟩ : Tracks f s), fixedPoints.lfp_eq_sSup_iterate _ hg]
 
 theorem fixed_of_step (f : D α → Option (D α)) (g : Model α →o Model α) (hg : ωScottContinuous g)
     (lift : ∀ d m, Presents d m → ∃ e, f d = some e ∧ Presents e (g m)) :
-    fixedValue (some f) = realize g.lfp :=
+    fixedValue (some f) = realizeChain g.lfp (fun n => g^[n] ⊥) :=
   fixed_of_step_on f g hg (fun _ => True) trivial (fun _ _ => trivial) (fun d m _ => lift d m)
 
 theorem strictRetry_continuous (b : Model α) (r : ℝ≥0∞) : ωScottContinuous (strictRetryStep b r) := by
@@ -200,7 +205,7 @@ theorem fixed_add_tail (swap : Bool) {r : Option ℝ} (q : ℚ) (hr : r = some (
   | some b =>
     obtain ⟨m, hb⟩ := hs b rfl
     have r0 : 0 ≤ (q : ℝ) := by exact_mod_cast tail.nonneg
-    rw [retry_eq_realize hb r0]
+    rw [retry_eq_chain hb r0]
     apply fixed_of_step _ _ (strictRetry_continuous _ _)
     intro d k hd
     obtain ⟨e, he, htail, hvis⟩ := tail.step d k hd
@@ -227,7 +232,7 @@ theorem fixed_tail {f g : D α → Option (D α)} {q : ℚ} (tail : Tail g q)
   let m : Model α := (fun _ => 0, ∅)
   have h : Presents (.zero : D α) m := ⟨Represents.zero, visited_zero⟩
   have h0 : 0 ≤ (q : ℝ) := by exact_mod_cast tail.nonneg
-  rw [← retry_zero q tail.nonneg (r := some (q : ℝ)) rfl, zeroValue, retry_eq_realize h h0]
+  rw [← retry_zero q tail.nonneg (r := some (q : ℝ)) rfl, zeroValue, retry_eq_chain h h0]
   apply fixed_of_step _ _ (strictRetry_continuous _ _)
   intro d k hd
   obtain ⟨e, he, hk, hv⟩ := tail.step d k hd

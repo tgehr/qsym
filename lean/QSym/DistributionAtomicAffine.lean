@@ -153,7 +153,7 @@ theorem fixed_affine {f g : D α → Option (D α)} {s : Option (D α)} {r : Opt
     rw [hs, retry_missing]
     exact fixed_missing (n := 1) ((body .zero).trans (step .zero))
   | @present b m hs hm step =>
-    rw [hs, retry_eq_realize hm (by exact_mod_cast h.nonneg)]
+    rw [hs, retry_eq_chain hm (by exact_mod_cast h.nonneg)]
     apply fixed_of_step_on _ _ (strictRetry_continuous _ _) (fun k => k.2 ⊆ m.2)
     · exact Set.empty_subset _
     · intro k hk

@@ -60,6 +60,35 @@ theorem density_at_atom : densityAtValue (kernelSeriesAt body ()) (some 0) = non
   apply lt_of_lt_of_le _ (ENNReal.le_tsum 0)
   norm_num [reachWeight, model, atom]
 
+private def direct := fixedValue (some (fun d : D ℝ => addValue (some seed) (some d)))
+
+-- Check the same grouped signed observation through the ordinary distribution
+-- fixed point; equality of the two final weights alone cannot establish it.
+theorem direct_agrees (t : ℝ → Option ℝ) : probe direct t = probe (kernelSeriesAt body ()) t := by
+  have admissible : Admissible (some seed) := fun _ h => by cases h; exact ⟨model, seed_presents⟩
+  have loop : direct = retryValue (some 1) (some seed) :=
+    fixed_add_tail false 1 (by norm_num) admissible Tail.self (fun _ => rfl)
+  let g := strictRetryStep model (ENNReal.ofReal (1 : ℝ))
+  have missing : realize g.lfp = none := by
+    apply realize_eq_none_of_infinite_visits (a := (0 : ℝ)) (b := 0) (c := 2)
+    · simp [g, strictRetry_lfp, lfp_retry, model, atom]
+    · simp [g, strictRetry_lfp, model]
+    · simp [g, strictRetry_lfp, model]
+    · norm_num
+  rw [loop, retry_eq_chain seed_presents zero_le_one,
+    probe_realizeChain missing (seed_presents.approximates_retry zero_le_one), probe_retry_one, mixed_signed]
+  rfl
+
+theorem direct_cancellation : probe direct (fun x => some (if x=0 then 1 else -1)) = some 0 :=
+  (direct_agrees _).trans cancellation
+
+theorem direct_mass : massValue direct = none := (direct_agrees _).trans divergent_mass
+
+#qsym_check_axioms retry_isSome
+#qsym_check_axioms probe_retry_of_series
+#qsym_check_axioms direct_agrees
+#qsym_check_axioms direct_cancellation
+#qsym_check_axioms direct_mass
 #qsym_check_axioms probe_incrementSeries_congr
 #qsym_check_axioms visited_incrementSeries
 #qsym_check_axioms density_incrementSeries

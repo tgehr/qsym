@@ -1138,6 +1138,13 @@ private Case[] cases(){
 	Case("SeriesFibreMissing","densityAtD(sumD(λ(i:ℤ).δ((i:ℝ))),undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("SeriesFibreMissingPoint","densityAtD(sumD(λ(i:ℕ).δ(undefined(ℝ))),2)","ℝ","undefined(ℝ)"),
 	Case("SeriesFibreMissingRow","densityAtD(sumD(λ(i:ℕ).undefined(Distribution(ℝ))),2)","ℝ","undefined(ℝ)"),
+	Case("LoopExistsCritical","defined(μ(d:Distribution(ℝ)).addD(addD(δ(0),δ(2)),d))","𝔹","true"),
+	Case("LoopExistsSupercritical","defined(μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ(0)),δ(2)),scaleD(3,d)))","𝔹","true"),
+	Case("LoopExistsContracting","defined("~retry~")","𝔹","true"),
+	Case("LoopExistsHigher","defined(μ(d:Distribution(ℕ→ℕ)).addD(addD(δ(λ(n:ℕ).n),δ(λ(n:ℕ).n+1)),d))","𝔹","true"),
+	Case("LoopExistsDistribution","defined(μ(d:Distribution(Distribution(ℝ))).addD(addD(δ(δ((0:ℝ))),δ(δ((2:ℝ)))),d))","𝔹","true"),
+	Case("LoopExistsPartial","λ(x:ℝ).defined(μ(d:Distribution(ℝ)).addD(addD(δ(x⁻¹),δ(2)),d))","ℝ→𝔹","λ(x:ℝ). x≠0"),
+	Case("LoopExistsMissing","defined(μ(d:Distribution(ℝ)).addD(addD(δ(undefined(ℝ)),δ(2)),d))","𝔹","false"),
 	Case("InfiniteRetryFunction","μ(d:Distribution(ℕ→ℕ)).addD(δ(λ(n:ℕ).n),d)","Distribution(ℕ→ℕ)","Λ(x:ℕ→ℕ). (∑(i:ℤ). δ(λ(n:ℕ). n)[x])"),
 	Case("InfiniteRetrySupercritical","μ(d:Distribution(ℝ)).addD(scaleD(3/4,δ(2)),scaleD(4,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(2)[x])"),
 	Case("InfiniteRetryMass","massD("~endless~")","ℝ","undefined(ℝ)"),
@@ -1255,6 +1262,8 @@ private void run(string directory){
 		else if(c.name.indexOf("SeriesFibre")==0)
 			enforce(certificate.indexOf("Distribution.FibreCertificate.extract_sum")>=0||
 				certificate.indexOf("Distribution.FibreCertificate.extract_nat_sum")>=0,c.name);
+		if(c.name.indexOf("LoopExists")==0&&c.name!="LoopExistsMissing")
+			enforce(certificate.indexOf("Atomic.retry_isSome")>=0,c.name);
 		if(c.name.indexOf("InfiniteRetry")==0){
 			if(c.name!="InfiniteRetryDirectSeries") enforce(certificate.indexOf("Atomic.retry_infinite_point")>=0,c.name);
 			if(c.name=="InfiniteRetryAt"||c.name=="InfiniteRetryAway"||c.name=="InfiniteRetryDensity"||c.name=="InfiniteRetryDirectSeries")

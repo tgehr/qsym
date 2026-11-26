@@ -23,9 +23,6 @@ theorem probe_nat_sum (v : ℕ → Option (D α)) (t : α → Option ℝ) :
   · rw [if_neg hi, if_neg hi]
     rfl
 
-def incrementSeries (v : ℕ → Option (D α)) : Option (D α) :=
-  sumNatValue (some (fun n => addValue (v (n+1)) (scaleValue (some (-1)) (v n))))
-
 private theorem probe_difference (a b : Option (D α)) (t : α → Option ℝ) :
     probe (addValue b (scaleValue (some (-1)) a)) t =
       Value.add (probe b t) (Value.mul (some (-1)) (probe a t)) := by
@@ -54,6 +51,20 @@ theorem probe_incrementSeries_congr {v w : ℕ → Option (D α)} {s : ℕ → M
     rw [ha, hb]
     exact (pa.eq_iff pb).mp rfl t
   simp only [probe_incrementSeries, h]
+
+theorem Approximates.realize {v : ℕ → Option (D α)} {s : ℕ → Model α} (h : Approximates v s) :
+    Approximates (fun n => realize (s n)) s := by
+  refine ⟨h.1, fun n => ?_⟩
+  obtain ⟨_, _, hd⟩ := h.2 n
+  exact realize_presents hd
+
+/-- In the fallback case, every signed observation can use the actual source
+approximants, even when their canonical finite representatives are different. -/
+theorem probe_realizeChain {m : Model α} {s : ℕ → Model α} {v : ℕ → Option (D α)}
+    (hm : realize m = none) (hv : Approximates v s) (t : α → Option ℝ) :
+    probe (realizeChain m s) t = probe (incrementSeries v) t := by
+  rw [realizeChain, hm]
+  exact probe_incrementSeries_congr hv.realize hv t
 
 /-- An atomic function query is defined as a distribution exactly when its
 actual finite approximants track an increasing sequence of finite models. -/
@@ -183,6 +194,18 @@ theorem kernelSeriesAt_visited {body : (ι → Option (D α)) → ι → Option 
   rw [kernelSeriesAt_of_limit h, visited_incrementSeries hs, ← hm, Prod.snd_iSup, Set.iSup_eq_iUnion,
     Set.mem_iUnion]
 
+theorem Presents.approximates_retry {d : D α} {m : Model α} (hd : Presents d m) {r : ℝ} (hr : 0 ≤ r) :
+    Approximates (fun n => some (approximate d r n)) (fun n => (strictRetryStep m (ENNReal.ofReal r))^[n] ⊥) := by
+  let g := strictRetryStep m (ENNReal.ofReal r)
+  refine ⟨g.monotone.monotone_iterate_of_le_map bot_le, fun n => ⟨_, rfl, ?_⟩⟩
+  induction n with
+  | zero => exact ⟨Represents.zero, visited_zero⟩
+  | succ n ih =>
+    change Presents (approximate d r (n+1)) (g^[n+1] ⊥)
+    rw [Function.iterate_succ_apply']
+    exact ⟨hd.1.add (ih.1.scale hr),
+      (visited_add _ _).trans (congrArg₂ (· ∪ ·) hd.2 ((visited_scale _ _).trans ih.2))⟩
+
 /-- For a retry, the per-depth differences recover the ordinary weighted series
 of seed observations. This also holds for negative and missing observations. -/
 theorem probe_retry_increments (d : D α) (r : ℝ) (t : α → Option ℝ) :
@@ -202,6 +225,12 @@ theorem probe_retry_increments (d : D α) (r : ℝ) (t : α → Option ℝ) :
       rw [integrate_approximate, hv, Finset.sum_range_succ _ (n+1)]
       simp only [Value.add, Value.mul, Option.some.injEq]
       ring
+
+theorem probe_retry_of_series {d : D α} {m : Model α} (hd : Presents d m) {r : ℝ} (hr : 0 ≤ r)
+    (h : realize (strictRetryStep m (ENNReal.ofReal r)).lfp = none) (t : α → Option ℝ) :
+    probe (retryValue (some r) (some d)) t =
+      Summation.value norm (some (fun n : ℕ => Value.mul (some (r^n)) (integrate d t))) := by
+  rw [retry_eq_chain hd hr, probe_realizeChain h (hd.approximates_retry hr), probe_retry_increments]
 
 theorem probe_retry_one (d : D α) (t : α → Option ℝ) :
     probe (incrementSeries (fun n => some (approximate d 1 n))) t =
