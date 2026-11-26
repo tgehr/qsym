@@ -1582,6 +1582,12 @@ private Case[] cases(){
 	Case("BehindBetweenDomain","∫dx [0≤x]*[x≤1]*[c<1]*(1/b)*λ[x]","ℝ","[c<1]·(guard(b≠0,b⁻¹))"),
 	Case("BehindBoundDomain","∫dx [0≤x]*[c<1]*[x≤1]*(1/b)*λ[x]","ℝ","[c<1]·(guard(b≠0,b⁻¹))"),
 	Case("BehindBetweenDomainTwo","∫dx [0≤x]*[x≤1]*[c<1]*[0<d]*(1/b)*λ[x]","ℝ"),
+	Case("OriginUniform","∫dx [0≤x]*[x≤a]*(1/a)*λ[x]","ℝ","guard(a≠0,[0≤a])"),
+	Case("OriginLogarithm","∫dx [0≤x]*[x≤a]*log(a)*λ[x]","ℝ","guard(a≠0,[0≤a]·(a·log(a)))"),
+	Case("OriginBelow","∫dx [a≤x]*[x≤0]*(1/a)*λ[x]","ℝ","guard(a≠0,[a≤0]·-1)"),
+	Case("OriginMoment","∫dx [0≤x]*[x≤a]*x*(1/a)*λ[x]","ℝ","guard(a≠0,[0≤a]·(a·(1/2)))"),
+	Case("OriginCompeting","∫dx [0≤x]*[x≤a]*[x≤1]*(1/a)*λ[x]","ℝ","guard(a≠0,[0≤a]·([1<a]·(guard(a≠0,a⁻¹))+[a≤1]·([0≤a]·(a·a⁻¹))))"),
+	Case("OriginOther","∫dx [1≤x]*[x≤a]*(1/(a-1))*λ[x]","ℝ","[1≤a]·(guard(a≠1,(1:ℝ)))"),
 	Case("PieceCasesDomain","∫dx [0≤x]*[x≤1]*([x≤a]*x*(1/c)+[a<x]*x^2)*λ[x]","ℝ"),
 	Case("Solved","∫dx [0≤x]*[2*x≤a]*λ[x]","ℝ","[0≤a]·(a·(1/2))"),
 	Case("SolvedStrict","∫dx [0<x]*[2*x<a]*λ[x]","ℝ","[0<a]·(a·(1/2))"),
@@ -3278,6 +3284,16 @@ private void run(string directory){
 			enforce((certificate.indexOf("Value.mul_add ")>=0)==among("CastSumWeight","CastSumExponential","CastSumHalfLine"),c.name~" factor of the sum");
 			enforce(has("third_second_piece ")==among("CastSumRational","CastSumCompeting","CastSumCompetingInteger","CastSumMany","CastSumOne","CastSumMixed","CastSumBound","CastSumWeight"),c.name~" bounds of a summand that compete");
 			enforce(has("same_side_piece ")==among("CastSumHalfLine"),c.name~" bounds of a summand on one side");
+		}
+		// A weight between bounds that meet at the origin exactly where its
+		// value is missing: the density of a uniform variable on `[0,a]`,
+		// `[0≤x∧x≤a]·a⁻¹`. The simplifier writes its domain as `x≠0∨a≠0`, a
+		// guard that can fail at the origin only: it leaves the observation
+		// as the guard by `a≠0`. Bounds that meet elsewhere keep the domain
+		// in the order of the bounds, which the interval reads as before.
+		if(c.name.indexOf("Origin")==0){
+			enforce(text.indexOf("∫")<0,c.name~": "~text);
+			enforce((certificate.indexOf("Distribution.DensityProgram.mass_guard_origin ")>=0)==(c.name!="OriginOther"),c.name~" guard that can fail at the origin only");
 		}
 		// A condition that does not mention the axis, behind bounds of the
 		// axis in a guard. A guard is evaluated from the left, so the condition

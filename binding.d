@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -2089,6 +2089,19 @@ final class Bindings{
 		if(around!=uint.max) s.rest="(Binding.guardValue "~under(domains[$-1])~" "~s.rest~")";
 		foreach_reverse(c;chain[count..$]) s.rest="(Value.mask "~under(c)~" "~s.rest~")";
 		return true;
+	}
+	// A guard of a weight that can fail at the origin only: `x≠0`, or a
+	// condition that does not mention the axis. The simplifier writes the
+	// domain of a weight so where its bounds meet at the origin exactly
+	// where its value is missing, as for `[0≤x∧x≤a]·a⁻¹`. The condition and
+	// the weight without the guard.
+	private bool originGuard(uint body,out uint condition,out BoundTerm rest){
+		bool isOp(BoundNode q,Op op){ return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==op; }
+		auto q=nodes[body]; if(q.op!=BoundOp.guard) return false;
+		auto o=nodes[q.a]; if(!isOp(o,Op.or_)||!isOp(nodes[o.a],Op.nonzero)) return false;
+		auto x=nodes[nodes[o.a].a];
+		if(x.op!=BoundOp.variable||x.data!=0||depends(at(o.b),0)) return false;
+		condition=o.b; rest=at(q.b); return true;
 	}
 	// The first strict guard that does not mention the innermost variable, at
 	// the top of a term or of a factor of it: its condition, and the term
@@ -6872,6 +6885,18 @@ final class Bindings{
 			foreach(i,w;weights) d=distribution(ctx,BoundOp.distributionWeight,[i==position?inheritHint(at(w),lambda(rest)):at(w),d]);
 			return guard(dropIndex(at(condition)),distribution(ctx,BoundOp.distributionMass,[d]));
 		}
+		// A guard that can fail at the origin only leaves the observation as
+		// the guard by its condition: where the condition holds the guard
+		// holds at every point, and where it fails or is missing so does the
+		// guard at the origin, and the observation is missing. This needs
+		// nothing of the inner observation.
+		BoundTerm unguardOrigin(BoundTerm t){
+			auto n=node(t); uint[] bodies; uint condition; BoundTerm rest;
+			if(n.op!=BoundOp.distributionMass||!densityBodies(n.a,bodies)||bodies.length!=1||!originGuard(bodies[0],condition,rest)) return BoundTerm.init;
+			auto ctx=context(t),weight=inheritHint(at(nodes[n.a].a),lambda(rest));
+			auto inside=distribution(ctx,BoundOp.distributionMass,[distribution(ctx,BoundOp.distributionWeight,[weight,distribution(ctx,BoundOp.distributionLebesgue)])]);
+			return guard(dropIndex(at(condition)),inside);
+		}
 		// A factor or a mask of a sum with a masked summand goes under the sum:
 		// a product and a mask distribute over a sum for every definedness
 		// pattern. Before that a weight is split where the arguments of its
@@ -9134,11 +9159,13 @@ final class Bindings{
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integratePieces(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){ solution=IntegralSolution.init; evaluated=integrateMissingPoint(at(result.output),solution); }
 				if(evaluated==BoundTerm.init){
-					auto strict=unguardMass(at(result.output)),unguarded=strict==BoundTerm.init?massGuard(at(result.output),0):BoundTerm.init;
+					auto strict=unguardMass(at(result.output)); auto origin=strict==BoundTerm.init?unguardOrigin(at(result.output)):BoundTerm.init;
+					if(origin!=BoundTerm.init) strict=origin;
+					auto unguarded=strict==BoundTerm.init?massGuard(at(result.output),0):BoundTerm.init;
 					IntegralSolution sum; auto spread=strict==BoundTerm.init&&unguarded==BoundTerm.init?distributeMass(at(result.output),sum,true):BoundTerm.init;
 					auto bounds=strict==BoundTerm.init&&unguarded==BoundTerm.init&&spread==BoundTerm.init?splitBounds(at(result.output),0):BoundTerm.init;
 					auto solved=strict==BoundTerm.init&&unguarded==BoundTerm.init&&spread==BoundTerm.init&&bounds==BoundTerm.init?solveMass(at(result.output),0):BoundTerm.init;
-					if(strict!=BoundTerm.init){ next=strict; rule=BindingRule.distributionMassStrictGuard; }
+					if(strict!=BoundTerm.init){ next=strict; rule=origin!=BoundTerm.init?BindingRule.distributionMassOrigin:BindingRule.distributionMassStrictGuard; }
 					else if(spread!=BoundTerm.init){ next=spread; rule=BindingRule.distributionMassSpread; extra=cast(uint)integrals.length; integrals~=sum; }
 					else if(unguarded!=BoundTerm.init){ next=unguarded; rule=BindingRule.distributionMassGuard; }
 					else if(bounds!=BoundTerm.init){ next=bounds; rule=BindingRule.distributionMassBounds; }
@@ -14560,6 +14587,12 @@ final class Bindings{
 					auto equation=tail.length?"(Eq.trans "~spread.proof~" "~tail~")":spread.proof;
 					if(guarded)equation="(Eq.trans "~equation~" (Distribution.DensityProgram.GuardedSum.sound "~lift~"))";
 					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_pointwise (w := "~fn(s.from[0])~") (v := "~fn(s.to[0])~") (fun x => "~equation~"); h)"; break;
+				}
+				case BindingRule.distributionMassOrigin:{
+					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					auto body=nodes[nodes[n.a].a].a;uint condition;BoundTerm rest;
+					enforce(originGuard(body,condition,rest),"missing guard that can fail at the origin only");
+					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_guard_origin ("~name(dropIndex(at(condition)).id)~".eval ξ ρ) (w := "~fn(body)~") (m := "~fn(rest.id)~") (fun _ => rfl); h)"; break;
 				}
 				case BindingRule.distributionMassSolve:{
 					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}

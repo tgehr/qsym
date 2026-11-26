@@ -987,4 +987,26 @@ theorem mass_beyond_guard (lower s : Bool) (t : Option ℝ) (g : Option Bool)
   rw [mass_weight, mass_weight]
   exact (StepSource.beyond_guarded lower s t g r h hv).integral
 
+/-- A guard of a weight that can fail at the origin only: `x ≠ 0` or a
+condition that does not mention the axis. Where the condition holds the guard
+holds at every point; where it fails or is missing, so does the guard at the
+origin, and the observation is missing. -/
+theorem mass_guard_origin (g : Option Bool) {w m : ℝ → Option ℝ}
+    (h : ∀ x, w x = Binding.guardValue (Value.or (Value.nonzero (some x)) g) (m x)) :
+    massValue (DensityProgram.weight w .lebesgue).presentation =
+      Binding.guardValue g (massValue (DensityProgram.weight m .lebesgue).presentation) := by
+  rw [mass_weight, mass_weight]
+  rcases g with _ | _ | _
+  · rw [StepSource.partialIntegral_missing (x := 0)
+      (by rw [h 0]; simp [Value.nonzero, Value.or, Binding.guardValue])]
+    rfl
+  · rw [StepSource.partialIntegral_missing (x := 0)
+      (by rw [h 0]; simp [Value.nonzero, Value.or, Binding.guardValue])]
+    rfl
+  · have hw : w = m := funext fun x => by
+      rw [h x]
+      by_cases hx : x = 0 <;> simp [hx, Value.nonzero, Value.or, Binding.guardValue]
+    rw [hw]
+    rfl
+
 end QSym.Distribution.DensityProgram
