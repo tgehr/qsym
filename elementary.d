@@ -30,8 +30,8 @@ package final class Elementary{
 			if(p==x){ result=mid; return true; }
 			if(p<x) lo=mid; else hi=mid;
 		}
-		if(power(lo,n,x)==x){ result=lo; return true; }
-		return false;
+		// For nonnegative x the floor is also available when the root is inexact.
+		result=lo; return false;
 	}
 	bool root(Rational x,uint n,out Rational result){
 		BigInt numerator,denominator;
@@ -116,11 +116,33 @@ package final class Elementary{
 		if(!ceiling&&r<0) --m;
 		return m;
 	}
+	// Round a rational affine function of a square root. After clearing the
+	// offset denominator, the remaining irrational part has magnitude √v.
+	// Its adjacent integers suffice even when the final bin edge is exact.
+	private bool roundSquareRoot(Term x,bool ceiling,out BigInt result){
+		Number offset,slope;
+		splitLiteral(x,Op.add,offset);
+		if(!splitLiteral(x,Op.mul,slope)) slope=Number(1);
+		auto n=a.view(x);
+		if(n.op!=Op.builtin||n.value!=Builtin.sqrtR||!a.isNumber(a.at(n.a))) return false;
+		auto radicand=a.number(a.at(n.a));
+		if(radicand.re<Rational(0)) return false;
+		auto denominator=offset.re.denominator;
+		auto scaled=budget.calc!"*"(slope,Number(Rational(denominator,BigInt(1))));
+		auto v=budget.calc!"*"(radicand,budget.calc!"*"(scaled,scaled)).re;
+		BigInt magnitude;
+		bool perfect=root(roundInteger(v,false),2,magnitude)&&v.integral;
+		bool negative=slope.re<Rational(0);
+		if(!perfect&&ceiling!=negative) ++magnitude;
+		auto numerator=offset.re.numerator+(negative?-magnitude:magnitude);
+		result=roundInteger(Rational(numerator,denominator),ceiling);
+		return true;
+	}
 	private bool rounding(Builtin f,Term x,out Instance result){
 		bool ceiling=f==Builtin.ceilR;
 		BigInt m;
 		if(a.isNumber(x)) m=roundInteger(a.number(x).re,ceiling);
-		else{
+		else if(!roundSquareRoot(x,ceiling,m)){
 			PiLine line; if(!piLine(x,line)||line.base==Term.init) return false;
 			Number lo,hi; piBounds(line.base,lo,hi);
 			auto lower=evaluate(line,lo).re,upper=evaluate(line,hi).re;
