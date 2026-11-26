@@ -1,5 +1,6 @@
 import QSym.RefinementBase
 import QSym.AffineAlgebra
+import QSym.Enclosure
 import QSym.RuleBranches
 import QSym.Partitions
 import QSym.Trigonometry

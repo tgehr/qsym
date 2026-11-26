@@ -66,6 +66,78 @@ package final class Elementary{
 		return scale!=Rational(1);
 	}
 	private bool pi(Term t){ auto n=a.view(t); return n.op==Op.builtin&&n.value==Builtin.pi; }
+	// Closed rational affine forms in π or 1/π. A proposal uses rational
+	// endpoints only; the ordinary rule path proves each bound and identity.
+	private struct PiLine{ Term base; Number slope,offset; }
+	private bool splitLiteral(ref Term t,Op op,out Number literal){
+		auto n=a.view(t); if(n.op!=op) return false;
+		auto left=a.at(n.a),right=a.at(n.b);
+		if(a.isNumber(left)){ literal=a.number(left); t=right; return true; }
+		if(a.isNumber(right)){ literal=a.number(right); t=left; return true; }
+		return false;
+	}
+	private bool piLine(Term t,out PiLine line){
+		if(a.sort(t)!=Sort.real_) return false;
+		if(a.isNumber(t)){ line.offset=a.number(t); return true; }
+		splitLiteral(t,Op.add,line.offset);
+		if(!splitLiteral(t,Op.mul,line.slope)) line.slope=Number(1);
+		auto n=a.view(t);
+		if(!pi(t)&&!(n.op==Op.inv&&pi(a.at(n.a)))) return false;
+		line.base=t; return true;
+	}
+	private void piBounds(Term base,out Number lower,out Number upper){
+		auto lo=Rational(BigInt(3141592),BigInt(1000000)),hi=Rational(BigInt(3141593),BigInt(1000000));
+		if(pi(base)){ lower=Number(lo); upper=Number(hi); }
+		else{ lower=Number(hi.inverse); upper=Number(lo.inverse); }
+	}
+	private Number evaluate(PiLine line,Number t){
+		return budget.calc!"+"(budget.calc!"*"(line.slope,t),line.offset);
+	}
+	bool piComparison(Node n,out Instance result){
+		auto x=a.at(n.a),y=a.at(n.b); PiLine left,right;
+		if(!piLine(x,left)||!piLine(y,right)) return false;
+		auto base=left.base==Term.init?right.base:left.base;
+		if(base==Term.init||(right.base!=Term.init&&right.base!=base)) return false;
+		auto diff=PiLine(base,budget.calc!"-"(right.slope,left.slope),budget.calc!"-"(right.offset,left.offset));
+		// The sign of a pure π multiple just uses positivity. Enclosing
+		// it numerically during a sign proof adds no information.
+		if(diff.offset.zero||diff.slope.zero) return false;
+		Number lo,hi; piBounds(base,lo,hi);
+		auto first=evaluate(diff,lo).re.numerator,second=evaluate(diff,hi).re.numerator;
+		if(first<0&&second>0||first>0&&second<0) return false;
+		result=instantiate(a,n.op==Op.lt?Law.real_enclosed_affine_lt:Law.real_enclosed_affine_le,
+			[x,y,a.real_(diff.slope.re),a.real_(diff.offset.re),base,a.real_(lo.re),a.real_(hi.re)]);
+		return true;
+	}
+	private BigInt roundInteger(Rational q,bool ceiling){
+		budget.spend(q.words);
+		auto m=q.numerator/q.denominator,r=q.numerator%q.denominator;
+		if(ceiling&&r>0) ++m;
+		if(!ceiling&&r<0) --m;
+		return m;
+	}
+	private bool rounding(Builtin f,Term x,out Instance result){
+		bool ceiling=f==Builtin.ceilR;
+		BigInt m;
+		if(a.isNumber(x)) m=roundInteger(a.number(x).re,ceiling);
+		else{
+			PiLine line; if(!piLine(x,line)||line.base==Term.init) return false;
+			Number lo,hi; piBounds(line.base,lo,hi);
+			auto lower=evaluate(line,lo).re,upper=evaluate(line,hi).re;
+			if(upper<lower){ auto tmp=lower; lower=upper; upper=tmp; }
+			if(f==Builtin.floorN&&upper<=Rational(0)){
+				result=instantiate(a,Law.natural_floor_nonpositive,[x]); return true;
+			}
+			// The actual value lies strictly inside. Equality with the outside
+			// edge of the proposed rounding bin is therefore sufficient.
+			m=roundInteger(ceiling?upper:lower,ceiling);
+			if(ceiling?lower<Rational(m-1,BigInt(1)):upper>Rational(m+1,BigInt(1))) return false;
+		}
+		if(f==Builtin.floorN&&m<0){ result=instantiate(a,Law.natural_floor_nonpositive,[x]); return true; }
+		auto law=f==Builtin.floorN?Law.natural_floor_exact:ceiling?Law.real_ceil_exact:Law.real_floor_exact;
+		result=instantiate(a,law,[x,a.number(Number(Rational(m,BigInt(1))),f==Builtin.floorN?Sort.natural:Sort.integer)]);
+		return true;
+	}
 	private bool cartesian(Term t){
 		foreach(id;a.postorder(t)){
 			budget.spend(); auto u=a.at(id),n=a.view(u);
@@ -131,7 +203,8 @@ package final class Elementary{
 		return false;
 	}
 	bool propose(Term t,out Instance result){
-		auto n=a.view(t); if(n.op!=Op.builtin) return false;
+		auto n=a.view(t);
+		if(n.op!=Op.builtin) return false;
 		auto f=cast(Builtin)n.value;
 		if(f==Builtin.ltN||f==Builtin.ltZ){
 			foreach(right;[false,true]){
@@ -150,11 +223,7 @@ package final class Elementary{
 			foreach(right;[false,true]){
 				auto integral=a.at(right?n.b:n.a),bound=a.at(right?n.a:n.b),v=a.view(integral);
 				if(v.op!=Op.builtin||v.value!=Builtin.castZQ||!a.isNumber(bound)) continue;
-				auto q=a.number(bound).re,m=q.numerator/q.denominator,r=q.numerator%q.denominator;
-				budget.spend(q.words);
-				bool ceiling=(f==Builtin.ltQ)!=right;
-				if(ceiling&&r>0) ++m;
-				if(!ceiling&&r<0) --m;
+				auto m=roundInteger(a.number(bound).re,(f==Builtin.ltQ)!=right);
 				auto law=right?(f==Builtin.ltQ?Law.integer_rational_bound_lt_right:Law.integer_rational_bound_le_right)
 					:(f==Builtin.ltQ?Law.integer_rational_bound_lt:Law.integer_rational_bound_le);
 				result=instantiate(a,law,[a.at(v.a),bound,a.number(Number(Rational(m,BigInt(1))),Sort.integer)]);
@@ -218,15 +287,7 @@ package final class Elementary{
 				}
 			}
 		}
-		if((f==Builtin.floorN||f==Builtin.floorR||f==Builtin.ceilR)&&a.isNumber(a.at(n.a))){
-			auto q=a.number(a.at(n.a)).re,m=q.numerator/q.denominator,r=q.numerator%q.denominator;
-			budget.spend(q.words);
-			if((f==Builtin.floorN||f==Builtin.floorR)&&r<0) --m;
-			if(f==Builtin.floorN&&m<0){ result=instantiate(a,Law.natural_floor_nonpositive,[a.at(n.a)]); return true; }
-			if(f==Builtin.ceilR&&r>0) ++m;
-			result=instantiate(a,f==Builtin.floorN?Law.natural_floor_exact:f==Builtin.floorR?Law.real_floor_exact:Law.real_ceil_exact,
-				[a.at(n.a),a.number(Number(Rational(m,BigInt(1))),f==Builtin.floorN?Sort.natural:Sort.integer)]); return true;
-		}
+		if(f==Builtin.floorN||f==Builtin.floorR||f==Builtin.ceilR) return rounding(f,a.at(n.a),result);
 		if((f==Builtin.log2R||f==Builtin.log10R)&&a.isNumber(a.at(n.a))){
 			auto q=a.number(a.at(n.a)).re; if(q<=Rational(0)) return false;
 			long exponent; auto base=f==Builtin.log2R?2:10;

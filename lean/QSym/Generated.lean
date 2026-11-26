@@ -3145,6 +3145,54 @@ theorem r_real_positive_pi :
 
 #qsym_check_axioms r_real_positive_pi
 
+theorem r_real_pi_enclosure_lower :
+    Value.Refines (Value.lt (some ((((3141592) : ℚ) / (1000000) : ℚ) : ℝ)) (some Functions.pi)) (some true) := qsym_cached% by simpa [Value.Refines, Value.lt, Value.inv, Functions.pi, Real.pi_ne_zero] using Enclosure.pi_low
+
+#qsym_check_axioms r_real_pi_enclosure_lower
+
+theorem r_real_pi_enclosure_upper :
+    Value.Refines (Value.lt (some Functions.pi) (some ((((3141593) : ℚ) / (1000000) : ℚ) : ℝ))) (some true) := qsym_cached% by simpa [Value.Refines, Value.lt, Value.inv, Functions.pi, Real.pi_ne_zero] using Enclosure.pi_high
+
+#qsym_check_axioms r_real_pi_enclosure_upper
+
+theorem r_real_inv_pi_enclosure_lower :
+    Value.Refines (Value.lt (some ((((1000000) : ℚ) / (3141593) : ℚ) : ℝ)) (Value.inv (some Functions.pi))) (some true) := qsym_cached% by simpa [Value.Refines, Value.lt, Value.inv, Functions.pi, Real.pi_ne_zero] using Enclosure.inv_pi_low
+
+#qsym_check_axioms r_real_inv_pi_enclosure_lower
+
+theorem r_real_inv_pi_enclosure_upper :
+    Value.Refines (Value.lt (Value.inv (some Functions.pi)) (some ((((1000000) : ℚ) / (3141592) : ℚ) : ℝ))) (some true) := qsym_cached% by simpa [Value.Refines, Value.lt, Value.inv, Functions.pi, Real.pi_ne_zero] using Enclosure.inv_pi_high
+
+#qsym_check_axioms r_real_inv_pi_enclosure_upper
+
+theorem r_real_enclosed_affine_lt (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real)) (v_l : Option (Ty.denote .real)) (v_u : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.add (Value.mul v_a v_t) v_b))))) (some true))
+    (hp1 : Value.Refines (Value.lt v_l v_t) (some true))
+    (hp2 : Value.Refines (Value.lt v_t v_u) (some true))
+    (hp3 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) (Value.mul (Value.add (Value.mul v_a v_l) v_b) (Value.add (Value.mul v_a v_u) v_b))) (some true))
+    (hp4 : Value.Defined v_a)
+    (hp5 : Value.Defined v_b)
+    (hp6 : Value.Defined v_t)
+    (hp7 : Value.Defined v_l)
+    (hp8 : Value.Defined v_u) :
+    Value.Refines (Value.lt v_x v_y) (Value.lt (some (((0) : Int) : ℝ)) (Value.add (Value.add (Value.mul v_a v_l) v_b) (Value.add (Value.mul v_a v_u) v_b))) := qsym_cached% Enclosure.compare_affine true v_x v_y v_a v_b v_t v_l v_u hp0 hp1 hp2 hp3 hp4 hp5 hp6 hp7 hp8
+
+#qsym_check_axioms r_real_enclosed_affine_lt
+
+theorem r_real_enclosed_affine_le (v_x : Option (Ty.denote .real)) (v_y : Option (Ty.denote .real)) (v_a : Option (Ty.denote .real)) (v_b : Option (Ty.denote .real)) (v_t : Option (Ty.denote .real)) (v_l : Option (Ty.denote .real)) (v_u : Option (Ty.denote .real))
+    (hp0 : Value.Refines (Value.not (Value.nonzero (Value.add (Value.add v_y (Value.mul (some (((-1) : Int) : ℝ)) v_x)) (Value.mul (some (((-1) : Int) : ℝ)) (Value.add (Value.mul v_a v_t) v_b))))) (some true))
+    (hp1 : Value.Refines (Value.lt v_l v_t) (some true))
+    (hp2 : Value.Refines (Value.lt v_t v_u) (some true))
+    (hp3 : Value.Refines (Value.le (some (((0) : Int) : ℝ)) (Value.mul (Value.add (Value.mul v_a v_l) v_b) (Value.add (Value.mul v_a v_u) v_b))) (some true))
+    (hp4 : Value.Defined v_a)
+    (hp5 : Value.Defined v_b)
+    (hp6 : Value.Defined v_t)
+    (hp7 : Value.Defined v_l)
+    (hp8 : Value.Defined v_u) :
+    Value.Refines (Value.le v_x v_y) (Value.le (some (((0) : Int) : ℝ)) (Value.add (Value.add (Value.mul v_a v_l) v_b) (Value.add (Value.mul v_a v_u) v_b))) := qsym_cached% Enclosure.compare_affine false v_x v_y v_a v_b v_t v_l v_u hp0 hp1 hp2 hp3 hp4 hp5 hp6 hp7 hp8
+
+#qsym_check_axioms r_real_enclosed_affine_le
+
 theorem r_real_positive_e :
     Value.Refines (Value.lt (some (((0) : Int) : ℝ)) (some Functions.e)) (some true) := qsym_cached% by
   all_goals qsym_rule

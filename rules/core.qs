@@ -412,6 +412,12 @@ rewrite complex_sqrt_inv_re(z:ℂ):csqrt(z⁻¹)⇒csqrt(z)⁻¹ when 0≤creal(
 rewrite complex_sqrt_inv_im(z:ℂ):csqrt(z⁻¹)⇒csqrt(z)⁻¹ when cimag(z)≠0;
 rewrite complex_sqrt_inv_cut(z:ℂ):csqrt(z⁻¹)⇒-csqrt(z)⁻¹ when creal(z)<0,cimag(z)=0;
 fact real_positive_pi():0<π;
+fact real_pi_enclosure_lower():real(3141592,1000000)<π;
+fact real_pi_enclosure_upper():π<real(3141593,1000000);
+fact real_inv_pi_enclosure_lower():real(1000000,3141593)<π⁻¹;
+fact real_inv_pi_enclosure_upper():π⁻¹<real(1000000,3141592);
+lemma real_enclosed_affine_lt(x:ℝ,y:ℝ,a:ℝ,b:ℝ,t:ℝ,l:ℝ,u:ℝ):x<y⇒0<(a*l+b)+(a*u+b) when y-x=a*t+b,l<t,t<u,0≤(a*l+b)*(a*u+b),defined(a),defined(b),defined(t),defined(l),defined(u);
+lemma real_enclosed_affine_le(x:ℝ,y:ℝ,a:ℝ,b:ℝ,t:ℝ,l:ℝ,u:ℝ):x≤y⇒0≤(a*l+b)+(a*u+b) when y-x=a*t+b,l<t,t<u,0≤(a*l+b)*(a*u+b),defined(a),defined(b),defined(t),defined(l),defined(u);
 fact real_positive_e():0<e;
 rewrite real_log_product(x:ℝ,y:ℝ):log(x·y)⇒log(x)+log(y) when 0≤x;
 rewrite real_log_product_right(x:ℝ,y:ℝ):log(x·y)⇒log(x)+log(y) when 0≤y;

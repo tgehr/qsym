@@ -572,6 +572,15 @@ package final class Engine{
 			auto current=p.after; n=a.view(current);
 			auto numeric=field.literal(current,ctx);
 			if(numeric.after!=current){ p=d.trans(p,numeric,ctx); memoize(k,p); return p; }
+			// A closed numerical inequality has the same proof under every
+			// guard. Keep its enclosure arithmetic out of contextual search.
+			if(n.op==Op.lt||n.op==Op.le){
+				Instance bound; Proof step;
+				if(elementary.piComparison(n,bound)&&instanceProof(bound,0,step)){
+					auto truth=go(step.after,0,true);
+					p=d.trans(p,d.trans(step,truth,0),ctx); memoize(k,p); return p;
+				}
+			}
 			if(current!=t&&differenceRewrite(current,ctx,difference)){
 				p=d.trans(p,difference,ctx); p=d.trans(p,go(p.after,ctx,probe),ctx); memoize(k,p); return p;
 			}
