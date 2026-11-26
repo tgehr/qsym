@@ -52,6 +52,7 @@ import QSym.Binding
 import QSym.DistributionRecursion
 import QSym.DistributionAtomicAffine
 import QSym.DistributionAtomicKernel
+import QSym.DistributionAtomicSeries
 import QSym.DistributionAtomicObservation
 import QSym.Tensor
 import QSym.TensorDomains

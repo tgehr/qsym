@@ -34,6 +34,17 @@ theorem limitModel_eq {v : ℕ → Option (D α)} {s : ℕ → Model α} (h : Ap
   have hex : ∃ t, Approximates v t := ⟨s, h⟩
   simp only [limitModel, dif_pos hex, hex.choose_spec.unique h]
 
+theorem limitModel_eq_some_iff {v : ℕ → Option (D α)} {m : Model α} :
+    limitModel v = some m ↔ ∃ s, Approximates v s ∧ (⨆ n, s n) = m := by
+  classical
+  constructor
+  · intro h
+    by_cases ex : ∃ s, Approximates v s
+    · exact ⟨ex.choose, ex.choose_spec, Option.some.inj ((limitModel_eq ex.choose_spec).symm.trans h)⟩
+    · simp [limitModel, ex] at h
+  · rintro ⟨s, hs, rfl⟩
+    exact limitModel_eq hs
+
 theorem limitModel_missing {v : ℕ → Option (D α)} {n : ℕ} (h : v n = none) : limitModel v = none := by
   classical
   have missing : ¬ ∃ s, Approximates v s := by
