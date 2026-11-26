@@ -7,17 +7,17 @@ noncomputable section
 namespace QSym.Distribution.Atomic
 open scoped ENNReal
 
-private def sumModel (a b : Model α) : Model α := (fun x => a.1 x + b.1 x, a.2 ∪ b.2)
-private def scaleModel (r : ℝ≥0∞) (a : Model α) : Model α := (fun x => r * a.1 x, a.2)
+def sumModel (a b : Model α) : Model α := (fun x => a.1 x + b.1 x, a.2 ∪ b.2)
+def scaleModel (r : ℝ≥0∞) (a : Model α) : Model α := (fun x => r * a.1 x, a.2)
 
 def affineModel (b : Model α) (q : ℚ) (uses : Bool) (k : Model α) : Model α :=
   (fun x => b.1 x + ENNReal.ofReal (q : ℝ) * k.1 x, b.2 ∪ (if uses then k.2 else ∅))
 
-private theorem presents_sum {d e : D α} {a b : Model α} (hd : Presents d a) (he : Presents e b) :
+theorem presents_sum {d e : D α} {a b : Model α} (hd : Presents d a) (he : Presents e b) :
     Presents (.add d e) (sumModel a b) :=
   ⟨hd.1.add he.1, (visited_add _ _).trans (congrArg₂ (· ∪ ·) hd.2 he.2)⟩
 
-private theorem presents_scale {d : D α} {a : Model α} (hd : Presents d a) {c : ℝ} (hc : 0 ≤ c) :
+theorem presents_scale {d : D α} {a : Model α} (hd : Presents d a) {c : ℝ} (hc : 0 ≤ c) :
     Presents (.scale c d) (scaleModel (ENNReal.ofReal c) a) :=
   ⟨hd.1.scale hc, (visited_scale _ _).trans hd.2⟩
 

@@ -335,13 +335,14 @@ clean:
 # Focused, source-checked distribution prototype regression suite.
 test-distributions: build/distribution-tests test-distribution-model-rules test-dependent-references test-distribution-source-model
 	./build/distribution-tests build/distributions
-	cd lean && $(LAKE) build QSym.DistributionSquareIntegral QSym.DistributionGraphBridge QSym.DistributionMixture QSym.DistributionSum QSym.DistributionSumFibre QSym.DistributionCounting QSym.SummationAffine QSym.SummationLinearity QSym.DistributionPolynomialGrid QSym.DistributionInterval QSym.DistributionGaussian QSym.DistributionSymbolicPolynomial QSym.DistributionGaussianSymbolic QSym.DistributionCoordinateDomain QSym.DistributionRecursion QSym.DistributionAtomicAffine QSym.DistributionAtomicKernel QSym.DistributionAtomicSeries QSym.DistributionAtomicDivergence QSym.DistributionAtomicOrbit QSym.DistributionAtomicTransport QSym.DistributionAtomicShift QSym.DistributionAtomicMoment QSym.DistributionAtomicObservation QSym.DistributionWeightedAffine QSym.LimitExponential QSym.LimitStep QSym.LimitContinuous QSym.LimitQuotient QSym.DistributionExponentialInterval QSym.DistributionGaussianInterval QSym.DistributionRatio QSym.DistributionLog QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.RawPolynomial QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
+	cd lean && $(LAKE) build QSym.DistributionSquareIntegral QSym.DistributionGraphBridge QSym.DistributionMixture QSym.DistributionSum QSym.DistributionSumFibre QSym.DistributionCounting QSym.SummationAffine QSym.SummationLinearity QSym.DistributionPolynomialGrid QSym.DistributionInterval QSym.DistributionGaussian QSym.DistributionSymbolicPolynomial QSym.DistributionGaussianSymbolic QSym.DistributionCoordinateDomain QSym.DistributionRecursion QSym.DistributionAtomicAffine QSym.DistributionAtomicKernelRules QSym.DistributionAtomicSeries QSym.DistributionAtomicDivergence QSym.DistributionAtomicOrbit QSym.DistributionAtomicTransport QSym.DistributionAtomicShift QSym.DistributionAtomicMoment QSym.DistributionAtomicObservation QSym.DistributionWeightedAffine QSym.LimitExponential QSym.LimitStep QSym.LimitContinuous QSym.LimitQuotient QSym.DistributionExponentialInterval QSym.DistributionGaussianInterval QSym.DistributionRatio QSym.DistributionLog QSym.DistributionFibreCertificate QSym.DistributionIntegral QSym.PositiveIntegral QSym.ProofCache QSym.Numeric QSym.RawPolynomial QSym.Tensor QSym.SummationMasks QSym.AC QSym.Bag
 	cd lean && $(LAKE) env lean ../tests/RestrictedSquare.lean
 	cd lean && $(LAKE) env lean ../tests/SquareReconstruction.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionCoordinates.lean
 	cd lean && $(LAKE) env lean ../tests/AffineGraph.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionAtomicFixed.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionAtomicKernel.lean
+	cd lean && $(LAKE) env lean ../tests/DistributionBranchingKernel.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionAtomicSeries.lean
 	cd lean && $(LAKE) env lean ../tests/DistributionBranch.lean
 	python3 tools/check_distributions.py --lake $(LAKE)

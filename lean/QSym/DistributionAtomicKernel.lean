@@ -100,30 +100,33 @@ def iterateKernel (body : (ι → Option (D α)) → ι → Option (D α)) : ℕ
 def kernelModelAt (body : (ι → Option (D α)) → ι → Option (D α)) (x : ι) : Option (Model α) :=
   limitModel (fun n => iterateKernel body n x)
 
-/-- Undefined values at unrelated states do not affect the queried limit.
-The source step may be partial away from the certified set. -/
+/-- The actual finite source approximants recover the least fixed point of a
+continuous model step. The step only has to realize its inputs and outputs at
+the states relevant to the query. -/
+theorem kernelModelAt_of_step_on (body : (ι → Option (D α)) → ι → Option (D α))
+    (g : Kernel ι α →o Kernel ι α) (continuous : ωScottContinuous g) (states : Set ι)
+    (lift : ∀ (k : ι → Option (D α)) (m : Kernel ι α),
+      (∀ a ∈ states, ∃ d, k a = some d ∧ Presents d (m a)) →
+        ∀ a ∈ states, ∃ e, body k a = some e ∧ Presents e (g m a))
+    {x : ι} (hx : x ∈ states) : kernelModelAt body x = some (g.lfp x) := by
+  have data : ∀ n a, a ∈ states → ∃ d, iterateKernel body n a = some d ∧ Presents d ((g^[n] ⊥) a) := by
+    intro n
+    induction n with
+    | zero => exact fun _ _ => ⟨.zero, rfl, Represents.zero, visited_zero⟩
+    | succ n ih => simpa only [iterateKernel, Function.iterate_succ_apply'] using lift _ _ ih
+  have tr : Approximates (fun n => iterateKernel body n x) (fun n => (g^[n] ⊥) x) :=
+    ⟨fun i j hij => g.monotone.monotone_iterate_of_le_map bot_le hij x, fun n => data n x hx⟩
+  rw [kernelModelAt, limitModel_eq tr, fixedPoints.lfp_eq_sSup_iterate _ continuous, iSup_apply]
+
+/-- A single recursive call needs a seed and a transition only on reachable states. -/
 theorem kernelModelAt_on (body : (ι → Option (D α)) → ι → Option (D α))
     (b : Kernel ι α) (r : ι → ℝ≥0∞) (next : ι → ι) (states : Set ι) (closed : Set.MapsTo next states states)
     (lift : ∀ x ∈ states, ∀ (k : ι → Option (D α)) d m, k (next x) = some d → Presents d m →
       ∃ e, body k x = some e ∧ Presents e (strictRetryStep (b x) (r x) m))
     {x : ι} (hx : x ∈ states) : kernelModelAt body x = some ((kernelStep b r next).lfp x) := by
-  let g := kernelStep b r next
-  have inc : ∀ n : ℕ, g^[n] ⊥ ≤ g^[n+1] ⊥ := by
-    intro n
-    induction n with
-    | zero => exact bot_le
-    | succ n ih => simpa only [Function.iterate_succ_apply'] using g.monotone ih
-  have data : ∀ n a, a ∈ states → ∃ d, iterateKernel body n a = some d ∧ Presents d ((g^[n] ⊥) a) := by
-    intro n
-    induction n with
-    | zero => exact fun _ _ => ⟨.zero, rfl, Represents.zero, visited_zero⟩
-    | succ n ih =>
-      intro a ha
-      obtain ⟨d, hd, hm⟩ := ih (next a) (closed ha)
-      obtain ⟨e, he, hk⟩ := lift a ha _ d _ hd hm
-      exact ⟨e, he, by simpa only [Function.iterate_succ_apply'] using hk⟩
-  have tr : Approximates (fun n => iterateKernel body n x) (fun n => (g^[n] ⊥) x) :=
-    ⟨monotone_nat_of_le_succ (fun n => inc n x), fun n => data n x hx⟩
-  rw [kernelModelAt, limitModel_eq tr, fixedPoints.lfp_eq_sSup_iterate _ (kernel_continuous b r next), iSup_apply]
+  apply kernelModelAt_of_step_on _ _ (kernel_continuous b r next) states _ hx
+  intro k m hm a ha
+  obtain ⟨d, hd, hp⟩ := hm (next a) (closed ha)
+  exact lift a ha k d _ hd hp
 
 end QSym.Distribution.Atomic

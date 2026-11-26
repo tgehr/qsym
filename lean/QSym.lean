@@ -51,7 +51,7 @@ import QSym.Conditionals
 import QSym.Binding
 import QSym.DistributionRecursion
 import QSym.DistributionAtomicAffine
-import QSym.DistributionAtomicKernel
+import QSym.DistributionAtomicKernelRules
 import QSym.DistributionAtomicSeries
 import QSym.DistributionAtomicDivergence
 import QSym.DistributionAtomicOrbit
