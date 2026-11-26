@@ -8537,14 +8537,19 @@ final class Bindings{
 				}
 				if(next==BoundTerm.init){ next=solveFinite(at(result.output),extra,true); rule=BindingRule.rangeSolution; }
 			}else if(next==BoundTerm.init&&current.op==BoundOp.finiteSum&&nodes[current.a].op==BoundOp.lambda){
-				// Reduce applications introduced by recurrence solutions before
-				// lifting the summand to another numeric type.
-				Table!(uint,bool) inspected;
-				bool betaRedex(uint id){
-					if(inspected.get(id,false))return false;inspected.set(id,true);auto q=nodes[id];
-					return q.op==BoundOp.apply&&nodes[q.a].op==BoundOp.lambda||q.a!=uint.max&&betaRedex(q.a)||q.b!=uint.max&&betaRedex(q.b)||q.c!=uint.max&&betaRedex(q.c);
+				// Share a reduced distribution observation across repeated visits.
+				// A zero bound must never force the summand.
+				auto rangeBound=nodes[current.b]; long literalCount=-1;
+				if(rangeBound.op==BoundOp.scalar&&arena.isNumber(arena.at(rangeBound.data))){
+					auto q=arena.number(arena.at(rangeBound.data)).re; if(q.small) literalCount=q.integer;
 				}
-				if(steps<budget&&betaRedex(nodes[current.a].a)){
+				Table!(uint,bool) inspected;
+				bool summandRedex(uint id){
+					if(inspected.get(id,false))return false;inspected.set(id,true);auto q=nodes[id];
+					return q.op==BoundOp.apply&&nodes[q.a].op==BoundOp.lambda||q.op==BoundOp.distributionMass&&literalCount>=2&&literalCount<=64||
+						q.a!=uint.max&&summandRedex(q.a)||q.b!=uint.max&&summandRedex(q.b)||q.c!=uint.max&&summandRedex(q.c);
+				}
+				if(steps<budget&&summandRedex(nodes[current.a].a)){
 					auto f=visit(at(current.a),depth+1);
 					if(f.output!=current.a){
 						auto out_=finiteSum(at(f.output),at(current.b));++steps;
@@ -8641,11 +8646,15 @@ final class Bindings{
 					}
 				}
 				if(next==BoundTerm.init&&bound.op==BoundOp.bottom){ next=bottom(ctx,types[current.type]); rule=BindingRule.shortCircuit; }
-				else if(next==BoundTerm.init&&bound.op==BoundOp.scalar&&arena.isNumber(arena.at(bound.data))&&arena.number(arena.at(bound.data)).re.small){
-					auto count=arena.number(arena.at(bound.data)).re.integer;
-					if(count==0){ next=scalar(ctx,arena.number(Number(0),sort)); rule=BindingRule.rangeZero; }
-					else if(count<=64){
-						auto prev=scalar(ctx,arena.natural_(cast(ulong)(count-1))),term=apply(at(current.a),prev),prefix=finiteSum(at(current.a),prev);
+				else if(next==BoundTerm.init&&literalCount>=0&&literalCount<=64){
+					if(!literalCount){ next=scalar(ctx,arena.number(Number(0),sort)); rule=BindingRule.rangeZero; }
+					// A single antidifference proof is smaller than repeatedly
+					// evaluating a polynomial-sized row at each literal index.
+					else if(literalCount>=4&&(sort==Sort.rational||sort==Sort.real_||sort==Sort.complex)){
+						next=solveFinite(at(result.output),extra); rule=BindingRule.rangeSolution;
+					}
+					if(next==BoundTerm.init){
+						auto prev=scalar(ctx,arena.natural_(cast(ulong)(literalCount-1))),term=apply(at(current.a),prev),prefix=finiteSum(at(current.a),prev);
 						next=primitive(scalarOperator(types[current.type],TensorOp.add),[prefix,term]); rule=BindingRule.rangeStep;
 					}
 				}

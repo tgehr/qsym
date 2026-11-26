@@ -1526,6 +1526,11 @@ private Case[] cases(){
 	Case("IntegratingFactorEmpty","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else addD(undefined(Distribution(ℝ)),scaleD(n/(n+1),f(n sub 1))))(0))","ℝ","1"),
 	Case("IntegratingFactorMissingEmission","defined(massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else addD(undefined(Distribution(ℝ)),scaleD(n/(n+1),f(n sub 1))))(1)))","𝔹","false"),
 	Case("IntegratingFactorPole","λ(k:ℕ).massD("~discountedAtoms("k","(n+1)/(n-1)")~")","ℕ→ℝ"),
+	Case("UniformCountdownFive","massD("~uniformCountdown~"(5))","ℝ","1"),
+	Case("UniformCountdownFiveMean","massD(weightD(λ(x:ℝ).x,"~uniformCountdown~"(5)))","ℝ","5/2"),
+	Case("UniformCountdownFiveSecond","massD(weightD(λ(x:ℝ).x^2,"~uniformCountdown~"(5)))","ℝ","55/6"),
+	Case("SmallRangePolynomial","∑(i:ℕ).[i<8]·((i:ℝ)^2+i+1)","ℝ","176"),
+	Case("SmallRangePartial","defined(∑(i:ℕ).[i<4]·(i-2:ℝ)⁻¹)","𝔹","false"),
 	Case("UniformCountdownMass","λ(k:ℕ).massD("~uniformCountdown~"(k))","ℕ→ℝ","λ(k:ℕ). (1:ℝ)"),
 	Case("UniformCountdownMean","massD(weightD(λ(x:ℝ).x,"~uniformCountdown~"(1000000)))","ℝ","500000"),
 	Case("UniformCountdownSecond","massD(weightD(λ(x:ℝ).x^2,"~uniformCountdown~"(1000000)))","ℝ","333333500000"),
@@ -1724,6 +1729,9 @@ private void run(string directory){
 			if(c.name=="UnitEmissionMillion") enforce(certificate.length<60_000,c.name~" expanded recursive visits");
 		}else if(c.name.indexOf("Emitting")==0)
 			enforce(certificate.indexOf("Distribution.observe_emitting_countdown ")>=0&&text.indexOf("μ")<0&&text.indexOf("∑")<0,c.name~" finite geometric observation");
+		if(c.name.indexOf("UniformCountdownFive")==0||c.name=="SmallRangePolynomial")
+			enforce(certificate.indexOf("Summation.range_step ")<0&&certificate.indexOf("Summation.range_solution_partial ")>=0,c.name);
+		if(c.name=="UniformCountdownFive") enforce(certificate.length<225_000,c.name~" expanded scalar visits");
 		if(c.name.indexOf("OpaqueUnitPair")==0)
 			enforce((certificate.indexOf("Value.mul_pair_one ")>=0)==(c.name!="OpaqueUnitPairZero"),c.name);
 		if(c.name=="UniformCountdownProbe")
