@@ -29,6 +29,9 @@ private Case[] cases(){
 	string flip(string seed="δ(false)",string rate="1/2"){
 		return "(μ(d:Distribution(𝔹)).addD("~seed~",scaleD("~rate~",bindD(d,λ(b:𝔹).δ(¬b)))))";
 	}
+	string reflectAcross(string expression="5-x",string seed="δ((1:ℝ))",string ratio="1/2"){
+		return "(μ(d:Distribution(ℝ)).addD("~seed~",scaleD("~ratio~",bindD(d,λ(x:ℝ).δ("~expression~")))))";
+	}
 	string reflect(string seed="δ((2:ℝ))",string rate="1/2"){
 		return "(μ(d:Distribution(ℝ)).addD("~seed~",scaleD("~rate~",bindD(d,λ(x:ℝ).δ(-x)))))";
 	}
@@ -1369,6 +1372,16 @@ private Case[] cases(){
 	Case("AtomicRetryDensity","λ(x:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(scaleD(1/4,δ(0)),scaleD(1/4,δ(1))),scaleD(1/2,d)),x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0∧x≠1}). (0:ℝ)"),
 	Case("AtomicRetryUnitRatio","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(1,d))","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("CountdownGeometric","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). ((1/2)^k:ℝ)"),
+	Case("AffineCycleMass","massD("~reflectAcross()~")","ℝ","2"),
+	Case("AffineCycleFirst","massD(weightD(λ(x:ℝ).x,"~reflectAcross()~"))","ℝ","4"),
+	Case("AffineCycleSecond","massD(weightD(λ(x:ℝ).x^2,"~reflectAcross()~"))","ℝ","12"),
+	Case("AffineCycleNested","massD(weightD(λ(x:ℝ).x,"~reflectAcross("2*(3-x/2)")~"))","ℝ","14/3"),
+	Case("AffineCycleCenter","massD(weightD(λ(x:ℝ).x,"~reflectAcross("5-x","scaleD(1/2,δ((5/2:ℝ)))")~"))","ℝ","5/2"),
+	Case("AffineCyclePartial","λ(h:ℝ→ℝ).massD(weightD(h,"~reflectAcross()~"))","(ℝ→ℝ)→ℝ"),
+	Case("AffineCycleUnusedWeight","defined(massD(weightD(λ(x:ℝ).(x-4)⁻¹,"~reflectAcross("5-x","δ((1:ℝ))","0")~")))","𝔹","false"),
+	Case("AffineCycleDiverges","defined(massD(weightD(λ(x:ℝ).x-2,"~reflectAcross("4-x","δ((1:ℝ))","1")~")))","𝔹","false"),
+	Case("AffineCycleZero","massD(weightD(λ(x:ℝ).x-1,"~reflectAcross("2-x","δ((1:ℝ))","1")~"))","ℝ","0"),
+	Case("AffineCycleFraction","massD(weightD(λ(x:ℝ).x,"~reflectAcross("1/2-x")~"))","ℝ","1"),
 	Case("CycleBoolMass","massD("~flip()~")","ℝ","2"),
 	Case("CycleBoolFalse","massD(weightD(λ(b:𝔹).[¬b],"~flip("scaleD(1/2,δ(false))")~"))","ℝ","2/3"),
 	Case("CycleBoolTrue","massD(weightD(λ(b:𝔹).[b],"~flip("scaleD(1/2,δ(false))")~"))","ℝ","1/3"),
@@ -1706,6 +1719,10 @@ private void run(string directory){
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
 			enforce(certificate.indexOf(c.name=="AtomicRetryMass"?"Atomic.mass_retry":"Atomic.density_retry")>=0,c.name);
+		if(c.name.indexOf("AffineCycle")==0){
+			enforce(certificate.indexOf("Distribution.Atomic.dirac_reflection ")>=0&&text.indexOf("μ")<0,c.name);
+			if(c.name=="AffineCyclePartial") enforce(text.indexOf("h(1)")>=0&&text.indexOf("h(4)")>=0,c.name);
+		}
 		if(c.name.indexOf("IndexedVisit")==0)
 			enforce(certificate.indexOf("Distribution.observe_indexed_countdown ")>=0&&text.indexOf("μ")<0,c.name);
 		if(c.name.indexOf("MaskContext")==0){
@@ -2782,6 +2799,8 @@ private void run(string directory){
 	}
 	auto owner=Session.open(),a=owner.arena; FunctionSyntax s;
 	foreach(source;[
+		"μ(d:Distribution(ℝ)).addD(δ((1:ℝ)),scaleD(1/2,bindD(d,λ(x:ℝ).δ(5-2*x))))",
+		"μ(d:Distribution(ℝ)).addD(δ((1:ℝ)),scaleD(1/2,bindD(d,λ(x:ℝ).δ(5-x/0))))",
 		"μ(d:Distribution(ℕ)).addD(δ(0),scaleD(-1,bindD(d,λ(n:ℕ).δ(n+1))))",
 		"μ(d:Distribution(ℕ)).addD(scaleD(-1,δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))",
 		"μ(d:Distribution(ℕ)).addD(δ(0),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+n))))",

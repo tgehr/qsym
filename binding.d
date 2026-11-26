@@ -984,7 +984,7 @@ final class Bindings{
 		if(!affineForm(id,forms)) return false;
 		parts=RetryParts(uint.max,id,forms[id].ratio,false,false,false,forms); return true;
 	}
-	private enum Involution { flip, negLeft, negRight }
+	private enum Involution { flip, negLeft, negRight, reflection }
 	private struct InvolutiveLoop { uint seed,ratio,kernel,unit=uint.max; Involution map; }
 	private bool involutiveLoop(uint id,out InvolutiveLoop loop){
 		auto body=nodes[id]; Rational ratio;
@@ -1004,12 +1004,16 @@ final class Bindings{
 		bool self(uint i){return nodes[i].op==BoundOp.variable&&nodes[i].data==0;}
 		loop=InvolutiveLoop(body.a,factor,transport.b);
 		if(op.op==Op.not_&&self(term.a)) return true;
-		if(op.op!=Op.mul||types[term.type]!=scalarType(Sort.real_)) return false;
-		bool left=self(term.b);
-		if(!left&&!self(term.a)) return false;
-		loop.unit=left?term.a:term.b;
-		if(nodes[loop.unit].op!=BoundOp.scalar||arena.at(nodes[loop.unit].data)!=arena.real_(-1)) return false;
-		loop.map=left?Involution.negLeft:Involution.negRight; return true;
+		if(types[term.type]!=scalarType(Sort.real_)) return false;
+		if(op.op==Op.mul&&(self(term.a)||self(term.b))){
+			bool left=self(term.b); auto coefficient=left?term.a:term.b;
+			if(nodes[coefficient].op==BoundOp.scalar&&arena.at(nodes[coefficient].data)==arena.real_(-1)){
+				loop.unit=coefficient; loop.map=left?Involution.negLeft:Involution.negRight; return true;
+			}
+		}
+		Rational slope,offset;
+		if(!affineBody(nodes[fn.a].a,slope,offset)||slope!=Rational(-1)) return false;
+		loop.map=Involution.reflection; return true;
 	}
 	private void involutionEmissions(Scope ctx,BoundNode loop,InvolutiveLoop source,out BoundTerm seed,out BoundTerm reflected){
 		BoundTerm[] env=[bottom(ctx,types[loop.type])];
@@ -11014,6 +11018,19 @@ final class Bindings{
 			coordinateProofs~=coordinateGridProof(coordinate,c); proofRoots~=c.roots;
 			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
 		}
+		Table!(uint,string) reflections;
+		foreach(i,p;result.proofs){
+			if(p.rule!=BindingRule.distributionInvolutionObservation&&p.rule!=BindingRule.distributionInvolutionUnbounded) continue;
+			uint[] ops; auto loop=nodes[observationInput(nodes[p.from].a,ops)]; InvolutiveLoop source;
+			enforce(involutiveLoop(nodes[loop.a].a,source));
+			if(source.map!=Involution.reflection) continue;
+			BoundTerm seed,mapped; involutionEmissions(context(at(p.from)),loop,source,seed,mapped);
+			auto body=nodes[nodes[node(mapped).b].a].a;
+			auto c=new SourceCertificates("reflection"~to!string(i)~"_",body),affine=c.affineProof(body);
+			auto b=c.q(affine.offset);
+			reflections.set(cast(uint)i,"(Distribution.Atomic.reflection_involutive "~b~") (Distribution.Atomic.dirac_reflection "~b~" "~c.functionAt(body)~" "~affine.proof~".equation)");
+			proofRoots~=c.roots; stepNumerics~=c.numericTerms; stepDeclarations~=c.declarations;
+		}
 		Table!(uint,string) affineMasks;
 		foreach(i,d;result.domains) if(d.affineInput!=uint.max){
 			auto c=new SourceCertificates("mask"~to!string(i)~"_",d.affineInput),f=c.affineProof(d.affineInput);
@@ -12548,9 +12565,13 @@ final class Bindings{
 						BoundTerm seed,mapped; involutionEmissions(context(at(p.from)),loop,source,seed,mapped);
 						bool flip=source.map==Involution.flip;
 						auto transport="("~ns~(flip?"Transport.bind (":"Transport.realBind (")~"("~name(node(mapped).b)~".eval ξ ρ).getD (fun _ => none)))";
-						auto involution=flip?"(fun a : Bool => Bool.not_not a)":"(fun a : ℝ => neg_neg a)";
-						auto point=flip?"(fun _ => rfl)":"("~ns~"dirac_neg "~(source.map==Involution.negLeft?"true ":"false ")~number(source.unit)~")";
-						auto args=" "~massObserver(ops,true)~" "~transport~" "~involution~" "~point~" "~admissible(seed.id);
+						auto geometry=reflections.get(cast(uint)i,"");
+						if(!geometry.length){
+							auto inv=flip?"(fun a : Bool => Bool.not_not a)":"(fun a : ℝ => neg_neg a)";
+							auto point=flip?"(fun _ => rfl)":"("~ns~"dirac_neg "~(source.map==Involution.negLeft?"true ":"false ")~number(source.unit)~")";
+							geometry=inv~" "~point;
+						}
+						auto args=" "~massObserver(ops,true)~" "~transport~" "~geometry~" "~admissible(seed.id);
 						if(p.rule==BindingRule.distributionInvolutionUnbounded){
 							if(source.ratio==uint.max) law=ns~"CountableObservation.fixed_involution_unscaled"~args~" (fun _ => rfl)";
 							else law=ns~"CountableObservation.fixed_involution_noncontracting"~args~" "~q(literal(source.ratio))~yes~" "~number(source.ratio)~" (fun _ => rfl)";

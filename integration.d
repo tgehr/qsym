@@ -48,6 +48,12 @@ private bool affine(Arena a,Term t,Term x,out Rational slope,out Rational offset
 	if(a.isNumber(t)){ offset=a.number(t).re; return a.number(t).im.zero; }
 	auto n=a.view(t);
 	if(n.op==Op.builtin&&n.value>=Builtin.castNZ&&n.value<=Builtin.castQR) return affine(a,a.viewChild(t,0),x,slope,offset,depth+1);
+	if(n.op==Op.inv||n.op==Op.builtin&&n.value==Builtin.invQ){
+		auto d=a.viewChild(t,0),v=a.view(d);
+		while(v.op==Op.builtin&&v.value>=Builtin.castNZ&&v.value<=Builtin.castQR){ d=a.viewChild(d,0); v=a.view(d); }
+		if(!a.isNumber(d)||!a.number(d).im.zero||a.number(d).re.zero) return false;
+		offset=Rational(1)/a.number(d).re; return true;
+	}
 	bool add=n.op==Op.add||n.op==Op.builtin&&(n.value==Builtin.addN||n.value==Builtin.addZ||n.value==Builtin.addQ);
 	bool mul=n.op==Op.mul||n.op==Op.builtin&&(n.value==Builtin.mulN||n.value==Builtin.mulZ||n.value==Builtin.mulQ);
 	if(!add&&!mul) return false;

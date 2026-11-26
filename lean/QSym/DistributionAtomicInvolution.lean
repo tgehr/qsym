@@ -225,6 +225,16 @@ theorem CountableObservation.fixed_involution_q {o : Option (D α) → Option �
   simpa only [Rat.cast_mul, Rat.cast_inv, Rat.cast_sub, Rat.cast_one, Rat.cast_pow] using
     h.fixed_involution tr inv point seed (by exact_mod_cast h0) (by exact_mod_cast h1) body
 
+/-- The offset of a real reflection is the sum of each pair of outcomes. -/
+theorem reflection_involutive (b : ℚ) : Function.Involutive (fun x : ℝ => (b : ℝ) - x) :=
+  fun _ => sub_sub_cancel _ _
+
+theorem dirac_reflection (b : ℚ) (f : ℝ → Option ℝ)
+    (h : ∀ x, f x = some (((-1 : ℚ) : ℝ) * x + b)) (x : ℝ) :
+    diracValue (f x) = some (.dirac ((b : ℝ) - x)) := by
+  rw [h]
+  simp [diracValue, sub_eq_add_neg, add_comm]
+
 theorem dirac_neg (left : Bool) {r : Option ℝ} (hr : r = some ((-1 : ℚ) : ℝ)) (x : ℝ) :
     diracValue (if left then Value.mul r (some x) else Value.mul (some x) r) = some (.dirac (-x)) := by
   cases left <;> simp [hr, Value.mul, diracValue]
