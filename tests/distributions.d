@@ -1866,6 +1866,22 @@ private Case[] cases(){
 	Case("CapturedScaleHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(undefined(ℝ),f(n sub 1)))(100))","ℝ","undefined(ℝ)"),
 	Case("CapturedScaleMissingIndex","λ(r:ℝ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD(r,f(n sub 1)))(0 sub 1))","ℝ→ℝ","λ(r:ℝ). undefined(ℝ)"),
 	Case("VariableScaleByIndex","λ(r:ℝ).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((3:ℝ)) else scaleD((n:ℝ),f(n sub 1)))(k))","ℝ→ℕ→ℝ"),
+	Case("PowerSelectIndex","λ(r:ℝ). λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·mulR(r^i,[x=(i:ℝ)]·1)","ℝ→ℕ→ℝ→ℝ"),
+	Case("PowerSelectSucc","λ(r:ℝ). λ(x:ℝ). ∑(i:ℕ). [i<1000000]·mulR([x=(i+2:ℝ)]·1,r^(i+1))","ℝ→ℝ→ℝ"),
+	Case("PowerSelectRemaining","λ(r:ℝ). λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·mulR(r^(n sub (i+1)),[x=(i+1:ℝ)]·1)","ℝ→ℕ→ℝ→ℝ"),
+	Case("PowerSelectZero","λ(r:ℝ). λ(n:ℕ). ∑(i:ℕ). [i<n]·mulR(r^(n sub (i+1)),(0:ℝ))","ℝ→ℕ→ℝ"),
+	Case("PowerSelectMissingEmpty","∑(i:ℕ). [i<0]·mulR((undefined(ℝ))^i,[9=(i:ℝ)]·(1:ℝ))","ℝ","0"),
+	Case("PowerSelectMissingMiss","∑(i:ℕ). [i<5]·mulR((undefined(ℝ))^i,[9=(i:ℝ)]·(1:ℝ))","ℝ","undefined(ℝ)"),
+	Case("PowerSelectMissingZero","∑(i:ℕ). [i<5]·mulR((0:ℝ),(undefined(ℝ))^(5 sub (i+1)))","ℝ","undefined(ℝ)"),
+	Case("PowerSelectMiss","∑(i:ℕ). [i<1000000]·mulR((-1:ℝ)^i,[1000000=(i:ℝ)]·undefined(ℝ))","ℝ","0"),
+	Case("PowerSelectHit","∑(i:ℕ). [i<1000000]·mulR((-1:ℝ)^i,[999999=(i:ℝ)]·(2:ℝ))","ℝ","-2"),
+	Case("PowerSelectOpaqueWeight","λ(f:ℕ→ℝ). ∑(i:ℕ). [i<1000000]·mulR([999999=(i:ℝ)]·f(i),(-1:ℝ)^(i+1))","(ℕ→ℝ)→ℝ"),
+	Case("PowerSelectUnsafeExponent","defined(∑(i:ℕ). [i<2]·mulR((2:ℝ)^(i sub 1),[5=(i:ℝ)]·1))","𝔹","false"),
+	Case("DiscountProbeAlternatingLast","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","-1","1000000")~",1000000)","ℝ","undefined(ℝ)"),
+	Case("DiscountProbeAlternatingBeyond","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","-1","1000000")~",1000001)","ℝ","1"),
+	Case("DiscountProbeZeroPast","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","0","1000000")~",999999)","ℝ","0"),
+	Case("DiscountProbeZeroLatest","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","0","1000000")~",1000000)","ℝ","undefined(ℝ)"),
+	Case("DiscountProbeZeroAfter","densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","0","1000000")~",1000001)","ℝ","0"),
 	Case("DiscountFibreCancel","densityAtD("~emittedSteps("addD(δ((2:ℝ)),lebesgueD())","scaleD(-1/4,δ((n:ℝ)))","1/2","2")~",2)","ℝ","1/4"),
 	Case("DiscountFibreAfter","densityAtD("~emittedSteps("addD(δ((2:ℝ)),lebesgueD())","scaleD(-1/4,δ((n:ℝ)))","1/2","3",true)~",2)","ℝ","1/8"),
 	Case("DiscountFibreBefore","densityAtD("~emittedSteps("addD(δ((2:ℝ)),lebesgueD())","scaleD(-1/4,δ((n:ℝ)))","1/2","1")~",2)","ℝ","undefined(ℝ)"),
@@ -2247,6 +2263,13 @@ private void run(string directory){
 			enforce(text.indexOf("∑")<0,c.name);
 			if(c.name!="RangeProbeMissingEmpty"&&c.name!="RangeProbeMissingVisit"&&c.name!="RangeProbeLazy")
 				enforce(certificate.indexOf("Summation.range_real_N ")>=0||certificate.indexOf("Summation.range_shifted_real_N ")>=0,c.name);
+		}
+		if(c.name.indexOf("PowerSelect")==0||c.name.indexOf("DiscountProbe")==0||c.name=="DiscountFibreCaptured"){
+			enforce(text.indexOf("∑")<0&&text.indexOf("μ")<0,c.name~": "~text);
+			if(c.name=="PowerSelectIndex"||c.name=="PowerSelectSucc"||c.name=="PowerSelectRemaining"||c.name=="DiscountFibreCaptured")
+				enforce(certificate.indexOf("Summation.RangeDefined.mask ")>=0,c.name);
+			if(c.name=="PowerSelectZero") enforce(certificate.indexOf("Summation.RangeDefined.zero ")>=0,c.name);
+			if(c.name=="PowerSelectUnsafeExponent") enforce(certificate.indexOf("Summation.RangeDefined.")<0,c.name);
 		}
 		if(c.name.indexOf("DiscountFibre")==0){
 			bool solved=c.name!="DiscountFibreOpaqueSeed";

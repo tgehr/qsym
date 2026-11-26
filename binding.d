@@ -35,7 +35,7 @@ struct BoundNode{
 	uint context,type,a=uint.max,b=uint.max,data,c=uint.max;
 }
 struct BinderHint{ string name,refinement; }
-private enum BindingRule:ubyte{
+private enum BindingRule:ushort{
 	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
@@ -46,7 +46,7 @@ private enum BindingRule:ubyte{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 private struct SummationSolution{ uint source,target,candidate,variable,zero,step; SumPrimitive[] tail; uint[] totals,convergence; }
@@ -628,6 +628,60 @@ final class Bindings{
 		if(!finite) return selected;
 		auto inside=primitive(arena.call(Builtin.ltN,[nat,nat]),[candidate,count]);
 		return primitive(mask,[indexBuiltin(Builtin.nonzeroN,count),primitive(mask,[inside,selected])]);
+	}
+	private struct RangeProduct{
+		uint power,token,other;
+		bool right,mask;
+		string exponent;
+	}
+	// On the visited indices these natural exponents are total. Only the
+	// captured base can make the power missing.
+	private bool rangeProduct(BoundTerm fn,BoundTerm count,out RangeProduct d){
+		auto root=node(fn).a;
+		if(!primitiveOp(root,Op.mul)) return false;
+		auto row=nodes[root],i=variable(context(at(root)),0);
+		bool call(uint id,Builtin operation){
+			auto n=nodes[id];
+			if(n.op!=BoundOp.primitive) return false;
+			auto v=arena.view(arena.at(n.data)); return v.op==Op.builtin&&v.value==operation;
+		}
+		bool successor(uint id){
+			if(!call(id,Builtin.addN)) return false;
+			auto n=nodes[id];
+			return n.a==i.id&&nodes[n.b].op==BoundOp.scalar&&arena.at(nodes[n.b].data)==arena.natural_(1);
+		}
+		foreach(right;[false,true]){
+			auto coef=right?row.b:row.a,other=right?row.a:row.b;
+			if(!call(coef,Builtin.powRN)||depends(at(nodes[coef].a),0)) continue;
+			auto exp=nodes[coef].b;
+			if(exp==i.id) d.exponent="index";
+			else if(successor(exp)) d.exponent="successor";
+			else if(call(exp,Builtin.subN)&&successor(nodes[exp].b)&&!depends(at(nodes[exp].a),0)&&dropIndex(at(nodes[exp].a))==count)
+				d.exponent="remaining";
+			else continue;
+			d.mask=primitiveOp(other,Op.mask);
+			if(d.mask){
+				RealSelection selector;
+				if(!realSelection(lambda(at(other)),true,selector)) continue;
+			}else if(nodes[other].op!=BoundOp.scalar||arena.at(nodes[other].data)!=arena.real_(0)) continue;
+			d.power=coef; d.other=other; d.token=dropIndex(at(nodes[coef].a)).id; d.right=right;
+			return true;
+		}
+		return false;
+	}
+	private BoundTerm selectedProduct(BoundTerm fn,BoundTerm count){
+		RangeProduct d;
+		if(!rangeProduct(fn,count,d)) return BoundTerm.init;
+		auto ctx=context(count),other=at(d.other);
+		auto value=scalar(ctx,arena.real_(0));
+		if(d.mask){
+			auto mask=node(other),mult=arena.at(nodes[node(fn).a].data);
+			auto coef=at(d.power),f=at(mask.b),weight=primitive(mult,d.right?[f,coef]:[coef,f]);
+			auto row=primitive(arena.at(mask.data),[at(mask.a),weight]);
+			value=finiteSum(inheritHint(fn,lambda(row)),count);
+		}
+		auto present=indexBuiltin(Builtin.nonzeroN,count);
+		return primitive(arena.mask(arena.boolean(true),arena.real_(0)),[present,sequence(at(d.token),value)]);
 	}
 	// Compile the signed singleton charge and regular weight together. Keeping
 	// one witness per source node also shares reused summands in the export.
@@ -8843,7 +8897,8 @@ final class Bindings{
 				bool swap,finite=current.op==BoundOp.finiteSum;
 				next=selectRealIndex(at(current.a),finite?at(current.b):BoundTerm.init,swap);
 				if(next!=BoundTerm.init){ rule=BindingRule.sumRealIndex; extra=swap; }
-				else if(!finite){
+				else if(finite){ next=selectedProduct(at(current.a),at(current.b)); rule=BindingRule.rangeDefinedProduct; }
+				else{
 					auto row=nodes[nodes[current.a].a];
 					RealSelection inner;
 					if(boundedMask(row)&&realSelection(lambda(at(row.b)),true,inner))
@@ -12836,6 +12891,21 @@ final class Bindings{
 					auto ns=index==scalarType(Sort.natural),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
 					auto f="(fun (i : Option "~(ns?"ℕ":"ℤ")~") => "~name(sourceBody.b)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") i ρ))";
 					proof=".ofEq (fun ξ ρ => Summation.interval_convert"~(ns?"N":"Z")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(bounds.a)~".eval ξ ρ) ("~name(nodes[bounds.b].a)~".eval ξ ρ))"; break;
+				case BindingRule.rangeDefinedProduct:{
+					RangeProduct d;
+					enforce(rangeProduct(at(n.a),at(n.b),d),"missing coefficient domain on the finite range");
+					string value(uint id){ return " ("~name(id)~".eval ξ ρ)"; }
+					string row(uint id){ return " (fun i : ℕ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some i) ρ))"; }
+					auto ns="Summation.RangeDefined.",count=value(n.b),token=value(d.token);
+					auto cert=" ("~ns~d.exponent~token~count~")";
+					auto args=to!string(d.right)~token~row(d.power);
+					if(d.mask) args~=row(nodes[d.other].b)~row(nodes[d.other].a)~count~cert;
+					else{
+						auto z=dropIndex(at(d.other));
+						args~=count~cert~value(z.id)~" (Numeric.calculate_real_zero ξ n"~to!string(nodes[z.id].data)~" rfl)";
+					}
+					proof=".ofEq (fun ξ ρ => "~ns~(d.mask?"mask ":"zero ")~args~")"; break;
+				}
 				case BindingRule.sumRealIndex:{
 					bool finite=n.op==BoundOp.finiteSum,natural=naturalIndex(n.a);
 					RealSelection s;
