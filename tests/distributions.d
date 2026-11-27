@@ -1055,6 +1055,26 @@ private Case[] cases(){
 	Case("OrdinaryQuadraticEmpty","Λy.∫dx [0<x<0]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). 0·λ[y]"),
 	Case("OrdinaryQuadraticScaleTwo","Λy.∫dx [0<x<2]·λ[x]·δ(x²/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([0<y∧y<2]·sqrt(2·y)⁻¹)·λ[y]"),
 	Case("OrdinaryQuadraticNegativeUnitGain","Λy.∫dx [-1<x≤0]·λ[x]·δ((1-(x+1)^2)/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([y<1/2∧0≤y]·sqrt(-2·y+1)⁻¹)·λ[y]"),
+	Case("InvRootIntegralPrinted","∫dy ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]","ℝ","1"),
+	Case("InvRootIntegralOpen","∫dy ([1<y<2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","2"),
+	Case("InvRootIntegralClosedFar","∫dy ([1<y≤2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","2"),
+	Case("InvRootIntegralDescending","∫dy ([y<3∧2<y]·(sqrt(3-y)⁻¹))·λ[y]","ℝ","2"),
+	Case("InvRootIntegralDescendingClosedFar","∫dy ([y<3∧2≤y]·(sqrt(3-y)⁻¹))·λ[y]","ℝ","2"),
+	Case("InvRootIntegralSigned","∫dy ([1≤y≤4]·(-3·sqrt(y)⁻¹))·λ[y]","ℝ","-6"),
+	Case("InvRootIntegralRadicals","∫dy ([2≤y<3]·(sqrt(y)⁻¹))·λ[y]","ℝ","-2·sqrt(2)+2·sqrt(3)"),
+	Case("InvRootIntegralScaleTwo","∫dy ([0<y<2]·(sqrt(2*y)⁻¹))·λ[y]","ℝ","2"),
+	Case("InvRootIntegralDownFraction","∫dy ([0≤y∧y<1/2]·(sqrt(1-2*y)⁻¹))·λ[y]","ℝ","1"),
+	Case("InvRootIntegralPole","∫dy ([1≤y≤2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
+	Case("InvRootIntegralUpperPole","∫dy ([2<y∧y≤3]·(sqrt(3-y)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
+	Case("InvRootIntegralCrosses","∫dy ([0<y<2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
+	Case("InvRootIntegralNegative","∫dy ([-4<y<-1]·(sqrt(y)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
+	Case("InvRootIntegralReverseCrosses","∫dy ([0<y<2]·(sqrt(1-y)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
+	Case("InvRootIntegralPointPole","∫dy ([1≤y≤1]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
+	Case("InvRootIntegralPointRegular","∫dy ([2≤y≤2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","0"),
+	Case("InvRootIntegralEmpty","∫dy ([3<y<2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","0"),
+	Case("InvRootIntegralNonlinear","∫dy ([1<y<2]·(sqrt(y²+1)⁻¹))·λ[y]","ℝ","∫dy ([1<y∧y<2]·sqrt(y^2+1)⁻¹)·λ[y]"),
+	Case("InvRootIntegralStrictProduct","∫dy [1<y<2]·λ[y]/(2*sqrt(y-1))","ℝ","∫dy (mulR((guard(1<y,sqrt(y-1)⁻¹·(1/2))),[1<y∧y<2]))·λ[y]"),
+	Case("InvRootIntegralSourceMass","massD(Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y])","ℝ","1"),
 	Case("OrdinaryQuadraticWindow","Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticTail","Λy.∫dx λ[x]·δ(x²+1)[y]·[0<x<1]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticGraph","pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x²+1)","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
@@ -3487,6 +3507,14 @@ private void run(string directory){
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
+		if(c.name.indexOf("InvRootIntegral")==0){
+			import std.algorithm : canFind;
+			auto form=c.name["InvRootIntegral".length..$];
+			bool missing=["Pole","UpperPole","Crosses","Negative","ReverseCrosses","PointPole"].canFind(form);
+			bool other=["Empty","Nonlinear","StrictProduct","SourceMass"].canFind(form);
+			enforce((certificate.indexOf("RootInterval.mass_missing ")>=0)==missing,c.name);
+			enforce((certificate.indexOf("RootInterval.mass ")>=0)==(!missing&&!other),c.name);
+		}
 		if(c.name.indexOf("OrdinaryQuadratic")==0){
 			import std.algorithm : canFind;
 			auto form=c.name["OrdinaryQuadratic".length..$];

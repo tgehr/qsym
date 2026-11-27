@@ -43,7 +43,7 @@ private enum BindingRule:ushort{
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,pointwiseReordered,pointwiseRootSheet,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumNormalizedMoment,sumPolynomialGeometric,sumConstantMomentRows,sumPlainPolynomialZero,sumPlainPolynomialNonzero,sumPolynomialFactor,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,distributionMassTwoWeights,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassBindTest,distributionMassWeightBind,distributionMassConstantWeight,distributionMassLebesgue,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
-	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,distributionQuadraticDensity,distributionQuadraticFibre,distributionMaskedQuadraticChart,distributionQuadraticBand,distributionMaskedMarginal,coordinateRepeatedSheet,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
+	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,distributionQuadraticDensity,distributionQuadraticFibre,distributionMaskedQuadraticChart,distributionQuadraticBand,distributionRootIntervalMass,distributionMaskedMarginal,coordinateRepeatedSheet,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionUniformCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
@@ -2395,6 +2395,63 @@ final class Bindings{
 		return true;
 	}
 
+	private struct RootInterval{
+		uint lower,upper,rad,scale=uint.max;
+		Rational l,u,a,b,k,p,q,gain,witness;
+		bool swap,openLo,openHi,left,missing;
+	}
+	private bool rootIntervalData(uint id,out RootInterval s){
+		auto mass=nodes[id];
+		if(mass.op!=BoundOp.distributionMass) return false;
+		auto d=nodes[mass.a];
+		if(d.op!=BoundOp.distributionWeight||nodes[d.b].op!=BoundOp.distributionLebesgue||nodes[d.a].op!=BoundOp.lambda) return false;
+		auto body=nodes[d.a].a;
+		if(!primitiveOp(body,Op.mask)) return false;
+		IntervalData mask; AxisBounds bounds;
+		if(!intervalMask(body,mask,bounds)||mask.half||mask.nested||mask.unit!=uint.max) return false;
+		if(!literalFactor(bounds.lower,s.l)||!literalFactor(bounds.upper,s.u)||s.l>s.u) return false;
+		auto value=mask.value; s.k=Rational(1);
+		if(primitiveOp(value,Op.mul)){
+			auto prod=nodes[value]; s.left=literalFactor(prod.a,s.k);
+			if(!s.left&&!literalFactor(prod.b,s.k)) return false;
+			s.scale=s.left?prod.a:prod.b; value=s.left?prod.b:prod.a;
+		}
+		if(!primitiveOp(value,Op.inv)) return false;
+		auto root=nodes[value].a;
+		if(!primitiveOp(root,Op.builtin)||arena.view(arena.at(nodes[root].data)).value!=Builtin.sqrtR) return false;
+		s.rad=nodes[root].a;
+		if(!affineBody(s.rad,s.a,s.b)||s.a.words+s.b.words+s.l.words+s.u.words+s.k.words>256) return false;
+		s.lower=bounds.lower; s.upper=bounds.upper; s.swap=mask.swap; s.openLo=mask.strictLower; s.openHi=mask.strictUpper;
+		s.p=s.a*s.l+s.b; s.q=s.a*s.u+s.b;
+		if(s.p.words>128||s.q.words>128) return false;
+		// The finite integral needs a defined row even at an included endpoint.
+		auto zero=Rational(0);
+		if((s.openLo?s.p>=zero:s.p>zero)&&(s.openHi?s.q>=zero:s.q>zero)){
+			s.gain=Rational(2)*s.k/s.a;
+			return s.gain.words<=128;
+		}
+		s.missing=true;
+		if(s.l==s.u&&(s.openLo||s.openHi)) return false;
+		if(!s.openLo&&s.p<=zero) s.witness=s.l;
+		else if(!s.openHi&&s.q<=zero) s.witness=s.u;
+		else if(s.p<zero||s.q<zero){
+			auto low=s.l,high=s.u;
+			if(s.q>zero) high=-s.b/s.a;
+			if(s.p>zero) low=-s.b/s.a;
+			s.witness=(low+high)/Rational(2);
+		}else return false;
+		return s.witness.words<=128;
+	}
+	private BoundTerm rootIntervalMass(BoundTerm t){
+		RootInterval s;
+		if(!rootIntervalData(t.id,s)) return BoundTerm.init;
+		auto ctx=context(t);
+		if(s.missing) return bottom(ctx,type(t));
+		auto z=arena.real_(0),root=arena.call(Builtin.sqrtR,[z]),mul=scalarOperator(type(t),TensorOp.mul);
+		BoundTerm atRoot(Rational x){return primitive(root,[scalar(ctx,arena.real_(x))]);}
+		auto delta=primitive(arena.add(z,z,true),[atRoot(s.q),primitive(mul,[scalar(ctx,arena.real_(-1)),atRoot(s.p)])]);
+		return primitive(mul,[scalar(ctx,arena.real_(s.gain)),delta]);
+	}
 	// Match the affine source certificate. A product needs a syntactically
 	// constant side so the evaluation of its multiplier is closed.
 	private struct SquareRootSheet{
@@ -10295,6 +10352,13 @@ final class Bindings{
 			if((n.op==BoundOp.distributionMass||n.op==BoundOp.distributionDensityAt)&&steps<budget){
 				BindingRule rule; BoundTerm target;
 				if(n.op==BoundOp.distributionMass){
+					auto rootMass=rootIntervalMass(t);
+					if(rootMass!=BoundTerm.init){
+						++steps;
+						auto proof=emit(BindingRule.distributionRootIntervalMass,t.id,rootMass.id);
+						chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
+						return Result(rootMass.id,uint.max);
+					}
 					// Retain a pole witness before scalar simplification puts a
 					// zero times a reciprocal under the domain of the denominator.
 					IntegralSolution observation;
@@ -11144,6 +11208,10 @@ final class Bindings{
 						}
 					}
 				}
+			}
+			if(next==BoundTerm.init&&current.op==BoundOp.distributionMass){
+				next=rootIntervalMass(at(result.output));
+				if(next!=BoundTerm.init) rule=BindingRule.distributionRootIntervalMass;
 			}
 			bool maskedGraph=current.op==BoundOp.apply&&nodes[current.a].op==BoundOp.distributionMaskedGraph;
 			bool graph=maskedGraph||current.op==BoundOp.distributionGraphFibre||current.op==BoundOp.distributionGraphMass;
@@ -14561,6 +14629,31 @@ final class Bindings{
 			squareWeights.set(cast(uint)i,c.functionAt(weight)~" "~borelProof(weight,c));
 			stepDeclarations~=c.declarations;
 		}
+		Table!(uint,string) rootIntervals;
+		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionRootIntervalMass){
+			RootInterval s; enforce(rootIntervalData(p.from,s),"missing inverse-root interval");
+			auto c=new SourceCertificates("rootInterval"~to!string(i)~"_",s.rad);
+			alias q=SourceCertificates.q;
+			string number(Term t){return "(Numeric.calculate_sound ξ n"~to!string(t.id)~" "~q(arena.number(t).re)~" rfl)";}
+			enum ns="Distribution.RootInterval.";
+			auto term="("~ns~"Term.inverse "~c.affineProof(s.rad).proof~")";
+			if(s.scale!=uint.max) term="("~ns~"Term."~(s.left?"left ":"right ")~q(s.k)~" "~number(arena.at(nodes[s.scale].data))~" "~term~")";
+			auto flag=(bool v)=>v?" true":" false";
+			auto flags=flag(s.swap)~flag(s.openLo)~flag(s.openHi);
+			auto bounds=number(arena.at(nodes[s.lower].data))~" "~number(arena.at(nodes[s.upper].data));
+			auto args=term~" "~q(s.l)~" "~q(s.u)~" ";
+			enum ok=" (of_decide_eq_true rfl)";
+			string law;
+			if(s.missing) law="mass_missing "~args~q(s.witness)~flags~ok~ok~ok~" "~bounds;
+			else{
+				auto low=arena.real_(s.p),high=arena.real_(s.q),gain=arena.real_(s.gain);
+				stepNumerics~=[low,high,gain];
+				law="mass "~args~q(s.p)~" "~q(s.q)~" "~q(s.gain)~flags~ok~ok~ok~ok~ok~ok~ok~" "~bounds~
+					" "~number(low)~" "~number(high)~" "~number(gain);
+			}
+			rootIntervals.set(cast(uint)i,ns~law);
+			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
+		}
 		Table!(uint,string) quadraticMasks;
 		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionMaskedQuadraticChart){
 			auto body=nodes[nodes[p.from].a].a;
@@ -17316,6 +17409,8 @@ final class Bindings{
 						" _ (QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct "~env~") (Value.refines_refl _)).symm)";
 					break;
 				}
+				case BindingRule.distributionRootIntervalMass:
+					proof=".ofEq (fun ξ ρ => "~rootIntervals.get(cast(uint)i,"")~")"; break;
 				case BindingRule.distributionQuadraticDensity,BindingRule.distributionQuadraticChart,BindingRule.distributionMaskedMarginal,BindingRule.distributionMaskedQuadraticChart,BindingRule.distributionQuadraticBand,BindingRule.distributionQuadraticFibre:{
 					auto chart=result.quadratics[p.extra],id=chart.polynomial;
 					alias q=SourceCertificates.q;

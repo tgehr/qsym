@@ -101,7 +101,7 @@ import QSym.DistributionSquareRootSheet
 import QSym.DistributionQuadraticRestriction
 import QSym.DistributionQuadraticWindow
 import QSym.DistributionQuadraticBand
-import QSym.DistributionRootInterval
+import QSym.DistributionRootIntervalSource
 import QSym.DistributionFiniteFibreModel
 import QSym.DistributionWeightObservation
 import QSym.DistributionTestScale

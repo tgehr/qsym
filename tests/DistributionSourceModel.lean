@@ -4,7 +4,7 @@ import QSym.DistributionMaskedRootCover
 import QSym.DistributionBindObservation
 import QSym.DistributionTestScale
 import QSym.DistributionQuadraticBand
-import QSym.DistributionRootInterval
+import QSym.DistributionRootIntervalSource
 import QSym.AxiomCheck
 
 noncomputable section
@@ -466,6 +466,11 @@ theorem inverse_root_endpoint_edit :
       simp [away 1 (by simp), sub_eq_add_neg, add_comm]
     _ = _ := by norm_num
 
+#qsym_check_axioms RootInterval.Term.inverse
+#qsym_check_axioms RootInterval.Term.left
+#qsym_check_axioms RootInterval.Term.right
+#qsym_check_axioms RootInterval.mass
+#qsym_check_axioms RootInterval.mass_missing
 #qsym_check_axioms RootInterval.integral
 #qsym_check_axioms inverse_root_endpoint_edit
 
