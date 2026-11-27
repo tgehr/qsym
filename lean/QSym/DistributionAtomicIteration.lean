@@ -1,4 +1,5 @@
 import QSym.DistributionAtomicValue
+import QSym.Binding
 
 /-! Distribution fixed points use the evaluated source body at every finite
 depth. The limit retains both the weights and the set of visited outcomes. -/
@@ -76,6 +77,44 @@ theorem fixed_chain {f : D α → Option (D α)} {s : ℕ → Model α} (h : Tra
 theorem fixed_missing {f : D α → Option (D α)} {n : ℕ} (h : iterateBody f n = none) :
     fixedValue (some f) = none := by
   simp only [fixedValue, Option.some_bind, trackedChain_missing h, Option.none_bind]
+
+/-- A parameter selects the same body at every approximation. If it is
+missing, the very first application to the zero distribution is missing. -/
+theorem fixed_conditional (p : Option Bool) (f g : D α → Option (D α)) :
+    fixedValue (some fun d => Binding.conditionalValue p (f d) (g d)) =
+      Binding.conditionalValue p (fixedValue (some f)) (fixedValue (some g)) := by
+  cases p with
+  | none => exact fixed_missing (n := 1) rfl
+  | some b => cases b <;> rfl
+
+theorem fixed_guard (p : Option Bool) (f : D α → Option (D α)) :
+    fixedValue (some fun d => Binding.guardValue p (f d)) = Binding.guardValue p (fixedValue (some f)) := by
+  cases p with
+  | none => exact fixed_missing (n := 1) rfl
+  | some b => cases b with
+    | false => exact fixed_missing (n := 1) rfl
+    | true => rfl
+
+/-- The source predicate is weakened under the fixed-point binder.
+Check that small equality separately from the denotation of the iteration. -/
+theorem fixed_conditional_rule (p : Binding.Expr Γ (.scalar .bool))
+    (q : Binding.Expr (.distribution a :: Γ) (.scalar .bool))
+    (f g : Binding.Expr (.distribution a :: Γ) (.distribution a))
+    (hp : ∀ ξ ρ (d : D a.denote), q.eval ξ (ρ.cons (some d)) = p.eval ξ ρ) :
+    Binding.Reduction (.unary (b := .distribution a) fixedValue (.lam (.conditional q f g)))
+      (.conditional p (.unary (b := .distribution a) fixedValue (.lam f)) (.unary (b := .distribution a) fixedValue (.lam g))) :=
+  .ofEq (fun ξ ρ => by
+    simp only [Binding.Expr.eval, hp]
+    exact fixed_conditional _ _ _)
+
+theorem fixed_guard_rule (p : Binding.Expr Γ (.scalar .bool))
+    (q : Binding.Expr (.distribution a :: Γ) (.scalar .bool))
+    (f : Binding.Expr (.distribution a :: Γ) (.distribution a))
+    (hp : ∀ ξ ρ (d : D a.denote), q.eval ξ (ρ.cons (some d)) = p.eval ξ ρ) :
+    Binding.Reduction (.unary (b := .distribution a) fixedValue (.lam (.guard q f))) (.guard p (.unary (b := .distribution a) fixedValue (.lam f))) :=
+  .ofEq (fun ξ ρ => by
+    simp only [Binding.Expr.guard, Binding.Expr.eval, hp]
+    exact fixed_guard _ _)
 
 /-- A compositional certificate for the source body suffices to compute its
 least fixed point in the atomic model. -/

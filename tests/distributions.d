@@ -8,6 +8,7 @@ import std.stdio:writeln;
 
 private struct Case{ string name,source,type,expected; }
 private Case[] cases(){
+	enum retryHalf="addD(δ((1:ℝ)),scaleD(1/2,d))",retryQuarter="addD(δ((2:ℝ)),scaleD(1/4,d))";
 	string scaledSteps(string rate,string k="k",string seed="δ((3:ℝ))"){
 		return "(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then "~seed~" else scaleD("~rate~",f(n sub 1)))("~k~")";
 	}
@@ -2193,6 +2194,23 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("ConditionalFixFamily","(μ(d:Distribution(ℝ)).if 0<a then "~retryHalf~" else "~retryQuarter~")","Distribution(ℝ)","Λ(x:ℝ). if 0<a then 2·δ(1)[x] else 4/3·δ(2)[x]"),
+	Case("ConditionalFixMass","massD((μ(d:Distribution(ℝ)).if 0<a then "~retryHalf~" else "~retryQuarter~"))","ℝ","[0<a]·2+[a≤0]·(4/3)"),
+	Case("ConditionalFixDensity","densityAtD((μ(d:Distribution(ℝ)).if 0<a then "~retryHalf~" else "~retryQuarter~"),1)","ℝ","guard(a≤0,(0:ℝ))"),
+	Case("ConditionalFixNested","massD((μ(d:Distribution(ℝ)).if 0<a then (if b<1 then "~retryHalf~" else "~retryQuarter~") else d))","ℝ","[0<a]·([b<1]·2+[1≤b]·(4/3))"),
+	Case("ConditionalFixPartial","λ(h:ℕ→𝔹).massD((μ(d:Distribution(ℝ)).if h(0) then d else "~retryHalf~"))","(ℕ→𝔹)→ℝ","λ(h:ℕ→𝔹). [h(0)]·0+[¬h(0)]·2"),
+	Case("ConditionalFixMissing","massD((μ(d:Distribution(ℝ)).if undefined(𝔹) then "~retryHalf~" else "~retryQuarter~"))","ℝ","undefined(ℝ)"),
+	Case("ConditionalFixDivergent","massD((μ(d:Distribution(ℝ)).if a<0 then "~retryHalf~" else addD(δ((0:ℝ)),d)))","ℝ","guard(a<0,(2:ℝ))"),
+	Case("ConditionalFixShift","massD((μ(d:Distribution(ℕ)).if a<0 then addD(δ(0),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1)))) else δ(0)))","ℝ","[a<0]·2+[0≤a]"),
+	Case("ConditionalFixInvolution","massD((μ(d:Distribution(ℝ)).if a<0 then addD(δ((1:ℝ)),scaleD(1/2,bindD(d,λ(x:ℝ).δ(-x)))) else d))","ℝ","[a<0]·2"),
+	Case("ConditionalFixFunctionOutcome","massD((μ(d:Distribution(ℕ→ℕ)).if a<0 then δ(λ(n:ℕ).n) else addD(δ(λ(n:ℕ).n),scaleD(1/2,d))))","ℝ","[a<0]+[0≤a]·2"),
+	Case("ConditionalFixDistributionOutcome","massD((μ(d:Distribution(Distribution(ℕ))).if a<0 then δ(δ(0)) else addD(δ(δ(1)),scaleD(1/2,d))))","ℝ","[a<0]+[0≤a]·2"),
+	Case("ConditionalFixScalarArgument","λ(n:ℕ).massD((μ(d:Distribution(ℝ)).if n=0 then "~retryHalf~" else "~retryQuarter~"))","ℕ→ℝ","λ(n:ℕ). [n=0]·2+[n≠0]·(4/3)"),
+	Case("ConditionalFixGuarded","massD(μ(d:Distribution(ℝ)).guard(a<0,"~retryHalf~"))","ℝ","guard(a<0,(2:ℝ))"),
+	Case("ConditionalFixGuardedZero","massD(μ(d:Distribution(ℝ)).guard(a<0,d))","ℝ","guard(a<0,(0:ℝ))"),
+	Case("ConditionalFixGuardedFalse","massD(μ(d:Distribution(ℝ)).guard(false,d))","ℝ","undefined(ℝ)"),
+	Case("ConditionalFixGuardedNested","massD((μ(d:Distribution(ℝ)).if a<0 then guard(b<1,"~retryHalf~") else "~retryQuarter~"))","ℝ","[a<0]·(guard(b<1,(2:ℝ)))+[0≤a]·(4/3)"),
+	Case("ConditionalFixGuardedFunction","λ(h:ℕ→𝔹).massD(μ(d:Distribution(ℝ)).guard(h(0),"~retryHalf~"))","(ℕ→𝔹)→ℝ","λ(h:{h:ℕ→𝔹 | h(0)}). (2:ℝ)"),
 	Case("AtomicRetryFair","μ(d:Distribution(ℝ)).Λx. 1/2·δ(0)[x]+1/2·d[x]","Distribution(ℝ)","δ((0:ℝ))"),
 	Case("AtomicRetrySwapped","μ(d:Distribution(ℝ)).Λx. 1/2·d[x]+1/2·δ(0)[x]","Distribution(ℝ)","δ((0:ℝ))"),
 	Case("AtomicRetryFiniteWeight","μ(d:Distribution(ℝ)).addD(scaleD(1/4,δ(3)),scaleD(1/2,d))","Distribution(ℝ)","Λ(x:ℝ). 1/2·δ(3)[x]"),
@@ -2765,6 +2783,10 @@ private void run(string directory){
 		if(c.name.indexOf("RetryObservation")==0&&c.name!="RetryObservationMissingProbe"&&c.name!="RetryObservationMissingKernel"){
 			enforce(certificate.indexOf("Distribution.Atomic.Observation.retry")>=0,c.name);
 			if(c.name=="RetryObservationMappedMoment") enforce(certificate.indexOf("Observation.realBind (Distribution.Atomic.Observation.weight")>=0,c.name);
+		}
+		if(c.name.indexOf("ConditionalFix")==0){
+			bool guarded=c.name.indexOf("ConditionalFixGuarded")==0;
+			enforce(certificate.indexOf(guarded?"Distribution.Atomic.fixed_guard_rule ":"Distribution.Atomic.fixed_conditional_rule ")>=0,c.name);
 		}
 		if(c.name.indexOf("AtomicRetry")==0) enforce(certificate.indexOf("Distribution.Atomic.fixed_retry")>=0,c.name);
 		if(c.name=="AtomicRetryMass"||c.name=="AtomicRetryDensity")
@@ -4535,6 +4557,10 @@ private void run(string directory){
 		"μ(d:Distribution(ℝ)).scaleD(1/2,addD(δ(massD(d)),d))", "μ(d:Distribution(ℝ)).scaleD(-1,addD(δ(0),d))",
 		"μ(d:Distribution(ℝ)).addD(scaleD(-1,d),d)", "μ(d:Distribution(ℝ)).Λx. x·d[x]",
 		"μ(d:Distribution(ℝ)).addD(δ(0),scaleD(-1,d))", "μ(d:Distribution(ℝ)).addD(Λx.λ[x],scaleD(1/2,d))",
+		"(μ(d:Distribution(ℝ)).guard(massD(d)=0,addD(δ((1:ℝ)),scaleD(1/2,d))))",
+		"(μ(d:Distribution(ℝ)).if massD(d)=0 then addD(δ((1:ℝ)),scaleD(1/2,d)) else addD(δ((2:ℝ)),scaleD(1/4,d)))",
+		"(μ(d:Distribution(ℝ)).if a<0 then addD(δ((1:ℝ)),scaleD(1/2,d)) else addD(δ(massD(d)),scaleD(1/2,d)))",
+		"(μ(d:Distribution(ℝ)).if a<0 then addD(δ((1:ℝ)),scaleD(-1,d)) else addD(δ((2:ℝ)),scaleD(1/4,d)))",
 		"μ(d:Distribution(ℝ)).addD(δ(massD(d)),scaleD(1/2,d))",
 		"if x<0 then δ(0)[x] else λ[x]", "(λ[x]·δ(x+y)[y])//λ[y]", "Λ(z:ℝ).(λ[x]·δ(x²)[y])//λ[y]",
 		"μ(f:ℝ→ℝ).λ(y:ℝ).massD((λ[x]·δ(f(x))[y])//λ[y])",
