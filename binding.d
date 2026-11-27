@@ -3596,17 +3596,34 @@ final class Bindings{
 					cert.functionAt(left?n.b:n.a)~" "~proof~")";
 				return true;
 			}
-			Rational[] p;
-			if(op!=Op.inv||!axisPolynomial(n.a,p,0,true)) return false;
-			while(p.length&&p[$-1].zero) p.length=p.length-1;
-			if(p.length<2||p.length>3) return false;
-			auto b=p[1]/Rational(2),a=p.length==3?p[2]:Rational(0);
-			if(b*b<a*p[0]) return false;
-			if(cert !is null){
-				auto poly=cert.piece(n.a,cert.everywhere,"",Rational(0));
-				proof="("~ns~"quadratic "~cert.q(p[0])~" "~cert.q(b)~" "~cert.q(a)~" "~poly.proof~" rfl rfl)";
+			if(op==Op.builtin&&arena.view(arena.at(n.data)).value==Builtin.sqrtR){
+				Rational a,b;
+				if(affineBody(n.a,a,b)){
+					if(cert !is null) proof="("~ns~"affine_preimage "~cert.affineProof(n.a).proof~
+						" (of_decide_eq_true rfl) "~ns~"sqrt_negative_one)";
+					return true;
+				}
 			}
-			return true;
+			Rational[] p;
+			if(op==Op.inv&&axisPolynomial(n.a,p,0,true)){
+				while(p.length&&p[$-1].zero) p.length=p.length-1;
+				if(p.length>=2&&p.length<=3){
+					auto b=p[1]/Rational(2),a=p.length==3?p[2]:Rational(0);
+					if(b*b>=a*p[0]){
+						if(cert !is null){
+							auto poly=cert.piece(n.a,cert.everywhere,"",Rational(0));
+							proof="("~ns~"quadratic "~cert.q(p[0])~" "~cert.q(b)~" "~cert.q(a)~" "~poly.proof~" rfl rfl)";
+						}
+						return true;
+					}
+				}
+			}
+			if(n.a!=uint.max&&n.b==uint.max&&type(at(n.a))==scalarType(Sort.real_)&&type(at(id))==scalarType(Sort.real_)&&
+				(op==Op.inv||op==Op.abs||op==Op.pow||op==Op.builtin)&&visit(n.a,proof)){
+				if(cert !is null) proof="("~ns~"unary "~valueOperation(n)~" rfl "~proof~")";
+				return true;
+			}
+			return false;
 		}
 		return visit(body,evidence);
 	}

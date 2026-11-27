@@ -1059,6 +1059,23 @@ private Case[] cases(){
 	Case("InvRootIntegralThirdPole","∫dy ([1/3≤y≤4/3]·(sqrt(y-1/3)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
 	Case("InvRootIntegralFifth","∫dy ([1≤y≤4]·((-2/5)·sqrt(y)⁻¹))·λ[y]","ℝ","-4/5"),
 	Case("InvRootIntegralTwoRoots","∫dy ([9/4≤y<25/4]·(sqrt(y)⁻¹))·λ[y]","ℝ","2"),
+	Case("StrictRootHolePositive","massD(weightD(λ(x:ℝ).sqrt(x),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleDecreasing","massD(weightD(λ(x:ℝ).sqrt(3-2*x),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleReciprocal","massD(weightD(λ(x:ℝ).sqrt(x)⁻¹,lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleComposite","massD(weightD(λ(x:ℝ).exp(sqrt(3-2*x)),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleAbsolute","massD(weightD(λ(x:ℝ).abs(sqrt(x)),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHolePower","massD(weightD(λ(x:ℝ).sqrt(x)^3,lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleNested","massD(weightD(λ(x:ℝ).sqrt(sqrt(x)+1),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleLog","massD(weightD(λ(x:ℝ).log(sqrt(x)+1),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHolePoleInRoot","massD(weightD(λ(x:ℝ).sqrt(1/x),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleForwardMass","massD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).sqrt(x)))","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleForwardDensity","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).sqrt(x)),2)","ℝ","undefined(ℝ)"),
+	Case("StrictRootHoleMasked","∫dy ([1<y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]","ℝ","1"),
+	Case("StrictRootHoleHidden","massD(weightD(λ(x:ℝ).[0≤x]·sqrt(x),lebesgueD()))","ℝ","∫dx ([0≤x]·sqrt(x))·λ[x]"),
+	Case("StrictRootHolePositiveRadicand","massD(weightD(λ(x:ℝ).sqrt(x²+1),lebesgueD()))","ℝ","∫dx (sqrt(x^2+1))·λ[x]"),
+	Case("StrictRootHoleSquare","massD(weightD(λ(x:ℝ).sqrt(x²),lebesgueD()))","ℝ","∫dx (abs(x))·λ[x]"),
+	Case("StrictRootHoleInverse","densityAtD(Λy.λ[sqrt(y)],4)","ℝ","(λ(x:ℝ). (λ[(sqrt(x))])//λ[x])((4:ℝ))"),
+	Case("StrictRootHoleUnknown","λ(f:ℝ→ℝ).massD(weightD(f,lebesgueD()))","(ℝ→ℝ)→ℝ","λ(f:ℝ→ℝ). ∫dx (weightD(f,Λ(x:ℝ). λ[x]))[x]"),
 	Case("InvRootIntegralPrinted","∫dy ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]","ℝ","1"),
 	Case("InvRootIntegralOpen","∫dy ([1<y<2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","2"),
 	Case("InvRootIntegralClosedFar","∫dy ([1<y≤2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","2"),
@@ -1077,7 +1094,7 @@ private Case[] cases(){
 	Case("InvRootIntegralPointRegular","∫dy ([2≤y≤2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","0"),
 	Case("InvRootIntegralEmpty","∫dy ([3<y<2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","0"),
 	Case("InvRootIntegralNonlinear","∫dy ([1<y<2]·(sqrt(y²+1)⁻¹))·λ[y]","ℝ","∫dy ([1<y∧y<2]·sqrt(y^2+1)⁻¹)·λ[y]"),
-	Case("InvRootIntegralStrictProduct","∫dy [1<y<2]·λ[y]/(2*sqrt(y-1))","ℝ","∫dy (mulR((guard(1<y,sqrt(y-1)⁻¹·(1/2))),[1<y∧y<2]))·λ[y]"),
+	Case("InvRootIntegralStrictProduct","∫dy [1<y<2]·λ[y]/(2*sqrt(y-1))","ℝ","undefined(ℝ)"),
 	Case("InvRootIntegralSourceMass","massD(Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y])","ℝ","1"),
 	Case("OrdinaryQuadraticWindow","Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticTail","Λy.∫dx λ[x]·δ(x²+1)[y]·[0<x<1]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
@@ -3511,6 +3528,14 @@ private void run(string directory){
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
+		if(c.name.indexOf("StrictRootHole")==0||c.name=="InvRootIntegralStrictProduct"){
+			import std.algorithm : canFind;
+			auto form=c.name=="InvRootIntegralStrictProduct"?"StrictProduct":c.name["StrictRootHole".length..$];
+			bool safe=["Masked","Hidden","PositiveRadicand","Square","Inverse","Unknown"].canFind(form);
+			enforce((certificate.indexOf("MissingPoint.affine_preimage ")>=0)==(!safe&&form!="PoleInRoot"),c.name);
+			bool unary=["Reciprocal","Composite","Absolute","Power","Nested","Log","PoleInRoot","StrictProduct"].canFind(form);
+			enforce((certificate.indexOf("MissingPoint.unary ")>=0)==unary,c.name);
+		}
 		if(c.name.indexOf("InvRootIntegral")==0){
 			import std.algorithm : canFind;
 			auto form=c.name["InvRootIntegral".length..$];

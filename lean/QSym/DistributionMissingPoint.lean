@@ -11,6 +11,25 @@ def MissingPoint (f : ℝ → Option ℝ) := ∃ x, f x = none
 
 theorem MissingPoint.bottom : MissingPoint (fun _ => none) := ⟨0, rfl⟩
 
+theorem MissingPoint.unary (op : Option ℝ → Option ℝ) (strict : op none = none)
+    {f} (h : MissingPoint f) : MissingPoint (fun x => op (f x)) := by
+  obtain ⟨x,hx⟩ := h
+  exact ⟨x, by change op (f x) = none; rw [hx, strict]⟩
+
+/-- An affine bijection hits every real point at which the outer operation
+is missing. No hypothesis on the operation at other points is needed. -/
+theorem MissingPoint.affine_preimage {f a b} (src : Affine f a b) (ha : a ≠ 0)
+    {op : Option ℝ → Option ℝ} {v : ℝ} (hole : op (some v) = none) :
+    MissingPoint (fun x => op (f x)) := by
+  have hn : (a:ℝ) ≠ 0 := by exact_mod_cast ha
+  refine ⟨(v-b)/a, ?_⟩
+  change op (f _) = none
+  rw [src.equation, show (a:ℝ)*((v-b)/a)+b = v by field_simp]
+  exact hole
+
+theorem MissingPoint.sqrt_negative_one : Functions.sqrtR.apply (some (-1 : ℝ)) = none := by
+  norm_num [Functions.sqrtR, Function1.apply]
+
 theorem MissingPoint.mul_left {f} (g : ℝ → Option ℝ) (hf : MissingPoint f) :
     MissingPoint (fun x => Value.mul (f x) (g x)) := by
   obtain ⟨x, hx⟩ := hf

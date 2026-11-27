@@ -1,4 +1,5 @@
 import QSym.DistributionIntegral
+import QSym.DistributionMissingPoint
 import QSym.DistributionModelBridge
 import QSym.DistributionMaskedRootCover
 import QSym.DistributionBindObservation
@@ -472,6 +473,9 @@ theorem inverse_root_endpoint_edit :
 #qsym_check_axioms RootInterval.mass
 #qsym_check_axioms RootInterval.mass_missing
 #qsym_check_axioms RootInterval.exact_result
+#qsym_check_axioms StepSource.MissingPoint.unary
+#qsym_check_axioms StepSource.MissingPoint.affine_preimage
+#qsym_check_axioms StepSource.MissingPoint.sqrt_negative_one
 #qsym_check_axioms RootInterval.integral
 #qsym_check_axioms inverse_root_endpoint_edit
 
