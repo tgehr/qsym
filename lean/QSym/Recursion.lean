@@ -108,6 +108,20 @@ theorem fixed_program (p : Program α β β) (f : (α → Option β) → Option 
     ContinuousHom.ext _ _ (congrFun ht)
   exact congrArg (fun k => some (FixedPoint.value k)) he
 
+/-- A certified unit-input recursion has the same value as its body with all
+recursive calls missing. The result type can be any flat partial value. -/
+theorem fixed_unit_first (p : Program Unit β β) (f : (Unit → Option β) → Option (Unit → Option β))
+    (h : ∀ g, f g = some (fun x => p.eval g x)) :
+    fixedValue (some f) = f (fun _ => none) := by
+  classical
+  rw [fixed_program p f h, h]
+  apply congrArg some
+  funext x
+  unfold FixedPoint.value
+  rw [FixedPoint.least_unit]
+  have hb : (⊥ : Part β).toOption = none := @Part.none_toOption β (Classical.propDecidable _)
+  simpa only [Program.functional, ContinuousHom.flip_apply, Pi.bot_apply, hb] using p.toOption_continuous x ⊥
+
 theorem Program.unfold (p : Program α β β) (x : α) :
     p.eval (FixedPoint.value p.functional) x = FixedPoint.value p.functional x := by
   classical

@@ -2194,6 +2194,8 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("FlatFixedDistFunction","massD((μ(f:Unit→Distribution(ℝ)).λ(u:Unit).if a<0 then δ((3:ℝ)) else f(u))(()))","ℝ","guard(a<0,(1:ℝ))"),
+	Case("FlatFixedDistribution","massD(μ(d:Distribution(ℝ)).addD(δ((1:ℝ)),scaleD(1/2,d)))","ℝ","2"),
 	Case("ConditionalFixFamily","(μ(d:Distribution(ℝ)).if 0<a then "~retryHalf~" else "~retryQuarter~")","Distribution(ℝ)","Λ(x:ℝ). if 0<a then 2·δ(1)[x] else 4/3·δ(2)[x]"),
 	Case("ConditionalFixMass","massD((μ(d:Distribution(ℝ)).if 0<a then "~retryHalf~" else "~retryQuarter~"))","ℝ","[0<a]·2+[a≤0]·(4/3)"),
 	Case("ConditionalFixDensity","densityAtD((μ(d:Distribution(ℝ)).if 0<a then "~retryHalf~" else "~retryQuarter~"),1)","ℝ","guard(a≤0,(0:ℝ))"),
@@ -2784,6 +2786,8 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.Atomic.Observation.retry")>=0,c.name);
 			if(c.name=="RetryObservationMappedMoment") enforce(certificate.indexOf("Observation.realBind (Distribution.Atomic.Observation.weight")>=0,c.name);
 		}
+		if(c.name=="FlatFixedDistFunction"||c.name=="FlatFixedDistribution")
+			enforce((certificate.indexOf("Recursion.fixed_unit_first")>=0)==(c.name=="FlatFixedDistFunction"),c.name);
 		if(c.name.indexOf("ConditionalFix")==0){
 			bool guarded=c.name.indexOf("ConditionalFixGuarded")==0;
 			enforce(certificate.indexOf(guarded?"Distribution.Atomic.fixed_guard_rule ":"Distribution.Atomic.fixed_conditional_rule ")>=0,c.name);

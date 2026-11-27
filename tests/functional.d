@@ -28,6 +28,24 @@ private Case[] cases(){
 		Case("LimitScaleDomain","lim[x→∞] exp(-x)/a","a≠0","",true),
 		Case("LimitSymbolicFunction","lim[x→∞] f(x)","lim[x→∞] f(x)","f:ℝ→ℝ"),
 		Case("LimitInProduct","2·lim[x→∞] sin(x)","2·(lim[x→∞] sin(x))"),
+		Case("FlatFixedIdentity","μ(x:ℝ).x","undefined(ℝ)"),
+		Case("FlatFixedConstant","μ(x:ℝ).7","7"),
+		Case("FlatFixedStrict","μ(x:ℝ).x+1","undefined(ℝ)"),
+		Case("FlatFixedInactive","μ(x:ℝ).[false]·x","0"),
+		Case("FlatFixedChosen","μ(x:ℝ).if a<0 then 7 else x","[0≤a]·(undefined(ℝ))+[a<0]·7"),
+		Case("FlatFixedReverse","μ(x:ℝ).if a<0 then x else b","[a<0]·(undefined(ℝ))+[0≤a]·b"),
+		Case("FlatFixedPartial","λ(h:ℕ→ℝ).μ(x:ℝ).if a<0 then h(0) else x","λ(h:ℕ→ℝ). [a<0]·h(0)+[0≤a]·(undefined(ℝ))"),
+		Case("FlatFixedNested","μ(x:ℝ).if a<0 then (μ(y:ℝ).if b<0 then 4 else y) else x","[a<0]·([0≤b]·(undefined(ℝ))+[b<0]·4)+[0≤a]·(undefined(ℝ))"),
+		Case("FlatFixedBoolean","μ(p:𝔹). false∧p","false"),
+		Case("FlatFixedBooleanStrict","μ(p:𝔹). ¬p","undefined(𝔹)"),
+		Case("FlatFixedState","λ(n:ℕ).μ(k:ℕ).if n=0 then 3 else k+1","λ(n:ℕ). [n=0]·3+[n≠0]·(undefined(ℕ))"),
+		Case("FlatFixedComplex","μ(z:ℂ).if a<0 then complex(1,2) else conj(z)","[a<0]·(1+2·ⅈ)+[0≤a]·(undefined(ℂ))"),
+		Case("FlatFixedTuple","μ(t:ℝ×𝔹).if a<0 then ((1:ℝ),true) else t","guard(a<0,(((1:ℝ),true):ℝ×𝔹))"),
+		Case("FlatFixedVector","μ(v:ℝ^2).if a<0 then ((1:ℝ),(2:ℝ)) else v","guard(a<0,((1:ℝ),(2:ℝ)))"),
+		Case("FlatFixedPairStrict","μ(t:ℝ×𝔹).((1:ℝ),get(t,1))","(((1:ℝ),get(undefined(ℝ×𝔹),1)):ℝ×𝔹)"),
+		Case("FlatFixedUnit","μ(u:Unit).u","undefined(Unit)"),
+		Case("FlatFixedUnitInput","(μ(f:Unit→ℝ).λ(u:Unit).if a<0 then 7 else f(u))(())","[0≤a]·(undefined(ℝ))+[a<0]·7"),
+		Case("FlatFixedAbsentInput","(μ(f:Unit→ℝ).λ(u:Unit).3)(undefined(Unit))","undefined(ℝ)"),
 		Case("FunctionBody","λ(x:ℝ). x/x"),
 		Case("GlobalBodyDomain","λ(x:ℝ). y/y","","y:ℝ"),
 		Case("FunctionValueDefined","defined(λ(x:ℝ). 1/x)","true"),
@@ -99,6 +117,8 @@ private string[] run(string directory=""){
 		auto again=s.run(a,output,[],Options(DensityMode.preserve,true));
 		enforce(s.format(a,again)==output,c.name~" round trip: "~output~" -> "~s.format(a,again));
 		auto code=s.exportCertificate(a,r);
+		import std.string:indexOf;
+		if(c.name.indexOf("FlatFixed")==0) enforce(code.indexOf("Recursion.fixed_unit_first")>=0,c.name);
 		if(directory.length) write(buildPath(directory,c.name~".lean"),code);
 		names~=c.name;
 	}
@@ -109,6 +129,8 @@ unittest{
 	foreach(source;["λ(x:ℕ).missing(0)","(λ(x:ℕ).x)(true)","0∈{p:𝔹 | p}","λ(x:ℕ).x(0)","domain(2)",
 		"{x:ℕ | x+1}","λ(x:ℕ).(λ(x:ℕ).x)(0,1)","λ(exp:ℝ).exp", "((λ(x:ℕ).x):ℝ→ℝ)"])
 		assertThrown(s.run(a,source));
+	foreach(source;["μ(n:ℕ).if defined(n) then 0 else 1","μ(p:𝔹).defined(p)","μ(f:Unit→ℝ).λ(u:Unit).if defined(f(u)) then 1 else 2"])
+		assertThrown(s.run(a,source),source);
 	assertThrown(s.declare("f:ℕ→ℕ,f:ℝ→ℝ"));
 	assertThrown(s.declare("domain:ℕ→ℕ"));
 	s.declare("f:ℕ→ℕ,S:Set(ℝ)");

@@ -32,6 +32,18 @@ theorem least_const (x : α) : least (ContinuousHom.const x : α →𝒄 α) = x
 
 variable {ι β : Type}
 
+/-- On a singleton input the flat value either stays at bottom or is already
+maximal after one application. Both cases give the least fixed point. -/
+theorem least_unit (f : (Unit → Part β) →𝒄 (Unit → Part β)) : least f = f ⊥ := by
+  have step : f (f ⊥) = f ⊥ := by
+    rcases Part.eq_none_or_eq_some (f ⊥ ()) with h | ⟨v, h⟩
+    · have hb : f ⊥ = ⊥ := funext (fun | () => h)
+      exact congrArg f hb
+    · have grow : f ⊥ ≤ f (f ⊥) := f.monotone bot_le
+      have hv := grow () v (Part.eq_some_iff.mp h)
+      exact funext (fun | () => (Part.eq_some_iff.mpr hv).trans h.symm)
+  exact least_eq_of_le f step.le ((f.monotone bot_le).trans (unfold f).le)
+
 theorem mem_least_iff (f : (ι → Part β) →𝒄 (ι → Part β)) (x : ι) (y : β) :
     y ∈ least f x ↔ ∃ n, y ∈ approx f n x := by
   change y ∈ (ωSup ((fixedPoints.iterateChain f.toOrderHom ⊥ bot_le).map (Pi.evalOrderHom x)) : Part β) ↔ _

@@ -353,9 +353,11 @@ struct FunctionSyntax{
 			}
 			if(p.name=="$fix"){
 				auto ty=type(p.annotation,locals,null,localTypes),v=pool.view(ty);
-				enforce(v.kind==TypeKind.function_||v.kind==TypeKind.distribution,"a fixed point requires a supported function or distribution type");
+				enforce(v.kind==TypeKind.function_||v.kind==TypeKind.distribution||v.kind<=TypeKind.complex||v.kind==TypeKind.tuple||v.kind==TypeKind.vector,
+					"a fixed point requires a supported function, distribution, or first-order data type");
 				auto inner=b.push(ctx,ty),body=build(p.args[0],inner,[p.binder]~locals,ty,depth+1);
 				if(v.kind==TypeKind.distribution) return finish(b.distributionFixed(b.hint(b.lambda(body),p.binder)));
+				if(v.kind!=TypeKind.function_) return finish(b.flatFixed(body));
 				if(b.node(body).op==BoundOp.variable&&b.node(body).data==0){
 					auto arg=b.push(inner,v.fields[0]); uint[] indices;
 					foreach(i;0..b.depth(inner)) indices~=i+1;
