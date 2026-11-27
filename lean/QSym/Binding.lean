@@ -413,6 +413,19 @@ theorem Reduction.memberSet (p : Expr (a :: Γ) (.scalar .bool)) (x : Expr Γ a)
     | none => simp [hp]
     | some b => cases b <;> simp [hp])
 
+theorem Reduction.seqMissing (x : Expr Γ a) :
+    Reduction (.seq x (.constant (a := b) none)) (.constant none) := .ofEq (by
+  intro ξ ρ
+  cases h : x.eval ξ ρ <;> simp [Expr.eval, h])
+
+theorem Reduction.guardMissing (p : Expr Γ (.scalar .bool)) :
+    Reduction (.guard p (.constant (a := a) none)) (.constant none) := .ofEq (by
+  intro ξ ρ
+  change guardValue (p.eval ξ ρ) none = _
+  cases p.eval ξ ρ with
+  | none => rfl
+  | some v => cases v <;> rfl)
+
 theorem Reduction.seqGuard (x : Expr Γ a) (y : Expr Γ b) :
     Reduction (.seq x y) (.guard (.defined x) y) := .ofEq (by
   intro ξ ρ

@@ -40,7 +40,7 @@ private enum BindingRule:ushort{
 	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMissing,definedScalarPrimitive,distributionGuard,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
-	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,maskChoiceMissing,appScalarUndefined,memberDomain,
+	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
@@ -10744,6 +10744,7 @@ final class Bindings{
 			}else if(current.op==BoundOp.sequence){
 				if(domains&&nodes[current.a].op==BoundOp.bottom){ next=bottom(ctx,type(at(current.b))); rule=BindingRule.shortCircuit; }
 				else if(current.a==current.b){ next=at(current.b); rule=BindingRule.seqSelf; }
+				else if(domains&&nodes[current.b].op==BoundOp.bottom){ next=at(current.b); rule=BindingRule.seqMissing; }
 				else if(totalScalar(at(current.a))){ next=at(current.b); rule=BindingRule.seqScalar; }
 				else if(nodes[current.a].op==BoundOp.lambda){ next=at(current.b); rule=BindingRule.seqLam; }
 				else if(domains){
@@ -10792,6 +10793,16 @@ final class Bindings{
 			if(next==BoundTerm.init&&current.op==BoundOp.primitive&&current.b!=uint.max&&current.c==uint.max&&
 				nodes[current.b].op==BoundOp.bottom&&conditionalStrict(current,true)){
 				next=bottom(ctx,types[current.type]); rule=BindingRule.shortCircuit;
+			}
+			// Products and projections are strict, including constructors whose
+			// other field may itself be undefined.
+			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.pair||current.op==BoundOp.vectorCons||
+				current.op==BoundOp.first||current.op==BoundOp.rest)){
+				if(nodes[current.a].op==BoundOp.bottom){
+					next=bottom(ctx,types[current.type]); rule=BindingRule.fold;
+				}else if(current.b!=uint.max&&nodes[current.b].op==BoundOp.bottom){
+					next=bottom(ctx,types[current.type]); rule=BindingRule.productMissingRight;
+				}
 			}
 			// Lift guards through strict tuple constructors and projections so a
 			// lambda can display the restriction once, on its parameter.
@@ -10957,6 +10968,8 @@ final class Bindings{
 					}else if(current.op==BoundOp.member&&nodes[current.a].op==BoundOp.set){
 						auto reduction=beta(at(nodes[current.a].a),at(current.b));
 						next=sequence(at(current.b),holds(at(node(reduction).b))); rule=BindingRule.memberSet;
+					}else if(current.op==BoundOp.guard&&nodes[current.b].op==BoundOp.bottom){
+						next=at(current.b); rule=BindingRule.guardMissing;
 					}else if(current.op==BoundOp.guard&&isTrue(current.a,true)){
 						next=at(current.b); rule=BindingRule.guardTrue;
 					}else if(current.op==BoundOp.guard&&nodes[current.b].op==BoundOp.guard){
@@ -14718,6 +14731,10 @@ final class Bindings{
 				case BindingRule.fold,BindingRule.seqTotal:proof=".ofEq (fun _ _ => rfl)"; break;
 				case BindingRule.domainBottom:proof=".domainBottom"; break;
 				case BindingRule.appBottom:proof=".appBottom "~name(n.a); break;
+				case BindingRule.seqMissing:proof=".seqMissing "~name(n.a); break;
+				case BindingRule.guardMissing:proof=".guardMissing "~name(n.a); break;
+				case BindingRule.productMissingRight:
+					proof=".ofEq (fun ξ ρ => Tensor."~(n.op==BoundOp.pair?"pair_none_right":"cons_none_right")~" ("~name(n.a)~".eval ξ ρ))"; break;
 				case BindingRule.appNowhere:proof=".appNowhere "~name(n.b); break;
 				case BindingRule.maskChoiceMissing:{
 					bool swap=(p.extra&1)!=0,neg=(p.extra&2)!=0;

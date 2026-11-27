@@ -13,6 +13,13 @@ def nilValue {α : Type} : Option (Fin 0 → α) := some Fin.elim0
 def consValue {α : Type} {n : ℕ} (x : Option α) (xs : Option (Fin n → α)) : Option (Fin (n+1) → α) :=
   x.bind (fun a => xs.map (fun as => Fin.cases a as))
 
+theorem pair_none_right {α β : Type} (x : Option α) : pairValue x (none : Option β) = none := by
+  cases x <;> rfl
+
+theorem cons_none_right {α : Type} {n : ℕ} (x : Option α) :
+    consValue x (none : Option (Fin n → α)) = none := by
+  cases x <;> rfl
+
 theorem guard_pair_left {α β : Type} (p : Option Bool) (x : Option α) (y : Option β) :
     pairValue (Binding.guardValue p x) y = Binding.guardValue p (pairValue x y) := by
   cases p with
