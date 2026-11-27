@@ -938,6 +938,27 @@ private Case[] cases(){
 	Case("QuadraticSheetDomain","Λy. λ[guard(1≤y,-sqrt(y-1)),guard(1≤y,sqrt(y-1))]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1), sqrt(y-1)]"),
 	Case("QuadraticSheetMissing","Λy. λ[guard(undefined(𝔹),-sqrt(y-1)),sqrt(y-1)]","Distribution(ℝ)","Λ(y:ℝ). λ[undefined(ℝ), sqrt(y-1)]"),
 	Case("QuadraticSheetThree","Λy. λ[guard(1≤y,-sqrt(y-1)),sqrt(y-1),guard(0<y,1/y)]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1), sqrt(y-1), guard(0<y,y⁻¹)]"),
+	Case("QuadraticDensityRaised","λ(y:ℝ).densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠1}). [1≤y]·sqrt(y-1)⁻¹"),
+	Case("QuadraticDensityVertex","densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],1)","ℝ","undefined(ℝ)"),
+	Case("QuadraticDensityBelow","densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],0)","ℝ","0"),
+	Case("QuadraticDensityAbove","densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],5)","ℝ","1/2"),
+	Case("QuadraticDensityDownTop","densityAtD(Λy.∫dx λ[x]·δ(3-x^2)[y],3)","ℝ","undefined(ℝ)"),
+	Case("QuadraticDensityDownAbove","densityAtD(Λy.∫dx λ[x]·δ(3-x^2)[y],4)","ℝ","0"),
+	Case("QuadraticDensityDownBelow","densityAtD(Λy.∫dx λ[x]·δ(3-x^2)[y],-1)","ℝ","1/2"),
+	Case("QuadraticDensityMarginal","λ(y:ℝ).∫dx λ[x]·δ(x^2+x)[y]//λ[y]","ℝ→ℝ","λ(y:{y:ℝ | y≠-1/4}). [-1/4≤y]·sqrt(y+1/4)⁻¹"),
+	Case("QuadraticDensityMarginalVertex","(λ(y:ℝ).∫dx λ[x]·δ(x^2+x)[y]//λ[y])(-1/4)","ℝ","undefined(ℝ)"),
+	Case("QuadraticDensityHalfScale","densityAtD(Λy.∫dx λ[x]·δ(2*x^2)[y],2)","ℝ","1/2"),
+	Case("QuadraticDensityNegativeScale","densityAtD(Λy.∫dx λ[x]·δ(-2*x^2-1)[y],-3)","ℝ","1/2"),
+	Case("QuadraticDensityClosedPush","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).x*x+1),10)","ℝ","1/3"),
+	Case("QuadraticDensityExplicitIntegral","densityAtD(integralD(λ(x:ℝ).δ(x^2+1)),5)","ℝ","1/2"),
+	Case("QuadraticDensityMissing","densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("QuadraticDensityMissingAt","λ(h:ℕ→ℝ).densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],h(0))","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). [0≤h(0)-1]·sqrt(h(0)-1)⁻¹"),
+	Case("QuadraticDensityRejectPole","λ(y:ℝ).densityAtD(Λy.∫dx λ[x]·δ(x^2+1/x)[y],y)","ℝ→ℝ","λ(y:ℝ). ((∫(x:ℝ). (δ(x^2+x⁻¹)[y])·(λ[x])))//λ[y]"),
+	Case("QuadraticDensityRejectRestricted","densityAtD(pushforwardOnD(λ(x:ℝ).x≠0,λ(x:ℝ).x^2+1),1)","ℝ","(λ(x:ℝ). (∫dx1 λ[x1]·δ(x1^2+1)[x]·[x1≠0])//λ[x])((1:ℝ))"),
+	Case("QuadraticDensityIrrational","densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],3)","ℝ","1/2·sqrt(2)"),
+	Case("QuadraticDensityDefinedVertex","defined(densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],1))","𝔹","false"),
+	Case("QuadraticDensityDefinedOutside","defined(densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],0))","𝔹","true"),
+	Case("QuadraticDensityFractionPoint","densityAtD(Λy.∫dx λ[x]·δ(x^2+x)[y],0)","ℝ","2"),
 	Case("ClosedSquareDensity","λ(y:ℝ).densityAtD(Λz. ∫dx λ[x]·δ((1-2*x)^2)[z],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMass","λ(y:ℝ).∫dx λ[x]·δ((1-2*x)^2)[y]//λ[y]","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMissing","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x/3-1)*(x/3-1)),undefined(ℝ))","ℝ","undefined(ℝ)"),
@@ -3172,6 +3193,14 @@ private void run(string directory){
 		}
 		if(c.name=="PointwiseOrderComplexProduct")
 			enforce(certificate.indexOf("Generated.r_complex_add_comm")>=0,c.name);
+		if(c.name.indexOf("QuadraticDensity")==0){
+			bool supported=c.name!="QuadraticDensityRejectPole"&&c.name!="QuadraticDensityRejectRestricted";
+			enforce((certificate.indexOf("Coordinates.Quadratic.observation ")>=0)==supported,c.name);
+			if(c.name=="QuadraticDensityVertex"||c.name=="QuadraticDensityDownTop")
+				enforce(certificate.indexOf("unrestrictedSquareDensity_zero")>=0,c.name);
+			if(c.name=="QuadraticDensityAbove"||c.name=="QuadraticDensityNegativeScale")
+				enforce(certificate.indexOf("Quadratic.literal_regular")>=0,c.name);
+		}
 		if(c.name.indexOf("QuadraticChart")==0){
 			bool supported=c.name!="QuadraticChartQuartic"&&c.name!="QuadraticChartPole"&&
 				c.name!="QuadraticChartCubic"&&c.name!="QuadraticChartSymbolic";

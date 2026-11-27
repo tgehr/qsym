@@ -43,7 +43,7 @@ private enum BindingRule:ushort{
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,pointwiseReordered,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumNormalizedMoment,sumPolynomialGeometric,sumConstantMomentRows,sumPlainPolynomialZero,sumPlainPolynomialNonzero,sumPolynomialFactor,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
-	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
+	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,distributionQuadraticDensity,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionUniformCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
@@ -265,7 +265,13 @@ private struct AffineChart{
 	uint borelPredicate=uint.max,punctureBody=uint.max,radiusCentre=uint.max;
 	uint polynomialCheck=uint.max,bandLo=uint.max,bandHi=uint.max,cutoff=uint.max;
 }
-private struct QuadraticChart{ Term centre,scale,offset; uint polynomial; }
+private enum QuadraticPoint:ubyte{ symbolic, outside, vertex, regular }
+private struct QuadraticChart{
+	Term centre,scale,offset;
+	uint polynomial,map;
+	QuadraticPoint point;
+	Rational radicand,root;
+}
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
 private struct ProductStep{ uint rate,gain; bool rational,swapped,inverse,scaled; }
@@ -9414,30 +9420,40 @@ final class Bindings{
 			auto out_=rebuild(cells,context(cells),[head,at(tail.output)]);
 			return Result(out_.id,emit(BindingRule.congr,cells.id,out_.id,headProof,tail.proof));
 		}
-		BoundTerm quadraticChart(BoundTerm graph,out uint evidence){
-			auto n=node(graph);
-			if(nodes[n.a].op!=BoundOp.lambda||!isTrue(nodes[n.a].a,true)||nodes[n.b].op!=BoundOp.lambda)
-				return BoundTerm.init;
-			auto body=at(nodes[n.b].a);
-			if(node(body).op!=BoundOp.primitive) return BoundTerm.init;
+		bool quadraticParameters(uint map,out QuadraticChart chart,out ScalarDomain check){
+			if(nodes[map].op!=BoundOp.lambda) return false;
+			auto body=at(nodes[map].a);
+			if(node(body).op!=BoundOp.primitive) return false;
 			auto index=freshScalarIndex(body.id),x=arena.variable(Sort.real_,index),raw=scalarBody(body,x);
 			Rational centre,scale,offset;
-			if(raw==Term.init||!rationalQuadraticInverse(arena,raw,x,centre,scale,offset)) return BoundTerm.init;
+			if(raw==Term.init||!rationalQuadraticInverse(arena,raw,x,centre,scale,offset)) return false;
 			auto h=arena.real_(centre),t=arena.real_(scale),u=arena.real_(offset),neg=arena.real_(-1);
 			auto shifted=arena.add(x,arena.mul(neg,h,true),true);
 			auto lhs=arena.add(arena.mul(t,raw,true),u,true);
 			auto diff=arena.add(lhs,arena.mul(neg,arena.pow(shifted,2),true),true);
-			if(!polynomialZero(arena,diff)) return BoundTerm.init;
+			if(!polynomialZero(arena,diff)) return false;
+			chart=QuadraticChart(h,t,u,uint.max,map);
+			check.input=diff; check.variable=index; check.sort=Sort.real_; check.polynomial=true;
+			return true;
+		}
+		uint rememberQuadratic(QuadraticChart chart,ScalarDomain check){
+			chart.polynomial=cast(uint)scalarDomains.length; scalarDomains~=check;
+			auto index=cast(uint)quadratics.length; quadratics~=chart; return index;
+		}
+		BoundTerm quadraticChart(BoundTerm graph,out uint evidence){
+			auto n=node(graph);
+			if(nodes[n.a].op!=BoundOp.lambda||!isTrue(nodes[n.a].a,true)) return BoundTerm.init;
+			QuadraticChart chart; ScalarDomain check;
+			if(!quadraticParameters(n.b,chart,check)) return BoundTerm.init;
+			auto h=chart.centre,t=chart.scale,u=chart.offset,neg=arena.real_(-1),body=at(nodes[n.b].a);
 			auto ctx=context(graph),inner=context(body),y=variable(inner,0);
 			auto add=arena.add(neg,neg,true),mul=scalarOperator(type(y),TensorOp.mul);
-			auto linear=scale==Rational(1)?y:primitive(mul,[scalar(inner,t),y]);
-			if(!offset.zero) linear=primitive(add,[linear,scalar(inner,u)]);
+			auto linear=arena.number(t).one?y:primitive(mul,[scalar(inner,t),y]);
+			if(!arena.number(u).zero) linear=primitive(add,[linear,scalar(inner,u)]);
 			auto root=primitive(arena.call(Builtin.sqrtR,[arena.real_(0)]),[linear]);
 			auto lower=primitive(mul,[scalar(inner,neg),root]),upper=root;
-			if(!centre.zero){lower=primitive(add,[scalar(inner,h),lower]); upper=primitive(add,[scalar(inner,h),upper]);}
-			ScalarDomain check; check.input=diff; check.variable=index; check.sort=Sort.real_; check.polynomial=true;
-			evidence=cast(uint)quadratics.length;
-			quadratics~=QuadraticChart(h,t,u,cast(uint)scalarDomains.length); scalarDomains~=check;
+			if(!arena.number(h).zero){lower=primitive(add,[scalar(inner,h),lower]); upper=primitive(add,[scalar(inner,h),upper]);}
+			evidence=rememberQuadratic(chart,check);
 			return distribution(ctx,BoundOp.distributionInverseCover,[tuple(ctx,[hint(lambda(lower),"y"),hint(lambda(upper),"y")])]);
 		}
 		BoundTerm inverseSquareChart(BoundTerm graph,out uint evidence){
@@ -9527,6 +9543,50 @@ final class Bindings{
 			auto jac=scalar(ctx,scale);
 			auto weight=primitive(scalarOperator(type(y),TensorOp.mul),[inv,jac]);
 			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[nonnegative,weight]);
+		}
+		BoundTerm quadraticDensity(BoundTerm term,out uint evidence){
+			auto n=node(term); uint map;
+			if(n.op==BoundOp.distributionGraphMass) map=n.a;
+			else{
+				auto d=nodes[n.a];
+				if(d.op==BoundOp.distributionPushforwardOn&&nodes[d.a].op==BoundOp.lambda&&isTrue(nodes[d.a].a,true))
+					map=d.b;
+				else{
+					uint weight,point;
+					if(!realAtomRow(at(n.a),weight,point)||weight!=uint.max) return BoundTerm.init;
+					map=lambda(at(point)).id;
+				}
+			}
+			if(powerMap(map,true).degree) return BoundTerm.init;
+			QuadraticChart chart; ScalarDomain check;
+			if(!quadraticParameters(map,chart,check)) return BoundTerm.init;
+			if(arena.number(chart.offset).zero&&arena.number(chart.scale).re>Rational(0)){
+				ScalarDomain alreadySquare;
+				if(factoredSquare(map,alreadySquare).degree) return BoundTerm.init;
+			}
+			auto ctx=context(term),y=at(n.b),zero=arena.real_(0);
+			auto a=arena.number(chart.scale).re,j=a<Rational(0)?-a:a;
+			if(node(y).op==BoundOp.scalar&&arena.isNumber(arena.at(node(y).data))){
+				import qsym.budget:Budget,Limit;
+				import qsym.elementary:Elementary;
+				auto budget=new Budget(8192,16,128);
+				try{
+					auto q=arena.number(arena.at(node(y).data));
+					auto z=budget.calc!"+"(budget.calc!"*"(Number(a),q),arena.number(chart.offset)).re;
+					chart.radicand=z; BoundTerm value;
+					if(z.zero){chart.point=QuadraticPoint.vertex; value=bottom(ctx,type(term));}
+					else if(z<Rational(0)){chart.point=QuadraticPoint.outside; value=scalar(ctx,zero);}
+					else if((new Elementary(arena,budget)).root(z,2,chart.root)){
+						auto k=budget.calc!"/"(Number(j),Number(chart.root));
+						chart.point=QuadraticPoint.regular; value=scalar(ctx,arena.real_(k.re));
+					}
+					if(value!=BoundTerm.init){evidence=rememberQuadratic(chart,check); return value;}
+				}catch(Limit e){}
+			}
+			auto scaled=primitive(scalarOperator(type(y),TensorOp.mul),[scalar(ctx,chart.scale),y]);
+			auto radicand=primitive(arena.add(zero,zero,true),[scaled,scalar(ctx,chart.offset)]);
+			evidence=rememberQuadratic(chart,check);
+			return maskedInverseRoot(radicand,arena.real_(j));
 		}
 		BoundTerm closedSquareDensity(PowerMap map,BoundTerm y,out uint evidence){
 			auto chart=sourceChart(map);
@@ -9949,6 +10009,15 @@ final class Bindings{
 					auto tail=visit(chart,depth+1);
 					result=Result(tail.output,emit(BindingRule.trans,t.id,tail.output,proof,tail.proof));
 					active.set(t.id,false); memo.set(t.id,result); return result;
+				}
+			}
+			if((n.op==BoundOp.distributionGraphMass||n.op==BoundOp.distributionDensityAt)&&steps<budget){
+				uint evidence; auto density=quadraticDensity(t,evidence);
+				if(density!=BoundTerm.init){
+					++steps;
+					auto step=emit(BindingRule.distributionQuadraticDensity,t.id,density.id,uint.max,uint.max,evidence);
+					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),step);
+					return Result(density.id,uint.max);
 				}
 			}
 			// Keep the short proof for a factored square and preserve closed
@@ -13946,6 +14015,10 @@ final class Bindings{
 		Term[] stepNumerics;string stepDeclarations;string[] stepProofs=new string[result.integrals.length],stepOutputs=new string[result.integrals.length];
 		uint[] proofRoots;
 		foreach(d;result.domains) if(d.maskBody!=uint.max) proofRoots~=d.maskBody;
+		foreach(chart;result.quadratics) if(chart.point!=QuadraticPoint.symbolic){
+			auto a=arena.number(chart.scale).re;
+			stepNumerics~=arena.real_(a<Rational(0)?-a:a);
+		}
 		foreach(p;result.proofs) if(p.rule==BindingRule.closedRationalValue) stepNumerics~=arena.at(p.extra);
 		foreach(i,s;result.integrals) if(s.piecewise||s.ae){
 			auto c=new SourceCertificates("step"~to!string(i)~"_",s.from[0]);
@@ -16608,16 +16681,48 @@ final class Bindings{
 						" _ (QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct "~env~") (Value.refines_refl _)).symm)";
 					break;
 				}
-				case BindingRule.distributionQuadraticChart:{
+				case BindingRule.distributionQuadraticDensity,BindingRule.distributionQuadraticChart:{
 					auto chart=result.quadratics[p.extra],id=chart.polynomial;
 					alias q=SourceCertificates.q;
 					string literal(Term v){return q(arena.number(v).re);}
 					string number(Term v){return "(Numeric.calculate_sound ξ n"~to!string(v.id)~" "~literal(v)~" rfl)";}
 					auto env="({ ξ with real := fun i => if i = "~to!string(result.domains[id].variable)~" then x else ξ.real i })";
-					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.Quadratic.image "~literal(chart.centre)~" "~
-						literal(chart.scale)~" "~literal(chart.offset)~" (of_decide_eq_true rfl) "~number(chart.centre)~" "~
-						number(chart.scale)~" "~number(chart.offset)~" (f := "~realBody(n.b)~") (fun x => QSym.BindingScalar"~
-						to!string(id)~".zero "~env~"))"; break;
+					auto args=literal(chart.centre)~" "~literal(chart.scale)~" "~literal(chart.offset)~" ";
+					auto nums=number(chart.centre)~" "~number(chart.scale)~" "~number(chart.offset)~" ";
+					auto equation="(f := "~realBody(chart.map)~") (fun x => QSym.BindingScalar"~to!string(id)~".zero "~env~")";
+					string law;
+					if(p.rule==BindingRule.distributionQuadraticChart)
+						law="image "~args~"(of_decide_eq_true rfl) "~nums~equation;
+					else{
+						auto a=arena.number(chart.scale).re,gain=arena.real_(a<Rational(0)?-a:a);
+						auto kind=n.op==BoundOp.distributionGraphMass?"mass":nodes[n.a].op==BoundOp.distributionBind?"bind":
+							nodes[n.a].op==BoundOp.distributionIntegral?"integral":"density";
+						law="observation "~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
+							" ("~name(n.b)~".eval ξ ρ) ."~kind;
+					}
+					auto ns="Distribution.GraphFibre.Coordinates.Quadratic.";
+					law=ns~law;
+					if(chart.point!=QuadraticPoint.symbolic){
+						auto v=arena.at(nodes[n.b].data),a=arena.number(chart.scale).re,gain=arena.real_(a<Rational(0)?-a:a);
+						auto z=q(chart.radicand);
+						auto arg=ns~"literal_argument "~literal(chart.scale)~" "~literal(chart.offset)~" "~literal(v)~" "~z~" "~
+							number(chart.scale)~" "~number(chart.offset)~" "~number(v)~" rfl";
+						auto atPoint="congrArg (Distribution.GraphFibre.unrestrictedSquareDensity (n"~to!string(gain.id)~".eval ξ)) ("~arg~")";
+						string value;
+						final switch(chart.point){
+							case QuadraticPoint.symbolic:assert(0);
+							case QuadraticPoint.vertex:value="Distribution.GraphFibre.unrestrictedSquareDensity_zero _"; break;
+							case QuadraticPoint.outside:
+								value="Eq.trans ("~ns~"literal_outside "~z~" (of_decide_eq_true rfl) _) (Numeric.calculate_real_zero ξ n"~
+									to!string(nodes[p.to].data)~" rfl).symm"; break;
+							case QuadraticPoint.regular:
+								auto k=arena.at(nodes[p.to].data);
+								value=ns~"literal_regular "~literal(gain)~" "~z~" "~q(chart.root)~" "~literal(k)~" "~
+									number(gain)~" "~number(k)~" (of_decide_eq_true rfl) rfl rfl"; break;
+						}
+						law="Eq.trans ("~law~") (Eq.trans ("~atPoint~") ("~value~"))";
+					}
+					proof=".ofEq (fun ξ ρ => "~law~")"; break;
 				}
 				case BindingRule.distributionRadiusChart:{
 					auto chart=result.affineCharts[p.extra];
