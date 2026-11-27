@@ -108,19 +108,56 @@ theorem fixed_program (p : Program α β β) (f : (α → Option β) → Option 
     ContinuousHom.ext _ _ (congrFun ht)
   exact congrArg (fun k => some (FixedPoint.value k)) he
 
-/-- A certified unit-input recursion has the same value as its body with all
-recursive calls missing. The result type can be any flat partial value. -/
-theorem fixed_unit_first (p : Program Unit β β) (f : (Unit → Option β) → Option (Unit → Option β))
-    (h : ∀ g, f g = some (fun x => p.eval g x)) :
+/-- The recursive function is consulted only at the argument currently being evaluated. -/
+def Program.Pointwise (p : Program α β γ) : Prop :=
+  ∀ g k x, g x = k x → p.eval g x = p.eval k x
+
+theorem Program.Pointwise.constant {v : α → Option γ} : (Program.constant (β := β) v).Pointwise :=
+  fun _ _ _ _ => rfl
+
+theorem Program.Pointwise.self : (Program.call (.constant some) : Program α β β).Pointwise :=
+  fun _ _ _ h => h
+
+theorem Program.Pointwise.unary {op strict} {p : Program α β γ} (hp : p.Pointwise) :
+    (Program.unary (δ := δ) op strict p).Pointwise := fun g k x h => congrArg op (hp g k x h)
+
+theorem Program.Pointwise.binary {op left right} {p : Program α β γ} {q : Program α β δ}
+    (hp : p.Pointwise) (hq : q.Pointwise) : (Program.binary (ε := ε) op left right p q).Pointwise :=
+  fun g k x h => congrArg₂ op (hp g k x h) (hq g k x h)
+
+theorem Program.Pointwise.branch {p : Program α β Bool} {a b : Program α β γ}
+    (hp : p.Pointwise) (ha : a.Pointwise) (hb : b.Pointwise) : (Program.branch p a b).Pointwise := by
+  intro g k x h
+  simp only [Program.eval, hp g k x h, ha g k x h, hb g k x h]
+
+private theorem fixed_first_of_least (p : Program α β β)
+    (f : (α → Option β) → Option (α → Option β)) (h : ∀ g, f g = some (fun x => p.eval g x))
+    (hl : FixedPoint.least p.functional = p.functional ⊥) :
     fixedValue (some f) = f (fun _ => none) := by
   classical
   rw [fixed_program p f h, h]
   apply congrArg some
   funext x
   unfold FixedPoint.value
-  rw [FixedPoint.least_unit]
+  rw [hl]
   have hb : (⊥ : Part β).toOption = none := @Part.none_toOption β (Classical.propDecidable _)
   simpa only [Program.functional, ContinuousHom.flip_apply, Pi.bot_apply, hb] using p.toOption_continuous x ⊥
+
+theorem fixed_unit_first (p : Program Unit β β) (f : (Unit → Option β) → Option (Unit → Option β))
+    (h : ∀ g, f g = some (fun x => p.eval g x)) : fixedValue (some f) = f (fun _ => none) :=
+  fixed_first_of_least p f h (FixedPoint.least_unit _)
+
+theorem fixed_pointwise_first (p : Program α β β) (f : (α → Option β) → Option (α → Option β))
+    (h : ∀ g, f g = some (fun x => p.eval g x)) (hp : p.Pointwise) :
+    fixedValue (some f) = f (fun _ => none) := by
+  classical
+  apply fixed_first_of_least p f h
+  apply FixedPoint.least_pointwise
+  intro g k x hx
+  have he : (p.functional g x).toOption = (p.functional k x).toOption :=
+    (p.toOption_continuous x g).trans ((hp _ _ x (congrArg (fun v : Part β => v.toOption) hx)).trans
+      (p.toOption_continuous x k).symm)
+  exact (Part.of_toOption _).symm.trans ((congrArg Part.ofOption he).trans (Part.of_toOption _))
 
 theorem Program.unfold (p : Program α β β) (x : α) :
     p.eval (FixedPoint.value p.functional) x = FixedPoint.value p.functional x := by

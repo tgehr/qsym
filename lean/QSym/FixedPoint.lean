@@ -32,17 +32,22 @@ theorem least_const (x : α) : least (ContinuousHom.const x : α →𝒄 α) = x
 
 variable {ι β : Type}
 
-/-- On a singleton input the flat value either stays at bottom or is already
-maximal after one application. Both cases give the least fixed point. -/
-theorem least_unit (f : (Unit → Part β) →𝒄 (Unit → Part β)) : least f = f ⊥ := by
+/-- If every coordinate depends only on its own previous flat value, each
+coordinate either stays at bottom or is maximal after the first step. -/
+theorem least_pointwise (f : (ι → Part β) →𝒄 (ι → Part β))
+    (atInput : ∀ (g k : ι → Part β) x, g x = k x → f g x = f k x) : least f = f ⊥ := by
   have step : f (f ⊥) = f ⊥ := by
-    rcases Part.eq_none_or_eq_some (f ⊥ ()) with h | ⟨v, h⟩
-    · have hb : f ⊥ = ⊥ := funext (fun | () => h)
-      exact congrArg f hb
+    funext x
+    rcases Part.eq_none_or_eq_some (f ⊥ x) with h | ⟨v, h⟩
+    · exact atInput (f ⊥) ⊥ x h
     · have grow : f ⊥ ≤ f (f ⊥) := f.monotone bot_le
-      have hv := grow () v (Part.eq_some_iff.mp h)
-      exact funext (fun | () => (Part.eq_some_iff.mpr hv).trans h.symm)
+      exact (Part.eq_some_iff.mpr (grow x v (Part.eq_some_iff.mp h))).trans h.symm
   exact least_eq_of_le f step.le ((f.monotone bot_le).trans (unfold f).le)
+
+theorem least_unit (f : (Unit → Part β) →𝒄 (Unit → Part β)) : least f = f ⊥ :=
+  least_pointwise f (fun g k x h => by
+    cases x
+    exact congrFun (congrArg f (funext (fun | () => h) : g = k)) ())
 
 theorem mem_least_iff (f : (ι → Part β) →𝒄 (ι → Part β)) (x : ι) (y : β) :
     y ∈ least f x ↔ ∃ n, y ∈ approx f n x := by

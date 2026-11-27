@@ -40,7 +40,7 @@ private enum BindingRule:ushort{
 	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMissing,definedScalarPrimitive,distributionGuard,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
-	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
+	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,maskChoiceMissing,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
@@ -1001,6 +1001,30 @@ final class Bindings{
 			checkProgram(at(n.b)); return;
 		}
 		throw new Exception("recursive definitions cannot inspect definedness or use higher-order recursion yet");
+	}
+	/// A certified recursion program can consult its current state several
+	/// times or only in a selected branch. A call at another input prevents
+	/// the one-step fixed-point law.
+	private bool pointwiseCalls(uint id,out string law,bool proof=false){
+		enum ns="Recursion.Program.Pointwise.";
+		if(!depends(at(id),1)){ if(proof) law=ns~"constant"; return true; }
+		auto n=nodes[id];
+		if(n.op==BoundOp.apply){
+			if(nodes[n.a].op!=BoundOp.variable||nodes[n.a].data!=1||
+				nodes[n.b].op!=BoundOp.variable||nodes[n.b].data!=0) return false;
+			if(proof) law=ns~"self";
+			return true;
+		}
+		string x,y,z;
+		if(n.a==uint.max||!pointwiseCalls(n.a,x,proof)||
+			n.b!=uint.max&&!pointwiseCalls(n.b,y,proof)||n.c!=uint.max&&!pointwiseCalls(n.c,z,proof)) return false;
+		if(!proof) return true;
+		auto op=n.op==BoundOp.primitive?arena.view(arena.at(n.data)).op:Op.variable;
+		if(n.op==BoundOp.conditional) law="("~ns~"branch "~x~" "~y~" "~z~")";
+		else if(n.op==BoundOp.guard||op==Op.mask||op==Op.and_) law="("~ns~"branch "~x~" "~y~" "~ns~"constant)";
+		else if(op==Op.or_) law="("~ns~"branch "~x~" "~ns~"constant "~y~")";
+		else law=n.b==uint.max?"("~ns~"unary "~x~")":"("~ns~"binary "~x~" "~y~")";
+		return true;
 	}
 	/// A source-level continuity capability, relative to one recursion variable.
 	enum Continuity:ubyte { constant, continuous, unsupported }
@@ -9249,13 +9273,14 @@ final class Bindings{
 			auto n=node(t); Result result;
 			if(steps<budget&&(n.op==BoundOp.fixed||n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.fixed)){
 				auto fn=n.op==BoundOp.fixed?t:at(n.a),v=pool.view(type(fn));
-				if(v.fields[0]==pool.primitive(TypeKind.unit)){
+				auto body=nodes[node(fn).a].a; bool unit=v.fields[0]==pool.primitive(TypeKind.unit); string witness;
+				if(unit||nodes[body].op!=BoundOp.apply&&depends(at(body),1)&&pointwiseCalls(body,witness)){
 					auto inner=push(context(t),v.fields[0]),absent=lambda(bottom(inner,v.fields[1]));
 					auto next=substituteArgument(at(node(fn).a),absent);
-					auto proof=emit(BindingRule.fixedUnitFirst,fn.id,next.id);
+					auto proof=emit(unit?BindingRule.fixedUnitFirst:BindingRule.fixedPointwiseFirst,fn.id,next.id);
 					if(n.op==BoundOp.apply){
 						next=apply(next,at(n.b));
-							proof=emit(BindingRule.congr,t.id,next.id,proof,emit(BindingRule.refl,n.b,n.b));
+						proof=emit(BindingRule.congr,t.id,next.id,proof,emit(BindingRule.refl,n.b,n.b));
 					}
 					++steps; chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
 					return Result(next.id,uint.max);
@@ -10692,6 +10717,8 @@ final class Bindings{
 				next=bottom(ctx,type(at(result.output))); rule=BindingRule.fold;
 			}else if(domains&&current.op==BoundOp.apply&&nodes[current.b].op==BoundOp.bottom){
 				next=bottom(ctx,type(at(result.output))); rule=BindingRule.appBottom;
+			}else if(current.op==BoundOp.apply&&nodes[current.a].op==BoundOp.lambda&&nodes[nodes[current.a].a].op==BoundOp.bottom){
+				next=bottom(ctx,types[current.type]); rule=BindingRule.appNowhere;
 			}else if(current.op==BoundOp.apply&&nodes[current.a].op==BoundOp.lambda){
 				if(steps<budget){ next=beta(at(nodes[current.a].a),at(current.b)); rule=BindingRule.beta; }
 				else exhausted=true;
@@ -10746,6 +10773,16 @@ final class Bindings{
 					auto args=current.b==uint.max?[at(g.b)]:right?[at(current.a),at(g.b)]:[at(g.b),at(current.b)];
 					next=guard(at(g.a),rebuild(at(result.output),ctx,args));
 					rule=BindingRule.distributionGuard; extra=right?1:0;
+				}
+			}
+			if(next==BoundTerm.init&&additive(current)&&primitiveOp(current.a,Op.mask)&&primitiveOp(current.b,Op.mask)){
+				auto left=nodes[current.a],right=nodes[current.b];
+				bool swap=nodes[left.b].op==BoundOp.bottom;
+				auto live=swap?right:left,missing=swap?left:right;
+				bool neg=primitiveOp(live.a,Op.not_)&&nodes[live.a].a==missing.a;
+				if(nodes[missing.b].op==BoundOp.bottom&&(neg||primitiveOp(missing.a,Op.not_)&&nodes[missing.a].a==live.a)){
+					next=guard(at(live.a),at(live.b)); rule=BindingRule.maskChoiceMissing;
+					extra=cast(uint)swap+2*cast(uint)neg;
 				}
 			}
 			if(next==BoundTerm.init&&(additive(current)||multiplicative(current))&&
@@ -13432,7 +13469,7 @@ final class Bindings{
 		auto unrolled=new bool[nodes.length],firstStep=new bool[nodes.length];
 		foreach(p;result.proofs){
 			if(p.rule==BindingRule.fixedApp) unrolled[nodes[p.from].a]=true;
-			if(p.rule==BindingRule.fixedUnitFirst) firstStep[p.from]=true;
+			if(p.rule==BindingRule.fixedUnitFirst||p.rule==BindingRule.fixedPointwiseFirst) firstStep[p.from]=true;
 		}
 		foreach(i,n;nodes) if(used[i]&&n.op==BoundOp.fixed){
 			auto v=pool.view(types[n.type]),a="("~leanType(v.fields[0])~" : Binding.Ty).denote",b="("~leanType(v.fields[1])~" : Binding.Ty).denote";
@@ -13480,9 +13517,16 @@ final class Bindings{
 			}
 			code~="theorem fixed"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = some (FixedPoint.value (rec"~id~dimArg~" γ ξ ρ).functional) := Recursion.fixed_program (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
 			if(unrolled[i]) code~="theorem unroll"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = (Binding.Expr.app (.lam "~name(n.a)~") "~name(cast(uint)i)~").eval ξ ρ := Recursion.program_unfold (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
-			if(firstStep[i])
+			if(firstStep[i]){
+				string witness,lemma="Recursion.fixed_unit_first";
+				if(v.fields[0]!=pool.primitive(TypeKind.unit)){
+					enforce(pointwiseCalls(nodes[n.a].a,witness,true),"missing proof that recursive calls preserve their input");
+					lemma="Recursion.fixed_pointwise_first";
+				}
 				code~="theorem first"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(n.a)~
-					".eval ξ (ρ.cons (some (fun _ => none))) := Recursion.fixed_unit_first (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
+					".eval ξ (ρ.cons (some (fun _ => none))) := "~lemma~" (rec"~id~dimArg~" γ ξ ρ) _ "~h~
+					(witness.length?" "~witness:"")~"\n";
+			}
 			foreach(ri,r;result.ranks) if(r.source==i){
 				auto prefix="QSym.BindingRank"~to!string(ri),field=leanSort(r.sort),eta="({ ξ with "~field~" := fun i => if i = "~to!string(r.variable)~" then x else ξ."~field~" i })";
 				string constant(Term t){ return "((n"~to!string(t.id)~".eval ξ).getD 0)"; }
@@ -14674,13 +14718,22 @@ final class Bindings{
 				case BindingRule.fold,BindingRule.seqTotal:proof=".ofEq (fun _ _ => rfl)"; break;
 				case BindingRule.domainBottom:proof=".domainBottom"; break;
 				case BindingRule.appBottom:proof=".appBottom "~name(n.a); break;
+				case BindingRule.appNowhere:proof=".appNowhere "~name(n.b); break;
+				case BindingRule.maskChoiceMissing:{
+					bool swap=(p.extra&1)!=0,neg=(p.extra&2)!=0;
+					auto live=nodes[swap?n.b:n.a],atom=neg?nodes[live.a].a:live.a,sort=elementSort(types[n.type]);
+					auto add=valueOperation(n),ha=sort==Sort.natural?"AffineRecurrence.addN":sort==Sort.integer?"AffineRecurrence.addZ":
+						sort==Sort.rational?"AffineRecurrence.addQ":"rfl";
+					proof=".ofEq (fun ξ ρ => Binding.mask_choice_missing "~add~" "~ha~" ("~name(atom)~".eval ξ ρ) ("~
+						name(live.b)~".eval ξ ρ) "~(swap?"true":"false")~" "~(neg?"true":"false")~")"; break;
+				}
 				case BindingRule.appScalarUndefined:
 					proof=".appScalarUndefined "~name(n.a)~" n"~to!string(nodes[n.b].data)~" QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct"; break;
 				case BindingRule.definedFixed:proof=".ofEq (fun ξ ρ => congrArg Binding.definedValue (fixed"~to!string(n.a)~dimArg~" γ ξ ρ))"; break;
 				case BindingRule.fixedApp:
 					proof=".ofEq (fun ξ ρ => Binding.Expr.eval_unroll_app "~name(n.a)~" "~name(nodes[nodes[n.a].a].a)~" "~name(n.b)~
 						" ξ ρ (fixed"~to!string(n.a)~dimArg~" γ ξ ρ) (unroll"~to!string(n.a)~dimArg~" γ ξ ρ))"; break;
-				case BindingRule.fixedUnitFirst:proof=".ofEq (first"~to!string(p.from)~dimArg~" γ)"; break;
+				case BindingRule.fixedUnitFirst,BindingRule.fixedPointwiseFirst:proof=".ofEq (first"~to!string(p.from)~dimArg~" γ)"; break;
 				case BindingRule.fixedConstant:
 					proof=".ofEq (fun ξ ρ => Recursion.fixed_constant (fun x => "~name(nodes[p.to].a)~".eval ξ (ρ.cons (some x))))"; break;
 				case BindingRule.fixedIdentity:proof=".ofEq (fun _ _ => Recursion.fixed_identity)"; break;

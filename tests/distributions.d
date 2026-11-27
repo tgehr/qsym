@@ -2194,6 +2194,15 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("PointwiseFixRestrictedAtoms","μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if n<3 then δ(n) else f(n)","ℕ→Distribution(ℕ)","λ(n:{n:ℕ | n≤2}). δ(n)"),
+	Case("PointwiseFixRestrictedMass","λ(n:ℕ).massD((μ(f:ℕ→Distribution(ℕ)).λ(k:ℕ).if k<3 then δ(k) else f(k))(n))","ℕ→ℝ","λ(n:{n:ℕ | n≤2}). (1:ℝ)"),
+	Case("PointwiseFixEmitting","μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if n<3 then δ(n) else addD(δ(n),f(n))","ℕ→Distribution(ℕ)","λ(n:{n:ℕ | n≤2}). δ(n)"),
+	Case("PointwiseFixCondition","μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if massD(f(n))<1 then δ(n) else δ(0)","ℕ→Distribution(ℕ)","λ(n:ℕ). undefined(Distribution(ℕ))"),
+	Case("PointwiseFixCaptured","λ(h:ℕ→𝔹).μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if h(n) then δ(n) else f(n)","(ℕ→𝔹)→ℕ→Distribution(ℕ)","λ(h:ℕ→𝔹). λ(n:{n:ℕ | h(n)}). δ(n)"),
+	Case("PointwiseFixDistributionState","(μ(f:Distribution(ℝ)→ℝ).λ(d:Distribution(ℝ)).if massD(d)<2 then 5 else f(d))(δ((3:ℝ)))","ℝ","5"),
+	Case("PointwiseFixDistributionStateOutside","(μ(f:Distribution(ℝ)→ℝ).λ(d:Distribution(ℝ)).if massD(d)<2 then 5 else f(d))(scaleD(2,δ((3:ℝ))))","ℝ","undefined(ℝ)"),
+	Case("PointwiseFixContinuousOutput","densityAtD((μ(f:ℝ→Distribution(ℝ)).λ(x:ℝ).if x<0 then lebesgueD() else f(x))(-1),0)","ℝ","1"),
+	Case("PointwiseFixHigherOutcome","massD((μ(f:ℕ→Distribution(ℕ→ℕ)).λ(n:ℕ).if n=0 then δ(λ(j:ℕ).j) else f(n))(0))","ℝ","1"),
 	Case("FlatFixedDistFunction","massD((μ(f:Unit→Distribution(ℝ)).λ(u:Unit).if a<0 then δ((3:ℝ)) else f(u))(()))","ℝ","guard(a<0,(1:ℝ))"),
 	Case("FlatFixedDistribution","massD(μ(d:Distribution(ℝ)).addD(δ((1:ℝ)),scaleD(1/2,d)))","ℝ","2"),
 	Case("ConditionalFixFamily","(μ(d:Distribution(ℝ)).if 0<a then "~retryHalf~" else "~retryQuarter~")","Distribution(ℝ)","Λ(x:ℝ). if 0<a then 2·δ(1)[x] else 4/3·δ(2)[x]"),
@@ -2786,6 +2795,7 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.Atomic.Observation.retry")>=0,c.name);
 			if(c.name=="RetryObservationMappedMoment") enforce(certificate.indexOf("Observation.realBind (Distribution.Atomic.Observation.weight")>=0,c.name);
 		}
+		if(c.name.indexOf("PointwiseFix")==0) enforce(certificate.indexOf("Recursion.fixed_pointwise_first ")>=0,c.name);
 		if(c.name=="FlatFixedDistFunction"||c.name=="RecursiveDistributionState"||c.name=="DiscountFibreCaptured"){
 			enforce((certificate.indexOf("Recursion.program_unfold ")>=0)==(c.name=="RecursiveDistributionState"),c.name);
 			enforce((certificate.indexOf("theorem body")>=0)==(c.name!="DiscountFibreCaptured"),c.name);

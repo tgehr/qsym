@@ -130,6 +130,19 @@ noncomputable def subsetValue {α : Type} (s t : Option (Set α)) : Option Bool 
 def guardValue {α : Type} (p : Option Bool) (x : Option α) : Option α :=
   if p == some true then x else none
 
+theorem mask_choice_missing {α : Type} [AddZeroClass α] (add : Option α → Option α → Option α)
+    (ha : add = Value.add) (p : Option Bool) (v : Option α) (swap neg : Bool) :
+    let yes := if neg then Value.not p else p
+    let no := if neg then p else Value.not p
+    let live := Value.mask yes v
+    let missing := Value.mask no (none : Option α)
+    (if swap then add missing live else add live missing) = guardValue yes v := by
+  subst add
+  cases p with
+  | none => cases swap <;> cases neg <;> rfl
+  | some b => cases b <;> cases swap <;> cases neg <;> cases v <;>
+      simp [Value.add, Value.not, Value.mask, guardValue]
+
 theorem guard_branch {α : Type} (p : Option Bool) (x : Option α) :
     guardValue p x = p.bind (fun b => if b then x else none) := by
   cases p with
@@ -430,6 +443,10 @@ theorem Reduction.definedGuardFalse (x : Expr Γ a) :
 theorem Reduction.scalarDomain (x : QSym.Expr s) (d : QSym.Expr .bool)
     (h : ∀ ξ, Domain.Correct (x.eval ξ) (d.eval ξ)) :
     Reduction (Γ := Γ) (.defined (.scalar x)) (.scalar d) := .ofEq (fun ξ _ => (h ξ).symm)
+
+theorem Reduction.appNowhere (x : Expr Γ a) :
+    Reduction (.app (.lam (.constant (a := b) none)) x) (.constant none) :=
+  .ofEq (fun ξ ρ => by simp [Expr.eval])
 
 theorem Reduction.appBottom (f : Expr Γ (.arrow a b)) :
     Reduction (.app f (.constant none)) (.constant none) := .ofEq (by

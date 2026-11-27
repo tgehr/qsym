@@ -28,6 +28,24 @@ private Case[] cases(){
 		Case("LimitScaleDomain","lim[x→∞] exp(-x)/a","a≠0","",true),
 		Case("LimitSymbolicFunction","lim[x→∞] f(x)","lim[x→∞] f(x)","f:ℝ→ℝ"),
 		Case("LimitInProduct","2·lim[x→∞] sin(x)","2·(lim[x→∞] sin(x))"),
+		Case("PointwiseFixBoth","μ(f:ℕ→ℝ).λ(n:ℕ).if n<3 then f(n)+f(n) else n","λ(n:{n:ℕ | 3≤n}). (n:ℝ)"),
+		Case("PointwiseFixPredicate","μ(f:ℕ→𝔹).λ(n:ℕ). n=0∨f(n)","λ(n:ℕ). n=0∨(undefined(𝔹))"),
+		Case("PointwiseFixConjunction","μ(f:ℕ→𝔹).λ(n:ℕ). n≠0∧f(n)","λ(n:ℕ). n≠0∧(undefined(𝔹))"),
+		Case("PointwiseFixMask","μ(f:ℕ→ℝ).λ(n:ℕ).[n≠0]·f(n)","λ(n:ℕ). [n≠0]·(undefined(ℝ))"),
+		Case("PointwiseFixGuard","μ(f:ℕ→ℝ).λ(n:ℕ).guard(n≠0,f(n))","λ(n:{n:ℕ | n≠0}). undefined(ℝ)"),
+		Case("PointwiseFixPair","μ(f:(ℕ×𝔹)→ℝ).λ(t:ℕ×𝔹).if get(t,1) then get(t,0) else f(t)","λ(t:{t:ℕ×𝔹 | get(t,1)}). ((get(t,0)):ℝ)"),
+		Case("PointwiseFixReal","μ(f:ℝ→ℝ).λ(x:ℝ).if x<0 then sin(x) else f(x)","λ(x:{x:ℝ | x<0}). sin(x)"),
+		Case("PointwiseFixShiftControl","(μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 7 else f(n sub 1))(2)","7"),
+		Case("MissingChoiceReal","λ(p:𝔹).λ(y:ℝ).[p]·y+[¬p]·undefined(ℝ)","λ(p:𝔹). λ(y:{y:ℝ | p}). y"),
+		Case("MissingChoiceReversed","λ(p:𝔹).λ(y:ℝ).[¬p]·undefined(ℝ)+[p]·y","λ(p:𝔹). λ(y:{y:ℝ | p}). y"),
+		Case("MissingChoiceNegative","λ(p:𝔹).λ(y:ℝ).[¬p]·y+[p]·undefined(ℝ)","λ(p:𝔹). λ(y:{y:ℝ | ¬p}). y"),
+		Case("MissingChoiceNatural","λ(p:𝔹).λ(y:ℕ).[p]·y+[¬p]·undefined(ℕ)","λ(p:𝔹). λ(y:{y:ℕ | p}). y"),
+		Case("MissingChoiceInteger","λ(p:𝔹).λ(y:ℤ).[p]·y+[¬p]·undefined(ℤ)","λ(p:𝔹). λ(y:{y:ℤ | p}). y"),
+		Case("MissingChoiceRational","λ(p:𝔹).λ(y:ℚ).[p]·y+[¬p]·undefined(ℚ)","λ(p:𝔹). λ(y:{y:ℚ | p}). y"),
+		Case("MissingChoiceComplex","λ(p:𝔹).λ(y:ℂ).[p]·y+[¬p]·undefined(ℂ)","λ(p:𝔹). λ(y:{y:ℂ | p}). y"),
+		Case("MissingChoicePartialPredicate","λ(h:ℕ→𝔹).λ(y:ℝ).[h(0)]·y+[¬h(0)]·undefined(ℝ)","λ(h:ℕ→𝔹). λ(y:{y:ℝ | h(0)}). y"),
+		Case("MissingChoiceNowhere","λ(h:ℕ→ℝ).(λ(x:ℝ).undefined(ℝ))(h(0))","λ(h:ℕ→ℝ). undefined(ℝ)"),
+		Case("MissingChoiceOneSided","λ(p:𝔹).λ(q:𝔹).[p]·1+[q]·undefined(ℝ)","λ(p:𝔹). λ(q:𝔹). [p]+[q]·(undefined(ℝ))"),
 		Case("FlatFixedIdentity","μ(x:ℝ).x","undefined(ℝ)"),
 		Case("FlatFixedConstant","μ(x:ℝ).7","7"),
 		Case("FlatFixedStrict","μ(x:ℝ).x+1","undefined(ℝ)"),
@@ -38,7 +56,7 @@ private Case[] cases(){
 		Case("FlatFixedNested","μ(x:ℝ).if a<0 then (μ(y:ℝ).if b<0 then 4 else y) else x","[a<0]·([0≤b]·(undefined(ℝ))+[b<0]·4)+[0≤a]·(undefined(ℝ))"),
 		Case("FlatFixedBoolean","μ(p:𝔹). false∧p","false"),
 		Case("FlatFixedBooleanStrict","μ(p:𝔹). ¬p","undefined(𝔹)"),
-		Case("FlatFixedState","λ(n:ℕ).μ(k:ℕ).if n=0 then 3 else k+1","λ(n:ℕ). [n=0]·3+[n≠0]·(undefined(ℕ))"),
+		Case("FlatFixedState","λ(n:ℕ).μ(k:ℕ).if n=0 then 3 else k+1","λ(n:{n:ℕ | n=0}). 3"),
 		Case("FlatFixedComplex","μ(z:ℂ).if a<0 then complex(1,2) else conj(z)","[a<0]·(1+2·ⅈ)+[0≤a]·(undefined(ℂ))"),
 		Case("FlatFixedTuple","μ(t:ℝ×𝔹).if a<0 then ((1:ℝ),true) else t","guard(a<0,(((1:ℝ),true):ℝ×𝔹))"),
 		Case("FlatFixedVector","μ(v:ℝ^2).if a<0 then ((1:ℝ),(2:ℝ)) else v","guard(a<0,((1:ℝ),(2:ℝ)))"),
@@ -118,6 +136,11 @@ private string[] run(string directory=""){
 		enforce(s.format(a,again)==output,c.name~" round trip: "~output~" -> "~s.format(a,again));
 		auto code=s.exportCertificate(a,r);
 		import std.string:indexOf;
+		if(c.name.indexOf("PointwiseFix")==0)
+			enforce((code.indexOf("Recursion.fixed_pointwise_first ")>=0)==(c.name!="PointwiseFixShiftControl"),c.name);
+		if(c.name.indexOf("MissingChoice")==0&&c.name!="MissingChoiceNowhere")
+			enforce((code.indexOf("Binding.mask_choice_missing ")>=0)==(c.name!="MissingChoiceOneSided"),c.name);
+		if(c.name=="MissingChoiceNowhere") enforce(code.indexOf(".appNowhere ")>=0,c.name);
 		if(c.name.indexOf("FlatFixed")==0) enforce(code.indexOf("Recursion.fixed_unit_first")>=0,c.name);
 		if(directory.length) write(buildPath(directory,c.name~".lean"),code);
 		names~=c.name;
