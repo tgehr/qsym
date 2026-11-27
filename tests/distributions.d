@@ -61,7 +61,7 @@ private Case[] cases(){
 	Case("BareLebesgue","λ[x]","Distribution(ℝ)"),
 	Case("Interval","∫dx [-1≤x≤1]·λ[x]","ℝ"),
 	Case("PuncturedInterval","∫dx [x≠0]·λ[x]·[-1≤x≤1]","ℝ"),
-	Case("UnboundedPuncture","∫dx [x≠0]·λ[x]","ℝ"),
+	Case("UnboundedPuncture","∫dx [x≠0]·λ[x]","ℝ","undefined(ℝ)"),
 	Case("ZeroIntegral","∫dx 0","ℝ","0"),
 	Case("StrictInterval","∫dx [-1<x<1]·λ[x]","ℝ","2"),
 	Case("EmptyInterval","∫dx [2≤x≤1]·λ[x]","ℝ","0"),
@@ -557,7 +557,7 @@ private Case[] cases(){
 	Case("MissingOutputOutside","massD(pushforwardOnD(λ(x:ℝ).1<x,λ(x:ℝ).(2*x-1)⁻¹))","ℝ","undefined(ℝ)"),
 	Case("MissingOutputZeroGuard","densityAtD(pushforwardOnD(λ(x:ℝ).false,λ(x:ℝ).(x^2-2)⁻¹),5)","ℝ","undefined(ℝ)"),
 	Case("MissingOutputWeighted","densityAtD(weightD(λ(x:ℝ).x,pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x^2-3)⁻¹)),y)","ℝ","undefined(ℝ)"),
-	Case("MissingOutputMaskedPole","massD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).[x≠0]·x⁻¹))","ℝ","∫dx λ[x]"),
+	Case("MissingOutputMaskedPole","massD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).[x≠0]·x⁻¹))","ℝ","undefined(ℝ)"),
 	Case("MissingOutputNoRealRoot","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x^2+1)⁻¹),0)","ℝ","(λ(x:ℝ). (∫dx1 λ[x1]·δ((x1^2+1)⁻¹)[x])//λ[x])((0:ℝ))"),
 	Case("MissingOutputInversePartial","densityAtD(Λx.λ[x⁻¹],1)","ℝ","(λ(x:ℝ). (λ[(x⁻¹)])//λ[x])((1:ℝ))"),
 	Case("MissingOutputAtom","massD(δ((2:ℝ)))","ℝ","1"),
@@ -1046,6 +1046,15 @@ private Case[] cases(){
 	Case("OrderedMaskBoth","λ(g:ℝ→ℝ).λ(y:ℝ).massD(weightD(g,graphFibreD(λ(x:ℝ).x^2+1,y)))","(ℝ→ℝ)→ℝ→ℝ","λ(g:ℝ→ℝ). λ(y:ℝ). [1<y]·(g(-sqrt(y-1))·sqrt(y-1)⁻¹·(1/2)+g(sqrt(y-1))·sqrt(y-1)⁻¹·(1/2))+[y≤1]·(guard(y<1∧(defined(g)),(0:ℝ)))"),
 	Case("OrderedMaskOne","λ(y:ℝ).massD(weightD(λ(x:ℝ).x^2,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(y)))","ℝ→ℝ","λ(y:ℝ). [1<y]·((y-1)·sqrt(y-1)⁻¹·(1/2))"),
 	Case("OrderedMaskOpposite","λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y)))","ℝ→ℝ","λ(y:{y:ℝ | y≠1}). (0:ℝ)"),
+	Case("WholeLineBare","∫dx λ[x]","ℝ","undefined(ℝ)"),
+	Case("WholeLineMultiHole","∫dx [x≠0]·[x≠1]·λ[x]","ℝ","undefined(ℝ)"),
+	Case("WholeLineStrictScaleZero","massD(scaleD((0:ℝ),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("WholeLineStrictSum","massD(addD(lebesgueD(),δ((2:ℝ))))","ℝ","undefined(ℝ)"),
+	Case("WholeLineUnit","∫dx (1:ℝ)·λ[x]","ℝ","undefined(ℝ)"),
+	Case("WholeLineFinite","∫dx [-2≤x≤3]·λ[x]","ℝ","5"),
+	Case("WholeLineHoleDensity","λ(x:ℝ).densityAtD(Λy. [y≠0]·λ[y],x)","ℝ→ℝ","λ(x:ℝ). [x≠0]"),
+	Case("WholeLinePlain","Λx. λ[x]","Distribution(ℝ)","Λ(x:ℝ). λ[x]"),
+	Case("WholeLineNatural","massD(bindD(δ(3),λ(n:ℕ).lebesgueD()))","ℝ","undefined(ℝ)"),
 	Case("ConstantWeightUnit","λ(d:Distribution(ℝ)).massD(weightD(λ(v:ℝ).(1:ℝ),d))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx d[x]"),
 	Case("ConstantWeightNegative","λ(d:Distribution(ℝ)).massD(weightD(λ(v:ℝ).(-2:ℝ),d))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). -2·(∫dx d[x])"),
 	Case("ConstantWeightFraction","λ(d:Distribution(ℕ)).massD(weightD(λ(v:ℕ).(3/5:ℝ),d))","Distribution(ℕ)→ℝ","λ(d:Distribution(ℕ)). (∫(x:ℕ). d[x])·(3/5)"),
@@ -1057,7 +1066,7 @@ private Case[] cases(){
 	Case("ConstantWeightPartial","λ(k:ℕ→Distribution(ℝ)).massD(weightD(λ(v:ℝ).(2:ℝ),k(0)))","(ℕ→Distribution(ℝ))→ℝ","λ(k:ℕ→Distribution(ℝ)). 2·(∫dx (k(0))[x])"),
 	Case("ConstantWeightMissing","massD(weightD(λ(v:ℝ).(-3/2:ℝ),undefined(Distribution(ℝ))))","ℝ","undefined(ℝ)"),
 	Case("ConstantWeightInfiniteZero","massD(weightD(λ(v:ℝ).(0:ℝ),lebesgueD()))","ℝ","0"),
-	Case("ConstantWeightInfiniteNegative","massD(weightD(λ(v:ℝ).(-2:ℝ),lebesgueD()))","ℝ","-2·(∫dx λ[x])"),
+	Case("ConstantWeightInfiniteNegative","massD(weightD(λ(v:ℝ).(-2:ℝ),lebesgueD()))","ℝ","undefined(ℝ)"),
 	Case("ConstantWeightEmpty","massD(weightD(λ(v:ℝ).(-2:ℝ),zeroD(ℝ)))","ℝ","0"),
 	Case("ConstantWeightSignedAtoms","massD(weightD(λ(v:ℝ).(-2:ℝ),addD(δ((3:ℝ)),scaleD(-3,δ((8:ℝ))))))","ℝ","4"),
 	Case("ConstantWeightStrictPole","(λ(d:Distribution(ℝ)).massD(weightD(λ(v:ℝ).guard(v≠0,(1:ℝ)),d)))(scaleD(0,δ((0:ℝ))))","ℝ","undefined(ℝ)"),
@@ -1368,7 +1377,7 @@ private Case[] cases(){
 	Case("BoundDistribution","massD(bindD(weightD(λ(x:ℝ).[0≤x≤1],lebesgueD()),λ(x:ℝ).δ(δ(x))))","ℝ","1"),
 	Case("BoundType","massD(bindD(weightD(λ(x:ℝ).[0≤x≤1],lebesgueD()),λ(x:ℝ).δ(Distribution(ℝ))))","ℝ","1"),
 	Case("UnboundedParameter","λ(a:ℝ).massD(weightD(λ(y:ℝ).a,lebesgueD()))","ℝ→ℝ"),
-	Case("ZeroInfiniteRow","massD(bindD(weightD(λ(x:ℝ).0,lebesgueD()),λ(x:ℝ).lebesgueD()))","ℝ"),
+	Case("ZeroInfiniteRow","massD(bindD(weightD(λ(x:ℝ).0,lebesgueD()),λ(x:ℝ).lebesgueD()))","ℝ","undefined(ℝ)"),
 	Case("NestedMaskedRectangle","∫dx ∫dy [0≤x≤1]*[0≤y≤2]*λ[y]*λ[x]","ℝ","2"),
 	Case("ReversedMaskedRectangle","∫dx ∫dy [0≤y≤2]*[0≤x≤1]*λ[y]*λ[x]","ℝ","2"),
 	Case("SignedMaskedRectangle","∫dx ∫dy (-3)*[0≤x≤1]*[0≤y≤2]*λ[y]*λ[x]","ℝ","-6"),
@@ -3345,7 +3354,6 @@ private void run(string directory){
 		if(c.expected.length) enforce(text==c.expected,c.name~": "~text);
 		if(c.name=="DensityRecovery") enforce(text=="[x≠0]",c.name~": "~text);
 		if(c.name=="Interval"||c.name=="PuncturedInterval") enforce(text=="2",c.name~": "~text);
-		if(c.name=="UnboundedPuncture") enforce(text=="∫dx λ[x]",c.name~": "~text);
 		if(c.name=="Integral") enforce(text=="2",c.name~": "~text);
 		if(c.name=="RecursiveAtom") enforce(text=="1",c.name~": "~text);
 		auto again=s.run(a,text,[],Options(DensityMode.preserve,true));
@@ -3451,6 +3459,11 @@ private void run(string directory){
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
+		if(c.name.indexOf("WholeLine")==0||c.name=="UnboundedPuncture"||c.name=="ZeroInfiniteRow"||
+			c.name=="ConstantWeightInfiniteNegative"||c.name=="MissingOutputMaskedPole"){
+			bool infinite=c.name!="WholeLineFinite"&&c.name!="WholeLineHoleDensity"&&c.name!="WholeLinePlain";
+			enforce((certificate.indexOf("Distribution.mass_lebesgue")>=0)==infinite,c.name);
+		}
 		if(c.name.indexOf("ConstantWeight")==0){
 			import std.algorithm : canFind;
 			auto form=c.name["ConstantWeight".length..$];
@@ -3635,7 +3648,7 @@ private void run(string directory){
 			if(c.name=="UniformSlopeZero") enforce(certificate.indexOf("MissingOutput.density ")>=0,c.name);
 		}
 		if(c.name.indexOf("MissingOutput")==0){
-			bool witnessed=c.expected=="undefined(ℝ)";
+			bool witnessed=c.expected=="undefined(ℝ)"&&c.name!="MissingOutputMaskedPole";
 			enforce((certificate.indexOf("GraphFibre.MissingOutput.")>=0)==witnessed,c.name);
 			if(c.name=="MissingOutputWeighted"||c.name=="MissingOutputInverseZero")
 				enforce(certificate.indexOf("MissingOutput.weight ")>=0,c.name);
@@ -4216,8 +4229,8 @@ private void run(string directory){
 		if(c.name=="IntegralRectangle"||c.name=="WeightedRows") enforce(certificate.indexOf("Distribution.model_mass_integralValue")>=0);
 		if(c.name=="ParametricWeight"||c.name=="ParametricPartialWeight"||c.name=="ParametricNestedWeights"||c.name=="WeightedRows")
 			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_grid")>=0);
-		if(c.name=="UnboundedParameter"||c.name=="ZeroInfiniteRow"){
-			if(c.name=="UnboundedParameter") enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_grid")<0);
+		if(c.name=="UnboundedParameter"){
+			enforce(certificate.indexOf("Distribution.DensityProgram.presentation_mass_grid")<0);
 			enforce(text.indexOf("∫")>=0,c.name~" must retain its unsupported integral");
 		}
 		if(c.name=="NestedMaskedRectangle"||c.name=="ReversedMaskedRectangle"||c.name=="SignedMaskedRectangle"||

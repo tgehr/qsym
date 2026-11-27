@@ -145,9 +145,7 @@ theorem ordered_integral (k : ℝ → Option (D (D ℝ))) :
       massValue (weightValue (some (fun x => massValue (k x))) lebesgueValue) :=
   model_mass_integralValue k
 
-theorem unbounded_inner : DensityProgram.lebesgue.mass = none := by
-  simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
-    partialIntegral, Value.Defined, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+theorem unbounded_inner : DensityProgram.lebesgue.mass = none := DensityProgram.lebesgue_mass
 
 def zeroDensity : DensityProgram := .weight (fun _ => some 0) .lebesgue
 
@@ -373,6 +371,7 @@ example (p : DensityProgram) : p.mass = p.mass := by
 #qsym_check_axioms ordered_bind
 #qsym_check_axioms ordered_integral
 #qsym_check_axioms unbounded_inner
+#qsym_check_axioms mass_lebesgue
 #qsym_check_axioms zero_density_mass
 #qsym_check_axioms factoring_requires_finiteness
 #qsym_check_axioms ParametricIntervalCertificate.defined_iff

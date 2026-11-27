@@ -59,6 +59,15 @@ theorem observeAt_bridge (p : DensityProgram) (x : ℝ) :
 
 end DensityProgram
 
+open MeasureTheory in
+theorem DensityProgram.lebesgue_mass : DensityProgram.lebesgue.mass = none := by
+  simp [DensityProgram.mass, Model.densityMassValue_eq, DensityProgram.density,
+    partialIntegral, Value.Defined, integrable_const_iff, isFiniteMeasure_iff, Real.volume_univ]
+
+/-- The scalar observer requires a finite real integral over the whole line. -/
+theorem mass_lebesgue : massValue lebesgueValue = none :=
+  (DensityProgram.mass_bridge .lebesgue).trans DensityProgram.lebesgue_mass
+
 /-- A replaceable observation interface. Implementations must prove both
 laws on their model; certificates never add global axioms. -/
 structure DensityIntegralTheory where
