@@ -271,6 +271,7 @@ private struct QuadraticChart{
 	uint polynomial,map;
 	QuadraticPoint point;
 	Rational radicand,root;
+	uint predicate=uint.max;
 	bool fromSheets;
 }
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
@@ -9638,6 +9639,7 @@ final class Bindings{
 		}
 		BoundTerm quadraticDensity(BoundTerm term,out uint evidence){
 			auto n=node(term); QuadraticChart chart; ScalarDomain check;
+			uint predicate=uint.max;
 			if(n.op==BoundOp.distributionDensityAt&&nodes[n.a].op==BoundOp.distributionInverseCover){
 				CoverStep known;
 				if(squareFromCover(at(n.a),known)!=BoundTerm.init) return BoundTerm.init;
@@ -9652,9 +9654,13 @@ final class Bindings{
 				if(n.op==BoundOp.distributionGraphMass) map=n.a;
 				else{
 					auto d=nodes[n.a];
-					if(d.op==BoundOp.distributionPushforwardOn&&nodes[d.a].op==BoundOp.lambda&&isTrue(nodes[d.a].a,true))
+					if(d.op==BoundOp.distributionPushforwardOn){
 						map=d.b;
-					else{
+						if(nodes[d.a].op!=BoundOp.lambda||!isTrue(nodes[d.a].a,true)){
+							if(nodes[n.b].op!=BoundOp.scalar||!arena.isNumber(arena.at(nodes[n.b].data))) return BoundTerm.init;
+							predicate=d.a;
+						}
+					}else{
 						uint weight,point;
 						if(!realAtomRow(at(n.a),weight,point)||weight!=uint.max) return BoundTerm.init;
 						map=lambda(at(point)).id;
@@ -9667,6 +9673,7 @@ final class Bindings{
 					if(factoredSquare(map,alreadySquare).degree) return BoundTerm.init;
 				}
 			}
+			chart.predicate=predicate;
 			auto ctx=context(term),y=at(n.b),zero=arena.real_(0);
 			auto a=arena.number(chart.scale).re,j=a<Rational(0)?-a:a;
 			if(node(y).op==BoundOp.scalar&&arena.isNumber(arena.at(node(y).data))){
@@ -9677,15 +9684,33 @@ final class Bindings{
 					auto q=arena.number(arena.at(node(y).data));
 					auto z=budget.calc!"+"(budget.calc!"*"(Number(a),q),arena.number(chart.offset)).re;
 					chart.radicand=z; BoundTerm value;
-					if(z.zero){chart.point=QuadraticPoint.vertex; value=bottom(ctx,type(term));}
-					else if(z<Rational(0)){chart.point=QuadraticPoint.outside; value=scalar(ctx,zero);}
-					else if((new Elementary(arena,budget)).root(z,2,chart.root)){
+					BoundTerm atRoot(Term x,BoundTerm weight){
+						auto test=apply(at(predicate),scalar(ctx,x));
+						return primitive(arena.mask(arena.boolean(true),zero),[test,weight]);
+					}
+					if(z.zero){
+						chart.point=QuadraticPoint.vertex;
+						value=bottom(ctx,type(term));
+						if(predicate!=uint.max) value=atRoot(chart.centre,value);
+					}else if(z<Rational(0)){
+						chart.point=QuadraticPoint.outside;
+						value=scalar(ctx,zero);
+						if(predicate!=uint.max) value=sequence(at(predicate),value);
+					}else if((new Elementary(arena,budget)).root(z,2,chart.root)){
 						auto k=budget.calc!"/"(Number(j),Number(chart.root));
-						chart.point=QuadraticPoint.regular; value=scalar(ctx,arena.real_(k.re));
+						chart.point=QuadraticPoint.regular;
+						if(predicate==uint.max) value=scalar(ctx,arena.real_(k.re));
+						else{
+							auto c=arena.number(chart.centre),r=Number(chart.root);
+							auto lo=budget.calc!"-"(c,r),hi=budget.calc!"+"(c,r),w=budget.calc!"/"(k,Number(2));
+							auto weight=scalar(ctx,arena.real_(w.re));
+							value=primitive(arena.add(zero,zero,true),[atRoot(arena.real_(lo.re),weight),atRoot(arena.real_(hi.re),weight)]);
+						}
 					}
 					if(value!=BoundTerm.init){evidence=rememberQuadratic(chart,check); return value;}
 				}catch(Limit e){}
 			}
+			if(predicate!=uint.max) return BoundTerm.init;
 			auto scaled=primitive(scalarOperator(type(y),TensorOp.mul),[scalar(ctx,chart.scale),y]);
 			auto radicand=primitive(arena.add(zero,zero,true),[scaled,scalar(ctx,chart.offset)]);
 			evidence=rememberQuadratic(chart,check);
@@ -16869,14 +16894,37 @@ final class Bindings{
 						auto args=literal(chart.centre)~" "~literal(chart.scale)~" "~literal(chart.offset)~" ";
 						auto nums=number(chart.centre)~" "~number(chart.scale)~" "~number(chart.offset)~" ";
 						if(p.rule==BindingRule.distributionQuadraticChart) law=ns~"image "~args~"(of_decide_eq_true rfl) "~nums~equation;
-						else{
+						else if(chart.predicate!=uint.max){
+							auto v=arena.at(nodes[n.b].data),z=q(chart.radicand);
+							auto pred="("~name(chart.predicate)~".eval ξ ρ)";
+							law=ns~"guarded_observation "~args~literal(v)~" "~z~" (of_decide_eq_true rfl) rfl "~nums~
+								number(v)~" "~equation~" "~pred;
+							auto c=literal(chart.centre),a_=literal(chart.scale);
+							string observed;
+							final switch(chart.point){
+								case QuadraticPoint.symbolic:assert(0);
+								case QuadraticPoint.outside:
+									observed=ns~"guarded_outside "~c~" "~a_~" "~z~" (of_decide_eq_true rfl) "~pred~
+										" (Numeric.calculate_real_zero ξ n"~to!string(arena.real_(0).id)~" rfl)"; break;
+								case QuadraticPoint.vertex:
+									observed=ns~"guarded_vertex "~c~" "~a_~" "~pred~" "~number(chart.centre); break;
+								case QuadraticPoint.regular:
+									auto sum=nodes[p.to],low=nodes[sum.a],high=nodes[sum.b];
+									auto lo=arena.at(nodes[nodes[low.a].b].data),hi=arena.at(nodes[nodes[high.a].b].data);
+									auto w=arena.at(nodes[low.b].data);
+									observed=ns~"guarded_regular "~c~" "~a_~" "~z~" "~q(chart.root)~" "~literal(lo)~" "~literal(hi)~" "~literal(w)~
+										" (of_decide_eq_true rfl) (of_decide_eq_true rfl) rfl rfl rfl rfl "~pred~" "~number(lo)~" "~number(hi)~" "~number(w);
+									break;
+							}
+							law="Eq.trans ("~law~") ("~observed~")";
+						}else{
 							auto kind=n.op==BoundOp.distributionGraphMass?"mass":nodes[n.a].op==BoundOp.distributionBind?"bind":
 								nodes[n.a].op==BoundOp.distributionIntegral?"integral":"density";
 							law=ns~"observation "~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
 								" ("~name(n.b)~".eval ξ ρ) ."~kind;
 						}
 					}
-					if(chart.point!=QuadraticPoint.symbolic){
+					if(chart.point!=QuadraticPoint.symbolic&&chart.predicate==uint.max){
 						auto v=arena.at(nodes[n.b].data);
 						auto z=q(chart.radicand);
 						auto arg=ns~"literal_argument "~literal(chart.scale)~" "~literal(chart.offset)~" "~literal(v)~" "~z~" "~

@@ -98,6 +98,7 @@ import QSym.SummationLinearity
 import QSym.GeometricMomentsNewton
 import QSym.GeometricMomentsExact
 import QSym.DistributionSquareRootSheet
+import QSym.DistributionQuadraticRestriction
 import QSym.DistributionRepeatedSheet
 import QSym.SummationAffine
 import QSym.SummationPowers

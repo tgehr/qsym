@@ -954,7 +954,28 @@ private Case[] cases(){
 	Case("QuadraticDensityMissing","densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("QuadraticDensityMissingAt","λ(h:ℕ→ℝ).densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],h(0))","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). [0≤h(0)-1]·sqrt(h(0)-1)⁻¹"),
 	Case("QuadraticDensityRejectPole","λ(y:ℝ).densityAtD(Λy.∫dx λ[x]·δ(x^2+1/x)[y],y)","ℝ→ℝ","λ(y:ℝ). ((∫(x:ℝ). (δ(x^2+x⁻¹)[y])·(λ[x])))//λ[y]"),
-	Case("QuadraticDensityRejectRestricted","densityAtD(pushforwardOnD(λ(x:ℝ).x≠0,λ(x:ℝ).x^2+1),1)","ℝ","(λ(x:ℝ). (∫dx1 λ[x1]·δ(x1^2+1)[x]·[x1≠0])//λ[x])((1:ℝ))"),
+	Case("QuadraticSourceExcludedVertex","densityAtD(pushforwardOnD(λ(x:ℝ).x≠0,λ(x:ℝ).x^2+1),1)","ℝ","0"),
+	Case("QuadraticSourceIncludedVertex","densityAtD(pushforwardOnD(λ(x:ℝ).0≤x,λ(x:ℝ).x^2+1),1)","ℝ","undefined(ℝ)"),
+	Case("QuadraticSourceMissingVertex","densityAtD(pushforwardOnD(λ(x:ℝ).0<1/x,λ(x:ℝ).x^2+1),1)","ℝ","[0<0⁻¹]·(undefined(ℝ))"),
+	Case("QuadraticSourceLower","densityAtD(pushforwardOnD(λ(x:ℝ).x<0,λ(x:ℝ).x^2+1),5)","ℝ","1/4"),
+	Case("QuadraticSourceUpper","densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1),5)","ℝ","1/4"),
+	Case("QuadraticSourceBoth","densityAtD(pushforwardOnD(λ(x:ℝ).-2≤x∧x≤2,λ(x:ℝ).x^2+1),5)","ℝ","1/2"),
+	Case("QuadraticSourceNeither","densityAtD(pushforwardOnD(λ(x:ℝ).-2<x∧x<2,λ(x:ℝ).x^2+1),5)","ℝ","0"),
+	Case("QuadraticSourceOnlyRootHole","densityAtD(pushforwardOnD(λ(x:ℝ).0<1/(x-2),λ(x:ℝ).x^2+1),5)","ℝ","undefined(ℝ)"),
+	Case("QuadraticSourceOffRootHole","densityAtD(pushforwardOnD(λ(x:ℝ).0<1/(x-3),λ(x:ℝ).x^2+1),5)","ℝ","0"),
+	Case("QuadraticSourceGap","densityAtD(pushforwardOnD(λ(x:ℝ).0<1/x,λ(x:ℝ).x^2+1),0)","ℝ","0"),
+	Case("QuadraticSourceDown","densityAtD(pushforwardOnD(λ(x:ℝ).x<0,λ(x:ℝ).3-x^2),-1)","ℝ","1/4"),
+	Case("QuadraticSourceNegativeScale","densityAtD(pushforwardOnD(λ(x:ℝ).x<0,λ(x:ℝ).-2*x^2-1),-3)","ℝ","1/4"),
+	Case("QuadraticSourceTranslated","densityAtD(pushforwardOnD(λ(x:ℝ).0≤x,λ(x:ℝ).x^2+x),0)","ℝ","1"),
+	Case("QuadraticSourceGraph","densityAtD(Λy. ∫dx λ[x]·δ(x^2+1)[y]·[0<x≤2],5)","ℝ","1/4"),
+	Case("QuadraticSourceGraphVertex","densityAtD(Λy. ∫dx λ[x]·δ(x^2+1)[y]·[0<x≤2],1)","ℝ","0"),
+	Case("QuadraticSourcePredicateParam","λ(p:ℝ→𝔹).densityAtD(pushforwardOnD(p,λ(x:ℝ).x^2+1),5)","(ℝ→𝔹)→ℝ","λ(p:ℝ→𝔹). [p(-2)]·(1/4)+[p(2)]·(1/4)"),
+	Case("QuadraticSourceVertexPredicate","λ(p:ℝ→𝔹).densityAtD(pushforwardOnD(p,λ(x:ℝ).x^2+1),1)","(ℝ→𝔹)→ℝ","λ(p:ℝ→𝔹). [p(0)]·(undefined(ℝ))"),
+	Case("QuadraticSourceMissingPredicate","densityAtD(pushforwardOnD(undefined(ℝ→𝔹),λ(x:ℝ).x^2+1),0)","ℝ","undefined(ℝ)"),
+	Case("QuadraticSourceMissingQuery","densityAtD(pushforwardOnD(λ(x:ℝ).x<0,λ(x:ℝ).x^2+1),undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("QuadraticSourceUnknownAtGap","λ(h:ℕ→(ℝ→𝔹)).densityAtD(pushforwardOnD(h(0),λ(x:ℝ).x^2+1),0)","(ℕ→ℝ→𝔹)→ℝ","λ(h:{h:ℕ→ℝ→𝔹 | holds((0∈domain(h)))}). (0:ℝ)"),
+	Case("QuadraticSourceIrrational","densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1),3)","ℝ","(λ(x:ℝ). (∫dx1 λ[x1]·δ(x1^2+1)[x]·[0<x1])//λ[x])((3:ℝ))"),
+	Case("QuadraticSourceNonquadratic","densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^4+1),5)","ℝ","(λ(x:ℝ). (∫dx1 λ[x1]·δ(x1^4+1)[x]·[0<x1])//λ[x])((5:ℝ))"),
 	Case("QuadraticDensityIrrational","densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],3)","ℝ","1/2·sqrt(2)"),
 	Case("QuadraticDensityDefinedVertex","defined(densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],1))","𝔹","false"),
 	Case("QuadraticDensityDefinedOutside","defined(densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],0))","𝔹","true"),
@@ -3238,7 +3259,7 @@ private void run(string directory){
 		if(c.name=="PointwiseOrderComplexProduct")
 			enforce(certificate.indexOf("Generated.r_complex_add_comm")>=0,c.name);
 		if(c.name.indexOf("QuadraticDensity")==0){
-			bool supported=c.name!="QuadraticDensityRejectPole"&&c.name!="QuadraticDensityRejectRestricted";
+			bool supported=c.name!="QuadraticDensityRejectPole";
 			enforce((certificate.indexOf("Coordinates.Quadratic.observation ")>=0)==supported,c.name);
 			if(c.name=="QuadraticDensityVertex"||c.name=="QuadraticDensityDownTop")
 				enforce(certificate.indexOf("unrestrictedSquareDensity_zero")>=0,c.name);
@@ -3249,6 +3270,10 @@ private void run(string directory){
 				c.name=="CompactSheetGrouped"||c.name=="CompactSheetNegative"||c.name=="CompactSheetTwoRoots"){
 			enforce(certificate.indexOf("theorem rootEquality")>=0,c.name~" square-root sheet equation");
 			enforce(certificate.length<45000,c.name~" redundant scalar proof");
+		}
+		if(c.name.indexOf("QuadraticSource")==0){
+			bool supported=c.name!="QuadraticSourceNonquadratic"&&c.name!="QuadraticSourceIrrational"&&c.name!="QuadraticSourceMissingQuery";
+			enforce((certificate.indexOf("Quadratic.guarded_observation ")>=0)==supported,c.name);
 		}
 		if(c.name.indexOf("RepeatedSheet")==0){
 			bool duplicate=c.name!="RepeatedSheetSum"&&c.name!="RepeatedSheetDifferentHole";

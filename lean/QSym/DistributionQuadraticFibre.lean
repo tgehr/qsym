@@ -16,6 +16,48 @@ theorem RootCover.postcomp {s : Set ℝ} {f g : ℝ → ℝ} {y : ℝ} {xs : Lis
 
 namespace Coordinates.Quadratic
 
+/-- The complete fibre in increasing source order. The vertex occurs once. -/
+def sourceRoots (c t : ℝ) : List ℝ :=
+  if t < 0 then [] else if t = 0 then [c] else [-√t+c, √t+c]
+
+theorem sourceRoots_cover (c a b y : ℝ) (ha : a ≠ 0) :
+    RootCover univ (fun x : ℝ => ((x-c)^2-b)/a) y (sourceRoots c (a*y+b)) := by
+  let t := a*y+b
+  have shift : GlobalInverseBranch (fun x : ℝ => x-c) (fun z => z+c) (fun _ => 1) :=
+    ⟨fun _ _ h => by linarith, fun _ => by ring, fun x => (hasStrictDerivAt_id x).sub_const c⟩
+  have back : Function.Injective (fun u : ℝ => (u-b)/a) := by
+    intro u v h; field_simp [ha] at h; linarith
+  have transport {xs : List ℝ} (h : RootCover univ (fun x : ℝ => (x-c)^2) t xs) :
+      RootCover univ (fun x : ℝ => ((x-c)^2-b)/a) y xs := by
+    have eq : (t-b)/a = y := by dsimp [t]; field_simp [ha]
+    simpa only [eq] using h.postcomp back
+  change RootCover _ _ _ (sourceRoots c t)
+  rcases lt_trichotomy t 0 with hn | hz | hp
+  · simpa only [sourceRoots, if_pos hn] using transport (squareCover_negative (fun x : ℝ => x-c) hn)
+  · have root : RootCover univ (fun x : ℝ => (x-c)^2) t [0+c] := hz ▸ squareCover_zero shift
+    simpa [sourceRoots, hz] using transport root
+  · have hs := Real.sqrt_pos.mpr hp
+    simpa only [sourceRoots, if_neg hp.not_lt, if_neg hp.ne'] using transport (squareCover_positive shift hp
+      (l := -√t+c) (r := √t+c) (by linarith) (Or.inl ⟨rfl, rfl⟩))
+
+private theorem derivative (c a b x : ℝ) :
+    HasStrictDerivAt (fun u : ℝ => ((u-c)^2-b)/a) (2*(x-c)/a) x := by
+  have h₁ : HasStrictDerivAt (fun u : ℝ => u-c) 1 x := (hasStrictDerivAt_id x).sub_const c
+  have h₂ := (hasStrictDerivAt_pow 2 (x-c)).comp x h₁
+  have h₃ : HasStrictDerivAt (fun z : ℝ => (z-b)/a) a⁻¹ ((x-c)^2) := by
+    convert affine_derivative a⁻¹ (-b/a) ((x-c)^2) using 1
+    ext z; ring
+  simpa [Function.comp_def, div_eq_mul_inv, mul_assoc, mul_comm, mul_left_comm] using h₃.comp x h₂
+
+/-- A source predicate is queried only at roots of this fibre. A false
+predicate at the critical root suppresses its undefined inverse derivative. -/
+theorem restricted_roots (c a b y : ℝ) (ha : a ≠ 0) (p : ℝ → Option Bool) :
+    densityAtValue (realPushforwardOnValue (some p)
+      (some fun x => some (((x-c)^2-b)/a))) (some y) =
+      (sourceRoots c (a*y+b)).foldr (fun x acc =>
+        Value.add (Value.mask (p x) (Value.inv (some |2*(x-c)/a|))) acc) (some 0) :=
+  (sourceRoots_cover c a b y ha).density p (by fun_prop) _ (fun x _ _ => derivative c a b x)
+
 /-- The pointwise density for an arbitrary nondegenerate quadratic in vertex
 coordinates. The real square root is partial, and the reciprocal is singular
 at the vertex even though that fibre integrates over the source as usual. -/
@@ -26,42 +68,17 @@ theorem density (c a b : ℝ) (ha : a ≠ 0) (query : Option ℝ) :
   cases query with
   | none => rfl
   | some y =>
-    let f (x : ℝ) := ((x-c)^2-b)/a
-    let slope (x : ℝ) := 2*(x-c)/a
+    rw [restricted_roots c a b y ha]
     let t := a*y+b
-    have hd (x : ℝ) : HasStrictDerivAt f (slope x) x := by
-      have h₁ : HasStrictDerivAt (fun u : ℝ => u-c) 1 x := (hasStrictDerivAt_id x).sub_const c
-      have h₂ := (hasStrictDerivAt_pow 2 (x-c)).comp x h₁
-      have h₃ : HasStrictDerivAt (fun z : ℝ => (z-b)/a) a⁻¹ ((x-c)^2) := by
-        convert affine_derivative a⁻¹ (-b/a) ((x-c)^2) using 1
-        ext z; ring
-      simpa [f, slope, Function.comp_def, div_eq_mul_inv, mul_assoc, mul_comm, mul_left_comm] using h₃.comp x h₂
-    have hm : Measurable f := (continuous_iff_continuousAt.mpr fun x => (hd x).continuousAt).measurable
-    have shift : GlobalInverseBranch (fun x : ℝ => x-c) (fun z => z+c) (fun _ => 1) :=
-      ⟨fun _ _ h => by linarith, fun _ => by ring, fun x => (hasStrictDerivAt_id x).sub_const c⟩
-    have back : Function.Injective (fun u : ℝ => (u-b)/a) := by
-      intro u v h; field_simp [ha] at h; linarith
-    have transport {xs : List ℝ} (h : RootCover univ (fun x : ℝ => (x-c)^2) t xs) :
-        RootCover univ f y xs := by
-      have eq : (t-b)/a = y := by dsimp [t]; field_simp [ha]
-      simpa only [eq, f] using h.postcomp back
-    change densityAtValue (realPushforwardOnValue _ (some fun x => some (f x))) (some y) =
-      unrestrictedSquareDensity (some |a|) (some t)
+    change (sourceRoots c t).foldr _ _ = unrestrictedSquareDensity (some |a|) (some t)
     rcases lt_trichotomy t 0 with hn | hz | hp
-    · have roots := transport (squareCover_negative (fun x : ℝ => x-c) hn)
-      rw [roots.density _ hm slope (fun x _ _ => hd x)]
-      simp [unrestrictedSquareDensity, Value.le, Value.mask, not_le.mpr hn]
-    · have roots := transport (xs := [0+c]) (hz ▸ squareCover_zero shift)
-      rw [roots.density _ hm slope (fun x _ _ => hd x), hz]
-      simp [slope, unrestrictedSquareDensity, Value.le, Value.mask, Value.add, Value.mul,
+    · simp [sourceRoots, hn, unrestrictedSquareDensity, Value.le, Value.mask, not_le.mpr hn]
+    · simp [sourceRoots, hz, unrestrictedSquareDensity, Value.le, Value.mask, Value.add, Value.mul,
         Value.inv, Functions.sqrtR, Function1.apply]
     · have hs := Real.sqrt_pos.mpr hp
-      have roots := transport (squareCover_positive shift hp
-        (l := -√t+c) (r := √t+c) (by linarith) (Or.inl ⟨rfl, rfl⟩))
-      rw [roots.density _ hm slope (fun x _ _ => hd x)]
       have ha' : |a| ≠ 0 := abs_ne_zero.mpr ha
-      simp [slope, unrestrictedSquareDensity, hp.le, Value.le, Value.mask, Value.add, Value.mul,
-        Value.inv, Functions.sqrtR, Function1.apply, abs_div, abs_mul, abs_of_pos hs, hs.ne', ha]
+      simp [sourceRoots, hp.not_lt, hp.ne', unrestrictedSquareDensity, hp.le, Value.le, Value.mask, Value.add,
+        Value.mul, Value.inv, Functions.sqrtR, Function1.apply, abs_div, abs_mul, abs_of_pos hs, hs.ne', ha]
       field_simp [ha', hs.ne']; ring
 
 inductive Observation where
