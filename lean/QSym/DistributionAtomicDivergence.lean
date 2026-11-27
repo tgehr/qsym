@@ -1,5 +1,6 @@
 import QSym.DistributionAtomicSeries
 import QSym.DistributionAtomicObservation
+import QSym.SummationLinearity
 
 /-! A noncontracting retry has a finite signed observation exactly when one
 entire round has a defined observation of zero. Different outcomes emitted
@@ -255,9 +256,8 @@ theorem CountableObservation.retry_parameter {o : Option (D α) → Option ℝ} 
 theorem complement_weight (oneFirst minusFirst : Bool) (r : Option ℝ) {one minus : Option ℝ}
     (h1 : one = some ((1 : ℚ) : ℝ)) (hm : minus = some ((-1 : ℚ) : ℝ)) :
     (let neg := if minusFirst then Value.mul minus r else Value.mul r minus
-     if oneFirst then Value.add one neg else Value.add neg one) = r.map (fun x => 1-x) := by
-  subst one minus
-  cases r <;> cases oneFirst <;> cases minusFirst <;> simp [Value.mul, Value.add, sub_eq_add_neg, add_comm]
+     if oneFirst then Value.add one neg else Value.add neg one) = r.map (fun x => 1-x) :=
+  SummationLinearity.complement_weight oneFirst minusFirst r h1 hm
 
 /-- With complementary emission and retry coefficients, a contracting retry
 returns the observation of one seed. At unit retry probability the coefficient

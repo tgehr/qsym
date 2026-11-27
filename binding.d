@@ -41,7 +41,7 @@ private enum BindingRule:ushort{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -1270,24 +1270,34 @@ final class Bindings{
 		if(!affineForm(id,forms)) return false;
 		parts=RetryParts(uint.max,id,forms[id].ratio,false,false,false,forms); return true;
 	}
-	private struct ComplementaryRetry {uint seed,rate,unit,minus;bool swapped,oneFirst,minusFirst;}
-	private bool complementaryRetry(uint id,out ComplementaryRetry result){
-		auto fn=nodes[id]; if(fn.op!=BoundOp.distributionFixed) return false;
-		RetryParts parts;
-		if(!retrySource(nodes[fn.a].a,parts)||!parts.direct||parts.weighted||parts.seed==uint.max) return false;
-		auto emission=nodes[parts.seed];
-		if(emission.op!=BoundOp.distributionScale||!primitiveOp(emission.a,Op.add)) return false;
-		auto sum=nodes[emission.a],rate=nodes[parts.tail].a;
+	private struct Complement {uint unit,minus;bool oneFirst,minusFirst;}
+	private bool complementWeight(uint weight,uint rate,out Complement result){
+		if(!primitiveOp(weight,Op.add)) return false;
+		auto sum=nodes[weight];
 		foreach(oneFirst;[true,false]){
 			auto unit=oneFirst?sum.a:sum.b,other=oneFirst?sum.b:sum.a; Rational one,minus;
 			if(!literalFactor(unit,one)||one!=Rational(1)||!primitiveOp(other,Op.mul)) continue;
 			auto product=nodes[other]; bool minusFirst=product.b==rate;
 			auto factor=minusFirst?product.a:product.b;
 			if((minusFirst||product.a==rate)&&literalFactor(factor,minus)&&minus==Rational(-1)){
-				result=ComplementaryRetry(emission.b,rate,unit,factor,parts.swapped,oneFirst,minusFirst); return true;
+				result=Complement(unit,factor,oneFirst,minusFirst); return true;
 			}
 		}
 		return false;
+	}
+	private struct ComplementaryRetry {uint seed,rate;bool swapped;Complement weight;}
+	private bool complementaryRetry(uint id,out ComplementaryRetry result){
+		auto fn=nodes[id]; if(fn.op!=BoundOp.distributionFixed) return false;
+		RetryParts parts;
+		if(!retrySource(nodes[fn.a].a,parts)||!parts.direct||parts.weighted||parts.seed==uint.max) return false;
+		auto emission=nodes[parts.seed],rate=nodes[parts.tail].a; Complement weight;
+		if(emission.op!=BoundOp.distributionScale||!complementWeight(emission.a,rate,weight)) return false;
+		result=ComplementaryRetry(emission.b,rate,parts.swapped,weight); return true;
+	}
+	private string complementProof(Complement weight,uint rate){
+		string number(uint id,int n){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~SourceCertificates.q(Rational(n))~" rfl)";}
+		return "(SummationLinearity.complement_weight "~(weight.oneFirst?"true ":"false ")~(weight.minusFirst?"true (":"false (")~
+			name(rate)~".eval ξ ρ) "~number(weight.unit,1)~" "~number(weight.minus,-1)~")";
 	}
 	private BoundTerm normalizedRetryMass(BoundTerm mass){
 		uint[] operations; auto input=observationInput(node(mass).a,operations); ComplementaryRetry parts;
@@ -1729,7 +1739,7 @@ final class Bindings{
 			depends(at(power.a),0)) return BoundTerm.init;
 		return rationalCast?primitive(arena.at(outer.data),[at(power.a)]):at(power.a);
 	}
-	private BoundTerm scaledGeometric(BoundTerm sum,out bool coefficientFirst,out bool rationalCast){
+	private BoundTerm scaledGeometric(BoundTerm sum,out bool coefficientFirst,out bool rationalCast,out bool normalized){
 		auto fn=nodes[node(sum).a],row=nodes[fn.a]; if(row.op!=BoundOp.primitive) return BoundTerm.init;
 		auto op=arena.view(arena.at(row.data)),sort=elementSort(type(sum));
 		if(sort!=Sort.rational&&sort!=Sort.real_&&sort!=Sort.complex) return BoundTerm.init;
@@ -1738,10 +1748,18 @@ final class Bindings{
 			auto factor=left?row.a:row.b,power=left?row.b:row.a;
 			auto base=geometricRatio(power,rationalCast);
 			if(base==BoundTerm.init||depends(at(factor),0)) continue;
-			auto r=dropIndex(base),c=dropIndex(at(factor)),z=arena.number(Number(0),sort);
-			auto nonzero=primitive(arena.nonzero(z),[c]);
+			auto r=dropIndex(base),z=arena.number(Number(0),sort); coefficientFirst=left;
+			Complement weight;
+			if(sort==Sort.real_&&complementWeight(factor,base.id,weight)){
+				auto ctx=context(sum),one=scalar(ctx,arena.real_(1)),minus=scalar(ctx,arena.real_(-1));
+				auto lo=primitive(arena.lt(z,z),[minus,r]),hi=primitive(arena.le(z,z),[r,one]);
+				auto valid=primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[lo,hi]);
+				auto contracts=primitive(arena.lt(z,z),[r,one]); normalized=true;
+				return guard(valid,primitive(arena.mask(arena.boolean(true),z),[contracts,one]));
+			}
+			auto c=dropIndex(at(factor)),nonzero=primitive(arena.nonzero(z),[c]);
 			auto series=summation(inheritHint(at(node(sum).a),lambda(at(power))));
-			auto product=primitive(arena.at(row.data),[c,series]); coefficientFirst=left;
+			auto product=primitive(arena.at(row.data),[c,series]);
 			return sequence(r,primitive(arena.mask(arena.boolean(true),z),[nonzero,product]));
 		}
 		return BoundTerm.init;
@@ -10462,9 +10480,12 @@ final class Bindings{
 				}
 				BoundTerm geometricBase; bool rationalCast;
 				if(next==BoundTerm.init){
-					bool coefficientFirst;
-					next=scaledGeometric(at(result.output),coefficientFirst,rationalCast);
-					if(next!=BoundTerm.init){ rule=BindingRule.sumScaledGeometric; extra=(coefficientFirst?1:0)|(rationalCast?2:0); }
+					bool coefficientFirst,normalized;
+					next=scaledGeometric(at(result.output),coefficientFirst,rationalCast,normalized);
+					if(next!=BoundTerm.init){
+						rule=normalized?BindingRule.sumNormalizedGeometric:BindingRule.sumScaledGeometric;
+						extra=(coefficientFirst?1:0)|(rationalCast?2:0);
+					}
 				}
 				if(next!=BoundTerm.init){}
 				else if(body.op==BoundOp.bottom){
@@ -14782,6 +14803,15 @@ final class Bindings{
 					auto out_=nodes[p.to],sort=elementSort(types[n.type]),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm",index=pool.view(type(at(n.a))).fields[0];
 					auto f="(fun (i : "~(index==scalarType(Sort.natural)?"ℕ":"ℤ")~") => "~name(nodes[out_.a].a)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") (some i) ρ))";
 					proof=".ofEq (fun ξ ρ => Summation.delta"~(p.rule==BindingRule.sumDeltaOffset?"Z_offset":index==scalarType(Sort.natural)?"N":"Z")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(p.rule==BindingRule.sumDeltaOffset?p.extra:out_.b)~".eval ξ ρ))"; break;
+				case BindingRule.sumNormalizedGeometric:{
+					auto row=nodes[nodes[n.a].a],out_=nodes[p.to],rate=nodes[nodes[out_.b].a].a;
+					bool first=(p.extra&1)!=0,lifted;
+					auto base=geometricRatio(first?row.b:row.a,lifted); Complement weight;
+					enforce(base!=BoundTerm.init&&complementWeight(first?row.a:row.b,base.id,weight));
+					auto theorem=lifted?"normalized_geometricQR":"normalized_geometricR";
+					proof=".ofEq (fun ξ ρ => SummationLinearity."~theorem~(first?" true (":" false (")~
+						name(lifted?nodes[rate].a:rate)~".eval ξ ρ) "~complementProof(weight,rate)~")"; break;
+				}
 				case BindingRule.sumScaledGeometric:{
 					auto out_=nodes[p.to],mask=nodes[out_.b],factor=nodes[mask.a].a;
 					auto sort=elementSort(types[n.type]),suffix=sort==Sort.rational?"Q":sort==Sort.real_?"R":"C";
@@ -15336,8 +15366,7 @@ final class Bindings{
 						uint[] ops,outputs; auto input=observationInput(n.a,ops); ComplementaryRetry parts;
 						enforce(complementaryRetry(input,parts));
 						auto value=nodes[nodes[p.to].b],rate=nodes[nodes[value.a].a].a,seed=observationInput(nodes[value.b].a,outputs);
-						auto weight=" ("~ns~"complement_weight "~(parts.oneFirst?"true ":"false ")~(parts.minusFirst?"true":"false")~
-							ev(rate)~" "~number(parts.unit)~" "~number(parts.minus)~")";
+						auto weight=" "~complementProof(parts.weight,rate);
 						law=ns~"CountableObservation.fixed_normalized "~massObserver(ops,true)~(parts.swapped?" true":" false")~
 							ev(rate)~weight~" "~admissible(seed)~" (fun _ => rfl)";
 					}else if(p.rule==BindingRule.distributionRetryParameterObservation){

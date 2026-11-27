@@ -178,4 +178,50 @@ theorem geometricQR_literals (q : Option ℚ) (one minus : Option ℝ) (ho : one
   simp_rw [cast_power]
   exact geometricR_literals (Functions.castQR.apply q) one minus ho hm
 
+theorem complement_weight (oneFirst minusFirst : Bool) (r : Option ℝ) {one minus : Option ℝ}
+    (h1 : one = some ((1 : ℚ) : ℝ)) (hm : minus = some ((-1 : ℚ) : ℝ)) :
+    (let neg := if minusFirst then Value.mul minus r else Value.mul r minus
+     if oneFirst then Value.add one neg else Value.add neg one) = r.map (fun x => 1-x) := by
+  subst one minus
+  cases r <;> cases oneFirst <;> cases minusFirst <;> simp [Value.mul, Value.add, sub_eq_add_neg, _root_.add_comm]
+
+/-- The normalized geometric series also has a value at ratio one. Every
+term is zero there. At minus one the nonzero terms fail to be summable. -/
+theorem normalized_geometricR (left : Bool) (q : Option ℝ) {c : Option ℝ}
+    (hc : c = q.map (fun x => 1-x)) :
+    value norm (some (fun n : ℕ => if left then Value.mul c (Functions.powRN.apply q (some n))
+      else Value.mul (Functions.powRN.apply q (some n)) c)) =
+      Binding.guardValue (Value.and (Value.lt (some ((-1 : ℚ) : ℝ)) q) (Value.le q (some ((1 : ℚ) : ℝ))))
+        (Value.mask (Value.lt q (some ((1 : ℚ) : ℝ))) (some ((1 : ℚ) : ℝ))) := by
+  rw [hc, factor_geometricR, geometricR]
+  cases q with
+  | none => rfl
+  | some q =>
+    rcases lt_trichotomy q 1 with hi | rfl | hi
+    · have nz := sub_ne_zero.mpr (ne_of_gt hi)
+      by_cases lo : -1 < q
+      · have inside := abs_lt.mpr ⟨lo, hi⟩
+        simp [lo, hi, hi.le, inside, nz, ← sub_eq_add_neg, Value.lt, Value.le, Value.and, Value.nonzero,
+          Value.mask, Value.mul, Value.inv, Value.add, Value.abs, Binding.guardValue]
+      · have outside : ¬ |q| < 1 := fun h => lo (abs_lt.mp h).1
+        simp [lo, hi, hi.le, outside, nz, Value.lt, Value.le, Value.and, Value.nonzero,
+          Value.mask, Value.mul, Value.abs, Binding.guardValue]
+    · simp [Value.lt, Value.le, Value.and, Value.nonzero, Value.mask, Binding.guardValue]
+    · have nz := sub_ne_zero.mpr (ne_of_lt hi)
+      have lo : -1 < q := by linarith
+      have outside : ¬ |q| < 1 := fun h => (not_lt_of_gt hi) (abs_lt.mp h).2
+      simp [lo, not_le_of_gt hi, outside, nz, Value.lt, Value.le, Value.and, Value.nonzero,
+        Value.mask, Value.mul, Value.abs, Binding.guardValue]
+
+theorem normalized_geometricQR (left : Bool) (q : Option ℚ) {c : Option ℝ}
+    (hc : c = (Functions.castQR.apply q).map (fun x => 1-x)) :
+    let r := Functions.castQR.apply q
+    let power := fun n : ℕ => Functions.castQR.apply (Functions.powQN.apply q (some n))
+    value norm (some (fun n => if left then Value.mul c (power n) else Value.mul (power n) c)) =
+      Binding.guardValue (Value.and (Value.lt (some ((-1 : ℚ) : ℝ)) r) (Value.le r (some ((1 : ℚ) : ℝ))))
+        (Value.mask (Value.lt r (some ((1 : ℚ) : ℝ))) (some ((1 : ℚ) : ℝ))) := by
+  dsimp only
+  simp_rw [cast_power]
+  exact normalized_geometricR left (Functions.castQR.apply q) hc
+
 end QSym.SummationLinearity
