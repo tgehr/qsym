@@ -86,4 +86,71 @@ theorem band_chart (c a b j l u v : ℚ) (right closed : Bool)
   funext y
   exact band_rows _ _ _ _ hlt right closed
 
+
+private def targetBand (a b k : ℚ) (closed : Bool) (t shift near far gain : Option ℝ)
+    (y : ℝ) : Option ℝ :=
+  let linear := if a = 1 then some y else Value.mul t (some y)
+  let rad := if b = 0 then linear else Value.add linear shift
+  let inv := Value.inv (Functions.sqrtR.apply rad)
+  let weight := if k = 1 then inv else Value.mul inv gain
+  let support := if 0 < a then Value.and (Value.lt near (some y)) (edge closed (some y) far)
+    else Value.and (Value.lt (some y) near) (edge closed far (some y))
+  Value.mask support weight
+
+private theorem half_gain (r : Option ℝ) (a : ℝ) :
+    Value.mul (Value.inv (Value.mul (some ((2:ℤ):ℝ)) r)) (some a) =
+      Value.mul (Value.inv r) (some (a/2)) := by
+  cases r with
+  | none => rfl
+  | some x =>
+    by_cases h : x = 0 <;> simp [Value.inv, Value.mul, h, mul_inv_rev, div_eq_mul_inv,
+      mul_assoc, mul_left_comm, mul_comm]
+
+private theorem affine_support (a b n f y : ℝ) (ha : a ≠ 0) (hn : a*n+b = 0) (closed : Bool) :
+    Value.and (Value.lt (some ((0:ℤ):ℝ)) (some (a*y+b)))
+      (edge closed (some (a*y+b)) (some (a*f+b))) =
+    (if 0 < a then Value.and (Value.lt (some n) (some y)) (edge closed (some y) (some f))
+      else Value.and (Value.lt (some y) (some n)) (edge closed (some f) (some y))) := by
+  rcases lt_or_gt_of_ne ha with neg | pos
+  · rw [if_neg (not_lt_of_gt neg)]
+    have near : 0 < a*y+b ↔ y < n := by rw [← hn, add_lt_add_iff_right, mul_lt_mul_left_of_neg neg]
+    cases closed <;> simp [edge, Value.lt, Value.le, near, mul_lt_mul_left_of_neg neg, mul_le_mul_left_of_neg neg]
+  · rw [if_pos pos]
+    have near : 0 < a*y+b ↔ n < y := by rw [← hn, add_lt_add_iff_right, mul_lt_mul_left pos]
+    cases closed <;> simp [edge, Value.lt, Value.le, near, mul_lt_mul_left pos, mul_le_mul_left pos]
+
+/-- Transport the two comparisons to exact rational target endpoints and halve
+the coefficient before export. Strict masking still handles the singular end. -/
+theorem target_band_chart (c a b l u n v k : ℚ) (right closed : Bool)
+    (ha : a ≠ 0) (hlu : l < u) (hcentre : (if right then l else u) = c)
+    (hn : a*n+b = 0) (hf : a*v+b = (u-l)^2) (hk : k = |a|/2)
+    {h t shift lo hi near far gain : Option ℝ}
+    (hc : h = some (c:ℝ)) (ht : t = some (a:ℝ)) (hb : shift = some (b:ℝ))
+    (hl : lo = some (l:ℝ)) (hu : hi = some (u:ℝ)) (hnear : near = some (n:ℝ))
+    (hfar : far = some (v:ℝ)) (hg : gain = some (k:ℝ)) {f : ℝ → Option ℝ}
+    (equal : ∀ x, Value.add (Value.add (Value.mul t (f x)) shift)
+      (Value.mul (some ((-1 : ℤ) : ℝ)) (squareInput false
+        (Value.add (some x) (Value.mul (some ((-1 : ℤ) : ℝ)) h)))) = some 0) :
+    realPushforwardOnValue (some (sourceBand right closed lo hi)) (some f) =
+      weightValue (some (targetBand a b k closed t shift near far gain)) lebesgueValue := by
+  rw [band_chart c a b |a| l u ((u-l)^2) right closed ha rfl hlu hcentre rfl hc ht hb rfl hl hu rfl equal]
+  subst t; subst shift; subst near; subst far; subst gain
+  have hne : (a:ℝ) ≠ 0 := by exact_mod_cast ha
+  have hn' : (a:ℝ)*n+b = 0 := by exact_mod_cast hn
+  have hf' : (a:ℝ)*v+b = (((u-l)^2 : ℚ):ℝ) := by exact_mod_cast hf
+  have hk' : (k:ℝ) = |(a:ℝ)|/2 := by exact_mod_cast hk
+  apply congrArg (fun w => weightValue (some w) lebesgueValue)
+  funext y
+  have rad : (if b = 0 then (if a = 1 then some y else Value.mul (some (a:ℝ)) (some y))
+      else Value.add (if a = 1 then some y else Value.mul (some (a:ℝ)) (some y)) (some (b:ℝ))) =
+      some ((a:ℝ)*y+b) := by
+    by_cases h₁ : a = 1 <;> by_cases h₂ : b = 0 <;> simp [h₁,h₂,Value.mul,Value.add]
+  simp only [bandDensity, targetBand, rad]
+  rw [Rat.cast_abs, half_gain, ← hk']
+  change Value.mask (Value.and (Value.lt (some ((0:ℤ):ℝ)) (some ((a:ℝ)*y+b)))
+    (edge closed (some ((a:ℝ)*y+b)) (some (((u-l)^2 : ℚ):ℝ)))) _ = _
+  rw [← hf', affine_support _ _ _ _ _ hne hn' closed]
+  simp only [Rat.cast_pos]
+  by_cases h : k = 1 <;> simp [h, Value.mul_one_right] <;> rfl
+
 end QSym.Distribution.GraphFibre.Coordinates.Quadratic

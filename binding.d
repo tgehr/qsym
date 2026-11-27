@@ -266,7 +266,7 @@ private struct AffineChart{
 	uint polynomialCheck=uint.max,bandLo=uint.max,bandHi=uint.max,cutoff=uint.max;
 }
 private enum QuadraticPoint:ubyte{ symbolic, outside, vertex, regular }
-private struct QuadraticBand{ Term lo,hi,cap; bool right,closed; }
+private struct QuadraticBand{ Term lo,hi,near,far,halfGain; bool right,closed; }
 private struct QuadraticChart{
 	Term centre,scale,offset;
 	uint polynomial,map;
@@ -9632,22 +9632,28 @@ final class Bindings{
 		BoundTerm quadraticBandImage(BoundTerm graph,ref QuadraticChart chart){
 			uint lo,hi; bool openLo,openHi;
 			if(!literalBand(nodes[chart.predicate].a,lo,hi,openLo,openHi)) return BoundTerm.init;
-			auto l=arena.at(nodes[lo].data),u=arena.at(nodes[hi].data),a=arena.number(l).re,b=arena.number(u).re;
-			auto c=arena.number(chart.centre).re;
-			if(a>=b||a.words+b.words>128) return BoundTerm.init;
-			bool right=c==a&&openLo;
-			if(!right&&!(c==b&&openHi)) return BoundTerm.init;
-			auto length=b-a,cap=length*length;
+			auto l=arena.at(nodes[lo].data),u=arena.at(nodes[hi].data),lower=arena.number(l).re,upper=arena.number(u).re;
+			auto centre=arena.number(chart.centre).re;
+			if(lower>=upper||lower.words+upper.words>128) return BoundTerm.init;
+			bool right=centre==lower&&openLo;
+			if(!right&&!(centre==upper&&openHi)) return BoundTerm.init;
+			auto length=upper-lower,cap=length*length;
 			if(cap.words>128) return BoundTerm.init;
-			chart.band=QuadraticBand(l,u,arena.real_(cap),right,right?!openHi:!openLo);
+			auto a=arena.number(chart.scale).re,b=arena.number(chart.offset).re;
+			bool increasing=a>Rational(0);
+			auto vertex=-b/a,limit=(cap-b)/a,gain=(increasing?a:-a)/Rational(2);
+			if(vertex.words>128||limit.words>128||gain.words>128) return BoundTerm.init;
+			chart.band=QuadraticBand(l,u,arena.real_(vertex),arena.real_(limit),arena.real_(gain),right,right?!openHi:!openLo);
 			auto ctx=context(graph),scope_=push(ctx,scalarType(Sort.real_)),y=variable(scope_,0),z=arena.real_(0);
-			auto mul=scalarOperator(type(y),TensorOp.mul),lt=arena.lt(z,z);
-			auto rad=primitive(arena.add(z,z,true),[primitive(mul,[scalar(scope_,chart.scale),y]),scalar(scope_,chart.offset)]);
-			auto near=primitive(lt,[scalar(scope_,z),rad]),far=primitive(chart.band.closed?arena.le(z,z):lt,[rad,scalar(scope_,chart.band.cap)]);
+			auto mul=scalarOperator(type(y),TensorOp.mul),lt=arena.lt(z,z),edge=chart.band.closed?arena.le(z,z):lt;
+			auto rad=a.one?y:primitive(mul,[scalar(scope_,chart.scale),y]);
+			if(!b.zero) rad=primitive(arena.add(z,z,true),[rad,scalar(scope_,chart.offset)]);
+			auto begin=scalar(scope_,chart.band.near),end=scalar(scope_,chart.band.far);
+			auto near=primitive(lt,increasing?[begin,y]:[y,begin]);
+			auto far=primitive(edge,increasing?[y,end]:[end,y]);
 			auto support=primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[near,far]);
-			auto root=primitive(arena.call(Builtin.sqrtR,[z]),[rad]),jac=primitive(arena.inv(arena.real_(1)),[primitive(mul,[scalar(scope_,arena.real_(2)),root])]);
-			auto coeff=arena.number(chart.scale).re;
-			auto w=primitive(mul,[jac,scalar(scope_,arena.real_(coeff<Rational(0)?-coeff:coeff))]);
+			auto root=primitive(arena.call(Builtin.sqrtR,[z]),[rad]),w=primitive(arena.inv(arena.real_(1)),[root]);
+			if(!gain.one) w=primitive(mul,[w,scalar(scope_,chart.band.halfGain)]);
 			auto density=hint(lambda(primitive(arena.mask(arena.boolean(true),z),[support,w])),"y");
 			return distribution(ctx,BoundOp.distributionWeight,[density,distribution(ctx,BoundOp.distributionLebesgue)]);
 		}
@@ -14533,6 +14539,10 @@ final class Bindings{
 			auto a=arena.number(chart.scale).re;
 			stepNumerics~=arena.real_(a<Rational(0)?-a:a);
 		}
+		foreach(p;result.proofs) if(p.rule==BindingRule.distributionQuadraticBand){
+			auto chart=result.quadratics[p.extra];
+			stepNumerics~=[chart.centre,chart.scale,chart.offset,chart.band.halfGain];
+		}
 		foreach(p;result.proofs) if(p.rule==BindingRule.closedRationalValue) stepNumerics~=arena.at(p.extra);
 		foreach(i,s;result.integrals) if(s.piecewise||s.ae){
 			auto c=new SourceCertificates("step"~to!string(i)~"_",s.from[0]);
@@ -17324,10 +17334,10 @@ final class Bindings{
 						if(p.rule==BindingRule.distributionQuadraticChart) law=ns~"image "~args~"(of_decide_eq_true rfl) "~nums~equation;
 						else if(p.rule==BindingRule.distributionQuadraticBand){
 							auto band=chart.band;
-							law=ns~"band_chart "~args~literal(gain)~" "~literal(band.lo)~" "~literal(band.hi)~" "~literal(band.cap)~
+							law=ns~"target_band_chart "~args~literal(band.lo)~" "~literal(band.hi)~" "~literal(band.near)~" "~literal(band.far)~" "~literal(band.halfGain)~
 								(band.right?" true":" false")~(band.closed?" true":" false")~
-								" (of_decide_eq_true rfl) rfl (of_decide_eq_true rfl) rfl (of_decide_eq_true rfl) "~nums~number(gain)~
-								" "~number(band.lo)~" "~number(band.hi)~" "~number(band.cap)~" "~equation;
+								" (of_decide_eq_true rfl) (of_decide_eq_true rfl) rfl (of_decide_eq_true rfl) (of_decide_eq_true rfl) (of_decide_eq_true rfl) "~
+								nums~number(band.lo)~" "~number(band.hi)~" "~number(band.near)~" "~number(band.far)~" "~number(band.halfGain)~" "~equation;
 						}else if(p.rule==BindingRule.distributionMaskedQuadraticChart){
 							law=ns~"masked_chart_source "~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
 								" "~quadraticMasks.get(cast(uint)i,"")~" "~rowTotalProof(p.left)~" ("~proofName(p.right)~".sound ξ ρ)";

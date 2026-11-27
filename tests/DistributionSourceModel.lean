@@ -452,5 +452,6 @@ theorem charged_point_density (x w : ℝ) (hw : w ≠ 0) :
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.masked_chart
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.masked_chart_source
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.band_chart
+#qsym_check_axioms GraphFibre.Coordinates.Quadratic.target_band_chart
 
 end QSym.DistributionSourceTests

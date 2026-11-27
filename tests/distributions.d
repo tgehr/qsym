@@ -1053,6 +1053,8 @@ private Case[] cases(){
 	Case("OrdinaryQuadraticDownClosed","Λy.∫dx [-1≤x<0]·λ[x]·δ(3-x²)[y]","Distribution(ℝ)","Λ(y:ℝ). ([y<3∧2≤y]·(sqrt(-y+3)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticAway","Λy.∫dx [2<x<3]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). ([5<y∧y<10]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticEmpty","Λy.∫dx [0<x<0]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). 0·λ[y]"),
+	Case("OrdinaryQuadraticScaleTwo","Λy.∫dx [0<x<2]·λ[x]·δ(x²/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([0<y∧y<2]·sqrt(2·y)⁻¹)·λ[y]"),
+	Case("OrdinaryQuadraticNegativeUnitGain","Λy.∫dx [-1<x≤0]·λ[x]·δ((1-(x+1)^2)/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([y<1/2∧0≤y]·sqrt(-2·y+1)⁻¹)·λ[y]"),
 	Case("OrdinaryQuadraticWindow","Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticTail","Λy.∫dx λ[x]·δ(x²+1)[y]·[0<x<1]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticGraph","pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x²+1)","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
@@ -3489,9 +3491,9 @@ private void run(string directory){
 			import std.algorithm : canFind;
 			auto form=c.name["OrdinaryQuadratic".length..$];
 			bool band=["Window","Tail","Graph","Negative","Down","Moved","Fraction","ExcludedAtEnd","LeftFarClosed",
-				"RightMovedClosed","LeftMovedOpen","FractionalWidth","DownClosed"].canFind(form);
+				"RightMovedClosed","LeftMovedOpen","FractionalWidth","DownClosed","ScaleTwo","NegativeUnitGain"].canFind(form);
 			bool generic=["Both","Neither","Away","Empty"].canFind(form);
-			enforce((certificate.indexOf("Quadratic.band_chart ")>=0)==band,c.name);
+			enforce((certificate.indexOf("Quadratic.target_band_chart ")>=0)==band,c.name);
 			enforce((certificate.indexOf("Quadratic.masked_chart_source ")>=0)==generic,c.name);
 			if(form=="UnitMass") enforce(certificate.indexOf("GraphFibre.mass_total_graph ")>=0,c.name);
 		}
