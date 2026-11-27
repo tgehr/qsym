@@ -91,6 +91,24 @@ theorem mass {w a b k} (term : Term w a b k) (l u p q m : ℚ) (swap sl su : Boo
   rw [rule.1 result.1, result.2, h₁, h₂, h₃]
   simp [Functions.sqrtR, Function1.apply, hq', hp', Value.mul, Value.add, sub_eq_add_neg]
 
+/-- Square and sign certificates determine both rational square roots.
+The endpoint arithmetic can then return one numeral directly. -/
+theorem exact_result (p q m r s z : ℚ) (hr : 0 ≤ r) (hs : 0 ≤ s) (hp : r^2 = p)
+    (hq : s^2 = q) (hz : m*(s-r) = z) {low high gain out : Option ℝ}
+    (hl : low = some (p:ℝ)) (hu : high = some (q:ℝ)) (hg : gain = some (m:ℝ))
+    (ho : out = some (z:ℝ)) :
+    Value.mul gain (Value.add (Functions.sqrtR.apply high)
+      (Value.mul (some ((-1:ℤ):ℝ)) (Functions.sqrtR.apply low))) = out := by
+  subst low; subst high; subst gain; subst out
+  have hr' : 0 ≤ (r:ℝ) := by exact_mod_cast hr
+  have hs' : 0 ≤ (s:ℝ) := by exact_mod_cast hs
+  have hp' : (r:ℝ)^2 = p := by exact_mod_cast hp
+  have hq' : (s:ℝ)^2 = q := by exact_mod_cast hq
+  have hz' : (m:ℝ)*((s:ℝ)-r) = z := by exact_mod_cast hz
+  rw [← hp', ← hq', ← hz']
+  simp [Functions.sqrtR, Function1.apply, sq_nonneg, Real.sqrt_sq hr', Real.sqrt_sq hs',
+    Value.mul, Value.add, sub_eq_add_neg]
+
 /-- Missing values remain observable at a single included point of the mask. -/
 theorem mass_missing {w a b k} (term : Term w a b k) (l u v : ℚ) (swap sl su : Bool)
     (h₁ : if sl then l < v else l ≤ v) (h₂ : if su then v < u else v ≤ u)

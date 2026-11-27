@@ -2396,9 +2396,10 @@ final class Bindings{
 	}
 
 	private struct RootInterval{
-		uint lower,upper,rad,scale=uint.max;
-		Rational l,u,a,b,k,p,q,gain,witness;
-		bool swap,openLo,openHi,left,missing;
+		uint rad,scale=uint.max;
+		Term lowerTerm,upperTerm,scaleTerm;
+		Rational l,u,a,b,k,p,q,gain,witness,lowRoot,highRoot,mass;
+		bool swap,openLo,openHi,left,missing,exact;
 	}
 	private bool rootIntervalData(uint id,out RootInterval s){
 		auto mass=nodes[id];
@@ -2409,26 +2410,39 @@ final class Bindings{
 		if(!primitiveOp(body,Op.mask)) return false;
 		IntervalData mask; AxisBounds bounds;
 		if(!intervalMask(body,mask,bounds)||mask.half||mask.nested||mask.unit!=uint.max) return false;
-		if(!literalFactor(bounds.lower,s.l)||!literalFactor(bounds.upper,s.u)||s.l>s.u) return false;
+		bool rational(uint i,out Rational value,out Term source){
+			if(literalFactor(i,value)){source=arena.at(nodes[i].data); return true;}
+			return numericSyntax(i)&&closedRational(at(i),value,source);
+		}
 		auto value=mask.value; s.k=Rational(1);
 		if(primitiveOp(value,Op.mul)){
-			auto prod=nodes[value]; s.left=literalFactor(prod.a,s.k);
-			if(!s.left&&!literalFactor(prod.b,s.k)) return false;
+			auto prod=nodes[value]; s.left=rational(prod.a,s.k,s.scaleTerm);
+			if(!s.left&&!rational(prod.b,s.k,s.scaleTerm)) return false;
 			s.scale=s.left?prod.a:prod.b; value=s.left?prod.b:prod.a;
 		}
 		if(!primitiveOp(value,Op.inv)) return false;
 		auto root=nodes[value].a;
 		if(!primitiveOp(root,Op.builtin)||arena.view(arena.at(nodes[root].data)).value!=Builtin.sqrtR) return false;
 		s.rad=nodes[root].a;
+		if(!rational(bounds.lower,s.l,s.lowerTerm)||!rational(bounds.upper,s.u,s.upperTerm)||s.l>s.u) return false;
 		if(!affineBody(s.rad,s.a,s.b)||s.a.words+s.b.words+s.l.words+s.u.words+s.k.words>256) return false;
-		s.lower=bounds.lower; s.upper=bounds.upper; s.swap=mask.swap; s.openLo=mask.strictLower; s.openHi=mask.strictUpper;
+		s.swap=mask.swap; s.openLo=mask.strictLower; s.openHi=mask.strictUpper;
 		s.p=s.a*s.l+s.b; s.q=s.a*s.u+s.b;
 		if(s.p.words>128||s.q.words>128) return false;
 		// The finite integral needs a defined row even at an included endpoint.
 		auto zero=Rational(0);
 		if((s.openLo?s.p>=zero:s.p>zero)&&(s.openHi?s.q>=zero:s.q>zero)){
 			s.gain=Rational(2)*s.k/s.a;
-			return s.gain.words<=128;
+			if(s.gain.words>128) return false;
+			import qsym.budget:Budget,Limit;
+			import qsym.elementary:Elementary;
+			auto roots=new Elementary(arena,new Budget(8192,16,128));
+			try{
+				if(roots.root(s.p,2,s.lowRoot)&&roots.root(s.q,2,s.highRoot)){
+					s.mass=s.gain*(s.highRoot-s.lowRoot); s.exact=s.mass.words<=128;
+				}
+			}catch(Limit){ }
+			return true;
 		}
 		s.missing=true;
 		if(s.l==s.u&&(s.openLo||s.openHi)) return false;
@@ -2447,6 +2461,7 @@ final class Bindings{
 		if(!rootIntervalData(t.id,s)) return BoundTerm.init;
 		auto ctx=context(t);
 		if(s.missing) return bottom(ctx,type(t));
+		if(s.exact) return scalar(ctx,arena.real_(s.mass));
 		auto z=arena.real_(0),root=arena.call(Builtin.sqrtR,[z]),mul=scalarOperator(type(t),TensorOp.mul);
 		BoundTerm atRoot(Rational x){return primitive(root,[scalar(ctx,arena.real_(x))]);}
 		auto delta=primitive(arena.add(z,z,true),[atRoot(s.q),primitive(mul,[scalar(ctx,arena.real_(-1)),atRoot(s.p)])]);
@@ -14634,24 +14649,31 @@ final class Bindings{
 			RootInterval s; enforce(rootIntervalData(p.from,s),"missing inverse-root interval");
 			auto c=new SourceCertificates("rootInterval"~to!string(i)~"_",s.rad);
 			alias q=SourceCertificates.q;
-			string number(Term t){return "(Numeric.calculate_sound ξ n"~to!string(t.id)~" "~q(arena.number(t).re)~" rfl)";}
+			string number(Term t,Rational v){
+				stepNumerics~=t;return "(Numeric.calculate_sound ξ n"~to!string(t.id)~" "~q(v)~" rfl)";
+			}
+			string value(Rational v){return number(arena.real_(v),v);}
 			enum ns="Distribution.RootInterval.";
 			auto term="("~ns~"Term.inverse "~c.affineProof(s.rad).proof~")";
-			if(s.scale!=uint.max) term="("~ns~"Term."~(s.left?"left ":"right ")~q(s.k)~" "~number(arena.at(nodes[s.scale].data))~" "~term~")";
+			if(s.scale!=uint.max) term="("~ns~"Term."~(s.left?"left ":"right ")~q(s.k)~" "~number(s.scaleTerm,s.k)~" "~term~")";
 			auto flag=(bool v)=>v?" true":" false";
 			auto flags=flag(s.swap)~flag(s.openLo)~flag(s.openHi);
-			auto bounds=number(arena.at(nodes[s.lower].data))~" "~number(arena.at(nodes[s.upper].data));
+			auto bounds=number(s.lowerTerm,s.l)~" "~number(s.upperTerm,s.u);
 			auto args=term~" "~q(s.l)~" "~q(s.u)~" ";
 			enum ok=" (of_decide_eq_true rfl)";
 			string law;
-			if(s.missing) law="mass_missing "~args~q(s.witness)~flags~ok~ok~ok~" "~bounds;
+			if(s.missing) law=ns~"mass_missing "~args~q(s.witness)~flags~ok~ok~ok~" "~bounds;
 			else{
-				auto low=arena.real_(s.p),high=arena.real_(s.q),gain=arena.real_(s.gain);
-				stepNumerics~=[low,high,gain];
-				law="mass "~args~q(s.p)~" "~q(s.q)~" "~q(s.gain)~flags~ok~ok~ok~ok~ok~ok~ok~" "~bounds~
-					" "~number(low)~" "~number(high)~" "~number(gain);
+				auto nums=value(s.p)~" "~value(s.q)~" "~value(s.gain);
+				law=ns~"mass "~args~q(s.p)~" "~q(s.q)~" "~q(s.gain)~flags~ok~ok~ok~ok~ok~ok~ok~" "~bounds~
+					" "~nums;
+				if(s.exact){
+					auto endpoint=ns~"exact_result "~q(s.p)~" "~q(s.q)~" "~q(s.gain)~" "~q(s.lowRoot)~" "~q(s.highRoot)~" "~q(s.mass)~
+						ok~ok~ok~ok~ok~" "~nums~" "~value(s.mass);
+					law="Eq.trans ("~law~") ("~endpoint~")";
+				}
 			}
-			rootIntervals.set(cast(uint)i,ns~law);
+			rootIntervals.set(cast(uint)i,law);
 			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;proofRoots~=c.roots;
 		}
 		Table!(uint,string) quadraticMasks;

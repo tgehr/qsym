@@ -1055,6 +1055,10 @@ private Case[] cases(){
 	Case("OrdinaryQuadraticEmpty","Λy.∫dx [0<x<0]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). 0·λ[y]"),
 	Case("OrdinaryQuadraticScaleTwo","Λy.∫dx [0<x<2]·λ[x]·δ(x²/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([0<y∧y<2]·sqrt(2·y)⁻¹)·λ[y]"),
 	Case("OrdinaryQuadraticNegativeUnitGain","Λy.∫dx [-1<x≤0]·λ[x]·δ((1-(x+1)^2)/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([y<1/2∧0≤y]·sqrt(-2·y+1)⁻¹)·λ[y]"),
+	Case("InvRootIntegralThird","∫dy ([1/3<y≤4/3]·(sqrt(y-1/3)⁻¹·(2/3)))·λ[y]","ℝ","4/3"),
+	Case("InvRootIntegralThirdPole","∫dy ([1/3≤y≤4/3]·(sqrt(y-1/3)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
+	Case("InvRootIntegralFifth","∫dy ([1≤y≤4]·((-2/5)·sqrt(y)⁻¹))·λ[y]","ℝ","-4/5"),
+	Case("InvRootIntegralTwoRoots","∫dy ([9/4≤y<25/4]·(sqrt(y)⁻¹))·λ[y]","ℝ","2"),
 	Case("InvRootIntegralPrinted","∫dy ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]","ℝ","1"),
 	Case("InvRootIntegralOpen","∫dy ([1<y<2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","2"),
 	Case("InvRootIntegralClosedFar","∫dy ([1<y≤2]·(sqrt(y-1)⁻¹))·λ[y]","ℝ","2"),
@@ -3510,9 +3514,10 @@ private void run(string directory){
 		if(c.name.indexOf("InvRootIntegral")==0){
 			import std.algorithm : canFind;
 			auto form=c.name["InvRootIntegral".length..$];
-			bool missing=["Pole","UpperPole","Crosses","Negative","ReverseCrosses","PointPole"].canFind(form);
+			bool missing=["Pole","UpperPole","Crosses","Negative","ReverseCrosses","PointPole","ThirdPole"].canFind(form);
 			bool other=["Empty","Nonlinear","StrictProduct","SourceMass"].canFind(form);
 			enforce((certificate.indexOf("RootInterval.mass_missing ")>=0)==missing,c.name);
+			enforce((certificate.indexOf("RootInterval.exact_result ")>=0)==(!missing&&!other&&form!="Radicals"),c.name);
 			enforce((certificate.indexOf("RootInterval.mass ")>=0)==(!missing&&!other),c.name);
 		}
 		if(c.name.indexOf("OrdinaryQuadratic")==0){
