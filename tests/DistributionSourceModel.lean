@@ -1,7 +1,7 @@
 import QSym.DistributionIntegral
 import QSym.DistributionModelBridge
 import QSym.DistributionMaskedRootCover
-import QSym.DistributionWeightObservation
+import QSym.DistributionBindObservation
 import QSym.AxiomCheck
 
 noncomputable section
@@ -437,5 +437,9 @@ theorem charged_point_density (x w : ℝ) (hw : w ≠ 0) :
 #qsym_check_axioms mass_two_weights
 #qsym_check_axioms mass_weight_pair
 #qsym_check_axioms FiniteFibre.Represents.weighted_mass
+#qsym_check_axioms integrate_bind
+#qsym_check_axioms mass_bind_test
+#qsym_check_axioms mass_bind_kernel
+#qsym_check_axioms FiniteFibre.Represents.bind_mass
 
 end QSym.DistributionSourceTests

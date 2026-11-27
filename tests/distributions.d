@@ -1046,6 +1046,26 @@ private Case[] cases(){
 	Case("OrderedMaskBoth","λ(g:ℝ→ℝ).λ(y:ℝ).massD(weightD(g,graphFibreD(λ(x:ℝ).x^2+1,y)))","(ℝ→ℝ)→ℝ→ℝ","λ(g:ℝ→ℝ). λ(y:ℝ). [1<y]·(g(-sqrt(y-1))·sqrt(y-1)⁻¹·(1/2)+g(sqrt(y-1))·sqrt(y-1)⁻¹·(1/2))+[y≤1]·(guard(y<1∧(defined(g)),(0:ℝ)))"),
 	Case("OrderedMaskOne","λ(y:ℝ).massD(weightD(λ(x:ℝ).x^2,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(y)))","ℝ→ℝ","λ(y:ℝ). [1<y]·((y-1)·sqrt(y-1)⁻¹·(1/2))"),
 	Case("OrderedMaskOpposite","λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y)))","ℝ→ℝ","λ(y:{y:ℝ | y≠1}). (0:ℝ)"),
+	Case("OrderedBindSigned","λ(d:Distribution(ℝ)).massD(bindD(d,λ(x:ℝ).scaleD(x,δ(0))))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x)·d[x]"),
+	Case("OrderedBindReal","λ(d:Distribution(ℝ)).massD(bindD(d,λ(x:ℝ).scaleD(x+1,δ(x))))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x+1)·d[x]"),
+	Case("OrderedBindPoint","λ(d:Distribution(ℝ)).massD(bindD(d,λ(x:ℝ).δ(x*x)))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx 1·d[x]"),
+	Case("OrderedBindEvaluate","λ(d:Distribution(ℝ→ℝ)).massD(bindD(d,λ(f:ℝ→ℝ).scaleD(f(0),δ((1:ℕ)))))","Distribution(ℝ→ℝ)→ℝ","λ(d:Distribution(ℝ→ℝ)). ∫(f:ℝ→ℝ). (f(0))·d[f]"),
+	Case("OrderedBindDistributions","λ(d:Distribution(Distribution(ℝ))).massD(bindD(d,λ(q:Distribution(ℝ)).q))","Distribution(Distribution(ℝ))→ℝ","λ(d:Distribution(Distribution(ℝ))). ∫(q:Distribution(ℝ)). (∫dx q[x])·d[q]"),
+	Case("OrderedBindNatural","λ(d:Distribution(ℕ)).massD(bindD(d,λ(n:ℕ).scaleD((n:ℝ),δ(true))))","Distribution(ℕ)→ℝ","λ(d:Distribution(ℕ)). ∫(n:ℕ). ((n:ℝ))·d[n]"),
+	Case("OrderedBindFunctionOutput","λ(d:Distribution(ℝ)).massD(bindD(d,λ(x:ℝ).scaleD(x,δ(λ(a:ℝ).x+a))))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x)·d[x]"),
+	Case("OrderedBindDistOutput","λ(d:Distribution(ℝ)).massD(bindD(d,λ(x:ℝ).scaleD(x,δ(δ(x)))))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x)·d[x]"),
+	Case("OrderedBindTypeOutput","λ(d:Distribution(ℝ)).massD(bindD(d,λ(x:ℝ).scaleD(x,δ(Distribution(ℝ)))))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x)·d[x]"),
+	Case("OrderedBindUnknownReal","λ(k:ℝ→Distribution(ℝ)).λ(d:Distribution(ℝ)).massD(bindD(d,k))","(ℝ→Distribution(ℝ))→Distribution(ℝ)→ℝ","λ(k:ℝ→Distribution(ℝ)). λ(d:{d:Distribution(ℝ) | defined(k)}). ∫dx (∫dx1 (k(x))[x1])·d[x]"),
+	Case("OrderedBindUnknownNatural","λ(k:ℝ→Distribution(ℕ)).λ(d:Distribution(ℝ)).massD(bindD(d,k))","(ℝ→Distribution(ℕ))→Distribution(ℝ)→ℝ","λ(k:ℝ→Distribution(ℕ)). λ(d:{d:Distribution(ℝ) | defined(k)}). ∫dx (∫(x1:ℕ). (k(x))[x1])·d[x]"),
+	Case("OrderedBindUnknownFunction","λ(k:(ℝ→ℝ)→Distribution(ℕ)).λ(d:Distribution(ℝ→ℝ)).massD(bindD(d,k))","((ℝ→ℝ)→Distribution(ℕ))→Distribution(ℝ→ℝ)→ℝ","λ(k:(ℝ→ℝ)→Distribution(ℕ)). λ(d:{d:Distribution(ℝ→ℝ) | defined(k)}). ∫(x:ℝ→ℝ). (∫(x1:ℕ). (k(x))[x1])·d[x]"),
+	Case("OrderedBindSelected","λ(k:ℕ→ℝ→Distribution(ℝ)).λ(d:Distribution(ℝ)).massD(bindD(d,k(3)))","(ℕ→ℝ→Distribution(ℝ))→Distribution(ℝ)→ℝ","λ(k:ℕ→ℝ→Distribution(ℝ)). λ(d:{d:Distribution(ℝ) | holds((3∈domain(k)))}). ∫dx (∫dx1 ((k(3))(x))[x1])·d[x]"),
+	Case("OrderedBindMissing","massD(bindD(zeroD(ℝ),undefined(ℝ→Distribution(ℝ))))","ℝ","undefined(ℝ)"),
+	Case("OrderedBindEmpty","massD(bindD(zeroD(ℝ),λ(x:ℝ).undefined(Distribution(ℝ))))","ℝ","0"),
+	Case("OrderedBindZeroRetains","massD(bindD(scaleD(0,δ((2:ℝ))),λ(x:ℝ).undefined(Distribution(ℝ))))","ℝ","undefined(ℝ)"),
+	Case("OrderedBindZeroSigned","massD(bindD(scaleD(0,δ((2:ℝ))),λ(x:ℝ).scaleD(x,δ(1))))","ℝ","0"),
+	Case("OrderedBindTwice","λ(d:Distribution(ℝ)).massD(bindD(bindD(d,λ(x:ℝ).scaleD(x,δ(x+1))),λ(y:ℝ).scaleD(y,δ(y))))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dy (y)·(∫(x:ℝ). ((x)·δ(x+1)[y])·(d[x]))"),
+	Case("OrderedBindConcrete","(λ(d:Distribution(ℝ)).massD(bindD(d,λ(x:ℝ).scaleD(x+1,δ(x)))))(addD(δ((2:ℝ)),scaleD(-1,δ((5:ℝ)))))","ℝ","-3"),
+	Case("OrderedBindMissingSource","massD(bindD(undefined(Distribution(ℝ)),λ(x:ℝ).δ(x)))","ℝ","undefined(ℝ)"),
 	Case("WeightPairingPolynomial","λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).x+1,weightD(λ(x:ℝ).x-1,d)))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x^2-1)·d[x]"),
 	Case("WeightPairingThree","λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).x,weightD(λ(x:ℝ).x+1,weightD(λ(x:ℝ).x-1,d))))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x·(x^2-1))·d[x]"),
 	Case("WeightPairingPole","λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).x,weightD(λ(x:ℝ).1/x,d)))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (guard(x≠0,(1:ℝ)))·d[x]"),
@@ -3394,6 +3414,16 @@ private void run(string directory){
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
+		if(c.name.indexOf("OrderedBind")==0){
+			import std.algorithm : canFind;
+			auto form=c.name["OrderedBind".length..$];
+			if(["Signed","Real","Point","Evaluate","Distributions","Natural","FunctionOutput","DistOutput","TypeOutput","Twice"].canFind(form))
+				enforce(certificate.indexOf("Distribution.mass_bind_test ")>=0,c.name);
+			if(["UnknownReal","UnknownNatural","UnknownFunction","Selected"].canFind(form))
+				enforce(certificate.indexOf("Distribution.mass_bind_kernel ")>=0,c.name);
+			if(["Real","Point","Distributions","UnknownReal","Selected","Twice"].canFind(form))
+				enforce(certificate.indexOf("Distribution.GraphFibre.realBind_mass ")>=0,c.name);
+		}
 		if(c.name.indexOf("WeightPairing")==0){
 			import std.algorithm : canFind;
 			auto form=c.name["WeightPairing".length..$];

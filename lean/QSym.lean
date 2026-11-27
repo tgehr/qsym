@@ -101,6 +101,7 @@ import QSym.DistributionSquareRootSheet
 import QSym.DistributionQuadraticRestriction
 import QSym.DistributionFiniteFibreModel
 import QSym.DistributionWeightObservation
+import QSym.DistributionBindObservation
 import QSym.DistributionMaskedRootCover
 import QSym.DistributionQuadraticDisintegration
 import QSym.DistributionRepeatedSheet
