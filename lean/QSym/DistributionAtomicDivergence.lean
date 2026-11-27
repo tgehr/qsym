@@ -202,21 +202,54 @@ theorem CountableObservation.at_chain {o : Option (D α) → Option ℝ} (h : Co
     rw [probe_incrementSeries, incrementSeries, h.natSum]
     simp only [p.add, p.scale, stages]
 
-theorem CountableObservation.retry_noncontracting {o : Option (D α) → Option ℝ} (h : CountableObservation o)
-    {r : Option ℝ} (q : ℚ) (hq : 1 ≤ q) (hr : r = some (q : ℝ)) {seed : Option (D α)} (hs : Admissible seed) :
-    o (retryValue r seed) = Binding.guardValue (Value.not (Value.nonzero (o seed))) (some ((0 : ℤ) : ℝ)) := by
-  rw [Int.cast_zero, guard_zero]
+theorem CountableObservation.retry_noncontracting_real {o : Option (D α) → Option ℝ} (h : CountableObservation o)
+    {r : ℝ} (h1 : 1 ≤ r) {seed : Option (D α)} (hs : Admissible seed) :
+    o (retryValue (some r) seed) = if o seed = some 0 then some 0 else none := by
   cases h.finite with
   | absent absent => rw [absent, absent]; rfl
   | linear p =>
-    subst r
     cases seed with
     | none => rw [retry_missing, p.missing]; rfl
     | some d =>
       obtain ⟨m, hd⟩ := hs d rfl
-      have q1 : 1 ≤ (q : ℝ) := by exact_mod_cast hq
-      have q0 := le_trans zero_le_one q1
+      have q0 := le_trans zero_le_one h1
       have e := retry_eq_chain hd q0
-      rw [e, h.at_chain p _ (hd.approximates_retry q0), ← e, probe_retry_noncontracting hd q1, p.atoms hd.1]
+      rw [e, h.at_chain p _ (hd.approximates_retry q0), ← e, probe_retry_noncontracting hd h1, p.atoms hd.1]
+
+theorem CountableObservation.retry_noncontracting {o : Option (D α) → Option ℝ} (h : CountableObservation o)
+    {r : Option ℝ} (q : ℚ) (hq : 1 ≤ q) (hr : r = some (q : ℝ)) {seed : Option (D α)} (hs : Admissible seed) :
+    o (retryValue r seed) = Binding.guardValue (Value.not (Value.nonzero (o seed))) (some ((0 : ℤ) : ℝ)) := by
+  subst r
+  rw [Int.cast_zero, guard_zero]
+  exact h.retry_noncontracting_real (by exact_mod_cast hq) hs
+
+/-- A zero observation in a single round makes every partial sum zero. Only a
+nonzero observation needs the geometric denominator and the contracting bound. -/
+theorem CountableObservation.retry_parameter {o : Option (D α) → Option ℝ} (h : CountableObservation o)
+    (r : Option ℝ) {seed : Option (D α)} (hs : Admissible seed) :
+    o (retryValue r seed) = Binding.guardValue (Value.le (some ((0 : ℚ) : ℝ)) r)
+      (Value.mask (Value.nonzero (o seed)) (Binding.guardValue (Value.lt r (some ((1 : ℚ) : ℝ)))
+        (Value.mul (Value.inv (Value.add (some ((1 : ℚ) : ℝ)) (Value.mul (some ((-1 : ℚ) : ℝ)) r))) (o seed)))) := by
+  cases r with
+  | none => exact h.finite.missing
+  | some r =>
+    by_cases h0 : 0 ≤ r
+    · by_cases h1 : r < 1
+      · rw [h.finite.retry_real h0 h1 hs, h.finite.scale]
+        have nz : 1 + -r ≠ 0 := by linarith
+        cases ho : o seed with
+        | none => simp [h0, h1, Binding.guardValue, Value.le, Value.nonzero, Value.mask, Value.mul]
+        | some v =>
+          by_cases hz : v = 0 <;>
+            simp [hz, h0, h1, nz, sub_eq_add_neg, Binding.guardValue, Value.le, Value.lt,
+              Value.nonzero, Value.mask, Value.inv, Value.add, Value.mul]
+      · rw [h.retry_noncontracting_real (le_of_not_gt h1) hs]
+        cases ho : o seed with
+        | none => simp [h0, Binding.guardValue, Value.le, Value.mask, Value.nonzero]
+        | some v =>
+          by_cases hz : v = 0 <;>
+            simp [hz, h0, h1, Binding.guardValue, Value.le, Value.lt, Value.mask, Value.nonzero]
+    · rw [retry_negative (lt_of_not_ge h0), h.finite.missing]
+      simp [h0, Binding.guardValue, Value.le]
 
 end QSym.Distribution.Atomic

@@ -67,19 +67,32 @@ theorem LinearObservation.atoms {o : Option (D α) → Option ℝ} (h : LinearOb
   | add _ _ ih jh => exact (h.add _ _).trans (congrArg₂ Value.add ih jh)
   | @scale r _ _ _ _ ih => exact (h.scale (some r) _).trans (congrArg (Value.mul (some r)) ih)
 
-theorem Observation.retry {o : Option (D α) → Option ℝ} (h : Observation o)
-    {r g : Option ℝ} (q c : ℚ) (h0 : 0 ≤ q) (h1 : q < 1) (hc : c = (1-q)⁻¹)
-    (hr : r = some (q : ℝ)) (hg : g = some (c : ℝ)) {s : Option (D α)} (hs : Admissible s) :
-    o (retryValue r s) = o (scaleValue g s) := by
+theorem Observation.scale {o : Option (D α) → Option ℝ} (h : Observation o) (r : Option ℝ) (d : Option (D α)) :
+    o (scaleValue r d) = Value.mul r (o d) := by
+  cases h with
+  | absent absent => rw [absent, absent]; cases r <;> rfl
+  | linear p => exact p.scale r d
+
+theorem Observation.retry_real {o : Option (D α) → Option ℝ} (h : Observation o)
+    {r : ℝ} (h0 : 0 ≤ r) (h1 : r < 1) {s : Option (D α)} (hs : Admissible s) :
+    o (retryValue (some r) s) = o (scaleValue (some (1-r)⁻¹) s) := by
   have strict (v : Option (D α)) : o v = v.bind (fun d => o (some d)) := by
     cases v with
     | none => exact h.missing
     | some => rfl
-  rw [strict (retryValue r s), strict (scaleValue g s)]
-  apply observe_retry _ _ q c h0 h1 hc hr hg hs
+  rw [strict (retryValue (some r) s), strict (scaleValue (some (1-r)⁻¹) s)]
+  apply observe_retry_real _ _ h0 h1 hs
   intro d e m hd he
   cases h with
   | absent p => exact (p _).trans (p _).symm
   | linear p => exact (p.atoms hd.1).trans (((hd.eq_iff he).mp rfl _).trans (p.atoms he.1).symm)
+
+theorem Observation.retry {o : Option (D α) → Option ℝ} (h : Observation o)
+    {r g : Option ℝ} (q c : ℚ) (h0 : 0 ≤ q) (h1 : q < 1) (hc : c = (1-q)⁻¹)
+    (hr : r = some (q : ℝ)) (hg : g = some (c : ℝ)) {s : Option (D α)} (hs : Admissible s) :
+    o (retryValue r s) = o (scaleValue g s) := by
+  subst r g c
+  simpa only [Rat.cast_inv, Rat.cast_sub, Rat.cast_one] using
+    h.retry_real (r := (q : ℝ)) (by exact_mod_cast h0) (by exact_mod_cast h1) hs
 
 end QSym.Distribution.Atomic

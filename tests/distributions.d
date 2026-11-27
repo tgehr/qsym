@@ -2194,6 +2194,21 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("RetryProbeTwoAtoms","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(addD(δ((0:ℕ)),δ((1:ℕ))),scaleD(q,d))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). 2·(-q+1)⁻¹"),
+	Case("RetryProbeZeroSeed","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(zeroD(ℕ),scaleD(q,d))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). (0:ℝ)"),
+	Case("RetryProbeZeroPoint","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(0,δ((2:ℕ))),scaleD(q,d))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). (0:ℝ)"),
+	Case("RetryProbeRationalWeights","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(addD(scaleD(1/3,δ((0:ℕ))),scaleD(1/2,δ(1))),scaleD(q,d))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹·(5/6)"),
+	Case("RetryProbeSignedRound","λ(q:ℝ).massD(weightD(λ(x:ℝ).x,(μ(d:Distribution(ℝ)).addD(addD(δ((-1:ℝ)),δ((1:ℝ))),scaleD(q,d)))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). (0:ℝ)"),
+	Case("RetryProbePartialProbe","λ(q:ℝ).massD(weightD(λ(x:ℝ).1/x,(μ(d:Distribution(ℝ)).addD(addD(scaleD(0,δ((0:ℝ))),δ((1:ℝ))),scaleD(q,d)))))","ℝ→ℝ","λ(q:ℝ). undefined(ℝ)"),
+	Case("RetryProbeVariableRound","λ(q:ℝ).λ(w:ℕ→ℝ).massD(weightD(w,(μ(d:Distribution(ℕ)).addD(addD(δ((0:ℕ)),δ((1:ℕ))),scaleD(q,d)))))","ℝ→(ℕ→ℝ)→ℝ","λ(q:ℝ). λ(w:{w:ℕ→ℝ | 0≤q}). [w(0)+w(1)≠0]·(guard(q<1,(w(0)+w(1))·(-q+1)⁻¹))"),
+	Case("RetryProbeMissingWeight","λ(q:ℝ).massD(weightD(undefined(ℕ→ℝ),(μ(d:Distribution(ℕ)).addD(addD(δ((0:ℕ)),δ((1:ℕ))),scaleD(q,d)))))","ℝ→ℝ","λ(q:ℝ). undefined(ℝ)"),
+	Case("RetryProbeMissingRate","λ(h:ℕ→ℝ).massD((μ(d:Distribution(ℕ)).addD(zeroD(ℕ),scaleD(h(0),d))))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)}). (0:ℝ)"),
+	Case("RetryProbeBoundRound","λ(q:ℝ).massD(bindD((μ(d:Distribution(ℕ)).addD(addD(δ((0:ℕ)),δ((1:ℕ))),scaleD(q,d))),λ(n:ℕ).scaleD(3,δ(n))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). 6·(-q+1)⁻¹"),
+	Case("RetryProbeRealBoundRound","λ(q:ℝ).massD(bindD((μ(d:Distribution(ℕ)).addD(addD(δ((0:ℕ)),δ((1:ℕ))),scaleD(q,d))),λ(n:ℕ).δ((1:ℝ))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). 2·(-q+1)⁻¹"),
+	Case("RetryProbeContracting","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(addD(δ((0:ℕ)),δ((1:ℕ))),scaleD(q,d)))))(1/2)","ℝ","4"),
+	Case("RetryProbeNoncontracting","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(addD(δ((0:ℕ)),δ((1:ℕ))),scaleD(q,d)))))(1)","ℝ","undefined(ℝ)"),
+	Case("RetryProbeCancellationAtTwo","(λ(q:ℝ).massD(weightD(λ(x:ℝ).x,(μ(d:Distribution(ℝ)).addD(addD(δ((-1:ℝ)),δ((1:ℝ))),scaleD(q,d))))))(2)","ℝ","0"),
+	Case("RetryProbeZeroNegative","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(zeroD(ℕ),scaleD(q,d)))))(-1)","ℝ","undefined(ℝ)"),
 	Case("RetryDensityPoint","λ(q:ℝ).λ(y:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),y)","ℝ→ℝ→ℝ","λ(q:ℝ). λ(y:{y:ℝ | 0≤q∧y≠0}). (0:ℝ)"),
 	Case("RetryDensityOn","λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),0)","ℝ→ℝ","λ(q:ℝ). undefined(ℝ)"),
 	Case("RetryDensityOff","λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),1)","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). (0:ℝ)"),
@@ -2894,6 +2909,8 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="RetryProbeTwoAtoms"||c.name=="RetryProbeSignedRound"||c.name=="RetryProbePartialProbe"||c.name=="RetryProbeRealBoundRound")
+			enforce(certificate.indexOf("CountableObservation.retry_parameter ")>=0,c.name);
 		if(c.name=="RetryDensityPoint"||c.name=="RetryDensityTwoAtoms"||c.name=="RetryDensityZeroCharge")
 			enforce(certificate.indexOf("density_retry_parameter ")>=0,c.name);
 		if(c.name=="RetryMassClosedForm"||c.name=="RetryMassPartialPoint"||c.name=="RetryMassDistributionPoint")
