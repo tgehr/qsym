@@ -317,6 +317,22 @@ theorem PowerRow.mul_right {r : Option ℝ} {f g : ℕ → Option ℝ} {p b : Sa
   intro n; change Value.mul (f n) (g n) = _
   rw [hf n, hg n]; cases r <;> simp [Value.mul, SampledPolynomial.mul, mul_right_comm]
 
+theorem PowerRow.add {r : Option ℝ} {f g : ℕ → Option ℝ} {p b : SampledPolynomial}
+    (hf : PowerRow r f p) (hg : PowerRow r g b) : PowerRow r (fun n => Value.add (f n) (g n)) (p.add b) := by
+  intro n; change Value.add (f n) (g n) = _
+  rw [hf n, hg n]; cases r <;> simp [Value.add, SampledPolynomial.add, add_mul]
+
+/-- Cancellation is pointwise before the sum checks convergence. Even when
+the resulting polynomial is zero, each original row still needs the rate. -/
+theorem PowerRow.constant_rows {r : Option ℝ} {row power : ℕ → Option ℝ} {p : SampledPolynomial}
+    (hr : PowerRow r row p) (c : ℚ) (hc : constantChecks p c = true) (v : Option ℝ) (hv : v = some (c : ℝ))
+    (hp : ∀ n, power n = r.map (fun q => q^n)) :
+    value norm (some row) = value norm (some (fun n => Value.mul v (power n))) := by
+  apply congrArg (fun f : ℕ → Option ℝ => value norm (some f))
+  funext n; change row n = Value.mul v (power n)
+  rw [hr n, hp n, hv, samples_equal (b := .constant c) hc]
+  cases r <;> simp [Value.mul, SampledPolynomial.constant]
+
 theorem row_fraction {row : ℕ → Option ℝ} {r : Option ℝ} {p : SampledPolynomial} (hr : PowerRow r row p)
     (cs ns : List ℚ) (w : ℕ) (h : checks p cs = true) (hnum : numeratorChecks cs ns = true) (hn : p.num 0 ≠ p.num w)
     (one minus : Option ℝ) {answer : Option ℝ} (h1 : one = some 1) (hm : minus = some (-1)) (ha : At r ns answer) :

@@ -2274,6 +2274,21 @@ private Case[] cases(){
 	Case("GroupedMomentMissing","(λ(q:ℝ).∑(n:ℕ).(n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2)*((n:ℝ)-3)*powRN(q,n))(undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("GroupedMomentPole","λ(q:ℝ).∑(n:ℕ).(1/(n:ℝ))*(powRN(q,n)*((n:ℝ)+1))","ℝ→ℝ","λ(q:ℝ). ∑(n:ℕ). (guard(n≠0,(n⁻¹:ℝ)))·(n+1)·q^n"),
 	Case("GroupedMomentMixedRates","λ(q:ℝ).λ(r:ℝ).∑(n:ℕ).(n:ℝ)*(powRN(q,n)*powRN(r,n))","ℝ→ℝ→ℝ","λ(q:ℝ). λ(r:{r:ℝ | abs(q·r)<1}). q·r·((-q·r+1)⁻¹)^2"),
+	Case("CombinedMomentSum","λ(q:ℝ).∑(n:ℕ).(n:ℝ)^2*powRN(q,n)+((n:ℝ)+1)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q^2+1)·((-q+1)^3)⁻¹"),
+	Case("CombinedMomentCubic","λ(q:ℝ).∑(n:ℕ).(n:ℝ)*(powRN(q,n)*((n:ℝ)+1))+powRN(q,n)*(n:ℝ)^3","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q·(q+2)+3)·((-q+1)^4)⁻¹"),
+	Case("CombinedMomentDropLeading","λ(q:ℝ).∑(n:ℕ).((n:ℝ)+1)^2*powRN(q,n)-powRN(q,n)*((n*n):ℝ)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q+1)·((-q+1)^2)⁻¹"),
+	Case("CombinedMomentConstant","λ(q:ℝ).∑(n:ℕ).(((n:ℝ)+1)^2*powRN(q,n))-(powRN(q,n)*((n*n+2*n):ℝ))","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (-q+1)⁻¹"),
+	Case("CombinedMomentCancel","λ(q:ℝ).∑(n:ℕ).(((n:ℝ)+1)^2*powRN(q,n))-(powRN(q,n)*((n*n+2*n+1):ℝ))","ℝ→ℝ","λ(q:ℝ). (0:ℝ)"),
+	Case("CombinedMomentNegativeConstant","λ(q:ℝ).∑(n:ℕ).(powRN(q,n)*((n*n+2*n):ℝ))-(((n:ℝ)+1)^2*powRN(q,n))","ℝ→ℝ","λ(q:ℝ). -(guard(-1<q∧q<1,(-q+1)⁻¹))"),
+	Case("CombinedMomentUnboundedZero","∑(n:ℕ).(((n:ℝ)+1)^2*powRN(2,n))-(powRN(2,n)*((n*n+2*n+1):ℝ))","ℝ","0"),
+	Case("CombinedMomentUnitZero","∑(n:ℕ).(((n:ℝ)+1)^2*powRN(1,n))-(powRN(1,n)*((n*n+2*n+1):ℝ))","ℝ","0"),
+	Case("CombinedMomentUnitConstant","(λ(q:ℝ).∑(n:ℕ).(((n:ℝ)+1)^2*powRN(q,n))-(powRN(q,n)*((n*n+2*n):ℝ)))(1)","ℝ","undefined(ℝ)"),
+	Case("CombinedMomentAtHalf","(λ(q:ℝ).∑(n:ℕ).(((n:ℝ)+1)^2*powRN(q,n))-(powRN(q,n)*((n*n+2*n):ℝ)))(1/2)","ℝ","2"),
+	Case("CombinedMomentCapturedZero","λ(h:ℕ→ℝ).∑(n:ℕ).(((n:ℝ)+1)^2*powRN(h(0),n))-(powRN(h(0),n)*((n*n+2*n+1):ℝ))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | holds((0∈domain(h)))}). (0:ℝ)"),
+	Case("CombinedMomentMissingZero","(λ(h:ℕ→ℝ).∑(n:ℕ).(((n:ℝ)+1)^2*powRN(h(0),n))-(powRN(h(0),n)*((n*n+2*n+1):ℝ)))(λ(k:ℕ).undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("CombinedMomentLifted","λ(q:ℚ).∑(n:ℕ).(n:ℝ)^2*castQR(powQN(q,n))+powRN(castQR(q),n)*((n:ℝ)+1)","ℚ→ℝ","λ(q:{q:ℚ | -1<q∧(q<1∧q≠1)}). ((q^2+1)·((-q+1)⁻¹)^3:ℝ)"),
+	Case("CombinedMomentMixedRates","λ(q:ℝ).λ(r:ℝ).∑(n:ℕ).(n:ℝ)^2*powRN(q,n)+powRN(r,n)*((n:ℝ)+1)","ℝ→ℝ→ℝ","λ(q:ℝ). λ(r:ℝ). ∑(n:ℕ). n^2·q^n+(n+1)·r^n"),
+	Case("CombinedMomentPartialProbe","λ(q:ℝ).λ(h:ℕ→ℝ).∑(n:ℕ).(n:ℝ)*powRN(q,n)+powRN(q,n)*h(n)","ℝ→(ℕ→ℝ)→ℝ","λ(q:ℝ). λ(h:ℕ→ℝ). ∑(n:ℕ). h(n)·q^n+n·q^n"),
 	Case("NewtonMomentSquare","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
 	Case("NewtonMomentReverse","λ(q:ℝ).∑(n:ℕ). powRN(q,n)*(n:ℝ)^2","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
 	Case("NewtonMomentAffine","λ(q:ℝ).∑(n:ℕ). (2*(n:ℝ)+3)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (-q+3)·((-q+1)^2)⁻¹"),
@@ -3148,6 +3163,13 @@ private void run(string directory){
 				c.name=="GroupedMomentBuriedRight"||c.name=="GroupedMomentExactMixed"||
 				c.name=="GroupedMomentPartialRatio"||c.name=="GroupedMomentLifted"||c.name=="GroupedMomentScaled")
 			enforce(certificate.indexOf("GeometricMoments.Newton.row_fraction")>=0,c.name);
+		if(c.name.indexOf("CombinedMoment")==0){
+			bool supported=c.name!="CombinedMomentMixedRates"&&c.name!="CombinedMomentPartialProbe";
+			enforce((certificate.indexOf("GeometricMoments.Newton.PowerRow.add")>=0)==supported,c.name);
+			if(c.name=="CombinedMomentCancel"||c.name=="CombinedMomentConstant"||
+					c.name=="CombinedMomentUnboundedZero"||c.name=="CombinedMomentCapturedZero")
+				enforce(certificate.indexOf("PowerRow.constant_rows")>=0,c.name);
+		}
 		if(c.name=="NewtonMomentSquare"){
 			enforce(certificate.indexOf("GeometricMoments.Newton.series_fraction")>=0,c.name);
 			enforce(certificate.indexOf("namespace QSym.BindingScalar")<0,c.name~" redundant scalar proof");
