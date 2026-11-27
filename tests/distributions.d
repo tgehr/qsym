@@ -977,6 +977,14 @@ private Case[] cases(){
 	Case("SheetDensityAsymmetric","densityAtD(Λz. λ[-2*sqrt(z-1),sqrt(z-1)],5)","ℝ","(λ(x:ℝ). (λ[-2·sqrt(x-1), sqrt(x-1)])//λ[x])((5:ℝ))"),
 	Case("SheetDensityDifferentCentres","densityAtD(Λz. λ[2-sqrt(z-1),3+sqrt(z-1)],5)","ℝ","(λ(x:ℝ). (λ[-sqrt(x-1)+2, sqrt(x-1)+3])//λ[x])((5:ℝ))"),
 	Case("SheetDensityDifferentInputs","densityAtD(Λz. λ[-sqrt(3-z),sqrt(z-1)],5)","ℝ","(λ(x:ℝ). (λ[-sqrt(-x+3), sqrt(x-1)])//λ[x])((5:ℝ))"),
+	Case("CompactSheetTwoRoots","Λy.λ[-sqrt((2/3)*y-26/9)+2/3,sqrt((2/3)*y-26/9)+2/3]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y·(2/3)-26/9)+2/3, sqrt(y·(2/3)-26/9)+2/3]"),
+	Case("CompactSheetGrouped","λ(y:ℝ).2*(sqrt(3-y)+1/3)+3","ℝ→ℝ","λ(y:ℝ). 2·sqrt(-y+3)+11/3"),
+	Case("CompactSheetReordered","λ(y:ℝ).1/3+sqrt(3-y)*2","ℝ→ℝ","λ(y:ℝ). 2·sqrt(-y+3)+1/3"),
+	Case("CompactSheetNegative","λ(y:ℝ).(-3)*(2-sqrt(2*y-1))","ℝ→ℝ","λ(y:ℝ). 3·sqrt(2·y-1)-6"),
+	Case("CompactSheetReciprocal","λ(y:ℝ).1/sqrt(y-1)","ℝ→ℝ","λ(y:ℝ). sqrt(y-1)⁻¹"),
+	Case("CompactSheetRequiredCut","λ(y:ℝ).guard(y≠2,sqrt(y-1)+1)","ℝ→ℝ","λ(y:{y:ℝ | y≠2}). sqrt(y-1)+1"),
+	Case("CompactSheetBoth","λ(y:ℝ).sqrt(y-1)-sqrt(y-3)","ℝ→ℝ","λ(y:{y:ℝ | 3≤y}). -sqrt(y-3)+sqrt(y-1)"),
+	Case("CompactSheetPrintedDifference","λ(y:ℝ). 3·sqrt(2·y-1)-6","ℝ→ℝ","λ(y:ℝ). 3·sqrt(2·y-1)-6"),
 	Case("ClosedSquareDensity","λ(y:ℝ).densityAtD(Λz. ∫dx λ[x]·δ((1-2*x)^2)[z],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMass","λ(y:ℝ).∫dx λ[x]·δ((1-2*x)^2)[y]//λ[y]","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMissing","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x/3-1)*(x/3-1)),undefined(ℝ))","ℝ","undefined(ℝ)"),
@@ -3218,6 +3226,11 @@ private void run(string directory){
 				enforce(certificate.indexOf("unrestrictedSquareDensity_zero")>=0,c.name);
 			if(c.name=="QuadraticDensityAbove"||c.name=="QuadraticDensityNegativeScale")
 				enforce(certificate.indexOf("Quadratic.literal_regular")>=0,c.name);
+		}
+		if(c.name=="QuadraticChartDown"||c.name=="QuadraticChartFraction"||c.name=="QuadraticChartLinearTerm"||
+				c.name=="CompactSheetGrouped"||c.name=="CompactSheetNegative"||c.name=="CompactSheetTwoRoots"){
+			enforce(certificate.indexOf("theorem rootEquality")>=0,c.name~" square-root sheet equation");
+			enforce(certificate.length<45000,c.name~" redundant scalar proof");
 		}
 		if(c.name.indexOf("SheetDensity")==0){
 			bool supported=c.name!="SheetDensityGuardHole"&&c.name!="SheetDensityAsymmetric"&&
