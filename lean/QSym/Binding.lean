@@ -461,6 +461,24 @@ theorem Reduction.guardMissing (p : Expr Γ (.scalar .bool)) :
   | none => rfl
   | some v => cases v <;> rfl)
 
+/-- A literal right operand may determine the result, but the left operand
+is still evaluated first. -/
+theorem Reduction.boolRight (disjoin b : Bool) (p : Expr Γ (.scalar .bool)) :
+    Reduction (.binary (if disjoin then Value.or else Value.and) p (.scalar (.bool b)))
+      (if disjoin == b then .seq p (.scalar (.bool b)) else p) := .ofEq (by
+  intro ξ ρ
+  cases h : p.eval ξ ρ with
+  | none => cases disjoin <;> cases b <;> simp [Expr.eval, QSym.Expr.eval, Value.or, Value.and, h]
+  | some v => cases disjoin <;> cases b <;> cases v <;> simp [Expr.eval, QSym.Expr.eval, Value.or, Value.and, h])
+
+theorem Reduction.boolMissingRight (disjoin : Bool) (p : Expr Γ (.scalar .bool)) :
+    Reduction (.binary (if disjoin then Value.or else Value.and) p (.constant (a := .scalar .bool) none))
+      (.guard (if disjoin then p else .unary Value.not p) (.scalar (.bool disjoin))) := .ofEq (by
+  intro ξ ρ
+  cases h : p.eval ξ ρ with
+  | none => cases disjoin <;> simp [Expr.eval, QSym.Expr.eval, guardValue, Value.or, Value.and, Value.not, h]
+  | some v => cases disjoin <;> cases v <;> simp [Expr.eval, QSym.Expr.eval, guardValue, Value.or, Value.and, Value.not, h])
+
 theorem Reduction.seqGuard (x : Expr Γ a) (y : Expr Γ b) :
     Reduction (.seq x y) (.guard (.defined x) y) := .ofEq (by
   intro ξ ρ

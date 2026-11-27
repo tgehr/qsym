@@ -40,7 +40,7 @@ private enum BindingRule:ushort{
 	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMissing,definedScalarPrimitive,distributionGuard,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
-	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
+	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,distributionDefinedConstructor,distributionDefinedCover,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
@@ -10828,6 +10828,20 @@ final class Bindings{
 					next=bottom(ctx,types[current.type]); rule=BindingRule.productMissingRight;
 				}
 			}
+			if(domains&&next==BoundTerm.init&&current.op==BoundOp.primitive&&current.b!=uint.max&&
+				!isTrue(current.a,true)&&!isTrue(current.a,false)){
+				auto op=arena.view(arena.at(current.data)).op;
+				if(op==Op.and_||op==Op.or_){
+					bool disjoin=op==Op.or_;
+					if(isTrue(current.b,!disjoin)){ next=at(current.a); rule=BindingRule.boolRight; }
+					else if(isTrue(current.b,disjoin)){ next=sequence(at(current.a),at(current.b)); rule=BindingRule.boolRight; }
+					else if(nodes[current.b].op==BoundOp.bottom){
+						auto p=at(current.a);
+						if(!disjoin) p=primitive(arena.not_(arena.boolean(false)),[p]);
+						next=guard(p,scalar(ctx,arena.boolean(disjoin))); rule=BindingRule.boolMissingRight;
+					}
+				}
+			}
 			// Lift guards through strict tuple constructors and projections so a
 			// lambda can display the restriction once, on its parameter.
 			if(domains&&next==BoundTerm.init&&(current.op==BoundOp.vectorCons||current.op==BoundOp.pair||current.op==BoundOp.get)){
@@ -14770,6 +14784,12 @@ final class Bindings{
 				case BindingRule.appBottom:proof=".appBottom "~name(n.a); break;
 				case BindingRule.seqMissing:proof=".seqMissing "~name(n.a); break;
 				case BindingRule.guardMissing:proof=".guardMissing "~name(n.a); break;
+				case BindingRule.boolRight,BindingRule.boolMissingRight:{
+					auto disjoin=arena.view(arena.at(n.data)).op==Op.or_?"true ":"false ";
+					if(p.rule==BindingRule.boolMissingRight) proof=".boolMissingRight "~disjoin~name(n.a);
+					else proof=".boolRight "~disjoin~(arena.view(arena.at(nodes[n.b].data)).value?"true ":"false ")~name(n.a);
+					break;
+				}
 				case BindingRule.productMissingRight:
 					proof=".ofEq (fun ξ ρ => Tensor."~(n.op==BoundOp.pair?"pair_none_right":"cons_none_right")~" ("~name(n.a)~".eval ξ ρ))"; break;
 				case BindingRule.appNowhere:proof=".appNowhere "~name(n.b); break;
