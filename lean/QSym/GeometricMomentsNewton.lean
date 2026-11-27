@@ -298,6 +298,32 @@ theorem series_fraction {test power : ℕ → Option ℝ} {p : SampledPolynomial
       Binding.guardValue (interval r one minus) (Value.mul answer (Value.inv (denominatorPower r one minus cs.length))) :=
   (series ht hp left cs ns w h hnum hn one minus h1 hm ha).trans (fraction_form r one minus answer _ h1 hm)
 
+/-- A geometric row retains its partial rate while total polynomial factors
+are composed in the order in which they occur in the source term. -/
+def PowerRow (r : Option ℝ) (row : ℕ → Option ℝ) (p : SampledPolynomial) : Prop :=
+  ∀ n, row n = r.map (fun q => p.poly.eval (n : ℝ) * q^n)
+
+theorem PowerRow.power {r : Option ℝ} {f : ℕ → Option ℝ} (h : ∀ n, f n = r.map (fun q => q^n)) :
+    PowerRow r f (.constant 1) := by
+  intro n; simpa [SampledPolynomial.constant] using h n
+
+theorem PowerRow.mul_left {r : Option ℝ} {f g : ℕ → Option ℝ} {p b : SampledPolynomial}
+    (hf : NatTest f p) (hg : PowerRow r g b) : PowerRow r (fun n => Value.mul (f n) (g n)) (p.mul b) := by
+  intro n; change Value.mul (f n) (g n) = _
+  rw [hf n, hg n]; cases r <;> simp [Value.mul, SampledPolynomial.mul, mul_assoc]
+
+theorem PowerRow.mul_right {r : Option ℝ} {f g : ℕ → Option ℝ} {p b : SampledPolynomial}
+    (hf : PowerRow r f p) (hg : NatTest g b) : PowerRow r (fun n => Value.mul (f n) (g n)) (p.mul b) := by
+  intro n; change Value.mul (f n) (g n) = _
+  rw [hf n, hg n]; cases r <;> simp [Value.mul, SampledPolynomial.mul, mul_right_comm]
+
+theorem row_fraction {row : ℕ → Option ℝ} {r : Option ℝ} {p : SampledPolynomial} (hr : PowerRow r row p)
+    (cs ns : List ℚ) (w : ℕ) (h : checks p cs = true) (hnum : numeratorChecks cs ns = true) (hn : p.num 0 ≠ p.num w)
+    (one minus : Option ℝ) {answer : Option ℝ} (h1 : one = some 1) (hm : minus = some (-1)) (ha : At r ns answer) :
+    value norm (some row) =
+      Binding.guardValue (interval r one minus) (Value.mul answer (Value.inv (denominatorPower r one minus cs.length))) :=
+  (evaluate w h hnum hn r one minus answer h1 hm ha row hr).trans (fraction_form r one minus answer _ h1 hm)
+
 private def reducedDenominator (r one minus : Option ℝ) (k : ℕ) : Option ℝ :=
   if k = 1 then Value.add one (Value.mul r minus) else denominatorPower r one minus k
 

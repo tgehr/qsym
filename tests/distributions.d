@@ -614,7 +614,7 @@ private Case[] cases(){
 	Case("IntervalFactorSignedSine","λ(c:ℝ).∫dx [0≤x≤π]·mulR(c,sin(x))·λ[x]","ℝ→ℝ","λ(c:ℝ). 2·c"),
 	Case("IntervalFactorHigherOrder","λ(h:ℕ→ℝ).λ(n:ℕ).∫dx [0≤x≤2*π]·(abs(sin(x))*h(n))·λ[x]","(ℕ→ℝ)→ℕ→ℝ","λ(h:ℕ→ℝ). λ(n:ℕ). 4·h(n)"),
 	Case("IntervalFactorSum","λ(c:ℝ).∫dx [0≤x≤1]·(c*(abs(sin(x))+cos(x)))·λ[x]","ℝ→ℝ","λ(c:ℝ). c·(sin(1)-cos(1)+1)"),
-	Case("IntervalFactorTwoCoefficients","λ(c:ℝ).λ(d:ℝ).∫dx [0≤x≤π]·mulR(c,mulR(sin(x),d))·λ[x]","ℝ→ℝ→ℝ","λ(c:ℝ). λ(d:ℝ). 2·d·c"),
+	Case("IntervalFactorTwoCoefficients","λ(c:ℝ).λ(d:ℝ).∫dx [0≤x≤π]·mulR(c,mulR(sin(x),d))·λ[x]","ℝ→ℝ→ℝ","λ(c:ℝ). λ(d:ℝ). 2·c·d"),
 	Case("IntervalFactorInsideSum","λ(c:ℝ).λ(d:ℝ).∫dx [0≤x≤π]·(c*abs(sin(x))+d*cos(x))·λ[x]","ℝ→ℝ→ℝ","λ(c:ℝ). λ(d:ℝ). 2·c"),
 	Case("IntervalFactorCauchy","λ(c:ℝ).∫dx [0≤x≤1]·mulR(c,(1+x²)⁻¹)·λ[x]","ℝ→ℝ","λ(c:ℝ). c·(1/4)·π"),
 	Case("IntervalFactorCauchySine","λ(c:ℝ).∫dx [0≤x≤1]·mulR(c,(1+x²)⁻¹+sin(x))·λ[x]","ℝ→ℝ","λ(c:ℝ). c·(-cos(1)+1/4·π+1)"),
@@ -2261,6 +2261,19 @@ private Case[] cases(){
 	Case("NormalizedMomentMissing","(λ(q:ℝ).∑(n:ℕ).(1-q)*(n:ℝ)^2*powRN(q,n))(undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("NormalizedMomentOtherWeight","λ(q:ℝ).∑(n:ℕ).(2-q)*(n:ℝ)^2*powRN(q,n)","ℝ→ℝ","λ(q:ℝ). [q≠2]·((guard(-1<q∧q<1,q·(q+1)·((-q+1)^3)⁻¹))·(-q+2))"),
 	Case("NormalizedMomentPartialProbeAtOne","(λ(q:ℝ).∑(n:ℕ).(1-q)*(1/(n:ℝ))*powRN(q,n))(1)","ℝ","undefined(ℝ)"),
+	Case("GroupedMomentFallingFourth","λ(q:ℝ).∑(n:ℕ).(n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2)*((n:ℝ)-3)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). 24·((-q+1)^5)⁻¹·q^4"),
+	Case("GroupedMomentBuriedLeft","λ(q:ℝ).∑(n:ℕ).(n:ℝ)*(powRN(q,n)*((n:ℝ)-1))*((n:ℝ)-2)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). 6·((-q+1)^4)⁻¹·q^3"),
+	Case("GroupedMomentBuriedRight","λ(q:ℝ).∑(n:ℕ).((n:ℝ)+1)*(((n:ℝ)-2)*(powRN(q,n)*((n:ℝ)+3)))","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(-4·q+16)-6)·((-q+1)^4)⁻¹"),
+	Case("GroupedMomentScaled","λ(q:ℝ).∑(n:ℕ).3*(n:ℝ)*((n:ℝ)-1)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). 6·((-q+1)^3)⁻¹·q^2"),
+	Case("GroupedMomentExactMixed","λ(q:ℝ).∑(n:ℕ).((n+1):ℝ)*(powRN(q,n)*((n^2+2):ℝ))","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(6·q-2)+2)·((-q+1)^4)⁻¹"),
+	Case("GroupedMomentPartialRatio","λ(h:ℕ→ℝ).∑(n:ℕ).((n:ℝ)+1)*(powRN(h(0),n)*((n:ℝ)+2))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | -1<h(0)∧h(0)<1}). 2·((-h(0)+1)^3)⁻¹"),
+	Case("GroupedMomentLifted","λ(q:ℚ).∑(n:ℕ).((n:ℝ)+1)*(castQR(powQN(q,n))*((n:ℝ)+2))","ℚ→ℝ","λ(q:{q:ℚ | -1<q∧(q<1∧q≠1)}). (2·((-q+1)⁻¹)^3:ℝ)"),
+	Case("GroupedMomentHalf","(λ(q:ℝ).∑(n:ℕ).(n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2)*((n:ℝ)-3)*powRN(q,n))(1/2)","ℝ","48"),
+	Case("GroupedMomentAlternating","(λ(q:ℝ).∑(n:ℕ).(n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2)*((n:ℝ)-3)*powRN(q,n))(-1/2)","ℝ","16/81"),
+	Case("GroupedMomentUnit","(λ(q:ℝ).∑(n:ℕ).(n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2)*((n:ℝ)-3)*powRN(q,n))(1)","ℝ","undefined(ℝ)"),
+	Case("GroupedMomentMissing","(λ(q:ℝ).∑(n:ℕ).(n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2)*((n:ℝ)-3)*powRN(q,n))(undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("GroupedMomentPole","λ(q:ℝ).∑(n:ℕ).(1/(n:ℝ))*(powRN(q,n)*((n:ℝ)+1))","ℝ→ℝ","λ(q:ℝ). ∑(n:ℕ). (guard(n≠0,(n⁻¹:ℝ)))·(n+1)·q^n"),
+	Case("GroupedMomentMixedRates","λ(q:ℝ).λ(r:ℝ).∑(n:ℕ).(n:ℝ)*(powRN(q,n)*powRN(r,n))","ℝ→ℝ→ℝ","λ(q:ℝ). λ(r:{r:ℝ | abs(q·r)<1}). q·r·((-q·r+1)⁻¹)^2"),
 	Case("NewtonMomentSquare","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
 	Case("NewtonMomentReverse","λ(q:ℝ).∑(n:ℕ). powRN(q,n)*(n:ℝ)^2","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
 	Case("NewtonMomentAffine","λ(q:ℝ).∑(n:ℕ). (2*(n:ℝ)+3)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (-q+3)·((-q+1)^2)⁻¹"),
@@ -3131,6 +3144,10 @@ private void run(string directory){
 				c.name=="NormalizedMomentPartialRate"||c.name=="NormalizedMomentStride"||
 				c.name=="WeightedMomentNormalizedShift"||c.name=="ExactMomentNormalizedShift")
 			enforce(certificate.indexOf("GeometricMoments.Newton.normalized_fraction")>=0,c.name);
+		if(c.name=="GroupedMomentFallingFourth"||c.name=="GroupedMomentBuriedLeft"||
+				c.name=="GroupedMomentBuriedRight"||c.name=="GroupedMomentExactMixed"||
+				c.name=="GroupedMomentPartialRatio"||c.name=="GroupedMomentLifted"||c.name=="GroupedMomentScaled")
+			enforce(certificate.indexOf("GeometricMoments.Newton.row_fraction")>=0,c.name);
 		if(c.name=="NewtonMomentSquare"){
 			enforce(certificate.indexOf("GeometricMoments.Newton.series_fraction")>=0,c.name);
 			enforce(certificate.indexOf("namespace QSym.BindingScalar")<0,c.name~" redundant scalar proof");

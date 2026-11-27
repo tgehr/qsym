@@ -1805,50 +1805,90 @@ final class Bindings{
 		return true;
 	}
 	private struct NewtonMoment{
-		uint test, ratio, witness;
+		uint test=uint.max, ratio, witness, grouped=uint.max;
 		bool testFirst, lifted;
 		Rational[] differences, numerator;
+	}
+	private string geometricPowerProof(bool lifted,BoundTerm rate){
+		return "(GeometricMoments.Newton."~(lifted?"powerQR (":"powerR (")~name(lifted?node(rate).a:rate.id)~".eval ξ ρ))";
+	}
+	private struct MomentRow{
+		uint ratio;
+		Rational[] coefficients;
+		string proof;
+	}
+	// A natural power can occur anywhere in a strict product of total
+	// polynomials. Preserve the multiplication tree in the witness.
+	private bool groupedMomentRow(uint id,out MomentRow row,BoundTerm rate=BoundTerm.init,uint depth=0){
+		if(depth>64) return false;
+		bool lifted;
+		auto base=geometricRatio(id,lifted);
+		if(base!=BoundTerm.init){
+			row.ratio=base.id; row.coefficients=[Rational(1)];
+			if(rate!=BoundTerm.init) row.proof="(GeometricMoments.Newton.PowerRow.power "~geometricPowerProof(lifted,rate)~")";
+			return true;
+		}
+		if(!primitiveOp(id,Op.mul)) return false;
+		auto n=nodes[id];
+		foreach(left;[true,false]){
+			MomentPolynomial p; MomentRow child;
+			if(!momentPolynomial(left?n.a:n.b,p,rate!=BoundTerm.init)||!groupedMomentRow(left?n.b:n.a,child,rate,depth+1)) continue;
+			if(p.coefficients.length+child.coefficients.length>34) return false;
+			row.ratio=child.ratio; row.coefficients=polyProduct(p.coefficients,child.coefficients);
+			foreach(c;row.coefficients) if(c.words>128) return false;
+			if(rate!=BoundTerm.init) row.proof=left?"(GeometricMoments.Newton.PowerRow.mul_left "~p.proof~" "~child.proof~")":
+				"(GeometricMoments.Newton.PowerRow.mul_right "~child.proof~" "~p.proof~")";
+			return true;
+		}
+		return false;
 	}
 	// The Newton coefficients are the successive forward differences at zero.
 	// SampledPolynomial bounds the source degree, so a finite table certifies
 	// the identity for every natural index.
 	private bool polynomialGeometric(BoundTerm sum,out NewtonMoment d,uint rowId=uint.max){
 		if(type(sum)!=scalarType(Sort.real_)||!naturalIndex(node(sum).a)) return false;
-		auto row=nodes[rowId==uint.max?nodes[node(sum).a].a:rowId];
-		if(row.op!=BoundOp.primitive||arena.view(arena.at(row.data)).op!=Op.mul) return false;
+		if(rowId==uint.max) rowId=nodes[node(sum).a].a;
+		if(!primitiveOp(rowId,Op.mul)) return false;
+		auto row=nodes[rowId]; Rational[] coefficients;
 		foreach(left;[true,false]){
 			auto test=left?row.a:row.b;
 			bool lifted; auto r=geometricRatio(left?row.b:row.a,lifted);
 			MomentPolynomial p;
-			if(r==BoundTerm.init||!momentPolynomial(test,p,false)||p.coefficients.length<2) continue;
-			Rational[] samples;
-			if(!polynomialSamples(p.coefficients,samples)) return false;
-			uint witness;
-			foreach(i,y;samples) if(y!=samples[0]){ witness=cast(uint)i; break; }
-			if(!witness) continue;
-			Rational[] differences;
-			while(samples.length){
-				differences~=samples[0];
-				foreach(i;1..samples.length){
-					samples[i-1]=samples[i]-samples[i-1];
-					if(samples[i-1].words>128) return false;
-				}
-				samples.length--;
-			}
-			while(differences[$-1].zero) differences.length--;
-			// Clear the common denominator (1-r)^(degree+1) before
-			// emitting the result. Lean verifies this second identity.
-			Rational[] numerator,denominator=[Rational(1)];
-			foreach_reverse(c;differences){
-				numerator=polySum(polyProduct([c],denominator),polyProduct([Rational(0),Rational(1)],numerator));
-				foreach(v;numerator) if(v.words>128) return false;
-				denominator=polyProduct(denominator,[Rational(1),Rational(-1)]);
-			}
-			while(numerator[$-1].zero) numerator.length--;
-			d=NewtonMoment(test,r.id,witness,left,lifted,differences,numerator);
-			return true;
+			if(r==BoundTerm.init||!momentPolynomial(test,p,false)) continue;
+			d.test=test; d.ratio=r.id; d.testFirst=left; d.lifted=lifted; coefficients=p.coefficients;
+			break;
 		}
-		return false;
+		if(d.test==uint.max){
+			MomentRow group; if(!groupedMomentRow(rowId,group)) return false;
+			d.grouped=rowId; d.ratio=group.ratio; coefficients=group.coefficients;
+		}
+		if(coefficients.length<2) return false;
+		Rational[] samples;
+		if(!polynomialSamples(coefficients,samples)) return false;
+		uint witness;
+		foreach(i,y;samples) if(y!=samples[0]){ witness=cast(uint)i; break; }
+		if(!witness) return false;
+		Rational[] differences;
+		while(samples.length){
+			differences~=samples[0];
+			foreach(i;1..samples.length){
+				samples[i-1]=samples[i]-samples[i-1];
+				if(samples[i-1].words>128) return false;
+			}
+			samples.length--;
+		}
+		while(differences[$-1].zero) differences.length--;
+		// Clear the common denominator (1-r)^(degree+1) before
+		// emitting the result. Lean verifies this second identity.
+		Rational[] numerator,denominator=[Rational(1)];
+		foreach_reverse(c;differences){
+			numerator=polySum(polyProduct([c],denominator),polyProduct([Rational(0),Rational(1)],numerator));
+			foreach(v;numerator) if(v.words>128) return false;
+			denominator=polyProduct(denominator,[Rational(1),Rational(-1)]);
+		}
+		while(numerator[$-1].zero) numerator.length--;
+		d.witness=witness; d.differences=differences; d.numerator=numerator;
+		return true;
 	}
 	// Emit sparse Horner syntax and its witness in lockstep. Exact integer
 	// coefficients, zero terms and a monic tail need no scalar rearrangement.
@@ -1891,15 +1931,21 @@ final class Bindings{
 		return guard(domain,normalized?primitive(arena.mask(arena.boolean(true),z),[upper,fraction]):fraction);
 	}
 	private string momentFractionProof(NewtonMoment d,BoundTerm rate){
-		MomentPolynomial test; enforce(momentPolynomial(d.test,test,true));
 		enum ns="GeometricMoments.Newton.";
-		auto power="("~ns~(d.lifted?"powerQR (":"powerR (")~name(d.lifted?node(rate).a:rate.id)~".eval ξ ρ))";
+		string evidence;
+		if(d.grouped!=uint.max){
+			MomentRow row; enforce(groupedMomentRow(d.grouped,row,rate));
+			evidence=ns~"row_fraction "~row.proof~" ";
+		}else{
+			MomentPolynomial test; enforce(momentPolynomial(d.test,test,true));
+			evidence=ns~"series_fraction "~test.proof~" "~geometricPowerProof(d.lifted,rate)~(d.testFirst?" true ":" false ");
+		}
 		string list(Rational[] coefficients){
 			string text="["; foreach(j,c;coefficients) text~=(j?", ":"")~SourceCertificates.q(c); return text~"]";
 		}
 		string horner; momentNumerator(rate,d.numerator,true,horner);
 		auto one="(n"~to!string(arena.real_(1).id)~".eval ξ)",minus="(n"~to!string(arena.real_(-1).id)~".eval ξ)";
-		return ns~"series_fraction "~test.proof~" "~power~(d.testFirst?" true ":" false ")~
+		return evidence~
 			list(d.differences)~" "~list(d.numerator)~" "~to!string(d.witness)~" rfl rfl (of_decide_eq_true rfl) "~one~" "~minus~
 			" AffineRecurrence.oneR Spectral.minusR "~horner;
 	}
