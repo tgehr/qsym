@@ -288,6 +288,24 @@ theorem Expr.eval_unroll_app (f : Expr Γ (.arrow a b)) (body : Expr (a :: .arro
     k.bind (fun v => (x.eval ξ ρ).bind v)) (hf.trans he)).trans
       (Expr.eval_beta (body.subst (Substitution.lift (Substitution.single f))) x ξ ρ)
 
+theorem defined_unary_iff {x : Option α} {y : Option β} (h : Value.Defined y ↔ Value.Defined x) :
+    definedValue y = definedValue x := by
+  cases x <;> cases y <;> simp_all [Value.Defined, definedValue]
+
+theorem defined_binary_iff {x : Option α} {y : Option β} {z : Option γ}
+    (h : Value.Defined z ↔ Value.Defined x ∧ Value.Defined y) :
+    definedValue z = Value.and (definedValue x) (definedValue y) := by
+  cases x <;> cases y <;> cases z <;> simp_all [Value.Defined, definedValue, Value.and]
+
+theorem defined_total_function1 (f : Function1 α β) (ht : ∀ a, f.domain a) (x : Option α) :
+    definedValue (f.apply x) = definedValue x :=
+  defined_unary_iff ⟨f.defined_arg x, f.total ht x⟩
+
+theorem defined_total_function2 (f : Function2 α β γ) (ht : ∀ a b, f.domain a b) (x : Option α) (y : Option β) :
+    definedValue (f.apply x y) = Value.and (definedValue x) (definedValue y) :=
+  defined_binary_iff ⟨fun h => ⟨f.defined_left x y h, f.defined_right x y h⟩,
+    fun h => f.total ht x y h.1 h.2⟩
+
 theorem defined_binary_data (op : α → β → γ) (a : Option α) (b : Option β) :
     definedValue (a.bind (fun x => b.map (op x))) = Value.and (definedValue a) (definedValue b) := by
   cases a <;> cases b <;> rfl

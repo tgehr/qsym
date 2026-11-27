@@ -37,7 +37,7 @@ struct BoundNode{
 }
 struct BinderHint{ string name,refinement; }
 private enum BindingRule:ushort{
-	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMissing,distributionGuard,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
+	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMissing,definedScalarPrimitive,distributionGuard,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
@@ -10907,6 +10907,10 @@ final class Bindings{
 							next=both(defined(at(child.a)),defined(at(child.b))); rule=child.op==BoundOp.member?BindingRule.definedMember:child.op==BoundOp.subset?BindingRule.definedSubset:BindingRule.definedEqual;
 						}else if(child.op==BoundOp.primitive&&arena.view(arena.at(child.data)).op==Op.not_){
 							next=defined(at(child.a)); rule=BindingRule.definedNot;
+						}else if(child.op==BoundOp.primitive&&child.a!=uint.max&&domainStrict(child)){
+							next=defined(at(child.a));
+							if(child.b!=uint.max) next=both(next,defined(at(child.b)));
+							rule=BindingRule.definedScalarPrimitive;
 						}else if(child.op==BoundOp.apply){
 							next=holds(member(domain(at(child.a)),at(child.b))); rule=BindingRule.definedApp;
 						}
@@ -14543,6 +14547,22 @@ final class Bindings{
 					auto add=sort==Sort.natural?"Functions.addN.apply":sort==Sort.integer?"Functions.addZ.apply":sort==Sort.rational?"Functions.addQ.apply":"Value.add";
 					auto h=sort==Sort.natural?"AffineRecurrence.addN":sort==Sort.integer?"AffineRecurrence.addZ":sort==Sort.rational?"AffineRecurrence.addQ":"rfl";
 					proof=".ofEq (fun ξ ρ => Binding.conditional_numeric "~add~" "~h~" ("~name(n.a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ) ("~name(n.c)~".eval ξ ρ))"; break;
+				case BindingRule.definedScalarPrimitive:{
+					auto f=nodes[n.a],op=arena.view(arena.at(f.data));
+					bool binary=f.b!=uint.max;
+					auto args=" ("~name(f.a)~".eval ξ ρ)";
+					if(binary) args~=" ("~name(f.b)~".eval ξ ρ)";
+					string law;
+					if(op.op==Op.builtin){
+						auto b=builtinInfo(cast(Builtin)op.value);
+						law="Binding.defined_total_function"~(binary?"2":"1")~" Functions."~b.code~
+							(binary?" (fun _ _ => True.intro)":" (fun _ => True.intro)")~args;
+					}else{
+						auto member=op.op==Op.abs||op.op==Op.pow?"map _":to!string(op.op);
+						law=(binary?"Binding.defined_binary_iff":"Binding.defined_unary_iff")~" (Value.defined_"~member~args~")";
+					}
+					proof=".ofEq (fun ξ ρ => "~law~")"; break;
+				}
 				case BindingRule.conditionalMissing:{
 					bool positive=nodes[n.c].op==BoundOp.bottom;
 					auto args=" ("~name(n.a)~".eval ξ ρ) ("~name(positive?n.b:n.c)~".eval ξ ρ)";

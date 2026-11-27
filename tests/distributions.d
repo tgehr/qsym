@@ -484,6 +484,22 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("ScalarParameterDomainSine","λ(h:ℕ→ℝ).defined(sin(h(0)))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). holds((0∈domain(h)))"),
+	Case("ScalarParameterDomainComposite","λ(h:ℕ→ℝ).defined(exp(atan(h(1))))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). holds((1∈domain(h)))"),
+	Case("ScalarParameterDomainSum","λ(h:ℕ→ℝ).defined(h(0)+cos(h(1)))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). (holds((0∈domain(h))))∧(holds((1∈domain(h))))"),
+	Case("ScalarParameterDomainProd","λ(h:ℕ→ℝ).defined(h(1)*h(0))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). (holds((1∈domain(h))))∧(holds((0∈domain(h))))"),
+	Case("ScalarParameterDomainCompare","λ(h:ℕ→ℝ).defined(h(0)<h(1))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). (holds((0∈domain(h))))∧(holds((1∈domain(h))))"),
+	Case("ScalarParameterDomainNonzero","λ(h:ℕ→ℝ).defined(h(0)≠0)","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). holds((0∈domain(h)))"),
+	Case("ScalarParameterDomainPower","λ(h:ℕ→ℝ).defined(h(0)^2)","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). holds((0∈domain(h)))"),
+	Case("ScalarParameterDomainAbs","λ(h:ℕ→ℝ).defined(abs(h(0)))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). holds((0∈domain(h)))"),
+	Case("ScalarParameterDomainInteger","λ(h:ℕ→ℤ).defined(h(0)+h(1))","(ℕ→ℤ)→𝔹","λ(h:ℕ→ℤ). (holds((0∈domain(h))))∧(holds((1∈domain(h))))"),
+	Case("ScalarParameterDomainComplex","λ(h:ℕ→ℂ).defined(conj(h(0)))","(ℕ→ℂ)→𝔹","λ(h:ℕ→ℂ). holds((0∈domain(h)))"),
+	Case("ScalarParameterDomainCast","λ(h:ℕ→ℕ).defined(toℝ(h(0)))","(ℕ→ℕ)→𝔹","λ(h:ℕ→ℕ). holds((0∈domain(h)))"),
+	Case("ScalarParameterDomainScalar","defined(sin(a))","𝔹","true"),
+	Case("ScalarParameterDomainInverse","λ(h:ℕ→ℝ).defined(h(0)⁻¹)","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). defined(h(0)⁻¹)"),
+	Case("ScalarParameterDomainSquareRoot","λ(h:ℕ→ℝ).defined(sqrt(h(0)))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). defined(sqrt(h(0)))"),
+	Case("ScalarParameterDomainMask","λ(h:ℕ→ℝ).defined([a<0]·h(0))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). defined([a<0]·h(0))"),
+	Case("ScalarParameterDomainAbsent","defined(sin(undefined(ℝ)))","𝔹","false"),
 	Case("ConditionalChartDensity","densityAtD(Λx.λ[sin(x+a⁻¹)],0)","ℝ","guard(a≠0,abs(cos(a⁻¹)))"),
 	Case("ConditionalChartInterval","∫dx [0≤x≤1]·λ[sin(x+a⁻¹)]","ℝ","guard(a≠0,(-1)^floor((1/2·π+1+a⁻¹)·π⁻¹)·sin(1+a⁻¹)-(-1)^floor((1/2·π+a⁻¹)·π⁻¹)·sin(a⁻¹)+2·floor((1/2·π+1+a⁻¹)·π⁻¹)-2·floor((1/2·π+a⁻¹)·π⁻¹))"),
 	Case("ConditionalChartAffine","∫dx [0≤x≤1]·λ[x*a⁻¹]","ℝ","guard(a≠0,abs(a)⁻¹)"),
@@ -557,14 +573,14 @@ private Case[] cases(){
 	Case("IversonParameterInverseMass","∫dx [0≤x≤1]·λ[exp(x+[a≠0]·a⁻¹)]","ℝ","exp([a≠0]·a⁻¹+1)-exp([a≠0]·a⁻¹)"),
 	Case("IversonParameterBooleanMass","λ(p:𝔹).∫dx [0≤x≤1]·λ[(x+[p])^3]","𝔹→ℝ","λ(p:𝔹). ([p]+1)^3+[p]·-1"),
 	Case("IversonParameterOtherGuard","Λx.λ[sin(x+[b≠0]·a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if b=0∨a≠0 then (guard(b=0∨a≠0,abs(cos(x+[b≠0]·a⁻¹))))·λ[x] else λ[(undefined(ℝ))]"),
-	Case("IversonParameterPartialGuard","λ(h:ℕ→𝔹).Λx.λ[sin(x+[h(0)])]","(ℕ→𝔹)→Distribution(ℝ)","λ(h:ℕ→𝔹). Λ(x:ℝ). if defined(sin([h(0)])) then (abs(cos(x+[h(0)])))·λ[x] else λ[(undefined(ℝ))]"),
-	Case("IversonParameterPartialValue","λ(h:ℕ→ℝ).Λx.λ[sin(x+[a<0]·h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). if defined(sin([a<0]·h(0))) then (abs(cos(x+[a<0]·h(0))))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("IversonParameterPartialGuard","λ(h:ℕ→𝔹).Λx.λ[sin(x+[h(0)])]","(ℕ→𝔹)→Distribution(ℝ)","λ(h:ℕ→𝔹). Λ(x:ℝ). if defined([h(0)]) then (abs(cos(x+[h(0)])))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("IversonParameterPartialValue","λ(h:ℕ→ℝ).Λx.λ[sin(x+[a<0]·h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). if defined([a<0]·h(0)) then (abs(cos(x+[a<0]·h(0))))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("IversonParameterApplied","(λ(p:𝔹).Λx.λ[sin(x+[p])])(false)","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x)))·λ[x]"),
 	Case("ScalarBinderNatural","λ(n:ℕ).Λx.λ[sin(x+(n:ℝ))]","ℕ→Distribution(ℝ)","λ(n:ℕ). Λ(x:ℝ). (abs(cos(x+n)))·λ[x]"),
 	Case("ScalarBinderInteger","λ(k:ℤ).Λx.λ[sin((k:ℝ)*x)]","ℤ→Distribution(ℝ)","λ(k:ℤ). Λ(x:ℝ). (abs(k)·abs(cos(x·k)))·λ[x]"),
 	Case("ScalarBinderRational","λ(q:ℚ).Λx.λ[exp((q:ℝ)*x)]","ℚ→Distribution(ℝ)","λ(q:ℚ). Λ(x:ℝ). (abs(q)·exp(x·q))·λ[x]"),
 	Case("ScalarBinderComplex","λ(z:ℂ).Λx.λ[sin(x+creal(z))]","ℂ→Distribution(ℝ)","λ(z:ℂ). Λ(x:ℝ). (abs(cos(x+creal(z))))·λ[x]"),
-	Case("ScalarBinderHigherOrder","λ(h:ℕ→ℝ).λ(n:ℕ).Λx.λ[sin(x+h(n))]","(ℕ→ℝ)→ℕ→Distribution(ℝ)","λ(h:ℕ→ℝ). λ(n:ℕ). Λ(x:ℝ). if defined(sin(h(n))) then (abs(cos(x+h(n))))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("ScalarBinderHigherOrder","λ(h:ℕ→ℝ).λ(n:ℕ).Λx.λ[sin(x+h(n))]","(ℕ→ℝ)→ℕ→Distribution(ℝ)","λ(h:ℕ→ℝ). λ(n:ℕ). Λ(x:ℝ). if holds((n∈domain(h))) then (abs(cos(x+h(n))))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("ScalarBinderNaturalMass","λ(n:ℕ).∫dx [0≤x≤1]·λ[exp(x+(n:ℝ))]","ℕ→ℝ","λ(n:ℕ). -exp(n)+exp(n+1)"),
 	Case("ScalarBinderMixed","λ(n:ℕ).λ(a:ℝ).Λx.λ[sin(a*x+(n:ℝ))]","ℕ→ℝ→Distribution(ℝ)","λ(n:ℕ). λ(a:ℝ). Λ(x:ℝ). (abs(a)·abs(cos(a·x+n)))·λ[x]"),
 	Case("ScalarBinderSameType","λ(n:ℕ).λ(m:ℕ).Λx.λ[sin((n:ℝ)*x+(m:ℝ))]","ℕ→ℕ→Distribution(ℝ)","λ(n:ℕ). λ(m:ℕ). Λ(x:ℝ). (abs(cos(x·n+m))·n)·λ[x]"),
@@ -588,7 +604,7 @@ private Case[] cases(){
 	Case("CoordinateParameterConstantMass","∫dx [0≤x≤1]·λ[exp(a)]","ℝ","0"),
 	Case("CoordinateParameterSingular","Λx.λ[sin(x+a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then (guard(a≠0,abs(cos(x+a⁻¹))))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("CoordinateParameterMissing","Λx.λ[sin(x+undefined(ℝ))]","Distribution(ℝ)","Λ(x:ℝ). λ[(undefined(ℝ))]"),
-	Case("CoordinateParameterLookup","λ(h:ℕ→ℝ).Λx.λ[sin(x+h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). if defined(sin(h(0))) then (abs(cos(x+h(0))))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("CoordinateParameterLookup","λ(h:ℕ→ℝ).Λx.λ[sin(x+h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). if holds((0∈domain(h))) then (abs(cos(x+h(0))))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("CoordinateParameterMagnitude","Λx.λ[sin(abs(a)*x)]","Distribution(ℝ)","Λ(x:ℝ). (abs(a)·abs(cos(x·abs(a))))·λ[x]"),
 	Case("IntervalFactorSigned","∫dx [0≤x≤2*π]·(-3/2*abs(cos(x)))·λ[x]","ℝ","-6"),
 	Case("IntervalFactorPositive","∫dx [0≤x≤2*π]·(3/2*abs(cos(x)))·λ[x]","ℝ","6"),
@@ -2552,7 +2568,7 @@ private Case[] cases(){
 	Case("RangeProbeBare","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([x=(i:ℝ)]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x)<n∧x=floorN(x))]"),
 	Case("RangeProbeShift","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([x=(i+3:ℝ)]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x-3)<n∧x=(floorN(x-3)+3))]"),
 	Case("RangeProbeFlipped","λ(n:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<n]·([(3+i:ℝ)=x]·1)","ℕ→ℝ→ℝ","λ(n:ℕ). λ(x:ℝ). [n≠0∧(floorN(x-3)<n∧x=(floorN(x-3)+3))]"),
-	Case("RangeProbeCaptured","λ(o:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<1000000]·([x=(o+i:ℝ)]·(i:ℝ))","ℕ→ℝ→ℝ","λ(o:ℕ). λ(x:ℝ). [floorN(x-o)<1000000]·([x=(o+floorN(x-o))]·(guard(defined(floorN(x-o)),(floorN(x-o):ℝ))))"),
+	Case("RangeProbeCaptured","λ(o:ℕ). λ(x:ℝ). ∑(i:ℕ). [i<1000000]·([x=(o+i:ℝ)]·(i:ℝ))","ℕ→ℝ→ℝ","λ(o:ℕ). λ(x:ℝ). [floorN(x-o)<1000000]·([x=(o+floorN(x-o))]·(guard(defined(o),(floorN(x-o):ℝ))))"),
 	Case("RangeProbeLazy","∑(i:ℕ). [i<1000000]·([1/2=(i+3:ℝ)]·undefined(ℝ))","ℝ","0"),
 	Case("RangeProbeRight","∑(i:ℕ). [i<1000000]·([1000003=(i+3:ℝ)]·undefined(ℝ))","ℝ","0"),
 	Case("RangeProbeInside","∑(i:ℕ). [i<1000000]·([1000002=(i+3:ℝ)]·(i:ℝ))","ℝ","999999"),
@@ -2770,6 +2786,13 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("ScalarParameterDomain")==0){
+			bool unary=c.name=="ScalarParameterDomainSine"||c.name=="ScalarParameterDomainComposite"||c.name=="ScalarParameterDomainCast";
+			if(unary) enforce(certificate.indexOf("Binding.defined_total_function1 ")>=0,c.name);
+			if(c.name=="ScalarParameterDomainInteger") enforce(certificate.indexOf("Binding.defined_total_function2 ")>=0,c.name);
+			if(c.name=="ScalarParameterDomainInverse"||c.name=="ScalarParameterDomainSquareRoot"||c.name=="ScalarParameterDomainMask")
+				enforce(certificate.indexOf("Binding.defined_total_function")<0&&text.indexOf("defined(")>=0,c.name);
 		}
 		if(c.name.indexOf("ConditionalChart")==0){
 			if(c.name=="ConditionalChartInterval"||c.name=="ConditionalChartAffine"||c.name=="ConditionalChartDensity"){
