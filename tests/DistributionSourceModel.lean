@@ -478,6 +478,7 @@ theorem inverse_root_endpoint_edit :
 #qsym_check_axioms RootInterval.mass_missing
 #qsym_check_axioms RootInterval.exact_result
 #qsym_check_axioms StepSource.MissingPoint.unary
+#qsym_check_axioms StepSource.MissingPoint.guard_false_at
 #qsym_check_axioms StepSource.MissingPoint.affine_preimage
 #qsym_check_axioms StepSource.MissingPoint.sqrt_negative_one
 #qsym_check_axioms RootInterval.integral

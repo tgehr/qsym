@@ -625,7 +625,7 @@ private Case[] cases(){
 	Case("IntervalFactorZeroAreaPartial","λ(h:ℕ→ℝ).∫dx [0≤x≤π]·mulR(h(0),cos(x))·λ[x]","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). 0·h(0)"),
 	Case("IntervalFactorActiveMissing","defined(∫dx [0≤x≤1]·mulR(undefined(ℝ),abs(cos(x)))·λ[x])","𝔹","false"),
 	Case("IntervalFactorActiveMissingZeroArea","defined(∫dx [-π≤x≤π]·mulR(undefined(ℝ),sin(x))·λ[x])","𝔹","false"),
-	Case("IntervalFactorSingular","defined(∫dx [0≤x≤1]·mulR(0,x⁻¹)·λ[x])","𝔹"),
+	Case("IntervalFactorSingular","defined(∫dx [0≤x≤1]·mulR(0,x⁻¹)·λ[x])","𝔹","false"),
 	Case("IntervalFactorOpaque","λ(c:ℝ).∫dx [0≤x≤1]·mulR(c,sin(x²))·λ[x]","ℝ→ℝ"),
 	Case("IntervalFactorImproper","λ(c:ℝ).∫dx [0≤x]·mulR(c,abs(sin(x)))·λ[x]","ℝ→ℝ"),
 	Case("PromotedLiteralGuard","λ(h:ℕ→𝔹).[h(0)]·toℝ(floor(3/2))","(ℕ→𝔹)→ℝ","λ(h:ℕ→𝔹). [h(0)]"),
@@ -1055,20 +1055,38 @@ private Case[] cases(){
 	Case("OrdinaryQuadraticEmpty","Λy.∫dx [0<x<0]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). 0·λ[y]"),
 	Case("OrdinaryQuadraticScaleTwo","Λy.∫dx [0<x<2]·λ[x]·δ(x²/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([0<y∧y<2]·sqrt(2·y)⁻¹)·λ[y]"),
 	Case("OrdinaryQuadraticNegativeUnitGain","Λy.∫dx [-1<x≤0]·λ[x]·δ((1-(x+1)^2)/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([y<1/2∧0≤y]·sqrt(-2·y+1)⁻¹)·λ[y]"),
+	Case("StrictGuardPointExcluded","massD(weightD(λ(x:ℝ).guard(x≠0,(1:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointRational","massD(weightD(λ(x:ℝ).guard(x≠2/3,(1:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointHalfSpace","massD(weightD(λ(x:ℝ).guard(2*x≤3,(7:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointFarSpace","massD(weightD(λ(x:ℝ).guard(-3<x,(7:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointNarrowGap","massD(weightD(λ(x:ℝ).guard(x≤4/7∨5/8≤x,(2:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointJustPoint","massD(weightD(λ(x:ℝ).guard(x<2/3∨2/3<x,(2:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointComposite","massD(weightD(λ(x:ℝ).exp(guard(x≤1∨3/2≤x,(2:ℝ))),lebesgueD()))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointWeightedOutside","∫dx [0<x<1]·λ[x]·guard(x≠0,(3:ℝ))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointForwardMass","massD(pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).guard(x≠2/3,(5:ℝ))))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointForwardDensity","densityAtD(pushforwardOnD(λ(x:ℝ).false,λ(x:ℝ).guard(x≠2/3,(5:ℝ))),7)","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointPullback","massD(weightD(λ(y:ℝ).y,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).1/x)))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointTarget","massD(weightD(λ(y:ℝ).1/y,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointBoolean","massD(weightD(λ(b:𝔹).if b then (2:ℝ) else undefined(ℝ),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x<1/2)))","ℝ","undefined(ℝ)"),
+	Case("StrictGuardPointHidden","∫dx ([0<x<1]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","∫dx ([0<x∧x<1]·(guard(x≠0,(2:ℝ))))·λ[x]"),
+	Case("StrictGuardPointMasked","∫dx ([0<x<1]·(2:ℝ))·λ[x]","ℝ","2"),
+	Case("StrictGuardPointTautology","∫dx guard(x<2/3∨2/3≤x,[0<x<1]·(2:ℝ))·λ[x]","ℝ","2"),
+	Case("StrictGuardPointNoWitness","λ(p:ℝ→𝔹).massD(weightD(λ(x:ℝ).guard(p(x),[0<x<1]·(1:ℝ)),lebesgueD()))","(ℝ→𝔹)→ℝ","λ(p:ℝ→𝔹). ∫dx (guard(p(x),[0<x∧x<1]))·λ[x]"),
+	Case("StrictGuardPointInverse","densityAtD(Λx.λ[guard(x≠0,x)],1)","ℝ","(λ(x:ℝ). (λ[(guard(x≠0,x))])//λ[x])((1:ℝ))"),
 	Case("PullbackMomentMean","massD(weightD(λ(y:ℝ).y,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","4/3"),
 	Case("PullbackMomentSecondMoment","massD(weightD(λ(y:ℝ).y²,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","28/15"),
 	Case("PullbackMomentQuartic","massD(weightD(λ(y:ℝ).y,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x^4+1)))","ℝ","6/5"),
 	Case("PullbackMomentQuarticSecond","massD(weightD(λ(y:ℝ).y²,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x^4+1)))","ℝ","68/45"),
 	Case("PullbackMomentSigned","massD(weightD(λ(y:ℝ).y-2,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","-2/3"),
 	Case("PullbackMomentThreshold","massD(weightD(λ(y:ℝ).[y≤5/4],Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","1/2"),
-	Case("PullbackMomentMissingMap","massD(weightD(λ(y:ℝ).y,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).1/x)))","ℝ","∫dx (guard(x≠0,[0<x∧x<1]·x⁻¹))·λ[x]"),
-	Case("PullbackMomentRealPartial","massD(weightD(λ(y:ℝ).1/y,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","∫dy (guard(y≠0,[1<y∧y<2]·(y⁻¹·sqrt(y-1)⁻¹·(1/2))))·λ[y]"),
+	Case("PullbackMomentMissingMap","massD(weightD(λ(y:ℝ).y,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).1/x)))","ℝ","undefined(ℝ)"),
+	Case("PullbackMomentRealPartial","massD(weightD(λ(y:ℝ).1/y,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","undefined(ℝ)"),
 	Case("PullbackMomentOpaqueReal","λ(t:ℝ→ℝ).massD(weightD(t,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","(ℝ→ℝ)→ℝ","λ(t:{t:ℝ→ℝ | defined(t)}). ∫dx (mulR(t(x),[1<x∧x<2]·(sqrt(x-1)⁻¹·(1/2))))·λ[x]"),
 	Case("PullbackMomentBool","massD(weightD(λ(b:𝔹).if b then (2:ℝ) else 0,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x<1/2)))","ℝ","1"),
 	Case("PullbackMomentNat","massD(weightD(λ(n:ℕ).if n=2 then (3:ℝ) else 0,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).(2:ℕ))))","ℝ","3"),
 	Case("PullbackMomentFunction","massD(weightD(λ(h:ℝ→ℝ).h(1),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).λ(z:ℝ).x+z)))","ℝ","3/2"),
 	Case("PullbackMomentNested","massD(weightD(λ(d:Distribution(ℝ)).massD(d),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).δ(x))))","ℝ","1"),
-	Case("PullbackMomentBoolPartial","massD(weightD(λ(b:𝔹).if b then (2:ℝ) else undefined(ℝ),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x<1/2)))","ℝ","∫dx (mulR((guard(x<1/2,(2:ℝ))),[0<x∧x<1]))·λ[x]"),
+	Case("PullbackMomentBoolPartial","massD(weightD(λ(b:𝔹).if b then (2:ℝ) else undefined(ℝ),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x<1/2)))","ℝ","undefined(ℝ)"),
 	Case("PullbackMomentOpaqueFunction","λ(t:(ℝ→ℝ)→ℝ).massD(weightD(t,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).λ(z:ℝ).x+z)))","((ℝ→ℝ)→ℝ)→ℝ","λ(t:{t:(ℝ→ℝ)→ℝ | defined(t)}). ∫dx (mulR(t(λ(z:ℝ). x+z),[0<x∧x<1]))·λ[x]"),
 	Case("PullbackMomentMissingTest","massD(weightD(undefined(ℕ→ℝ),pushforwardOnD(λ(x:ℝ).false,λ(x:ℝ).(2:ℕ))))","ℝ","undefined(ℝ)"),
 	Case("PullbackMomentType","massD(weightD(λ(T:Type).if T=ℝ then (5:ℝ) else 0,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).ℝ)))","ℝ","5"),
@@ -2060,7 +2078,7 @@ private Case[] cases(){
 	Case("QuotientPoleScaleClosed","∫dx [0<x<1]*c/(x+1)*λ[x]","ℝ","c·log(2)"),
 	Case("QuotientPoleScaleBelow","∫dx [x≤b]*c/(x-2)^2*λ[x]","ℝ","guard(b<2,-c·(b-2)⁻¹)"),
 	Case("QuotientPoleUniform","∫dx [a≤x≤b]*(1/(x+1))/log(b/a)*λ[x]","ℝ","[a≤b]·(guard(a≠0∧(0<b·a⁻¹∧(b≠a∧(-1<a∧b≠-1)))∨a<0∧(b≠a∧(b<-1∧a≠-1)),(-log(abs(a+1))+log(abs(b+1)))·log(b·a⁻¹)⁻¹))"),
-	Case("QuotientPoleInside","∫dx [-2≤x≤0]*1/(x+1)*λ[x]","ℝ"),
+	Case("QuotientPoleInside","∫dx [-2≤x≤0]*1/(x+1)*λ[x]","ℝ","undefined(ℝ)"),
 	Case("Logarithm","∫dx [1≤x≤2]*log(x)*λ[x]","ℝ","2·log(2)-1"),
 	Case("LogarithmProduct","∫dx [1≤x≤2]*x*log(x)*λ[x]","ℝ","2·log(2)-3/4"),
 	Case("LogarithmPolynomial","∫dx [1≤x≤2]*(x^2-1)*log(x)*λ[x]","ℝ","2/3·log(2)+2/9"),
@@ -3552,6 +3570,12 @@ private void run(string directory){
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
+		if(c.name.indexOf("StrictGuardPoint")==0){
+			import std.algorithm : canFind;
+			auto form=c.name["StrictGuardPoint".length..$];
+			bool witness=!["Hidden","Masked","Tautology","NoWitness","Inverse"].canFind(form);
+			enforce((certificate.indexOf("MissingPoint.guard_false_at ")>=0)==witness,c.name);
+		}
 		if(c.name.indexOf("PullbackMoment")==0){
 			import std.algorithm : canFind;
 			auto form=c.name["PullbackMoment".length..$];
@@ -3818,7 +3842,8 @@ private void run(string directory){
 			bool left=certificate.indexOf("StepSource.IntervalTerms.factor ")>=0,right=certificate.indexOf("StepSource.IntervalTerms.factorRight ")>=0;
 			enforce((left||right)==factored,c.name);
 			if(c.name=="IntervalFactorTwoCoefficients") enforce(left&&right,c.name);
-			if(c.name=="IntervalFactorOpaque"||c.name=="IntervalFactorImproper"||c.name=="IntervalFactorSingular") enforce(text.indexOf("∫")>=0,c.name);
+			if(c.name=="IntervalFactorOpaque"||c.name=="IntervalFactorImproper") enforce(text.indexOf("∫")>=0,c.name);
+			if(c.name=="IntervalFactorSingular") enforce(certificate.indexOf("MissingPoint.guard_false_at ")>=0,c.name);
 		}
 		if(c.name.indexOf("TrigIntegral")==0){
 			bool residual=c.name=="TrigIntegralMissing"||c.name=="TrigIntegralNonlinear"||c.name=="TrigIntegralHalfLine";
@@ -4507,15 +4532,16 @@ private void run(string directory){
 		// inverse of a power of a linear polynomial. Moved along the axis
 		// by the pole that is a quotient around zero, between the bounds
 		// moved along with it, and the polynomials are moved as well. The
-		// domain is then that the axis is not at the pole. Two poles, a
-		// denominator without a root and the domain around a mask of closed
-		// bounds with the pole between them keep their integral.
-		if(c.name.indexOf("Quotient")==0&&c.name!="QuotientPoleQuadratic"||c.name=="DomainAxis"){
+		// domain is then that the axis is not at the pole. Two poles and a
+		// denominator without a root keep their integral. A strict domain
+		// guard that excludes a pole can instead supply a missing point.
+		if(c.name=="QuotientPoleInside") enforce(certificate.indexOf("MissingPoint.guard_false_at ")>=0,c.name);
+		else if(c.name.indexOf("Quotient")==0&&c.name!="QuotientPoleQuadratic"||c.name=="DomainAxis"){
 			enum src="Distribution.StepSource.";
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
 			bool retained=among("QuotientDiverges","QuotientAbovePolynomial","QuotientRemovable","QuotientExponential","QuotientScaleSum","QuotientScaleDiverges",
-				"QuotientPoleInside","QuotientPoleTwo");
+				"QuotientPoleTwo");
 			bool pole=c.name.indexOf("QuotientPole")==0&&!retained;
 			bool scaled=c.name.indexOf("QuotientScale")==0&&c.name!="QuotientScaled"||c.name.indexOf("QuotientPoleScale")==0||c.name=="QuotientPoleUniform";
 			bool above=c.name.indexOf("QuotientAbove")==0||c.name.indexOf("QuotientScaleAbove")==0||c.name.indexOf("QuotientPoleAbove")==0||
@@ -5409,7 +5435,7 @@ private void run(string directory){
 		// rest is then observed; the scalar under it is simplified there. A
 		// guard that mentions the axis as the negation of the bound in front,
 		// or else the domain of the value, leaves from behind that bound.
-		if(c.name.indexOf("StrictGuard")==0){
+		if(c.name.indexOf("StrictGuard")==0&&c.name.indexOf("StrictGuardPoint")!=0){
 			enforce(certificate.indexOf("Distribution.DensityProgram.mass_strict_guard")>=0,c.name~" strict guard certificate");
 			enforce(certificate.indexOf("Distribution.DensityProgram.Hoists.here")>=0,c.name~" guard");
 			bool retained=c.name=="StrictGuardRetained";

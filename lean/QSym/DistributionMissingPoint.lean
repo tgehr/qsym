@@ -55,6 +55,11 @@ theorem MissingPoint.guard (p : ℝ → Option Bool) {f} (hf : MissingPoint f) :
   obtain ⟨x, hx⟩ := hf
   exact ⟨x, by simp [hx, Binding.guardValue]⟩
 
+/-- A single rejected parameter makes a strict guard missing, for any payload. -/
+theorem MissingPoint.guard_false_at (x : ℝ) {p : ℝ → Option Bool} (f : ℝ → Option ℝ)
+    (h : p x = some false) : MissingPoint (fun y => Binding.guardValue (p y) (f y)) :=
+  ⟨x, by simp [Binding.guardValue, h]⟩
+
 namespace MissingPoint
 
 /-- An ordinary real density, possibly missing as a distribution. -/

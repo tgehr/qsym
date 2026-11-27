@@ -3572,6 +3572,29 @@ final class Bindings{
 		d.constant=p[0]; d.halfLinear=half; d.leading=p[2]; d.determinant=k; d.inverse=id;
 		return true;
 	}
+	// A Boolean combination of affine comparisons can change at a rational cut.
+	// Try each cut and one point of each open cell. The proof only needs one
+	// calculation on the original predicate, regardless of its other values.
+	private bool falseGuardPoint(uint id,out Rational witness){
+		auto axis=arena.variable(Sort.real_,freshScalarIndex(id));
+		auto predicate=scalarBody(at(id),axis);
+		Rational[] cuts;
+		if(predicate==Term.init||!integralCutPoints(arena,predicate,axis,cuts)) return false;
+		bool check(Rational point){
+			Term value;
+			if(point.words>128||!gridValue(id,point,value)||value!=arena.boolean(false)) return false;
+			witness=point;
+			return true;
+		}
+		if(!cuts.length) return check(Rational(0));
+		import std.algorithm : sort;
+		sort(cuts);
+		foreach(i,cut;cuts){
+			if(i&&cut==cuts[i-1]) continue;
+			if(check(cut)||i&&check((cut+cuts[i-1])/Rational(2))) return true;
+		}
+		return check(cuts[0]-Rational(1))||check(cuts[$-1]+Rational(1));
+	}
 	// Find a point where a strict weight is missing. Iverson masks can
 	// hide a pole, so traversal follows only strict operations and guards.
 	private bool missingPoint(uint body,out string evidence,SourceCertificates cert=null){
@@ -3583,8 +3606,13 @@ final class Bindings{
 			auto n=nodes[id];
 			if(n.op==BoundOp.bottom){ if(cert !is null) proof=ns~"bottom"; return true; }
 			if(n.op==BoundOp.guard){
-				if(!visit(n.b,proof)) return false;
-				if(cert !is null) proof="("~ns~"guard "~cert.functionAt(n.a)~" "~proof~")";
+				if(visit(n.b,proof)){
+					if(cert !is null) proof="("~ns~"guard "~cert.functionAt(n.a)~" "~proof~")";
+					return true;
+				}
+				Rational point;
+				if(!falseGuardPoint(n.a,point)) return false;
+				if(cert !is null) proof="("~ns~"guard_false_at ("~cert.q(point)~" : ℝ) (p := "~cert.functionAt(n.a)~") "~cert.functionAt(n.b)~" "~cert.numericProof(n.a,point,"false")~")";
 				return true;
 			}
 			if(n.op!=BoundOp.primitive) return false;
