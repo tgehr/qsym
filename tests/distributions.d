@@ -2194,6 +2194,25 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("WeightedRetryNormalized","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d))))","ℝ→ℝ","λ(q:{q:ℝ | q≤1∧0≤q}). [q≠1]·(guard(q<1,(-q+1)⁻¹·abs(-q+1)))"),
+	Case("WeightedRetryDomain","λ(q:ℝ).defined((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d))))","ℝ→𝔹","λ(q:ℝ). q≤1∧0≤q"),
+	Case("WeightedRetryRaw","λ(q:ℝ).(μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d)))","ℝ→Distribution(ℕ)","λ(q:{q:ℝ | q≤1}). μ(d:Distribution(ℕ)). addD(Λ(x:ℕ). (abs(-q+1))·δ(0)[x],scaleD(q,d))"),
+	Case("WeightedRetryIndependent","λ(w:ℝ).λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(w,δ((0:ℕ))),scaleD(q,d))))","ℝ→ℝ→ℝ","λ(w:ℝ). λ(q:{q:ℝ | 0≤w∧0≤q}). [abs(w)≠0]·(guard(q<1,(-q+1)⁻¹·abs(w)))"),
+	Case("WeightedRetrySquareBase","λ(w:ℝ).λ(x:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(w,scaleD(x^2,δ(1))),scaleD(1/2,d))))","ℝ→ℝ→ℝ","λ(w:ℝ). λ(x:{x:ℝ | 0≤w}). 2·x^2·abs(w)"),
+	Case("WeightedRetrySumBase","λ(w:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(w,addD(δ(0),δ(1))),scaleD(1/2,d))))","ℝ→ℝ","λ(w:{w:ℝ | 0≤w}). 4·abs(w)"),
+	Case("WeightedRetryPartialWeight","λ(h:ℕ→ℝ).defined((μ(d:Distribution(ℕ)).addD(scaleD(h(0),δ((0:ℕ))),scaleD(1/2,d))))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). (holds(0≤h(0)))∧(holds((0∈domain(h))))"),
+	Case("WeightedRetryPartialPoint","λ(w:ℝ).λ(h:ℕ→ℕ).defined((μ(d:Distribution(ℕ)).addD(scaleD(w,δ(h(0))),scaleD(1/2,d))))","ℝ→(ℕ→ℕ)→𝔹","λ(w:ℝ). λ(h:ℕ→ℕ). (holds(0≤w))∧((defined(w))∧(holds((0∈domain(h)))))"),
+	Case("WeightedRetrySwapped","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(q,d),scaleD(1-q,δ((0:ℕ))))))","ℝ→ℝ","λ(q:{q:ℝ | q≤1∧0≤q}). [q≠1]·(guard(q<1,(-q+1)⁻¹·abs(-q+1)))"),
+	Case("WeightedRetryAtZero","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d)))))(0)","ℝ","1"),
+	Case("WeightedRetryAtHalf","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d)))))(1/2)","ℝ","1"),
+	Case("WeightedRetryAtOne","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d)))))(1)","ℝ","0"),
+	Case("WeightedRetryAboveOne","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d)))))(2)","ℝ","undefined(ℝ)"),
+	Case("WeightedRetryNegative","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d)))))(-1/2)","ℝ","undefined(ℝ)"),
+	Case("WeightedRetryNegativeSeed","defined((μ(d:Distribution(ℕ)).addD(scaleD(-1,δ((0:ℕ))),scaleD(1/2,d))))","𝔹","false"),
+	Case("WeightedRetryNoWeight","massD((μ(d:Distribution(ℕ)).addD(scaleD(undefined(ℝ),δ((0:ℕ))),scaleD(1/2,d))))","ℝ","undefined(ℝ)"),
+	Case("WeightedRetryScaleDomain","λ(h:ℕ→ℝ).λ(k:ℕ→ℕ).defined(scaleD(h(0),δ(k(1))))","(ℕ→ℝ)→(ℕ→ℕ)→𝔹","λ(h:ℕ→ℝ). λ(k:ℕ→ℕ). (holds((0∈domain(h))))∧(holds((1∈domain(k))))"),
+	Case("WeightedRetrySumDomain","λ(h:ℕ→ℕ).λ(k:ℕ→ℕ).defined(addD(δ(h(0)),δ(k(1))))","(ℕ→ℕ)→(ℕ→ℕ)→𝔹","λ(h:ℕ→ℕ). λ(k:ℕ→ℕ). (holds((0∈domain(h))))∧(holds((1∈domain(k))))"),
+	Case("WeightedRetryDensity","λ(w:ℝ).λ(y:ℝ).densityAtD((μ(d:Distribution(ℝ)).addD(scaleD(w,δ((0:ℝ))),scaleD(1/2,d))),y)","ℝ→ℝ→ℝ","λ(w:ℝ). λ(y:{y:ℝ | 0≤w∧mulR(abs(w),[y=0])=0}). 0·abs(w)"),
 	Case("RetryEmissionSquare","λ(x:ℝ).massD(μ(d:Distribution(ℕ)).addD(scaleD(x^2,δ((0:ℕ))),scaleD(1/2,d)))","ℝ→ℝ","λ(x:ℝ). 2·x^2"),
 	Case("RetryEmissionAbsolute","λ(x:ℝ).massD(μ(d:Distribution(ℕ)).addD(scaleD(abs(x),δ((0:ℕ))),scaleD(1/2,d)))","ℝ→ℝ","λ(x:ℝ). 2·abs(x)"),
 	Case("RetryEmissionExponential","λ(x:ℝ).massD(μ(d:Distribution(ℕ)).addD(scaleD(exp(x),δ((0:ℕ))),scaleD(1/2,d)))","ℝ→ℝ","λ(x:ℝ). 2·exp(x)"),
@@ -2922,6 +2941,10 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="WeightedRetryNormalized"||c.name=="WeightedRetryRaw"||c.name=="WeightedRetryPartialPoint")
+			enforce(certificate.indexOf("fixed_weighted_emission ")>=0,c.name);
+		if(c.name=="WeightedRetryScaleDomain"||c.name=="WeightedRetrySumDomain")
+			enforce(certificate.indexOf("Binding.defined_binary_constructor ")>=0,c.name);
 		if(c.name=="RetryEmissionSquare"||c.name=="RetryEmissionProduct"||c.name=="RetryEmissionPartialMask")
 			enforce(certificate.indexOf("admissible_scale_lower ")>=0,c.name);
 		if(c.name=="RetryProbeTwoAtoms"||c.name=="RetryProbeSignedRound"||c.name=="RetryProbePartialProbe"||c.name=="RetryProbeRealBoundRound")

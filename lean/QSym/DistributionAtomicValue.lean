@@ -120,6 +120,11 @@ def retryValue (ratio : Option ℝ) (seed : Option (D α)) : Option (D α) := do
   let g := strictRetryStep m (ENNReal.ofReal r)
   if 0 ≤ r then realizeChain g.lfp (fun n => g^[n] ⊥) else none
 
+theorem retry_unrepresented (r : Option ℝ) {d : D α} (bad : ∀ k, ¬ Represents d k) :
+    retryValue r (some d) = none := by
+  have absent : ¬ ∃ m, Presents d m := fun ⟨_, h⟩ => bad _ h.1
+  cases r <;> simp [retryValue, modelOf, absent]
+
 theorem retry_negative {r : ℝ} (hr : r < 0) (seed : Option (D α)) : retryValue (some r) seed = none := by
   cases seed with
   | none => rfl

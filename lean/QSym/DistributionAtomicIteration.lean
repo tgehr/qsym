@@ -318,6 +318,59 @@ theorem fixed_scaled_parameter (swap : Bool) (r : Option ℝ) {seed : Option (D 
         | false => cases h with | add _ right => exact bad _ _ right
         | true => cases h with | add left _ => exact bad _ _ left
 
+/-- Direct scaling and addition force every successful approximation of the
+source to contain a presentation of the seed. -/
+theorem fixed_scaled_source (swap : Bool) (r : Option ℝ) (seed : Option (D α))
+    {f : D α → Option (D α)} (body : ∀ d, f d = retryBody swap false r seed d) :
+    fixedValue (some f) = retryValue r seed := by
+  classical
+  by_cases hs : Admissible seed
+  · exact fixed_scaled_parameter swap r hs body
+  · cases seed with
+    | none => exact (hs admissible_none).elim
+    | some s =>
+      have bad (k : Weights α) : ¬ Represents s k := by
+        intro h
+        apply hs
+        rintro _ ⟨⟩
+        exact ⟨(k, visited s), h, rfl⟩
+      rw [retry_unrepresented r bad]
+      cases r with
+      | none =>
+        apply fixed_missing (n := 1)
+        change f .zero = none
+        rw [body]
+        cases swap <;> rfl
+      | some r =>
+        have first : iterateBody f 1 = some (if swap then .add (.scale r .zero) s else .add s (.scale r .zero)) := by
+          change f .zero = _
+          rw [body]
+          cases swap <;> rfl
+        apply fixed_unrepresented first
+        intro k h
+        cases swap with
+        | false => cases h with | add left _ => exact bad _ left
+        | true => cases h with | add _ right => exact bad _ right
+
+/-- A missing or negative emission coefficient fails in the first approximation.
+On its nonnegative domain the absolute value is a certified source coefficient. -/
+theorem fixed_weighted_emission (swap : Bool) (r w : Option ℝ) (seed : Option (D α))
+    {f : D α → Option (D α)} (body : ∀ d, f d = retryBody swap false r (scaleValue w seed) d) :
+    fixedValue (some f) = Binding.guardValue (Value.le (some ((0 : ℚ) : ℝ)) w)
+      (retryValue r (scaleValue (Value.abs w) seed)) := by
+  rw [fixed_scaled_source swap r _ body]
+  cases w with
+  | none => exact retry_missing r
+  | some w =>
+    by_cases h : 0 ≤ w
+    · simp [Binding.guardValue, Value.le, Value.abs, h, abs_of_nonneg h]
+    · have absent : ∀ s : D α, ∀ k, ¬ Represents (.scale w s) k := by
+        intro s k hs
+        cases hs with | scale hw _ => exact h hw
+      cases seed with
+      | none => simpa [Binding.guardValue, Value.le, h, scaleValue] using (retry_missing (α := α) r)
+      | some s => simpa [Binding.guardValue, Value.le, h, scaleValue] using (retry_unrepresented r (absent s))
+
 theorem defined_retry_parameter (r : Option ℝ) {seed : Option (D α)} (hs : Admissible seed) :
     Binding.definedValue (retryValue r seed) =
       Value.and (Binding.holdsValue (Value.le (some ((0 : ℚ) : ℝ)) r)) (Binding.definedValue seed) := by
