@@ -37,7 +37,7 @@ struct BoundNode{
 }
 struct BinderHint{ string name,refinement; }
 private enum BindingRule:ushort{
-	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
+	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMissing,distributionGuard,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,domainBottom,definedFixed,appBottom,appScalarUndefined,memberDomain,
@@ -5627,6 +5627,7 @@ final class Bindings{
 	// In particular, domain/defined/holds and inactive Boolean branches do not.
 	private bool conditionalStrict(BoundNode n,bool right=false){
 		switch(n.op){
+			case BoundOp.distributionMass,BoundOp.distributionDensityAt,BoundOp.distributionWeight:return true;
 			case BoundOp.apply,BoundOp.sequence,BoundOp.first,BoundOp.rest,BoundOp.get,
 				BoundOp.member,BoundOp.subset,BoundOp.typeEq,BoundOp.equal,BoundOp.tensor:return true;
 			case BoundOp.primitive:
@@ -10174,6 +10175,12 @@ final class Bindings{
 				else if(nodes[current.a].op==BoundOp.bottom){ next=bottom(ctx,type(at(result.output))); rule=BindingRule.conditionalBottom; }
 				else if(steps<budget&&missingPredicate(current.a)){ next=bottom(ctx,type(at(result.output))); rule=BindingRule.conditionalUndefined; }
 				else if(current.b==current.c){ next=sequence(at(current.a),at(current.b)); rule=BindingRule.conditionalSame; }
+				else if(nodes[current.c].op==BoundOp.bottom||nodes[current.b].op==BoundOp.bottom){
+					bool positive=nodes[current.c].op==BoundOp.bottom;
+					auto pred=at(current.a);
+					if(!positive) pred=primitive(arena.not_(arena.boolean(false)),[pred]);
+					next=guard(pred,at(positive?current.b:current.c)); rule=BindingRule.conditionalMissing;
+				}
 				else if(types[current.type]==scalarType(Sort.boolean)){
 					auto predicate=at(current.a),neg=primitive(arena.not_(arena.boolean(false)),[predicate]);
 					next=primitive(arena.or_(arena.boolean(false),arena.boolean(false)),[both(predicate,at(current.b)),both(neg,at(current.c))]); rule=BindingRule.conditionalBool;
@@ -10683,6 +10690,16 @@ final class Bindings{
 					auto right=nodes[current.b];
 					next=conditional(at(right.a),rebuild(at(result.output),ctx,[at(current.a),at(right.b)]),rebuild(at(result.output),ctx,[at(current.a),at(right.c)]));
 					rule=BindingRule.conditionalRight;
+				}
+			}
+			if(next==BoundTerm.init&&(current.op==BoundOp.distributionMass||current.op==BoundOp.distributionDensityAt||
+				current.op==BoundOp.distributionWeight)){
+				bool right=nodes[current.a].op!=BoundOp.guard;
+				if(!right||current.b!=uint.max&&nodes[current.b].op==BoundOp.guard){
+					auto g=nodes[right?current.b:current.a];
+					auto args=current.b==uint.max?[at(g.b)]:right?[at(current.a),at(g.b)]:[at(g.b),at(current.b)];
+					next=guard(at(g.a),rebuild(at(result.output),ctx,args));
+					rule=BindingRule.distributionGuard; extra=right?1:0;
 				}
 			}
 			if(next==BoundTerm.init&&(additive(current)||multiplicative(current))&&
@@ -14526,8 +14543,15 @@ final class Bindings{
 					auto add=sort==Sort.natural?"Functions.addN.apply":sort==Sort.integer?"Functions.addZ.apply":sort==Sort.rational?"Functions.addQ.apply":"Value.add";
 					auto h=sort==Sort.natural?"AffineRecurrence.addN":sort==Sort.integer?"AffineRecurrence.addZ":sort==Sort.rational?"AffineRecurrence.addQ":"rfl";
 					proof=".ofEq (fun ξ ρ => Binding.conditional_numeric "~add~" "~h~" ("~name(n.a)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ) ("~name(n.c)~".eval ξ ρ))"; break;
-				case BindingRule.conditionalMap,BindingRule.conditionalLeft,BindingRule.conditionalRight:
-					auto right=p.rule==BindingRule.conditionalRight,q=nodes[right?n.b:n.a];
+				case BindingRule.conditionalMissing:{
+					bool positive=nodes[n.c].op==BoundOp.bottom;
+					auto args=" ("~name(n.a)~".eval ξ ρ) ("~name(positive?n.b:n.c)~".eval ξ ρ)";
+					auto law=positive?"(Binding.guard_branch"~args~").symm":"Binding.conditional_none_left"~args;
+					proof=".ofEq (fun ξ ρ => "~law~")"; break;
+				}
+				case BindingRule.conditionalMap,BindingRule.conditionalLeft,BindingRule.conditionalRight,BindingRule.distributionGuard:
+					auto guarded=p.rule==BindingRule.distributionGuard;
+					auto right=guarded?p.extra==1:p.rule==BindingRule.conditionalRight,q=nodes[right?n.b:n.a];
 					string operation;
 					if(n.op==BoundOp.apply||n.op==BoundOp.sequence){
 						operation="(fun (f : Option ("~leanType(types[nodes[n.a].type])~" : Binding.Ty).denote) (x : Option ("~leanType(types[nodes[n.b].type])~" : Binding.Ty).denote) => f.bind (fun g => "~(n.op==BoundOp.apply?"x.bind g":"x")~"))";
@@ -14539,7 +14563,9 @@ final class Bindings{
 						operation=right?"(fun v => "~operation~" "~other~" v)":"(fun v => "~operation~" v "~other~")";
 						strict=n.op==BoundOp.tensor?"("~tensorDomainProof(n)~(right?".right ":".left ")~other~")":binaryNone(binary,other,right);
 					}
-					proof=".ofEq (fun ξ ρ => Binding.conditional_map "~operation~" "~strict~" ("~name(q.a)~".eval ξ ρ) ("~name(q.b)~".eval ξ ρ) ("~name(q.c)~".eval ξ ρ))"; break;
+					auto law=guarded?"Binding.guard_map_strict":"Binding.conditional_map";
+					proof=".ofEq (fun ξ ρ => "~law~" "~operation~" "~strict~" ("~name(q.a)~".eval ξ ρ) ("~name(q.b)~".eval ξ ρ)"~
+						(guarded?"":" ("~name(q.c)~".eval ξ ρ)")~")"; break;
 				case BindingRule.conditionalDefined:
 					auto q=nodes[n.a]; proof=".definedConditional "~name(q.a)~" "~name(q.b)~" "~name(q.c); break;
 				case BindingRule.trans:proof=".trans "~proofName(p.left)~" "~proofName(p.right); break;

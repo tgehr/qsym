@@ -677,6 +677,18 @@ theorem conditional_map {α β : Type} (f : Option α → Option β) (hf : f non
   | none => exact hf
   | some b => cases b <;> rfl
 
+theorem guard_map_strict {α β : Type} (f : Option α → Option β) (hf : f none = none)
+    (p : Option Bool) (x : Option α) : f (guardValue p x) = guardValue p (f x) := by
+  cases p with
+  | none => exact hf
+  | some b => cases b <;> first | exact hf | rfl
+
+theorem conditional_none_left {α : Type} (p : Option Bool) (x : Option α) :
+    conditionalValue p none x = guardValue (Value.not p) x := by
+  cases p with
+  | none => rfl
+  | some b => cases b <;> rfl
+
 theorem conditional_numeric {α : Type} [AddZeroClass α]
     (add : Option α → Option α → Option α) (ha : add = Value.add)
     (p : Option Bool) (x y : Option α) :

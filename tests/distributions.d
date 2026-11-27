@@ -425,7 +425,7 @@ private Case[] cases(){
 	Case("AffineTurnMissingEndpoint","defined(∫dx [0≤x<undefined(ℝ)]·λ[a*cos(x)+b])","𝔹","false"),
 	Case("AffineTurnNonlinear","∫dx [0≤x≤2*π]·λ[x*sin(x)]","ℝ"),
 	Case("AffineTurnMissingCoefficient","∫dx [0≤x≤2*π]·λ[undefined(ℝ)*cos(x)+1]","ℝ","undefined(ℝ)"),
-	Case("AffineTurnOpaque","λ(h:ℕ→ℝ).∫dx [0≤x≤2*π]·λ[h(0)+sin(x)]","(ℕ→ℝ)→ℝ"),
+	Case("AffineTurnOpaque","λ(h:ℕ→ℝ).∫dx [0≤x≤2*π]·λ[h(0)+sin(x)]","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | holds((0∈domain(h)))}). (4:ℝ)"),
 	Case("AffineTurnHolder","λ(u:ℝ).∫dx [0≤x≤u]·λ[7-2*cos(x)]","ℝ→ℝ"),
 	Case("AffineTurnClosedZero","∫dx [0≤x≤2*π]·λ[0*cos(x)+4]","ℝ","0"),
 	Case("PowerWaveRationalEndpoints","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ","sin(-4)^2+sin(4)^2+4"),
@@ -484,6 +484,26 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("ConditionalChartDensity","densityAtD(Λx.λ[sin(x+a⁻¹)],0)","ℝ","guard(a≠0,abs(cos(a⁻¹)))"),
+	Case("ConditionalChartInterval","∫dx [0≤x≤1]·λ[sin(x+a⁻¹)]","ℝ","guard(a≠0,(-1)^floor((1/2·π+1+a⁻¹)·π⁻¹)·sin(1+a⁻¹)-(-1)^floor((1/2·π+a⁻¹)·π⁻¹)·sin(a⁻¹)+2·floor((1/2·π+1+a⁻¹)·π⁻¹)-2·floor((1/2·π+a⁻¹)·π⁻¹))"),
+	Case("ConditionalChartAffine","∫dx [0≤x≤1]·λ[x*a⁻¹]","ℝ","guard(a≠0,abs(a)⁻¹)"),
+	Case("ConditionalChartMassChoice","λ(p:𝔹).massD(if p then δ((1:ℝ)) else scaleD(2,δ((3:ℝ))))","𝔹→ℝ","λ(p:𝔹). [p]+[¬p]·2"),
+	Case("ConditionalChartMassAtoms","massD(if a>0 then δ((0:ℝ)) else scaleD(3,δ((2:ℝ))))","ℝ","[0<a]+[a≤0]·3"),
+	Case("ConditionalChartMassMissing","massD(if a>0 then δ((0:ℝ)) else undefined(Distribution(ℝ)))","ℝ","guard(0<a,(1:ℝ))"),
+	Case("ConditionalChartQueryTrue","densityAtD(if a>0 then δ((0:ℝ)) else lebesgueD(),2)","ℝ","[a≤0]"),
+	Case("ConditionalChartQueryPoint","densityAtD(δ((0:ℝ)),if a>0 then 1 else 0)","ℝ","guard(0<a,(0:ℝ))"),
+	Case("ConditionalChartWeight","weightD(λ(x:ℝ).x,if a>0 then δ((2:ℝ)) else δ((3:ℝ)))","Distribution(ℝ)","Λ(x:ℝ). if 0<a then 2·δ(2)[x] else 3·δ(3)[x]"),
+	Case("ConditionalChartWeightMass","massD(weightD(λ(x:ℝ).x,if a>0 then δ((2:ℝ)) else δ((3:ℝ))))","ℝ","[0<a]·2+[a≤0]·3"),
+	Case("ConditionalChartWeightFn","massD(weightD(if a>0 then (λ(x:ℝ).x) else (λ(x:ℝ).x^2),δ((2:ℝ))))","ℝ","[0<a]·2+[a≤0]·4"),
+	Case("ConditionalChartOpaque","λ(h:ℕ→𝔹).massD(if h(0) then scaleD(2,δ((0:ℝ))) else δ((1:ℝ)))","(ℕ→𝔹)→ℝ","λ(h:ℕ→𝔹). [h(0)]·2+[¬h(0)]"),
+	Case("ConditionalChartMissing","massD(if undefined(𝔹) then δ((1:ℝ)) else δ((2:ℝ)))","ℝ","undefined(ℝ)"),
+	Case("ConditionalChartHigher","λ(p:𝔹).massD(if p then δ(λ(n:ℕ).n) else scaleD(2,δ(λ(n:ℕ).0)))","𝔹→ℝ","λ(p:𝔹). [p]+[¬p]·2"),
+	Case("ConditionalChartNested","λ(p:𝔹).massD(if p then δ(δ((2:ℝ))) else scaleD(2,δ(δ((1:ℝ)))))","𝔹→ℝ","λ(p:𝔹). [p]+[¬p]·2"),
+	Case("ConditionalChartMissingYes","massD(if a>0 then undefined(Distribution(ℝ)) else δ((0:ℝ)))","ℝ","guard(a≤0,(1:ℝ))"),
+	Case("ConditionalChartGuardWeight","massD(weightD(λ(x:ℝ).x,guard(a>0,δ((3:ℝ)))))","ℝ","guard(0<a,(3:ℝ))"),
+	Case("ConditionalChartGuardPoint","densityAtD(guard(a>0,lebesgueD()),z)","ℝ","guard(0<a,(1:ℝ))"),
+	Case("ConditionalChartGuardFunction","weightD(guard(a>0,(λ(x:ℝ).x)),δ((1:ℝ)))","Distribution(ℝ)","Λ(x:ℝ). ((guard(0<a,λ(x:ℝ). x))(1))·δ(1)[x]"),
+	Case("ConditionalChartTotal","densityAtD(lebesgueD(),0)","ℝ","1"),
 	Case("PromotedSumSeparated","a+2*floor(b)-2*floor(c)","ℝ","a+2·floor(b)-2·floor(c)"),
 	Case("PromotedSumPromoted","a+toℝ(2*floor(b)-2*floor(c))","ℝ","a+2·floor(b)-2·floor(c)"),
 	Case("PromotedSumRegrouped","sin(a)+sin(b)-2*floor(a)+2*floor(b)","ℝ","sin(a)+sin(b)+2·floor(b)-2·floor(a)"),
@@ -501,8 +521,8 @@ private Case[] cases(){
 	Case("UniformSlopeLog","Λx.λ[log((x+a⁻¹)^2+1)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then (guard(a≠0,2·((x+a⁻¹)^2+1)⁻¹·abs(x+a⁻¹)))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("UniformSlopePart","inversePartD(λ(z:ℝ).z<3,(λ(x:ℝ).sin(x+a⁻¹),))","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then ([(guard(a≠0,sin(x+a⁻¹)<3))]·(guard(a≠0,abs(cos(x+a⁻¹)))))·λ[x] else λ[undefined(ℝ) | z. z<3]"),
 	Case("UniformSlopeState","λ(n:ℕ).Λx.λ[cos(x+(n:ℝ)⁻¹)]","ℕ→Distribution(ℝ)","λ(n:ℕ). Λ(x:ℝ). if n≠0 then (abs(-sin(x+n⁻¹)))·λ[x] else λ[(undefined(ℝ))]"),
-	Case("UniformSlopeDensity","densityAtD(Λx.λ[sin(x+a⁻¹)],0)","ℝ","(λ(x:ℝ). (if a≠0 then (guard(a≠0,abs(cos(x+a⁻¹))))·λ[x] else λ[(undefined(ℝ))])//λ[x])((0:ℝ))"),
-	Case("UniformSlopeInterval","∫dx [0≤x≤1]·λ[sin(x+a⁻¹)]","ℝ","∫dx [0≤x∧x≤1]·(if a≠0 then (guard(a≠0,abs(cos(x+a⁻¹))))·λ[x] else λ[(undefined(ℝ))])"),
+	Case("UniformSlopeDensity","densityAtD(Λx.λ[sin(x+a⁻¹)],0)","ℝ","guard(a≠0,abs(cos(a⁻¹)))"),
+	Case("UniformSlopeInterval","∫dx [0≤x≤1]·λ[sin(x+a⁻¹)]","ℝ","guard(a≠0,(-1)^floor((1/2·π+1+a⁻¹)·π⁻¹)·sin(1+a⁻¹)-(-1)^floor((1/2·π+a⁻¹)·π⁻¹)·sin(a⁻¹)+2·floor((1/2·π+1+a⁻¹)·π⁻¹)-2·floor((1/2·π+a⁻¹)·π⁻¹))"),
 	Case("UniformSlopeZero","densityAtD((λ(a:ℝ).Λx.λ[sin(x+a⁻¹)])(0),1)","ℝ","undefined(ℝ)"),
 	Case("UniformSlopeFinite","densityAtD((λ(a:ℝ).Λx.λ[sin(x+a⁻¹)])(1),0)","ℝ","cos(1)"),
 	Case("UniformSlopeAxisHole","Λx.λ[(x-a)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). λ[((-a+x)⁻¹)]"),
@@ -2561,7 +2581,7 @@ private Case[] cases(){
 	Case("FibreWeightsCancellation","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","2")~",0)","ℝ","1"),
 	Case("FibreWeightsBefore","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","1","1",true)~",0)","ℝ","undefined(ℝ)"),
 	Case("FibreWeightsAfter","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","3")~",0)","ℝ","undefined(ℝ)"),
-	Case("FibreWeightsSymbolic","λ(k:ℕ).densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","k")~",0)","ℕ→ℝ","λ(k:ℕ). [k=0]·(undefined(ℝ))+[k≠0]·(guard(k·(-1/2·k-1/2)=-3,(1:ℝ)))"),
+	Case("FibreWeightsSymbolic","λ(k:ℕ).densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","k")~",0)","ℕ→ℝ","λ(k:{k:ℕ | k≠0∧k·(-1/2·k-1/2)=-3}). (1:ℝ)"),
 	Case("FibreWeightsMillion","densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ),lebesgueD())","","1000000",true)~",2)","ℝ","500000500001"),
 	Case("FibreWeightsPolynomial","λ(k:ℕ).densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ)^2,lebesgueD())","","k")~",0)","ℕ→ℝ","λ(k:ℕ). ([k=0]+[k≠0]·(k·(k·(1/3·k+1/2)+1/6)+1):ℝ)"),
 	Case("FibreWeightsZero","densityAtD("~emittedSteps("lebesgueD()","scaleD((n:ℝ),undefined(Distribution(ℝ)))","","0")~",0)","ℝ","1"),
@@ -2750,6 +2770,14 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("ConditionalChart")==0){
+			if(c.name=="ConditionalChartInterval"||c.name=="ConditionalChartAffine"||c.name=="ConditionalChartDensity"){
+				enforce(certificate.indexOf("Binding.conditional_map ")>=0,c.name);
+				enforce(text.indexOf("∫")<0&&text.indexOf("λ[")<0,c.name);
+			}
+			if(c.name=="ConditionalChartMissingYes") enforce(certificate.indexOf("Binding.conditional_none_left ")>=0,c.name);
+			if(c.name=="ConditionalChartMissingYes") enforce(certificate.indexOf("Binding.guard_map_strict ")>=0,c.name);
 		}
 		if(c.name.indexOf("UniformSlope")==0){
 			bool split=c.name!="UniformSlopeZero"&&c.name!="UniformSlopeFinite"&&c.name!="UniformSlopeAxisHole"&&
@@ -2947,7 +2975,8 @@ private void run(string directory){
 			bool changed=c.name!="AffineTurnNonlinear"&&c.name!="AffineTurnMissingCoefficient"&&c.name!="AffineTurnOpaque";
 			enforce((certificate.indexOf("Grid.VariationChange.translate ")>=0)==changed,c.name);
 			enforce((certificate.indexOf("Grid.VariationChange.scale ")>=0)==(changed&&c.name!="AffineTurnOffset"),c.name);
-			bool missing=c.name=="AffineTurnMissingCoefficient";
+			bool missing=c.name=="AffineTurnMissingCoefficient"||c.name=="AffineTurnOpaque";
+			if(c.name=="AffineTurnOpaque") enforce(certificate.indexOf("Grid.UniformSlope.length ")>=0,c.name);
 			enforce((certificate.indexOf("MissingOutput.mass ")>=0)==missing,c.name);
 			enforce((text.indexOf("∫")<0)==(changed||missing),c.name);
 		}
