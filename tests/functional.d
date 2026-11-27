@@ -109,6 +109,19 @@ private Case[] cases(){
 		Case("ApplicationDomainTwoApplications","(λ(y:ℝ).0*sqrt(y-1))((λ(y:ℝ).y)(0))","undefined(ℝ)"),
 		Case("ApplicationDomainSymbolic","(λ(y:ℝ).0*(1/y))((x:ℝ))","guard(x≠0,(0:ℝ))"),
 		Case("ApplicationDomainReapplied","(λ(f:ℝ→ℝ). f(0))((λ(y:ℝ).0*(1/y)))","undefined(ℝ)"),
+		Case("ActiveGuardPredicate","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p]·([guard(p,q)]·z+[guard(p,false)]·guard(p,z))","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p]·([q]·z)"),
+		Case("ActiveGuardConjLeft","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p∧q]·(guard(p,z)+1)","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p∧q]·(z+1)"),
+		Case("ActiveGuardConjRight","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p∧q]·(guard(q,z)+1)","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p∧q]·(z+1)"),
+		Case("ActiveGuardRepeated","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p]·(guard(p,z)*guard(p,z)+guard(p,z))","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p]·(z^2+z)"),
+		Case("ActiveGuardPartialTest","λ(h:ℕ→𝔹).λ(z:ℝ).[h(0)]·([guard(h(0),h(1))]·z)","λ(h:ℕ→𝔹). λ(z:ℝ). [h(0)]·([h(1)]·z)"),
+		Case("ActiveGuardDifferent","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p]·([guard(q,false)]·z)","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p]·([(guard(q,false))]·z)"),
+		Case("ActiveGuardDisjunction","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p∨q]·guard(p,z)","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p∨q]·(guard(p,z))"),
+		Case("ActiveGuardMaskedMissing","λ(h:ℕ→𝔹).λ(z:ℝ).[h(0)]·([guard(h(0),h(1))]·guard(h(1),z))","λ(h:ℕ→𝔹). λ(z:ℝ). [h(0)]·([h(1)]·z)"),
+		Case("ActiveGuardFalseUndefined","(λ(p:𝔹). [p]·guard(p,undefined(ℝ)))(false)","0"),
+		Case("ActiveGuardTrueUndefined","(λ(p:𝔹). [p]·guard(p,undefined(ℝ)))(true)","undefined(ℝ)"),
+		Case("ActiveGuardMissingPredicate","(λ(p:𝔹). [p]·guard(p,(3:ℝ)))(undefined(𝔹))","undefined(ℝ)"),
+		Case("ActiveGuardDifferentAt","(λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p]·([guard(q,false)]·z))(true)(false)(1)","undefined(ℝ)"),
+		Case("ActiveGuardOrAt","(λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p∨q]·guard(p,z))(false)(true)(1)","undefined(ℝ)"),
 		Case("QuotientDomainZero","0∈domain(λ(x:ℝ). x/x)","false"),
 		Case("QuotientDomainOne","1∈domain(λ(x:ℝ). x/x)","true"),
 		Case("UndefinedArgument","(λ(x:ℝ).0)(1/0)","undefined(ℕ)"),
@@ -178,6 +191,11 @@ private string[] run(string directory=""){
 		if(c.name=="ApplicationDomainRootMissing"||c.name=="ApplicationDomainReciprocalMissing"||
 				c.name=="ApplicationDomainNestedSum"||c.name=="ApplicationDomainTwoApplications"||c.name=="ApplicationDomainSymbolic")
 			enforce(code.indexOf("namespace QSym.FunctionCertificate")<0&&code.indexOf("#qsym_check_axioms sound")>=0,c.name~" conditional equality");
+		if(c.name=="ActiveGuardConjLeft"||c.name=="ActiveGuardConjRight"||c.name=="ActiveGuardPredicate"||
+				c.name=="ActiveGuardPartialTest"||c.name=="ActiveGuardMaskedMissing")
+			enforce(code.indexOf("Binding.guard_of_true ")>=0,c.name);
+		if(c.name=="ActiveGuardDifferent"||c.name=="ActiveGuardDisjunction")
+			enforce(code.indexOf("Binding.guard_of_true ")<0,c.name);
 		if(c.name.indexOf("RestrictedCall")==0){
 			auto local=c.name!="RestrictedCallStateChanges"&&c.name!="RestrictedCallOneBranchChanges"&&c.name!="RestrictedCallRecursiveTest";
 			enforce((code.indexOf("Pointwise.restricted ")>=0)==local,c.name);

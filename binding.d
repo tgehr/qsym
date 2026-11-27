@@ -47,7 +47,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionUniformCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated,maskActiveGuard
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -553,6 +553,49 @@ final class Bindings{
 			path~=atMask;
 		}
 		return BoundTerm.init;
+	}
+	// In the active branch of an Iverson bracket, its predicate and each
+	// conjunct are true. Search only within operations in the same scope.
+	private BoundTerm clearActiveGuard(uint id,out bool[] path,out bool[] conjuncts){
+		auto mask=nodes[id];
+		if(nodes[mask.b].op!=BoundOp.primitive&&nodes[mask.b].op!=BoundOp.guard) return BoundTerm.init;
+		uint conditions;
+		bool implied(uint condition,uint wanted,uint depth){
+			if(condition==wanted) return true;
+			if(depth>=12||conditions>=128||!primitiveOp(condition,Op.and_)) return false;
+			++conditions;
+			auto pair=nodes[condition];
+			conjuncts~=false;
+			if(implied(pair.a,wanted,depth+1)) return true;
+			conjuncts[$-1]=true;
+			if(implied(pair.b,wanted,depth+1)) return true;
+			--conjuncts.length;
+			return false;
+		}
+		Table!(uint,bool) searched; uint visits;
+		BoundTerm visit(uint cur,uint depth){
+			auto n=nodes[cur];
+			if(n.op!=BoundOp.guard&&n.op!=BoundOp.primitive||n.c!=uint.max||depth>=32||visits>=128||searched.get(cur,false))
+				return BoundTerm.init;
+			++visits; searched.set(cur,true);
+			if(n.op==BoundOp.guard&&implied(mask.a,n.a,0)) return at(n.b);
+			foreach(right;[false,true]){
+				auto child=right?n.b:n.a;
+				if(child==uint.max) continue;
+				path~=right;
+				auto replaced=visit(child,depth+1);
+				if(replaced!=BoundTerm.init){
+					if(right) n.b=replaced.id; else n.a=replaced.id;
+					return intern(n);
+				}
+				--path.length;
+			}
+			return BoundTerm.init;
+		}
+		auto payload=visit(mask.b,0);
+		if(payload==BoundTerm.init) return payload;
+		mask.b=payload.id;
+		return intern(mask);
 	}
 	private struct JumpRays{ uint x,leftTest,rightTest; Term a,b; bool swap; }
 	private bool jumpRays(uint fn,out JumpRays outRays){
@@ -12014,6 +12057,10 @@ final class Bindings{
 				uint[] path; uint matched;
 				next=repeatedMask(result.output,path,matched); rule=BindingRule.maskRepeated;
 			}
+			if(next==BoundTerm.init&&steps<budget&&primitiveOp(result.output,Op.mask)){
+				bool[] path,conjuncts;
+				next=clearActiveGuard(result.output,path,conjuncts); rule=BindingRule.maskActiveGuard;
+			}
 
 			if(next!=BoundTerm.init){
 				if(node(next).op==current.op&&(current.op==BoundOp.lambda||current.op==BoundOp.set||current.op==BoundOp.fixed)) inheritHint(at(result.output),next);
@@ -15769,6 +15816,26 @@ final class Bindings{
 				case BindingRule.seqScalar:proof=".seqScalar n"~to!string(nodes[n.a].data)~" "~name(n.b)~" (fun _ => ⟨_, rfl⟩)"; break;
 				case BindingRule.seqLam:proof=".seqLam "~name(nodes[n.a].a)~" "~name(n.b); break;
 				case BindingRule.seqSelf:proof=".seqSelf "~name(n.a); break;
+				case BindingRule.maskActiveGuard:{
+					bool[] path,conjuncts;
+					enforce(clearActiveGuard(p.from,path,conjuncts).id==p.to,"missing active guard");
+					string val(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+					auto known="active";
+					foreach(right;conjuncts) known="(Value.and_true_"~(right?"right":"left")~" "~known~")";
+					uint[] parents; auto id=n.b;
+					foreach(right;path){ parents~=id; id=right?nodes[id].b:nodes[id].a; }
+					auto eq="(Binding.guard_of_true "~val(nodes[id].b)~" "~known~")";
+					foreach_reverse(k,parent;parents){
+						auto node_=nodes[parent],op=valueOperation(node_);
+						if(node_.b==uint.max) eq="(congrArg "~op~" "~eq~")";
+						else{
+							auto fixed="(Eq.refl "~val(path[k]?node_.a:node_.b)~")";
+							eq="(congrArg₂ "~op~" "~(path[k]?fixed~" "~eq:eq~" "~fixed)~")";
+						}
+					}
+					proof=".ofEq (fun ξ ρ => Value.UnderMask.sound (p := "~val(n.a)~") (u := "~val(n.b)~
+						") (v := "~val(nodes[p.to].b)~") (fun active => "~eq~"))"; break;
+				}
 				case BindingRule.maskRepeated:{
 					uint[] path; uint matched;
 					enforce(repeatedMask(p.from,path,matched).id==p.to,"missing repeated mask");

@@ -130,6 +130,9 @@ noncomputable def subsetValue {α : Type} (s t : Option (Set α)) : Option Bool 
 def guardValue {α : Type} (p : Option Bool) (x : Option α) : Option α :=
   if p == some true then x else none
 
+theorem guard_of_true {p : Option Bool} (v : Option α) (h : p = some true) : guardValue p v = v :=
+  h ▸ rfl
+
 theorem atInput_guard (p : Option Bool) {x : α} {v : Option α} (h : Recursion.AtInput x v) :
     Recursion.AtInput x (guardValue p v) := by
   cases p with

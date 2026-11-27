@@ -1040,7 +1040,7 @@ private Case[] cases(){
 	Case("QuadraticBranchesPartialPred","λ(h:ℕ→(ℝ→𝔹)).λ(y:ℝ).densityAtD(pushforwardOnD(h(0),λ(x:ℝ).x^2+1),y)","(ℕ→ℝ→𝔹)→ℝ→ℝ"),
 	Case("QuadraticBranchesSameInput","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).x≠y,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
 	Case("QuadraticBranchesControl","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^4+1),y)","ℝ→ℝ"),
-	Case("FibreMarginalWindow","λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y]","ℝ→ℝ"),
+	Case("FibreMarginalWindow","λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y]","ℝ→ℝ","λ(y:ℝ). [1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2))"),
 	Case("FibreMarginalWindowVertex","(λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y])(1)","ℝ","0"),
 	Case("FibreMarginalWindowEdge","(λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y])(2)","ℝ","0"),
 	Case("FibreMarginalWindowInterior","(λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y])(5/4)","ℝ","1"),
@@ -1059,6 +1059,9 @@ private Case[] cases(){
 	Case("FibreMarginalMissing","massD((maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(undefined(ℝ)))","ℝ","undefined(ℝ)"),
 	Case("FibreMarginalConstant","λ(y:ℝ).massD((maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).1))(y))","ℝ→ℝ"),
 	Case("FibreMarginalQuartic","λ(y:ℝ).massD((maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^4+1))(y))","ℝ→ℝ"),
+	Case("ActiveGuardStrictRoot","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1),y)","ℝ→ℝ","λ(y:ℝ). [1<y]·(sqrt(y-1)⁻¹·(1/2))"),
+	Case("ActiveGuardIncludedRoot","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0≤x,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
+	Case("ActiveGuardHole","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<1/(x-2),λ(x:ℝ).x^2+1),y)","ℝ→ℝ","λ(y:{y:ℝ | y<1∨sqrt(y-1)≠2}). [5<y]·(sqrt(y-1)⁻¹·(1/2))"),
 	Case("ClosedSquareDensity","λ(y:ℝ).densityAtD(Λz. ∫dx λ[x]·δ((1-2*x)^2)[z],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMass","λ(y:ℝ).∫dx λ[x]·δ((1-2*x)^2)[y]//λ[y]","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMissing","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x/3-1)*(x/3-1)),undefined(ℝ))","ℝ","undefined(ℝ)"),
@@ -3314,6 +3317,8 @@ private void run(string directory){
 			bool symbolic=c.name!="QuadraticBranchesControl"&&c.name!="QuadraticBranchesGapReapplied"&&c.name!="QuadraticBranchesBoundaryReapplied";
 			enforce((certificate.indexOf("Quadratic.guarded_symbolic ")>=0)==symbolic,c.name);
 		}
+		if(c.name=="FibreMarginalWindow"||c.name.indexOf("ActiveGuard")==0)
+			enforce(certificate.indexOf("Binding.guard_of_true ")>=0,c.name);
 		if(c.name.indexOf("FibreMarginal")==0){
 			import std.string:count;
 			bool supported=c.name!="FibreMarginalConstant"&&c.name!="FibreMarginalQuartic"&&c.name!="FibreMarginalMissing";
