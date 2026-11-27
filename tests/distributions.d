@@ -2194,6 +2194,12 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("RestrictedCallGuardedAtoms","μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if n<3 then δ(n) else f(guard(n≠5,n))","ℕ→Distribution(ℕ)","λ(n:{n:ℕ | n≤2}). δ(n)"),
+	Case("RestrictedCallIndependentTest","λ(h:ℕ→𝔹).μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if h(n) then δ(n) else f(guard(h(0),n))","(ℕ→𝔹)→ℕ→Distribution(ℕ)","λ(h:ℕ→𝔹). λ(n:{n:ℕ | h(n)}). δ(n)"),
+	Case("RestrictedCallGuardedLebesgue","densityAtD((μ(f:ℝ→Distribution(ℝ)).λ(x:ℝ).if x<0 then lebesgueD() else f(guard(0<x,x)))(-1),0)","ℝ","1"),
+	Case("RestrictedCallSeedMass","massD((μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if n<3 then δ(n) else f(guard(n≠5,n)))(2))","ℝ","1"),
+	Case("RestrictedCallOutsideMass","massD((μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if n<3 then δ(n) else f(guard(n≠5,n)))(4))","ℝ","undefined(ℝ)"),
+	Case("RestrictedCallDistBranch","(μ(f:Distribution(ℝ)→ℝ).λ(d:Distribution(ℝ)).if massD(d)<2 then 7 else f(if 0<massD(d) then d else undefined(Distribution(ℝ))))(δ((0:ℝ)))","ℝ","7"),
 	Case("StrictMissingGuardedDist","λ(p:𝔹).guard(p,undefined(Distribution(ℝ)))","𝔹→Distribution(ℝ)","λ(p:𝔹). undefined(Distribution(ℝ))"),
 	Case("StrictMissingGuardedDensity","λ(h:ℕ→𝔹).densityAtD(guard(h(0),undefined(Distribution(ℝ))),0)","(ℕ→𝔹)→ℝ","λ(h:ℕ→𝔹). undefined(ℝ)"),
 	Case("StrictMissingSequencedMass","λ(h:ℕ→ℝ).massD(seq(h(0),undefined(Distribution(ℝ))))","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). undefined(ℝ)"),
@@ -2799,6 +2805,7 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.Atomic.Observation.retry")>=0,c.name);
 			if(c.name=="RetryObservationMappedMoment") enforce(certificate.indexOf("Observation.realBind (Distribution.Atomic.Observation.weight")>=0,c.name);
 		}
+		if(c.name.indexOf("RestrictedCall")==0) enforce(certificate.indexOf("Pointwise.restricted ")>=0,c.name);
 		if(c.name.indexOf("PointwiseFix")==0) enforce(certificate.indexOf("Recursion.fixed_pointwise_first ")>=0,c.name);
 		if(c.name=="FlatFixedDistFunction"||c.name=="RecursiveDistributionState"||c.name=="DiscountFibreCaptured"){
 			enforce((certificate.indexOf("Recursion.program_unfold ")>=0)==(c.name=="RecursiveDistributionState"),c.name);

@@ -1002,23 +1002,45 @@ final class Bindings{
 		}
 		throw new Exception("recursive definitions cannot inspect definedness or use higher-order recursion yet");
 	}
+	// A guard, sequencing test or branch may discard an input. All present
+	// branches must still return the same binder, regardless of the tests.
+	private bool restrictedInput(uint id,out string law,scope string delegate(uint) @safe value){
+		auto n=nodes[id];
+		if(n.op==BoundOp.variable&&n.data==0||n.op==BoundOp.bottom){
+			if(value) law=n.op==BoundOp.bottom?"(Recursion.AtInput.missing x)":"(Recursion.AtInput.here x)";
+			return true;
+		}
+		if(n.op!=BoundOp.guard&&n.op!=BoundOp.sequence&&n.op!=BoundOp.conditional) return false;
+		string yes,no;
+		if(!restrictedInput(n.b,yes,value)||n.op==BoundOp.conditional&&!restrictedInput(n.c,no,value)) return false;
+		if(value){
+			auto lemma=n.op==BoundOp.guard?"Binding.atInput_guard":n.op==BoundOp.sequence?"Recursion.AtInput.seq":"Binding.atInput_conditional";
+			law="("~lemma~" "~value(n.a)~" "~yes~(no.length?" "~no:"")~")";
+		}
+		return true;
+	}
 	/// A certified recursion program can consult its current state several
 	/// times or only in a selected branch. A call at another input prevents
 	/// the one-step fixed-point law.
-	private bool pointwiseCalls(uint id,out string law,bool proof=false){
+	private bool pointwiseCalls(uint id,out string law,scope string delegate(uint) @safe value=null){
 		enum ns="Recursion.Program.Pointwise.";
-		if(!depends(at(id),1)){ if(proof) law=ns~"constant"; return true; }
+		if(!depends(at(id),1)){ if(value) law=ns~"constant"; return true; }
 		auto n=nodes[id];
 		if(n.op==BoundOp.apply){
-			if(nodes[n.a].op!=BoundOp.variable||nodes[n.a].data!=1||
-				nodes[n.b].op!=BoundOp.variable||nodes[n.b].data!=0) return false;
-			if(proof) law=ns~"self";
+			if(nodes[n.a].op!=BoundOp.variable||nodes[n.a].data!=1) return false;
+			if(nodes[n.b].op==BoundOp.variable&&nodes[n.b].data==0){
+				if(value) law=ns~"self";
+			}else{
+				string arg;
+				if(depends(at(n.b),1)||!restrictedInput(n.b,arg,value)) return false;
+				if(value) law="("~ns~"restricted (fun x => "~arg~"))";
+			}
 			return true;
 		}
 		string x,y,z;
-		if(n.a==uint.max||!pointwiseCalls(n.a,x,proof)||
-			n.b!=uint.max&&!pointwiseCalls(n.b,y,proof)||n.c!=uint.max&&!pointwiseCalls(n.c,z,proof)) return false;
-		if(!proof) return true;
+		if(n.a==uint.max||!pointwiseCalls(n.a,x,value)||
+			n.b!=uint.max&&!pointwiseCalls(n.b,y,value)||n.c!=uint.max&&!pointwiseCalls(n.c,z,value)) return false;
+		if(!value) return true;
 		auto op=n.op==BoundOp.primitive?arena.view(arena.at(n.data)).op:Op.variable;
 		if(n.op==BoundOp.conditional) law="("~ns~"branch "~x~" "~y~" "~z~")";
 		else if(n.op==BoundOp.guard||op==Op.mask||op==Op.and_) law="("~ns~"branch "~x~" "~y~" "~ns~"constant)";
@@ -9274,7 +9296,9 @@ final class Bindings{
 			if(steps<budget&&(n.op==BoundOp.fixed||n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.fixed)){
 				auto fn=n.op==BoundOp.fixed?t:at(n.a),v=pool.view(type(fn));
 				auto body=nodes[node(fn).a].a; bool unit=v.fields[0]==pool.primitive(TypeKind.unit); string witness;
-				if(unit||nodes[body].op!=BoundOp.apply&&depends(at(body),1)&&pointwiseCalls(body,witness)){
+				auto source=nodes[body];
+				bool exactSelf=source.op==BoundOp.apply&&nodes[source.b].op==BoundOp.variable&&nodes[source.b].data==0;
+				if(unit||!exactSelf&&depends(at(body),1)&&pointwiseCalls(body,witness)){
 					auto inner=push(context(t),v.fields[0]),absent=lambda(bottom(inner,v.fields[1]));
 					auto next=substituteArgument(at(node(fn).a),absent);
 					auto proof=emit(unit?BindingRule.fixedUnitFirst:BindingRule.fixedPointwiseFirst,fn.id,next.id);
@@ -13533,7 +13557,8 @@ final class Bindings{
 			if(firstStep[i]){
 				string witness,lemma="Recursion.fixed_unit_first";
 				if(v.fields[0]!=pool.primitive(TypeKind.unit)){
-					enforce(pointwiseCalls(nodes[n.a].a,witness,true),"missing proof that recursive calls preserve their input");
+					string valueAt(uint q){ return " ("~name(q)~".eval ξ "~env~")"; }
+					enforce(pointwiseCalls(nodes[n.a].a,witness,&valueAt),"missing proof that recursive calls preserve their input");
 					lemma="Recursion.fixed_pointwise_first";
 				}
 				code~="theorem first"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(n.a)~

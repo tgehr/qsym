@@ -118,6 +118,27 @@ theorem Program.Pointwise.constant {v : α → Option γ} : (Program.constant (�
 theorem Program.Pointwise.self : (Program.call (.constant some) : Program α β β).Pointwise :=
   fun _ _ _ h => h
 
+/-- A partially defined argument that can only return the current input. -/
+def AtInput (x : α) (v : Option α) : Prop := v = none ∨ v = some x
+
+theorem AtInput.here (x : α) : AtInput x (some x) := Or.inr rfl
+
+theorem AtInput.missing (x : α) : AtInput x none := Or.inl rfl
+
+theorem AtInput.seq (test : Option γ) {x : α} {v : Option α} (h : AtInput x v) :
+    AtInput x (test.bind (fun _ => v)) := by
+  cases test with
+  | none => exact .inl rfl
+  | some _ => exact h
+
+theorem Program.Pointwise.restricted {u : α → Option α} (hu : ∀ x, AtInput x (u x)) :
+    (Program.call (.constant u) : Program α β β).Pointwise := by
+  intro g k x hk
+  change (u x).bind g = (u x).bind k
+  rcases hu x with hx | hx <;> rw [hx]
+  · rfl
+  · exact hk
+
 theorem Program.Pointwise.unary {op strict} {p : Program α β γ} (hp : p.Pointwise) :
     (Program.unary (δ := δ) op strict p).Pointwise := fun g k x h => congrArg op (hp g k x h)
 

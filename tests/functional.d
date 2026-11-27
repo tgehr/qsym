@@ -28,6 +28,14 @@ private Case[] cases(){
 		Case("LimitScaleDomain","lim[x→∞] exp(-x)/a","a≠0","",true),
 		Case("LimitSymbolicFunction","lim[x→∞] f(x)","lim[x→∞] f(x)","f:ℝ→ℝ"),
 		Case("LimitInProduct","2·lim[x→∞] sin(x)","2·(lim[x→∞] sin(x))"),
+		Case("RestrictedCallSequence","λ(h:ℕ→ℝ).μ(f:ℕ→ℝ).λ(n:ℕ).if n=0 then 7 else f(seq(h(n),n))","λ(h:ℕ→ℝ). λ(n:{n:ℕ | n=0}). (7:ℝ)"),
+		Case("RestrictedCallNested","λ(h:ℕ→𝔹).μ(f:ℕ→ℝ).λ(n:ℕ).if h(n) then 2 else f(guard(h(0),seq(h(1),guard(h(2),n))))","λ(h:ℕ→𝔹). λ(n:{n:ℕ | h(n)}). (2:ℝ)"),
+		Case("RestrictedCallRootCall","μ(f:ℕ→ℝ).λ(n:ℕ).f(guard(n≠0,n))","λ(n:ℕ). undefined(ℝ)"),
+		Case("RestrictedCallMissing","μ(f:ℕ→ℝ).λ(n:ℕ).if n=0 then 8 else f(undefined(ℕ))","λ(n:{n:ℕ | n=0}). (8:ℝ)"),
+		Case("RestrictedCallPairBranch","λ(h:ℕ→𝔹).μ(f:(ℕ×𝔹)→ℝ).λ(t:ℕ×𝔹).if get(t,1) then get(t,0) else f(if h(0) then t else guard(h(1),t))","λ(h:ℕ→𝔹). λ(t:{t:ℕ×𝔹 | get(t,1)}). ((get(t,0)):ℝ)"),
+		Case("RestrictedCallStateChanges","(μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 7 else f(guard(n≠0,n sub 1)))(2)","7"),
+		Case("RestrictedCallOneBranchChanges","(μ(f:ℕ→ℕ).λ(n:ℕ).if n=0 then 7 else f(if n=1 then 0 else n sub 1))(2)","7"),
+		Case("RestrictedCallRecursiveTest","(μ(f:ℕ→ℝ).λ(n:ℕ).if n=0 then 9 else f(guard(f(n)<4,n)))(0)","9"),
 		Case("StrictMissingGuard","λ(h:ℕ→𝔹).guard(h(0),undefined(ℝ))","λ(h:ℕ→𝔹). undefined(ℝ)"),
 		Case("StrictMissingSequence","λ(h:ℕ→ℝ).seq(h(0),undefined(ℕ))","λ(h:ℕ→ℝ). undefined(ℕ)"),
 		Case("StrictMissingPairLeft","λ(h:ℕ→𝔹).((undefined(ℝ),h(0)):ℝ×𝔹)","λ(h:ℕ→𝔹). undefined(ℝ×𝔹)"),
@@ -147,6 +155,10 @@ private string[] run(string directory=""){
 		enforce(s.format(a,again)==output,c.name~" round trip: "~output~" -> "~s.format(a,again));
 		auto code=s.exportCertificate(a,r);
 		import std.string:indexOf;
+		if(c.name.indexOf("RestrictedCall")==0){
+			auto local=c.name!="RestrictedCallStateChanges"&&c.name!="RestrictedCallOneBranchChanges"&&c.name!="RestrictedCallRecursiveTest";
+			enforce((code.indexOf("Pointwise.restricted ")>=0)==local,c.name);
+		}
 		if(c.name.indexOf("PointwiseFix")==0)
 			enforce((code.indexOf("Recursion.fixed_pointwise_first ")>=0)==(c.name!="PointwiseFixShiftControl"),c.name);
 		if(c.name.indexOf("MissingChoice")==0&&c.name!="MissingChoiceNowhere")
