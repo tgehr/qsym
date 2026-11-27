@@ -92,7 +92,7 @@ struct Syntax{
 	string format(Arena a,Term root){
 		struct Piece{ string text; uint precedence=100; bool negative,iverson; string indicatorConjunct; bool liftedProduct,coefficient,lowerVariable; }
 		Piece[] memo=new Piece[a.length];
-		bool[] symbolic=new bool[a.length];
+		bool[] symbolic=new bool[a.length],exactSyntax=new bool[a.length];
 		string render(Piece p,uint precedence=0,bool magnitude=false){
 			if(p.negative&&!magnitude){
 				p.text="-"~(p.precedence<70?"("~p.text~")":p.text);
@@ -206,8 +206,66 @@ struct Syntax{
 			}
 			return es;
 		}
+		// A sum of exact terms can reparse with a single injection around
+		// their sum, or with separate injections on its summands. Addition
+		// and multiplication here are strict in every numeric sort.
+		bool exactSum(Node n){ return n.op==Op.builtin&&(n.value==Builtin.addN||n.value==Builtin.addZ||n.value==Builtin.addQ); }
+		Piece mixedSum(Operand[] operands){
+			struct Addend{ Piece piece; bool exact; }
+			size_t lower; bool upper;
+			foreach(e;operands){
+				// Preserve the existing order of piecewise alternatives.
+				if(memo[e.term.id].iverson) return Piece.init;
+				if(!exactSyntax[e.term.id]) upper=true;
+				else{
+					auto t=uncast(e.term.id),n=a.view(t);
+					if(!a.isNumber(t)) lower+=exactSum(n)?2:e.count;
+				}
+				if(upper&&lower>=2) break;
+			}
+			if(!upper||lower<2) return Piece.init;
+			Addend[] terms; size_t work;
+			foreach(e;operands){
+				uint[] pending=[e.term.id];
+				while(pending.length){
+					if(++work>4096) return Piece.init;
+					auto id=pending[$-1]; --pending.length;
+					auto t=uncast(id),n=a.view(t);
+					if(exactSum(n)){
+						pending~=[n.a,n.b]; continue;
+					}
+					if(memo[id].iverson) return Piece.init;
+					bool exact=exactSyntax[id];
+					if(e.count>4096-terms.length) return Piece.init;
+					foreach(i;0..e.count) terms~=Addend(memo[id],exact);
+				}
+			}
+			sort!((x,y){
+				if(x.exact!=y.exact) return !x.exact;
+				if(x.piece.negative!=y.piece.negative) return !x.piece.negative;
+				return x.piece.text<y.piece.text;
+			})(terms);
+			import std.array:appender;
+			auto out_=appender!string();
+			foreach(i,t;terms){
+				auto p=t.piece;
+				if(!i) out_.put(render(p,60));
+				else{
+					auto tail=render(p,p.negative?61:60,true);
+					if(p.negative) out_.put("-");
+					else if(!tail.length||tail[0]!='-') out_.put("+");
+					out_.put(tail);
+				}
+				enforce(out_.data.length<=1_000_000,"formatted expression exceeds one million bytes");
+			}
+			return Piece(out_.data,60);
+		}
 		Piece region(Term t,Op op){
 			auto es=ordered(t,op),s=a.sort(t);
+			if(op==Op.add&&es.length>=2){
+				auto mixed=mixedSum(es);
+				if(mixed.text.length) return mixed;
+			}
 			Piece result; bool first=true;
 			foreach(e;es){
 				enforce(e.count<=100_000,"formatted expression has too many repeated operands");
@@ -289,9 +347,16 @@ struct Syntax{
 		foreach(id;a.postorder(root)){
 			auto t=a.at(id),n=a.view(t); Piece p;
 			if(a.node(t).region){
-				foreach(e;a.operands(t)){ symbolic[id]|=symbolic[e.term.id]; }
+				exactSyntax[id]=true;
+				foreach(e;a.operands(t)){
+					symbolic[id]|=symbolic[e.term.id];
+					exactSyntax[id]&=exactSyntax[e.term.id];
+				}
 				memo[id]=region(t,n.op); continue;
 			}
+			exactSyntax[id]=n.sort==Sort.natural||n.sort==Sort.integer||n.sort==Sort.rational||
+				a.isNumber(t)&&a.number(t).im.zero||conversion(n)&&exactSyntax[n.a]||
+				(n.op==Op.add||n.op==Op.mul)&&exactSyntax[n.a]&&exactSyntax[n.b];
 			symbolic[id]=n.op==Op.variable||n.op==Op.densityAt||
 				n.arity>=1&&symbolic[n.a]||n.arity==2&&symbolic[n.b];
 			final switch(n.op){
