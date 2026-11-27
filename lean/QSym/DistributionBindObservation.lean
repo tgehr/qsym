@@ -1,4 +1,5 @@
 import QSym.DistributionWeightObservation
+import QSym.DistributionAtomRows
 
 noncomputable section
 namespace QSym.Distribution
@@ -43,5 +44,37 @@ theorem FiniteFibre.Represents.bind_mass {d : Option (D ℝ)} {m : Option (Finit
   cases k with
   | none => cases d <;> rfl
   | some k => exact (mass_bind_test d k).trans (r.weighted_mass _)
+
+/-- Pair the output of an ordered bind with a strict partial test. The source
+tests the weighted mass of each kernel result in its original order. -/
+theorem mass_weight_bind (d : Option (D α)) (k : α → Option (D β)) (t : β → Option ℝ) :
+    massValue (weightValue (some t) (bindValue d (some k))) =
+      massValue (weightValue (some (fun x => massValue (weightValue (some t) (k x)))) d) := by
+  simp only [mass_weight_test]
+  cases d with
+  | none => rfl
+  | some d => exact integrate_bind d k t
+
+theorem mass_weight_bind_values (d : Option (D α)) (k : Option (α → Option (D β)))
+    (t : Option (β → Option ℝ)) :
+    massValue (weightValue t (bindValue d k)) =
+      t.bind (fun _ => k.bind (fun _ => massValue (weightValue
+        (some (fun x => massValue (weightValue t (k.bind (fun g => g x))))) d))) := by
+  cases t with
+  | none => rfl
+  | some t =>
+    cases k with
+    | none => cases d <;> rfl
+    | some k => exact mass_weight_bind d k t
+
+/-- Changing the real output chart preserves every total scalar observation. -/
+theorem GraphFibre.realBind_weight_total (d : Option (D α)) (k : Option (α → Option (D ℝ)))
+    (t : ℝ → Option ℝ) (ht : ∀ y, Value.Defined (t y)) :
+    massValue (weightValue (some t) (GraphFibre.realBindValue d k)) =
+      massValue (weightValue (some t) (bindValue d k)) := by
+  rw [mass_weight_test, mass_weight_test]
+  choose f hf using ht
+  rw [funext hf]
+  exact GraphFibre.realBind_total d k f
 
 end QSym.Distribution

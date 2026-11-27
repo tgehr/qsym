@@ -441,5 +441,8 @@ theorem charged_point_density (x w : ℝ) (hw : w ≠ 0) :
 #qsym_check_axioms mass_bind_test
 #qsym_check_axioms mass_bind_kernel
 #qsym_check_axioms FiniteFibre.Represents.bind_mass
+#qsym_check_axioms mass_weight_bind
+#qsym_check_axioms mass_weight_bind_values
+#qsym_check_axioms GraphFibre.realBind_weight_total
 
 end QSym.DistributionSourceTests
