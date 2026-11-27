@@ -1,5 +1,6 @@
 import QSym.DistributionIntegral
 import QSym.DistributionModelBridge
+import QSym.DistributionMaskedRootCover
 import QSym.AxiomCheck
 
 noncomputable section
@@ -406,5 +407,29 @@ example (p : DensityProgram) : p.mass = p.mass := by
 #qsym_check_axioms missing_cell_probe_rejected
 #qsym_check_axioms zero_does_not_hide_infinite_row
 #qsym_check_axioms null_row_is_not_erased
+
+theorem empty_fibre_skips_missing_test :
+    FiniteFibre.pairing (FiniteFibre.ofRows ([] : List (ℝ × ℝ))) (fun _ => none) = some 0 := by
+  rw [FiniteFibre.pairing_rows]; rfl
+
+theorem zero_weight_visits_point (x : ℝ) :
+    FiniteFibre.pairing (FiniteFibre.ofRows [(x,0)]) (fun _ => none) = none := by
+  rw [FiniteFibre.pairing_rows]; rfl
+
+theorem cancelled_point_density (x w : ℝ) :
+    FiniteFibre.density (FiniteFibre.ofRows [(x,w),(x,-w)]) x = some 0 := by
+  simp [FiniteFibre.density, FiniteFibre.pairing_rows, Value.mul, Value.add]
+
+theorem charged_point_density (x w : ℝ) (hw : w ≠ 0) :
+    FiniteFibre.density (FiniteFibre.ofRows [(x,w)]) x = none := by
+  simp [FiniteFibre.density, FiniteFibre.pairing_rows, Value.mul, Value.add, hw]
+
+#qsym_check_axioms empty_fibre_skips_missing_test
+#qsym_check_axioms zero_weight_visits_point
+#qsym_check_axioms cancelled_point_density
+#qsym_check_axioms charged_point_density
+#qsym_check_axioms GraphFibre.RootCover.finite_model
+#qsym_check_axioms GraphFibre.RootCover.masked_model
+#qsym_check_axioms GraphFibre.RootCover.masked_mass
 
 end QSym.DistributionSourceTests
