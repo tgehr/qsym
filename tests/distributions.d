@@ -920,6 +920,24 @@ private Case[] cases(){
 	Case("BareCriticalPoint","densityAtD(Λy. ∫dx λ[x]·δ((1-2*x)^2)[y],0)","ℝ","undefined(ℝ)"),
 	Case("BareCriticalNegative","densityAtD(Λy. ∫dx λ[x]·δ((1-2*x)^2)[y],-1)","ℝ","0"),
 	Case("BareCriticalPositive","densityAtD(Λy. ∫dx λ[x]·δ((1-2*x)^2)[y],4)","ℝ","1/4"),
+	Case("QuadraticChartRaised","Λy.∫dx λ[x]·δ(x^2+1)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1), sqrt(y-1)]"),
+	Case("QuadraticChartShifted","Λy.∫dx λ[x]·δ(x^2+x)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y+1/4)-1/2, sqrt(y+1/4)-1/2]"),
+	Case("QuadraticChartDown","Λy.∫dx λ[x]·δ(3-x^2)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(-y+3), sqrt(-y+3)]"),
+	Case("QuadraticChartNonsquare","Λy.∫dx λ[x]·δ(2*x^2)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y·(1/2)), sqrt(y·(1/2))]"),
+	Case("QuadraticChartFraction","Λy.∫dx λ[x]·δ((3/2)*x^2-2*x+5)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y·(2/3)-26/9)+2/3, sqrt(y·(2/3)-26/9)+2/3]"),
+	Case("QuadraticChartLinearTerm","Λy.∫dx λ[x]·δ(-3*x^2+x+1)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(-y·(1/3)+13/36)+1/6, sqrt(-y·(1/3)+13/36)+1/6]"),
+	Case("QuadraticChartHorizontal","Λy.∫dx λ[x]·δ((x-2)^2+1)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1)+2, sqrt(y-1)+2]"),
+	Case("QuadraticChartExpanded","Λy.∫dx λ[x]·δ(x*x+4*x+3)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y+1)-2, sqrt(y+1)-2]"),
+	Case("QuadraticChartCancelFourth","Λy.∫dx λ[x]·δ(x^4+x^2-x^4+2)[y]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-2), sqrt(y-2)]"),
+	Case("QuadraticChartQuartic","Λy.∫dx λ[x]·δ(x^4+1)[y]","Distribution(ℝ)","Λ(y:ℝ). ∫dx λ[x]·δ(x^4+1)[y]"),
+	Case("QuadraticChartPole","Λy.∫dx λ[x]·δ(x^2+x/x)[y]","Distribution(ℝ)","Λ(x:ℝ). (∫(x1:ℝ). (δ(x1^2+x1·x1⁻¹)[x])·(λ[x1]))"),
+	Case("QuadraticChartCubic","Λy.∫dx λ[x]·δ(x^3+x)[y]","Distribution(ℝ)","Λ(y:ℝ). ∫dx λ[x]·δ(x^3+x)[y]"),
+	Case("QuadraticChartSymbolic","Λy.∫dx λ[x]·δ(x^2+a)[y]","Distribution(ℝ)","Λ(y:ℝ). ∫dx λ[x]·δ(x^2+a)[y]"),
+	Case("QuadraticSheetHole","Λy. λ[guard(1<y,-sqrt(y-1)),sqrt(y-1)]","Distribution(ℝ)","Λ(y:ℝ). λ[guard(1<y,-sqrt(y-1)), sqrt(y-1)]"),
+	Case("QuadraticSheetCut","Λy. λ[guard(2≤y,-sqrt(y-1)),sqrt(y-1)]","Distribution(ℝ)","Λ(y:ℝ). λ[guard(2≤y,-sqrt(y-1)), sqrt(y-1)]"),
+	Case("QuadraticSheetDomain","Λy. λ[guard(1≤y,-sqrt(y-1)),guard(1≤y,sqrt(y-1))]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1), sqrt(y-1)]"),
+	Case("QuadraticSheetMissing","Λy. λ[guard(undefined(𝔹),-sqrt(y-1)),sqrt(y-1)]","Distribution(ℝ)","Λ(y:ℝ). λ[undefined(ℝ), sqrt(y-1)]"),
+	Case("QuadraticSheetThree","Λy. λ[guard(1≤y,-sqrt(y-1)),sqrt(y-1),guard(0<y,1/y)]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1), sqrt(y-1), guard(0<y,y⁻¹)]"),
 	Case("ClosedSquareDensity","λ(y:ℝ).densityAtD(Λz. ∫dx λ[x]·δ((1-2*x)^2)[z],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMass","λ(y:ℝ).∫dx λ[x]·δ((1-2*x)^2)[y]//λ[y]","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMissing","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x/3-1)*(x/3-1)),undefined(ℝ))","ℝ","undefined(ℝ)"),
@@ -3154,6 +3172,13 @@ private void run(string directory){
 		}
 		if(c.name=="PointwiseOrderComplexProduct")
 			enforce(certificate.indexOf("Generated.r_complex_add_comm")>=0,c.name);
+		if(c.name.indexOf("QuadraticChart")==0){
+			bool supported=c.name!="QuadraticChartQuartic"&&c.name!="QuadraticChartPole"&&
+				c.name!="QuadraticChartCubic"&&c.name!="QuadraticChartSymbolic";
+			enforce((certificate.indexOf("Coordinates.Quadratic.image ")>=0)==supported,c.name);
+		}
+		if(c.name=="QuadraticSheetDomain"||c.name=="QuadraticSheetThree")
+			enforce(certificate.indexOf("(Value.refines_refl _)).symm")>=0,c.name);
 		if(c.name=="NormalizedMomentFirst"||c.name=="NormalizedMomentSecond"||c.name=="NormalizedMomentRight"||
 				c.name=="NormalizedMomentBetween"||c.name=="NormalizedMomentSparse"||c.name=="NormalizedMomentLifted"||
 				c.name=="NormalizedMomentPartialRate"||c.name=="NormalizedMomentStride"||

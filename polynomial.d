@@ -103,18 +103,36 @@ bool polynomialZero(Arena a,Term input){
  catch(Limit e){return false;}
 }
 
+private bool quadraticCoefficients(Arithmetic arithmetic,Term expression,Term x,out Number[3] c){
+ Polynomial p;
+ if(!arithmetic.parse(expression,p))return false;
+ foreach(powers,v;p){
+  if(!v.im.zero||powers.length&&(powers.length!=2||powers[0]!=x.id||powers[1]>2))return false;
+  c[powers.length?powers[1]:0]=v;
+ }
+ return !c[2].zero;
+}
+
+// The inverse branches of a nonconstant quadratic are h ± sqrt(t*y+u).
+// Compute the three candidates here; the caller certifies t*f(x)+u=(x-h)^2.
+bool rationalQuadraticInverse(Arena a,Term expression,Term x,out Rational centre,out Rational scale,out Rational offset){
+ try{
+  auto ar=new Arithmetic(a); Number[3] c;
+  if(!quadraticCoefficients(ar,expression,x,c))return false;
+  auto t=ar.budget.calc!"/"(Number(1),c[2]);
+  auto h=ar.budget.calc!"/"(c[1],ar.budget.calc!"*"(Number(-2),c[2]));
+  auto u=ar.budget.calc!"-"(ar.budget.calc!"*"(h,h),ar.budget.calc!"*"(t,c[0]));
+  centre=h.re;scale=t.re;offset=u.re;return true;
+ }catch(Limit e){return false;}
+}
+
 // Recover the rational affine square from its polynomial, regardless of how
 // its products were expanded or ordered. The caller certifies the identity.
 bool rationalAffineSquare(Arena a,Term expression,Term x,out Rational slope,out Rational offset){
  import qsym.elementary:Elementary;
  try{
-  auto arithmetic=new Arithmetic(a); Polynomial p;
-  if(!arithmetic.parse(expression,p))return false;
-  Number[3] c;
-  foreach(powers,v;p){
-   if(!v.im.zero||powers.length&&(powers.length!=2||powers[0]!=x.id||powers[1]>2))return false;
-   c[powers.length?powers[1]:0]=v;
-  }
+  auto arithmetic=new Arithmetic(a);Number[3] c;
+  if(!quadraticCoefficients(arithmetic,expression,x,c))return false;
   if(c[2].re<=Rational(0)||!(new Elementary(a,arithmetic.budget)).root(c[2].re,2,slope))return false;
   auto b=arithmetic.budget.calc!"/"(c[1],arithmetic.budget.calc!"*"(Number(2),Number(slope)));
   if(arithmetic.budget.calc!"*"(b,b)!=c[0])return false;

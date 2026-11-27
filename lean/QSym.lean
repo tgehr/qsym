@@ -97,6 +97,7 @@ import QSym.SummationRangeWeight
 import QSym.SummationLinearity
 import QSym.GeometricMomentsNewton
 import QSym.GeometricMomentsExact
+import QSym.DistributionQuadraticChart
 import QSym.SummationAffine
 import QSym.SummationPowers
 import QSym.SummationPrefix
