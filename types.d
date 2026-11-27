@@ -82,6 +82,18 @@ final class TypePool{
 	TypeView view(TypeId t){
 		check(t); auto v=nodes[t.index]; v.fields=v.fields.dup; return v;
 	}
+	bool scalarSort(TypeId t,out Sort sort){
+		if(t.owner !is this) return false;
+		switch(view(t).kind){
+			case TypeKind.boolean:sort=Sort.boolean;return true;
+			case TypeKind.natural:sort=Sort.natural;return true;
+			case TypeKind.integer:sort=Sort.integer;return true;
+			case TypeKind.rational:sort=Sort.rational;return true;
+			case TypeKind.real_:sort=Sort.real_;return true;
+			case TypeKind.complex:sort=Sort.complex;return true;
+			default:return false;
+		}
+	}
 	TypeId primitive(TypeKind k){
 		enforce(k<=TypeKind.complex||k==TypeKind.type_,"not a primitive type");
 		return intern(k,0,[]);

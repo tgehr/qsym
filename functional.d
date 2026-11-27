@@ -43,11 +43,7 @@ struct FunctionSyntax{
 			case Sort.density,Sort.measure:throw new Exception("unsupported function scalar type");
 		}
 	}
-	private bool scalarSort(TypeId t,out Sort sort){
-		foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex,Sort.boolean])
-			if(t==scalarType(s)){ sort=s; return true; }
-		return false;
-	}
+	private bool scalarSort(TypeId t,out Sort sort){ init(); return pool.scalarSort(t,sort); }
 	private Dimension dimension(Pattern p,string[] locals=[],Parameter[] parameters=null,TypeId[] localTypes=[]){
 		if(p.name=="#"){ enforce(p.number>=0,"negative vector dimension"); return Dimension.literal(cast(ulong)p.number); }
 		if(p.name=="$add"||p.name=="$mul"||p.name=="$pow")

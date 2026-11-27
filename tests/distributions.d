@@ -484,6 +484,19 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("ScalarBinderNatural","λ(n:ℕ).Λx.λ[sin(x+(n:ℝ))]","ℕ→Distribution(ℝ)","λ(n:ℕ). Λ(x:ℝ). (abs(cos(x+n)))·λ[x]"),
+	Case("ScalarBinderInteger","λ(k:ℤ).Λx.λ[sin((k:ℝ)*x)]","ℤ→Distribution(ℝ)","λ(k:ℤ). Λ(x:ℝ). (abs(k)·abs(cos(x·k)))·λ[x]"),
+	Case("ScalarBinderRational","λ(q:ℚ).Λx.λ[exp((q:ℝ)*x)]","ℚ→Distribution(ℝ)","λ(q:ℚ). Λ(x:ℝ). (abs(q)·exp(x·q))·λ[x]"),
+	Case("ScalarBinderComplex","λ(z:ℂ).Λx.λ[sin(x+creal(z))]","ℂ→Distribution(ℝ)","λ(z:ℂ). Λ(x:ℝ). (abs(cos(x+creal(z))))·λ[x]"),
+	Case("ScalarBinderHigherOrder","λ(h:ℕ→ℝ).λ(n:ℕ).Λx.λ[sin(x+h(n))]","(ℕ→ℝ)→ℕ→Distribution(ℝ)","λ(h:ℕ→ℝ). λ(n:ℕ). Λ(x:ℝ). λ[(sin(x+h(n)))]"),
+	Case("ScalarBinderNaturalMass","λ(n:ℕ).∫dx [0≤x≤1]·λ[exp(x+(n:ℝ))]","ℕ→ℝ","λ(n:ℕ). -exp(n)+exp(n+1)"),
+	Case("ScalarBinderMixed","λ(n:ℕ).λ(a:ℝ).Λx.λ[sin(a*x+(n:ℝ))]","ℕ→ℝ→Distribution(ℝ)","λ(n:ℕ). λ(a:ℝ). Λ(x:ℝ). (abs(a)·abs(cos(a·x+n)))·λ[x]"),
+	Case("ScalarBinderSameType","λ(n:ℕ).λ(m:ℕ).Λx.λ[sin((n:ℝ)*x+(m:ℝ))]","ℕ→ℕ→Distribution(ℝ)","λ(n:ℕ). λ(m:ℕ). Λ(x:ℝ). (abs(cos(x·n+m))·n)·λ[x]"),
+	Case("ScalarBinderFree","λ(n:ℕ).Λx.λ[sin(x+(n:ℝ)+a)]","ℕ→Distribution(ℝ)","λ(n:ℕ). Λ(x:ℝ). (abs(cos(a+x+n)))·λ[x]"),
+	Case("ScalarBinderSpecialized","(λ(n:ℕ).Λx.λ[sin(x+(n:ℝ))])(2)","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+2)))·λ[x]"),
+	Case("ScalarBinderPartial","λ(k:ℤ).Λx.λ[sin(x+(k:ℝ)⁻¹)]","ℤ→Distribution(ℝ)","λ(k:ℤ). Λ(x:ℝ). λ[(sin(x+k⁻¹))]"),
+	Case("ScalarBinderIntegerMass","λ(k:ℤ).∫dx [0≤x≤1]·λ[(x+(k:ℝ))^3]","ℤ→ℝ","λ(k:ℤ). ((k+1)^3-k^3:ℝ)"),
+	Case("ScalarBinderComplexMass","λ(z:ℂ).∫dx [0≤x≤1]·λ[exp(x+creal(z))]","ℂ→ℝ","λ(z:ℂ). exp(creal(z)+1)-exp(creal(z))"),
 	Case("CoordinateParameterOffset","Λx.λ[sin(x+a)]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(a+x)))·λ[x]"),
 	Case("CoordinateParameterFrequency","Λx.λ[sin(a*x)]","Distribution(ℝ)","Λ(x:ℝ). (abs(a)·abs(cos(a·x)))·λ[x]"),
 	Case("CoordinateParameterScale","Λx.λ[(exp(a)+cos(b))*x]","Distribution(ℝ)","Λ(x:ℝ). (abs(exp(a)+cos(b)))·λ[x]"),
@@ -2681,6 +2694,13 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("ScalarBinder")==0){
+			import std.string:count;
+			bool nested=c.name=="ScalarBinderMixed"||c.name=="ScalarBinderSameType";
+			bool direct=c.name=="ScalarBinderHigherOrder"||c.name=="ScalarBinderPartial"||c.name=="ScalarBinderSpecialized";
+			enforce(certificate.count(".lamOpened ")==(nested?2:direct?0:1),c.name);
+			enforce(s.inspectType(a,text)==c.type,c.name~" parameter type after printing");
 		}
 		if(c.name.indexOf("CoordinateParameter")==0){
 			bool directed=c.name=="CoordinateParameterIntegral"||c.name=="CoordinateParameterIncreasing"||

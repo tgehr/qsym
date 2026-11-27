@@ -4524,15 +4524,15 @@ final class Bindings{
 	}
 	// Count retained integrals and inverse coordinates that depend on this
 	// binder, including each occurrence of a shared term.
-	private size_t keptObservations(uint id,uint index=0,uint depth=0){
+	private size_t keptObservations(uint id,bool includeMass,uint index=0,uint depth=0){
 		auto q=nodes[id]; if(depth>64||!depends(at(id),index)) return 0;
 		auto below=q.op==BoundOp.lambda||q.op==BoundOp.set||q.op==BoundOp.fixed?index+1:index;
-		size_t count=q.op==BoundOp.distributionMass;
+		size_t count=includeMass&&q.op==BoundOp.distributionMass;
 		if(q.op==BoundOp.distributionInverseCover||q.op==BoundOp.distributionInversePart){
 			auto row=nodes[q.op==BoundOp.distributionInversePart?q.b:q.a];
 			if(row.op==BoundOp.vectorCons&&nodes[row.b].op==BoundOp.vectorNil&&nodes[row.a].op==BoundOp.lambda) ++count;
 		}
-		foreach(c;[q.a,q.b,q.c]) if(c!=uint.max) count+=keptObservations(c,below,depth+1);
+		foreach(c;[q.a,q.b,q.c]) if(c!=uint.max) count+=keptObservations(c,includeMass,below,depth+1);
 		return count;
 	}
 	private BoundTerm solveRecurrence(BoundTerm t,out RecurrenceSolution solution){
@@ -8134,10 +8134,8 @@ final class Bindings{
 		// products and powers of sums out. Without `commit` nothing is
 		// recorded: the result only, to see whether it helps.
 		BoundTerm pointwise(BoundTerm binder,out uint extra,bool expand=false,bool commit=true){
-			auto body=at(node(binder).a),ctx=context(body),param=type(variable(ctx,0)); Sort sort; bool scalarParam;
-			foreach(s;[Sort.natural,Sort.integer,Sort.rational,Sort.real_,Sort.complex,Sort.boolean])
-				if(param==scalarType(s)){ sort=s; scalarParam=true; break; }
-			if(!scalarParam) return BoundTerm.init;
+			auto body=at(node(binder).a),ctx=context(body); Sort sort;
+			if(!pool.scalarSort(type(variable(ctx,0)),sort)) return BoundTerm.init;
 			auto index=freshScalarIndex(body.id);
 			auto argument=arena.variable(sort,index);
 			// A later guard is evaluated at the exceptional point only when all
@@ -10711,7 +10709,7 @@ final class Bindings{
 						next=set(holds(at(current.a))); rule=BindingRule.setHolds;
 					}else if((current.op==BoundOp.lambda||current.op==BoundOp.set)&&steps<budget){
 						next=pointwise(at(result.output),extra); rule=BindingRule.pointwise;
-						// The body of a function of a real number is evaluated at
+						// The body of a function of a scalar is evaluated at
 						// arguments that exist only. Where it keeps an observation
 						// that mentions the variable of the function, the variable
 						// is a scalar variable for once: the body with it, a term
@@ -10719,16 +10717,18 @@ final class Bindings{
 						// where every step treats the variable as it treats a
 						// parameter, and the result is the body of the function
 						// again. Used where fewer observations are kept then.
-						auto binder=at(result.output),body=at(current.a);
-						auto kept=next==BoundTerm.init&&current.op==BoundOp.lambda&&type(variable(context(body),0))==scalarType(Sort.real_)&&
-							!opened.get(body.id,false)?keptObservations(body.id):0;
+						// Open the other scalar sorts for singleton coordinates, including
+						// those under a mass. An opaque distribution alone supplies no chart.
+						auto binder=at(result.output),body=at(current.a); Sort sort;
+						auto kept=next==BoundTerm.init&&current.op==BoundOp.lambda&&pool.scalarSort(type(variable(context(body),0)),sort)&&
+							!opened.get(body.id,false)?keptObservations(body.id,sort==Sort.real_):0;
 						if(kept){
 							opened.set(body.id,true);
-							auto index=freshScalarIndex(body.id); auto argument=arena.variable(Sort.real_,index);
+							auto index=freshScalarIndex(body.id); auto argument=arena.variable(sort,index);
 							BoundTerm[] values=[scalar(ctx,argument)]; foreach(i;0..contexts[ctx.index].length) values~=variable(ctx,i);
 							auto source=substitute(body,ctx,values),inside=visit(source,depth+1);
 							auto closed=inside.output==source.id?body:closeOver(at(inside.output),context(body),argument);
-							if(keptObservations(closed.id)<kept){ next=inheritHint(binder,lambda(closed)); rule=BindingRule.lambdaOpened; predicateDomain=inside.proof; extra=index; }
+							if(keptObservations(closed.id,sort==Sort.real_)<kept){ next=inheritHint(binder,lambda(closed)); rule=BindingRule.lambdaOpened; predicateDomain=inside.proof; extra=index; }
 						}
 					}else if(current.op==BoundOp.scalar&&steps<budget&&!arena.isNumber(arena.at(current.data))){
 						auto source=arena.at(current.data),value=simplify(arena,source,Options(DensityMode.preserve,true));
@@ -15275,7 +15275,11 @@ final class Bindings{
 				case BindingRule.lambdaOpened:{
 					// The two bodies are the terms of the reduction inside with
 					// the scalar variable set to the argument, by unfolding.
-					auto env="(fun (ξ : Env) (x : ℝ) => ({ ξ with real := fun i => if i = "~to!string(p.extra)~" then x else ξ.real i } : Env))";
+					Sort sort;
+					enforce(pool.scalarSort(type(variable(context(at(n.a)),0)),sort),"opened argument has no scalar environment field");
+					import qsym.text:scalarSymbol;
+					auto field=leanSort(sort),carrier=sort==Sort.boolean?"Bool":scalarSymbol(sort);
+					auto env="(fun (ξ : Env) (x : "~carrier~") => ({ ξ with "~field~" := fun i => if i = "~to!string(p.extra)~" then x else ξ."~field~" i } : Env))";
 					proof=".lamOpened "~env~" "~proofName(p.left)~" (fun _ _ _ => rfl) (fun _ _ _ => rfl)"; break;
 				}
 				case BindingRule.distributionMassPoint:{
