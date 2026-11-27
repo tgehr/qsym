@@ -168,15 +168,29 @@ theorem admissible_add {x y : Option (D α)} (hx : Admissible x) (hy : Admissibl
       obtain ⟨l, hb⟩ := hy b rfl
       exact represented (ha.1.add hb.1)
 
+theorem admissible_scale_lower {w : Option ℝ} (strict : Bool)
+    (sign : ∀ v, w = some v → if strict then 0 < v else 0 ≤ v)
+    {x : Option (D α)} (hx : Admissible x) : Admissible (scaleValue w x) := by
+  cases w with
+  | none => exact admissible_none
+  | some r =>
+    have hr : 0 ≤ r := by
+      cases strict with
+      | false => exact sign r rfl
+      | true => exact (show 0 < r from sign r rfl).le
+    cases x with
+    | none => exact admissible_none
+    | some a =>
+      rintro _ ⟨⟩
+      obtain ⟨k, ha⟩ := hx a rfl
+      exact represented (ha.1.scale hr)
+
 theorem admissible_scale {x : Option (D α)} {w : Option ℝ} (c : ℚ) (hc : 0 ≤ c)
     (hw : w = some (c : ℝ)) (hx : Admissible x) : Admissible (scaleValue w x) := by
   subst w
-  cases x with
-  | none => simp [Admissible, scaleValue]
-  | some a =>
-    rintro _ ⟨⟩
-    obtain ⟨k, ha⟩ := hx a rfl
-    exact represented (ha.1.scale (r := (c : ℝ)) (by exact_mod_cast hc))
+  apply admissible_scale_lower false _ hx
+  rintro _ ⟨⟩
+  exact_mod_cast hc
 
 theorem retry_isSome_real {r : ℝ} (h0 : 0 ≤ r) {seed : Option (D α)} (hs : Admissible seed) :
     (retryValue (some r) seed).isSome = seed.isSome := by

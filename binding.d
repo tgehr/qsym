@@ -1163,7 +1163,10 @@ final class Bindings{
 		auto n=nodes[id]; Rational r;
 		switch(n.op){
 			case BoundOp.bottom,BoundOp.distributionZero,BoundOp.distributionDirac:return true;
-			case BoundOp.distributionScale:return nonnegativeReal(n.a,r)&&atomicSeed(n.b);
+			case BoundOp.distributionScale:
+				if(!nonnegativeReal(n.a,r)&&(new CoordinateBounds(null,true,false)).lower(n.a,0).sign==CoordinateBounds.Sign.unknown)
+					return false;
+				return atomicSeed(n.b);
 			case BoundOp.distributionAdd:return atomicSeed(n.a)&&atomicSeed(n.b);
 			default:return false;
 		}
@@ -3014,8 +3017,8 @@ final class Bindings{
 		@safe:
 		enum ns="Distribution.GraphFibre.Coordinates.Grid.";
 		SourceCertificates cert;
-		bool calculatedConstants;
-		this(SourceCertificates c,bool calculated=false){cert=c;calculatedConstants=calculated;}
+		bool calculatedConstants,coordinateAxis;
+		this(SourceCertificates c,bool calculated=false,bool axis=true){cert=c;calculatedConstants=calculated;coordinateAxis=axis;}
 		enum Sign { unknown, nonnegative, positive }
 		struct Evidence { Sign sign; string proof; }
 		Evidence[uint] signs;
@@ -3100,7 +3103,7 @@ final class Bindings{
 					}
 				}
 			}
-			if(n.op==BoundOp.primitive&&e.sign!=Sign.positive){
+			if(coordinateAxis&&n.op==BoundOp.primitive&&e.sign!=Sign.positive){
 				auto polynomial=centered(id,e.sign);
 				if(polynomial.sign!=Sign.unknown) return signs[id]=polynomial;
 			}
@@ -11548,12 +11551,23 @@ final class Bindings{
 		string prefix,declarations;
 		Term[] numericTerms;
 		uint parent;
-		this(string prefix,uint body){this.prefix=prefix;parent=contexts[nodes[body].context].parent;}
+		// A scalar parameter keeps the entire environment when viewed as a constant function.
+		bool constantFamily;
+		this(string prefix,uint body,bool constantFamily=false){
+			this.prefix=prefix; this.constantFamily=constantFamily;
+			parent=constantFamily?nodes[body].context:contexts[nodes[body].context].parent;
+		}
 		static string q(Rational v){return v.denominator==1?"("~to!string(v.numerator)~" : ℚ)":"(("~to!string(v.numerator)~") / ("~to!string(v.denominator)~") : ℚ)";}
 		string app(string lemma,string args){return "(Distribution.StepSource."~lemma~" "~args~")";}
-		string atPoint(uint id,Rational point){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some ("~q(point)~" : ℝ)) ρ))";}
+		string atPoint(uint id,Rational point){
+			if(constantFamily) return "("~name(id)~".eval ξ ρ)";
+			return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some ("~q(point)~" : ℝ)) ρ))";
+		}
 		uint serial;Table!(string,string) proofCache;
-		string functionAt(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+		string functionAt(uint id){
+			if(constantFamily) return "(fun _ : ℝ => "~name(id)~".eval ξ ρ)";
+			return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 		string save(string claim,string proof){
 			auto old=proofCache.get(claim,"");if(old.length)return old;
 			auto id=prefix~to!string(serial++),dims=dependent_?" (δ : ℕ → ℕ)":"",args=dependent_?" δ":"";
@@ -11561,7 +11575,7 @@ final class Bindings{
 			auto ref_="("~id~args~" γ ξ ρ)";proofCache.set(claim,ref_);return ref_;
 		}
 		string numericProof(uint id,Rational point,string value){
-			auto term=scalarBody(at(id),arena.real_(point));enforce(term!=Term.init,"missing step numeric witness");
+			auto term=constantFamily?arena.at(nodes[id].data):scalarBody(at(id),arena.real_(point));enforce(term!=Term.init,"missing step numeric witness");
 			numericTerms~=term;return save(atPoint(id,point)~" = some (Numeric.denote (s := ."~leanSort(arena.sort(term))~") "~value~")", "(Numeric.calculate_sound ξ n"~to!string(term.id)~" "~value~" rfl)");
 		}
 		struct Linear{Rational slope,offset;string proof;}
@@ -12178,7 +12192,8 @@ final class Bindings{
 	}
 	// The same masks and linear point describe exclusions for a density or a coordinate.
 	private string excludedEvidence(string prefix,ref BoundSplit s,uint body,string total,string zero=""){
-		string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+		string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 		auto kind=s.only?"only":"excluded";
 		auto lemma=s.front?"front_"~kind:(s.third?"between_":"beyond_")~kind~" "~boundArguments(s);
 		return prefix~lemma~" (f := "~fn(s.point)~") (p := "~SourceCertificates.q(s.slope)~") "~s.linear~" rfl"~zero~
@@ -12634,7 +12649,8 @@ final class Bindings{
 
 			// A value under the strict guard of its domain. Around the mask that
 			// guard follows the negations of the comparisons of the mask.
-			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 			string domain;
 			// The guard that the axis is not zero stands there in the same way.
 			// The conjunction of the two is the guard of each: of the domain
@@ -13104,7 +13120,8 @@ final class Bindings{
 				return "(Distribution.StepSource.Piece.add "~left~" "~right~")";
 			}
 			// A sum of a lesser sort below its casts is the sum of the casts.
-			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+			string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 			auto whole=s.from[0];string shape="(fun _ => rfl)";
 			if(s.lifted!=uint.max){
 				auto casts=liftCasts(whole,&under);enforce(casts.id==s.lifted&&casts.proof.length,"missing casts of a sum of observations");
@@ -15039,6 +15056,7 @@ final class Bindings{
 					Rational literal(uint id){return arena.number(arena.at(nodes[id].data)).re;}
 					string number(uint id){return "(Numeric.calculate_sound ξ n"~to!string(nodes[id].data)~" "~q(literal(id))~" rfl)";}
 					enum yes=" (of_decide_eq_true rfl)";
+					string[uint] scaleProofs;
 					string admissible(uint id){
 						auto v=nodes[id];
 						switch(v.op){
@@ -15046,7 +15064,18 @@ final class Bindings{
 							case BoundOp.distributionZero:return ns~"admissible_zero";
 							case BoundOp.distributionDirac:return " ("~ns~"admissible_dirac"~ev(v.a)~")";
 							case BoundOp.distributionAdd:return " ("~ns~"admissible_add "~admissible(v.a)~" "~admissible(v.b)~")";
-							case BoundOp.distributionScale:return " ("~ns~"admissible_scale "~q(literal(v.a))~yes~" "~number(v.a)~" "~admissible(v.b)~")";
+							case BoundOp.distributionScale:{
+								Rational coefficient;
+								if(nonnegativeReal(v.a,coefficient))
+									return " ("~ns~"admissible_scale "~q(coefficient)~yes~" "~number(v.a)~" "~admissible(v.b)~")";
+								if(auto old=id in scaleProofs) return *old;
+								auto cert=new SourceCertificates("seed"~to!string(i)~"_"~to!string(id)~"_",v.a,true);
+								auto sign=(new CoordinateBounds(cert,true,false)).lower(v.a,0);
+								enforce(sign.sign!=CoordinateBounds.Sign.unknown,"missing sign certificate for atomic emission");
+								stepPrefix~=cert.declarations;
+								auto strict=sign.sign==CoordinateBounds.Sign.positive?"true":"false";
+								return scaleProofs[id]=" ("~ns~"admissible_scale_lower "~strict~" ("~sign.proof~" 0) "~admissible(v.b)~")";
+							}
 							default:throw new Exception("missing atomic seed certificate");
 						}
 					}
@@ -15602,7 +15631,8 @@ final class Bindings{
 					uint[] weights;size_t position;uint condition;BoundTerm rest;
 					enforce(massStrictGuard(p.from,weights,position,condition,rest),"missing strict guard free of the axis");
 					enum program_="Distribution.DensityProgram.";
-					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 					// The guard at the top or in a factor, by the path to it.
 					string hoist(uint id){
 						auto q=nodes[id];uint inside;BoundTerm without;
@@ -15623,7 +15653,8 @@ final class Bindings{
 				case BindingRule.distributionMassSpread:{
 					auto s=result.integrals[p.extra];
 					enforce(s.from.length==1&&s.to.length==1,"missing weight with a sum");
-					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 					string fn(uint id){return "(fun x : ℝ => "~under(id)~")";}
 					// The split at the changes of sign, then the factors under the sums.
 					auto source=s.from[0];string cut;
@@ -15670,7 +15701,8 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_pointwise (w := "~fn(s.from[0])~") (v := "~fn(s.to[0])~") (fun x => "~equation~"); h)"; break;
 				}
 				case BindingRule.distributionMassOrigin:{
-					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 					auto body=nodes[nodes[n.a].a].a;uint condition;BoundTerm rest;
 					enforce(originGuard(body,condition,rest),"missing guard that can fail at the origin only");
 					proof=".ofEq (fun ξ ρ => let h := Distribution.DensityProgram.mass_guard_origin ("~name(dropIndex(at(condition)).id)~".eval ξ ρ) (w := "~fn(body)~") (m := "~fn(rest.id)~") (fun _ => rfl); h)"; break;
@@ -15686,7 +15718,8 @@ final class Bindings{
 					proof=".lamOpened "~env~" "~proofName(p.left)~" (fun _ _ _ => rfl) (fun _ _ _ => rfl)"; break;
 				}
 				case BindingRule.distributionMassPoint:{
-					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 					string fixed(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some (0 : ℝ)) ρ))";}
 					string fn(uint id){return "(fun x : ℝ => "~under(id)~")";}
 					auto body=nodes[nodes[n.a].a].a; PointExclusion e;
@@ -15696,7 +15729,8 @@ final class Bindings{
 						" (fun x he => "~e.agree~"); h)"; break;
 				}
 				case BindingRule.distributionMassSolve:{
-					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string under(uint id){return "("~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 					string fn(uint id){return "(fun x : ℝ => "~under(id)~")";}
 					auto body=nodes[nodes[n.a].a].a,solved=solveBounds(body,&under);
 					enforce(solved.id!=uint.max&&solved.id==nodes[nodes[nodes[p.to].a].a].a,"missing comparison to solve for the axis");
@@ -15704,7 +15738,8 @@ final class Bindings{
 				}
 				case BindingRule.distributionMassBounds:{
 					BoundSplit s;enforce(competingBounds(p.from,s),"missing bounds on one side");
-					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 					auto arguments=boundArguments(s);
 					if(s.excluded){
 						auto zero=s.only?" (z := "~name(scalar(context(at(p.from)),arena.real_(0)).id)~".eval ξ ρ) "~literalProof(Rational(0)):"";
@@ -15723,7 +15758,8 @@ final class Bindings{
 				case BindingRule.distributionMassGuard:{
 					uint guard;BoundTerm rest;string shape;
 					enforce(axisFreeGuard(p.from,guard,rest,shape),"missing guard free of the axis");
-					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";}
+					string fn(uint id){return "(fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))";
+		}
 					auto outside=nodes[p.to].a;
 					proof=".ofEq (fun ξ ρ => Distribution.DensityProgram.mass_guard ("~name(outside)~".eval ξ ρ) (w := "~fn(nodes[nodes[n.a].a].a)~") (r := "~fn(rest.id)~") "~shape~")"; break;
 				}
