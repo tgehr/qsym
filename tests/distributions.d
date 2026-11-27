@@ -1046,6 +1046,25 @@ private Case[] cases(){
 	Case("OrderedMaskBoth","λ(g:ℝ→ℝ).λ(y:ℝ).massD(weightD(g,graphFibreD(λ(x:ℝ).x^2+1,y)))","(ℝ→ℝ)→ℝ→ℝ","λ(g:ℝ→ℝ). λ(y:ℝ). [1<y]·(g(-sqrt(y-1))·sqrt(y-1)⁻¹·(1/2)+g(sqrt(y-1))·sqrt(y-1)⁻¹·(1/2))+[y≤1]·(guard(y<1∧(defined(g)),(0:ℝ)))"),
 	Case("OrderedMaskOne","λ(y:ℝ).massD(weightD(λ(x:ℝ).x^2,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(y)))","ℝ→ℝ","λ(y:ℝ). [1<y]·((y-1)·sqrt(y-1)⁻¹·(1/2))"),
 	Case("OrderedMaskOpposite","λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y)))","ℝ→ℝ","λ(y:{y:ℝ | y≠1}). (0:ℝ)"),
+	Case("WeightPairingPolynomial","λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).x+1,weightD(λ(x:ℝ).x-1,d)))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x^2-1)·d[x]"),
+	Case("WeightPairingThree","λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).x,weightD(λ(x:ℝ).x+1,weightD(λ(x:ℝ).x-1,d))))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x·(x^2-1))·d[x]"),
+	Case("WeightPairingPole","λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).x,weightD(λ(x:ℝ).1/x,d)))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (guard(x≠0,(1:ℝ)))·d[x]"),
+	Case("WeightPairingCaptured","λ(g:ℝ→ℝ).λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).g(-x),weightD(λ(x:ℝ).g(x),d)))","(ℝ→ℝ)→Distribution(ℝ)→ℝ","λ(g:ℝ→ℝ). λ(d:Distribution(ℝ)). ∫dx (g(-x)·g(x))·d[x]"),
+	Case("WeightPairingFunctions","λ(d:Distribution(ℝ→ℝ)).massD(weightD(λ(f:ℝ→ℝ).f(1),weightD(λ(f:ℝ→ℝ).f(0),d)))","Distribution(ℝ→ℝ)→ℝ","λ(d:Distribution(ℝ→ℝ)). ∫(f:ℝ→ℝ). (f(0)·f(1))·d[f]"),
+	Case("WeightPairingMeasures","λ(d:Distribution(Distribution(ℝ))).massD(weightD(λ(q:Distribution(ℝ)).densityAtD(q,0),weightD(λ(q:Distribution(ℝ)).massD(q),d)))","Distribution(Distribution(ℝ))→ℝ","λ(d:Distribution(Distribution(ℝ))). ∫(q:Distribution(ℝ)). (((λ(x:ℝ). (q[x])//λ[x])((0:ℝ)))·(∫dx q[x]))·d[q]"),
+	Case("WeightPairingNatural","λ(d:Distribution(ℕ)).massD(weightD(λ(n:ℕ).(n:ℝ)+1,weightD(λ(n:ℕ).(n:ℝ),d)))","Distribution(ℕ)→ℝ","λ(d:Distribution(ℕ)). ∫(n:ℕ). ((n·(n+1):ℝ))·d[n]"),
+	Case("WeightPairingBoolean","λ(d:Distribution(𝔹)).massD(weightD(λ(p:𝔹).if p then (3:ℝ) else 1,weightD(λ(p:𝔹).[p],d)))","Distribution(𝔹)→ℝ","λ(d:Distribution(𝔹)). ∫(p:𝔹). ([p]·3)·d[p]"),
+	Case("WeightPairingKernelSource","λ(k:ℕ→Distribution(ℝ)).massD(weightD(λ(x:ℝ).x+1,weightD(λ(x:ℝ).x-1,k(0))))","(ℕ→Distribution(ℝ))→ℝ","λ(k:ℕ→Distribution(ℝ)). ∫dx (x^2-1)·(k(0))[x]"),
+	Case("WeightPairingFinite","massD(weightD(λ(x:ℝ).x+1,weightD(λ(x:ℝ).x-1,δ((3:ℝ)))))","ℝ","8"),
+	Case("WeightPairingZeroPole","massD(weightD(λ(x:ℝ).1/x,weightD(λ(x:ℝ).0*x,δ((0:ℝ)))))","ℝ","undefined(ℝ)"),
+	Case("WeightPairingEmpty","massD(weightD(λ(x:ℝ).undefined(ℝ),weightD(λ(x:ℝ).undefined(ℝ),zeroD(ℝ))))","ℝ","0"),
+	Case("WeightPairingMissingWeight","massD(weightD(λ(x:ℝ).x,weightD(undefined(ℝ→ℝ),zeroD(ℝ))))","ℝ","undefined(ℝ)"),
+	Case("WeightPairingBothOpaque","λ(g:ℝ→ℝ).λ(d:Distribution(ℝ)).massD(weightD(g,weightD(g,d)))","(ℝ→ℝ)→Distribution(ℝ)→ℝ","λ(g:ℝ→ℝ). λ(d:{d:Distribution(ℝ) | (defined(g))∧(defined(g))}). ∫dx (g(x)·g(x))·d[x]"),
+	Case("WeightPairingPartialWeights","λ(k:ℕ→(ℝ→ℝ)).λ(d:Distribution(ℝ)).massD(weightD(k(1),weightD(k(0),d)))","(ℕ→ℝ→ℝ)→Distribution(ℝ)→ℝ","λ(k:ℕ→ℝ→ℝ). λ(d:{d:Distribution(ℝ) | (holds((0∈domain(k))))∧(holds((1∈domain(k))))}). ∫dx ((k(0))(x)·(k(1))(x))·d[x]"),
+	Case("WeightPairingPartialApplied","(λ(k:ℕ→(ℝ→ℝ)).λ(d:Distribution(ℝ)).massD(weightD(k(1),weightD(k(0),d))))(λ(n:ℕ).undefined(ℝ→ℝ))(zeroD(ℝ))","ℝ","undefined(ℝ)"),
+	Case("WeightPairingMixed","λ(g:ℝ→ℝ).λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).x+1,weightD(g,d)))","(ℝ→ℝ)→Distribution(ℝ)→ℝ","λ(g:ℝ→ℝ). λ(d:{d:Distribution(ℝ) | defined(g)}). ∫dx (g(x)·(x+1))·d[x]"),
+	Case("WeightPairingMissingSource","massD(weightD(λ(x:ℝ).x+1,weightD(λ(x:ℝ).x-1,undefined(Distribution(ℝ)))))","ℝ","undefined(ℝ)"),
+	Case("WeightPairingOne","λ(d:Distribution(ℝ)).massD(weightD(λ(x:ℝ).x-1,d))","Distribution(ℝ)→ℝ","λ(d:Distribution(ℝ)). ∫dx (x-1)·d[x]"),
 	Case("BranchedFibreFull","λ(y:ℝ).graphFibreD(λ(x:ℝ).x^2+1,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then (2·sqrt(y-1))⁻¹·δ(-sqrt(y-1))[x]+(2·sqrt(y-1))⁻¹·δ(sqrt(y-1))[x] else (guard(y<1,Λ(x:ℝ). 0))[x]"),
 	Case("BranchedFibreSource","λ(y:ℝ).(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then ([(guard(defined(sqrt(y-1)),0<-sqrt(y-1)))]·(2·sqrt(y-1))⁻¹)·δ(-sqrt(y-1))[x]+([(guard(defined(sqrt(y-1)),0<sqrt(y-1)))]·(2·sqrt(y-1))⁻¹)·δ(sqrt(y-1))[x] else if y<1 then 0 else 0·δ(0)[x]"),
 	Case("BranchedFibreJoint","λ(y:ℝ). Λx. λ[x]·δ(x^2+1)[y]//λ[y]","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then (2·sqrt(y-1))⁻¹·δ(-sqrt(y-1))[x]+(2·sqrt(y-1))⁻¹·δ(sqrt(y-1))[x] else (guard(y<1,Λ(x:ℝ). 0))[x]"),
@@ -3375,6 +3394,14 @@ private void run(string directory){
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
+		if(c.name.indexOf("WeightPairing")==0){
+			import std.algorithm : canFind;
+			auto form=c.name["WeightPairing".length..$];
+			if(["Polynomial","Three","Pole","Captured","Functions","Measures","Natural","Boolean","KernelSource"].canFind(form))
+				enforce(certificate.indexOf("Distribution.mass_two_weights ")>=0,c.name);
+			if(["BothOpaque","PartialWeights","PartialApplied","Mixed"].canFind(form))
+				enforce(certificate.indexOf("Distribution.mass_weight_pair ")>=0,c.name);
+		}
 		if(c.name.indexOf("BranchedFibre")==0){
 			bool symbolic=c.name!="BranchedFibreAbsent"&&c.name!="BranchedFibreControl"&&c.name!="BranchedFibreFraction"&&
 				c.name!="BranchedFibreSumWeight"&&c.name!="BranchedFibreProductWeight";

@@ -100,6 +100,7 @@ import QSym.GeometricMomentsExact
 import QSym.DistributionSquareRootSheet
 import QSym.DistributionQuadraticRestriction
 import QSym.DistributionFiniteFibreModel
+import QSym.DistributionWeightObservation
 import QSym.DistributionMaskedRootCover
 import QSym.DistributionQuadraticDisintegration
 import QSym.DistributionRepeatedSheet

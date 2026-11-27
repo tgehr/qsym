@@ -43,15 +43,29 @@ theorem observe_weight_const (p : DensityProgram) (c : Option ℝ)
     exact partialIntegral_scale_defined MeasureTheory.volume r
       (fun x => Value.mul (p.density x) (f x)) hd
 
-private theorem integrate_getD (d : Option (D α)) (f : α → Option ℝ) :
+end DensityProgram
+
+theorem integrate_getD (d : Option (D α)) (f : α → Option ℝ) :
     integrate (d.getD .invalid) f = d.bind (fun a => integrate a f) := by
   cases d <;> rfl
 
-private theorem integrate_scaleValue (r : Option ℝ) (d : Option (D α))
+theorem integrate_addValue (a b : Option (D α)) (f : α → Option ℝ) :
+    (addValue a b).bind (fun d => integrate d f) =
+      Value.add (a.bind (fun d => integrate d f)) (b.bind (fun d => integrate d f)) := by
+  cases a with
+  | none => rfl
+  | some a =>
+    cases b with
+    | none => cases h : integrate a f <;> simp [addValue, Value.add, h]
+    | some b => rfl
+
+theorem integrate_scaleValue (r : Option ℝ) (d : Option (D α))
     (f : α → Option ℝ) :
     (scaleValue r d).bind (fun a => integrate a f) =
       Value.mul r (d.bind (fun a => integrate a f)) := by
   cases r <;> cases d <;> rfl
+
+namespace DensityProgram
 
 /-- Pointwise source observation is compatible with the old presentation
 observer for every strict partial test, not only for mass. -/
