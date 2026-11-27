@@ -41,7 +41,7 @@ private enum BindingRule:ushort{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumPolynomialGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumPolynomialGeometric,sumPlainPolynomialZero,sumPlainPolynomialNonzero,sumPolynomialFactor,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -1796,6 +1796,14 @@ final class Bindings{
 		form=(first?1:0)|(lifted?2:0)|(castRow?4:0);
 		return geometricValue(dropIndex(ratio),true);
 	}
+	private bool polynomialSamples(Rational[] coefficients,out Rational[] samples){
+		samples=new Rational[](coefficients.length);
+		foreach(i,ref y;samples) foreach_reverse(c;coefficients){
+			y=y*Rational(cast(long)i)+c;
+			if(y.words>128) return false;
+		}
+		return true;
+	}
 	private struct NewtonMoment{
 		uint test, ratio, witness;
 		bool testFirst, lifted;
@@ -1813,15 +1821,10 @@ final class Bindings{
 			bool lifted; auto r=geometricRatio(left?row.b:row.a,lifted);
 			MomentPolynomial p;
 			if(r==BoundTerm.init||!momentPolynomial(test,p,false)||p.coefficients.length<2) continue;
-			auto samples=new Rational[](p.coefficients.length);
+			Rational[] samples;
+			if(!polynomialSamples(p.coefficients,samples)) return false;
 			uint witness;
-			foreach(i,ref y;samples){
-				foreach_reverse(c;p.coefficients){
-					y=y*Rational(cast(long)i)+c;
-					if(y.words>128) return false;
-				}
-				if(!witness&&y!=samples[0]) witness=cast(uint)i;
-			}
+			foreach(i,y;samples) if(y!=samples[0]){ witness=cast(uint)i; break; }
 			if(!witness) continue;
 			Rational[] differences;
 			while(samples.length){
@@ -1855,6 +1858,37 @@ final class Bindings{
 			v=primitive(add,[scalar(ctx,arena.real_(c)),primitive(mul,[r,v])]);
 		auto power=primitive(arena.pow(z,cast(uint)d.differences.length),[inverse]);
 		return guard(pred,primitive(mul,[power,v]));
+	}
+	// A polynomial on every natural index has a finite unweighted sum
+	// exactly when it vanishes identically. A finite witness suffices for
+	// divergence. A constant polynomial factor may also be replaced in a
+	// partial row without assuming the remaining factor is total.
+	private BoundTerm plainPolynomialSum(BoundTerm sum,out BindingRule rule,out uint extra){
+		auto fn=nodes[node(sum).a],body=at(fn.a),ctx=context(sum),ty=type(sum);
+		if(!naturalIndex(node(sum).a)||!depends(body,0)) return BoundTerm.init;
+		MomentPolynomial p;
+		if(momentPolynomial(body.id,p,false)){
+			Rational[] samples;
+			if(!polynomialSamples(p.coefficients,samples)) return BoundTerm.init;
+			foreach(i,c;samples) if(!c.zero){
+				extra=cast(uint)i; rule=BindingRule.sumPlainPolynomialNonzero; return bottom(ctx,ty);
+			}
+			rule=BindingRule.sumPlainPolynomialZero;
+			return scalar(ctx,arena.number(Number(0),elementSort(ty)));
+		}
+		if(ty!=scalarType(Sort.real_)||!primitiveOp(body.id,Op.mul)) return BoundTerm.init;
+		auto product=node(body);
+		foreach(left;[true,false]){
+			auto factor=at(left?product.a:product.b);
+			if(!depends(factor,0)||!momentPolynomial(factor.id,p,false)) continue;
+			bool constant=true; foreach(v;p.coefficients[1..$]) if(!v.zero){ constant=false; break; }
+			if(!constant) continue;
+			auto c=scalar(context(body),arena.real_(p.coefficients[0]));
+			auto row=primitive(arena.at(product.data),left?[c,at(product.b)]:[at(product.a),c]);
+			extra=left?1:0; rule=BindingRule.sumPolynomialFactor;
+			return summation(inheritHint(at(node(sum).a),lambda(row)));
+		}
+		return BoundTerm.init;
 	}
 	private struct WeightedGeometric {
 		uint coefficient, sibling, remainder, test, ratio;
@@ -10673,6 +10707,7 @@ final class Bindings{
 						next=polynomialGeometricValue(at(result.output),polynomial); rule=BindingRule.sumPolynomialGeometric;
 					}
 				}
+				if(next==BoundTerm.init) next=plainPolynomialSum(at(result.output),rule,extra);
 				if(next!=BoundTerm.init){}
 				else if(body.op==BoundOp.bottom){
 					next=bottom(ctx,ty);rule=BindingRule.sumMissingConstant;
@@ -14985,6 +15020,22 @@ final class Bindings{
 					auto out_=nodes[p.to],sort=elementSort(types[n.type]),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm",index=pool.view(type(at(n.a))).fields[0];
 					auto f="(fun (i : "~(index==scalarType(Sort.natural)?"ℕ":"ℤ")~") => "~name(nodes[out_.a].a)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") (some i) ρ))";
 					proof=".ofEq (fun ξ ρ => Summation.delta"~(p.rule==BindingRule.sumDeltaOffset?"Z_offset":index==scalarType(Sort.natural)?"N":"Z")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(p.rule==BindingRule.sumDeltaOffset?p.extra:out_.b)~".eval ξ ρ))"; break;
+				case BindingRule.sumPlainPolynomialZero,BindingRule.sumPlainPolynomialNonzero:{
+					MomentPolynomial poly; enforce(momentPolynomial(nodes[n.a].a,poly,true));
+					auto sort=elementSort(types[n.type]); bool realSum=sort==Sort.real_,zero=p.rule==BindingRule.sumPlainPolynomialZero;
+					auto law=realSum?"GeometricMoments.Newton.plain_":"GeometricMoments.ExactTest.sum_";
+					auto tag=realSum?"":sort==Sort.natural?".natural ":sort==Sort.integer?".integer ":".rational ";
+					auto evidence=zero?" rfl "~sumRawZero()~" "~sumZeroProof():" "~to!string(p.extra)~" (of_decide_eq_true rfl)";
+					proof=".ofEq (fun ξ ρ => "~law~(zero?"zero ":"nonzero ")~tag~poly.proof~evidence~")"; break;
+				}
+				case BindingRule.sumPolynomialFactor:{
+					auto row=nodes[nodes[n.a].a]; bool left=p.extra!=0;
+					MomentPolynomial poly; enforce(momentPolynomial(left?row.a:row.b,poly,true));
+					auto c=poly.coefficients[0],lit="(n"~to!string(arena.real_(c).id)~".eval ξ)";
+					auto other="(fun i : ℕ => "~name(left?row.b:row.a)~".eval ξ (Binding.Env.cons (a := .scalar .natural) (some i) ρ))";
+					proof=".ofEq (fun ξ ρ => GeometricMoments.Newton.constant_factor "~poly.proof~" "~SourceCertificates.q(c)~
+						" rfl "~lit~" "~literalProof(c)~(left?" true ":" false ")~other~")"; break;
+				}
 				case BindingRule.sumPolynomialGeometric:{
 					NewtonMoment d; enforce(polynomialGeometric(at(p.from),d));
 					MomentPolynomial test; enforce(momentPolynomial(d.test,test,true));

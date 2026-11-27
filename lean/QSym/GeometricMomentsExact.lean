@@ -1,4 +1,4 @@
-import QSym.GeometricMoments
+import QSym.GeometricMomentsNewton
 
 /-! Certificates for polynomial probes computed in the exact scalar types
 before they are promoted to a real distribution weight. -/
@@ -86,5 +86,51 @@ theorem ExactTest.pow (s : ExactScalar) (k : ℕ) {f : ℕ → Option s.carrier}
   intro n
   change s.embed (s.pow k (f n)) = _
   rw [s.embed_pow]; exact NatTest.pow k hf n
+
+/-- qsym uses the natural value itself as weight for a natural sum. Integer
+and rational sums use their native norm. All three agree with the magnitude
+of a present real embedding. -/
+private def ExactScalar.weight : (s : ExactScalar) → s.carrier → ℝ
+  | .natural => fun n : ℕ => (n : ℝ)
+  | .integer => fun z : ℤ => ‖z‖
+  | .rational => fun q : ℚ => ‖q‖
+
+def ExactScalar.zero : (s : ExactScalar) → s.carrier
+  | .natural => (0 : ℕ)
+  | .integer => (0 : ℤ)
+  | .rational => (0 : ℚ)
+
+def ExactScalar.sum : (s : ExactScalar) → Option (ℕ → Option s.carrier) → Option s.carrier
+  | .natural => Summation.value (α := ℕ) (ι := ℕ) (fun n => (n : ℝ))
+  | .integer => Summation.value (α := ℤ) (ι := ℕ) norm
+  | .rational => Summation.value (α := ℚ) (ι := ℕ) norm
+
+private theorem ExactScalar.weight_embed (s : ExactScalar) (x : Option s.carrier) (v : ℝ)
+    (h : s.embed x = some v) : s.weight (x.getD s.zero) = |v| := by
+  cases s <;> cases x <;> simp [ExactScalar.embed, Functions.castQR, Functions.castZQ, Functions.castNZ, Function1.apply] at h
+  all_goals rw [← h]; simp [ExactScalar.weight, ← Real.norm_eq_abs, Int.norm_cast_real, Rat.norm_cast_real]
+
+private theorem ExactScalar.reflect_zero (s : ExactScalar) (x : Option s.carrier)
+    (h : s.embed x = some 0) : x = some s.zero := by
+  cases s <;> cases x <;> simp_all [ExactScalar.embed, ExactScalar.zero, Functions.castQR, Functions.castZQ,
+    Functions.castNZ, Function1.apply]
+
+theorem ExactTest.sum_nonzero (s : ExactScalar) {f : ℕ → Option s.carrier} {p : SampledPolynomial}
+    (hf : ExactTest s f p) (w : ℕ) (hn : p.num w ≠ 0) : s.sum (some f) = none := by
+  have e : (fun n => s.weight ((f n).getD s.zero)) = (fun n : ℕ => |p.poly.eval (n : ℝ)|) :=
+    funext (fun n => s.weight_embed _ _ (hf n))
+  have no : ¬ Summable (fun n => s.weight ((f n).getD s.zero)) := by rw [e]; exact Newton.not_summable p w hn
+  cases s <;> exact if_neg (fun h => no h.2.1)
+
+theorem ExactTest.sum_zero (s : ExactScalar) {f : ℕ → Option s.carrier} {p : SampledPolynomial}
+    (hf : ExactTest s f p) (h : Newton.constantChecks p 0 = true)
+    (z : Option s.carrier) (hz : z = some s.zero) : s.sum (some f) = z := by
+  have he := Newton.constant_rows hf 0 h (some 0) (by simp)
+  have entire : f = (fun _ => some s.zero) := funext (fun n => s.reflect_zero _ (congrFun he n))
+  rw [entire, hz]
+  cases s
+  · exact Summation.zero _ (by simp)
+  · exact Summation.zero norm norm_zero
+  · exact Summation.zero norm norm_zero
 
 end QSym.GeometricMoments

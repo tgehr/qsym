@@ -137,6 +137,48 @@ private theorem divergent (p : SampledPolynomial) (hp : 0 < p.poly.degree) (r : 
   rw [norm_mul, Real.norm_eq_abs (p.poly.eval _)]
   exact le_mul_of_one_le_left (norm_nonneg _) hn
 
+/-- A single nonzero sample rules out absolute summability of an unweighted
+polynomial on all naturals. A nonconstant polynomial eventually dominates
+one in magnitude. A nonzero constant gives a divergent constant series. -/
+theorem not_summable (p : SampledPolynomial) (w : ℕ) (hn : p.num w ≠ 0) :
+    ¬ Summable (fun n : ℕ => |p.poly.eval (n : ℝ)|) := by
+  by_cases hd : 0 < p.poly.degree
+  · simpa only [one_pow, mul_one, Real.norm_eq_abs] using divergent p hd 1 (by norm_num)
+  · have hc := eq_C_of_natDegree_eq_zero (natDegree_eq_zero_iff_degree_le_zero.mpr (le_of_not_gt hd))
+    have nz : p.poly.coeff 0 ≠ 0 := by
+      intro z
+      have e := p.exact_num w
+      rw [hc, eval_C, z, mul_zero] at e
+      exact hn (by exact_mod_cast e)
+    rw [hc]
+    simpa only [eval_C, summable_const_iff] using (abs_ne_zero.mpr nz)
+
+def constantChecks (p : SampledPolynomial) (c : ℚ) : Bool := sameSamples p (.constant c)
+
+theorem constant_rows {p : SampledPolynomial} {f : ℕ → Option ℝ} (ht : NatTest f p)
+    (c : ℚ) (h : constantChecks p c = true) (v : Option ℝ) (hv : v = some (c : ℝ)) :
+    f = (fun _ => v) := by
+  funext n
+  rw [ht n, samples_equal (b := .constant c) h, hv]
+  simp [SampledPolynomial.constant]
+
+theorem plain_nonzero {p : SampledPolynomial} {f : ℕ → Option ℝ} (ht : NatTest f p)
+    (w : ℕ) (hn : p.num w ≠ 0) : value norm (some f) = none := by
+  rw [funext ht]
+  simp [value, Real.norm_eq_abs, not_summable p w hn]
+
+theorem plain_zero {p : SampledPolynomial} {f : ℕ → Option ℝ} (ht : NatTest f p)
+    (h : constantChecks p 0 = true) (z : Option ℝ) (hz : z = some 0) : value norm (some f) = z := by
+  rw [constant_rows ht 0 h z (by simpa using hz), hz]
+  exact zero norm norm_zero
+
+theorem constant_factor {p : SampledPolynomial} {f : ℕ → Option ℝ} (ht : NatTest f p)
+    (c : ℚ) (h : constantChecks p c = true) (v : Option ℝ) (hv : v = some (c : ℝ))
+    (left : Bool) (g : ℕ → Option ℝ) :
+    value norm (some (fun n => if left then Value.mul (f n) (g n) else Value.mul (g n) (f n))) =
+      value norm (some (fun n => if left then Value.mul v (g n) else Value.mul (g n) v)) := by
+  rw [constant_rows ht c h v hv]
+
 /-- Horner evaluation is only inspected on the convergence domain. The
 certificate can use scalar literals from the exported source expression. -/
 def At (x : Option ℝ) (cs : List ℚ) (v : Option ℝ) : Prop :=

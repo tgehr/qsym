@@ -2194,6 +2194,26 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("UnweightedSeriesReal","∑(n:ℕ). (n:ℝ)^2","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesNatural","∑(n:ℕ). n^2","ℕ","undefined(ℕ)"),
+	Case("UnweightedSeriesInteger","∑(n:ℕ). (n:ℤ)^2","ℤ","undefined(ℤ)"),
+	Case("UnweightedSeriesRational","∑(n:ℕ). (n:ℚ)^2","ℚ","undefined(ℚ)"),
+	Case("UnweightedSeriesIndex","∑(n:ℕ). (n:ℝ)","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesSigned","∑(n:ℕ). (3-2*(n:ℝ))","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesDelayed","∑(n:ℕ). (n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2)*((n:ℝ)-3)","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesPositiveConstant","∑(n:ℕ). ((((n:ℝ)+1)^2-(n:ℝ)^2-2*(n:ℝ)-1)+1)","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesZeroIdentity","∑(n:ℕ). (((n:ℝ)+1)^2-(n:ℝ)^2-2*(n:ℝ)-1)","ℝ","0"),
+	Case("UnweightedSeriesExactZero","∑(n:ℕ). (((n:ℤ)+1)^2-(n:ℤ)^2-2*(n:ℤ)-1)","ℤ","0"),
+	Case("UnweightedSeriesZeroRate","λ(q:ℝ).∑(n:ℕ). (((n:ℝ)+1)^2-(n:ℝ)^2-2*(n:ℝ)-1)*powRN(q,n)","ℝ→ℝ","λ(q:ℝ). (0:ℝ)"),
+	Case("UnweightedSeriesZeroDivergent","∑(n:ℕ). (((n:ℝ)+1)^2-(n:ℝ)^2-2*(n:ℝ)-1)*powRN(2,n)","ℝ","0"),
+	Case("UnweightedSeriesZeroMissing","∑(n:ℕ). (((n:ℝ)+1)^2-(n:ℝ)^2-2*(n:ℝ)-1)*powRN(undefined(ℝ),n)","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesConstantGeometric","λ(q:ℝ).∑(n:ℕ). powRN(q,n)*((((n:ℝ)+1)^2-(n:ℝ)^2-2*(n:ℝ)-1)+3)","ℝ→ℝ","λ(q:ℝ). 3·(guard(-1<q∧q<1,(-q+1)⁻¹))"),
+	Case("UnweightedSeriesMissingProbe","λ(h:ℕ→ℝ).∑(n:ℕ). (((n:ℝ)+1)^2-(n:ℝ)^2-2*(n:ℝ)-1)*h(n)","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). ∑(n:ℕ). 0·h(n)"),
+	Case("UnweightedSeriesMissingEverywhere","(λ(h:ℕ→ℝ).∑(n:ℕ). (((n:ℝ)+1)^2-(n:ℝ)^2-2*(n:ℝ)-1)*h(n))(λ(n:ℕ).undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesUnitLoop","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(1)","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesUnitLiteral","∑(n:ℕ). (n:ℝ)^2*powRN(1,n)","ℝ","undefined(ℝ)"),
+	Case("UnweightedSeriesFreeProbe","λ(h:ℕ→ℝ).∑(n:ℕ). h(n)","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). ∑(n:ℕ). h(n)"),
+	Case("UnweightedSeriesNegativeAxis","∑(n:ℤ). (n:ℝ)^2","ℝ","∑(n:ℤ). (n^2:ℝ)"),
 	Case("ExactMomentNatural","λ(q:ℝ).∑(n:ℕ). (((n^2+3*n+1):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(-q+2)+1)·((-q+1)^3)⁻¹"),
 	Case("ExactMomentInteger","λ(q:ℝ).∑(n:ℕ). ((((n:ℤ)*(-2)+(n:ℤ)^2):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(3·q-1)·((-q+1)^3)⁻¹"),
 	Case("ExactMomentRational","λ(q:ℝ).∑(n:ℕ). (((1/3*(n:ℚ)^2-(n:ℚ)/2):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q·(5/6)-1/6)·((-q+1)^3)⁻¹"),
@@ -2206,7 +2226,7 @@ private Case[] cases(){
 	Case("ExactMomentScaledShift","λ(w:ℝ).λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(scaleD(w,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ→ℝ","λ(w:ℝ). λ(q:{q:ℝ | 0≤w∧0≤q}). [w≠0]·(w·(guard(-1<q∧q<1,q·(q+1)·((-q+1)^3)⁻¹)))"),
 	Case("ExactMomentStrideHalf","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(δ(3),scaleD(q,bindD(d,λ(n:ℕ).δ(n+2))))))))(1/2)","ℝ","10"),
 	Case("ExactMomentShiftHalf","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(1/2)","ℝ","6"),
-	Case("ExactMomentShiftOne","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(1)","ℝ","∑(n:ℕ). (n^2:ℝ)"),
+	Case("ExactMomentShiftOne","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(1)","ℝ","undefined(ℝ)"),
 	Case("ExactMomentShiftNegative","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(-1/2)","ℝ","undefined(ℝ)"),
 	Case("ExactMomentRawSigned","λ(q:ℝ).∑(n:ℕ). (((n^2+1:ℕ):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(2·q-1)+1)·((-q+1)^3)⁻¹"),
 	Case("ExactMomentMissingAxis","λ(h:ℕ→ℕ).λ(q:ℝ).∑(n:ℕ). (((h(n)*n:ℕ):ℝ))*powRN(q,n)","(ℕ→ℕ)→ℝ→ℝ","λ(h:ℕ→ℕ). λ(q:ℝ). ∑(n:ℕ). n·h(n)·q^n"),
@@ -3069,6 +3089,12 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="UnweightedSeriesReal"||c.name=="UnweightedSeriesUnitLoop"||c.name=="UnweightedSeriesDelayed")
+			enforce(certificate.indexOf("GeometricMoments.Newton.plain_nonzero")>=0,c.name);
+		if(c.name=="UnweightedSeriesNatural"||c.name=="UnweightedSeriesInteger"||c.name=="UnweightedSeriesRational")
+			enforce(certificate.indexOf("GeometricMoments.ExactTest.sum_nonzero")>=0,c.name);
+		if(c.name=="UnweightedSeriesZeroMissing"||c.name=="UnweightedSeriesMissingProbe")
+			enforce(certificate.indexOf("GeometricMoments.Newton.constant_factor")>=0,c.name);
 		if(c.name=="ExactMomentNatural"||c.name=="ExactMomentShiftStride"||c.name=="ExactMomentShiftSquare"||c.name=="ExactMomentRational")
 			enforce(certificate.indexOf("GeometricMoments.ExactTest")>=0,c.name);
 		if(c.name=="NewtonMomentSquare"||c.name=="NewtonMomentCubic"||c.name=="NewtonMomentAffine"||c.name=="NewtonMomentLifted")
