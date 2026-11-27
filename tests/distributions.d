@@ -424,7 +424,7 @@ private Case[] cases(){
 	Case("AffineTurnEmpty","∫dx [1<x≤0]·λ[7-2*cos(x)]","ℝ","0"),
 	Case("AffineTurnMissingEndpoint","defined(∫dx [0≤x<undefined(ℝ)]·λ[a*cos(x)+b])","𝔹","false"),
 	Case("AffineTurnNonlinear","∫dx [0≤x≤2*π]·λ[x*sin(x)]","ℝ"),
-	Case("AffineTurnMissingCoefficient","∫dx [0≤x≤2*π]·λ[undefined(ℝ)*cos(x)+1]","ℝ"),
+	Case("AffineTurnMissingCoefficient","∫dx [0≤x≤2*π]·λ[undefined(ℝ)*cos(x)+1]","ℝ","undefined(ℝ)"),
 	Case("AffineTurnOpaque","λ(h:ℕ→ℝ).∫dx [0≤x≤2*π]·λ[h(0)+sin(x)]","(ℕ→ℝ)→ℝ"),
 	Case("AffineTurnHolder","λ(u:ℝ).∫dx [0≤x≤u]·λ[7-2*cos(x)]","ℝ→ℝ"),
 	Case("AffineTurnClosedZero","∫dx [0≤x≤2*π]·λ[0*cos(x)+4]","ℝ","0"),
@@ -484,6 +484,22 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("MissingOutputInverseMass","∫dx λ[(undefined(ℝ))]","ℝ","undefined(ℝ)"),
+	Case("MissingOutputInverseDensity","densityAtD(Λx.λ[(undefined(ℝ))],z)","ℝ","undefined(ℝ)"),
+	Case("MissingOutputInverseTest","∫dx [0<x<1]·λ[(undefined(ℝ))]","ℝ","undefined(ℝ)"),
+	Case("MissingOutputInverseZero","massD(weightD(λ(x:ℝ).(0:ℝ),Λz.λ[(undefined(ℝ))]))","ℝ","undefined(ℝ)"),
+	Case("MissingOutputPart","massD(inversePartD(λ(x:ℝ).false,(λ(y:ℝ).undefined(ℝ),)))","ℝ","undefined(ℝ)"),
+	Case("MissingOutputPartDensity","densityAtD(inversePartD(λ(x:ℝ).x>0,(λ(y:ℝ).undefined(ℝ),)),a)","ℝ","undefined(ℝ)"),
+	Case("MissingOutputForwardPole","massD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).x⁻¹))","ℝ","undefined(ℝ)"),
+	Case("MissingOutputForwardPoleDensity","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).x⁻¹),3)","ℝ","undefined(ℝ)"),
+	Case("MissingOutputOutside","massD(pushforwardOnD(λ(x:ℝ).1<x,λ(x:ℝ).(2*x-1)⁻¹))","ℝ","undefined(ℝ)"),
+	Case("MissingOutputZeroGuard","densityAtD(pushforwardOnD(λ(x:ℝ).false,λ(x:ℝ).(x^2-2)⁻¹),5)","ℝ","undefined(ℝ)"),
+	Case("MissingOutputWeighted","densityAtD(weightD(λ(x:ℝ).x,pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x^2-3)⁻¹)),y)","ℝ","undefined(ℝ)"),
+	Case("MissingOutputMaskedPole","massD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).[x≠0]·x⁻¹))","ℝ","∫dx 1·λ[x]"),
+	Case("MissingOutputNoRealRoot","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x^2+1)⁻¹),0)","ℝ","(λ(x:ℝ). (∫dx1 λ[x1]·δ((x1^2+1)⁻¹)[x])//λ[x])((0:ℝ))"),
+	Case("MissingOutputInversePartial","densityAtD(Λx.λ[x⁻¹],1)","ℝ","(λ(x:ℝ). (λ[(x⁻¹)])//λ[x])((1:ℝ))"),
+	Case("MissingOutputAtom","massD(δ((2:ℝ)))","ℝ","1"),
+	Case("MissingOutputUnknown","λ(h:ℝ→ℝ).massD(pushforwardOnD(λ(x:ℝ).true,h))","(ℝ→ℝ)→ℝ","λ(h:ℝ→ℝ). ∫dy (pushforwardOnD(λ(x:ℝ). true,h))[y]"),
 	Case("IversonParameterBoolean","λ(p:𝔹).Λx.λ[sin(x+[p])]","𝔹→Distribution(ℝ)","λ(p:𝔹). Λ(x:ℝ). (abs(cos(x+[p])))·λ[x]"),
 	Case("IversonParameterCompare","Λx.λ[sin(x+[a<b])]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+[a<b])))·λ[x]"),
 	Case("IversonParameterWeak","Λx.λ[sin(x+[a≤b])]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+[a≤b])))·λ[x]"),
@@ -2710,6 +2726,14 @@ private void run(string directory){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
 		}
+		if(c.name.indexOf("MissingOutput")==0){
+			bool witnessed=c.expected=="undefined(ℝ)";
+			enforce((certificate.indexOf("GraphFibre.MissingOutput.")>=0)==witnessed,c.name);
+			if(c.name=="MissingOutputWeighted"||c.name=="MissingOutputInverseZero")
+				enforce(certificate.indexOf("MissingOutput.weight ")>=0,c.name);
+			if(c.name=="MissingOutputZeroGuard"||c.name=="MissingOutputOutside")
+				enforce(certificate.indexOf("MissingPoint.quadratic ")>=0,c.name);
+		}
 		if(c.name.indexOf("IversonParameter")==0){
 			bool reciprocal=c.name=="IversonParameterGuardedInverse"||c.name=="IversonParameterInverseMass";
 			bool masked=c.name=="IversonParameterBoolean"||c.name=="IversonParameterCompare"||c.name=="IversonParameterWeak"||
@@ -2889,7 +2913,9 @@ private void run(string directory){
 			bool changed=c.name!="AffineTurnNonlinear"&&c.name!="AffineTurnMissingCoefficient"&&c.name!="AffineTurnOpaque";
 			enforce((certificate.indexOf("Grid.VariationChange.translate ")>=0)==changed,c.name);
 			enforce((certificate.indexOf("Grid.VariationChange.scale ")>=0)==(changed&&c.name!="AffineTurnOffset"),c.name);
-			enforce((text.indexOf("∫")<0)==changed,c.name);
+			bool missing=c.name=="AffineTurnMissingCoefficient";
+			enforce((certificate.indexOf("MissingOutput.mass ")>=0)==missing,c.name);
+			enforce((text.indexOf("∫")<0)==(changed||missing),c.name);
 		}
 		if(c.name.indexOf("PowerWave")==0||c.name=="VariationOscillating"){
 			bool solved=c.name!="PowerWaveUnknownVelocity"&&c.name!="PowerWaveInfinite";

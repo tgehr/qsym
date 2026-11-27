@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
-	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
+	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
 	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
@@ -2885,6 +2885,36 @@ final class Bindings{
 			return true;
 		}
 		return visit(body,evidence);
+	}
+	// A missing output in a forward chart obstructs both of its scalar
+	// observations. An inverse sheet with a hole can still cover the source.
+	// Only an entirely empty inverse relation supplies a witness here.
+	private bool chartMissingOutput(uint id,out uint body,out string proof,SourceCertificates cert=null){
+		enum ns="Distribution.GraphFibre.MissingOutput.";
+		uint[] weights;
+		auto n=nodes[id];
+		while(n.op==BoundOp.distributionWeight){
+			if(cert !is null) weights~=n.a;
+			n=nodes[n.b];
+		}
+		if(n.op==BoundOp.distributionPushforwardOn){
+			auto f=nodes[n.b];
+			if(f.op!=BoundOp.lambda||type(at(f.a))!=scalarType(Sort.real_)) return false;
+			body=f.a;
+			string witness;
+			if(!missingPoint(body,witness,cert)) return false;
+			if(cert !is null) proof="("~ns~"realPushforward ("~name(n.a)~".eval ξ ρ) "~witness~")";
+		}else if(n.op==BoundOp.distributionInverseCover||n.op==BoundOp.distributionInversePart){
+			bool part=n.op==BoundOp.distributionInversePart;
+			auto row=nodes[part?n.b:n.a];
+			if(row.op!=BoundOp.vectorCons||nodes[row.b].op!=BoundOp.vectorNil) return false;
+			auto f=nodes[row.a];
+			if(f.op!=BoundOp.lambda||nodes[f.a].op!=BoundOp.bottom) return false;
+			body=f.a;
+			if(cert !is null) proof=part?"("~ns~"singletonPart ("~name(n.a)~".eval ξ ρ))":ns~"singleton";
+		}else return false;
+		foreach_reverse(w;weights) proof="("~ns~"weight ("~name(w)~".eval ξ ρ) "~proof~")";
+		return true;
 	}
 	// Build an ordinary scalar polynomial in the innermost real variable.
 	private BoundTerm coordinatePolynomial(Scope inner,Rational[] coefficients){
@@ -10896,6 +10926,12 @@ final class Bindings{
 				}
 			}
 			if(next==BoundTerm.init&&(current.op==BoundOp.distributionMass||current.op==BoundOp.distributionDensityAt)){
+				string unused; uint body;
+				if(chartMissingOutput(current.a,body,unused)){
+					next=bottom(ctx,type(t)); rule=BindingRule.distributionMissingOutput; extra=body;
+				}
+			}
+			if(next==BoundTerm.init&&(current.op==BoundOp.distributionMass||current.op==BoundOp.distributionDensityAt)){
 				bool mass=current.op==BoundOp.distributionMass;
 				uint[] operations;
 				auto loop=nodes[mass?observationInput(current.a,operations):current.a]; Rational r;
@@ -13093,6 +13129,15 @@ final class Bindings{
 			affineMasks.set(cast(uint)i,c.functionAt(d.affineInput)~" "~c.q(f.slope)~" "~c.q(f.offset)~" "~z~" "~f.proof~
 				" (of_decide_eq_true rfl) (of_decide_eq_true rfl)");
 			stepNumerics~=c.numericTerms; stepDeclarations~=c.declarations;
+		}
+		Table!(uint,string) missingOutputs;
+		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionMissingOutput){
+			auto n=nodes[p.from],c=new SourceCertificates("output"~to!string(i)~"_",p.extra);
+			uint body; string w;
+			enforce(chartMissingOutput(n.a,body,w,c)&&body==p.extra,"missing chart output witness");
+			auto law=n.op==BoundOp.distributionMass?"mass "~w:"density "~w~" ("~name(n.b)~".eval ξ ρ)";
+			missingOutputs.set(cast(uint)i,"Distribution.GraphFibre.MissingOutput."~law);
+			proofRoots~=c.roots; stepNumerics~=c.numericTerms; stepDeclarations~=c.declarations;
 		}
 		Table!(uint,string) smoothCoordinates;
 		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionSmoothCoordinate){
@@ -15402,6 +15447,8 @@ final class Bindings{
 					auto sum=nodes[n.a];
 					proof=".ofEq (fun ξ ρ => Distribution.GraphFibre.Coordinates.density_add_weight ("~name(sum.a)~".eval ξ ρ) "~realBody(nodes[sum.b].a)~" ("~name(n.b)~".eval ξ ρ))"; break;
 				}
+				case BindingRule.distributionMissingOutput:
+					proof=".ofEq (fun ξ ρ => "~missingOutputs.get(cast(uint)i,"")~")"; break;
 				case BindingRule.distributionSmoothCoordinate:
 					proof=".ofEq (fun ξ ρ => "~smoothCoordinates.get(cast(uint)i,"")~")"; break;
 				case BindingRule.distributionCoordinateGrid:

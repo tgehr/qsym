@@ -16,6 +16,7 @@ import QSym.DistributionCauchy
 import QSym.DistributionSymbolicPolynomial
 import QSym.DistributionGaussianSymbolic
 import QSym.DistributionCoordinateDomain
+import QSym.DistributionMissingOutput
 import QSym.DistributionCoordinateGridMass
 import QSym.DistributionCoordinateGridPoint
 import QSym.DistributionCoordinateInterval
