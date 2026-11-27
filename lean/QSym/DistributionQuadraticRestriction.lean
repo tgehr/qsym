@@ -96,6 +96,11 @@ private theorem branches_eq (c a t : ℝ) (ha : a ≠ 0) (p : ℝ → Option Boo
     simp only [rootObservation, guardedBranches, sourceRoots, if_neg hp.not_lt, if_neg hp.ne', Option.some_bind,
       List.foldr_cons, List.foldr_nil, add_sub_cancel_right, left, right, sr, w, test, lo, hi, Value.mask_true, Value.add_zero_right]
 
+theorem restricted_branches (c a b y : ℝ) (ha : a ≠ 0) (p : ℝ → Option Bool) :
+    densityAtValue (realPushforwardOnValue (some p) (some fun x => some (((x-c)^2-b)/a))) (some y) =
+      guardedBranches (some p) (some c) (some |a|) (some (a*y+b)) :=
+  (restricted_roots c a b y ha p).trans (branches_eq c a _ ha p)
+
 theorem guarded_symbolic (c a b j : ℚ) (ha : a ≠ 0) (hj : j = |a|) {h t u gain : Option ℝ}
     (hc : h = some (c:ℝ)) (ht : t = some (a:ℝ)) (hu : u = some (b:ℝ)) (hg : gain = some (j:ℝ))
     {f : ℝ → Option ℝ}
@@ -112,6 +117,6 @@ theorem guarded_symbolic (c a b j : ℚ) (ha : a ≠ 0) (hj : j = |a|) {h t u ga
   | some pred =>
     cases y with
     | none => rfl
-    | some y => exact (restricted_roots _ _ _ _ hn pred).trans (branches_eq _ _ _ hn pred)
+    | some y => exact restricted_branches _ _ _ _ hn pred
 
 end QSym.Distribution.GraphFibre.Coordinates.Quadratic
