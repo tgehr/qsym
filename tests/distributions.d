@@ -165,6 +165,16 @@ private Case[] cases(){ return [
 	Case("CoverPairingMissingEndpoint","∫dy y⁻¹·λ[-sqrt(y),sqrt(y)]","ℝ","undefined(ℝ)"),
 	Case("CoverPairingGap","∫dy [0<y]·[y<0]·λ[-sqrt(y),sqrt(y)]","ℝ","0"),
 	Case("CoverPairingShifted","λ(t:ℝ→ℝ). ∫dy t(y)·λ[3-3·sqrt(y),3+3·sqrt(y)]","(ℝ→ℝ)→ℝ"),
+	Case("RestrictedJumpWindow","∫dy λ[2*[0≤y] | x. 0<x<1]","ℝ","1"),
+	Case("RestrictedJumpDescending","∫dy λ[2*[y<0] | x. 1/2≤x≤3/2]","ℝ","1"),
+	Case("RestrictedJumpDisjoint","∫dy λ[2*[0≤y] | x. 2<x]","ℝ","0"),
+	Case("RestrictedJumpEndpoint","∫dy λ[2*[0≤y] | x. x=2]","ℝ","0"),
+	Case("RestrictedJumpTwo","∫dy λ[2*[0≤y]+[1≤y] | x. 1<x<5/2]","ℝ","3/2"),
+	Case("RestrictedJumpDensity","densityAtD(Λy. λ[2*[0≤y] | x. 0<x<1],0)","ℝ","undefined(ℝ)"),
+	Case("RestrictedJumpPartialProbe","∫dy y⁻¹·λ[2*[0≤y] | x. 0<x<1]","ℝ","undefined(ℝ)"),
+	Case("RestrictedJumpSlope","densityAtD(Λy. λ[y+2*[0≤y] | x. 1<x<3],1/2)","ℝ","1"),
+	Case("JumpPartialRestriction","∫dy λ[2*[0≤y] | x. x⁻¹<1]","ℝ"),
+	Case("JumpOutputWindow","∫dy [0<y<1]·λ[2*[0≤y]]","ℝ","0"),
 	Case("SheetPartPairing","λ(p:ℝ→𝔹). λ(t:ℝ→ℝ). ∫dy t(y)·λ[-sqrt(y),sqrt(y) | x. p(x)]","(ℝ→𝔹)→(ℝ→ℝ)→ℝ"),
 	Case("SheetPartCritical","∫dy y⁻¹·λ[-sqrt(y),sqrt(y) | x. 0<x]","ℝ","undefined(ℝ)"),
 	Case("SheetPartDensityPositive","densityAtD(Λy. λ[-sqrt(y),sqrt(y) | x. 0<x],4)","ℝ","1/4"),
@@ -425,6 +435,10 @@ private Case[] cases(){ return [
 	Case("PolynomialMixedMoment","∫dx (1/3*δ(1)[x]+2/3*[0≤x≤3]*(1/3)*λ[x])*x^2","ℝ","7/3"),
 	Case("PolynomialAbsolute","∫dx [-1≤x≤1]*abs(x)*λ[x]","ℝ","1"),
 	Case("PolynomialAbsoluteShifted","∫dx [-1≤x≤2]*abs(x-1)*x*λ[x]","ℝ","1/6"),
+	Case("PolynomialAbsoluteTurning","∫dx [-2≤x≤2]·λ[x³-3*x]","ℝ","12"),
+	Case("PolynomialAbsoluteRoots","∫dx [-1≤x≤1]*abs(6*x^2+x-1)*λ[x]","ℝ","341/108"),
+	Case("RepeatedAbsoluteRoot","∫dx [-2≤x≤2]*abs((x-1)^2*(x+1))*λ[x]","ℝ","35/6"),
+	Case("UnsplitAbsolute","∫dx [-2≤x≤2]*abs(x^2-2)*λ[x]","ℝ"),
 	Case("PolynomialAbsoluteScaled","∫dx [0≤x≤1]*abs(2*x-1)*λ[x]","ℝ","1/2"),
 	Case("PolynomialAbsoluteCube","∫dx [-1≤x≤1]*abs(x)^3*λ[x]","ℝ","1/2"),
 	Case("PolynomialAbsoluteCoordinate","∫dx [-1≤x≤1]·x²·λ[x²]","ℝ","1"),
@@ -1103,6 +1117,9 @@ private void run(string directory){
 		// model. Keep their proof dependencies from silently reverting to the
 		// presentation-only lemmas while the remaining backend is migrated.
 		import std.string:indexOf;
+		if(c.name=="JumpPartialRestriction") enforce(certificate.indexOf("Grid.restrictedJump")<0&&text.indexOf("∫")>=0,c.name);
+		if(c.name=="UnsplitAbsolute") enforce(text.indexOf("∫")>=0,c.name~": "~text);
+		if(c.name.indexOf("RestrictedJump")==0) enforce(certificate.indexOf("Grid.restrictedJump")>=0,c.name);
 		if(c.name.indexOf("Grid")==0){
 			auto compiled=certificate.indexOf("GraphFibre.Coordinates.Grid.cell ")>=0;
 			enforce(compiled==(c.name!="GridSpike"),c.name);

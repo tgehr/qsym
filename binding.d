@@ -192,10 +192,11 @@ private struct CoordinateJoin{
 	JoinKind kind;
 	Rational left,right,slope;
 	uint event=uint.max;
+	IntegralSolution* clipped;
 }
 private struct CoordinateGrid{
 	PolynomialGrid grid;
-	uint body,weight;
+	uint body,weight,predicate=uint.max;
 	CoordinateJoin[] joins;
 }
 private Rational polynomialAt(Rational[] p,Rational x) @safe {
@@ -1292,6 +1293,28 @@ final class Bindings{
 		auto inside=scalarBody(at(id),arg);
 		return inside!=Term.init&&integralAffine(arena,inside,arg,slope,offset)&&slope.words<=128&&offset.words<=128;
 	}
+	// The scalar simplifier proposes rational zeros. Exact division accounts
+	// for multiplicities and rejects incomplete lists before choosing any sign.
+	private bool gridFactors(uint id,Term arg,out Rational lead,out Rational[] roots){
+		Rational[] p;
+		if(!axisPolynomial(id,p)) return false;
+		while(p.length&&p[$-1].zero) p=p[0..$-1];
+		lead=p.length?p[$-1]:Rational(0);
+		if(p.length<=1) return true;
+		if(p.length>17) return false;
+		auto test=simplify(arena,arena.nonzero(scalarBody(at(id),arg)));
+		Rational[] candidates;
+		if(test.exhausted||!integralCutPoints(arena,test.output,arg,candidates)) return false;
+		foreach(a;candidates){
+			while(p.length>1&&polynomialAt(p,a).zero){
+				auto quotient=new Rational[](p.length-1);
+				quotient[$-1]=p[$-1];
+				foreach_reverse(i;1..quotient.length) quotient[i-1]=p[i]+a*quotient[i];
+				p=quotient; roots~=a;
+			}
+		}
+		return p.length==1;
+	}
 	// Below a cast the axis occurs only in guards: a step expression.
 	private bool gridSteps(uint id,Term arg,ref Rational[] cuts,uint depth){
 		auto q=nodes[id];
@@ -1328,9 +1351,14 @@ final class Bindings{
 		if(op.op==Op.add||op.op==Op.mul) return gridCuts(q.a,arg,cuts,depth+1)&&gridCuts(q.b,arg,cuts,depth+1);
 		if(op.op==Op.builtin) return op.value>=Builtin.castNZ&&op.value<=Builtin.castQR&&gridSteps(q.a,arg,cuts,depth+1);
 		if(op.op==Op.abs){
-			// The kink of an absolute value of an affine expression is a cut.
-			Rational slope,offset; if(!gridKink(q.a,arg,slope,offset)) return false;
-			if(!slope.zero) cuts~=-offset/slope;
+			Rational slope,offset;
+			if(gridKink(q.a,arg,slope,offset)){
+				if(!slope.zero) cuts~=-offset/slope;
+			}else{
+				Rational lead; Rational[] roots;
+				if(!gridFactors(q.a,arg,lead,roots)) return false;
+				cuts~=roots;
+			}
 			return true;
 		}
 		return op.op==Op.pow&&op.value<=16&&gridCuts(q.a,arg,cuts,depth+1);
@@ -1360,9 +1388,11 @@ final class Bindings{
 			return gridPolynomial(q.b,arg,sample,p);
 		}
 		if(op.op==Op.abs){
-			Rational slope,offset; if(!gridKink(q.a,arg,slope,offset)) return false;
-			auto inside=slope*sample+offset;
-			p=inside.zero?[]:inside<Rational(0)?[-offset,-slope]:[offset,slope]; return true;
+			Rational slope,offset;
+			if(gridKink(q.a,arg,slope,offset)) p=[offset,slope];
+			else if(!axisPolynomial(q.a,p)) return false;
+			if(polynomialAt(p,sample)<Rational(0)) foreach(ref c;p) c=-c;
+			return true;
 		}
 		if(!gridPolynomial(q.a,arg,sample,a)) return false;
 		if(op.op==Op.pow){ p=[Rational(1)]; foreach(i;0..op.value){ p=polyProduct(p,a); if(p.length>64) return false; } }
@@ -5282,7 +5312,7 @@ final class Bindings{
 			rule=BindingRule.distributionCoordinateRayLinear;
 			return distribution(ctx,BoundOp.distributionAdd,[corner,regular]);
 		}
-		BoundTerm polynomialCoordinate(BoundTerm fn,out uint index){
+		BoundTerm polynomialCoordinate(BoundTerm fn,out uint index,BoundTerm pred=BoundTerm.init){
 			auto body=at(node(fn).a),inner=context(body),ctx=context(fn),x=variable(inner,0);
 			CoordinateGrid cert;
 			Rational[] global;
@@ -5300,6 +5330,27 @@ final class Bindings{
 			}
 			auto zero=arena.real_(0),mul=arena.mul(zero,zero,true),add=arena.add(zero,zero,true);
 			auto lt=arena.lt(zero,zero),le=arena.le(zero,zero),mask=arena.mask(arena.boolean(true),zero);
+			if(pred!=BoundTerm.init){
+				// Restrict a jump in its traversed coordinate. Only commit the
+				// rewrite when every exceptional contribution has a certificate.
+				bool hasJump;
+				cert.predicate=node(pred).a;
+				foreach(ref j;cert.joins){
+					if(j.kind==JoinKind.corner) return BoundTerm.init;
+					if(j.kind!=JoinKind.jump) continue;
+					hasJump=true;
+					auto lo=j.left<j.right?j.left:j.right,hi=j.left<j.right?j.right:j.left;
+					auto between=primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[
+						primitive(le,[scalar(inner,arena.real_(lo)),x]),primitive(le,[x,scalar(inner,arena.real_(hi))])]);
+					auto selected=primitive(mask,[at(cert.predicate),scalar(inner,arena.real_(1))]);
+					auto w=primitive(mask,[between,selected]);
+					auto d=distribution(ctx,BoundOp.distributionWeight,[lambda(w),distribution(ctx,BoundOp.distributionLebesgue)]);
+					j.clipped=new IntegralSolution;
+					if(integratePolynomials(distribution(ctx,BoundOp.distributionMass,[d]),*j.clipped)==BoundTerm.init)
+						return BoundTerm.init;
+				}
+				if(!hasJump) return BoundTerm.init;
+			}
 			BoundTerm weight;
 			foreach(i,p;slopes){
 				if(!p.length) continue;
@@ -5324,7 +5375,16 @@ final class Bindings{
 				weight=weight==BoundTerm.init?magnitude:primitive(add,[weight,magnitude]);
 			}
 			if(weight==BoundTerm.init) weight=scalar(inner,zero);
+			cert.weight=weight.id;
+			if(pred!=BoundTerm.init){
+				uint[] shift; foreach(i;0..contexts[ctx.index].length) shift~=i+1;
+				weight=primitive(mask,[apply(rename(pred,inner,shift),body),weight]);
+			}
 			auto result=distribution(ctx,BoundOp.distributionWeight,[inheritHint(fn,lambda(weight)),distribution(ctx,BoundOp.distributionLebesgue)]);
+			BoundTerm atom(Rational a,Rational height){
+				auto d=distribution(ctx,BoundOp.distributionDirac,[scalar(ctx,arena.real_(a))]);
+				return height==Rational(1)?d:distribution(ctx,BoundOp.distributionScale,[scalar(ctx,arena.real_(height)),d]);
+			}
 			foreach_reverse(i,a;cuts){
 				auto join=cert.joins[i];
 				if(join.kind==JoinKind.smooth) continue;
@@ -5336,13 +5396,13 @@ final class Bindings{
 					event=distribution(ctx,BoundOp.distributionPushforwardOn,[lambda(isZero),lambda(map)]);
 				}else{
 					auto k=join.right-join.left; if(k<Rational(0)) k=-k;
-					event=distribution(ctx,BoundOp.distributionDirac,[scalar(ctx,arena.real_(a))]);
-					if(k!=Rational(1)) event=distribution(ctx,BoundOp.distributionScale,[scalar(ctx,arena.real_(k)),event]);
+					event=atom(a,k);
 				}
 				cert.joins[i].event=event.id;
+				if(pred!=BoundTerm.init) event=atom(a,join.clipped.value);
 				result=distribution(ctx,BoundOp.distributionAdd,[event,result]);
 			}
-			cert.body=body.id;cert.weight=weight.id;index=cast(uint)coordinates.length;coordinates~=cert;
+			cert.body=body.id;index=cast(uint)coordinates.length;coordinates~=cert;
 			return result;
 		}
 		BoundTerm jumpCoordinate(BoundTerm fn,JumpRays rays){
@@ -6035,6 +6095,13 @@ final class Bindings{
 				return (g.a==uint.max||guardReady(g.a))&&(g.b==uint.max||guardReady(g.b))&&(g.c==uint.max||guardReady(g.c));
 			}
 
+			if(current.op==BoundOp.distributionInversePart&&nodes[current.a].op==BoundOp.lambda){
+				auto first=nodes[current.b];
+				if(first.op==BoundOp.vectorCons&&nodes[first.b].op==BoundOp.vectorNil&&nodes[first.a].op==BoundOp.lambda){
+					next=polynomialCoordinate(at(first.a),extra,at(current.a));
+					if(next!=BoundTerm.init) rule=BindingRule.distributionCoordinateGrid;
+				}
+			}
 			if(current.op==BoundOp.distributionInverseCover){
 				auto first=nodes[current.a]; Rational slope,offset; bool product;
 				bool single=first.op==BoundOp.vectorCons&&nodes[first.b].op==BoundOp.vectorNil;
@@ -7639,6 +7706,17 @@ final class Bindings{
 			}
 			if(op.op==Op.abs){
 				enforce(region.length,"absolute value outside a cell");
+				auto arg=arena.variable(Sort.real_,freshScalarIndex(n.a));
+				Rational slope,offset;
+				if(!gridKink(n.a,arg,slope,offset)){
+					Rational lead; Rational[] roots;
+					enforce(gridFactors(n.a,arg,lead,roots),"missing polynomial factors");
+					string[] literals; foreach(a;roots) literals~=q(a);
+					auto factors="["~literals.join(", ")~"]";
+					auto inside=piece(n.a,set,region,sample);
+					return Piece(app("polynomial_abs_factors","(r := "~region~") "~q(lead)~" "~factors~" "~inside.proof~" rfl rfl"),
+						"(Distribution.StepSource.absFactors "~region~" "~q(lead)~" "~factors~")");
+				}
 				auto inside=affineProof(n.a);auto at_=inside.slope*sample+inside.offset;
 				auto sign=at_.zero?"zero":at_<Rational(0)?"negative":"positive";
 				return Piece(app("polynomial_abs","(r := "~region~") ."~sign~" "~inside.proof~" rfl"),
@@ -7941,7 +8019,8 @@ final class Bindings{
 			cells~=cert.save(grid~"Cell "~set~" "~f~" "~w~" "~src.poly,app("cell",src.proof~" "~proof~" rfl"));
 		}
 		if(!cuts.length) return app("polynomial",cells[0]);
-		string events="([] : List "~grid~"Event)";
+		string events="([] : List "~grid~"Event)",selected="List.Forall₂.nil";
+		if(c.predicate!=uint.max) cert.roots~=c.weight;
 		auto tail=app("last","(a := "~q(cuts[$-1])~") "~cells[$-1]);
 		foreach_reverse(i,a;cuts){
 			auto j=c.joins[i],v=c.grid.points[i],lo=i?"(some "~q(cuts[i-1])~")":"none",hi=i+1<cuts.length?"(some "~q(cuts[i+1])~")":"none";
@@ -7965,12 +8044,24 @@ final class Bindings{
 					law=app("jump",point~"(l := "~q(j.left)~") (r := "~q(j.right)~") "~germs~" "~pv~" rfl rfl (of_decide_eq_true rfl) "~side~" "~zero);
 					eq=app("atomTerm",q(a)~" "~q(height)~" "~apos~" "~numeric(arena.real_(height),height));
 				}
+				if(c.predicate!=uint.max){
+					auto mass=*j.clipped;
+					cert.roots~=[j.event,mass.from[0]];
+					string unused;
+					auto hm=stepGridProof(mass,cert,unused);
+					auto lower=j.left<j.right?j.left:j.right,upper=j.left<j.right?j.right:j.left;
+					auto clipped=app("restrictedJump",cert.functionAt(c.predicate)~" "~q(j.left)~" "~q(j.right)~" "~q(mass.value)~" "~germs~
+						" rfl rfl (of_decide_eq_true rfl) "~numeric(arena.real_(lower),lower)~" "~numeric(arena.real_(upper),upper)~
+						" "~numeric(arena.real_(1),Rational(1))~" ("~hm~")");
+					auto atom=app("atomTerm",q(a)~" "~q(mass.value)~" "~apos~" "~numeric(arena.real_(mass.value),mass.value));
+					selected="(List.Forall₂.cons (Eq.trans "~clipped~" "~atom~") "~selected~")";
+				}
 				law=app("moveBreak",law~" "~eq);
 				events="((("~q(a)~" : ℝ), "~name(j.event)~".eval ξ ρ) :: "~events~")";
 			}
 			tail=cert.save(grid~"Checked "~f~" "~w~" "~lo~" "~events,app(j.kind==JoinKind.smooth?"pass":"cut",bounds~"rfl "~cells[i]~" "~law~" "~tail));
 		}
-		return app("finish",tail);
+		return c.predicate==uint.max?app("finish",tail):app("finishRestricted",cert.functionAt(c.predicate)~" "~tail~" "~selected);
 	}
 	private string stepGridProof(IntegralSolution s,SourceCertificates cert,ref string outputProof){
 		auto q=&cert.q,app=&cert.app,atPoint=&cert.atPoint,functionAt=&cert.functionAt;
@@ -8801,7 +8892,11 @@ final class Bindings{
 				facts=app("ProbeFacts.cons","(P := fun x => Value.Defined ("~density()~" x)) (x := "~x~") "~defined~" "~facts);
 			}
 			outputProof="(Numeric.calculate_sound ξ n"~to!string(nodes[s.output].data)~" "~q(s.value)~" rfl)";
-			return left.proof~" rfl "~tail~" "~facts~" rfl";
+			string[] rest; foreach(a;cuts[1..$]) rest~=q(a);
+			auto program="Distribution.DensityProgram.lebesgue";
+			foreach(id;s.from) program="(Distribution.DensityProgram.weight "~functionAt(id)~" "~program~")";
+			return "Distribution.DensityProgram.presentation_mass_polynomial "~program~" (a := "~q(cuts[0])~
+				") (bs := ["~rest.join(", ")~"]) (v := "~q(s.value)~") "~left.proof~" rfl "~tail~" "~facts~" rfl";
 		}
 		if(!s.ae){
 			auto evidence=constancy()~" "~densityZero(cuts[0]-Rational(1))~" "~densityZero(cuts[$-1]+Rational(1));
@@ -8958,7 +9053,7 @@ final class Bindings{
 		string[] coordinateProofs;
 		foreach(i,coordinate;result.coordinates){
 			auto c=new SourceCertificates("grid"~to!string(i)~"_",coordinate.body);
-			coordinateProofs~=coordinateGridProof(coordinate,c);
+			coordinateProofs~=coordinateGridProof(coordinate,c); proofRoots~=c.roots;
 			stepNumerics~=c.numericTerms;stepDeclarations~=c.declarations;
 		}
 		Table!(uint,string) affineCovers;
@@ -10238,9 +10333,10 @@ final class Bindings{
 				case BindingRule.distributionInterval,BindingRule.distributionIntegralAE:{
 					auto s=result.integrals[p.extra];enforce(s.piecewise||s.ae,"missing compositional integral certificate");
 					if(s.interval||s.gaussian){ proof=".ofEq (fun ξ ρ => let h := "~stepProofs[p.extra]~"; h)"; break; }
+					if(s.polynomial){ proof=".ofEq (fun ξ ρ => ("~stepProofs[p.extra]~").trans (Eq.symm "~stepOutputs[p.extra]~"))"; break; }
 					string rationalQ(Rational q){return q.denominator==1?"("~to!string(q.numerator)~" : ℚ)":"(("~to!string(q.numerator)~") / ("~to!string(q.denominator)~") : ℚ)";}
 					string tail="[";foreach(k,q;s.exceptions[1..$]){if(k)tail~=",";tail~=rationalQ(q);}tail~="]";
-					proof=".ofEq (fun ξ ρ => (Distribution.DensityProgram.presentation_mass_"~(s.polynomial?"polynomial":s.ae?"grid_null_edit":s.closed?"grid_known":"grid")~" "~densityProgram(s.from)~(s.ae?" "~densityProgram(s.to):"")~" (a := "~rationalQ(s.exceptions[0])~") (bs := "~tail~") "~(s.closed?"(v := "~rationalQ(s.value)~") ":"")~stepProofs[p.extra]~")"~(s.ae?"":".trans (Eq.symm "~stepOutputs[p.extra]~")")~")";break;
+					proof=".ofEq (fun ξ ρ => (Distribution.DensityProgram.presentation_mass_"~(s.ae?"grid_null_edit":s.closed?"grid_known":"grid")~" "~densityProgram(s.from)~(s.ae?" "~densityProgram(s.to):"")~" (a := "~rationalQ(s.exceptions[0])~") (bs := "~tail~") "~(s.closed?"(v := "~rationalQ(s.value)~") ":"")~stepProofs[p.extra]~")"~(s.ae?"":".trans (Eq.symm "~stepOutputs[p.extra]~")")~")";break;
 				}
 				case BindingRule.distributionMassWeightedDirac:
 					proof=".ofEq (fun ξ ρ => Distribution.model_mass_weight_diracValue ("~name(nodes[n.a].a)~".eval ξ ρ) ("~name(nodes[nodes[n.a].b].a)~".eval ξ ρ))"; break;

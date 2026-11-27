@@ -207,6 +207,48 @@ theorem polynomial_abs {r : Region} {f : ℝ → Option ℝ} {a b : ℚ} (s : Si
     · rw [h, abs_zero]
     · rw [abs_of_pos h]; push_cast; ring⟩
 
+/-- A rational factorization of the input and its absolute value on an open
+cell. Each root occurs with multiplicity. The sample chooses a sign and
+`signCheck` verifies it throughout the cell. -/
+def linearFactors (k : ℚ) : List ℚ → List ℚ
+  | [] => [k]
+  | a :: as => polyMul [-a, 1] (linearFactors k as)
+
+private def factorSign (r : Region) (a : ℚ) : Sign :=
+  if a ≤ r.sample then .positive else .negative
+
+def absFactors (r : Region) (k : ℚ) : List ℚ → List ℚ
+  | [] => [|k|]
+  | a :: as => polyMul (absPoly (factorSign r a) 1 (-a)) (absFactors r k as)
+
+def factorsChecked (r : Region) (as : List ℚ) : Bool :=
+  as.all fun a => signCheck r 1 (-a) (factorSign r a)
+
+private theorem absFactors_eval {r k as} (h : factorsChecked r as = true) {x} (hx : r.contains x) :
+    |polyEval (linearFactors k as) x| = polyEval (absFactors r k as) x := by
+  induction as with
+  | nil => simp [linearFactors, absFactors, polyEval]
+  | cons a as ih =>
+    change (signCheck r 1 (-a) (factorSign r a) && factorsChecked r as) = true at h
+    obtain ⟨ha, ht⟩ := Bool.and_eq_true_iff.mp h
+    have aff : Affine (fun z => some (((1:ℚ):ℝ)*z+((-a:ℚ):ℝ))) 1 (-a) := ⟨fun _ => rfl⟩
+    have eq := (polynomial_abs (factorSign r a) aff ha).equation x hx
+    simp only [Value.abs, Option.map_some', Option.some.injEq] at eq
+    rw [linearFactors, absFactors, polyEval_mul, abs_mul, ih ht, polyEval_mul, ← eq]
+    simp [polyEval, add_comm]
+
+theorem polynomial_abs_factors {r : Region} {f p} (k : ℚ) (as : List ℚ)
+    (hf : PolynomialOn r.contains f p)
+    (he : polyZero (polyAdd p (polyScale (-1) (linearFactors k as))) = true)
+    (hs : factorsChecked r as = true) :
+    PolynomialOn r.contains (fun x => Value.abs (f x)) (absFactors r k as) := by
+  constructor
+  intro x hx
+  have h := polyEval_zero he x
+  rw [polyEval_add, polyEval_scale] at h
+  have eq : polyEval p x = polyEval (linearFactors k as) x := by push_cast at h; linarith
+  simp only [hf.equation x hx, Value.abs, Option.map_some', eq, absFactors_eval hs hx]
+
 /-- The cells to the right of a cut, with their accumulated integral. -/
 inductive PolynomialTail (f : ℝ → Option ℝ) : ℚ → List ℚ → ℚ → Prop
   | nil (a : ℚ) {p : List ℚ} (h : PolynomialOn (Region.after a).contains f p) (zero : polyZero p = true) :

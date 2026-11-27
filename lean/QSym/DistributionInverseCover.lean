@@ -454,10 +454,9 @@ theorem restricted_length_eq {ι : Type} {gs : ι → ℝ → Option ℝ} {g : �
       weightValue (some fun x => Value.mask (p (g x)) (some |deriv g x|)) lebesgueValue :=
   restricted_pieces_eq (c := .smooth g hg.1) hg.2 p
 
-theorem singleton_pieces {coord : ℝ → Option ℝ} (c : VariationChart)
+theorem singleton_displays {coord : ℝ → Option ℝ} (c : VariationChart)
     (hc : ∀ x, coord x = some (c.coord x)) :
-    value (Tensor.consValue (some coord) Tensor.nilValue) = c.present none := by
-  apply pieces_eq
+    Displays (Fin.cases coord (Fin.elim0 : Fin 0 → ℝ → Option ℝ)) c := by
   intro x z
   constructor
   · rintro ⟨i,h⟩
@@ -465,6 +464,11 @@ theorem singleton_pieces {coord : ℝ → Option ℝ} (c : VariationChart)
     exact Option.some.inj ((hc x).symm.trans h)
   · intro h
     exact ⟨0, (hc x).trans (congrArg some h)⟩
+
+theorem singleton_pieces {coord : ℝ → Option ℝ} (c : VariationChart)
+    (hc : ∀ x, coord x = some (c.coord x)) :
+    value (Tensor.consValue (some coord) Tensor.nilValue) = c.present none :=
+  pieces_eq (singleton_displays c hc)
 
 /-- On each injective piece this pointwise density gives ordinary Lebesgue
 integration on the image, including the domain of every partial signed test. -/

@@ -264,27 +264,86 @@ private theorem foldEvents {f w : Scalar} (es : List Event)
     simp only [List.map_cons, List.foldr_cons]
     rw [(hb e List.mem_cons_self).event, ih (fun _ h => hb _ (List.mem_cons_of_mem _ h))]
 
-theorem finish {f w es} (h : Checked f w none es) :
-    value (Tensor.consValue (some f) Tensor.nilValue) =
-      es.foldr (fun e d => addValue e.2 d) (weightValue (some w) lebesgueValue) := by
+private def chartOf {f w es} (h : Checked f w none es) : VariationChart := by
   have exceptional x : x ∈ es.map Prod.fst ↔ ¬ DifferentiableAt ℝ (coord f) x := by
     constructor
     · intro hx; obtain ⟨e, he, rfl⟩ := List.mem_map.mp hx
       exact (h.breaks e he).nonsmooth
     · contrapose!
       exact fun hx => (h.regular _ trivial hx).smooth.differentiableAt le_rfl
-  let chart : VariationChart := ⟨coord f, es.map Prod.fst, h.sorted, exceptional,
+  exact ⟨coord f, es.map Prod.fst, h.sorted, exceptional,
     fun _ hx => (h.regular _ trivial hx).smooth, fun _ hx => by
       obtain ⟨e, he, rfl⟩ := List.mem_map.mp hx; exact (h.breaks e he).traces⟩
-  have eqs x : f x = some (coord f x) ∧ w x = some |deriv (coord f) x| := by
-    by_cases hx : x ∈ es.map Prod.fst
-    · obtain ⟨e, he, rfl⟩ := List.mem_map.mp hx
-      exact ⟨(h.breaks e he).total, (h.breaks e he).weight⟩
-    · exact ⟨(h.regular _ trivial hx).total, (h.regular _ trivial hx).weight⟩
-  rw [singleton_pieces chart (fun x => (eqs x).1)]
+
+private theorem gridValues {f w es} (h : Checked f w none es) (x : ℝ) : f x = some (coord f x) ∧ w x = some |deriv (coord f) x| := by
+  by_cases hx : x ∈ es.map Prod.fst
+  · obtain ⟨e, he, rfl⟩ := List.mem_map.mp hx
+    exact ⟨(h.breaks e he).total, (h.breaks e he).weight⟩
+  · exact ⟨(h.regular _ trivial hx).total, (h.regular _ trivial hx).weight⟩
+
+theorem finish {f w es} (h : Checked f w none es) :
+    value (Tensor.consValue (some f) Tensor.nilValue) =
+      es.foldr (fun e d => addValue e.2 d) (weightValue (some w) lebesgueValue) := by
+  rw [singleton_pieces (chartOf h) (fun x => (gridValues h x).1)]
   change (es.map Prod.fst).foldr _ (weightValue (some fun x => some |deriv (coord f) x|) _) = _
-  rw [← funext (fun x => (eqs x).2)]
+  rw [← funext (fun x => (gridValues h x).2)]
   exact foldEvents es h.breaks _
+
+/-- The same checked coordinate grid can be used with a restriction on its
+source. Each exceptional point supplies its own restricted contribution. -/
+def RestrictedEvent (f : Scalar) (pred : ℝ → Option Bool) (e : Event) (d : Option (D ℝ)) :=
+  VariationChart.atCut (coord f) e.1 (some pred) = d
+
+theorem finishRestricted {f w es ds} (pred : ℝ → Option Bool) (h : Checked f w none es)
+    (events : List.Forall₂ (RestrictedEvent f pred) es ds) :
+    restricted (some pred) (Tensor.consValue (some f) Tensor.nilValue) =
+      ds.foldr addValue (weightValue (some fun x => Value.mask ((f x).bind pred) (w x)) lebesgueValue) := by
+  refine (restricted_pieces_eq (singleton_displays (chartOf h) (fun x => (gridValues h x).1)) pred).trans ?_
+  change (es.map Prod.fst).foldr (fun a d => addValue (VariationChart.atCut (coord f) a (some pred)) d)
+    (weightValue (some fun x => Value.mask (pred (coord f x)) (some |deriv (coord f) x|)) _) = _
+  have eq x : Value.mask (pred (coord f x)) (some |deriv (coord f) x|) =
+      Value.mask ((f x).bind pred) (w x) := by rw [(gridValues h x).1, (gridValues h x).2]; rfl
+  rw [funext eq]
+  clear h
+  induction events with
+  | nil => rfl
+  | cons he _ ih => exact congrArg₂ addValue he ih
+
+/-- Clip a jump on its whole closed traversal. Reuse the ordinary mass
+certificate for the clipped indicator, including its endpoint probes. -/
+theorem restrictedJump {f a p q} (pred : ℝ → Option Bool) (l r k : ℚ)
+    (g : Germ f a p q) (hl : l = polyEvalQ p a) (hr : r = polyEvalQ q a) (hne : l ≠ r)
+    {lo hi unit : Option ℝ} (hlo : lo = some ((min l r : ℚ):ℝ))
+    (hhi : hi = some ((max l r : ℚ):ℝ)) (hu : unit = some ((1:ℚ):ℝ))
+    (hm : massValue (weightValue (some fun x => Value.mask
+      (Value.and (Value.le lo (some x)) (Value.le (some x) hi)) (Value.mask (pred x) unit))
+      lebesgueValue) = some (k:ℝ)) :
+    VariationChart.atCut (coord f) a (some pred) = VariationChart.atom a (some (k:ℝ)) := by
+  classical
+  have tl := traceL g; rw [← value_eq hl] at tl
+  have tr := traceR g; rw [← value_eq hr] at tr
+  rw [VariationChart.atCut_of_limits tl tr, if_neg (Rat.cast_injective.ne hne)]
+  congr 1
+  subst lo; subst hi; subst unit
+  simp only [Rat.cast_one] at hm
+  rw [weighted_lebesgue_mass_bridge, Model.densityMassValue_eq] at hm
+  apply Eq.trans _ hm
+  let s := uIcc (l:ℝ) (r:ℝ)
+  let v := fun x : ℝ => Value.mask (pred x) (some (1:ℝ))
+  let clipped := fun x : ℝ => Value.mask
+    (Value.and (Value.le (some ((min l r : ℚ):ℝ)) (some x))
+      (Value.le (some x) (some ((max l r : ℚ):ℝ)))) (v x)
+  have clip (b c x : ℝ) (t : Option ℝ) : Value.mask
+      (Value.and (Value.le (some b) (some x)) (Value.le (some x) (some c))) t =
+      if b ≤ x ∧ x ≤ c then t else some 0 := by
+    by_cases h : b ≤ x <;> by_cases j : x ≤ c <;> simp [Value.and, Value.le, Value.mask, h, j]
+  have atPoint x : clipped x = if x ∈ s then v x else some 0 := by
+    simp only [clipped, Rat.cast_min, Rat.cast_max, clip]
+    by_cases hx : x ∈ s
+    · exact (if_pos hx).trans (if_pos hx).symm
+    · exact (if_neg hx).trans (if_neg hx).symm
+  exact (branchIntegral_congr measurableSet_uIcc (fun x hx => ((atPoint x).trans (if_pos hx)).symm)).trans
+    (branchIntegral_eq_full measurableSet_uIcc clipped (fun x hx => (atPoint x).trans (if_neg hx)))
 
 private theorem zero_test (x : ℝ) :
     (if x = 0 then some true else some false) = Value.not (Value.nonzero (some x)) := by
