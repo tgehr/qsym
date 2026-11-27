@@ -840,7 +840,7 @@ final class Bindings{
 		auto nonzero=primitive(arena.nonzero(arena.real_(0)),[at(steps[root].charge)]);
 		return guard(primitive(neg,[nonzero]),at(steps[root].regular));
 	}
-	private bool depends(BoundTerm t,uint index){
+	package bool depends(BoundTerm t,uint index){
 		auto n=node(t); if(n.op==BoundOp.variable) return n.data==index;
 		if(n.op==BoundOp.lambda||n.op==BoundOp.set||n.op==BoundOp.fixed) ++index;
 		return n.a!=uint.max&&depends(at(n.a),index)||n.b!=uint.max&&depends(at(n.b),index)||n.c!=uint.max&&depends(at(n.c),index);

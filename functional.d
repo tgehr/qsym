@@ -605,6 +605,7 @@ struct FunctionSyntax{
 				string grouped(string body){ return group?"("~body~")":body; }
 				switch(q.op){
 					case BoundOp.distributionZero:return "0";
+					case BoundOp.variable,BoundOp.global:return value(d.id)~"["~axis~"]";
 					case BoundOp.distributionLebesgue:return "λ["~axis~"]";
 					case BoundOp.distributionInversePart,BoundOp.distributionInverseCover:{
 						bool part=q.op==BoundOp.distributionInversePart;
@@ -746,6 +747,15 @@ struct FunctionSyntax{
 					return "∫d"~axis~" "~graphForm(n,axis,locals,0,false);
 				}
 				case BoundOp.distributionDensityAt:{
+					auto point=b.node(b.at(n.b));
+					if(point.op==BoundOp.variable&&!b.depends(b.at(n.a),point.data)){
+						auto axis=locals[point.data];
+						auto source=b.at(n.a),op=b.node(source).op,body=form(source,axis,locals);
+						return (op==BoundOp.variable||op==BoundOp.global?body:"("~body~")")~"//λ["~axis~"]";
+					}
+					// A partial query cannot be introduced by a new lambda application:
+					// reparsing that application also introduces a definedness guard.
+					if(point.op!=BoundOp.scalar||!a.isNumber(a.at(point.data))) return "densityAtD("~child(n.a)~","~child(n.b)~")";
 					auto axis=fresh(locals,"x"); return "(λ("~axis~":ℝ). ("~form(b.at(n.a),axis,locals)~")//λ["~axis~"])("~child(n.b)~")";
 				}
 				case BoundOp.conditional:

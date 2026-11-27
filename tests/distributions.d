@@ -2194,6 +2194,19 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("RefinedDistributionMass","λ(d:{d:Distribution(ℝ) | (∫dx (d)[x])<2}). (7:ℝ)","Distribution(ℝ)→ℝ","λ(d:{d:Distribution(ℝ) | (∫dx d[x])<2}). (7:ℝ)"),
+	Case("RefinedDistributionDirac","(λ(d:{d:Distribution(ℝ) | (∫dx (d)[x])<2}). (7:ℝ))(δ((0:ℝ)))","ℝ","7"),
+	Case("RefinedDistributionHeavy","(λ(d:{d:Distribution(ℝ) | (∫dx (d)[x])<2}). (7:ℝ))(scaleD(2,δ((0:ℝ))))","ℝ","undefined(ℝ)"),
+	Case("RefinedDistributionDensity","λ(y:ℝ).λ(d:{r:Distribution(ℝ) | 0<(r[y]//λ[y])}).y","ℝ→Distribution(ℝ)→ℝ","λ(y:ℝ). λ(d:{r:Distribution(ℝ) | 0<(r[y]//λ[y])}). y"),
+	Case("RefinedDistributionShadowing","λ(x:ℝ).λ(d:{r:Distribution(ℝ) | (∫dx r[x])<x}).x","ℝ→Distribution(ℝ)→ℝ","λ(x:ℝ). λ(d:{r:Distribution(ℝ) | (∫dx1 r[x1])<x}). x"),
+	Case("RefinedDistributionDependentDensity","λ(f:ℝ→Distribution(ℝ)).λ(y:ℝ).densityAtD(f(y),y)","(ℝ→Distribution(ℝ))→ℝ→ℝ","λ(f:ℝ→Distribution(ℝ)). λ(y:ℝ). densityAtD(f(y),y)"),
+	Case("RefinedDistributionPartialQuery","λ(h:ℕ→ℝ).λ(d:Distribution(ℝ)).densityAtD(d,h(0))","(ℕ→ℝ)→Distribution(ℝ)→ℝ","λ(h:ℕ→ℝ). λ(d:Distribution(ℝ)). densityAtD(d,h(0))"),
+	Case("RefinedDistributionNatural","λ(d:{r:Distribution(ℕ) | (∫(n:ℕ).r[n])<2}).(1:ℝ)","Distribution(ℕ)→ℝ","λ(d:{r:Distribution(ℕ) | (∫(x:ℕ). r[x])<2}). (1:ℝ)"),
+	Case("RefinedDistributionNested","λ(d:{q:{r:Distribution(ℝ) | (∫dx r[x])<2} | 0<(∫dy q[y])}).(3:ℝ)","Distribution(ℝ)→ℝ","λ(d:{q:Distribution(ℝ) | (∫dx q[x])<2∧0<(∫dx q[x])}). (3:ℝ)"),
+	Case("RefinedDistributionSet","{d:{r:Distribution(ℝ) | (∫dx r[x])<2} | true}","Set(Distribution(ℝ))","{d:Distribution(ℝ) | (holds((∫dx d[x])<2))∧true}"),
+	Case("RefinedDistributionContinuousHole","(λ(y:ℝ).(λ(d:{r:Distribution(ℝ) | (r[y]//λ[y])=0}).(1:ℝ))(Λx.[x≠0]·λ[x]))(0)","ℝ","guard(defined(Λ(x:ℝ). [x≠0]·λ[x]),(1:ℝ))"),
+	Case("RefinedDistributionHigherState","μ(f:Distribution(ℝ)→ℝ).λ(d:Distribution(ℝ)).if massD(d)<2 then 7 else f(if 0<massD(d) then d else undefined(Distribution(ℝ)))","Distribution(ℝ)→ℝ","λ(d:{d:Distribution(ℝ) | (∫dx d[x])<2}). (7:ℝ)"),
+	Case("RefinedDistributionDomain","domain(λ(d:{r:Distribution(ℝ) | (∫dx r[x])<2}).(1:ℝ))","Set(Distribution(ℝ))","{d:Distribution(ℝ) | (holds((∫dx d[x])<2))∧true}"),
 	Case("RestrictedCallGuardedAtoms","μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if n<3 then δ(n) else f(guard(n≠5,n))","ℕ→Distribution(ℕ)","λ(n:{n:ℕ | n≤2}). δ(n)"),
 	Case("RestrictedCallIndependentTest","λ(h:ℕ→𝔹).μ(f:ℕ→Distribution(ℕ)).λ(n:ℕ).if h(n) then δ(n) else f(guard(h(0),n))","(ℕ→𝔹)→ℕ→Distribution(ℕ)","λ(h:ℕ→𝔹). λ(n:{n:ℕ | h(n)}). δ(n)"),
 	Case("RestrictedCallGuardedLebesgue","densityAtD((μ(f:ℝ→Distribution(ℝ)).λ(x:ℝ).if x<0 then lebesgueD() else f(guard(0<x,x)))(-1),0)","ℝ","1"),
@@ -2632,7 +2645,7 @@ private Case[] cases(){
 	Case("VisitFibreMissingQuery","defined(densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","2")~",undefined(ℝ)))","𝔹","false"),
 	Case("VisitFibreMissingBound","defined(densityAtD("~emittedSteps("lebesgueD()","δ((n:ℝ))","","0 sub 1")~",1))","𝔹","false"),
 	Case("VisitFibreHigherOrder","λ(h:ℕ→ℝ).λ(k:ℕ).λ(x:ℝ).densityAtD("~emittedSteps("lebesgueD()","δ(h(n))","","k")~",x)","(ℕ→ℝ)→ℕ→ℝ→ℝ"),
-	Case("VisitFibreOpaqueSeed","λ(b:Distribution(ℝ)).densityAtD("~emittedSteps("b","δ((n:ℝ))","","2")~",2)","Distribution(ℝ)→ℝ","λ(b:Distribution(ℝ)). (λ(x:ℝ). (δ(2)[x]+(δ(1)[x]+(b)[x]))//λ[x])((2:ℝ))"),
+	Case("VisitFibreOpaqueSeed","λ(b:Distribution(ℝ)).densityAtD("~emittedSteps("b","δ((n:ℝ))","","2")~",2)","Distribution(ℝ)→ℝ","λ(b:Distribution(ℝ)). (λ(x:ℝ). (δ(2)[x]+(δ(1)[x]+b[x]))//λ[x])((2:ℝ))"),
 	Case("FibreWeightsCancellation","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","2")~",0)","ℝ","1"),
 	Case("FibreWeightsBefore","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","1","1",true)~",0)","ℝ","undefined(ℝ)"),
 	Case("FibreWeightsAfter","densityAtD("~emittedSteps("addD(scaleD(3,δ((0:ℝ))),lebesgueD())","scaleD(-(n:ℝ),δ((0:ℝ)))","","3")~",0)","ℝ","undefined(ℝ)"),
@@ -2707,7 +2720,7 @@ private Case[] cases(){
 	Case("CountdownTestSeedWeight","λ(k:ℕ).massD(weightD(λ(x:ℝ).x,(μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then weightD(λ(x:ℝ).x+1,δ((2:ℝ))) else scaleD(1/2,f(n sub 1)))(k)))","ℕ→ℝ","λ(k:ℕ). (6·(1/2)^k:ℝ)"),
 	Case("CountdownSigned","λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then scaleD(-3,δ((0:ℝ))) else scaleD(-2,f(n sub 1)))(k))","ℕ→ℝ","λ(k:ℕ). (-3·(-2)^k:ℝ)"),
 	Case("CountdownCapturedSeed","λ(d:Distribution(ℕ→ℕ)).λ(k:ℕ).massD((μ(f:ℕ→Distribution(ℕ→ℕ)).λ(n:ℕ).if n=0 then d else scaleD(1/2,f(n sub 1)))(k))",
-		"Distribution(ℕ→ℕ)→ℕ→ℝ","λ(d:Distribution(ℕ→ℕ)). λ(k:ℕ). (∫(x:ℕ→ℕ). (d)[x])·(1/2)^k"),
+		"Distribution(ℕ→ℕ)→ℕ→ℝ","λ(d:Distribution(ℕ→ℕ)). λ(k:ℕ). (∫(x:ℕ→ℕ). d[x])·(1/2)^k"),
 	Case("CountdownHundred","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(100))","ℝ","1/1267650600228229401496703205376"),
 	Case("CountdownZeroAtZero","massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(0,f(n sub 1)))(0))","ℝ","1"),
 	Case("CountdownPartialIndex","defined(massD((μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if n=0 then δ((0:ℝ)) else scaleD(1/2,f(n sub 1)))(0 sub 1)))","𝔹","false"),
@@ -3413,7 +3426,7 @@ private void run(string directory){
 		// is reached and keeps its row interpreter.
 		if(c.name=="MixtureChartSummand"||c.name=="MixtureMaskedChart"||c.name=="MixtureMaskedChartMass")
 			enforce(certificate.indexOf("GraphFibre.realBind_addValue")>=0&&certificate.indexOf("mixture_")<0,c.name~": "~text);
-		if(c.name=="MixtureChartSummand") enforce(text.indexOf("δ(1)[x]")>=0&&text.indexOf("(d)[y]")>=0,c.name~": "~text);
+		if(c.name=="MixtureChartSummand") enforce(text.indexOf("δ(1)[x]")>=0&&text.indexOf("d[y]")>=0,c.name~": "~text);
 		if(c.name=="MixtureScaledChart") enforce(text.indexOf("∫")<0&&certificate.indexOf("GraphFibre.realBind_scaleValue")>=0,c.name~": "~text);
 		if(c.name=="MixtureMaskedChart") enforce(certificate.indexOf("GraphFibre.affine_chart_rule")>=0,c.name);
 		// A sum of presentations is observed through the scalar sum of its terms.
@@ -4599,7 +4612,7 @@ private void run(string directory){
 		"maskedGraphD(λ(x:ℝ).x,λ(x:ℝ).x)", "maskedGraphD(λ(x:ℝ).0<x,λ(n:ℕ).n)",
 		"pushforwardOnD(λ(x:ℝ).x,λ(x:ℝ).x)", "pushforwardOnD(λ(x:ℝ).x<1,λ(n:ℕ).n)",
 		"Λ(x:ℕ).λ[x]", "Λ(x:ℝ).δ(x)[x]", "Λ(x:ℝ).λ[x]*λ[x]",
-		"Λx. ∑(q:ℚ). δ(q)[x]", "Λx. ∑_x δ(x)[x]", "sumD(λ(x:ℝ). δ(x))",
+		"λ(d:{q:Distribution(ℝ) | (∫dq q[q])<2}).d", "Λx. ∑(q:ℚ). δ(q)[x]", "Λx. ∑_x δ(x)[x]", "sumD(λ(x:ℝ). δ(x))",
 		"Λ(x:ℝ).δ(2)[y]", "δ(2)=δ(2)", "(δ(2):Distribution(𝔹))",
 			"μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).if defined(f(n)) then δ((0:ℝ)) else f(n)",
 		"μ(f:ℕ→Distribution(ℝ)).λ(n:ℕ).Λy. massD(f(n))*λ[y]",

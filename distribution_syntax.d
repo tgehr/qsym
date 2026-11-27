@@ -108,6 +108,15 @@ Pattern distributionSyntax(Pattern root){
 		return result;
 	}
 	Pattern delegate(Pattern) @safe expand;
+	TypePattern expandType(TypePattern t) @safe {
+		if(t is null||!t.args.length&&t.predicate is null&&t.dimension is null) return t;
+		auto result=new TypePattern(t.name);
+		result.binder=t.binder;
+		foreach(a;t.args) result.args~=expandType(a);
+		if(t.predicate !is null) result.predicate=expand(t.predicate);
+		if(t.dimension !is null) result.dimension=expand(t.dimension);
+		return result;
+	}
 	Pattern lower(Pattern p,string axis,TypePattern ty) @safe {
 		auto dt=new TypePattern("Distribution",[ty]);
 		if(p.name=="$inversePart"){
@@ -130,7 +139,7 @@ Pattern distributionSyntax(Pattern root){
 			enforce(!distributionOccurs(p.args[0],axis),"a distribution branch condition must be independent of its output axis");
 			return pattern("$if",[expand(p.args[0]),lower(p.args[1],axis,ty),lower(p.args[2],axis,ty)]);
 		}
-		if(p.name=="$bottom") return typed(p,dt);
+		if(p.name=="$bottom") return typed(expand(p),dt);
 		if(p.name=="$disintegrate"){
 			Pattern input,mapping,target,mask;
 			enforce(graphForm(p,input,mapping,target,mask)&&input.name==axis,"graph disintegration requires its retained axis");
@@ -139,6 +148,7 @@ Pattern distributionSyntax(Pattern root){
 		if(p.name=="#"&&p.number==0){ auto t=pattern("$type",[]); t.annotation=ty; return pattern("zeroD",[t]); }
 		if(p.name=="$integral"){
 			enforce(p.binder!=axis,"an integral shadows the distribution output axis");
+			auto param=expandType(p.annotation);
 			// The source is the one factor that is a form on the integration axis:
 			// d[y], or a weighted form or sum of forms such as a finite mixture.
 			auto factors=integrandFactors(p.args[0],p.binder); size_t selected=size_t.max;
@@ -152,9 +162,9 @@ Pattern distributionSyntax(Pattern root){
 				enforce(selected==size_t.max,"ambiguous inverse coordinates for the integration axis");
 				selected=i;
 			}
-			if(selected==size_t.max) return pattern("integralD",[lambda(p.binder,p.annotation,lower(p.args[0],axis,ty))]);
+			if(selected==size_t.max) return pattern("integralD",[lambda(p.binder,param,lower(p.args[0],axis,ty))]);
 			enforce(!distributionOccurs(factors[selected],axis),"integration source depending on the output axis is unsupported");
-			auto measure=lower(factors[selected],p.binder,p.annotation); Pattern rest;
+			auto measure=lower(factors[selected],p.binder,param); Pattern rest;
 			foreach(i,f;factors) if(i!=selected) rest=rest is null?f:pattern("$mul",[rest,f]);
 			enforce(rest !is null,"a distribution-valued integral needs an output form");
 			// A native restricted graph retains the predicate and map independently,
@@ -170,12 +180,12 @@ Pattern distributionSyntax(Pattern root){
 					else graph=false;
 				}
 				if(graph&&predicate !is null&&atom !is null){
-					auto pred=lambda(p.binder,p.annotation,expand(predicate));
-					auto map=lambda(p.binder,p.annotation,typed(expand(atom.args[0]),ty));
+					auto pred=lambda(p.binder,param,expand(predicate));
+					auto map=lambda(p.binder,param,typed(expand(atom.args[0]),ty));
 					return typed(pattern("pushforwardOnD",[pred,map]),dt);
 				}
 			}
-			return pattern("bindD",[measure,lambda(p.binder,p.annotation,lower(rest,axis,ty))]);
+			return pattern("bindD",[measure,lambda(p.binder,param,lower(rest,axis,ty))]);
 		}
 		if(p.name=="$distributionApply"){
 			enforce(p.args[1].name==axis,"distribution form has an unbound output axis");
@@ -225,10 +235,10 @@ Pattern distributionSyntax(Pattern root){
 			auto weight=pattern("$iverson",[pattern("$lt",[zero,y])]);
 			return pattern("weightD",[lambda(y.name,new TypePattern("Real"),weight),new Pattern("lebesgueD")]);
 		}
-		if(p.name=="$distribution") return lower(p.args[0],p.binder,p.annotation);
+		if(p.name=="$distribution") return lower(p.args[0],p.binder,expandType(p.annotation));
 		if(p.name=="$integral"){
 			Pattern body; foreach(f;integrandFactors(p.args[0],p.binder)) body=body is null?f:pattern("$mul",[body,f]);
-			return pattern("massD",[lower(body,p.binder,p.annotation)]);
+			return pattern("massD",[lower(body,p.binder,expandType(p.annotation))]);
 		}
 		if(p.name=="$disintegrate"){
 			Pattern input,mapping,target,mask;
@@ -248,7 +258,7 @@ Pattern distributionSyntax(Pattern root){
 		enforce(!inverseForm(p),"inverse Lebesgue coordinates require an output axis from Λ, ∫ or //λ[y]");
 		enforce(p.name!="$distributionApply","distribution applications need a Λ or ∫ binder, or //λ[x]");
 		auto q=new Pattern(p.name=="δ"?"dirac":p.name);
-		q.annotation=p.annotation; q.binder=p.binder; q.called=p.called;
+		q.annotation=expandType(p.annotation); q.binder=p.binder; q.called=p.called;
 		q.number=p.number; q.sort=p.sort; q.variable=p.variable; q.natural=p.natural;
 		foreach(a;p.args) q.args~=expand(a);
 		return q;
