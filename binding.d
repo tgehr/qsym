@@ -554,14 +554,28 @@ final class Bindings{
 		}
 		return BoundTerm.init;
 	}
+	private enum GuardFact { exact, weak, ltLeft, ltRight, leLeft, leRight }
 	// In the active branch of an Iverson bracket, its predicate and each
 	// conjunct are true. Search only within operations in the same scope.
-	private BoundTerm clearActiveGuard(uint id,out bool[] path,out bool[] conjuncts){
+	private BoundTerm clearActiveGuard(uint id,out bool[] path,out bool[] conjuncts,out GuardFact fact){
 		auto mask=nodes[id];
 		if(nodes[mask.b].op!=BoundOp.primitive&&nodes[mask.b].op!=BoundOp.guard) return BoundTerm.init;
 		uint conditions;
+		bool testsDefined(BoundNode test,uint operand){
+			if(test.op==BoundOp.defined) return test.a==operand;
+			if(test.op!=BoundOp.holds||nodes[operand].op!=BoundOp.apply) return false;
+			auto mem=nodes[test.a],call=nodes[operand];
+			return mem.op==BoundOp.member&&nodes[mem.a].op==BoundOp.domain&&nodes[mem.a].a==call.a&&mem.b==call.b;
+		}
 		bool implied(uint condition,uint wanted,uint depth){
-			if(condition==wanted) return true;
+			if(condition==wanted){ fact=GuardFact.exact; return true; }
+			auto cmp=nodes[condition],test=nodes[wanted];
+			bool strict=primitiveOp(condition,Op.lt);
+			if(strict||primitiveOp(condition,Op.le)){
+				if(strict&&primitiveOp(wanted,Op.le)&&cmp.a==test.a&&cmp.b==test.b){ fact=GuardFact.weak; return true; }
+				if(testsDefined(test,cmp.a)){ fact=strict?GuardFact.ltLeft:GuardFact.leLeft; return true; }
+				if(testsDefined(test,cmp.b)){ fact=strict?GuardFact.ltRight:GuardFact.leRight; return true; }
+			}
 			if(depth>=12||conditions>=128||!primitiveOp(condition,Op.and_)) return false;
 			++conditions;
 			auto pair=nodes[condition];
@@ -12118,8 +12132,8 @@ final class Bindings{
 				next=repeatedMask(result.output,path,matched); rule=BindingRule.maskRepeated;
 			}
 			if(next==BoundTerm.init&&steps<budget&&primitiveOp(result.output,Op.mask)){
-				bool[] path,conjuncts;
-				next=clearActiveGuard(result.output,path,conjuncts); rule=BindingRule.maskActiveGuard;
+				bool[] path,conjuncts; GuardFact fact;
+				next=clearActiveGuard(result.output,path,conjuncts,fact); rule=BindingRule.maskActiveGuard;
 			}
 
 			if(next!=BoundTerm.init){
@@ -15898,13 +15912,28 @@ final class Bindings{
 				case BindingRule.seqLam:proof=".seqLam "~name(nodes[n.a].a)~" "~name(n.b); break;
 				case BindingRule.seqSelf:proof=".seqSelf "~name(n.a); break;
 				case BindingRule.maskActiveGuard:{
-					bool[] path,conjuncts;
-					enforce(clearActiveGuard(p.from,path,conjuncts).id==p.to,"missing active guard");
+					bool[] path,conjuncts; GuardFact fact;
+					enforce(clearActiveGuard(p.from,path,conjuncts,fact).id==p.to,"missing active guard");
 					string val(uint id){ return "("~name(id)~".eval ξ ρ)"; }
 					auto known="active";
 					foreach(right;conjuncts) known="(Value.and_true_"~(right?"right":"left")~" "~known~")";
 					uint[] parents; auto id=n.b;
 					foreach(right;path){ parents~=id; id=right?nodes[id].b:nodes[id].a; }
+					final switch(fact){
+						case GuardFact.exact:break;
+						case GuardFact.weak:known="(Binding.le_of_lt_true "~known~")"; break;
+						case GuardFact.ltLeft,GuardFact.ltRight,GuardFact.leLeft,GuardFact.leRight:
+							bool strict=fact==GuardFact.ltLeft||fact==GuardFact.ltRight;
+							bool left=fact==GuardFact.ltLeft||fact==GuardFact.leLeft;
+							known="(Binding.defined_of_"~(strict?"lt":"le")~"_true "~known~")."~(left?"1":"2");
+							auto test=nodes[nodes[id].a];
+							if(test.op==BoundOp.holds){
+								auto mem=nodes[test.a];
+								auto law="(Binding.Reduction.definedApp "~name(nodes[mem.a].a)~" "~name(mem.b)~").sound ξ ρ";
+								known="(Eq.trans (Eq.symm ("~law~")) "~known~")";
+							}
+							break;
+					}
 					auto eq="(Binding.guard_of_true "~val(nodes[id].b)~" "~known~")";
 					foreach_reverse(k,parent;parents){
 						auto node_=nodes[parent],op=valueOperation(node_);

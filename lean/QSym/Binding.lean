@@ -130,6 +130,24 @@ noncomputable def subsetValue {α : Type} (s t : Option (Set α)) : Option Bool 
 def guardValue {α : Type} (p : Option Bool) (x : Option α) : Option α :=
   if p == some true then x else none
 
+theorem le_of_lt_true {a b : Option ℝ} (h : Value.lt a b = some true) : Value.le a b = some true := by
+  cases a with
+  | none => contradiction
+  | some a =>
+    cases b with
+    | none => contradiction
+    | some b =>
+      have hab : a < b := by simpa [Value.lt] using h
+      simp [Value.le, hab.le]
+
+theorem defined_of_lt_true {a b : Option ℝ} (h : Value.lt a b = some true) :
+    definedValue a = some true ∧ definedValue b = some true := by
+  cases a <;> cases b <;> simp_all [Value.lt, definedValue]
+
+theorem defined_of_le_true {a b : Option ℝ} (h : Value.le a b = some true) :
+    definedValue a = some true ∧ definedValue b = some true := by
+  cases a <;> cases b <;> simp_all [Value.le, definedValue]
+
 theorem guard_of_true {p : Option Bool} (v : Option α) (h : p = some true) : guardValue p v = v :=
   h ▸ rfl
 

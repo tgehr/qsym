@@ -110,6 +110,19 @@ private Case[] cases(){
 		Case("ApplicationDomainSymbolic","(λ(y:ℝ).0*(1/y))((x:ℝ))","guard(x≠0,(0:ℝ))"),
 		Case("ApplicationDomainReapplied","(λ(f:ℝ→ℝ). f(0))((λ(y:ℝ).0*(1/y)))","undefined(ℝ)"),
 		Case("ActiveGuardPredicate","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p]·([guard(p,q)]·z+[guard(p,false)]·guard(p,z))","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p]·([q]·z)"),
+		Case("OrderedMaskWeak","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(h(0)≤h(1),h(2))","λ(h:ℕ→ℝ). [h(0)<h(1)]·h(2)"),
+		Case("OrderedMaskLtLeft","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(defined(h(0)),h(2))","λ(h:ℕ→ℝ). [h(0)<h(1)]·h(2)"),
+		Case("OrderedMaskLtRight","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(defined(h(1)),h(2))","λ(h:ℕ→ℝ). [h(0)<h(1)]·h(2)"),
+		Case("OrderedMaskLeLeft","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(defined(h(0)),h(2))","λ(h:ℕ→ℝ). [h(0)≤h(1)]·h(2)"),
+		Case("OrderedMaskLeRight","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(defined(h(1)),h(2))","λ(h:ℕ→ℝ). [h(0)≤h(1)]·h(2)"),
+		Case("OrderedMaskConjunction","λ(h:ℕ→ℝ).[h(0)<h(1)∧h(1)<h(2)]·guard(h(1)≤h(2),h(3))","λ(h:ℕ→ℝ). [h(0)<h(1)∧h(1)<h(2)]·h(3)"),
+		Case("OrderedMaskSums","λ(h:ℕ→ℝ).[h(0)<h(1)]·(guard(h(0)≤h(1),h(2))+guard(defined(h(1)),h(3)))","λ(h:ℕ→ℝ). [h(0)<h(1)]·(h(2)+h(3))"),
+		Case("OrderedMaskConverse","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(0)<h(1),h(2))","λ(h:ℕ→ℝ). [h(0)≤h(1)]·(guard(h(0)<h(1),h(2)))"),
+		Case("OrderedMaskReversed","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(h(1)≤h(0),h(2))","λ(h:ℕ→ℝ). [h(0)<h(1)]·(guard(h(1)≤h(0),h(2)))"),
+		Case("OrderedMaskUnrelated","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(defined(h(2)),h(0))","λ(h:ℕ→ℝ). [h(0)<h(1)]·(guard(holds((2∈domain(h))),h(0)))"),
+		Case("OrderedMaskDisjunction","λ(h:ℕ→ℝ).[h(0)<h(1)∨h(1)<h(2)]·guard(h(0)≤h(1),h(3))","λ(h:ℕ→ℝ). [h(0)<h(1)∨h(1)<h(2)]·(guard(h(0)≤h(1),h(3)))"),
+		Case("OrderedMaskEqualAt","(λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(0)<h(1),h(2)))(λ(n:ℕ).(1:ℝ))","undefined(ℝ)"),
+		Case("OrderedMaskMissing","(λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(h(0)≤h(1),h(2)))(λ(n:ℕ).undefined(ℝ))","undefined(ℝ)"),
 		Case("ActiveGuardConjLeft","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p∧q]·(guard(p,z)+1)","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p∧q]·(z+1)"),
 		Case("ActiveGuardConjRight","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p∧q]·(guard(q,z)+1)","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p∧q]·(z+1)"),
 		Case("ActiveGuardRepeated","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p]·(guard(p,z)*guard(p,z)+guard(p,z))","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p]·(z^2+z)"),
@@ -191,6 +204,11 @@ private string[] run(string directory=""){
 		if(c.name=="ApplicationDomainRootMissing"||c.name=="ApplicationDomainReciprocalMissing"||
 				c.name=="ApplicationDomainNestedSum"||c.name=="ApplicationDomainTwoApplications"||c.name=="ApplicationDomainSymbolic")
 			enforce(code.indexOf("namespace QSym.FunctionCertificate")<0&&code.indexOf("#qsym_check_axioms sound")>=0,c.name~" conditional equality");
+		if(c.name=="OrderedMaskWeak"||c.name=="OrderedMaskConjunction"||c.name=="OrderedMaskSums")
+			enforce(code.indexOf("Binding.le_of_lt_true ")>=0,c.name);
+		if(c.name=="OrderedMaskLtLeft"||c.name=="OrderedMaskLtRight"||c.name=="OrderedMaskLeLeft"||
+				c.name=="OrderedMaskLeRight"||c.name=="OrderedMaskSums")
+			enforce(code.indexOf("Binding.defined_of_")>=0,c.name);
 		if(c.name=="ActiveGuardConjLeft"||c.name=="ActiveGuardConjRight"||c.name=="ActiveGuardPredicate"||
 				c.name=="ActiveGuardPartialTest"||c.name=="ActiveGuardMaskedMissing")
 			enforce(code.indexOf("Binding.guard_of_true ")>=0,c.name);
