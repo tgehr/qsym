@@ -106,34 +106,63 @@ theorem undefined_bound {R : Type} [AddCommMonoid R]
   | none => cases f <;> rfl
   | some n => simp [Domain.Correct] at h
 
+/-- Removing an index-independent factor from a strict product. -/
+def Factored {K : Type} [Mul K] (c : Option K) (f g : ℕ → Option K) : Prop :=
+  ∀ n, f n = Value.mul c (g n)
+
+theorem Factored.left {K : Type} [Mul K] (c : Option K) (g : ℕ → Option K) :
+    Factored c (fun n => Value.mul c (g n)) g := fun _ => rfl
+
+theorem Factored.right {K : Type} [CommSemigroup K] (c : Option K) (g : ℕ → Option K) :
+    Factored c (fun n => Value.mul (g n) c) g := by
+  intro n; dsimp only; cases c <;> cases g n <;> simp [Value.mul, mul_comm]
+
+theorem Factored.mul_left {K : Type} [CommSemigroup K] {c : Option K} {f g : ℕ → Option K}
+    (h : Factored c f g) (s : ℕ → Option K) :
+    Factored c (fun n => Value.mul (f n) (s n)) (fun n => Value.mul (g n) (s n)) := by
+  intro n; dsimp only; rw [h n]; cases c <;> cases g n <;> cases s n <;> simp [Value.mul, mul_assoc]
+
+theorem Factored.mul_right {K : Type} [CommSemigroup K] {c : Option K} {f g : ℕ → Option K}
+    (h : Factored c f g) (s : ℕ → Option K) :
+    Factored c (fun n => Value.mul (s n) (f n)) (fun n => Value.mul (s n) (g n)) := by
+  intro n; dsimp only; rw [h n]; cases c <;> cases g n <;> cases s n <;> simp [Value.mul, mul_left_comm]
+
+/-- The presence test for the remaining row is needed at coefficient zero,
+where the weighted sum can exist even when the unweighted series diverges. -/
+theorem factor_present {K τ : Type} [NormedField K] (token : Option τ) (c : Option K) {f g : ℕ → Option K}
+    (h : Factored c f g) (present : ∀ n, (g n).isSome = token.isSome) :
+    value norm (some f) = token.bind (fun _ => Value.mask (Value.nonzero c) (Value.mul c (value norm (some g)))) := by
+  rw [funext h]
+  cases token with
+  | none =>
+    apply undefined_term norm _ 0
+    have h0 := present 0
+    cases c <;> cases hrow : g 0 <;> simp_all [Value.mul]
+  | some token =>
+    cases c with
+    | none => exact undefined_term norm _ 0 rfl
+    | some c =>
+      by_cases hc : c = 0
+      · subst c
+        have zeroRow : (fun n => Value.mul (some (0 : K)) (g n)) = (fun _ => some 0) := by
+          funext n; have hn := present n
+          cases hr : g n <;> simp_all [Value.mul]
+        rw [zeroRow]
+        simpa [Value.nonzero, Value.mask] using (Summation.zero (ι := ℕ) norm (norm_zero : ‖(0 : K)‖ = 0))
+      · rw [scale_nonzero c hc]
+        simp [hc, Value.nonzero, Value.mask]
+
 /-- A zero coefficient annihilates every row exactly when the ratio is
 present. A nonzero coefficient can pass through the convergence check. -/
 theorem factor_geometric {K : Type} [NormedField K] (left : Bool) (c r : Option K)
     (power : ℕ → Option K) (hp : ∀ n, power n = r.map (fun x => x^n)) :
     value norm (some (fun n => if left then Value.mul c (power n) else Value.mul (power n) c)) =
       r.bind (fun _ => Value.mask (Value.nonzero c) (Value.mul c (value norm (some power)))) := by
-  have rows : (fun n => if left then Value.mul c (power n) else Value.mul (power n) c) =
-      (fun n => Value.mul c (power n)) := by
-    funext n
-    cases left <;> cases c <;> cases power n <;> simp [Value.mul, mul_comm]
-  rw [rows]
-  cases r with
-  | none =>
-    apply undefined_term norm _ 0
-    rw [hp]
-    cases c <;> rfl
-  | some r =>
-    cases c with
-    | none => exact undefined_term norm _ 0 rfl
-    | some c =>
-      by_cases hc : c = 0
-      · subst c
-        have zeroRow : (fun n => Value.mul (some (0 : K)) (power n)) = (fun _ => some 0) := by
-          funext n; rw [hp]; simp [Value.mul]
-        rw [zeroRow]
-        simpa [Value.nonzero, Value.mask] using (Summation.zero (ι := ℕ) norm (norm_zero : ‖(0 : K)‖ = 0))
-      · rw [scale_nonzero c hc]
-        simp [hc, Value.nonzero, Value.mask]
+  apply factor_present r c (g := power)
+  · cases left
+    · exact Factored.right c power
+    · exact Factored.left c power
+  · intro n; rw [hp]; cases r <;> rfl
 
 theorem factor_geometricR (left : Bool) (c r : Option ℝ) :
     value norm (some (fun n : ℕ => if left then Value.mul c (Functions.powRN.apply r (some n))

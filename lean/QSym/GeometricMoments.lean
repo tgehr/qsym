@@ -197,4 +197,20 @@ theorem NatTest.pow (k : ℕ) {f : ℕ → Option ℝ} {p : SampledPolynomial} (
     NatTest (fun n => (f n).map (fun x => x^k)) (p.pow k) := by
   intro n; simp [h n, SampledPolynomial.pow]
 
+/-- A total polynomial probe does not affect the pointwise presence of a
+geometric row, including at the zeroth power. -/
+theorem NatTest.geometric_present {test : ℕ → Option ℝ} {p : SampledPolynomial}
+    (h : NatTest test p) (left : Bool) (r : Option ℝ) (n : ℕ) :
+    (if left then Value.mul (test n) (Functions.powRN.apply r (some n))
+      else Value.mul (Functions.powRN.apply r (some n)) (test n)).isSome = r.isSome := by
+  rw [h n]
+  cases left <;> cases r <;> simp [Value.mul, Functions.powRN, Functions.powQN, Functions.castQR, Function2.apply, Function1.apply]
+
+theorem NatTest.geometric_cast_present {test : ℕ → Option ℝ} {p : SampledPolynomial}
+    (h : NatTest test p) (left : Bool) (r : Option ℚ) (n : ℕ) :
+    let power := Functions.castQR.apply (Functions.powQN.apply r (some n))
+    (if left then Value.mul (test n) power else Value.mul power (test n)).isSome = (Functions.castQR.apply r).isSome := by
+  rw [h n]
+  cases left <;> cases r <;> simp [Value.mul, Functions.powRN, Functions.powQN, Functions.castQR, Function2.apply, Function1.apply]
+
 end QSym.GeometricMoments
