@@ -2194,15 +2194,32 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("ScaledSeriesReal","λ(c:ℝ).λ(q:ℝ).∑(i:ℕ). c*powRN(q,i)","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,(-q+1)⁻¹)))"),
+	Case("ScaledSeriesRight","λ(c:ℝ).λ(q:ℝ).∑(i:ℕ). powRN(q,i)*c","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,(-q+1)⁻¹)))"),
+	Case("ScaledSeriesComplex","λ(c:ℂ).λ(q:ℂ).∑(i:ℕ). c*powCN(q,i)","ℂ→ℂ→ℂ","λ(c:ℂ). λ(q:ℂ). [c≠0]·(c·(guard(cabs(q)<1∧q≠1,(-q+1)⁻¹)))"),
+	Case("ScaledSeriesRational","λ(c:ℚ).λ(q:ℚ).∑(i:ℕ). powQN(q,i)*c","ℚ→ℚ→ℚ","λ(c:ℚ). λ(q:ℚ). [c≠0]·(c·(guard(-1<q∧(q<1∧q≠1),(-q+1)⁻¹)))"),
+	Case("ScaledSeriesPartialCoefficient","λ(h:ℕ→ℝ).λ(q:ℝ).∑(i:ℕ). h(0)*powRN(q,i)","(ℕ→ℝ)→ℝ→ℝ","λ(h:ℕ→ℝ). λ(q:ℝ). [h(0)≠0]·((guard(-1<q∧q<1,(-q+1)⁻¹))·h(0))"),
+	Case("ScaledSeriesPartialRatio","λ(c:ℝ).λ(h:ℕ→ℝ).∑(i:ℕ). c*powRN(h(0),i)","ℝ→(ℕ→ℝ)→ℝ","λ(c:ℝ). λ(h:{h:ℕ→ℝ | holds((0∈domain(h)))}). [c≠0]·(c·(guard(abs(h(0))<1,(-h(0)+1)⁻¹)))"),
+	Case("ScaledSeriesZeroDivergent","∑(i:ℕ). (0:ℝ)*powRN(-2,i)","ℝ","0"),
+	Case("ScaledSeriesZeroMissing","∑(i:ℕ). (0:ℝ)*powRN(undefined(ℝ),i)","ℝ","undefined(ℝ)"),
+	Case("ScaledSeriesMissingCoefficient","∑(i:ℕ). undefined(ℝ)*powRN(1/2,i)","ℝ","undefined(ℝ)"),
+	Case("ScaledSeriesAlternates","∑(i:ℕ). (3:ℝ)*powRN(-1/2,i)","ℝ","2"),
+	Case("ScaledSeriesNegativeBoundary","∑(i:ℕ). (3:ℝ)*powRN(-1,i)","ℝ","undefined(ℝ)"),
+	Case("ScaledSeriesZeroBoundary","∑(i:ℕ). (0:ℝ)*powRN(-1,i)","ℝ","0"),
+	Case("ScaledSeriesComplement","λ(q:ℝ).∑(i:ℕ). (1-q)*powRN(q,i)","ℝ→ℝ","λ(q:ℝ). [q≠1]·((guard(-1<q∧q<1,(-q+1)⁻¹))·(-q+1))"),
+	Case("ScaledSeriesCastPower","λ(q:ℚ).∑(i:ℕ). castQR(powQN(q,i))","ℚ→ℝ","λ(q:{q:ℚ | -1<q∧(q<1∧q≠1)}). ((-q+1)⁻¹:ℝ)"),
+	Case("ScaledSeriesCastFactor","λ(c:ℝ).λ(q:ℚ).∑(i:ℕ). c*castQR(powQN(q,i))","ℝ→ℚ→ℝ","λ(c:ℝ). λ(q:ℚ). [c≠0]·(c·(guard(-1<q∧(q<1∧q≠1),((-q+1)⁻¹:ℝ))))"),
+	Case("ScaledSeriesCastPartial","λ(h:ℕ→ℝ).∑(i:ℕ). h(0)*castQR(powQN(1/2,i))","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). 2·h(0)"),
+	Case("ScaledSeriesIndexFactor","λ(q:ℝ).λ(h:ℕ→ℝ).∑(i:ℕ). h(i)*powRN(q,i)","ℝ→(ℕ→ℝ)→ℝ","λ(q:ℝ). λ(h:ℕ→ℝ). ∑(i:ℕ). h(i)·q^i"),
 	Case("ParameterShiftRaw","λ(q:ℝ).(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))","ℝ→Distribution(ℕ)","λ(q:ℝ). μ(d:Distribution(ℕ)). Λ(x:ℕ). δ(0)[x]+(scaleD(q,Λ(x:ℕ). (∫(n:ℕ). (δ(n+1)[x])·(d[n]))))[x]"),
 	Case("ParameterShiftMass","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹"),
-	Case("ParameterShiftNormalized","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→ℝ","λ(q:{q:ℝ | q≤1∧0≤q}). ∑(i:ℕ). (-q+1)·q^i"),
+	Case("ParameterShiftNormalized","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→ℝ","λ(q:{q:ℝ | q≤1∧0≤q}). [q≠1]·((guard(-1<q∧q<1,(-q+1)⁻¹))·(-q+1))"),
 	Case("ParameterShiftProbe","λ(q:ℝ).λ(h:ℕ→ℝ).massD(weightD(h,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→(ℕ→ℝ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℝ | 0≤q}). ∑(i:ℕ). h(i)·q^i"),
 	Case("ParameterShiftStride","λ(q:ℝ).λ(h:ℕ→ℝ).massD(weightD(h,(μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(3)),scaleD(q,bindD(d,λ(n:ℕ).δ(2+n)))))))","ℝ→(ℕ→ℝ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℝ | 0≤-q+1∧0≤q}). ∑(i:ℕ). h(3+i·2)·(-q+1)·q^i"),
-	Case("ParameterShiftIndependent","λ(w:ℝ).λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(w,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→ℝ→ℝ","λ(w:ℝ). λ(q:{q:ℝ | 0≤w∧0≤q}). ∑(i:ℕ). w·q^i"),
-	Case("ParameterShiftPartialStart","λ(q:ℝ).λ(h:ℕ→ℕ).massD((μ(d:Distribution(ℕ)).addD(δ(h(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→(ℕ→ℕ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℕ | 0≤q∧(holds((0∈domain(h))))}). ∑(i:ℕ). (guard(holds((0∈domain(h))),(1:ℝ)))·q^i"),
+	Case("ParameterShiftIndependent","λ(w:ℝ).λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(w,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→ℝ→ℝ","λ(w:ℝ). λ(q:{q:ℝ | 0≤w∧0≤q}). [w≠0]·(w·(guard(-1<q∧q<1,(-q+1)⁻¹)))"),
+	Case("ParameterShiftPartialStart","λ(q:ℝ).λ(h:ℕ→ℕ).massD((μ(d:Distribution(ℕ)).addD(δ(h(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→(ℕ→ℕ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℕ | 0≤q∧((holds((0∈domain(h))))∧(defined(q)))}). [(guard(holds((0∈domain(h))),(1:ℝ)))≠0]·((guard(abs(q)<1,(-q+1)⁻¹))·(guard(holds((0∈domain(h))),(1:ℝ))))"),
 	Case("ParameterShiftPartialRate","λ(h:ℕ→ℝ).massD((μ(d:Distribution(ℕ)).addD(δ(0),scaleD(h(0),bindD(d,λ(n:ℕ).δ(n+1))))))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)∧abs(h(0))<1}). (-h(0)+1)⁻¹"),
-	Case("ParameterShiftPartialWeight","λ(h:ℕ→ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(h(0),δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)}). ∑(i:ℕ). h(0)·(1/2)^i"),
+	Case("ParameterShiftPartialWeight","λ(h:ℕ→ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(h(0),δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)}). 2·h(0)"),
 	Case("ParameterShiftNegativeRatio","massD((μ(d:Distribution(ℕ)).addD(δ(0),scaleD(-1,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ","undefined(ℝ)"),
 	Case("ParameterShiftNegativeEmission","massD((μ(d:Distribution(ℕ)).addD(scaleD(-1,δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ","undefined(ℝ)"),
 	Case("ParameterShiftMissingEmission","massD((μ(d:Distribution(ℕ)).addD(scaleD(undefined(ℝ),δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ","undefined(ℝ)"),
@@ -2971,6 +2988,9 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="ScaledSeriesReal"||c.name=="ScaledSeriesRational"||c.name=="ScaledSeriesComplex"||c.name=="ScaledSeriesCastFactor")
+			enforce(certificate.indexOf("SummationLinearity.factor_geometric")>=0,c.name);
+		if(c.name=="ScaledSeriesCastPower") enforce(certificate.indexOf("SummationLinearity.geometricQR_literals ")>=0,c.name);
 		if(c.name=="ParameterShiftProbe"||c.name=="ParameterShiftStride"||c.name=="ParameterShiftNegativeRatio"||c.name=="ParameterShiftPartialStart")
 			enforce(certificate.indexOf("CountableObservation.nat_shift_parameter ")>=0,c.name);
 		if(c.name=="NormalizedRetryMass"||c.name=="NormalizedRetryRoundFunction"||c.name=="NormalizedRetryReverseBoth"||c.name=="WeightedRetryNormalized")

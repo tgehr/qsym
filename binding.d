@@ -41,7 +41,7 @@ private enum BindingRule:ushort{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -1713,6 +1713,38 @@ final class Bindings{
 		auto v=pool.view(type(f));
 		enforce(v.kind==TypeKind.function_&&v.fields[0]==scalarType(Sort.natural)&&type(n)==scalarType(Sort.natural)&&context(f)==context(n),"invalid finite sum");
 		return intern(BoundNode(BoundOp.finiteSum,node(f).context,typeId(v.fields[1]),f.id,n.id));
+	}
+	// A rational power cast to real is also a real geometric sequence. Its
+	// sum is taken in the ambient scalar type, including its convergence test.
+	private BoundTerm geometricRatio(uint id,out bool rationalCast){
+		if(!primitiveOp(id,Op.builtin)) return BoundTerm.init;
+		auto outer=nodes[id],power=outer,op=arena.view(arena.at(outer.data)).value;
+		rationalCast=op==Builtin.castQR;
+		if(rationalCast){
+			if(!primitiveOp(outer.a,Op.builtin)) return BoundTerm.init;
+			power=nodes[outer.a]; op=arena.view(arena.at(power.data)).value;
+			if(op!=Builtin.powQN) return BoundTerm.init;
+		}
+		if(op<Builtin.powQN||op>Builtin.powCN||nodes[power.b].op!=BoundOp.variable||nodes[power.b].data!=0||
+			depends(at(power.a),0)) return BoundTerm.init;
+		return rationalCast?primitive(arena.at(outer.data),[at(power.a)]):at(power.a);
+	}
+	private BoundTerm scaledGeometric(BoundTerm sum,out bool coefficientFirst,out bool rationalCast){
+		auto fn=nodes[node(sum).a],row=nodes[fn.a]; if(row.op!=BoundOp.primitive) return BoundTerm.init;
+		auto op=arena.view(arena.at(row.data)),sort=elementSort(type(sum));
+		if(sort!=Sort.rational&&sort!=Sort.real_&&sort!=Sort.complex) return BoundTerm.init;
+		if(op.op!=Op.mul&&(op.op!=Op.builtin||op.value!=Builtin.mulQ)) return BoundTerm.init;
+		foreach(left;[true,false]){
+			auto factor=left?row.a:row.b,power=left?row.b:row.a;
+			auto base=geometricRatio(power,rationalCast);
+			if(base==BoundTerm.init||depends(at(factor),0)) continue;
+			auto r=dropIndex(base),c=dropIndex(at(factor)),z=arena.number(Number(0),sort);
+			auto nonzero=primitive(arena.nonzero(z),[c]);
+			auto series=summation(inheritHint(at(node(sum).a),lambda(at(power))));
+			auto product=primitive(arena.at(row.data),[c,series]); coefficientFirst=left;
+			return sequence(r,primitive(arena.mask(arena.boolean(true),z),[nonzero,product]));
+		}
+		return BoundTerm.init;
 	}
 	private BoundTerm dropIndex(BoundTerm t){
 		auto inner=context(t),parent=Scope(this,contexts[inner.index].parent);
@@ -10428,6 +10460,12 @@ final class Bindings{
 						extra=tuple(ctx,[lo,hi,scalar(ctx,arena.natural_((li?1:0)|(ri?2:0)))]).id;rule=BindingRule.sumBoundedAdd;
 					}
 				}
+				BoundTerm geometricBase; bool rationalCast;
+				if(next==BoundTerm.init){
+					bool coefficientFirst;
+					next=scaledGeometric(at(result.output),coefficientFirst,rationalCast);
+					if(next!=BoundTerm.init){ rule=BindingRule.sumScaledGeometric; extra=(coefficientFirst?1:0)|(rationalCast?2:0); }
+				}
 				if(next!=BoundTerm.init){}
 				else if(body.op==BoundOp.bottom){
 					next=bottom(ctx,ty);rule=BindingRule.sumMissingConstant;
@@ -10437,13 +10475,13 @@ final class Bindings{
 					auto c=dropIndex(at(nodes[current.a].a)),sort=elementSort(ty),placeholder=arena.number(Number(0),sort);
 					auto pred=primitive(arena.not_(arena.boolean(false)),[primitive(arena.nonzero(placeholder),[c])]);
 					next=guard(pred,scalar(ctx,placeholder)); rule=BindingRule.sumConstant; extra=c.id;
-				}else if(body.op==BoundOp.primitive&&arena.view(arena.at(body.data)).op==Op.builtin&&arena.view(arena.at(body.data)).value>=Builtin.powQN&&arena.view(arena.at(body.data)).value<=Builtin.powCN&&nodes[body.b].op==BoundOp.variable&&nodes[body.b].data==0&&!depends(at(body.a),0)){
-					auto q=dropIndex(at(body.a)),sort=elementSort(ty),placeholder=arena.number(Number(0),sort);
+				}else if((geometricBase=geometricRatio(nodes[current.a].a,rationalCast))!=BoundTerm.init){
+					auto q=dropIndex(geometricBase),sort=elementSort(ty),placeholder=arena.number(Number(0),sort);
 					auto abs=sort==Sort.complex?primitive(arena.call(Builtin.absC,[placeholder]),[q]):primitive(arena.abs(arena.real_(0)),[sort==Sort.rational?primitive(arena.call(Builtin.castQR,[placeholder]),[q]):q]);
 					auto pred=primitive(arena.lt(arena.real_(0),arena.real_(1)),[abs,scalar(ctx,arena.real_(1))]);
 					auto neg=primitive(arena.mul(placeholder,placeholder,true),[scalar(ctx,arena.number(Number(-1),sort)),q]);
 					auto den=primitive(arena.add(placeholder,placeholder,true),[scalar(ctx,arena.number(Number(1),sort)),neg]);
-					next=guard(pred,primitive(arena.inv(placeholder),[den])); rule=BindingRule.sumGeometric; extra=q.id;
+					next=guard(pred,primitive(arena.inv(placeholder),[den])); rule=rationalCast?BindingRule.sumCastGeometric:BindingRule.sumGeometric; extra=q.id;
 				}else if(body.op==BoundOp.primitive&&arena.view(arena.at(body.data)).op==Op.builtin&&arena.view(arena.at(body.data)).value>=Builtin.powQN&&arena.view(arena.at(body.data)).value<=Builtin.powCN&&!depends(at(body.a),0)){
 					auto exponent=nodes[body.b];
 					if(exponent.op==BoundOp.primitive&&arena.view(arena.at(exponent.data)).op==Op.builtin&&arena.view(arena.at(exponent.data)).value==Builtin.addN&&nodes[exponent.a].op==BoundOp.variable&&nodes[exponent.a].data==0&&!depends(at(exponent.b),0)){
@@ -14744,13 +14782,22 @@ final class Bindings{
 					auto out_=nodes[p.to],sort=elementSort(types[n.type]),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm",index=pool.view(type(at(n.a))).fields[0];
 					auto f="(fun (i : "~(index==scalarType(Sort.natural)?"ℕ":"ℤ")~") => "~name(nodes[out_.a].a)~".eval ξ (Binding.Env.cons (a := "~leanType(index)~") (some i) ρ))";
 					proof=".ofEq (fun ξ ρ => Summation.delta"~(p.rule==BindingRule.sumDeltaOffset?"Z_offset":index==scalarType(Sort.natural)?"N":"Z")~" "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~f~" ("~name(p.rule==BindingRule.sumDeltaOffset?p.extra:out_.b)~".eval ξ ρ))"; break;
-				case BindingRule.sumGeometric:
+				case BindingRule.sumScaledGeometric:{
+					auto out_=nodes[p.to],mask=nodes[out_.b],factor=nodes[mask.a].a;
+					auto sort=elementSort(types[n.type]),suffix=sort==Sort.rational?"Q":sort==Sort.real_?"R":"C";
+					bool lifted=(p.extra&2)!=0;
+					proof=".ofEq (fun ξ ρ => SummationLinearity.factor_geometric"~(lifted?"QR":suffix)~(p.extra&1?" true (":" false (")~
+						name(factor)~".eval ξ ρ) ("~name(lifted?nodes[out_.a].a:out_.a)~".eval ξ ρ))"; break;
+				}
+				case BindingRule.sumGeometric,BindingRule.sumCastGeometric:
 					auto sort=elementSort(types[n.type]),suffix=sort==Sort.rational?"Q":sort==Sort.real_?"R":"C";
 					string raw(Term t){ return "(n"~to!string(t.id)~".eval ξ)"; }
 					auto one=raw(arena.number(Number(1),sort)),minus=raw(arena.number(Number(-1),sort)),rOne=raw(arena.real_(1));
 					auto ho=sort==Sort.rational?"(congrArg some (div_one (1 : ℚ)))":"AffineRecurrence.one"~suffix;
 					auto hm=sort==Sort.rational?"(congrArg some (div_one (-1 : ℚ)))":"Spectral.minus"~suffix;
-					proof=".ofEq (fun ξ ρ => Summation.geometric"~suffix~"_literals ("~name(p.extra)~".eval ξ ρ) "~one~" "~minus~(sort==Sort.real_?"":" "~rOne)~" "~ho~" "~hm~(sort==Sort.real_?"":" AffineRecurrence.oneR")~")"; break;
+					bool lifted=p.rule==BindingRule.sumCastGeometric;
+					auto theorem=lifted?"SummationLinearity.geometricQR_literals":"Summation.geometric"~suffix~"_literals";
+					proof=".ofEq (fun ξ ρ => "~theorem~" ("~name(lifted?nodes[p.extra].a:p.extra)~".eval ξ ρ) "~one~" "~minus~(sort==Sort.real_?"":" "~rOne)~" "~ho~" "~hm~(sort==Sort.real_?"":" AffineRecurrence.oneR")~")"; break;
 				case BindingRule.sumZero:
 					auto sort=elementSort(types[n.type]),w=sort==Sort.natural?"(fun n : ℕ => (n : ℝ))":"norm";
 					proof=".ofEq (fun ξ ρ => Summation.zero_literal "~w~" "~(sort==Sort.natural?"Summation.nat_weight_zero":"norm_zero")~" "~sumRawZero()~" "~sumZeroProof()~")"; break;

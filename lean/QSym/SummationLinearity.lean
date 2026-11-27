@@ -106,4 +106,76 @@ theorem undefined_bound {R : Type} [AddCommMonoid R]
   | none => cases f <;> rfl
   | some n => simp [Domain.Correct] at h
 
+/-- A zero coefficient annihilates every row exactly when the ratio is
+present. A nonzero coefficient can pass through the convergence check. -/
+theorem factor_geometric {K : Type} [NormedField K] (left : Bool) (c r : Option K)
+    (power : ℕ → Option K) (hp : ∀ n, power n = r.map (fun x => x^n)) :
+    value norm (some (fun n => if left then Value.mul c (power n) else Value.mul (power n) c)) =
+      r.bind (fun _ => Value.mask (Value.nonzero c) (Value.mul c (value norm (some power)))) := by
+  have rows : (fun n => if left then Value.mul c (power n) else Value.mul (power n) c) =
+      (fun n => Value.mul c (power n)) := by
+    funext n
+    cases left <;> cases c <;> cases power n <;> simp [Value.mul, mul_comm]
+  rw [rows]
+  cases r with
+  | none =>
+    apply undefined_term norm _ 0
+    rw [hp]
+    cases c <;> rfl
+  | some r =>
+    cases c with
+    | none => exact undefined_term norm _ 0 rfl
+    | some c =>
+      by_cases hc : c = 0
+      · subst c
+        have zeroRow : (fun n => Value.mul (some (0 : K)) (power n)) = (fun _ => some 0) := by
+          funext n; rw [hp]; simp [Value.mul]
+        rw [zeroRow]
+        simpa [Value.nonzero, Value.mask] using (Summation.zero (ι := ℕ) norm (norm_zero : ‖(0 : K)‖ = 0))
+      · rw [scale_nonzero c hc]
+        simp [hc, Value.nonzero, Value.mask]
+
+theorem factor_geometricR (left : Bool) (c r : Option ℝ) :
+    value norm (some (fun n : ℕ => if left then Value.mul c (Functions.powRN.apply r (some n))
+      else Value.mul (Functions.powRN.apply r (some n)) c)) =
+    r.bind (fun _ => Value.mask (Value.nonzero c) (Value.mul c
+      (value norm (some (fun n : ℕ => Functions.powRN.apply r (some n)))))) :=
+  factor_geometric left c r _ (fun n => by cases r <;> simp [Functions.powRN, Function2.apply])
+
+theorem factor_geometricC (left : Bool) (c r : Option ℂ) :
+    value norm (some (fun n : ℕ => if left then Value.mul c (Functions.powCN.apply r (some n))
+      else Value.mul (Functions.powCN.apply r (some n)) c)) =
+    r.bind (fun _ => Value.mask (Value.nonzero c) (Value.mul c
+      (value norm (some (fun n : ℕ => Functions.powCN.apply r (some n)))))) :=
+  factor_geometric left c r _ (fun n => by cases r <;> simp [Functions.powCN, Function2.apply])
+
+theorem factor_geometricQ (left : Bool) (c r : Option ℚ) :
+    value norm (some (fun n : ℕ => if left then Functions.mulQ.apply c (Functions.powQN.apply r (some n))
+      else Functions.mulQ.apply (Functions.powQN.apply r (some n)) c)) =
+    r.bind (fun _ => Value.mask (Functions.nonzeroQ.apply c) (Functions.mulQ.apply c
+      (value norm (some (fun n : ℕ => Functions.powQN.apply r (some n)))))) := by
+  have mul : Functions.mulQ.apply = Value.mul := by
+    funext a b; cases a <;> cases b <;> simp [Function2.apply, Functions.mulQ, Value.mul]
+  rw [Summation.nonzeroQ, mul]
+  exact factor_geometric left c r _ (fun n => by cases r <;> simp [Functions.powQN, Function2.apply])
+
+private theorem cast_power (q : Option ℚ) (i : ℕ) :
+    Functions.castQR.apply (Functions.powQN.apply q (some i)) = Functions.powRN.apply (Functions.castQR.apply q) (some i) := by
+  cases q <;> simp [Functions.castQR, Functions.powQN, Functions.powRN, Function1.apply, Function2.apply]
+
+theorem factor_geometricQR (left : Bool) (c : Option ℝ) (q : Option ℚ) :
+    let power := fun i : ℕ => Functions.castQR.apply (Functions.powQN.apply q (some i))
+    value norm (some (fun i => if left then Value.mul c (power i) else Value.mul (power i) c)) =
+      (Functions.castQR.apply q).bind (fun _ => Value.mask (Value.nonzero c) (Value.mul c (value norm (some power)))) := by
+  dsimp only
+  simp_rw [cast_power]
+  exact factor_geometricR left c (Functions.castQR.apply q)
+
+theorem geometricQR_literals (q : Option ℚ) (one minus : Option ℝ) (ho : one = some 1) (hm : minus = some (-1)) :
+    value norm (some (fun n : ℕ => Functions.castQR.apply (Functions.powQN.apply q (some n)))) =
+      Binding.guardValue (Value.lt (Value.abs (Functions.castQR.apply q)) one)
+        (Value.inv (Value.add one (Value.mul minus (Functions.castQR.apply q)))) := by
+  simp_rw [cast_power]
+  exact geometricR_literals (Functions.castQR.apply q) one minus ho hm
+
 end QSym.SummationLinearity
