@@ -484,6 +484,23 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("UniformSlopeFrequency","Λx.λ[sin(x*a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then (guard(a≠0,abs(a)⁻¹·abs(cos(x·a⁻¹))))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("UniformSlopeProduct","Λx.λ[exp(x*a⁻¹+b⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0∧b≠0 then (guard(a≠0∧b≠0,abs(a)⁻¹·exp(x·a⁻¹+b⁻¹)))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("UniformSlopePower","Λx.λ[(x+a⁻¹)^3]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then (guard(a≠0,3·(x+a⁻¹)^2))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("UniformSlopeConst","Λx.λ[(a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then 0·λ[x] else λ[(undefined(ℝ))]"),
+	Case("UniformSlopeCosh","Λx.λ[cosh(x+a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then (guard(a≠0,sinh(abs(x+a⁻¹))))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("UniformSlopeArctan","Λx.λ[atan(x+a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then (guard(a≠0,((x+a⁻¹)^2+1)⁻¹))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("UniformSlopeLog","Λx.λ[log((x+a⁻¹)^2+1)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then (guard(a≠0,2·((x+a⁻¹)^2+1)⁻¹·abs(x+a⁻¹)))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("UniformSlopePart","inversePartD(λ(z:ℝ).z<3,(λ(x:ℝ).sin(x+a⁻¹),))","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then ([(guard(a≠0,sin(x+a⁻¹)<3))]·(guard(a≠0,abs(cos(x+a⁻¹)))))·λ[x] else λ[undefined(ℝ) | z. z<3]"),
+	Case("UniformSlopeState","λ(n:ℕ).Λx.λ[cos(x+(n:ℝ)⁻¹)]","ℕ→Distribution(ℝ)","λ(n:ℕ). Λ(x:ℝ). if n≠0 then (abs(-sin(x+n⁻¹)))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("UniformSlopeDensity","densityAtD(Λx.λ[sin(x+a⁻¹)],0)","ℝ","(λ(x:ℝ). (if a≠0 then (guard(a≠0,abs(cos(x+a⁻¹))))·λ[x] else λ[(undefined(ℝ))])//λ[x])((0:ℝ))"),
+	Case("UniformSlopeInterval","∫dx [0≤x≤1]·λ[sin(x+a⁻¹)]","ℝ","∫dx [0≤x∧x≤1]·(if a≠0 then (guard(a≠0,abs(cos(x+a⁻¹))))·λ[x] else λ[(undefined(ℝ))])"),
+	Case("UniformSlopeZero","densityAtD((λ(a:ℝ).Λx.λ[sin(x+a⁻¹)])(0),1)","ℝ","undefined(ℝ)"),
+	Case("UniformSlopeFinite","densityAtD((λ(a:ℝ).Λx.λ[sin(x+a⁻¹)])(1),0)","ℝ","cos(1)"),
+	Case("UniformSlopeAxisHole","Λx.λ[(x-a)⁻¹]","Distribution(ℝ)","Λ(x:ℝ). λ[((-a+x)⁻¹)]"),
+	Case("UniformSlopeLogHole","Λx.λ[log(x+a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). λ[(log(x+a⁻¹))]"),
+	Case("UniformSlopeUnknownFunction","λ(h:ℝ→ℝ).Λx.λ[h(x)]","(ℝ→ℝ)→Distribution(ℝ)","λ(h:ℝ→ℝ). Λ(x:ℝ). λ[(h(x))]"),
+	Case("UniformSlopeEverywhereMissing","Λx.λ[(undefined(ℝ))]","Distribution(ℝ)","Λ(x:ℝ). λ[(undefined(ℝ))]"),
 	Case("MissingOutputInverseMass","∫dx λ[(undefined(ℝ))]","ℝ","undefined(ℝ)"),
 	Case("MissingOutputInverseDensity","densityAtD(Λx.λ[(undefined(ℝ))],z)","ℝ","undefined(ℝ)"),
 	Case("MissingOutputInverseTest","∫dx [0<x<1]·λ[(undefined(ℝ))]","ℝ","undefined(ℝ)"),
@@ -511,21 +528,21 @@ private Case[] cases(){
 	Case("IversonParameterInverseMagnitude","Λx.λ[sin(([a≠0]·a⁻¹)*x)]","Distribution(ℝ)","Λ(x:ℝ). λ[([a≠0]·sin(x·a⁻¹))]"),
 	Case("IversonParameterInverseMass","∫dx [0≤x≤1]·λ[exp(x+[a≠0]·a⁻¹)]","ℝ","exp([a≠0]·a⁻¹+1)-exp([a≠0]·a⁻¹)"),
 	Case("IversonParameterBooleanMass","λ(p:𝔹).∫dx [0≤x≤1]·λ[(x+[p])^3]","𝔹→ℝ","λ(p:𝔹). ([p]+1)^3+[p]·-1"),
-	Case("IversonParameterOtherGuard","Λx.λ[sin(x+[b≠0]·a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). λ[(sin(x+[b≠0]·a⁻¹))]"),
-	Case("IversonParameterPartialGuard","λ(h:ℕ→𝔹).Λx.λ[sin(x+[h(0)])]","(ℕ→𝔹)→Distribution(ℝ)","λ(h:ℕ→𝔹). Λ(x:ℝ). λ[(sin(x+[h(0)]))]"),
-	Case("IversonParameterPartialValue","λ(h:ℕ→ℝ).Λx.λ[sin(x+[a<0]·h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). λ[(sin(x+[a<0]·h(0)))]"),
+	Case("IversonParameterOtherGuard","Λx.λ[sin(x+[b≠0]·a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if b=0∨a≠0 then (guard(b=0∨a≠0,abs(cos(x+[b≠0]·a⁻¹))))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("IversonParameterPartialGuard","λ(h:ℕ→𝔹).Λx.λ[sin(x+[h(0)])]","(ℕ→𝔹)→Distribution(ℝ)","λ(h:ℕ→𝔹). Λ(x:ℝ). if defined(sin([h(0)])) then (abs(cos(x+[h(0)])))·λ[x] else λ[(undefined(ℝ))]"),
+	Case("IversonParameterPartialValue","λ(h:ℕ→ℝ).Λx.λ[sin(x+[a<0]·h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). if defined(sin([a<0]·h(0))) then (abs(cos(x+[a<0]·h(0))))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("IversonParameterApplied","(λ(p:𝔹).Λx.λ[sin(x+[p])])(false)","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x)))·λ[x]"),
 	Case("ScalarBinderNatural","λ(n:ℕ).Λx.λ[sin(x+(n:ℝ))]","ℕ→Distribution(ℝ)","λ(n:ℕ). Λ(x:ℝ). (abs(cos(x+n)))·λ[x]"),
 	Case("ScalarBinderInteger","λ(k:ℤ).Λx.λ[sin((k:ℝ)*x)]","ℤ→Distribution(ℝ)","λ(k:ℤ). Λ(x:ℝ). (abs(k)·abs(cos(x·k)))·λ[x]"),
 	Case("ScalarBinderRational","λ(q:ℚ).Λx.λ[exp((q:ℝ)*x)]","ℚ→Distribution(ℝ)","λ(q:ℚ). Λ(x:ℝ). (abs(q)·exp(x·q))·λ[x]"),
 	Case("ScalarBinderComplex","λ(z:ℂ).Λx.λ[sin(x+creal(z))]","ℂ→Distribution(ℝ)","λ(z:ℂ). Λ(x:ℝ). (abs(cos(x+creal(z))))·λ[x]"),
-	Case("ScalarBinderHigherOrder","λ(h:ℕ→ℝ).λ(n:ℕ).Λx.λ[sin(x+h(n))]","(ℕ→ℝ)→ℕ→Distribution(ℝ)","λ(h:ℕ→ℝ). λ(n:ℕ). Λ(x:ℝ). λ[(sin(x+h(n)))]"),
+	Case("ScalarBinderHigherOrder","λ(h:ℕ→ℝ).λ(n:ℕ).Λx.λ[sin(x+h(n))]","(ℕ→ℝ)→ℕ→Distribution(ℝ)","λ(h:ℕ→ℝ). λ(n:ℕ). Λ(x:ℝ). if defined(sin(h(n))) then (abs(cos(x+h(n))))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("ScalarBinderNaturalMass","λ(n:ℕ).∫dx [0≤x≤1]·λ[exp(x+(n:ℝ))]","ℕ→ℝ","λ(n:ℕ). -exp(n)+exp(n+1)"),
 	Case("ScalarBinderMixed","λ(n:ℕ).λ(a:ℝ).Λx.λ[sin(a*x+(n:ℝ))]","ℕ→ℝ→Distribution(ℝ)","λ(n:ℕ). λ(a:ℝ). Λ(x:ℝ). (abs(a)·abs(cos(a·x+n)))·λ[x]"),
 	Case("ScalarBinderSameType","λ(n:ℕ).λ(m:ℕ).Λx.λ[sin((n:ℝ)*x+(m:ℝ))]","ℕ→ℕ→Distribution(ℝ)","λ(n:ℕ). λ(m:ℕ). Λ(x:ℝ). (abs(cos(x·n+m))·n)·λ[x]"),
 	Case("ScalarBinderFree","λ(n:ℕ).Λx.λ[sin(x+(n:ℝ)+a)]","ℕ→Distribution(ℝ)","λ(n:ℕ). Λ(x:ℝ). (abs(cos(a+x+n)))·λ[x]"),
 	Case("ScalarBinderSpecialized","(λ(n:ℕ).Λx.λ[sin(x+(n:ℝ))])(2)","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+2)))·λ[x]"),
-	Case("ScalarBinderPartial","λ(k:ℤ).Λx.λ[sin(x+(k:ℝ)⁻¹)]","ℤ→Distribution(ℝ)","λ(k:ℤ). Λ(x:ℝ). λ[(sin(x+k⁻¹))]"),
+	Case("ScalarBinderPartial","λ(k:ℤ).Λx.λ[sin(x+(k:ℝ)⁻¹)]","ℤ→Distribution(ℝ)","λ(k:ℤ). Λ(x:ℝ). if k≠0 then (abs(cos(x+k⁻¹)))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("ScalarBinderIntegerMass","λ(k:ℤ).∫dx [0≤x≤1]·λ[(x+(k:ℝ))^3]","ℤ→ℝ","λ(k:ℤ). ((k+1)^3-k^3:ℝ)"),
 	Case("ScalarBinderComplexMass","λ(z:ℂ).∫dx [0≤x≤1]·λ[exp(x+creal(z))]","ℂ→ℝ","λ(z:ℂ). exp(creal(z)+1)-exp(creal(z))"),
 	Case("CoordinateParameterOffset","Λx.λ[sin(x+a)]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(a+x)))·λ[x]"),
@@ -541,9 +558,9 @@ private Case[] cases(){
 	Case("CoordinateParameterIncreasing","∫dx [0≤x≤1]·λ[(x+a)^3]","ℝ","-a^3+(a+1)^3"),
 	Case("CoordinateParameterDecreasing","∫dx [0≤x≤1]·λ[(a-x)^3]","ℝ","a^3-(a-1)^3"),
 	Case("CoordinateParameterConstantMass","∫dx [0≤x≤1]·λ[exp(a)]","ℝ","0"),
-	Case("CoordinateParameterSingular","Λx.λ[sin(x+a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). λ[(sin(x+a⁻¹))]"),
+	Case("CoordinateParameterSingular","Λx.λ[sin(x+a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). if a≠0 then (guard(a≠0,abs(cos(x+a⁻¹))))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("CoordinateParameterMissing","Λx.λ[sin(x+undefined(ℝ))]","Distribution(ℝ)","Λ(x:ℝ). λ[(undefined(ℝ))]"),
-	Case("CoordinateParameterLookup","λ(h:ℕ→ℝ).Λx.λ[sin(x+h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). λ[(sin(x+h(0)))]"),
+	Case("CoordinateParameterLookup","λ(h:ℕ→ℝ).Λx.λ[sin(x+h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). if defined(sin(h(0))) then (abs(cos(x+h(0))))·λ[x] else λ[(undefined(ℝ))]"),
 	Case("CoordinateParameterMagnitude","Λx.λ[sin(abs(a)*x)]","Distribution(ℝ)","Λ(x:ℝ). (abs(a)·abs(cos(x·abs(a))))·λ[x]"),
 	Case("IntervalFactorSigned","∫dx [0≤x≤2*π]·(-3/2*abs(cos(x)))·λ[x]","ℝ","-6"),
 	Case("IntervalFactorPositive","∫dx [0≤x≤2*π]·(3/2*abs(cos(x)))·λ[x]","ℝ","6"),
@@ -2726,6 +2743,13 @@ private void run(string directory){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
 		}
+		if(c.name.indexOf("UniformSlope")==0){
+			bool split=c.name!="UniformSlopeZero"&&c.name!="UniformSlopeFinite"&&c.name!="UniformSlopeAxisHole"&&
+				c.name!="UniformSlopeLogHole"&&c.name!="UniformSlopeUnknownFunction"&&c.name!="UniformSlopeEverywhereMissing";
+			enforce((certificate.indexOf("Grid.UniformSlope.parameter ")>=0)==split,c.name);
+			if(c.name=="UniformSlopePart") enforce(certificate.indexOf("Grid.UniformSlope.restricted ")>=0,c.name);
+			if(c.name=="UniformSlopeZero") enforce(certificate.indexOf("MissingOutput.density ")>=0,c.name);
+		}
 		if(c.name.indexOf("MissingOutput")==0){
 			bool witnessed=c.expected=="undefined(ℝ)";
 			enforce((certificate.indexOf("GraphFibre.MissingOutput.")>=0)==witnessed,c.name);
@@ -2758,6 +2782,8 @@ private void run(string directory){
 			enforce((certificate.indexOf("Grid.Slope.parameter ")>=0)==(!directed&&!partial),c.name);
 			enforce((certificate.indexOf("Grid.Directed.parameter ")>=0)==directed,c.name);
 			if(c.name=="CoordinateParameterBound") enforce(certificate.indexOf(".lamOpened ")>=0,c.name);
+			if(c.name=="CoordinateParameterLookup"||c.name=="CoordinateParameterSingular")
+				enforce(certificate.indexOf("Grid.UniformSlope.length ")>=0,c.name);
 		}
 		if(c.name.indexOf("IntervalFactor")==0){
 			bool factored=c.name=="IntervalFactorSigned"||c.name=="IntervalFactorPositive"||c.name=="IntervalFactorSymbolic"||

@@ -46,7 +46,7 @@ private enum BindingRule:ushort{
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
-	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
+	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionUniformCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
 	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
@@ -1761,14 +1761,17 @@ final class Bindings{
 		if(n.op==BoundOp.variable) return n.data!=0;
 		return n.op!=BoundOp.primitive||needsBindingScalar(n.a)||(n.b!=uint.max&&needsBindingScalar(n.b));
 	}
-	private Term scalarBody(BoundTerm term,Term argument){
+	private Term scalarBody(BoundTerm term,Term argument,Term[] outer=null){
 		auto n=node(term);
 		if(n.op==BoundOp.scalar) return arena.at(n.data);
-		if(n.op==BoundOp.variable) return n.data==0?argument:Term.init;
+		if(n.op==BoundOp.variable){
+			if(!n.data) return argument;
+			return n.data<=outer.length?outer[n.data-1]:Term.init;
+		}
 		if(n.op!=BoundOp.primitive) return Term.init;
-		auto x=scalarBody(at(n.a),argument); if(x==Term.init) return Term.init;
+		auto x=scalarBody(at(n.a),argument,outer); if(x==Term.init) return Term.init;
 		Term[] args=[x];
-		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument); if(y==Term.init) return Term.init; args~=y; }
+		if(n.b!=uint.max){ auto y=scalarBody(at(n.b),argument,outer); if(y==Term.init) return Term.init; args~=y; }
 		return arena.viewRebuild(arena.at(n.data),args,true);
 	}
 	// A real axis interval shared by density and coordinate observations.
@@ -3303,16 +3306,29 @@ final class Bindings{
 	}
 	// Construct a signed derivative. Replay the identical traversal when
 	// emitting evidence so every accepted operation has a checked chain rule.
-	private BoundTerm smoothSlope(BoundTerm body,out string witness,SourceCertificates cert=null){
+	private BoundTerm smoothSlope(BoundTerm body,out string witness,SourceCertificates cert=null,bool uniform=false){
 		enum ns="Distribution.GraphFibre.Coordinates.Grid.";
 		auto zero=arena.real_(0),sum=arena.add(zero,zero,true),product=arena.mul(zero,zero,true);
 		Table!(uint,uint) slopes; Table!(uint,string) proofs;
 		auto bounds=new CoordinateBounds(cert);
+		// Prefer the total-coordinate rules when opening the surrounding scalar
+		// arguments can already certify every independent parameter. These
+		// temporary variables only select a rule and never enter a proof.
+		Term[] opened; bool needsSplit;
+		if(uniform&&cert is null){
+			auto inner=context(body); uint first;
+			foreach(i;1..depth(inner)){
+				Sort sort;
+				if(!pool.scalarSort(type(variable(inner,i)),sort)||!depends(body,i)) continue;
+				if(!opened.length){ opened.length=depth(inner)-1; first=freshScalarIndex(body.id); }
+				opened[i-1]=arena.variable(sort,first+i-1);
+			}
+		}
 		BoundTerm visit(uint id,uint depth){
 			if(depth>64) return BoundTerm.init;
 			if(slopes.contains(id)) return at(slopes.get(id,uint.max));
 			auto n=nodes[id],f=at(id),inner=context(f);
-			BoundTerm d; string lemma,args;
+			BoundTerm d; string lemma,args,strictOp;
 			Rational[] polynomial; Term parameter;
 			if(axisPolynomial(id,polynomial,0,true)){
 				d=coordinatePolynomial(inner,derivativeCoefficients(polynomial));
@@ -3321,9 +3337,17 @@ final class Bindings{
 					auto b=cert.piece(d.id,cert.everywhere,"",Rational(0));
 					lemma="polynomial"; args=a.proof~" "~b.proof~" rfl";
 				}
-			}else if((parameter=coordinateParameter(id))!=Term.init){
+			}else if(uniform ? !depends(f,0) : (parameter=coordinateParameter(id))!=Term.init){
 				d=scalar(inner,zero); lemma="parameter";
-				if(cert !is null) args=cert.outside(id)~" "~cert.definedScalar(parameter)~" "~cert.closedProof(d,Rational(0));
+				if(opened.length&&!needsSplit){
+					auto arg=scalarBody(f,Term.init,opened);
+					needsSplit=arg==Term.init||!totalScalarParameter(arena,arg);
+				}
+				if(cert !is null){
+					args=cert.outside(id)~" ";
+					if(!uniform) args~=cert.definedScalar(parameter)~" ";
+					args~=cert.closedProof(d,Rational(0));
+				}
 			}else{
 				if(n.op!=BoundOp.primitive) return BoundTerm.init;
 				auto op=arena.view(arena.at(n.data));
@@ -3344,7 +3368,11 @@ final class Bindings{
 				}
 				auto du=visit(n.a,depth+1);
 				if(du==BoundTerm.init) return BoundTerm.init;
-				if(cert !is null) args=proofs.get(n.a,"");
+				if(cert !is null){
+					if(uniform&&(op.op==Op.inv||op.op==Op.builtin))
+						strictOp=op.op==Op.inv?"Value.inv":"Functions."~to!string(cast(Builtin)op.value)~".apply";
+					args=strictOp.length?"hs":proofs.get(n.a,"");
+				}
 				if(op.op==Op.inv||op.op==Op.builtin&&(op.value==Builtin.logR||op.value==Builtin.sqrtR)){
 					auto sign=bounds.lower(n.a,depth+1);
 					if(sign.sign==CoordinateBounds.Sign.positive){
@@ -3390,12 +3418,20 @@ final class Bindings{
 			slopes.set(id,d.id);
 			if(cert !is null){
 				cert.roots~=d.id;
-				proofs.set(id,cert.save(ns~"Slope "~cert.functionAt(id)~" "~cert.functionAt(d.id),
-					"("~(lemma=="chain"?ns~"ScalarChange.slope":ns~"Slope."~lemma)~" "~args~")"));
+				auto relation=uniform?"UniformSlope":"Slope";
+				auto law=lemma=="chain"?ns~"ScalarChange.slope":ns~"Slope."~lemma;
+				auto proof="("~law~" "~args~")";
+				if(uniform){
+					if(lemma=="polynomial") proof="(Or.inl "~proof~")";
+					else if(strictOp.length) proof="("~ns~"UniformSlope.unary "~strictOp~" rfl "~proofs.get(n.a,"")~" (fun hs => "~proof~"))";
+					else proof="("~ns~"UniformSlope."~lemma~" "~args~")";
+				}
+				proofs.set(id,cert.save(ns~relation~" "~cert.functionAt(id)~" "~cert.functionAt(d.id),proof));
 			}
 			return d;
 		}
 		auto d=visit(body.id,0);
+		if(opened.length&&!needsSplit) return BoundTerm.init;
 		if(cert !is null&&d!=BoundTerm.init) witness=proofs.get(body.id,"");
 		return d;
 	}
@@ -8335,9 +8371,11 @@ final class Bindings{
 			rule=BindingRule.distributionCoordinateRayLinear;
 			return distribution(ctx,BoundOp.distributionAdd,[corner,regular]);
 		}
-		BoundTerm smoothCoordinate(BoundTerm fn,BoundTerm pred=BoundTerm.init){
+		BoundTerm smoothCoordinate(BoundTerm fn,BoundTerm pred=BoundTerm.init,bool uniform=false){
 			auto body=at(node(fn).a),inner=context(body),ctx=context(fn);
-			string unused; auto derivative=smoothSlope(body,unused);
+			// The missing branch uses this canonical chart. Leave it in place.
+			if(uniform&&node(body).op==BoundOp.bottom) return BoundTerm.init;
+			string unused; auto derivative=smoothSlope(body,unused,null,uniform);
 			if(derivative==BoundTerm.init) return BoundTerm.init;
 			auto zero=arena.real_(0),w=primitive(arena.abs(zero),[derivative]);
 			if(pred!=BoundTerm.init){
@@ -8345,8 +8383,13 @@ final class Bindings{
 				auto guard=apply(rename(pred,inner,shift),body);
 				w=primitive(arena.mask(arena.boolean(true),zero),[guard,w]);
 			}
-			return distribution(ctx,BoundOp.distributionWeight,
+			auto regular=distribution(ctx,BoundOp.distributionWeight,
 				[inheritHint(fn,lambda(w)),distribution(ctx,BoundOp.distributionLebesgue)]);
+			if(!uniform) return regular;
+			auto empty=tuple(ctx,[inheritHint(fn,lambda(bottom(inner,type(body))))]);
+			auto fallback=pred==BoundTerm.init?distribution(ctx,BoundOp.distributionInverseCover,[empty]):
+				distribution(ctx,BoundOp.distributionInversePart,[pred,empty]);
+			return conditional(defined(apply(fn,scalar(ctx,zero))),regular,fallback);
 		}
 		BoundTerm gridAtom(Scope ctx,Rational a,Rational height){
 			auto d=distribution(ctx,BoundOp.distributionDirac,[scalar(ctx,arena.real_(a))]);
@@ -8567,7 +8610,11 @@ final class Bindings{
 			if(result!=BoundTerm.init) return result;
 			result=smoothCoordinate(fn,pred);
 			if(result!=BoundTerm.init){rule=BindingRule.distributionSmoothCoordinate; return result;}
-			return polynomialCoordinate(fn,index,pred,CoordinateGridMode.continuousChange);
+			result=polynomialCoordinate(fn,index,pred,CoordinateGridMode.continuousChange);
+			if(result!=BoundTerm.init) return result;
+			result=smoothCoordinate(fn,pred,true);
+			if(result!=BoundTerm.init) rule=BindingRule.distributionUniformCoordinate;
+			return result;
 		}
 		BoundTerm jumpCoordinate(BoundTerm fn,JumpRays rays){
 			auto x=at(rays.x),ctx=context(fn),inner=context(x),zero=arena.real_(0);
@@ -13140,13 +13187,16 @@ final class Bindings{
 			proofRoots~=c.roots; stepNumerics~=c.numericTerms; stepDeclarations~=c.declarations;
 		}
 		Table!(uint,string) smoothCoordinates;
-		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionSmoothCoordinate){
+		foreach(i,p;result.proofs) if(p.rule==BindingRule.distributionSmoothCoordinate||p.rule==BindingRule.distributionUniformCoordinate){
 			auto n=nodes[p.from]; bool restricted=n.op==BoundOp.distributionInversePart;
 			auto body=at(nodes[nodes[restricted?n.b:n.a].a].a);
 			auto c=new SourceCertificates("slope"~to!string(i)~"_",body.id);
-			string w; enforce(smoothSlope(body,w,c)!=BoundTerm.init,"missing smooth coordinate derivative");
-			auto rule=restricted?"restricted "~c.functionAt(nodes[n.a].a):"length";
-			smoothCoordinates.set(cast(uint)i,"Distribution.GraphFibre.Coordinates.Grid.Slope."~rule~" "~w);
+			bool uniform=p.rule==BindingRule.distributionUniformCoordinate;
+			string w; enforce(smoothSlope(body,w,c,uniform)!=BoundTerm.init,"missing smooth coordinate derivative");
+			auto rule=restricted?"restricted":"length";
+			if(uniform) rule~=" ((0 : ℤ) : ℝ)";
+			if(restricted) rule~=" "~c.functionAt(nodes[n.a].a);
+			smoothCoordinates.set(cast(uint)i,"Distribution.GraphFibre.Coordinates.Grid."~(uniform?"UniformSlope.":"Slope.")~rule~" "~w);
 			proofRoots~=c.roots; stepNumerics~=c.numericTerms; stepDeclarations~=c.declarations;
 		}
 		Table!(uint,string) affineCovers;
@@ -15449,7 +15499,7 @@ final class Bindings{
 				}
 				case BindingRule.distributionMissingOutput:
 					proof=".ofEq (fun ξ ρ => "~missingOutputs.get(cast(uint)i,"")~")"; break;
-				case BindingRule.distributionSmoothCoordinate:
+				case BindingRule.distributionSmoothCoordinate,BindingRule.distributionUniformCoordinate:
 					proof=".ofEq (fun ξ ρ => "~smoothCoordinates.get(cast(uint)i,"")~")"; break;
 				case BindingRule.distributionCoordinateGrid:
 					proof=".ofEq (fun ξ ρ => "~coordinateProofs[p.extra]~")"; break;
