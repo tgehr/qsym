@@ -252,4 +252,48 @@ theorem CountableObservation.retry_parameter {o : Option (D α) → Option ℝ} 
     · rw [retry_negative (lt_of_not_ge h0), h.finite.missing]
       simp [h0, Binding.guardValue, Value.le]
 
+theorem complement_weight (oneFirst minusFirst : Bool) (r : Option ℝ) {one minus : Option ℝ}
+    (h1 : one = some ((1 : ℚ) : ℝ)) (hm : minus = some ((-1 : ℚ) : ℝ)) :
+    (let neg := if minusFirst then Value.mul minus r else Value.mul r minus
+     if oneFirst then Value.add one neg else Value.add neg one) = r.map (fun x => 1-x) := by
+  subst one minus
+  cases r <;> cases oneFirst <;> cases minusFirst <;> simp [Value.mul, Value.add, sub_eq_add_neg, add_comm]
+
+/-- With complementary emission and retry coefficients, a contracting retry
+returns the observation of one seed. At unit retry probability the coefficient
+of every emitted row is zero, but a missing seed observation is still missing. -/
+theorem CountableObservation.fixed_normalized {o : Option (D α) → Option ℝ} (h : CountableObservation o)
+    (swap : Bool) (r : Option ℝ) {w : Option ℝ} (hw : w = r.map (fun x => 1-x))
+    {seed : Option (D α)} (hs : Admissible seed) {f : D α → Option (D α)}
+    (body : ∀ d, f d = retryBody swap false r (scaleValue w seed) d) :
+    o (fixedValue (some f)) = Binding.guardValue
+      (Value.and (Value.le (some ((0 : ℚ) : ℝ)) r) (Value.le r (some ((1 : ℚ) : ℝ))))
+      (Value.mul (Value.mask (Value.lt r (some ((1 : ℚ) : ℝ))) (some ((1 : ℚ) : ℝ))) (o seed)) := by
+  subst w
+  rw [fixed_weighted_emission swap r _ seed body]
+  cases r with
+  | none => exact h.finite.missing
+  | some r =>
+    by_cases hi : r ≤ 1
+    · have emission : 0 ≤ 1-r := sub_nonneg.mpr hi
+      have hseed : Admissible (scaleValue (some (1-r)) seed) :=
+        admissible_scale_lower false (fun v hv => (Option.some.inj hv) ▸ emission) hs
+      have checked : Binding.guardValue (Value.le (some ((0 : ℚ) : ℝ)) ((some r).map (fun x => 1-x)))
+          (retryValue (some r) (scaleValue (Value.abs ((some r).map (fun x => 1-x))) seed)) =
+          retryValue (some r) (scaleValue (some (1-r)) seed) := by
+        simp [Binding.guardValue, Value.le, Value.abs, emission, abs_of_nonneg emission]
+      rw [checked]
+      by_cases lo : 0 ≤ r
+      · rcases lt_or_eq_of_le hi with lt | rfl
+        · rw [h.finite.retry_real lo lt hseed, h.finite.scale, h.finite.scale]
+          have nz : 1-r ≠ 0 := sub_ne_zero.mpr (ne_of_gt lt)
+          cases o seed <;> simp [lo, hi, lt, Binding.guardValue, Value.le, Value.lt, Value.and, Value.mul, Value.mask, ← mul_assoc, nz]
+        · rw [h.retry_noncontracting_real le_rfl hseed, h.finite.scale]
+          cases o seed <;> simp [Binding.guardValue, Value.le, Value.lt, Value.and, Value.mul, Value.mask]
+      · rw [retry_negative (lt_of_not_ge lo), h.finite.missing]
+        simp [lo, Binding.guardValue, Value.le, Value.and]
+    · have emission : ¬ 0 ≤ 1-r := by linarith
+      have lo : 0 ≤ r := le_trans zero_le_one (le_of_not_ge hi)
+      simp [emission, hi, lo, Binding.guardValue, Value.le, Value.and, h.finite.missing]
+
 end QSym.Distribution.Atomic
