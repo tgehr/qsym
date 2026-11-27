@@ -985,6 +985,24 @@ private Case[] cases(){
 	Case("CompactSheetRequiredCut","λ(y:ℝ).guard(y≠2,sqrt(y-1)+1)","ℝ→ℝ","λ(y:{y:ℝ | y≠2}). sqrt(y-1)+1"),
 	Case("CompactSheetBoth","λ(y:ℝ).sqrt(y-1)-sqrt(y-3)","ℝ→ℝ","λ(y:{y:ℝ | 3≤y}). -sqrt(y-3)+sqrt(y-1)"),
 	Case("CompactSheetPrintedDifference","λ(y:ℝ). 3·sqrt(2·y-1)-6","ℝ→ℝ","λ(y:ℝ). 3·sqrt(2·y-1)-6"),
+	Case("RepeatedSheetIdentity","Λy. λ[y,y]","Distribution(ℝ)","Λ(x:ℝ). λ[x]"),
+	Case("RepeatedSheetSquare","Λy. λ[y^2,y*y]","Distribution(ℝ)","Λ(y:ℝ). (2·abs(y))·λ[y]"),
+	Case("RepeatedSheetJump","Λy. λ[[0≤y],[0≤y]]","Distribution(ℝ)","Λ(x:ℝ). δ(0)[x]+0·λ[x]"),
+	Case("RepeatedSheetJumpDensity","densityAtD(Λy. λ[[0≤y],[0≤y]],0)","ℝ","undefined(ℝ)"),
+	Case("RepeatedSheetRestricted","Λy. λ[2*y,2*y | x. x<3]","Distribution(ℝ)","Λ(y:ℝ). ([y<3/2]·2)·λ[y]"),
+	Case("RepeatedSheetRoots","Λy. λ[-sqrt(y-1),sqrt(y-1),-sqrt(y-1)]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1), sqrt(y-1)]"),
+	Case("RepeatedSheetRootDensity","densityAtD(Λy. λ[-sqrt(y-1),sqrt(y-1),-sqrt(y-1)],5)","ℝ","1/2"),
+	Case("RepeatedSheetRootVertex","densityAtD(Λy. λ[-sqrt(y-1),sqrt(y-1),-sqrt(y-1)],1)","ℝ","undefined(ℝ)"),
+	Case("RepeatedSheetRootOutside","densityAtD(Λy. λ[-sqrt(y-1),sqrt(y-1),-sqrt(y-1)],0)","ℝ","0"),
+	Case("RepeatedSheetMultiplicity","Λy. λ[sqrt(y-1),-sqrt(y-1),sqrt(y-1),-sqrt(y-1),sqrt(y-1)]","Distribution(ℝ)","Λ(y:ℝ). λ[sqrt(y-1), -sqrt(y-1)]"),
+	Case("RepeatedSheetNonadjacent","Λy. λ[y,sqrt(y-1),y,y+1]","Distribution(ℝ)","Λ(y:ℝ). λ[y, sqrt(y-1), y+1]"),
+	Case("RepeatedSheetPrefix","Λy. λ[sqrt(y-1),y,y+1,y]","Distribution(ℝ)","Λ(y:ℝ). λ[sqrt(y-1), y, y+1]"),
+	Case("RepeatedSheetPartialFunction","λ(h:ℕ→(ℝ→ℝ)). defined(inverseCoverD((h(0),h(0))))","(ℕ→ℝ→ℝ)→𝔹","λ(h:ℕ→ℝ→ℝ). holds((0∈domain(h)))"),
+	Case("RepeatedSheetPartialUnobserved","λ(h:ℕ→(ℝ→ℝ)). inverseCoverD((h(0),h(0)))","(ℕ→ℝ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ→ℝ). Λ(x:ℝ). (inverseCoverD((h(0),)))[x]"),
+	Case("RepeatedSheetSameHole","Λy. λ[guard(y≠2,sqrt(y-1)),sqrt(y-1),guard(y≠2,sqrt(y-1))]","Distribution(ℝ)","Λ(y:ℝ). λ[guard(y≠2,sqrt(y-1)), sqrt(y-1)]"),
+	Case("RepeatedSheetDifferentHole","Λy. λ[guard(y≠2,sqrt(y-1)),guard(y≠3,sqrt(y-1))]","Distribution(ℝ)","Λ(y:ℝ). λ[guard(y≠2,sqrt(y-1)), guard(y≠3,sqrt(y-1))]"),
+	Case("RepeatedSheetRestrictedRoots","Λy. λ[-sqrt(y-1),sqrt(y-1),-sqrt(y-1) | x. 0<x]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1), sqrt(y-1) | x. 0<x]"),
+	Case("RepeatedSheetSum","addD(Λy.λ[y],Λy.λ[y])","Distribution(ℝ)","Λ(x:ℝ). λ[x]+λ[x]"),
 	Case("ClosedSquareDensity","λ(y:ℝ).densityAtD(Λz. ∫dx λ[x]·δ((1-2*x)^2)[z],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMass","λ(y:ℝ).∫dx λ[x]·δ((1-2*x)^2)[y]//λ[y]","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMissing","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x/3-1)*(x/3-1)),undefined(ℝ))","ℝ","undefined(ℝ)"),
@@ -3231,6 +3249,11 @@ private void run(string directory){
 				c.name=="CompactSheetGrouped"||c.name=="CompactSheetNegative"||c.name=="CompactSheetTwoRoots"){
 			enforce(certificate.indexOf("theorem rootEquality")>=0,c.name~" square-root sheet equation");
 			enforce(certificate.length<45000,c.name~" redundant scalar proof");
+		}
+		if(c.name.indexOf("RepeatedSheet")==0){
+			bool duplicate=c.name!="RepeatedSheetSum"&&c.name!="RepeatedSheetDifferentHole";
+			enforce((certificate.indexOf("SameSheets.duplicate ")>=0)==duplicate,c.name);
+			if(c.name=="RepeatedSheetPrefix") enforce(certificate.indexOf("SameSheets.between ")>=0,c.name);
 		}
 		if(c.name.indexOf("SheetDensity")==0){
 			bool supported=c.name!="SheetDensityGuardHole"&&c.name!="SheetDensityAsymmetric"&&

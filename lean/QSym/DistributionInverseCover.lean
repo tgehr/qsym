@@ -438,6 +438,38 @@ def restricted {ι : Type} (p : Option (ℝ → Option Bool)) (coords : Option (
     Option (D ℝ) :=
   p.bind fun pred => coords.bind fun gs => interpret gs (some pred) (inverseSourcePartValue (some pred) (some gs))
 
+/-- Only the displayed coordinate pairs enter either interpretation. -/
+def SameRelation {ι κ : Type} (gs : ι → ℝ → Option ℝ) (hs : κ → ℝ → Option ℝ) : Prop :=
+  ∀ y x, (∃ i, gs i y = some x) ↔ ∃ j, hs j y = some x
+
+private theorem SameRelation.output {ι κ : Type} {gs : ι → ℝ → Option ℝ} {hs : κ → ℝ → Option ℝ}
+    (h : SameRelation gs hs) : inverseCoverOutput gs = inverseCoverOutput hs := by
+  funext x
+  exact congrArg (fun (p : ℝ → Prop) => if e : ∃! y, p y then some e.choose else none)
+    (funext fun y => propext (h y x))
+
+private theorem SameRelation.interpret_eq {ι κ : Type} {gs : ι → ℝ → Option ℝ} {hs : κ → ℝ → Option ℝ}
+    (h : SameRelation gs hs) (p fallback) : interpret gs p fallback = interpret hs p fallback := by
+  have eq : Displays gs = Displays hs := funext fun _ => propext
+    ⟨fun a y x => (h y x).symm.trans (a y x), fun a y x => (h y x).trans (a y x)⟩
+  exact congrArg (fun (q : VariationChart → Prop) => if e : ∃ c, q c then e.choose.present p else fallback) eq
+
+theorem SameRelation.value {ι κ : Type} {gs : ι → ℝ → Option ℝ} {hs : κ → ℝ → Option ℝ}
+    (h : SameRelation gs hs) : value (some gs) = value (some hs) := by
+  have out : inverseCoverValue (some gs) = inverseCoverValue (some hs) := by
+    simp [inverseCoverValue, h.output]
+  exact (h.interpret_eq none _).trans (congrArg (interpret hs none) out)
+
+theorem SameRelation.restricted {ι κ : Type} {gs : ι → ℝ → Option ℝ} {hs : κ → ℝ → Option ℝ}
+    (h : SameRelation gs hs) (p) : restricted p (some gs) = restricted p (some hs) := by
+  cases p with
+  | none => rfl
+  | some p =>
+    change interpret gs (some p) (pushforwardOnValue _ (some (inverseCoverOutput gs))) =
+      interpret hs (some p) (pushforwardOnValue _ (some (inverseCoverOutput hs)))
+    rw [h.output]
+    exact h.interpret_eq _ _
+
 /-- Overlapping, missing and critical outputs affect later observations.
 An unrestricted cover can be constructed whenever its coordinate family exists. -/
 theorem value_isSome {ι : Type} (coords : Option (ι → ℝ → Option ℝ)) :

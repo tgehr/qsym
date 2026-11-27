@@ -43,7 +43,7 @@ private enum BindingRule:ushort{
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,pointwiseReordered,pointwiseRootSheet,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumNormalizedMoment,sumPolynomialGeometric,sumConstantMomentRows,sumPlainPolynomialZero,sumPlainPolynomialNonzero,sumPolynomialFactor,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
-	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,distributionQuadraticDensity,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
+	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,distributionQuadraticDensity,coordinateRepeatedSheet,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionUniformCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
@@ -2358,6 +2358,30 @@ final class Bindings{
 			s.proof="(Distribution.GraphFibre.Coordinates.RootSheet."~law~" "~s.proof~" "~v~" "~cert.numericProof(idLiteral,Rational(0),v)~")";
 		}
 		return true;
+	}
+	// A cover denotes the union of the displayed coordinate pairs. Remove one
+	// repeated function, preserving the order of the first occurrences.
+	private BoundTerm dropRepeatedSheet(BoundTerm cover,out uint position){
+		auto n=node(cover);
+		bool restricted=n.op==BoundOp.distributionInversePart;
+		uint row=restricted?n.b:n.a;
+		if(nodes[row].op!=BoundOp.vectorCons||nodes[nodes[row].b].op!=BoundOp.vectorCons) return BoundTerm.init;
+		Table!(uint,uint) seen; uint[] cells;
+		while(nodes[row].op==BoundOp.vectorCons){
+			auto cell=nodes[row];
+			position=seen.get(cell.a,uint.max);
+			if(position!=uint.max){
+				auto tail=at(cell.b);
+				foreach_reverse(prefix;cells){
+					auto old=nodes[prefix];
+					tail=intern(BoundNode(BoundOp.vectorCons,old.context,nodes[old.b].type,old.a,tail.id));
+				}
+				return distribution(context(cover),n.op,restricted?[at(n.a),tail]:[tail]);
+			}
+			seen.set(cell.a,cast(uint)cells.length);
+			cells~=row; row=cell.b;
+		}
+		return BoundTerm.init;
 	}
 	private bool oppositeRootSheets(uint cover,out SquareRootSheet low,out SquareRootSheet high,SourceCertificates cert=null){
 		if(nodes[cover].op!=BoundOp.distributionInverseCover) return false;
@@ -10367,6 +10391,16 @@ final class Bindings{
 			uint predicateDomain=uint.max,excludedZero=uint.max;
 			auto ctx=context(at(result.output));
 
+			if((current.op==BoundOp.distributionInverseCover||current.op==BoundOp.distributionInversePart)&&steps<budget){
+				uint position;
+				auto shorter=dropRepeatedSheet(at(result.output),position);
+				if(shorter!=BoundTerm.init){
+					++steps;
+					auto step=emit(BindingRule.coordinateRepeatedSheet,result.output,shorter.id,uint.max,uint.max,position);
+					chain~=RewriteFrame(t.id,result.output,result.proof,step);
+					return Result(shorter.id,uint.max);
+				}
+			}
 			if(result.output!=t.id&&current.op==BoundOp.distributionDensityAt&&nodes[current.a].op==BoundOp.distributionInverseCover&&steps<budget){
 				uint witness; auto observed=quadraticDensity(at(result.output),witness);
 				if(observed!=BoundTerm.init){
@@ -16791,6 +16825,25 @@ final class Bindings{
 					if(nodes[p.to].op==BoundOp.bottom&&nodes[n.b].op!=BoundOp.bottom)
 						term="Eq.trans ("~term~") (Distribution.GraphFibre.unrestrictedSquareDensity_zero _)";
 					proof=".ofEq (fun ξ ρ => let h := "~term~"; h)"; break;
+				}
+				case BindingRule.coordinateRepeatedSheet:{
+					bool restricted=n.op==BoundOp.distributionInversePart;
+					auto row=restricted?n.b:n.a;
+					uint[] prefix,middle;
+					foreach(k;0..p.extra){ prefix~=nodes[row].a; row=nodes[row].b; }
+					auto head=nodes[row].a; row=nodes[row].b;
+					while(nodes[row].op==BoundOp.vectorCons&&nodes[row].a!=head){
+						middle~=nodes[row].a; row=nodes[row].b;
+					}
+					enforce(nodes[row].op==BoundOp.vectorCons,"missing repeated coordinate");
+					string atEnv(uint id){ return "("~name(id)~".eval ξ ρ)"; }
+					enum ns="Distribution.GraphFibre.Coordinates.";
+					auto same="("~ns~"SameSheets.duplicate "~atEnv(head)~" "~atEnv(nodes[row].b)~")";
+					foreach_reverse(g;middle) same="("~ns~"SameSheets.between "~atEnv(g)~" "~same~")";
+					foreach_reverse(g;prefix) same="("~ns~"SameSheets.keep "~atEnv(g)~" "~same~")";
+					auto law=restricted?"restricted ":"value ";
+					proof=".ofEq (fun ξ ρ => "~ns~"SameSheets."~law~same~(restricted?" "~atEnv(n.a):"")~")";
+					break;
 				}
 				case BindingRule.coordinateSheetDomain:{
 					auto d=result.domains[p.extra];
