@@ -1850,14 +1850,55 @@ final class Bindings{
 		}
 		return false;
 	}
+	// Emit sparse Horner syntax and its witness in lockstep. Exact integer
+	// coefficients, zero terms and a monic tail need no scalar rearrangement.
+	private BoundTerm momentNumerator(BoundTerm r,Rational[] cs,bool exporting,out string proof){
+		auto ctx=context(r),z=arena.real_(0),mul=arena.mul(z,z,true),add=arena.add(z,z,true);
+		BoundTerm literal(Rational c){ return scalar(ctx,arena.real_(c)); }
+		enum ns="GeometricMoments.Newton.At.";
+		if(cs.length==1){
+			if(exporting) proof="("~ns~"last _ "~literalProof(cs[0])~")";
+			return literal(cs[0]);
+		}
+		auto c=cs[$-2],d=cs[$-1]; BoundTerm v;
+		if(d.one){
+			v=c.zero?r:primitive(add,[r,literal(c)]);
+			if(exporting) proof=c.zero?"("~ns~"index _)":"("~ns~"monic _ "~literalProof(c)~")";
+		}else{
+			v=primitive(mul,[literal(d),r]);
+			if(!c.zero) v=primitive(add,[v,literal(c)]);
+			if(exporting) proof=c.zero?"("~ns~"scale _ "~literalProof(d)~")":
+				"("~ns~"linear _ "~literalProof(c)~" "~literalProof(d)~")";
+		}
+		foreach_reverse(head;cs[0..$-2]){
+			v=primitive(mul,[r,v]);
+			if(!head.zero) v=primitive(add,[v,literal(head)]);
+			if(exporting) proof="("~ns~(head.zero?"skip_zero ":"append_constant "~literalProof(head)~" ")~proof~")";
+		}
+		return v;
+	}
 	private BoundTerm polynomialGeometricValue(BoundTerm sum,NewtonMoment d){
-		auto r=dropIndex(at(d.ratio)),z=arena.real_(0),mul=arena.mul(z,z,true),add=arena.add(z,z,true);
-		BoundTerm pred; auto inverse=geometricInverse(r,pred);
-		auto ctx=context(sum),cs=d.numerator,v=scalar(ctx,arena.real_(cs[$-1]));
-		foreach_reverse(c;cs[0..$-1])
-			v=primitive(add,[scalar(ctx,arena.real_(c)),primitive(mul,[r,v])]);
-		auto power=primitive(arena.pow(z,cast(uint)d.differences.length),[inverse]);
-		return guard(pred,primitive(mul,[power,v]));
+		auto ctx=context(sum),r=dropIndex(at(d.ratio)),z=arena.real_(0),mul=arena.mul(z,z,true);
+		auto one=scalar(ctx,arena.real_(1)),minus=scalar(ctx,arena.real_(-1));
+		auto lower=primitive(arena.lt(z,z),[minus,r]),upper=primitive(arena.lt(z,z),[r,one]);
+		auto domain=primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[lower,upper]);
+		auto denominator=primitive(arena.add(z,z,true),[one,primitive(mul,[r,minus])]);
+		auto power=primitive(arena.pow(z,cast(uint)d.differences.length),[denominator]);
+		string unused;
+		return guard(domain,primitive(mul,[momentNumerator(r,d.numerator,false,unused),primitive(arena.inv(z),[power])]));
+	}
+	private string momentFractionProof(NewtonMoment d,BoundTerm rate){
+		MomentPolynomial test; enforce(momentPolynomial(d.test,test,true));
+		enum ns="GeometricMoments.Newton.";
+		auto power="("~ns~(d.lifted?"powerQR (":"powerR (")~name(d.lifted?node(rate).a:rate.id)~".eval ξ ρ))";
+		string list(Rational[] coefficients){
+			string text="["; foreach(j,c;coefficients) text~=(j?", ":"")~SourceCertificates.q(c); return text~"]";
+		}
+		string horner; momentNumerator(rate,d.numerator,true,horner);
+		auto one="(n"~to!string(arena.real_(1).id)~".eval ξ)",minus="(n"~to!string(arena.real_(-1).id)~".eval ξ)";
+		return ns~"series_fraction "~test.proof~" "~power~(d.testFirst?" true ":" false ")~
+			list(d.differences)~" "~list(d.numerator)~" "~to!string(d.witness)~" rfl rfl (of_decide_eq_true rfl) "~one~" "~minus~
+			" AffineRecurrence.oneR Spectral.minusR "~horner;
 	}
 	// A polynomial on every natural index has a finite unweighted sum
 	// exactly when it vanishes identically. A finite witness suffices for
@@ -15038,19 +15079,8 @@ final class Bindings{
 				}
 				case BindingRule.sumPolynomialGeometric:{
 					NewtonMoment d; enforce(polynomialGeometric(at(p.from),d));
-					MomentPolynomial test; enforce(momentPolynomial(d.test,test,true));
-					enum ns="GeometricMoments.Newton.";
-					auto rate=nodes[nodes[nodes[p.to].a].a].a,cs=d.numerator;
-					auto power="("~ns~(d.lifted?"powerQR (":"powerR (")~name(d.lifted?nodes[rate].a:rate)~".eval ξ ρ))";
-					string list(Rational[] coefficients){
-						string text="["; foreach(j,c;coefficients) text~=(j?", ":"")~SourceCertificates.q(c); return text~"]";
-					}
-					auto horner="("~ns~"At.last _ "~literalProof(cs[$-1])~")";
-					foreach_reverse(c;cs[0..$-1]) horner="("~ns~"At.step "~literalProof(c)~" "~horner~")";
-					auto one="(n"~to!string(arena.real_(1).id)~".eval ξ)",minus="(n"~to!string(arena.real_(-1).id)~".eval ξ)";
-					proof=".ofEq (fun ξ ρ => "~ns~"series "~test.proof~" "~power~(d.testFirst?" true ":" false ")~
-						list(d.differences)~" "~list(cs)~" "~to!string(d.witness)~" rfl rfl (of_decide_eq_true rfl) "~one~" "~minus~
-						" AffineRecurrence.oneR Spectral.minusR "~horner~")"; break;
+					auto rate=at(nodes[nodes[nodes[p.to].a].a].b);
+					proof=".ofEq (fun ξ ρ => "~momentFractionProof(d,rate)~")"; break;
 				}
 				case BindingRule.sumWeightedGeometric:{
 					WeightedGeometric d; enforce(weightedGeometric(at(p.from),d));

@@ -245,4 +245,56 @@ theorem series {test power : ℕ → Option ℝ} {p : SampledPolynomial} {r : Op
   intro n; rw [ht n, hp n]
   cases left <;> cases r <;> simp [Value.mul, mul_comm]
 
+/-- Evaluate sparse Horner expressions directly in their printed order. -/
+theorem At.index (x : Option ℝ) : At x [0,1] x := by
+  intro u hu; simp [hu, polyEval]
+
+theorem At.monic (x : Option ℝ) {c : ℚ} {v : Option ℝ} (hc : v = some (c : ℝ)) :
+    At x [c,1] (Value.add x v) := by
+  intro u hu; simp [hu, hc, Value.add, polyEval, _root_.add_comm]
+
+theorem At.linear (x : Option ℝ) {c d : ℚ} {v w : Option ℝ} (hc : v = some (c : ℝ)) (hd : w = some (d : ℝ)) :
+    At x [c,d] (Value.add (Value.mul w x) v) := by
+  intro u hu; simp [hu, hc, hd, Value.add, Value.mul, polyEval, _root_.add_comm, mul_comm]
+
+theorem At.scale (x : Option ℝ) {d : ℚ} {w : Option ℝ} (hd : w = some (d : ℝ)) :
+    At x [0,d] (Value.mul w x) := by
+  intro u hu; simp [hu, hd, Value.mul, polyEval, mul_comm]
+
+theorem At.skip_zero {x v : Option ℝ} {cs : List ℚ} (ht : At x cs v) :
+    At x (0::cs) (Value.mul x v) := by
+  intro u hu; simp [ht u hu, hu, Value.mul, polyEval]
+
+theorem At.append_constant {x v t : Option ℝ} {c : ℚ} {cs : List ℚ} (hc : v = some (c : ℝ)) (ht : At x cs t) :
+    At x (c::cs) (Value.add (Value.mul x t) v) := by
+  intro u hu; simp [ht u hu, hu, hc, Value.add, Value.mul, polyEval, _root_.add_comm]
+
+private def interval (r one minus : Option ℝ) : Option Bool :=
+  Value.and (Value.lt minus r) (Value.lt r one)
+
+private def denominatorPower (r one minus : Option ℝ) (k : ℕ) : Option ℝ :=
+  (Value.add one (Value.mul r minus)).map (fun d => d^k)
+
+private theorem fraction_form (r one minus num : Option ℝ) (k : ℕ) (h1 : one = some 1) (hm : minus = some (-1)) :
+    Binding.guardValue (Value.lt (Value.abs r) one) (Value.mul ((inverse r one minus).map (fun t => t^k)) num) =
+    Binding.guardValue (interval r one minus) (Value.mul num (Value.inv (denominatorPower r one minus k))) := by
+  subst one minus
+  cases r with
+  | none => rfl
+  | some r =>
+    by_cases lo : -1 < r <;> by_cases hi : r < 1
+    · have nz : -r+1 ≠ 0 := by linarith
+      have nz' : 1 + -r ≠ 0 := by linarith
+      cases num <;> simp [interval, inverse, denominatorPower, abs_lt, lo, hi, nz, nz', pow_ne_zero _ nz,
+        Value.lt, Value.and, Value.abs, Value.add, Value.mul, Value.inv, Binding.guardValue, _root_.add_comm, mul_comm]
+    all_goals simp [interval, abs_lt, lo, hi, Value.abs, Value.lt, Value.and, Binding.guardValue]
+
+theorem series_fraction {test power : ℕ → Option ℝ} {p : SampledPolynomial} {r : Option ℝ}
+    (ht : NatTest test p) (hp : ∀ n, power n = r.map (fun q => q^n)) (left : Bool)
+    (cs ns : List ℚ) (w : ℕ) (h : checks p cs = true) (hnum : numeratorChecks cs ns = true) (hn : p.num 0 ≠ p.num w)
+    (one minus : Option ℝ) {answer : Option ℝ} (h1 : one = some 1) (hm : minus = some (-1)) (ha : At r ns answer) :
+    value norm (some (fun n => if left then Value.mul (test n) (power n) else Value.mul (power n) (test n))) =
+      Binding.guardValue (interval r one minus) (Value.mul answer (Value.inv (denominatorPower r one minus cs.length))) :=
+  (series ht hp left cs ns w h hnum hn one minus h1 hm ha).trans (fraction_form r one minus answer _ h1 hm)
+
 end QSym.GeometricMoments.Newton
