@@ -4,6 +4,7 @@ import QSym.DistributionMaskedRootCover
 import QSym.DistributionBindObservation
 import QSym.DistributionTestScale
 import QSym.DistributionQuadraticBand
+import QSym.DistributionRootInterval
 import QSym.AxiomCheck
 
 noncomputable section
@@ -453,5 +454,19 @@ theorem charged_point_density (x w : ℝ) (hw : w ≠ 0) :
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.masked_chart_source
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.band_chart
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.target_band_chart
+/-- A finite edit at the singular endpoint retains its scalar integral. -/
+theorem inverse_root_endpoint_edit :
+    partialIntegral volume (fun y : ℝ => some (if y = 1 then 7 else
+      if 0 < y ∧ y < 1 then -3 / √(1-y) else 0)) = some (-6:ℝ) := by
+  calc
+    _ = some ((2*(-3)/(-1:ℝ))*(√(-1*1+1)-√(-1*0+1))) := by
+      apply RootInterval.integral (-1) 1 0 1 (-3) (by norm_num) (by norm_num)
+        (by norm_num) (by norm_num) _ [1] (fun y => ⟨_,rfl⟩)
+      intro y away
+      simp [away 1 (by simp), sub_eq_add_neg, add_comm]
+    _ = _ := by norm_num
+
+#qsym_check_axioms RootInterval.integral
+#qsym_check_axioms inverse_root_endpoint_edit
 
 end QSym.DistributionSourceTests
