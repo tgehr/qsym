@@ -97,6 +97,18 @@ private Case[] cases(){
 		Case("LambdaDomain","λ(x:ℝ). 1/x","","",true),
 		Case("LambdaDomainZero","0∈domain(λ(x:ℝ). 1/x)","false"),
 		Case("LambdaDomainOne","1∈domain(λ(x:ℝ). 1/x)","true"),
+		Case("ApplicationDomainRootMissing","(λ(y:ℝ).0*sqrt(y-1))(0)","undefined(ℝ)"),
+		Case("ApplicationDomainRootEndpoint","(λ(y:ℝ).0*sqrt(y-1))(1)","0"),
+		Case("ApplicationDomainReciprocalMissing","(λ(y:ℝ).0*(1/y))(0)","undefined(ℝ)"),
+		Case("ApplicationDomainReciprocalRegular","(λ(y:ℝ).0*(1/y))(2)","0"),
+		Case("ApplicationDomainFalseMask","(λ(y:ℝ).[0<y]*(1/y))(0)","0"),
+		Case("ApplicationDomainTrueMask","defined((λ(y:ℝ).[0≤y]*(1/y))(0))","false"),
+		Case("ApplicationDomainArgumentMissing","(λ(y:ℝ).(0:ℝ))(undefined(ℝ))","undefined(ℝ)"),
+		Case("ApplicationDomainRootDefined","defined((λ(y:ℝ).0*sqrt(y-1))(0))","false"),
+		Case("ApplicationDomainNestedSum","(1:ℝ)+(λ(y:ℝ).0*(1/y))(0)","undefined(ℝ)"),
+		Case("ApplicationDomainTwoApplications","(λ(y:ℝ).0*sqrt(y-1))((λ(y:ℝ).y)(0))","undefined(ℝ)"),
+		Case("ApplicationDomainSymbolic","(λ(y:ℝ).0*(1/y))((x:ℝ))","guard(x≠0,(0:ℝ))"),
+		Case("ApplicationDomainReapplied","(λ(f:ℝ→ℝ). f(0))((λ(y:ℝ).0*(1/y)))","undefined(ℝ)"),
 		Case("QuotientDomainZero","0∈domain(λ(x:ℝ). x/x)","false"),
 		Case("QuotientDomainOne","1∈domain(λ(x:ℝ). x/x)","true"),
 		Case("UndefinedArgument","(λ(x:ℝ).0)(1/0)","undefined(ℕ)"),
@@ -163,6 +175,9 @@ private string[] run(string directory=""){
 		enforce(s.format(a,again)==output,c.name~" round trip: "~output~" -> "~s.format(a,again));
 		auto code=s.exportCertificate(a,r);
 		import std.string:indexOf;
+		if(c.name=="ApplicationDomainRootMissing"||c.name=="ApplicationDomainReciprocalMissing"||
+				c.name=="ApplicationDomainNestedSum"||c.name=="ApplicationDomainTwoApplications"||c.name=="ApplicationDomainSymbolic")
+			enforce(code.indexOf("namespace QSym.FunctionCertificate")<0&&code.indexOf("#qsym_check_axioms sound")>=0,c.name~" conditional equality");
 		if(c.name.indexOf("RestrictedCall")==0){
 			auto local=c.name!="RestrictedCallStateChanges"&&c.name!="RestrictedCallOneBranchChanges"&&c.name!="RestrictedCallRecursiveTest";
 			enforce((code.indexOf("Pointwise.restricted ")>=0)==local,c.name);

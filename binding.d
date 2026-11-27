@@ -11963,15 +11963,15 @@ final class Bindings{
 		auto result=visit(term,0); return BindingResult(term,at(result.output),exhausted,steps,proofs,result.proof,scalarDomains,solutions,ranks,spectra,sums,integrals,fibres,affineCharts,covers,limits,coordinates,quadratics);
 	}
 
-	/// A scalar refinement can fill a hole in a pointwise observation. If its
-	/// definedness changes, keep the source domain as a checked binding guard.
-	bool protectObservationDomain(ref BindingResult r,Term source,ScalarResult candidate,Options options){
+	/// Scalar refinement may fill a hole exposed by function application or a
+	/// pointwise distribution query. Preserve that domain in the binding result.
+	bool protectPointwiseDomain(ref BindingResult r,Term source,ScalarResult candidate,Options options){
 		auto ty=arena.sort(source),embedded=arena.castTo(candidate.output,ty);
 		if(embedded==source) return false;
 		bool pointwise;
 		foreach(step;r.proofs){
 			auto op=nodes[step.from].op;
-			if(op==BoundOp.distributionDensityAt||op==BoundOp.distributionGraphMass||
+			if(op==BoundOp.apply||op==BoundOp.distributionDensityAt||op==BoundOp.distributionGraphMass||
 				op==BoundOp.distributionGraphFibre||op==BoundOp.distributionMaskedGraph){ pointwise=true; break; }
 		}
 		if(!pointwise) return false;
