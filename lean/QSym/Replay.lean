@@ -68,6 +68,13 @@ theorem defined_or_guard (p q : Option Bool) (h : Defined (or p q)) : Defined p 
   · exact ⟨true, h⟩
   · exact ⟨false, h⟩
 
+theorem defined_mask_total {α : Type} [Zero α] (p : Option Bool) (x : Option α)
+    (hp : Defined p) (hx : Defined x) : Defined (mask p x) := by
+  obtain ⟨b, rfl⟩ := hp
+  cases b
+  · exact (defined_mask _ _).mpr (Or.inl rfl)
+  · exact (defined_mask _ _).mpr (Or.inr ⟨rfl, hx⟩)
+
 theorem defined_and_total (p q : Option Bool) (hp : Defined p) (hq : Defined q) :
     Defined (and p q) := by
   obtain ⟨b, rfl⟩ := hp

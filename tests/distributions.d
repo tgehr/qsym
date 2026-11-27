@@ -484,6 +484,21 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("IversonParameterBoolean","λ(p:𝔹).Λx.λ[sin(x+[p])]","𝔹→Distribution(ℝ)","λ(p:𝔹). Λ(x:ℝ). (abs(cos(x+[p])))·λ[x]"),
+	Case("IversonParameterCompare","Λx.λ[sin(x+[a<b])]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+[a<b])))·λ[x]"),
+	Case("IversonParameterWeak","Λx.λ[sin(x+[a≤b])]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+[a≤b])))·λ[x]"),
+	Case("IversonParameterAnd","Λx.λ[exp(([a<b∧b<c]+1)*x)]","Distribution(ℝ)","Λ(x:ℝ). (([a<b∧b<c]+1)·exp(x·([a<b∧b<c]+1)))·λ[x]"),
+	Case("IversonParameterOr","Λx.λ[sin(([a<b∨c≤a]+1)*x)]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x·([a<b∨c≤a]+1)))·([a<b∨c≤a]+1))·λ[x]"),
+	Case("IversonParameterNegated","Λx.λ[sin(x+[a=0])]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+[a=0])))·λ[x]"),
+	Case("IversonParameterMasked","Λx.λ[sin(x+[a<0]*a)]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+[a<0]·a)))·λ[x]"),
+	Case("IversonParameterGuardedInverse","Λx.λ[sin(x+[a≠0]·a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x+[a≠0]·a⁻¹)))·λ[x]"),
+	Case("IversonParameterInverseMagnitude","Λx.λ[sin(([a≠0]·a⁻¹)*x)]","Distribution(ℝ)","Λ(x:ℝ). λ[([a≠0]·sin(x·a⁻¹))]"),
+	Case("IversonParameterInverseMass","∫dx [0≤x≤1]·λ[exp(x+[a≠0]·a⁻¹)]","ℝ","exp([a≠0]·a⁻¹+1)-exp([a≠0]·a⁻¹)"),
+	Case("IversonParameterBooleanMass","λ(p:𝔹).∫dx [0≤x≤1]·λ[(x+[p])^3]","𝔹→ℝ","λ(p:𝔹). ([p]+1)^3+[p]·-1"),
+	Case("IversonParameterOtherGuard","Λx.λ[sin(x+[b≠0]·a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). λ[(sin(x+[b≠0]·a⁻¹))]"),
+	Case("IversonParameterPartialGuard","λ(h:ℕ→𝔹).Λx.λ[sin(x+[h(0)])]","(ℕ→𝔹)→Distribution(ℝ)","λ(h:ℕ→𝔹). Λ(x:ℝ). λ[(sin(x+[h(0)]))]"),
+	Case("IversonParameterPartialValue","λ(h:ℕ→ℝ).Λx.λ[sin(x+[a<0]·h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). λ[(sin(x+[a<0]·h(0)))]"),
+	Case("IversonParameterApplied","(λ(p:𝔹).Λx.λ[sin(x+[p])])(false)","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(x)))·λ[x]"),
 	Case("ScalarBinderNatural","λ(n:ℕ).Λx.λ[sin(x+(n:ℝ))]","ℕ→Distribution(ℝ)","λ(n:ℕ). Λ(x:ℝ). (abs(cos(x+n)))·λ[x]"),
 	Case("ScalarBinderInteger","λ(k:ℤ).Λx.λ[sin((k:ℝ)*x)]","ℤ→Distribution(ℝ)","λ(k:ℤ). Λ(x:ℝ). (abs(k)·abs(cos(x·k)))·λ[x]"),
 	Case("ScalarBinderRational","λ(q:ℚ).Λx.λ[exp((q:ℝ)*x)]","ℚ→Distribution(ℝ)","λ(q:ℚ). Λ(x:ℝ). (abs(q)·exp(x·q))·λ[x]"),
@@ -2694,6 +2709,16 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("IversonParameter")==0){
+			bool reciprocal=c.name=="IversonParameterGuardedInverse"||c.name=="IversonParameterInverseMass";
+			bool masked=c.name=="IversonParameterBoolean"||c.name=="IversonParameterCompare"||c.name=="IversonParameterWeak"||
+				c.name=="IversonParameterAnd"||c.name=="IversonParameterOr"||c.name=="IversonParameterNegated"||
+				c.name=="IversonParameterMasked"||c.name=="IversonParameterBooleanMass";
+			enforce((certificate.indexOf("Value.defined_guarded_inv ")>=0)==reciprocal,c.name);
+			enforce((certificate.indexOf("Value.defined_mask_total ")>=0)==masked,c.name);
+			if(c.name=="IversonParameterAnd") enforce(certificate.indexOf("Value.defined_and_total ")>=0,c.name);
+			if(c.name=="IversonParameterOr") enforce(certificate.indexOf("Value.defined_or_total ")>=0,c.name);
 		}
 		if(c.name.indexOf("ScalarBinder")==0){
 			import std.string:count;

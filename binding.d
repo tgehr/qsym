@@ -1,6 +1,6 @@
 module qsym.binding;
 import qsym.ir;
-import qsym.algebra_proof:strictTotalScalar,scalarDefinedStep;
+import qsym.algebra_proof:totalScalarParameter,scalarDefinedStep;
 import qsym.integration:IntegralBounds,integralBounds,integralCutPoints,integralAffine,removeIntegralNullGuards;
 import qsym.summation:sumAntidifference,sumAbelAntidifference,SumPrimitive;
 import qsym.rational_identity:rationalIdentityZero;
@@ -3206,7 +3206,7 @@ final class Bindings{
 	private Term coordinateParameter(uint id){
 		if(depends(at(id),0)) return Term.init;
 		auto t=scalarBody(at(id),Term.init);
-		return t!=Term.init&&strictTotalScalar(arena,t)?t:Term.init;
+		return t!=Term.init&&totalScalarParameter(arena,t)?t:Term.init;
 	}
 	// Check smoothness and one orientation on the source. Reuse the same
 	// traversal when exporting the proof for the original coordinate lambda.

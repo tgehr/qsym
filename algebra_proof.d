@@ -2,6 +2,7 @@
 module qsym.algebra_proof;
 import qsym.ir;
 import qsym.budget:Budget;
+import qsym.domain:isGuardedInverse;
 import qsym.polynomial:Arithmetic,Polynomial,Powers;
 import qsym.proof:leanExportHeader,leanSyntaxCode;
 import qsym.spec:leanSort;
@@ -10,14 +11,25 @@ import std.conv:to;
 import std.exception:enforce;
 @safe:
 
-// The source fragment for which strict arguments suffice to prove totality.
-package bool strictTotalScalar(Arena a,Term root){
-	foreach(id;a.viewPostorder(root)){
+// Track definedness through the scalar DAG. A reciprocal masked by its
+// own nonzero test only needs the argument to be defined.
+package bool totalScalarParameter(Arena a,Term root){
+	auto r=a.view(root);
+	if(a.isNumber(root)||r.op==Op.variable||r.op==Op.boolLit) return true;
+	auto order=a.viewPostorder(root);
+	auto total=new bool[a.length];
+	foreach(id;order){
 		auto t=a.at(id),n=a.view(t);
-		if(!a.isNumber(t)&&n.op!=Op.variable&&n.op!=Op.boolLit&&n.op!=Op.add&&n.op!=Op.mul&&
-			n.op!=Op.pow&&n.op!=Op.conj&&n.op!=Op.abs&&!(n.op==Op.builtin&&builtinInfo(cast(Builtin)n.value).total)) return false;
+		if(isGuardedInverse(a,t)){ total[id]=total[a.view(a.at(n.a)).a]; continue; }
+		if(n.arity>=1&&!total[n.a]||n.arity==2&&!total[n.b]) continue;
+		switch(n.op){
+			case Op.variable,Op.boolLit,Op.add,Op.mul,Op.pow,Op.conj,Op.abs,Op.lt,Op.le,
+				Op.nonzero,Op.not_,Op.and_,Op.or_,Op.mask:total[id]=true;break;
+			case Op.builtin:total[id]=builtinInfo(cast(Builtin)n.value).total;break;
+			default:total[id]=a.isNumber(t);break;
+		}
 	}
-	return true;
+	return total[root.id];
 }
 
 // Construct one checked definedness step. Callers share child proofs in their
@@ -35,13 +47,25 @@ package string scalarDefinedStep(Arena a,Term t,string env,scope string delegate
 			if(n.arity==2)h~=" "~ev(n.b);
 			h~=" "~left;if(n.arity==2)h~=" "~child(a.viewChild(t,1));
 		}
-	}else if(n.op==Op.add||n.op==Op.mul){
+	}else if(isGuardedInverse(a,t)){
+		auto x=a.viewChild(a.at(n.a),0);
+		h="(Value.defined_guarded_inv "~ev(x.id)~").mpr "~child(x);
+	}else if(n.op==Op.mask||n.op==Op.and_||n.op==Op.or_){
+		auto law=n.op==Op.mask?"mask":n.op==Op.and_?"and":"or";
+		h="Value.defined_"~law~"_total "~ev(n.a)~" "~ev(n.b)~" "~child(a.at(n.a))~" "~child(a.at(n.b));
+	}else if(n.op==Op.add||n.op==Op.mul||n.op==Op.lt||n.op==Op.le){
 		auto x=child(a.viewChild(t,0)),y=child(a.viewChild(t,1));
-		h="(Value.defined_"~(n.op==Op.add?"add":"mul")~" "~ev(n.a)~" "~ev(n.b)~").mpr ⟨"~x~", "~y~"⟩";
+		h="(Value.defined_"~to!string(n.op)~" "~ev(n.a)~" "~ev(n.b)~").mpr ⟨"~x~", "~y~"⟩";
 	}else{
-		enforce(n.op==Op.pow||n.op==Op.conj||n.op==Op.abs,"partial opaque scalar argument");
-		auto x=child(a.viewChild(t,0));
-		h="(Value."~(n.op==Op.conj?"defined_conj":"defined_map _")~" "~ev(n.a)~").mpr "~x;
+		string rule;
+		switch(n.op){
+			case Op.nonzero:rule="defined_nonzero";break;
+			case Op.not_:rule="defined_not";break;
+			case Op.conj:rule="defined_conj";break;
+			case Op.pow,Op.abs:rule="defined_map _";break;
+			default:throw new Exception("partial opaque scalar argument");
+		}
+		h="(Value."~rule~" "~ev(n.a)~").mpr "~child(a.viewChild(t,0));
 	}
 	return h;
 }
