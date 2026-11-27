@@ -148,6 +148,40 @@ theorem defined_of_le_true {a b : Option ℝ} (h : Value.le a b = some true) :
     definedValue a = some true ∧ definedValue b = some true := by
   cases a <;> cases b <;> simp_all [Value.le, definedValue]
 
+private noncomputable abbrev apart (a b : Option ℝ) :=
+  Value.nonzero (Value.add a (Value.mul (some ((-1:ℤ):ℝ)) b))
+
+private theorem apart_some (x y : ℝ) : apart (some x) (some y) = some (decide (x ≠ y)) := by
+  by_cases h : x = y
+  · subst y; simp [apart, Value.nonzero, Value.add, Value.mul]
+  · have ne : x + -y ≠ 0 := by simpa only [← sub_eq_add_neg] using sub_ne_zero.mpr h
+    simp [apart, Value.nonzero, Value.add, Value.mul, h, ne]
+
+theorem mask_closed_open {α : Type} [Zero α] (a b : Option ℝ) (v : Option α) :
+    Value.mask (Value.le a b) (guardValue (Value.lt a b) v) =
+      guardValue (apart a b) (Value.mask (Value.lt a b) v) := by
+  cases a with
+  | none => rfl
+  | some x =>
+    cases b with
+    | none => rfl
+    | some y =>
+      rw [apart_some]
+      rcases lt_trichotomy x y with h | rfl | h
+      · simp [Value.le, Value.lt, guardValue, Value.mask, h, h.le, h.ne]
+      · simp [Value.le, Value.lt, guardValue, Value.mask]
+      · simp [Value.le, Value.lt, guardValue, Value.mask, not_le_of_gt h, not_lt_of_ge h.le, h.ne']
+
+theorem mask_closed_open_zero (a b zero : Option ℝ) (hz : zero = some 0) :
+    Value.mask (Value.le a b) (guardValue (Value.lt a b) zero) = guardValue (apart a b) zero := by
+  rw [mask_closed_open, hz]
+  cases a with
+  | none => rfl
+  | some x =>
+    cases b with
+    | none => rfl
+    | some y => by_cases h : x < y <;> simp [Value.lt, h, Value.mask]
+
 theorem guard_of_true {p : Option Bool} (v : Option α) (h : p = some true) : guardValue p v = v :=
   h ▸ rfl
 

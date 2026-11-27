@@ -1040,9 +1040,12 @@ private Case[] cases(){
 	Case("QuadraticBranchesPartialPred","λ(h:ℕ→(ℝ→𝔹)).λ(y:ℝ).densityAtD(pushforwardOnD(h(0),λ(x:ℝ).x^2+1),y)","(ℕ→ℝ→𝔹)→ℝ→ℝ"),
 	Case("QuadraticBranchesSameInput","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).x≠y,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
 	Case("QuadraticBranchesControl","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^4+1),y)","ℝ→ℝ"),
+	Case("OpenBoundaryOddVertex","(λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y))))(1)","ℝ","undefined(ℝ)"),
+	Case("OpenBoundaryOddOutside","(λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y))))(0)","ℝ","0"),
+	Case("OpenBoundaryOddInside","(λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y))))(5)","ℝ","0"),
 	Case("OrderedMaskBoth","λ(g:ℝ→ℝ).λ(y:ℝ).massD(weightD(g,graphFibreD(λ(x:ℝ).x^2+1,y)))","(ℝ→ℝ)→ℝ→ℝ","λ(g:ℝ→ℝ). λ(y:ℝ). [1<y]·(g(-sqrt(y-1))·sqrt(y-1)⁻¹·(1/2)+g(sqrt(y-1))·sqrt(y-1)⁻¹·(1/2))+[y≤1]·(guard(y<1∧(defined(g)),(0:ℝ)))"),
 	Case("OrderedMaskOne","λ(y:ℝ).massD(weightD(λ(x:ℝ).x^2,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(y)))","ℝ→ℝ","λ(y:ℝ). [1<y]·((y-1)·sqrt(y-1)⁻¹·(1/2))"),
-	Case("OrderedMaskOpposite","λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y)))","ℝ→ℝ","λ(y:ℝ). [y≤1]·(guard(y<1,(0:ℝ)))"),
+	Case("OrderedMaskOpposite","λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y)))","ℝ→ℝ","λ(y:{y:ℝ | y≠1}). (0:ℝ)"),
 	Case("BranchedFibreFull","λ(y:ℝ).graphFibreD(λ(x:ℝ).x^2+1,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then (2·sqrt(y-1))⁻¹·δ(-sqrt(y-1))[x]+(2·sqrt(y-1))⁻¹·δ(sqrt(y-1))[x] else (guard(y<1,Λ(x:ℝ). 0))[x]"),
 	Case("BranchedFibreSource","λ(y:ℝ).(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then ([(guard(defined(sqrt(y-1)),0<-sqrt(y-1)))]·(2·sqrt(y-1))⁻¹)·δ(-sqrt(y-1))[x]+([(guard(defined(sqrt(y-1)),0<sqrt(y-1)))]·(2·sqrt(y-1))⁻¹)·δ(sqrt(y-1))[x] else if y<1 then 0 else 0·δ(0)[x]"),
 	Case("BranchedFibreJoint","λ(y:ℝ). Λx. λ[x]·δ(x^2+1)[y]//λ[y]","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then (2·sqrt(y-1))⁻¹·δ(-sqrt(y-1))[x]+(2·sqrt(y-1))⁻¹·δ(sqrt(y-1))[x] else (guard(y<1,Λ(x:ℝ). 0))[x]"),
@@ -3368,6 +3371,7 @@ private void run(string directory){
 		}
 		if(c.name=="FibreMarginalWindow"||c.name.indexOf("ActiveGuard")==0)
 			enforce(certificate.indexOf("Binding.guard_of_true ")>=0,c.name);
+		if(c.name=="OrderedMaskOpposite") enforce(certificate.indexOf("Binding.mask_closed_open_zero ")>=0,c.name);
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");

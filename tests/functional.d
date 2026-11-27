@@ -110,6 +110,18 @@ private Case[] cases(){
 		Case("ApplicationDomainSymbolic","(λ(y:ℝ).0*(1/y))((x:ℝ))","guard(x≠0,(0:ℝ))"),
 		Case("ApplicationDomainReapplied","(λ(f:ℝ→ℝ). f(0))((λ(y:ℝ).0*(1/y)))","undefined(ℝ)"),
 		Case("ActiveGuardPredicate","λ(p:𝔹).λ(q:𝔹).λ(z:ℝ).[p]·([guard(p,q)]·z+[guard(p,false)]·guard(p,z))","λ(p:𝔹). λ(q:𝔹). λ(z:ℝ). [p]·([q]·z)"),
+		Case("OpenBoundaryZero","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(0)<h(1),(0:ℝ))","λ(h:{h:ℕ→ℝ | h(0)≠h(1)}). (0:ℝ)"),
+		Case("OpenBoundaryRegular","λ(x:ℝ). [x≤1]·guard(x<1,x+2)","λ(x:{x:ℝ | x≠1}). [x<1]·(x+2)"),
+		Case("OpenBoundaryZeroReal","λ(x:ℝ). [x≤1]·guard(x<1,(0:ℝ))","λ(x:{x:ℝ | x≠1}). (0:ℝ)"),
+		Case("OpenBoundaryPayloadHole","λ(x:ℝ). [x≤1]·guard(x<1,1/x)","λ(x:{x:ℝ | x≠1}). [x<1]·x⁻¹"),
+		Case("OpenBoundaryMissingPayload","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(0)<h(1),undefined(ℝ))","λ(h:ℕ→ℝ). [h(0)≤h(1)]·(undefined(ℝ))"),
+		Case("OpenBoundaryLowerAt","(λ(x:ℝ). [x≤1]·guard(x<1,1/x))(0)","0⁻¹"),
+		Case("OpenBoundaryAt","(λ(x:ℝ). [x≤1]·guard(x<1,1/x))(1)","undefined(ℝ)"),
+		Case("OpenBoundaryAbove","(λ(x:ℝ). [x≤1]·guard(x<1,1/x))(2)","0"),
+		Case("OpenBoundaryActive","(λ(x:ℝ). [x≤1]·guard(x<1,1/x))(1/2)","2"),
+		Case("OpenBoundaryMissingLeft","(λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(0)<h(1),(0:ℝ)))(λ(n:ℕ).undefined(ℝ))","undefined(ℝ)"),
+		Case("OpenBoundaryReversed","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(1)<h(0),h(2))","λ(h:ℕ→ℝ). [h(0)≤h(1)]·(guard(h(1)<h(0),h(2)))"),
+		Case("OpenBoundaryDifferent","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(0)<h(2),h(2))","λ(h:ℕ→ℝ). [h(0)≤h(1)]·(guard(h(0)<h(2),h(2)))"),
 		Case("OrderedMaskWeak","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(h(0)≤h(1),h(2))","λ(h:ℕ→ℝ). [h(0)<h(1)]·h(2)"),
 		Case("OrderedMaskLtLeft","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(defined(h(0)),h(2))","λ(h:ℕ→ℝ). [h(0)<h(1)]·h(2)"),
 		Case("OrderedMaskLtRight","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(defined(h(1)),h(2))","λ(h:ℕ→ℝ). [h(0)<h(1)]·h(2)"),
@@ -117,7 +129,7 @@ private Case[] cases(){
 		Case("OrderedMaskLeRight","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(defined(h(1)),h(2))","λ(h:ℕ→ℝ). [h(0)≤h(1)]·h(2)"),
 		Case("OrderedMaskConjunction","λ(h:ℕ→ℝ).[h(0)<h(1)∧h(1)<h(2)]·guard(h(1)≤h(2),h(3))","λ(h:ℕ→ℝ). [h(0)<h(1)∧h(1)<h(2)]·h(3)"),
 		Case("OrderedMaskSums","λ(h:ℕ→ℝ).[h(0)<h(1)]·(guard(h(0)≤h(1),h(2))+guard(defined(h(1)),h(3)))","λ(h:ℕ→ℝ). [h(0)<h(1)]·(h(2)+h(3))"),
-		Case("OrderedMaskConverse","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(0)<h(1),h(2))","λ(h:ℕ→ℝ). [h(0)≤h(1)]·(guard(h(0)<h(1),h(2)))"),
+		Case("OrderedMaskConverse","λ(h:ℕ→ℝ).[h(0)≤h(1)]·guard(h(0)<h(1),h(2))","λ(h:{h:ℕ→ℝ | h(0)≠h(1)}). [h(0)<h(1)]·h(2)"),
 		Case("OrderedMaskReversed","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(h(1)≤h(0),h(2))","λ(h:ℕ→ℝ). [h(0)<h(1)]·(guard(h(1)≤h(0),h(2)))"),
 		Case("OrderedMaskUnrelated","λ(h:ℕ→ℝ).[h(0)<h(1)]·guard(defined(h(2)),h(0))","λ(h:ℕ→ℝ). [h(0)<h(1)]·(guard(holds((2∈domain(h))),h(0)))"),
 		Case("OrderedMaskDisjunction","λ(h:ℕ→ℝ).[h(0)<h(1)∨h(1)<h(2)]·guard(h(0)≤h(1),h(3))","λ(h:ℕ→ℝ). [h(0)<h(1)∨h(1)<h(2)]·(guard(h(0)≤h(1),h(3)))"),
@@ -204,6 +216,9 @@ private string[] run(string directory=""){
 		if(c.name=="ApplicationDomainRootMissing"||c.name=="ApplicationDomainReciprocalMissing"||
 				c.name=="ApplicationDomainNestedSum"||c.name=="ApplicationDomainTwoApplications"||c.name=="ApplicationDomainSymbolic")
 			enforce(code.indexOf("namespace QSym.FunctionCertificate")<0&&code.indexOf("#qsym_check_axioms sound")>=0,c.name~" conditional equality");
+		if(c.name=="OrderedMaskConverse"||c.name=="OpenBoundaryZero"||c.name=="OpenBoundaryRegular"||
+				c.name=="OpenBoundaryZeroReal"||c.name=="OpenBoundaryPayloadHole")
+			enforce(code.indexOf("Binding.mask_closed_open")>=0,c.name);
 		if(c.name=="OrderedMaskWeak"||c.name=="OrderedMaskConjunction"||c.name=="OrderedMaskSums")
 			enforce(code.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="OrderedMaskLtLeft"||c.name=="OrderedMaskLtRight"||c.name=="OrderedMaskLeLeft"||

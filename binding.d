@@ -47,7 +47,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionUniformCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated,maskActiveGuard
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated,maskActiveGuard,maskOpenBoundary
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -554,6 +554,21 @@ final class Bindings{
 		}
 		return BoundTerm.init;
 	}
+	// A closed bracket around an open guard leaves the common boundary
+	// undefined, independently of the value of the guarded payload.
+	private BoundTerm openBoundaryMask(uint id){
+		auto mask=nodes[id],inside=nodes[mask.b];
+		if(!primitiveOp(mask.a,Op.le)||inside.op!=BoundOp.guard||!primitiveOp(inside.a,Op.lt)) return BoundTerm.init;
+		auto closed=nodes[mask.a],open=nodes[inside.a];
+		if(closed.a!=open.a||closed.b!=open.b) return BoundTerm.init;
+		auto ctx=context(at(id)),zero=arena.real_(0),payload=at(inside.b);
+		auto minus=primitive(arena.mul(zero,zero,true),[scalar(ctx,arena.real_(-1)),at(closed.b)]);
+		auto difference=primitive(arena.add(zero,zero,true),[at(closed.a),minus]);
+		auto apart=primitive(arena.nonzero(zero),[difference]);
+		if(payload!=scalar(ctx,zero)) payload=primitive(arena.at(mask.data),[at(inside.a),payload]);
+		return guard(apart,payload);
+	}
+
 	private enum GuardFact { exact, weak, ltLeft, ltRight, leLeft, leRight }
 	// In the active branch of an Iverson bracket, its predicate and each
 	// conjunct are true. Search only within operations in the same scope.
@@ -12134,6 +12149,7 @@ final class Bindings{
 			if(next==BoundTerm.init&&steps<budget&&primitiveOp(result.output,Op.mask)){
 				bool[] path,conjuncts; GuardFact fact;
 				next=clearActiveGuard(result.output,path,conjuncts,fact); rule=BindingRule.maskActiveGuard;
+				if(next==BoundTerm.init){ next=openBoundaryMask(result.output); rule=BindingRule.maskOpenBoundary; }
 			}
 
 			if(next!=BoundTerm.init){
@@ -15911,6 +15927,15 @@ final class Bindings{
 				case BindingRule.seqScalar:proof=".seqScalar n"~to!string(nodes[n.a].data)~" "~name(n.b)~" (fun _ => ⟨_, rfl⟩)"; break;
 				case BindingRule.seqLam:proof=".seqLam "~name(nodes[n.a].a)~" "~name(n.b); break;
 				case BindingRule.seqSelf:proof=".seqSelf "~name(n.a); break;
+				case BindingRule.maskOpenBoundary:{
+					auto closed=nodes[n.a],payload=nodes[n.b].b;
+					string val(uint id){return " ("~name(id)~".eval ξ ρ)";}
+					bool zero=nodes[p.to].b==payload;
+					auto law=zero?"mask_closed_open_zero":"mask_closed_open";
+					proof=".ofEq (fun ξ ρ => Binding."~law~val(closed.a)~val(closed.b)~val(payload);
+					if(zero) proof~=" (Numeric.calculate_real_zero ξ n"~to!string(nodes[payload].data)~" rfl)";
+					proof~=")"; break;
+				}
 				case BindingRule.maskActiveGuard:{
 					bool[] path,conjuncts; GuardFact fact;
 					enforce(clearActiveGuard(p.from,path,conjuncts,fact).id==p.to,"missing active guard");
