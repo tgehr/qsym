@@ -29,6 +29,11 @@ theorem constant (down : Bool) {v : Option ℝ} {r : ℝ} (h : v = some r) :
   refine ⟨fun _ => r, contDiff_const, ?_, fun _ => h⟩
   cases down <;> exact fun _ _ _ => le_rfl
 
+theorem parameter (down : Bool) (c : Option ℝ) (hc : Value.Defined c) :
+    Directed down (fun _ => c) := by
+  obtain ⟨_, hv⟩ := hc
+  exact constant down hv
+
 theorem change {g op jac down f} (c : ScalarChange univ g op jac) (inc : Monotone g)
     (h : Directed down f) : Directed down (fun x => op (f x)) := by
   obtain ⟨v, sm, mon, src⟩ := h

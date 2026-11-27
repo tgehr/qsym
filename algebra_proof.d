@@ -10,6 +10,42 @@ import std.conv:to;
 import std.exception:enforce;
 @safe:
 
+// The source fragment for which strict arguments suffice to prove totality.
+package bool strictTotalScalar(Arena a,Term root){
+	foreach(id;a.viewPostorder(root)){
+		auto t=a.at(id),n=a.view(t);
+		if(!a.isNumber(t)&&n.op!=Op.variable&&n.op!=Op.boolLit&&n.op!=Op.add&&n.op!=Op.mul&&
+			n.op!=Op.pow&&n.op!=Op.conj&&n.op!=Op.abs&&!(n.op==Op.builtin&&builtinInfo(cast(Builtin)n.value).total)) return false;
+	}
+	return true;
+}
+
+// Construct one checked definedness step. Callers share child proofs in their
+// own certificate namespace and evaluate the scalar in their own environment.
+package string scalarDefinedStep(Arena a,Term t,string env,scope string delegate(Term) @safe child){
+	auto n=a.view(t);string h;
+	string ev(uint id){return "(n"~to!string(id)~".eval "~env~")";}
+	if(a.isNumber(t)||n.op==Op.variable||n.op==Op.boolLit)h="⟨_, rfl⟩";
+	else if(n.op==Op.builtin){
+		auto info=builtinInfo(cast(Builtin)n.value);enforce(info.total,"partial opaque scalar atom");
+		if(!n.arity)h="⟨_, rfl⟩";
+		else {
+			auto left=child(a.viewChild(t,0));
+			h="Functions."~info.code~".total (fun "~(n.arity==1?"_":"_ _")~" => True.intro) "~ev(n.a);
+			if(n.arity==2)h~=" "~ev(n.b);
+			h~=" "~left;if(n.arity==2)h~=" "~child(a.viewChild(t,1));
+		}
+	}else if(n.op==Op.add||n.op==Op.mul){
+		auto x=child(a.viewChild(t,0)),y=child(a.viewChild(t,1));
+		h="(Value.defined_"~(n.op==Op.add?"add":"mul")~" "~ev(n.a)~" "~ev(n.b)~").mpr ⟨"~x~", "~y~"⟩";
+	}else{
+		enforce(n.op==Op.pow||n.op==Op.conj||n.op==Op.abs,"partial opaque scalar argument");
+		auto x=child(a.viewChild(t,0));
+		h="(Value."~(n.op==Op.conj?"defined_conj":"defined_map _")~" "~ev(n.a)~").mpr "~x;
+	}
+	return h;
+}
+
 package class AlgebraExporter {
 	Arena a;
 	Arithmetic arithmetic;
@@ -44,26 +80,8 @@ package class AlgebraExporter {
 	string[uint] totals;
 	string total(Term t){
 		if(auto old=t.id in totals)return *old;
-		auto n=a.view(t);string h;
+		auto h=scalarDefinedStep(a,t,"ρ",&total);
 		string ev(uint id){return "(n"~to!string(id)~".eval ρ)";}
-		if(a.isNumber(t)||n.op==Op.variable||n.op==Op.boolLit)h="⟨_, rfl⟩";
-		else if(n.op==Op.builtin){
-			auto info=builtinInfo(cast(Builtin)n.value);enforce(info.total,"partial opaque scalar atom");
-			if(!n.arity)h="⟨_, rfl⟩";
-			else {
-				auto left=total(a.viewChild(t,0));
-				h="Functions."~info.code~".total (fun "~(n.arity==1?"_":"_ _")~" => True.intro) "~ev(n.a);
-				if(n.arity==2)h~=" "~ev(n.b);
-				h~=" "~left;if(n.arity==2)h~=" "~total(a.viewChild(t,1));
-			}
-		}else if(n.op==Op.add||n.op==Op.mul){
-			auto x=total(a.viewChild(t,0)),y=total(a.viewChild(t,1));
-			h="(Value.defined_"~(n.op==Op.add?"add":"mul")~" "~ev(n.a)~" "~ev(n.b)~").mpr ⟨"~x~", "~y~"⟩";
-		}else{
-			enforce(n.op==Op.pow||n.op==Op.conj||n.op==Op.abs,"partial opaque scalar argument");
-			auto x=total(a.viewChild(t,0));
-			h="(Value."~(n.op==Op.conj?"defined_conj":"defined_map _")~" "~ev(n.a)~").mpr "~x;
-		}
 		auto name="total"~to!string(t.id);
 		code~="theorem "~name~" (ρ : Env) : Value.Defined "~ev(t.id)~" := "~h~"\n";
 		auto result="("~name~" ρ)";totals[t.id]=result;return result;

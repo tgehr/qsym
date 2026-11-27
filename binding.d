@@ -1,5 +1,6 @@
 module qsym.binding;
 import qsym.ir;
+import qsym.algebra_proof:strictTotalScalar,scalarDefinedStep;
 import qsym.integration:IntegralBounds,integralBounds,integralCutPoints,integralAffine,removeIntegralNullGuards;
 import qsym.summation:sumAntidifference,sumAbelAntidifference,SumPrimitive;
 import qsym.rational_identity:rationalIdentityZero;
@@ -3200,6 +3201,13 @@ final class Bindings{
 		auto monotone=change==CoordinateChange.tanh?coords~"VariationChart.ChangeOn.tanh_mono.monotone":"Real."~tag~"_strictMono.monotone";
 		return coords~"Grid.ScalarChange."~tag~" "~monotone;
 	}
+	// An axis-independent scalar has derivative zero throughout the chart
+	// whenever its own source term has a proof of totality.
+	private Term coordinateParameter(uint id){
+		if(depends(at(id),0)) return Term.init;
+		auto t=scalarBody(at(id),Term.init);
+		return t!=Term.init&&strictTotalScalar(arena,t)?t:Term.init;
+	}
 	// Check smoothness and one orientation on the source. Reuse the same
 	// traversal when exporting the proof for the original coordinate lambda.
 	private bool directedCoordinate(uint body,bool down,out string proof,SourceCertificates cert=null){
@@ -3212,7 +3220,7 @@ final class Bindings{
 			if(auto old=id in cache[decreasing]) return *old;
 			cache[decreasing][id]=Evidence.init;
 			auto n=nodes[id]; string law,args;
-			Rational a,b; Term number;
+			Rational a,b; Term number,parameter;
 			if(affineBody(id,a,b)||n.op==BoundOp.scalar&&arena.isNumber(arena.at(n.data))){
 				if(decreasing?a>Rational(0):a<Rational(0)) return Evidence.init;
 				law="affine";
@@ -3220,6 +3228,9 @@ final class Bindings{
 			}else if(!depends(at(id),0)&&closedRational(at(id),b,number)){
 				law="constant";
 				if(cert !is null) args=dir~" "~cert.closedProof(at(id),b);
+			}else if((parameter=coordinateParameter(id))!=Term.init){
+				law="parameter";
+				if(cert !is null) args=dir~" "~cert.outside(id)~" "~cert.definedScalar(parameter);
 			}else if(n.op==BoundOp.primitive){
 				auto op=arena.view(arena.at(n.data)),change=gridChange(id);
 				uint input=n.a; bool reverse;
@@ -3272,7 +3283,7 @@ final class Bindings{
 			if(slopes.contains(id)) return at(slopes.get(id,uint.max));
 			auto n=nodes[id],f=at(id),inner=context(f);
 			BoundTerm d; string lemma,args;
-			Rational[] polynomial;
+			Rational[] polynomial; Term parameter;
 			if(axisPolynomial(id,polynomial,0,true)){
 				d=coordinatePolynomial(inner,derivativeCoefficients(polynomial));
 				if(cert !is null){
@@ -3280,6 +3291,9 @@ final class Bindings{
 					auto b=cert.piece(d.id,cert.everywhere,"",Rational(0));
 					lemma="polynomial"; args=a.proof~" "~b.proof~" rfl";
 				}
+			}else if((parameter=coordinateParameter(id))!=Term.init){
+				d=scalar(inner,zero); lemma="parameter";
+				if(cert !is null) args=cert.outside(id)~" "~cert.definedScalar(parameter)~" "~cert.closedProof(d,Rational(0));
 			}else{
 				if(n.op!=BoundOp.primitive) return BoundTerm.init;
 				auto op=arena.view(arena.at(n.data));
@@ -4508,13 +4522,16 @@ final class Bindings{
 		}
 		return visit(rename(term,inner,shift),0);
 	}
-	// The observations in a term that mention the variable with this index:
-	// the integrals that were kept under the binder of it. Counted as the
-	// term is written, a shared one once for each place.
+	// Count retained integrals and inverse coordinates that depend on this
+	// binder, including each occurrence of a shared term.
 	private size_t keptObservations(uint id,uint index=0,uint depth=0){
 		auto q=nodes[id]; if(depth>64||!depends(at(id),index)) return 0;
 		auto below=q.op==BoundOp.lambda||q.op==BoundOp.set||q.op==BoundOp.fixed?index+1:index;
 		size_t count=q.op==BoundOp.distributionMass;
+		if(q.op==BoundOp.distributionInverseCover||q.op==BoundOp.distributionInversePart){
+			auto row=nodes[q.op==BoundOp.distributionInversePart?q.b:q.a];
+			if(row.op==BoundOp.vectorCons&&nodes[row.b].op==BoundOp.vectorNil&&nodes[row.a].op==BoundOp.lambda) ++count;
+		}
 		foreach(c;[q.a,q.b,q.c]) if(c!=uint.max) count+=keptObservations(c,below,depth+1);
 		return count;
 	}
@@ -11421,6 +11438,12 @@ final class Bindings{
 		// keeps them.
 		uint[] roots;
 		string outside(uint id){auto t=dropIndex(at(id));roots~=t.id;return "("~name(t.id)~".eval ξ ρ)";}
+		string definedScalar(Term t){
+			auto claim="Value.Defined (n"~to!string(t.id)~".eval ξ)";
+			auto old=proofCache.get(claim,""); if(old.length) return old;
+			numericTerms~=t;
+			return save(claim,scalarDefinedStep(arena,t,"ξ",&definedScalar));
+		}
 		// A closed term at its rational value, by the numeric calculator.
 		string closedProof(BoundTerm t,Rational expected){
 			Rational value;Term term;enforce(closedRational(t,value,term)&&value==expected,"coefficient is not the closed rational");

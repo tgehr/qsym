@@ -484,6 +484,23 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("CoordinateParameterOffset","Λx.λ[sin(x+a)]","Distribution(ℝ)","Λ(x:ℝ). (abs(cos(a+x)))·λ[x]"),
+	Case("CoordinateParameterFrequency","Λx.λ[sin(a*x)]","Distribution(ℝ)","Λ(x:ℝ). (abs(a)·abs(cos(a·x)))·λ[x]"),
+	Case("CoordinateParameterScale","Λx.λ[(exp(a)+cos(b))*x]","Distribution(ℝ)","Λ(x:ℝ). (abs(exp(a)+cos(b)))·λ[x]"),
+	Case("CoordinateParameterConstant","Λx.λ[exp(a)+cos(b)]","Distribution(ℝ)","Λ(x:ℝ). 0·λ[x]"),
+	Case("CoordinateParameterPolynomial","Λx.λ[a*x²+b*x+c]","Distribution(ℝ)","Λ(x:ℝ). (abs(2·a·x+b))·λ[x]"),
+	Case("CoordinateParameterExponential","Λx.λ[exp(a*x+b)]","Distribution(ℝ)","Λ(x:ℝ). (abs(a)·exp(a·x+b))·λ[x]"),
+	Case("CoordinateParameterNegative","Λx.λ[cos(b-a*x)]","Distribution(ℝ)","Λ(x:ℝ). (abs(a)·abs(sin(-a·x+b)))·λ[x]"),
+	Case("CoordinateParameterShared","Λx.λ[sin((a+b)*x+(a+b))]","Distribution(ℝ)","Λ(x:ℝ). (abs(a+b)·abs(cos(x·(a+b)+a+b)))·λ[x]"),
+	Case("CoordinateParameterBound","λ(a:ℝ).Λx.λ[sin(x+a)]","ℝ→Distribution(ℝ)","λ(a:ℝ). Λ(x:ℝ). (abs(cos(a+x)))·λ[x]"),
+	Case("CoordinateParameterIntegral","∫dx [0≤x≤1]·λ[exp(x+a)]","ℝ","-exp(a)+exp(a+1)"),
+	Case("CoordinateParameterIncreasing","∫dx [0≤x≤1]·λ[(x+a)^3]","ℝ","-a^3+(a+1)^3"),
+	Case("CoordinateParameterDecreasing","∫dx [0≤x≤1]·λ[(a-x)^3]","ℝ","a^3-(a-1)^3"),
+	Case("CoordinateParameterConstantMass","∫dx [0≤x≤1]·λ[exp(a)]","ℝ","0"),
+	Case("CoordinateParameterSingular","Λx.λ[sin(x+a⁻¹)]","Distribution(ℝ)","Λ(x:ℝ). λ[(sin(x+a⁻¹))]"),
+	Case("CoordinateParameterMissing","Λx.λ[sin(x+undefined(ℝ))]","Distribution(ℝ)","Λ(x:ℝ). λ[(undefined(ℝ))]"),
+	Case("CoordinateParameterLookup","λ(h:ℕ→ℝ).Λx.λ[sin(x+h(0))]","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). λ[(sin(x+h(0)))]"),
+	Case("CoordinateParameterMagnitude","Λx.λ[sin(abs(a)*x)]","Distribution(ℝ)","Λ(x:ℝ). (abs(a)·abs(cos(x·abs(a))))·λ[x]"),
 	Case("IntervalFactorSigned","∫dx [0≤x≤2*π]·(-3/2*abs(cos(x)))·λ[x]","ℝ","-6"),
 	Case("IntervalFactorPositive","∫dx [0≤x≤2*π]·(3/2*abs(cos(x)))·λ[x]","ℝ","6"),
 	Case("IntervalFactorSymbolic","λ(c:ℝ).∫dx [0≤x≤2*π]·(c*abs(cos(x)))·λ[x]","ℝ→ℝ","λ(c:ℝ). 4·c"),
@@ -2664,6 +2681,14 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("CoordinateParameter")==0){
+			bool directed=c.name=="CoordinateParameterIntegral"||c.name=="CoordinateParameterIncreasing"||
+				c.name=="CoordinateParameterDecreasing"||c.name=="CoordinateParameterConstantMass";
+			bool partial=c.name=="CoordinateParameterSingular"||c.name=="CoordinateParameterMissing"||c.name=="CoordinateParameterLookup";
+			enforce((certificate.indexOf("Grid.Slope.parameter ")>=0)==(!directed&&!partial),c.name);
+			enforce((certificate.indexOf("Grid.Directed.parameter ")>=0)==directed,c.name);
+			if(c.name=="CoordinateParameterBound") enforce(certificate.indexOf(".lamOpened ")>=0,c.name);
 		}
 		if(c.name.indexOf("IntervalFactor")==0){
 			bool factored=c.name=="IntervalFactorSigned"||c.name=="IntervalFactorPositive"||c.name=="IntervalFactorSymbolic"||

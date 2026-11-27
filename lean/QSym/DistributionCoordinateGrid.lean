@@ -92,6 +92,13 @@ def Slope (f d : Scalar) : Prop :=
 
 namespace Slope
 
+theorem parameter (c : Option ℝ) (hc : Value.Defined c) {z : Option ℝ}
+    (hz : z = some (Numeric.denote (s := .real) (0 : ℚ))) :
+    Slope (fun _ => c) (fun _ => z) := by
+  obtain ⟨v, hv⟩ := hc
+  exact ⟨fun _ => v, fun _ => 0, contDiff_const, fun x => hasDerivAt_const x v,
+    fun _ => hv, fun _ => by simpa [Numeric.denote] using hz⟩
+
 theorem polynomial {f d p q} (hf : PolynomialOn (fun _ => True) f p)
     (hd : PolynomialOn (fun _ => True) d q)
     (he : polyZero (polyAdd q (polyScale (-1) (polyDerivative p))) = true) : Slope f d :=
