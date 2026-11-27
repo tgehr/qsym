@@ -336,6 +336,24 @@ theorem defined_total_function2 (f : Function2 α β γ) (ht : ∀ a b, f.domain
   defined_binary_iff ⟨fun h => ⟨f.defined_left x y h, f.defined_right x y h⟩,
     fun h => f.total ht x y h.1 h.2⟩
 
+/-- Forming a value may leave evaluation of its contents to a later observer. -/
+theorem defined_unary_constructor (op : Option α → Option β) (absent : (op none).isSome = false)
+    (present : ∀ x, (op (some x)).isSome = true) (x : Option α) :
+    definedValue (op x) = definedValue x := by
+  cases x with
+  | none => exact congrArg some absent
+  | some x => exact congrArg some (present x)
+
+theorem defined_binary_constructor (op : Option α → Option β → Option γ)
+    (left : ∀ y, (op none y).isSome = false) (right : ∀ x, (op (some x) none).isSome = false)
+    (present : ∀ x y, (op (some x) (some y)).isSome = true) (x : Option α) (y : Option β) :
+    definedValue (op x y) = Value.and (definedValue x) (definedValue y) := by
+  cases x with
+  | none => exact congrArg some (left y)
+  | some x => cases y with
+    | none => exact congrArg some (right x)
+    | some y => exact congrArg some (present x y)
+
 theorem defined_binary_data (op : α → β → γ) (a : Option α) (b : Option β) :
     definedValue (a.bind (fun x => b.map (op x))) = Value.and (definedValue a) (definedValue b) := by
   cases a <;> cases b <;> rfl
