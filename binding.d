@@ -102,7 +102,7 @@ private struct CauchyData{
 private struct IntervalTerm{
 	uint value,primitive=uint.max; bool scaled,curved,vertex; Rational rate; uint order;
 	CauchyData cauchy;
-	uint trigPhase=uint.max; bool trigSine,trigAbsolute; Rational inverseSlope;
+	uint trigPhase=uint.max,trigZero=uint.max; bool trigSine,trigAbsolute,trigParameters; Rational inverseSlope;
 	GaussianData bell; Rational point,half,rest; uint restLiteral=uint.max;
 	// With the error function: the offset of its argument, and the literals
 	// of the negated curvature, of that offset and of minus one. With
@@ -6270,8 +6270,13 @@ final class Bindings{
 				auto op=arena.view(arena.at(v.data)).value;
 				if(op!=Builtin.sinR&&op!=Builtin.cosR) return false;
 				Rational slope,offset;
-				if(!affineBody(v.a,slope,offset)) return false;
-				r.trigPhase=v.a; r.trigSine=op==Builtin.sinR; r.inverseSlope=slope.inverse;
+				if(affineBody(v.a,slope,offset)) r.inverseSlope=slope.inverse;
+				else{
+					AxisCoefficient[3] c;
+					if(!axisQuadratic(v.a,c,false)||!c[1].present||c[2].present) return false;
+					r.trigParameters=true;
+				}
+				r.trigPhase=v.a; r.trigSine=op==Builtin.sinR;
 				return true;
 			}
 			bool intervalCauchy(uint id,ref IntervalTerm r){
@@ -6632,7 +6637,13 @@ final class Bindings{
 				d.terms~=r; return diff;
 			}
 			BoundTerm trigDifference(IntervalTerm r){
-				auto z=arena.real_(0),inverse=scalar(ctx,arena.real_(r.inverseSlope));
+				auto z=arena.real_(0); BoundTerm inverse,offset,slope;
+				if(r.trigParameters){
+					AxisCoefficient[3] c; axisQuadratic(r.trigPhase,c,true);
+					offset=c[0].present?c[0].term:scalar(ctx,z);
+					if(!c[0].present) r.trigZero=offset.id;
+					slope=c[1].term; inverse=primitive(arena.inv(z),[slope]);
+				}else inverse=scalar(ctx,arena.real_(r.inverseSlope));
 				auto trig=arena.call(r.trigSine?Builtin.cosR:Builtin.sinR,[z]);
 				BoundTerm atBound(BoundTerm bound){
 					auto phase=substituteArgument(at(r.trigPhase),bound);
@@ -6640,8 +6651,14 @@ final class Bindings{
 					if(r.trigSine&&!r.trigAbsolute) height=primitive(mulOp,[minusOne,height]);
 					return primitive(mulOp,[inverse,height]);
 				}
+				auto diff=primitive(addOp,[atBound(upper),primitive(mulOp,[minusOne,atBound(lower)])]);
 				d.terms~=r;
-				return primitive(addOp,[atBound(upper),primitive(mulOp,[minusOne,atBound(lower)])]);
+				if(!r.trigParameters) return diff;
+				// At zero frequency the original integrand has its value at the offset.
+				auto height=primitive(arena.call(r.trigSine?Builtin.sinR:Builtin.cosR,[z]),[offset]);
+				if(r.trigAbsolute) height=primitive(arena.abs(z),[height]);
+				auto width=primitive(addOp,[upper,primitive(mulOp,[minusOne,lower])]);
+				return conditional(primitive(arena.nonzero(z),[slope]),diff,primitive(mulOp,[height,width]));
 			}
 			BoundTerm build(uint id,uint depth){
 				IntervalTerm r; Rational[] p,exponent; Rational rate; r.value=id;
@@ -12552,11 +12569,16 @@ final class Bindings{
 				}
 				++next;
 				if(r.trigPhase!=uint.max){
-					auto phase=cert.affineProof(r.trigPhase);
-					auto inverse=scalar(context(at(d.minusOne)),arena.real_(r.inverseSlope));
 					auto extension="(fun z : Option ℝ => "~name(r.trigPhase)~".eval ξ (Binding.Env.cons (a := .scalar .real) z ρ))";
 					auto primitive=r.trigAbsolute?(r.trigSine?"absSine":"absCosine"):(r.trigSine?"sine":"cosine");
 					enum ns="Distribution.StepSource.HasPrimitive.";
+					if(r.trigParameters){
+						auto phase=cert.quadratic(r.trigPhase);
+						if(r.trigZero!=uint.max) phase="(Distribution.StepSource.Quadratic.fill0 "~cert.closedProof(at(r.trigZero),Rational(0))~" "~phase~")";
+						return "("~ns~"parameters "~ns~primitive~" rfl rfl "~extension~" "~phase~")";
+					}
+					auto phase=cert.affineProof(r.trigPhase);
+					auto inverse=scalar(context(at(d.minusOne)),arena.real_(r.inverseSlope));
 					return "("~ns~"interval "~ns~primitive~" "~extension~" "~phase.proof~" "~cert.q(r.inverseSlope)~
 						" ("~name(inverse.id)~".eval ξ ρ) "~cert.closedProof(inverse,r.inverseSlope)~" rfl)";
 				}

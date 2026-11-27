@@ -508,6 +508,27 @@ private Case[] cases(){
 	Case("PromotedLiteralGuard","λ(h:ℕ→𝔹).[h(0)]·toℝ(floor(3/2))","(ℕ→𝔹)→ℝ","λ(h:ℕ→𝔹). [h(0)]"),
 	Case("PromotedLiteralProduct","λ(h:ℕ→ℝ).mulR(h(0),toℝ(floor(9/2)))","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). 4·h(0)"),
 	Case("PromotedLiteralStrict","λ(h:ℕ→𝔹).λ(k:ℕ→ℝ).mulR([h(0)]·toℝ(floor(3/2)),k(0))","(ℕ→𝔹)→(ℕ→ℝ)→ℝ","λ(h:ℕ→𝔹). λ(k:ℕ→ℝ). mulR(k(0),[h(0)])"),
+	Case("TrigParameterCosine","λ(a:ℝ).∫dx [0≤x≤1]·cos(a*x)·λ[x]","ℝ→ℝ","λ(a:ℝ). [a≠0]·(a⁻¹·sin(a))+[a=0]"),
+	Case("TrigParameterSine","λ(a:ℝ).∫dx [0≤x≤1]·sin(a*x)·λ[x]","ℝ→ℝ","λ(a:ℝ). [a≠0]·(-a⁻¹·cos(a)+a⁻¹)"),
+	Case("TrigParameterShift","λ(a:ℝ).∫dx [0≤x≤π]·sin(x+a)·λ[x]","ℝ→ℝ","λ(a:ℝ). 2·cos(a)"),
+	Case("TrigParameterNegativeShift","λ(a:ℝ).∫dx [0≤x≤π]·sin(a-x)·λ[x]","ℝ→ℝ","λ(a:ℝ). -2·cos(a)"),
+	Case("TrigParameterCompound","λ(a:ℝ).λ(b:ℝ).∫dx [0≤x≤2]·sin(a*(2*x+b))·λ[x]","ℝ→ℝ→ℝ"),
+	Case("TrigParameterCosineShift","λ(a:ℝ).λ(b:ℝ).∫dx [0≤x≤2]·cos(b+a*x)·λ[x]","ℝ→ℝ→ℝ"),
+	Case("TrigParameterAbsSine","λ(a:ℝ).∫dx [0≤x≤1]·abs(sin(a*x))·λ[x]","ℝ→ℝ"),
+	Case("TrigParameterAbsTranslated","λ(b:ℝ).∫dx [0≤x≤π]·abs(sin(x+b))·λ[x]","ℝ→ℝ"),
+	Case("TrigParameterPartial","λ(h:ℕ→ℝ).λ(n:ℕ).∫dx [0≤x≤1]·cos(h(n)*x)·λ[x]","(ℕ→ℝ)→ℕ→ℝ"),
+	Case("TrigParameterPartialShift","λ(h:ℕ→ℝ).∫dx [0≤x≤π]·sin(x+h(0))·λ[x]","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). cos(h(0))-cos(h(0)+π)"),
+	Case("TrigParameterOnBounds","λ(l:ℝ).λ(u:ℝ).λ(a:ℝ).∫dx [l<x≤u]·sin(a*x)·λ[x]","ℝ→ℝ→ℝ→ℝ"),
+	Case("TrigParameterZero","∫dx [0≤x≤2]·cos(0*x)·λ[x]","ℝ","2"),
+	Case("TrigParameterFree","∫dx [-1≤x≤1]·sin(a*x+b)·λ[x]","ℝ"),
+	Case("TrigParameterFactor","λ(c:ℝ).λ(a:ℝ).∫dx [0≤x≤1]·mulR(c,cos(a*x))·λ[x]","ℝ→ℝ→ℝ"),
+	Case("TrigParameterUndefined","defined(∫dx [0≤x≤2]·cos(undefined(ℝ)*x)·λ[x])","𝔹","false"),
+	Case("TrigParameterUndefinedShift","defined(∫dx [0≤x≤1]·cos(x+undefined(ℝ))·λ[x])","𝔹","false"),
+	Case("TrigParameterClosedSingleton","defined(∫dx [0≤x≤0]·cos(undefined(ℝ)*x)·λ[x])","𝔹","false"),
+	Case("TrigParameterOpenSingleton","defined(∫dx [0<x≤0]·cos(undefined(ℝ)*x)·λ[x])","𝔹","true"),
+	Case("TrigParameterQuadratic","λ(a:ℝ).∫dx [0≤x≤1]·cos(a*x²)·λ[x]","ℝ→ℝ"),
+	Case("TrigParameterRay","λ(a:ℝ).∫dx [0≤x]·sin(a*x)·λ[x]","ℝ→ℝ"),
+	Case("TrigParameterCancellation","λ(a:ℝ).∫dx [-1≤x≤1]·sin(a*x)·λ[x]","ℝ→ℝ","λ(a:ℝ). (0:ℝ)"),
 	Case("TrigIntegralCosinePeriod","∫dx [0≤x≤2*π]·abs(cos(x))·λ[x]","ℝ","4"),
 	Case("TrigIntegralSinePeriod","∫dx [0≤x≤2*π]·abs(sin(x))·λ[x]","ℝ","4"),
 	Case("TrigIntegralAffinePeriod","∫dx [0≤x≤π]·abs(cos(2*x+1))·λ[x]","ℝ","2"),
@@ -2655,9 +2676,17 @@ private void run(string directory){
 			if(c.name=="IntervalFactorOpaque"||c.name=="IntervalFactorImproper"||c.name=="IntervalFactorSingular") enforce(text.indexOf("∫")>=0,c.name);
 		}
 		if(c.name.indexOf("TrigIntegral")==0){
-			bool residual=c.name=="TrigIntegralMissing"||c.name=="TrigIntegralNonlinear"||
-				c.name=="TrigIntegralHalfLine"||c.name=="TrigIntegralUnknownFrequency";
-			enforce((certificate.indexOf("StepSource.HasPrimitive.interval ")>=0)==(!residual&&c.name!="TrigIntegralBounds"),c.name);
+			bool residual=c.name=="TrigIntegralMissing"||c.name=="TrigIntegralNonlinear"||c.name=="TrigIntegralHalfLine";
+			bool parameters=c.name=="TrigIntegralUnknownFrequency";
+			enforce((certificate.indexOf("StepSource.HasPrimitive.parameters ")>=0)==parameters,c.name);
+			enforce((certificate.indexOf("StepSource.HasPrimitive.interval ")>=0)==(!residual&&!parameters&&c.name!="TrigIntegralBounds"),c.name);
+			enforce((text.indexOf("∫")>=0)==residual,c.name);
+		}
+		if(c.name.indexOf("TrigParameter")==0){
+			bool residual=c.name=="TrigParameterQuadratic"||c.name=="TrigParameterRay";
+			bool constantCase=c.name=="TrigParameterZero"||c.name=="TrigParameterUndefined"||c.name=="TrigParameterUndefinedShift"||
+				c.name=="TrigParameterClosedSingleton"||c.name=="TrigParameterOpenSingleton";
+			enforce((certificate.indexOf("StepSource.HasPrimitive.parameters ")>=0)==(!residual&&!constantCase),c.name);
 			enforce((text.indexOf("∫")>=0)==residual,c.name);
 		}
 		if(c.name.indexOf("RepeatedIverson")==0){

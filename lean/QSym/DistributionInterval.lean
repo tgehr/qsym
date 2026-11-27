@@ -421,6 +421,11 @@ inductive IntervalTerms (a b m : Option ℝ) : (ℝ → Option ℝ) → Option �
       (hc : Continuous g)
       (ho : ∀ l u, a = some l → b = some u → m = some (-1 : ℝ) →
         out = some (∫ x in l..u, g x)) : IntervalTerms a b m v out
+  /-- A uniformly missing integrand requires a missing result whenever both
+  endpoints exist, just as a continuous integrand requires its integral there. -/
+  | missing {v : ℝ → Option ℝ} {out : Option ℝ} (hv : ∀ x, v x = none)
+      (ho : ∀ l u, a = some l → b = some u → m = some (-1 : ℝ) → out = none) :
+      IntervalTerms a b m v out
 
 private theorem difference {G : Option ℝ → Option ℝ} {P p : List ℚ} {r s : ℚ}
     (hG : ExpPolynomial (fun t => G (some t)) P s) (hd : expPrimitive P p r s = true)
@@ -498,6 +503,7 @@ theorem IntervalTerms.sound {a b m : Option ℝ} {v : ℝ → Option ℝ} {out :
       simp only [Value.mul, Value.add, Option.some.injEq]
       ring
   | @value v g out hv hc ho => exact Or.inl ⟨g, hc, hv, ho l u rfl rfl rfl⟩
+  | @missing v out hv ho => exact Or.inr ⟨hv, ho l u rfl rfl rfl⟩
 
 theorem IntervalTerms.factorRight {a b m v out} (c : Option ℝ) (h : IntervalTerms a b m v out) :
     IntervalTerms a b m (fun x => Value.mul (v x) c) (Value.mul c out) := by
@@ -1247,12 +1253,11 @@ theorem compare_upper_cases (strict : Bool) (b : Option ℝ) :
   · exact Or.inl ⟨u - 1, by cases strict <;> simp [compare, Value.lt, Value.le]⟩
 
 /-! A value that is undefined everywhere is observed as undefined between
-bounds and beyond one: the scale of the primitive that is zero is. -/
+bounds and beyond a single bound. -/
 
 theorem IntervalTerms.undefined {a b m : Option ℝ} {v : ℝ → Option ℝ} (hv : ∀ x, v x = none) :
     IntervalTerms a b m v none :=
-  IntervalTerms.scaledPrimitive (c := none) (G := fun _ => some 0) (g := fun _ => 0)
-    (F := fun _ => 0) hv (fun _ => rfl) continuous_const (fun x => hasDerivAt_const x 0)
+  .missing hv (fun _ _ _ _ _ => rfl)
 
 theorem HalfLineTerms.undefined {a m : Option ℝ} {v : ℝ → Option ℝ} (hv : ∀ x, v x = none) :
     HalfLineTerms a m v none :=

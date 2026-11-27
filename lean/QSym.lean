@@ -20,6 +20,7 @@ import QSym.DistributionCoordinateGridMass
 import QSym.DistributionCoordinateGridPoint
 import QSym.DistributionCoordinateInterval
 import QSym.DistributionCoordinatePeriodic
+import QSym.DistributionTrigonometricIntegral
 import QSym.DistributionCoordinateWave
 import QSym.DistributionCoordinateRay
 import QSym.DistributionWeightedAffine
