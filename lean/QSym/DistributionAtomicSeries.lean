@@ -226,26 +226,42 @@ theorem Presents.approximates_retry {d : D α} {m : Model α} (hd : Presents d m
 
 /-- Each retry visits exactly the same points of positive charge as its seed.
 This is pointwise and also covers ratios at or above one. -/
-theorem density_retry_seed {r : Option ℝ} (q : ℚ) (hq : 0 ≤ q) (hr : r = some (q : ℝ))
+theorem density_retry_seed_real {r : ℝ} (h0 : 0 ≤ r)
     {seed : Option (D ℝ)} (hs : Admissible seed) (x : Option ℝ) :
-    densityAtValue (retryValue r seed) x = densityAtValue seed x := by
-  subst r
+    densityAtValue (retryValue (some r) seed) x = densityAtValue seed x := by
   cases seed with
   | none => rfl
   | some d =>
     obtain ⟨m, hd⟩ := hs d rfl
-    have q0 : 0 ≤ (q : ℝ) := by exact_mod_cast hq
-    let g := strictRetryStep m (ENNReal.ofReal (q : ℝ))
-    rw [retry_eq_chain hd q0]
+    let g := strictRetryStep m (ENNReal.ofReal r)
+    rw [retry_eq_chain hd h0]
     cases x with
     | none => cases realizeChain g.lfp (fun n => g^[n] ⊥) <;> rfl
     | some x =>
       have limit : (⨆ n : ℕ, g^[n] ⊥) = g.lfp :=
         (fixedPoints.lfp_eq_sSup_iterate _ (strictRetry_continuous _ _)).symm
-      rw [density_realizeChain (hd.approximates_retry q0) limit x rfl]
+      rw [density_realizeChain (hd.approximates_retry h0) limit x rfl]
       change _ = densityAt d x
-      have fin : 1 - ENNReal.ofReal (q : ℝ) ≠ ⊤ := ne_of_lt (lt_of_le_of_lt tsub_le_self ENNReal.one_lt_top)
+      have fin : 1 - ENNReal.ofReal r ≠ ⊤ := ne_of_lt (lt_of_le_of_lt tsub_le_self ENNReal.one_lt_top)
       simp only [g, strictRetry_lfp, lfp_retry, mul_eq_zero, ENNReal.inv_eq_zero, fin, false_or, hd.1.density]
+
+theorem density_retry_seed {r : Option ℝ} (q : ℚ) (hq : 0 ≤ q) (hr : r = some (q : ℝ))
+    {seed : Option (D ℝ)} (hs : Admissible seed) (x : Option ℝ) :
+    densityAtValue (retryValue r seed) x = densityAtValue seed x := by
+  subst r
+  exact density_retry_seed_real (by exact_mod_cast hq) hs x
+
+theorem density_retry_parameter (r : Option ℝ) {seed : Option (D ℝ)} (hs : Admissible seed) (x : Option ℝ) :
+    densityAtValue (retryValue r seed) x =
+      Binding.guardValue (Value.le (some ((0 : ℚ) : ℝ)) r) (densityAtValue seed x) := by
+  cases r with
+  | none => rfl
+  | some r =>
+    by_cases h : 0 ≤ r
+    · rw [density_retry_seed_real h hs]
+      simp [Binding.guardValue, Value.le, h]
+    · rw [retry_negative (lt_of_not_ge h)]
+      simp [Binding.guardValue, Value.le, h, densityAtValue]
 
 /-- For a retry, the per-depth differences recover the ordinary weighted series
 of seed observations. This also holds for negative and missing observations. -/

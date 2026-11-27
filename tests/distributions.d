@@ -2194,6 +2194,19 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("RetryDensityPoint","λ(q:ℝ).λ(y:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),y)","ℝ→ℝ→ℝ","λ(q:ℝ). λ(y:{y:ℝ | 0≤q∧y≠0}). (0:ℝ)"),
+	Case("RetryDensityOn","λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),0)","ℝ→ℝ","λ(q:ℝ). undefined(ℝ)"),
+	Case("RetryDensityOff","λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),1)","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). (0:ℝ)"),
+	Case("RetryDensitySwapped","λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(scaleD(q,d),δ((0:ℝ))),1)","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). (0:ℝ)"),
+	Case("RetryDensityTwoAtoms","λ(q:ℝ).λ(y:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(addD(δ((0:ℝ)),δ((1:ℝ))),scaleD(q,d)),y)","ℝ→ℝ→ℝ","λ(q:ℝ). λ(y:{y:ℝ | 0≤q∧(y≠0∧y≠1)}). (0:ℝ)"),
+	Case("RetryDensityZeroSeed","λ(q:ℝ).λ(y:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(zeroD(ℝ),scaleD(q,d)),y)","ℝ→ℝ→ℝ","λ(q:ℝ). λ(y:{y:ℝ | 0≤q}). (0:ℝ)"),
+	Case("RetryDensityZeroCharge","λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(scaleD(0,δ((0:ℝ))),scaleD(q,d)),0)","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). (0:ℝ)"),
+	Case("RetryDensityPartialRate","λ(h:ℕ→ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(h(0),d)),1)","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)}). (0:ℝ)"),
+	Case("RetryDensityPartialPoint","λ(q:ℝ).λ(h:ℕ→ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),h(0))","ℝ→(ℕ→ℝ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℝ | 0≤q∧h(0)≠0}). (0:ℝ)"),
+	Case("RetryDensityMissingSeed","λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ(undefined(ℝ)),scaleD(q,d)),1)","ℝ→ℝ","λ(q:ℝ). undefined(ℝ)"),
+	Case("RetryDensityUnboundedOff","(λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),1))(2)","ℝ","0"),
+	Case("RetryDensityUnboundedOn","(λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),0))(2)","ℝ","undefined(ℝ)"),
+	Case("RetryDensityNegativeOff","(λ(q:ℝ).densityAtD(μ(d:Distribution(ℝ)).addD(δ((0:ℝ)),scaleD(q,d)),1))(-1/2)","ℝ","undefined(ℝ)"),
 	Case("RetryMassClosedForm","λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d)))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹"),
 	Case("RetryMassSwapped","λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(scaleD(q,d),δ(3)))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹"),
 	Case("RetryMassPartialRate","λ(h:ℕ→ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(4),scaleD(h(0),d)))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)∧h(0)<1}). (-h(0)+1)⁻¹"),
@@ -2881,6 +2894,8 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="RetryDensityPoint"||c.name=="RetryDensityTwoAtoms"||c.name=="RetryDensityZeroCharge")
+			enforce(certificate.indexOf("density_retry_parameter ")>=0,c.name);
 		if(c.name=="RetryMassClosedForm"||c.name=="RetryMassPartialPoint"||c.name=="RetryMassDistributionPoint")
 			enforce(certificate.indexOf("mass_retry_parameter_dirac ")>=0,c.name);
 		if(c.name=="SymbolicRetryDefined"||c.name=="SymbolicRetryPartialRate"||c.name=="SymbolicRetryNegative")
