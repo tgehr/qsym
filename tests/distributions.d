@@ -2194,6 +2194,19 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("CoverConstructionPartial","λ(f:ℝ→ℝ).defined(Λx.λ[(f(x))])","(ℝ→ℝ)→𝔹","λ(f:ℝ→ℝ). true"),
+	Case("CoverConstructionOpaqueVector","λ(h:ℕ→((ℝ→ℝ)^1)).defined(inverseCoverD(h(0)))","(ℕ→(ℝ→ℝ)^1)→𝔹","λ(h:ℕ→(ℝ→ℝ)^1). holds((0∈domain(h)))"),
+	Case("CoverConstructionMissingCoordinate","defined(Λx.λ[(undefined(ℝ))])","𝔹","true"),
+	Case("CoverConstructionRepeated","λ(f:ℝ→ℝ).defined(inverseCoverD((λ(x:ℝ).f(x),λ(y:ℝ).f(y))))","(ℝ→ℝ)→𝔹","λ(f:ℝ→ℝ). true"),
+	Case("CoverConstructionNowhere","defined(inverseCoverD(undefined((ℝ→ℝ)^1)))","𝔹","false"),
+	Case("CoverConstructionPartialFunction","λ(h:ℕ→(ℝ→ℝ)).defined(inverseCoverD((h(0),)))","(ℕ→ℝ→ℝ)→𝔹","λ(h:ℕ→ℝ→ℝ). (holds((0∈domain(h))))∧true"),
+	Case("CoverConstructionInterior","defined(Λx.λ[[x<0]·x²])","𝔹","true"),
+	Case("CoverConstructionJump","defined(Λx.λ[[0<x]·(x+1)])","𝔹","true"),
+	Case("CoverConstructionCorner","defined(Λx.λ[abs(x)])","𝔹","true"),
+	Case("CoverConstructionCornerDensity","densityAtD(Λx.λ[abs(x)],0)","ℝ","undefined(ℝ)"),
+	Case("CoverConstructionRestrictedUnknown","λ(f:ℝ→ℝ).defined(inversePartD(λ(z:ℝ).undefined(𝔹),(λ(x:ℝ).f(x),)))","(ℝ→ℝ)→𝔹","λ(f:ℝ→ℝ). defined(Λ(x:ℝ). λ[f(x) | z. undefined(𝔹)])"),
+	Case("CoverConstructionRestrictedJump","defined(inversePartD(λ(z:ℝ).undefined(𝔹),(λ(x:ℝ).[0<x]·(x+1),)))","𝔹","false"),
+	Case("CoverConstructionRestrictedSmooth","defined(inversePartD(λ(z:ℝ).undefined(𝔹),(λ(x:ℝ).sin(x),)))","𝔹","true"),
 	Case("ConstructorDomainPunctured","defined(Λx.[x≠0]·λ[x])","𝔹","true"),
 	Case("ConstructorDomainMissingWeight","defined(Λx.undefined(ℝ)·λ[x])","𝔹","true"),
 	Case("ConstructorDomainSquareCoordinate","defined(Λx.λ[(x^2)])","𝔹","true"),
@@ -2835,6 +2848,8 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.Atomic.Observation.retry")>=0,c.name);
 			if(c.name=="RetryObservationMappedMoment") enforce(certificate.indexOf("Observation.realBind (Distribution.Atomic.Observation.weight")>=0,c.name);
 		}
+		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
+			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
 		if(c.name.indexOf("RestrictedCall")==0) enforce(certificate.indexOf("Pointwise.restricted ")>=0,c.name);
 		if(c.name.indexOf("PointwiseFix")==0) enforce(certificate.indexOf("Recursion.fixed_pointwise_first ")>=0,c.name);
 		if(c.name=="FlatFixedDistFunction"||c.name=="RecursiveDistributionState"||c.name=="DiscountFibreCaptured"){

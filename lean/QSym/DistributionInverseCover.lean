@@ -438,6 +438,19 @@ def restricted {ι : Type} (p : Option (ℝ → Option Bool)) (coords : Option (
     Option (D ℝ) :=
   p.bind fun pred => coords.bind fun gs => interpret gs (some pred) (inverseSourcePartValue (some pred) (some gs))
 
+/-- Overlapping, missing and critical outputs affect later observations.
+An unrestricted cover can be constructed whenever its coordinate family exists. -/
+theorem value_isSome {ι : Type} (coords : Option (ι → ℝ → Option ℝ)) :
+    (value coords).isSome = coords.isSome := by
+  cases coords with
+  | none => rfl
+  | some gs =>
+    change (interpret gs none (inverseCoverValue (some gs))).isSome = true
+    unfold interpret
+    split
+    · exact VariationChart.present_isSome _
+    · rfl
+
 theorem pieces_eq {ι : Type} {gs : ι → ℝ → Option ℝ} {c : VariationChart} (h : Displays gs c) :
     value (some gs) = c.present none := interpret_pieces h _ _
 

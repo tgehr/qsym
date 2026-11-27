@@ -69,5 +69,28 @@ def present (c : VariationChart) (p : Option (ℝ → Option Bool)) : Option (D 
     (fun q => Value.mask (q (c.coord x)) (some |deriv c.coord x|))) lebesgueValue
   c.cuts.foldr (fun a d => addValue (atCut c.coord a p) d) regular
 
+/-- Regular pieces form a density even with a partial source predicate. The
+only remaining construction obligations are the individual cuts. -/
+theorem present_isSome_iff (c : VariationChart) (p : Option (ℝ → Option Bool)) :
+    (c.present p).isSome = true ↔ ∀ a ∈ c.cuts, (atCut c.coord a p).isSome = true := by
+  let regular := weightValue (some fun x => p.elim (some |deriv c.coord x|)
+    (fun q => Value.mask (q (c.coord x)) (some |deriv c.coord x|))) lebesgueValue
+  change (c.cuts.foldr (fun a d => addValue (atCut c.coord a p) d) regular).isSome = true ↔ _
+  have add (a b : Option (D ℝ)) : (addValue a b).isSome = true ↔ a.isSome = true ∧ b.isSome = true := by
+    cases a <;> cases b <;> simp [addValue]
+  induction c.cuts with
+  | nil => simp [regular, weightValue, weight, lebesgueValue, densityValue]
+  | cons x xs ih => simp only [List.foldr_cons, add, ih, List.forall_mem_cons]
+
+theorem present_isSome (c : VariationChart) : (c.present none).isSome = true := by
+  apply (c.present_isSome_iff none).2
+  intro x _
+  by_cases h : Function.leftLim c.coord x = Function.rightLim c.coord x
+  · rw [atCut, if_pos h]
+    rfl
+  · rw [atCut, if_neg h]
+    unfold atom
+    split <;> rfl
+
 end VariationChart
 end QSym.Distribution.GraphFibre.Coordinates
