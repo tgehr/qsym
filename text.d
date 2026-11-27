@@ -141,6 +141,7 @@ struct Syntax{
 			Piece l,r; pair(x,y,l,r);
 			return Piece(render(l,51)~relation~render(r,51),50);
 		}
+		bool exactSum(Node n){ return n.op==Op.builtin&&(n.value==Builtin.addN||n.value==Builtin.addZ||n.value==Builtin.addQ); }
 		bool exactProduct(Node v){
 			return v.op==Op.builtin&&(v.value==Builtin.mulN||v.value==Builtin.mulZ||v.value==Builtin.mulQ);
 		}
@@ -179,6 +180,18 @@ struct Syntax{
 			// [p]·x denotes a non-strict mask, so a strict product needs an explicit call.
 			if(memo[n.a].iverson||memo[n.b].iverson)
 				return Piece("mul"~suffix(n.sort)~"("~arg(n.a)~","~arg(n.b)~")");
+			// A rational product can reach the printer in either order after
+			// a real coercion is pulled through the numerator and denominator.
+			// Keep a sum in the numerator before the powered reciprocal.
+			if(n.sort==Sort.rational){
+				auto power=a.view(uncast(n.a)),numerator=a.view(uncast(n.b));
+				if(power.op==Op.pow&&power.value&&exactSum(numerator)){
+					auto inverse=a.view(uncast(power.a));
+					if(inverse.op==Op.builtin&&inverse.value==Builtin.invQ){
+						auto denominator=n.a; n.a=n.b; n.b=denominator;
+					}
+				}
+			}
 			auto l=memo[n.a],r=memo[n.b];
 			bool coefficient=l.coefficient||r.coefficient,lower=l.lowerVariable||r.lowerVariable;
 			if(l.liftedProduct||r.liftedProduct||coefficient&&lower&&
@@ -209,7 +222,6 @@ struct Syntax{
 		// A sum of exact terms can reparse with a single injection around
 		// their sum, or with separate injections on its summands. Addition
 		// and multiplication here are strict in every numeric sort.
-		bool exactSum(Node n){ return n.op==Op.builtin&&(n.value==Builtin.addN||n.value==Builtin.addZ||n.value==Builtin.addQ); }
 		Piece mixedSum(Operand[] operands){
 			struct Addend{ Piece piece; bool exact; }
 			size_t lower; bool upper;

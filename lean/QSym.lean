@@ -95,6 +95,7 @@ import QSym.SummationBounds
 import QSym.SummationAlgebra
 import QSym.SummationRangeWeight
 import QSym.SummationLinearity
+import QSym.GeometricMomentsNewton
 import QSym.SummationAffine
 import QSym.SummationPowers
 import QSym.SummationPrefix

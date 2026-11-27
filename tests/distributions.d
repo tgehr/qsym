@@ -2194,13 +2194,33 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("NewtonMomentSquare","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
+	Case("NewtonMomentReverse","λ(q:ℝ).∑(n:ℕ). powRN(q,n)*(n:ℝ)^2","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
+	Case("NewtonMomentAffine","λ(q:ℝ).∑(n:ℕ). (2*(n:ℝ)+3)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (-q+3)·((-q+1)^2)⁻¹"),
+	Case("NewtonMomentCubic","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^3-2*(n:ℝ)+1)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(q·(-2·q+11)-4)+1)·((-q+1)^4)⁻¹"),
+	Case("NewtonMomentFractional","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2/3-(n:ℝ)/2+1/4)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(q·(13/12)-2/3)+1/4)·((-q+1)^3)⁻¹"),
+	Case("NewtonMomentFourth","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^4)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q·(q·(q+11)+11)+1)·((-q+1)^5)⁻¹"),
+	Case("NewtonMomentOffsetPower","λ(q:ℝ).∑(n:ℕ). (((n:ℝ)-2)^3)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(q·(27·q-44)+31)-8)·((-q+1)^4)⁻¹"),
+	Case("NewtonMomentMissingOrigin","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). 6·((-q+1)^4)⁻¹·q^3"),
+	Case("NewtonMomentPartial","λ(h:ℕ→ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(h(0),n)","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | abs(h(0))<1}). h(0)·(h(0)+1)·((-h(0)+1)⁻¹)^3"),
+	Case("NewtonMomentLifted","λ(q:ℚ).∑(n:ℕ). ((n:ℝ)^2+1)*castQR(powQN(q,n))","ℚ→ℝ","λ(q:{q:ℚ | -1<q∧(q<1∧q≠1)}). ((q·(2·q-1)+1)·((-q+1)⁻¹)^3:ℝ)"),
+	Case("NewtonMomentShiftSquare","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). ∑(i:ℕ). i^2·q^i"),
+	Case("NewtonMomentShiftStride","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(δ(3),scaleD(q,bindD(d,λ(n:ℕ).δ(n+2)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). ∑(i:ℕ). (2·i+3)·q^i"),
+	Case("NewtonMomentAtHalf","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(1/2)","ℝ","6"),
+	Case("NewtonMomentAlternating","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(-1/2)","ℝ","-2/27"),
+	Case("NewtonMomentAtZero","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(0)","ℝ","0"),
+	Case("NewtonMomentAtOne","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(1)","ℝ","undefined(ℝ)"),
+	Case("NewtonMomentAtNegativeOne","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(-1)","ℝ","undefined(ℝ)"),
+	Case("NewtonMomentBelow","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(-2)","ℝ","undefined(ℝ)"),
+	Case("NewtonMomentAtMissing","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("NewtonMomentNonpolynomial","λ(q:ℝ).∑(n:ℕ). (sin((n:ℝ)))*powRN(q,n)","ℝ→ℝ","λ(q:ℝ). ∑(n:ℕ). q^n·sin(n)"),
 	Case("WeightedMomentLeft","λ(c:ℝ).λ(q:ℝ).∑(n:ℕ). (c*(n:ℝ))*powRN(q,n)","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,q·((-q+1)^2)⁻¹)))"),
 	Case("WeightedMomentOuter","λ(c:ℝ).λ(q:ℝ).∑(n:ℕ). c*((n:ℝ)*powRN(q,n))","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,q·((-q+1)^2)⁻¹)))"),
 	Case("WeightedMomentPowerFirst","λ(c:ℝ).λ(q:ℝ).∑(n:ℕ). (powRN(q,n)*c)*(n:ℝ)","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,q·((-q+1)^2)⁻¹)))"),
 	Case("WeightedMomentRight","λ(c:ℝ).λ(q:ℝ).∑(n:ℕ). ((n:ℝ)*powRN(q,n))*c","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,q·((-q+1)^2)⁻¹)))"),
 	Case("WeightedMomentPartial","λ(h:ℕ→ℝ).λ(q:ℝ).∑(n:ℕ). (n:ℝ)*h(0)*powRN(q,n)","(ℕ→ℝ)→ℝ→ℝ","λ(h:ℕ→ℝ). λ(q:ℝ). [h(0)≠0]·((guard(-1<q∧q<1,q·((-q+1)^2)⁻¹))·h(0))"),
 	Case("WeightedMomentLifted","λ(c:ℝ).λ(q:ℚ).∑(n:ℕ). c*(n:ℝ)*castQR(powQN(q,n))","ℝ→ℚ→ℝ","λ(c:ℝ). λ(q:ℚ). [c≠0]·(c·(guard(-1<q∧(q<1∧q≠1),(q·((-q+1)⁻¹)^2:ℝ))))"),
-	Case("WeightedMomentPolynomial","λ(c:ℝ).λ(q:ℝ).∑(n:ℕ). c*((n:ℝ)^2+2)*powRN(q,n)","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(∑(n:ℕ). (n^2+2)·q^n))"),
+	Case("WeightedMomentPolynomial","λ(c:ℝ).λ(q:ℝ).∑(n:ℕ). c*((n:ℝ)^2+2)*powRN(q,n)","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,(q·(3·q-3)+2)·((-q+1)^3)⁻¹)))"),
 	Case("WeightedMomentNormalizedShift","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ","λ(q:{q:ℝ | q≤1∧0≤q}). [q≠1]·((guard(-1<q∧q<1,q·((-q+1)^2)⁻¹))·(-q+1))"),
 	Case("WeightedMomentWeightedShift","λ(c:ℝ).λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(scaleD(c,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:{q:ℝ | 0≤c∧0≤q}). [c≠0]·(c·(guard(-1<q∧q<1,q·((-q+1)^2)⁻¹)))"),
 	Case("WeightedMomentNormalizedUnit","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(1)","ℝ","0"),
@@ -3032,6 +3052,8 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="NewtonMomentSquare"||c.name=="NewtonMomentCubic"||c.name=="NewtonMomentAffine"||c.name=="NewtonMomentLifted")
+			enforce(certificate.indexOf("GeometricMoments.Newton.series")>=0,c.name);
 		if(c.name=="WeightedMomentLeft"||c.name=="WeightedMomentNormalizedShift"||c.name=="WeightedMomentPolynomial")
 			enforce(certificate.indexOf("SummationLinearity.factor_present")>=0,c.name);
 		if(c.name=="GeometricFirstReal"||c.name=="GeometricFirstNaturalShift"||c.name=="GeometricFirstCastRow")
