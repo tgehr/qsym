@@ -1046,6 +1046,13 @@ private Case[] cases(){
 	Case("OrderedMaskBoth","λ(g:ℝ→ℝ).λ(y:ℝ).massD(weightD(g,graphFibreD(λ(x:ℝ).x^2+1,y)))","(ℝ→ℝ)→ℝ→ℝ","λ(g:ℝ→ℝ). λ(y:ℝ). [1<y]·(g(-sqrt(y-1))·sqrt(y-1)⁻¹·(1/2)+g(sqrt(y-1))·sqrt(y-1)⁻¹·(1/2))+[y≤1]·(guard(y<1∧(defined(g)),(0:ℝ)))"),
 	Case("OrderedMaskOne","λ(y:ℝ).massD(weightD(λ(x:ℝ).x^2,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(y)))","ℝ→ℝ","λ(y:ℝ). [1<y]·((y-1)·sqrt(y-1)⁻¹·(1/2))"),
 	Case("OrderedMaskOpposite","λ(y:ℝ).massD(weightD(λ(x:ℝ).x,graphFibreD(λ(x:ℝ).x^2+1,y)))","ℝ→ℝ","λ(y:{y:ℝ | y≠1}). (0:ℝ)"),
+	Case("OrdinaryQuadraticLeftFarClosed","Λy.∫dx [-1≤x<0]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y≤2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
+	Case("OrdinaryQuadraticRightMovedClosed","Λy.∫dx [1<x≤3]·λ[x]·δ((x-1)^2+4)[y]","Distribution(ℝ)","Λ(y:ℝ). ([4<y∧y≤8]·(sqrt(y-4)⁻¹·(1/2)))·λ[y]"),
+	Case("OrdinaryQuadraticLeftMovedOpen","Λy.∫dx [-2<x<1]·λ[x]·δ((x-1)^2+4)[y]","Distribution(ℝ)","Λ(y:ℝ). ([4<y∧y<13]·(sqrt(y-4)⁻¹·(1/2)))·λ[y]"),
+	Case("OrdinaryQuadraticFractionalWidth","Λy.∫dx [1/2<x<5/4]·λ[x]·δ((x-1/2)^2-3)[y]","Distribution(ℝ)","Λ(y:ℝ). ([-3<y∧y<-39/16]·(sqrt(y+3)⁻¹·(1/2)))·λ[y]"),
+	Case("OrdinaryQuadraticDownClosed","Λy.∫dx [-1≤x<0]·λ[x]·δ(3-x²)[y]","Distribution(ℝ)","Λ(y:ℝ). ([y<3∧2≤y]·(sqrt(-y+3)⁻¹·(1/2)))·λ[y]"),
+	Case("OrdinaryQuadraticAway","Λy.∫dx [2<x<3]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). ([5<y∧y<10]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
+	Case("OrdinaryQuadraticEmpty","Λy.∫dx [0<x<0]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). 0·λ[y]"),
 	Case("OrdinaryQuadraticWindow","Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticTail","Λy.∫dx λ[x]·δ(x²+1)[y]·[0<x<1]","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
 	Case("OrdinaryQuadraticGraph","pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x²+1)","Distribution(ℝ)","Λ(y:ℝ). ([1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2)))·λ[y]"),
@@ -3481,8 +3488,11 @@ private void run(string directory){
 		if(c.name.indexOf("OrdinaryQuadratic")==0){
 			import std.algorithm : canFind;
 			auto form=c.name["OrdinaryQuadratic".length..$];
-			bool whole=["Window","Tail","Graph","Negative","Down","Moved","Fraction","Both","Neither","ExcludedAtEnd"].canFind(form);
-			enforce((certificate.indexOf("Quadratic.masked_chart_source ")>=0)==whole,c.name);
+			bool band=["Window","Tail","Graph","Negative","Down","Moved","Fraction","ExcludedAtEnd","LeftFarClosed",
+				"RightMovedClosed","LeftMovedOpen","FractionalWidth","DownClosed"].canFind(form);
+			bool generic=["Both","Neither","Away","Empty"].canFind(form);
+			enforce((certificate.indexOf("Quadratic.band_chart ")>=0)==band,c.name);
+			enforce((certificate.indexOf("Quadratic.masked_chart_source ")>=0)==generic,c.name);
 			if(form=="UnitMass") enforce(certificate.indexOf("GraphFibre.mass_total_graph ")>=0,c.name);
 		}
 		if(c.name.indexOf("WholeLine")==0||c.name=="UnboundedPuncture"||c.name=="ZeroInfiniteRow"||

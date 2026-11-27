@@ -3,7 +3,7 @@ import QSym.DistributionModelBridge
 import QSym.DistributionMaskedRootCover
 import QSym.DistributionBindObservation
 import QSym.DistributionTestScale
-import QSym.DistributionQuadraticWindow
+import QSym.DistributionQuadraticBand
 import QSym.AxiomCheck
 
 noncomputable section
@@ -451,5 +451,6 @@ theorem charged_point_density (x w : ℝ) (hw : w ≠ 0) :
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.weighted_integral
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.masked_chart
 #qsym_check_axioms GraphFibre.Coordinates.Quadratic.masked_chart_source
+#qsym_check_axioms GraphFibre.Coordinates.Quadratic.band_chart
 
 end QSym.DistributionSourceTests

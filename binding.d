@@ -43,7 +43,7 @@ private enum BindingRule:ushort{
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,pointwiseReordered,pointwiseRootSheet,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumNormalizedMoment,sumPolynomialGeometric,sumConstantMomentRows,sumPlainPolynomialZero,sumPlainPolynomialNonzero,sumPolynomialFactor,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,distributionMassTwoWeights,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassBindTest,distributionMassWeightBind,distributionMassConstantWeight,distributionMassLebesgue,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
-	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,distributionQuadraticDensity,distributionQuadraticFibre,distributionMaskedQuadraticChart,distributionMaskedMarginal,coordinateRepeatedSheet,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
+	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,distributionQuadraticDensity,distributionQuadraticFibre,distributionMaskedQuadraticChart,distributionQuadraticBand,distributionMaskedMarginal,coordinateRepeatedSheet,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionUniformCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
@@ -266,6 +266,7 @@ private struct AffineChart{
 	uint polynomialCheck=uint.max,bandLo=uint.max,bandHi=uint.max,cutoff=uint.max;
 }
 private enum QuadraticPoint:ubyte{ symbolic, outside, vertex, regular }
+private struct QuadraticBand{ Term lo,hi,cap; bool right,closed; }
 private struct QuadraticChart{
 	Term centre,scale,offset;
 	uint polynomial,map;
@@ -273,6 +274,7 @@ private struct QuadraticChart{
 	Rational radicand,root;
 	uint predicate=uint.max;
 	bool fromSheets;
+	QuadraticBand band;
 }
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
@@ -9442,16 +9444,20 @@ final class Bindings{
 			check.input=diff; check.variable=index; check.sort=Sort.real_; check.polynomial=true;
 			return PowerMap(2,lambda(restoreBody(base,context(body),x)),a,b,false);
 		}
-		bool squareBand(uint predicate,out uint lo,out uint hi,out bool strict){
+		bool literalBand(uint predicate,out uint lo,out uint hi,out bool openLo,out bool openHi){
 			auto n=nodes[predicate];
 			bool op(BoundNode q,Op which){ return q.op==BoundOp.primitive&&arena.view(arena.at(q.data)).op==which; }
 			if(!op(n,Op.and_)) return false;
 			auto l=nodes[n.a],r=nodes[n.b];
-			strict=op(l,Op.lt);
-			if((!strict&&!op(l,Op.le))||!op(r,strict?Op.lt:Op.le)||l.b!=r.a||nodes[l.b].op!=BoundOp.variable||nodes[l.b].data!=0) return false;
+			openLo=op(l,Op.lt); openHi=op(r,Op.lt);
+			if((!openLo&&!op(l,Op.le))||(!openHi&&!op(r,Op.le))||l.b!=r.a||nodes[l.b].op!=BoundOp.variable||nodes[l.b].data!=0) return false;
 			lo=l.a; hi=r.b;
 			return nodes[lo].op==BoundOp.scalar&&nodes[hi].op==BoundOp.scalar&&
 				arena.isNumber(arena.at(nodes[lo].data))&&arena.isNumber(arena.at(nodes[hi].data));
+		}
+		bool squareBand(uint predicate,out uint lo,out uint hi,out bool strict){
+			bool openHi;
+			return literalBand(predicate,lo,hi,strict,openHi)&&openHi==strict;
 		}
 		PowerMap oddMap(uint id){ return powerMap(id,false); }
 		bool isTrue(uint id,bool value){
@@ -9622,6 +9628,28 @@ final class Bindings{
 			if(!arena.number(chart.offset).zero||arena.number(chart.scale).re<=Rational(0)) return false;
 			ScalarDomain square;
 			return factoredSquare(map,square).degree!=0;
+		}
+		BoundTerm quadraticBandImage(BoundTerm graph,ref QuadraticChart chart){
+			uint lo,hi; bool openLo,openHi;
+			if(!literalBand(nodes[chart.predicate].a,lo,hi,openLo,openHi)) return BoundTerm.init;
+			auto l=arena.at(nodes[lo].data),u=arena.at(nodes[hi].data),a=arena.number(l).re,b=arena.number(u).re;
+			auto c=arena.number(chart.centre).re;
+			if(a>=b||a.words+b.words>128) return BoundTerm.init;
+			bool right=c==a&&openLo;
+			if(!right&&!(c==b&&openHi)) return BoundTerm.init;
+			auto length=b-a,cap=length*length;
+			if(cap.words>128) return BoundTerm.init;
+			chart.band=QuadraticBand(l,u,arena.real_(cap),right,right?!openHi:!openLo);
+			auto ctx=context(graph),scope_=push(ctx,scalarType(Sort.real_)),y=variable(scope_,0),z=arena.real_(0);
+			auto mul=scalarOperator(type(y),TensorOp.mul),lt=arena.lt(z,z);
+			auto rad=primitive(arena.add(z,z,true),[primitive(mul,[scalar(scope_,chart.scale),y]),scalar(scope_,chart.offset)]);
+			auto near=primitive(lt,[scalar(scope_,z),rad]),far=primitive(chart.band.closed?arena.le(z,z):lt,[rad,scalar(scope_,chart.band.cap)]);
+			auto support=primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[near,far]);
+			auto root=primitive(arena.call(Builtin.sqrtR,[z]),[rad]),jac=primitive(arena.inv(arena.real_(1)),[primitive(mul,[scalar(scope_,arena.real_(2)),root])]);
+			auto coeff=arena.number(chart.scale).re;
+			auto w=primitive(mul,[jac,scalar(scope_,arena.real_(coeff<Rational(0)?-coeff:coeff))]);
+			auto density=hint(lambda(primitive(arena.mask(arena.boolean(true),z),[support,w])),"y");
+			return distribution(ctx,BoundOp.distributionWeight,[density,distribution(ctx,BoundOp.distributionLebesgue)]);
 		}
 		bool maskedQuadraticParameters(BoundTerm graph,out QuadraticChart chart,out ScalarDomain check){
 			auto n=node(graph);
@@ -10342,7 +10370,10 @@ final class Bindings{
 				uint domain=uint.max,critical=uint.max;
 				QuadraticChart chart; ScalarDomain check;
 				if(image==BoundTerm.init&&maskedQuadraticParameters(t,chart,check)){
-					domain=totalMapDomain(nodes[n.a].a);
+					image=quadraticBandImage(t,chart);
+					if(image!=BoundTerm.init){
+						evidence=rememberQuadratic(chart,check); rule=BindingRule.distributionQuadraticBand;
+					}else domain=totalMapDomain(nodes[n.a].a);
 					if(domain!=uint.max){
 						auto atVertex=visit(apply(at(n.a),scalar(context(t),chart.centre)),depth+1);
 						if(isTrue(atVertex.output,false)){
@@ -17275,7 +17306,7 @@ final class Bindings{
 						" _ (QSym.BindingScalar"~to!string(p.extra)~".DomainCertificate.domain_correct "~env~") (Value.refines_refl _)).symm)";
 					break;
 				}
-				case BindingRule.distributionQuadraticDensity,BindingRule.distributionQuadraticChart,BindingRule.distributionMaskedMarginal,BindingRule.distributionMaskedQuadraticChart,BindingRule.distributionQuadraticFibre:{
+				case BindingRule.distributionQuadraticDensity,BindingRule.distributionQuadraticChart,BindingRule.distributionMaskedMarginal,BindingRule.distributionMaskedQuadraticChart,BindingRule.distributionQuadraticBand,BindingRule.distributionQuadraticFibre:{
 					auto chart=result.quadratics[p.extra],id=chart.polynomial;
 					alias q=SourceCertificates.q;
 					string literal(Term v){return q(arena.number(v).re);}
@@ -17291,7 +17322,13 @@ final class Bindings{
 						auto args=literal(chart.centre)~" "~literal(chart.scale)~" "~literal(chart.offset)~" ";
 						auto nums=number(chart.centre)~" "~number(chart.scale)~" "~number(chart.offset)~" ";
 						if(p.rule==BindingRule.distributionQuadraticChart) law=ns~"image "~args~"(of_decide_eq_true rfl) "~nums~equation;
-						else if(p.rule==BindingRule.distributionMaskedQuadraticChart){
+						else if(p.rule==BindingRule.distributionQuadraticBand){
+							auto band=chart.band;
+							law=ns~"band_chart "~args~literal(gain)~" "~literal(band.lo)~" "~literal(band.hi)~" "~literal(band.cap)~
+								(band.right?" true":" false")~(band.closed?" true":" false")~
+								" (of_decide_eq_true rfl) rfl (of_decide_eq_true rfl) rfl (of_decide_eq_true rfl) "~nums~number(gain)~
+								" "~number(band.lo)~" "~number(band.hi)~" "~number(band.cap)~" "~equation;
+						}else if(p.rule==BindingRule.distributionMaskedQuadraticChart){
 							law=ns~"masked_chart_source "~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
 								" "~quadraticMasks.get(cast(uint)i,"")~" "~rowTotalProof(p.left)~" ("~proofName(p.right)~".sound ξ ρ)";
 						}else if(p.rule==BindingRule.distributionMaskedMarginal){
