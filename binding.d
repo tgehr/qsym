@@ -40,7 +40,7 @@ private enum BindingRule:ushort{
 	refl,congr,conditionalTrue,conditionalFalse,conditionalBottom,conditionalSame,conditionalDefined,conditionalBool,conditionalNumeric,conditionalMissing,definedScalarPrimitive,distributionGuard,conditionalMap,conditionalLeft,conditionalRight,beta,closedRationalValue,seqScalar,seqLam,seqSelf,trans,fold,seqTotal,seqGuard,domainLam,memberSet,
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
-	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
+	guardAnd,guardLeft,guardRight,guardMap,pointwise,pointwiseReordered,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
 	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumPolynomialGeometric,sumPlainPolynomialZero,sumPlainPolynomialNonzero,sumPolynomialFactor,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
@@ -8711,6 +8711,27 @@ final class Bindings{
 				}
 				return BoundTerm.init;
 			}
+			// Retain a newly exposed exceptional domain in the printed binder.
+			// A guard already on the path can make that extra annotation redundant.
+			bool domainCovered(Term domain,uint[] path){
+				auto yes=arena.boolean(true); if(domain==yes) return true;
+				auto id=body.id,known=yes;
+				foreach(side;path){
+					auto p=nodes[id];
+					if((p.op==BoundOp.guard||primitiveOp(id,Op.mask))&&side==1||p.op==BoundOp.conditional&&side>0){
+						auto test=scalarBody(at(p.a),argument);
+						if(test!=Term.init){
+							if(p.op==BoundOp.conditional&&side==2) test=arena.not_(test);
+							known=known==yes?test:arena.and_(known,test);
+						}
+					}
+					id=side==0?p.a:side==1?p.b:p.c;
+				}
+				if(known==yes) return false;
+				auto check=simplify(arena,arena.or_(arena.not_(known),domain),Options(DensityMode.preserve,false));
+				return !check.exhausted&&check.output==yes;
+			}
+			bool allowReordering=true,reordered=false;
 			BoundTerm rewrite(BoundTerm t,uint[] path,bool masksOnly){
 				auto n=node(t),mode=n.op==BoundOp.defined||n.op==BoundOp.holds?n.op:BoundOp.scalar;
 				if(masksOnly&&primitiveOp(t.id,Op.mask)&&(depends(at(n.b),0)||primitiveOp(n.a,Op.and_))){
@@ -8731,6 +8752,9 @@ final class Bindings{
 						if(simplified==t||scalarBody(simplified,argument)==source) return BoundTerm.init;
 					}
 					auto d=simplifyDomain(arena,source,[],Options(DensityMode.preserve,commit));
+					if(mode==BoundOp.scalar&&allowReordering&&!d.exhausted&&pointwiseReordering(t.id,simplified.id).length&&domainCovered(d.output,path)){
+						reordered=true; extra=uint.max; return simplified;
+					}
 					if(commit){ exhausted|=d.exhausted; extra=cast(uint)scalarDomains.length; scalarDomains~=ScalarDomain(source,d,value,index,sort,path,mode); }
 					else if(d.exhausted) return BoundTerm.init;
 					if(mode==BoundOp.defined) return restoreBody(d.output,ctx,argument);
@@ -8750,6 +8774,11 @@ final class Bindings{
 				return BoundTerm.init;
 			}
 			auto output=rewrite(body,[],false);
+			if(reordered&&!pointwiseReordering(body.id,output.id).length){
+				// If the whole congruence exceeds the search bound, retain the
+				// scalar certificate path for this rewrite.
+				allowReordering=false; output=rewrite(body,[],false);
+			}
 			if(output==BoundTerm.init&&sort!=Sort.boolean) output=rewrite(body,[],true);
 			return output==BoundTerm.init?output:inheritHint(binder,node(binder).op==BoundOp.lambda?lambda(output):set(output));
 		}
@@ -10257,7 +10286,7 @@ final class Bindings{
 							auto source=nodes[current.a]; uint index;
 							auto weight=pointwise(at(source.a),index,true);
 							enforce(weight.id==nodes[nodes[wide.id].a].a,"the multiplied weight changed");
-							auto inner=emit(BindingRule.pointwise,source.a,weight.id,uint.max,uint.max,index);
+							auto inner=emit(index==uint.max?BindingRule.pointwiseReordered:BindingRule.pointwise,source.a,weight.id,uint.max,uint.max,index);
 							next=wide; rule=BindingRule.congr;
 							predicateDomain=emit(BindingRule.congr,current.a,nodes[wide.id].a,inner,emit(BindingRule.refl,source.b,source.b));
 						}
@@ -11318,7 +11347,7 @@ final class Bindings{
 					if(current.op==BoundOp.set&&nodes[current.a].op==BoundOp.guard){
 						next=set(holds(at(current.a))); rule=BindingRule.setHolds;
 					}else if((current.op==BoundOp.lambda||current.op==BoundOp.set)&&steps<budget){
-						next=pointwise(at(result.output),extra); rule=BindingRule.pointwise;
+						next=pointwise(at(result.output),extra); rule=extra==uint.max?BindingRule.pointwiseReordered:BindingRule.pointwise;
 						// The body of a function of a scalar is evaluated at
 						// arguments that exist only. Where it keeps an observation
 						// that mentions the variable of the function, the variable
@@ -11675,6 +11704,44 @@ final class Bindings{
 			observer="("~prefix~theorem~" "~observer~" ("~name(weight?op.a:op.b)~".eval ξ ρ))";
 		}
 		return observer;
+	}
+	// Check equality on partial values themselves. Reordering a strict sum or
+	// product preserves missing operands, including underneath a guard.
+	private string pointwiseReordering(uint before,uint after,string env=null){
+		uint fuel=1024;
+		string compare(uint src,uint dst,uint depth) @safe {
+			if(src==dst) return "rfl";
+			if(!fuel||depth>64) return null;
+			--fuel;
+			auto x=nodes[src],y=nodes[dst];
+			if(x.op!=y.op||x.type!=y.type||x.context!=y.context||x.data!=y.data) return null;
+			switch(x.op){
+				case BoundOp.primitive,BoundOp.guard,BoundOp.defined,BoundOp.holds,
+				BoundOp.conditional,BoundOp.pair,BoundOp.vectorCons,BoundOp.get,
+				BoundOp.first,BoundOp.rest,BoundOp.tensor:break;
+				default:return null;
+			}
+			string children(bool swap) @safe {
+				auto a=compare(swap?x.b:x.a,y.a,depth+1); if(!a.length) return null;
+				if(x.b==uint.max) return env.length?"(congrArg "~valueOperation(x)~" "~a~")":"rfl";
+				auto b=compare(swap?x.a:x.b,y.b,depth+1); if(!b.length) return null;
+				if(x.op==BoundOp.conditional){
+					auto c=compare(x.c,y.c,depth+1); if(!c.length) return null;
+					return env.length?"(Binding.conditional_congr "~a~" "~b~" "~c~")":"rfl";
+				}
+				if(!env.length||a=="rfl"&&b=="rfl") return "rfl";
+				return "(congrArg₂ "~valueOperation(x)~" "~a~" "~b~")";
+			}
+			auto aligned=children(false); if(aligned.length) return aligned;
+			if(x.op!=BoundOp.primitive) return null;
+			auto op=arena.view(arena.at(x.data));
+			if((op.op!=Op.add&&op.op!=Op.mul)||(op.sort!=Sort.real_&&op.sort!=Sort.complex)) return null;
+			auto swapped=children(true); if(!swapped.length||!env.length) return swapped;
+			string value(uint id) @safe { return "("~name(id)~".eval ξ "~env~")"; }
+			auto comm="(Generated.r_"~leanSort(op.sort)~(op.op==Op.add?"_add_comm ":"_mul_comm ")~value(x.a)~" "~value(x.b)~")";
+			return swapped=="rfl"?comm:"(Eq.trans "~comm~" "~swapped~")";
+		}
+		return compare(before,after,0);
 	}
 	private string name(uint id){ return "(t"~to!string(id)~(dependent_?" δ":"")~" γ)"; }
 	private string ctxName(uint id){ auto s="c"~to!string(id); return dependent_?"("~s~" δ)":s; }
@@ -15334,6 +15401,12 @@ final class Bindings{
 					proof="."~op~" "~name(nodes[n.a].a)~" "~name(nodes[n.a].b); break;
 				case BindingRule.definedNot:proof=".definedNot "~name(nodes[n.a].a); break;
 				case BindingRule.domainGuardFalse:proof=".domainGuardFalse "~name(nodes[n.a].b); break;
+				case BindingRule.pointwiseReordered:
+					auto field=leanSort(elementSort(type(variable(context(at(n.a)),0))));
+					auto env="(Binding.Env.cons (a := .scalar ."~field~") (some x) ρ)";
+					auto equality=pointwiseReordering(n.a,nodes[p.to].a,env);
+					enforce(equality.length,"pointwise reordering did not replay");
+					proof=(n.op==BoundOp.lambda?".lamPointwise":".setPointwise")~" (fun ξ ρ x => "~equality~")"; break;
 				case BindingRule.pointwise:
 					auto d=result.domains[p.extra],prefix="QSym.BindingScalar"~to!string(p.extra),field=leanSort(d.sort);
 					auto env="({ ξ with "~field~" := fun i => if i = "~to!string(d.variable)~" then x else ξ."~field~" i })";

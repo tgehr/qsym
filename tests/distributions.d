@@ -2235,6 +2235,16 @@ private Case[] cases(){
 	Case("ExactMomentRawSigned","λ(q:ℝ).∑(n:ℕ). (((n^2+1:ℕ):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(2·q-1)+1)·((-q+1)^3)⁻¹"),
 	Case("ExactMomentMissingAxis","λ(h:ℕ→ℕ).λ(q:ℝ).∑(n:ℕ). (((h(n)*n:ℕ):ℝ))*powRN(q,n)","(ℕ→ℕ)→ℝ→ℝ","λ(h:ℕ→ℕ). λ(q:ℝ). ∑(n:ℕ). n·h(n)·q^n"),
 	Case("ExactMomentPartialSub","λ(q:ℝ).∑(n:ℕ). (((n sub 1):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:ℝ). ∑(n:ℕ). (guard(n≠0,(n-1:ℝ)))·q^n"),
+	Case("PointwiseOrderPartialProduct","λ(x:ℝ).(1+1/x)*(2+1/x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0}). (1+x⁻¹)·(2+x⁻¹)"),
+	Case("PointwiseOrderUnderDomain","λ(x:ℝ).guard(0<x,(1+1/x)*(2+1/x))","ℝ→ℝ","λ(x:{x:ℝ | 0<x}). (1+x⁻¹)·(2+x⁻¹)"),
+	Case("PointwiseOrderComplexProduct","λ(x:ℂ).(1+x)*(2+x)","ℂ→ℂ","λ(x:ℂ). (x+1)·(x+2)"),
+	Case("PointwiseOrderConditionalProduct","λ(h:ℕ→𝔹).λ(x:ℝ).if h(0) then (1+1/x)*(2+1/x) else x","(ℕ→𝔹)→ℝ→ℝ","λ(h:ℕ→𝔹). λ(x:ℝ). [h(0)]·(guard(x≠0,(1+x⁻¹)·(2+x⁻¹)))+[¬h(0)]·x"),
+	Case("PointwiseOrderMemberProduct","{x:ℝ | (1+1/x)*(2+1/x)<3}","Set(ℝ)","{x:ℝ | x≠0∧(1+x⁻¹)·(2+x⁻¹)<3}"),
+	Case("PointwiseOrderPairProduct","λ(x:ℝ).(((1+x)*(2+x),true):ℝ×𝔹)","ℝ→ℝ×𝔹","λ(x:ℝ). (((x+1)·(x+2),true):ℝ×𝔹)"),
+	Case("PointwiseOrderZeroMasked","(λ(x:ℝ).[x<0]·((1+1/x)*(2+1/x)))(0)","ℝ","0"),
+	Case("PointwiseOrderNestedSwaps","λ(x:ℝ).(1+x)*(3+(2+x)^3)","ℝ→ℝ","λ(x:ℝ). (x+1)·((x+2)^3+3)"),
+	Case("PointwiseOrderStrictZero","λ(x:ℝ).0*(1/x)","ℝ→ℝ","λ(x:{x:ℝ | x≠0}). (0:ℝ)"),
+	Case("PointwiseOrderAtPole","defined((λ(x:ℝ).(1+1/x)*(2+1/x))(0))","𝔹","false"),
 	Case("NewtonMomentSquare","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
 	Case("NewtonMomentReverse","λ(q:ℝ).∑(n:ℕ). powRN(q,n)*(n:ℝ)^2","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
 	Case("NewtonMomentAffine","λ(q:ℝ).∑(n:ℕ). (2*(n:ℝ)+3)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (-q+3)·((-q+1)^2)⁻¹"),
@@ -2301,7 +2311,7 @@ private Case[] cases(){
 	Case("ComplementSeriesOtherCoefficient","λ(q:ℝ).∑(i:ℕ). (2-q)*powRN(q,i)","ℝ→ℝ","λ(q:ℝ). [q≠2]·((guard(-1<q∧q<1,(-q+1)⁻¹))·(-q+2))"),
 	Case("ScaledSeriesReal","λ(c:ℝ).λ(q:ℝ).∑(i:ℕ). c*powRN(q,i)","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,(-q+1)⁻¹)))"),
 	Case("ScaledSeriesRight","λ(c:ℝ).λ(q:ℝ).∑(i:ℕ). powRN(q,i)*c","ℝ→ℝ→ℝ","λ(c:ℝ). λ(q:ℝ). [c≠0]·(c·(guard(-1<q∧q<1,(-q+1)⁻¹)))"),
-	Case("ScaledSeriesComplex","λ(c:ℂ).λ(q:ℂ).∑(i:ℕ). c*powCN(q,i)","ℂ→ℂ→ℂ","λ(c:ℂ). λ(q:ℂ). [c≠0]·(c·(guard(cabs(q)<1∧q≠1,(-q+1)⁻¹)))"),
+	Case("ScaledSeriesComplex","λ(c:ℂ).λ(q:ℂ).∑(i:ℕ). c*powCN(q,i)","ℂ→ℂ→ℂ","λ(c:ℂ). λ(q:ℂ). [c≠0]·(c·(guard(cabs(q)<1,(-q+1)⁻¹)))"),
 	Case("ScaledSeriesRational","λ(c:ℚ).λ(q:ℚ).∑(i:ℕ). powQN(q,i)*c","ℚ→ℚ→ℚ","λ(c:ℚ). λ(q:ℚ). [c≠0]·(c·(guard(-1<q∧(q<1∧q≠1),(-q+1)⁻¹)))"),
 	Case("ScaledSeriesPartialCoefficient","λ(h:ℕ→ℝ).λ(q:ℝ).∑(i:ℕ). h(0)*powRN(q,i)","(ℕ→ℝ)→ℝ→ℝ","λ(h:ℕ→ℝ). λ(q:ℝ). [h(0)≠0]·((guard(-1<q∧q<1,(-q+1)⁻¹))·h(0))"),
 	Case("ScaledSeriesPartialRatio","λ(c:ℝ).λ(h:ℕ→ℝ).∑(i:ℕ). c*powRN(h(0),i)","ℝ→(ℕ→ℝ)→ℝ","λ(c:ℝ). λ(h:{h:ℕ→ℝ | holds((0∈domain(h)))}). [c≠0]·(c·(guard(abs(h(0))<1,(-h(0)+1)⁻¹)))"),
@@ -3093,6 +3103,13 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="PointwiseOrderUnderDomain"||c.name=="PointwiseOrderPairProduct"||
+				c.name=="PointwiseOrderNestedSwaps"){
+			enforce(certificate.indexOf("Generated.r_real_add_comm")>=0,c.name~" pointwise equality");
+			enforce(certificate.indexOf("namespace QSym.BindingScalar")<0,c.name~" redundant domain proof");
+		}
+		if(c.name=="PointwiseOrderComplexProduct")
+			enforce(certificate.indexOf("Generated.r_complex_add_comm")>=0,c.name);
 		if(c.name=="NewtonMomentSquare"){
 			enforce(certificate.indexOf("GeometricMoments.Newton.series_fraction")>=0,c.name);
 			enforce(certificate.indexOf("namespace QSym.BindingScalar")<0,c.name~" redundant scalar proof");
@@ -3966,12 +3983,12 @@ private void run(string directory){
 			// the two may be joined.
 			bool first=among("QuotientScaleDomainFirst"),nested=among("QuotientScaleDomainNested");
 			bool joined=among("QuotientScaleUniform","QuotientScaleDomainAbove","QuotientScaleDomainBelow","QuotientPoleUniform")||nested;
-			bool guardedPole=among("QuotientPoleBounds","QuotientPoleReversed","QuotientPoleAboveTerm","QuotientPoleBelow","QuotientPoleFunction");
+			bool guardedPole=among("QuotientPoleBounds","QuotientPoleReversed","QuotientPoleAboveTerm","QuotientPoleBelow");
 			bool guardedFactor=among("QuotientPoleScaleStrict","QuotientPoleScaleBelow");
 			enforce(has("ratio_guard ")==(c.name.indexOf("QuotientDomain")==0||guardedPole),c.name~" guard of the domain");
 			enforce(has("Fraction.guard ")==(joined||first||guardedFactor),c.name~" guard of the domain under a factor");
 			enforce(has("MaskDomain.mask ")==(c.name.indexOf("QuotientDomain")==0||among("QuotientScaleDomain")||(joined||first||guardedPole||guardedFactor)&&
-				!nested&&!among("QuotientPoleFunction")),c.name~" domain around the mask");
+				!nested),c.name~" domain around the mask");
 			enforce(has("guard_and_left ")==joined,c.name~" domain of the axis first");
 			enforce(has("guard_and_right ")==first,c.name~" domain of the factor first");
 			enforce(has("between_guard_integral ")==(among("QuotientScaleDomain","QuotientScaleUniform","QuotientPoleUniform")||first||nested),c.name~" guard inside the mask of the bounds");
@@ -4067,7 +4084,7 @@ private void run(string directory){
 			bool among(string[] names...){ foreach(name;names) if(c.name==name) return true; return false; }
 			bool has(string evidence){ return certificate.indexOf(src~evidence)>=0; }
 			bool retained=among("SummandAbove","SummandNested");
-			bool guarded=among("SummandBounds","SummandQuotientBounds","SummandScale","SummandPoleStrict","SummandFunction");
+			bool guarded=among("SummandBounds","SummandQuotientBounds","SummandScale","SummandPoleStrict");
 			enforce(has("between_add_constant ")!=retained,c.name~" summand that is a term");
 			enforce((text.indexOf("∫")>=0)==retained,c.name~": "~text);
 			enforce(has("value_add_comm ")==(!retained&&!guarded),c.name~" term in front");
