@@ -700,9 +700,14 @@ string exportEquivalence(Arena a,Result left,Result right){
 }
 
 string exportDomainLean(Arena a,Term source,Result result,ScalarClaims claims=ScalarClaims.all){
+	return exportLean(a,result,claims)~exportDomainCorrectness(a,source,result);
+}
+
+/// The domain proof uses the scalar refinement already declared in the sibling Certificate namespace.
+package string exportDomainCorrectness(Arena a,Term source,Result result){
 	auto conditions=domainConditions(a,source),condition=conditions[source.id];
 	enforce(result.input==condition&&result.proofInput==condition,"domain certificate input changed");
-	auto code=exportLean(a,result,claims)~"\nnamespace QSym.DomainCertificate\n";
+	auto code="\nnamespace QSym.DomainCertificate\n";
 	bool[] needed=new bool[a.length];
 	foreach(root;[source,condition]) foreach(id;a.viewPostorder(root)) needed[id]=true;
 	foreach(id;a.viewPostorder(source)) foreach(j;a.viewPostorder(conditions[id])) needed[j]=true;

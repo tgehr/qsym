@@ -3365,6 +3365,8 @@ private void run(string directory){
 		}
 		if(c.name=="FibreMarginalWindow"||c.name.indexOf("ActiveGuard")==0)
 			enforce(certificate.indexOf("Binding.guard_of_true ")>=0,c.name);
+		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
+			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
 		if(c.name.indexOf("BranchedFibre")==0){
 			bool symbolic=c.name!="BranchedFibreAbsent"&&c.name!="BranchedFibreControl"&&c.name!="BranchedFibreFraction"&&
 				c.name!="BranchedFibreSumWeight"&&c.name!="BranchedFibreProductWeight";

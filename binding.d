@@ -9,7 +9,7 @@ import qsym.types:TypeId,TypeKind,TypePool,Dimension;
 import qsym.number:Number,BigInt;
 import qsym.table:Table;
 import qsym.generated.rules:Law,instantiate;
-import qsym.proof:leanExportHeader,ScalarClaims,leanSyntaxCode,leanValueOperation,exportDomainLean,exportPolynomialZeroLean,exportRationalZeroLean,scalarExport=exportLean;
+import qsym.proof:leanExportHeader,ScalarClaims,leanSyntaxCode,leanValueOperation,exportDomainLean,exportDomainCorrectness,exportPolynomialZeroLean,exportRationalZeroLean,scalarExport=exportLean;
 import qsym.domain:simplifyDomain;
 import qsym.simplify:Result,ScalarResult=Result,Options,DensityMode,simplify;
 import std.string:replace,join;
@@ -14253,6 +14253,25 @@ final class Bindings{
 		check(result.input); check(result.output); enforce(result.proof<result.proofs.length,"missing binding proof");
 		auto lowered=lowerResult?lower(result.output):Term.init;
 		string code=leanExportHeader,dimDecl=dependent_?" (δ : ℕ → ℕ)":"",dimArg=dependent_?" δ":"";
+		// Scalar goals from independent binding steps can have different proof traces.
+		// Share a declaration only when its endpoints and ordered hypotheses agree.
+		alias Goal=immutable(uint)[];
+		string[Goal] refinements,domainProofs;
+		Goal scalarGoal(ScalarResult r){
+			uint[] ids=[r.input.id,r.proofInput.id,r.output.id];
+			foreach(h;r.assumptions) ids~=h.id;
+			return ids.idup;
+		}
+		string reuse(string dest,string original,string members){
+			return "namespace "~dest~"\nexport "~original~" ("~members~")\nend "~dest~"\n";
+		}
+		void writeRefinement(string dest,ScalarResult r,Goal goal){
+			if(auto previous=goal in refinements){
+				code~=reuse(dest,*previous,"n"~to!string(r.output.id)~" refinement"); return;
+			}
+			auto part=replace(scalarExport(arena,r,ScalarClaims.refinement),leanExportHeader,"");
+			code~=replace(part,"QSym.Certificate",dest); refinements[goal]=dest;
+		}
 		foreach(i,d;result.domains){
 			if(d.rational){
 				auto part=replace(exportRationalZeroLean(arena,d.input,d.rationalConditions),leanExportHeader,"");
@@ -14262,14 +14281,16 @@ final class Bindings{
 				auto part=replace(exportPolynomialZeroLean(arena,d.input),leanExportHeader,"");
 				code~=replace(part,"QSym.PolynomialCertificate","QSym.BindingScalar"~to!string(i));continue;
 			}
-			auto prefix="QSym.BindingScalar"~to!string(i),part=exportDomainLean(arena,d.input,d.result,ScalarClaims.refinement);
-			part=replace(part,leanExportHeader,"");
-			part=replace(part,"QSym.Certificate",prefix~".Certificate");
-			part=replace(part,"QSym.DomainCertificate",prefix~".DomainCertificate"); code~=part;
-			if(d.value.traced){
-				part=replace(scalarExport(arena,d.value,ScalarClaims.refinement),leanExportHeader,"");
-				code~=replace(part,"QSym.Certificate",prefix~".ValueCertificate");
+			auto prefix="QSym.BindingScalar"~to!string(i),goal=scalarGoal(d.result);
+			writeRefinement(prefix~".Certificate",d.result,goal);
+			auto dest=prefix~".DomainCertificate",domainGoal=([d.input.id]~goal).idup;
+			if(auto previous=domainGoal in domainProofs){
+				code~=reuse(dest,*previous,"domain_correct domain_total domain_iff");
+			}else{
+				auto part=exportDomainCorrectness(arena,d.input,d.result);
+				code~=replace(part,"QSym.DomainCertificate",dest); domainProofs[domainGoal]=dest;
 			}
+			if(d.value.traced) writeRefinement(prefix~".ValueCertificate",d.value,scalarGoal(d.value));
 		}
 		foreach(i,r;result.ranks){
 			auto prefix="QSym.BindingRank"~to!string(i);
