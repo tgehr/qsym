@@ -959,6 +959,24 @@ private Case[] cases(){
 	Case("QuadraticDensityDefinedVertex","defined(densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],1))","𝔹","false"),
 	Case("QuadraticDensityDefinedOutside","defined(densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],0))","𝔹","true"),
 	Case("QuadraticDensityFractionPoint","densityAtD(Λy.∫dx λ[x]·δ(x^2+x)[y],0)","ℝ","2"),
+	Case("SheetDensityQuery","λ(y:ℝ).densityAtD(Λz. λ[-sqrt(z-1),sqrt(z-1)],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠1}). [1≤y]·sqrt(y-1)⁻¹"),
+	Case("SheetDensityVertex","densityAtD(Λz. λ[-sqrt(z-1),sqrt(z-1)],1)","ℝ","undefined(ℝ)"),
+	Case("SheetDensityOutside","densityAtD(Λz. λ[-sqrt(z-1),sqrt(z-1)],0)","ℝ","0"),
+	Case("SheetDensityRegular","densityAtD(Λz. λ[-sqrt(z-1),sqrt(z-1)],5)","ℝ","1/2"),
+	Case("SheetDensityReversed","densityAtD(Λz. λ[sqrt(z-1),-sqrt(z-1)],5)","ℝ","1/2"),
+	Case("SheetDensityDown","densityAtD(Λz. λ[-sqrt(3-z),sqrt(3-z)],-1)","ℝ","1/2"),
+	Case("SheetDensityCentre","densityAtD(Λz. λ[3-sqrt(z-1),3+sqrt(z-1)],5)","ℝ","1/2"),
+	Case("SheetDensityScaled","densityAtD(Λz. λ[-2*sqrt(z-1),2*sqrt(z-1)],5)","ℝ","1"),
+	Case("SheetDensityScaledReversed","densityAtD(Λz. λ[3+2*sqrt(z-1),3-2*sqrt(z-1)],5)","ℝ","1"),
+	Case("SheetDensityScaledNegative","densityAtD(Λz. λ[-3*sqrt(3-z),3*sqrt(3-z)],-1)","ℝ","3/2"),
+	Case("SheetDensityFraction","λ(y:ℝ).densityAtD(Λz. λ[-1/2-sqrt(2*z+1),-1/2+sqrt(2*z+1)],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠-1/2}). [-1/2≤y]·(2·sqrt(2·y+1)⁻¹)"),
+	Case("SheetDensityDefinedBoundary","defined(densityAtD(Λz. λ[-sqrt(z-1),sqrt(z-1)],1))","𝔹","false"),
+	Case("SheetDensityMissing","densityAtD(Λz. λ[-sqrt(z-1),sqrt(z-1)],undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("SheetDensityGuardDomain","densityAtD(Λz. λ[guard(1≤z,-sqrt(z-1)),guard(1≤z,sqrt(z-1))],5)","ℝ","1/2"),
+	Case("SheetDensityGuardHole","densityAtD(Λz. λ[guard(1<z,-sqrt(z-1)),sqrt(z-1)],1)","ℝ","(λ(x:ℝ). (λ[guard(1<x,-sqrt(x-1)), sqrt(x-1)])//λ[x])((1:ℝ))"),
+	Case("SheetDensityAsymmetric","densityAtD(Λz. λ[-2*sqrt(z-1),sqrt(z-1)],5)","ℝ","(λ(x:ℝ). (λ[-2·sqrt(x-1), sqrt(x-1)])//λ[x])((5:ℝ))"),
+	Case("SheetDensityDifferentCentres","densityAtD(Λz. λ[2-sqrt(z-1),3+sqrt(z-1)],5)","ℝ","(λ(x:ℝ). (λ[-sqrt(x-1)+2, sqrt(x-1)+3])//λ[x])((5:ℝ))"),
+	Case("SheetDensityDifferentInputs","densityAtD(Λz. λ[-sqrt(3-z),sqrt(z-1)],5)","ℝ","(λ(x:ℝ). (λ[-sqrt(-x+3), sqrt(x-1)])//λ[x])((5:ℝ))"),
 	Case("ClosedSquareDensity","λ(y:ℝ).densityAtD(Λz. ∫dx λ[x]·δ((1-2*x)^2)[z],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMass","λ(y:ℝ).∫dx λ[x]·δ((1-2*x)^2)[y]//λ[y]","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMissing","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x/3-1)*(x/3-1)),undefined(ℝ))","ℝ","undefined(ℝ)"),
@@ -3200,6 +3218,11 @@ private void run(string directory){
 				enforce(certificate.indexOf("unrestrictedSquareDensity_zero")>=0,c.name);
 			if(c.name=="QuadraticDensityAbove"||c.name=="QuadraticDensityNegativeScale")
 				enforce(certificate.indexOf("Quadratic.literal_regular")>=0,c.name);
+		}
+		if(c.name.indexOf("SheetDensity")==0){
+			bool supported=c.name!="SheetDensityGuardHole"&&c.name!="SheetDensityAsymmetric"&&
+				c.name!="SheetDensityDifferentCentres"&&c.name!="SheetDensityDifferentInputs";
+			enforce((certificate.indexOf("RootSheet.density ")>=0)==supported,c.name);
 		}
 		if(c.name.indexOf("QuadraticChart")==0){
 			bool supported=c.name!="QuadraticChartQuartic"&&c.name!="QuadraticChartPole"&&

@@ -271,6 +271,7 @@ private struct QuadraticChart{
 	uint polynomial,map;
 	QuadraticPoint point;
 	Rational radicand,root;
+	bool fromSheets;
 }
 private struct CoverStep{ uint coefficient; bool centred,nested,lowerSwap,upperSwap,factorSwap; }
 private struct FibreStep{ uint source,charge,regular; uint[] weights; }
@@ -2321,6 +2322,51 @@ final class Bindings{
 
 	// Match the affine source certificate. A product needs a syntactically
 	// constant side so the evaluation of its multiplier is closed.
+	private struct SquareRootSheet{
+		Rational centre,factor,slope,offset;
+		string proof;
+	}
+	// Read a strict affine function of sqrt(a*y+b). The coefficient may occur
+	// on either side; only closed numeric terms are admitted beside the root.
+	private bool squareRootSheet(uint id,out SquareRootSheet s,SourceCertificates cert=null,uint depth=0){
+		if(depth>32) return false;
+		auto n=nodes[id];
+		if(n.op!=BoundOp.primitive) return false;
+		auto op=arena.view(arena.at(n.data));
+		if(op.op==Op.builtin&&op.value==Builtin.sqrtR){
+			if(!affineBody(n.a,s.slope,s.offset)) return false;
+			s.factor=Rational(1);
+			if(cert !is null)
+				s.proof="(Distribution.GraphFibre.Coordinates.RootSheet.root "~cert.affineProof(n.a).proof~")";
+			return true;
+		}
+		bool add=op.op==Op.add;
+		if(!add&&op.op!=Op.mul) return false;
+		bool left=nodes[n.a].op==BoundOp.scalar;
+		auto idLiteral=left?n.a:n.b,literal=nodes[idLiteral];
+		if(literal.op!=BoundOp.scalar||!arena.isNumber(arena.at(literal.data))) return false;
+		auto q=arena.number(arena.at(literal.data)).re;
+		if(q.words>128||!squareRootSheet(left?n.b:n.a,s,cert,depth+1)) return false;
+		if(add) s.centre=s.centre+q;
+		else{ s.centre=s.centre*q; s.factor=s.factor*q; }
+		if(s.centre.words>128||s.factor.words>128) return false;
+		if(cert !is null){
+			auto law=add?"add_":"mul_";law~=left?"left":"right";
+			auto v=SourceCertificates.q(q);
+			s.proof="(Distribution.GraphFibre.Coordinates.RootSheet."~law~" "~s.proof~" "~v~" "~cert.numericProof(idLiteral,Rational(0),v)~")";
+		}
+		return true;
+	}
+	private bool oppositeRootSheets(uint cover,out SquareRootSheet low,out SquareRootSheet high,SourceCertificates cert=null){
+		if(nodes[cover].op!=BoundOp.distributionInverseCover) return false;
+		auto xs=nodes[nodes[cover].a];
+		if(xs.op!=BoundOp.vectorCons) return false;
+		auto ys=nodes[xs.b];
+		if(ys.op!=BoundOp.vectorCons||nodes[ys.b].op!=BoundOp.vectorNil) return false;
+		auto l=nodes[xs.a],r=nodes[ys.a];
+		return l.op==BoundOp.lambda&&r.op==BoundOp.lambda&&squareRootSheet(l.a,low,cert)&&squareRootSheet(r.a,high,cert)&&
+			!high.factor.zero&&high.factor==-low.factor&&high.centre==low.centre&&high.slope==low.slope&&high.offset==low.offset;
+	}
 	private bool affineBody(uint id,out Rational a,out Rational b){
 		bool shape(uint i){
 			auto n=nodes[i];
@@ -9437,7 +9483,7 @@ final class Bindings{
 			return true;
 		}
 		uint rememberQuadratic(QuadraticChart chart,ScalarDomain check){
-			chart.polynomial=cast(uint)scalarDomains.length; scalarDomains~=check;
+			if(!chart.fromSheets){ chart.polynomial=cast(uint)scalarDomains.length; scalarDomains~=check; }
 			auto index=cast(uint)quadratics.length; quadratics~=chart; return index;
 		}
 		BoundTerm quadraticChart(BoundTerm graph,out uint evidence){
@@ -9545,24 +9591,35 @@ final class Bindings{
 			return primitive(arena.mask(arena.boolean(true),arena.real_(1)),[nonnegative,weight]);
 		}
 		BoundTerm quadraticDensity(BoundTerm term,out uint evidence){
-			auto n=node(term); uint map;
-			if(n.op==BoundOp.distributionGraphMass) map=n.a;
-			else{
-				auto d=nodes[n.a];
-				if(d.op==BoundOp.distributionPushforwardOn&&nodes[d.a].op==BoundOp.lambda&&isTrue(nodes[d.a].a,true))
-					map=d.b;
+			auto n=node(term); QuadraticChart chart; ScalarDomain check;
+			if(n.op==BoundOp.distributionDensityAt&&nodes[n.a].op==BoundOp.distributionInverseCover){
+				CoverStep known;
+				if(squareFromCover(at(n.a),known)!=BoundTerm.init) return BoundTerm.init;
+				SquareRootSheet lower,upper;
+				if(!oppositeRootSheets(n.a,lower,upper)) return BoundTerm.init;
+				auto square=upper.factor*upper.factor,t=square*upper.slope,u=square*upper.offset;
+				if(t.words>128||u.words>128) return BoundTerm.init;
+				chart.centre=arena.real_(upper.centre); chart.scale=arena.real_(t); chart.offset=arena.real_(u);
+				chart.fromSheets=true;
+			}else{
+				uint map;
+				if(n.op==BoundOp.distributionGraphMass) map=n.a;
 				else{
-					uint weight,point;
-					if(!realAtomRow(at(n.a),weight,point)||weight!=uint.max) return BoundTerm.init;
-					map=lambda(at(point)).id;
+					auto d=nodes[n.a];
+					if(d.op==BoundOp.distributionPushforwardOn&&nodes[d.a].op==BoundOp.lambda&&isTrue(nodes[d.a].a,true))
+						map=d.b;
+					else{
+						uint weight,point;
+						if(!realAtomRow(at(n.a),weight,point)||weight!=uint.max) return BoundTerm.init;
+						map=lambda(at(point)).id;
+					}
 				}
-			}
-			if(powerMap(map,true).degree) return BoundTerm.init;
-			QuadraticChart chart; ScalarDomain check;
-			if(!quadraticParameters(map,chart,check)) return BoundTerm.init;
-			if(arena.number(chart.offset).zero&&arena.number(chart.scale).re>Rational(0)){
-				ScalarDomain alreadySquare;
-				if(factoredSquare(map,alreadySquare).degree) return BoundTerm.init;
+				if(powerMap(map,true).degree) return BoundTerm.init;
+				if(!quadraticParameters(map,chart,check)) return BoundTerm.init;
+				if(arena.number(chart.offset).zero&&arena.number(chart.scale).re>Rational(0)){
+					ScalarDomain alreadySquare;
+					if(factoredSquare(map,alreadySquare).degree) return BoundTerm.init;
+				}
 			}
 			auto ctx=context(term),y=at(n.b),zero=arena.real_(0);
 			auto a=arena.number(chart.scale).re,j=a<Rational(0)?-a:a;
@@ -10278,6 +10335,16 @@ final class Bindings{
 			auto current=node(at(result.output)); BoundTerm next; BindingRule rule; uint extra=uint.max;
 			uint predicateDomain=uint.max,excludedZero=uint.max;
 			auto ctx=context(at(result.output));
+
+			if(result.output!=t.id&&current.op==BoundOp.distributionDensityAt&&nodes[current.a].op==BoundOp.distributionInverseCover&&steps<budget){
+				uint witness; auto observed=quadraticDensity(at(result.output),witness);
+				if(observed!=BoundTerm.init){
+					++steps;
+					auto step=emit(BindingRule.distributionQuadraticDensity,result.output,observed.id,uint.max,uint.max,witness);
+					chain~=RewriteFrame(t.id,result.output,result.proof,step);
+					return Result(observed.id,uint.max);
+				}
+			}
 
 			bool constantSet(uint id,bool value){ auto n=nodes[id]; return n.op==BoundOp.set&&isTrue(n.a,value); }
 			BoundTerm both(BoundTerm x,BoundTerm y){ return primitive(arena.and_(arena.boolean(true),arena.boolean(true)),[x,y]); }
@@ -14015,6 +14082,17 @@ final class Bindings{
 		Term[] stepNumerics;string stepDeclarations;string[] stepProofs=new string[result.integrals.length],stepOutputs=new string[result.integrals.length];
 		uint[] proofRoots;
 		foreach(d;result.domains) if(d.maskBody!=uint.max) proofRoots~=d.maskBody;
+		Table!(uint,string) sheetProofs;
+		foreach(p;result.proofs) if(p.rule==BindingRule.distributionQuadraticDensity&&result.quadratics[p.extra].fromSheets){
+			auto cover=nodes[p.from].a,xs=nodes[nodes[cover].a],body=nodes[xs.a].a;
+			auto c=new SourceCertificates("rootsheet"~to!string(p.extra)~"_",body);
+			SquareRootSheet l,r; enforce(oppositeRootSheets(cover,l,r,c),"missing inverse square-root sheets");
+			auto chart=result.quadratics[p.extra],t=arena.number(chart.scale).re,u=arena.number(chart.offset).re,j=t<Rational(0)?-t:t;
+			alias q=SourceCertificates.q;
+			sheetProofs.set(p.extra,"Distribution.GraphFibre.Coordinates.RootSheet.density "~q(r.centre)~" "~q(r.factor)~" "~q(r.slope)~" "~
+				q(r.offset)~" "~q(t)~" "~q(u)~" "~q(j)~" (of_decide_eq_true rfl) (of_decide_eq_true rfl) rfl rfl rfl "~l.proof~" "~r.proof);
+			stepNumerics~=c.numericTerms;stepNumerics~=[chart.scale,chart.offset,arena.real_(j)];stepDeclarations~=c.declarations;
+		}
 		foreach(chart;result.quadratics) if(chart.point!=QuadraticPoint.symbolic){
 			auto a=arena.number(chart.scale).re;
 			stepNumerics~=arena.real_(a<Rational(0)?-a:a);
@@ -16686,24 +16764,26 @@ final class Bindings{
 					alias q=SourceCertificates.q;
 					string literal(Term v){return q(arena.number(v).re);}
 					string number(Term v){return "(Numeric.calculate_sound ξ n"~to!string(v.id)~" "~literal(v)~" rfl)";}
-					auto env="({ ξ with real := fun i => if i = "~to!string(result.domains[id].variable)~" then x else ξ.real i })";
-					auto args=literal(chart.centre)~" "~literal(chart.scale)~" "~literal(chart.offset)~" ";
-					auto nums=number(chart.centre)~" "~number(chart.scale)~" "~number(chart.offset)~" ";
-					auto equation="(f := "~realBody(chart.map)~") (fun x => QSym.BindingScalar"~to!string(id)~".zero "~env~")";
-					string law;
-					if(p.rule==BindingRule.distributionQuadraticChart)
-						law="image "~args~"(of_decide_eq_true rfl) "~nums~equation;
-					else{
-						auto a=arena.number(chart.scale).re,gain=arena.real_(a<Rational(0)?-a:a);
-						auto kind=n.op==BoundOp.distributionGraphMass?"mass":nodes[n.a].op==BoundOp.distributionBind?"bind":
-							nodes[n.a].op==BoundOp.distributionIntegral?"integral":"density";
-						law="observation "~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
-							" ("~name(n.b)~".eval ξ ρ) ."~kind;
-					}
 					auto ns="Distribution.GraphFibre.Coordinates.Quadratic.";
-					law=ns~law;
+					auto a=arena.number(chart.scale).re,gain=arena.real_(a<Rational(0)?-a:a);
+					string law;
+					if(chart.fromSheets){
+						law=sheetProofs.get(p.extra,"")~" "~number(chart.scale)~" "~number(chart.offset)~" "~number(gain)~" ("~name(n.b)~".eval ξ ρ)";
+					}else{
+						auto env="({ ξ with real := fun i => if i = "~to!string(result.domains[id].variable)~" then x else ξ.real i })";
+						auto equation="(f := "~realBody(chart.map)~") (fun x => QSym.BindingScalar"~to!string(id)~".zero "~env~")";
+						auto args=literal(chart.centre)~" "~literal(chart.scale)~" "~literal(chart.offset)~" ";
+						auto nums=number(chart.centre)~" "~number(chart.scale)~" "~number(chart.offset)~" ";
+						if(p.rule==BindingRule.distributionQuadraticChart) law=ns~"image "~args~"(of_decide_eq_true rfl) "~nums~equation;
+						else{
+							auto kind=n.op==BoundOp.distributionGraphMass?"mass":nodes[n.a].op==BoundOp.distributionBind?"bind":
+								nodes[n.a].op==BoundOp.distributionIntegral?"integral":"density";
+							law=ns~"observation "~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
+								" ("~name(n.b)~".eval ξ ρ) ."~kind;
+						}
+					}
 					if(chart.point!=QuadraticPoint.symbolic){
-						auto v=arena.at(nodes[n.b].data),a=arena.number(chart.scale).re,gain=arena.real_(a<Rational(0)?-a:a);
+						auto v=arena.at(nodes[n.b].data);
 						auto z=q(chart.radicand);
 						auto arg=ns~"literal_argument "~literal(chart.scale)~" "~literal(chart.offset)~" "~literal(v)~" "~z~" "~
 							number(chart.scale)~" "~number(chart.offset)~" "~number(v)~" rfl";
