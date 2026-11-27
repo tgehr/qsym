@@ -524,12 +524,27 @@ package final class Field{
 		Factor[] output; foreach(f;result){ if(f.exponent>uint.max||f.exponent<-(cast(long)uint.max)) throw new Limit; if(f.exponent) output~=f; }
 		return output;
 	}
+	// Multiplication can leave x and x^k as separate operands. Polynomial
+	// division compares their combined exponent with the leading divisor.
+	private Mono[] divisionPolynomial(Term t){
+		auto rows=polynomial(t);
+		foreach(ref m;rows){
+			bool repeated;
+			foreach(i,f;m.factors){
+				// Keep reciprocal factors visible to the domain check in divide.
+				if(f.exponent<0){ repeated=false; break; }
+				if(i&&f.atom==m.factors[i-1].atom) repeated=true;
+			}
+			if(repeated) m.factors=factors(m.factors,[]);
+		}
+		return collect(rows);
+	}
 	private Proof divide(Term t,uint ctx){
 		auto n=a.view(t),p=a.at(n.a),inv=a.at(n.b);
 		if(a.view(inv).op!=Op.inv){ if(a.view(p).op!=Op.inv) return d.refl(t,ctx); auto z=p; p=inv; inv=z; }
 		auto denominator=a.viewChild(inv,0);
 		if(a.view(denominator).op!=Op.add) return d.refl(t,ctx);
-		auto num=collect(polynomial(p)),den=collect(polynomial(denominator));
+		auto num=divisionPolynomial(p),den=divisionPolynomial(denominator);
 		foreach(m;num~den) foreach(f;m.factors) if(f.exponent<0) return d.refl(t,ctx);
 		if(!den.length) return d.refl(t,ctx);
 		Mono[] quotient; auto remainder=num;

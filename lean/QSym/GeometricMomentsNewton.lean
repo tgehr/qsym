@@ -1,4 +1,5 @@
 import QSym.GeometricMoments
+import QSym.SummationLinearity
 import Mathlib.Data.Nat.Choose.Cast
 import Mathlib.Analysis.Polynomial.Basic
 
@@ -296,5 +297,41 @@ theorem series_fraction {test power : ℕ → Option ℝ} {p : SampledPolynomial
     value norm (some (fun n => if left then Value.mul (test n) (power n) else Value.mul (power n) (test n))) =
       Binding.guardValue (interval r one minus) (Value.mul answer (Value.inv (denominatorPower r one minus cs.length))) :=
   (series ht hp left cs ns w h hnum hn one minus h1 hm ha).trans (fraction_form r one minus answer _ h1 hm)
+
+private def reducedDenominator (r one minus : Option ℝ) (k : ℕ) : Option ℝ :=
+  if k = 1 then Value.add one (Value.mul r minus) else denominatorPower r one minus k
+
+private theorem reducedDenominator_eq (r one minus : Option ℝ) (k : ℕ) :
+    reducedDenominator r one minus k = denominatorPower r one minus k := by
+  by_cases h : k = 1 <;> simp [reducedDenominator, denominatorPower, h]
+
+/-- The extra endpoint at one follows from the original rows. Inside the
+open interval the emission cancels one power of the denominator. -/
+theorem normalized_fraction (r one minus : Option ℝ) (k : ℕ) {c num : Option ℝ} {f g : ℕ → Option ℝ}
+    (h1 : one = some 1) (hm : minus = some (-1)) (hc : c = r.map (fun q => 1-q))
+    (hf : SummationLinearity.Factored c f g) (hp : ∀ n, (g n).isSome = r.isSome)
+    (hs : value norm (some g) =
+      Binding.guardValue (interval r one minus) (Value.mul num (Value.inv (denominatorPower r one minus (k+1))))) :
+    value norm (some f) = Binding.guardValue (Value.and (Value.lt minus r) (Value.le r one))
+      (Value.mask (Value.lt r one) (Value.mul num (Value.inv (reducedDenominator r one minus k)))) := by
+  rw [reducedDenominator_eq, SummationLinearity.factor_present r c hf hp, hs, hc, h1, hm]
+  cases r with
+  | none => rfl
+  | some q =>
+    rcases lt_trichotomy q 1 with hi | rfl | hi
+    · have nz : 1-q ≠ 0 := sub_ne_zero.mpr (ne_of_gt hi)
+      by_cases lo : -1 < q
+      · cases num <;> simp [interval, denominatorPower, lo, hi, hi.le, ← sub_eq_add_neg, nz, pow_ne_zero _ nz,
+          Value.nonzero, Value.lt, Value.le, Value.and, Value.mask, Value.add, Value.mul, Value.inv, Binding.guardValue]
+        field_simp
+        rw [pow_succ]
+        ring
+      · simp [interval, lo, hi, hi.le, nz, Value.nonzero, Value.lt, Value.le, Value.and, Value.mask,
+          Value.mul, Binding.guardValue]
+    · simp [Value.nonzero, Value.lt, Value.le, Value.and, Value.mask, Binding.guardValue]
+    · have nz : 1-q ≠ 0 := sub_ne_zero.mpr (ne_of_lt hi)
+      have lo : -1 < q := by linarith
+      simp [interval, lo, not_lt_of_gt hi, not_le_of_gt hi, nz, Value.nonzero, Value.lt, Value.le, Value.and,
+        Value.mask, Value.mul, Binding.guardValue]
 
 end QSym.GeometricMoments.Newton
