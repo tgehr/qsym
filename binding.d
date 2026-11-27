@@ -1413,53 +1413,73 @@ final class Bindings{
 	// polynomial and its source proof use the same compositional operations.
 	private bool momentPolynomial(uint id,out MomentPolynomial result,bool exporting,uint depth=0){
 		if(depth>64) return false;
-		enum ns="GeometricMoments.NatTest.";
-		auto n=nodes[id];
+		auto n=nodes[id],ty=type(at(id));
+		Sort sort;
+		if(ty==scalarType(Sort.natural)) sort=Sort.natural;
+		else if(ty==scalarType(Sort.integer)) sort=Sort.integer;
+		else if(ty==scalarType(Sort.rational)) sort=Sort.rational;
+		else if(ty==scalarType(Sort.real_)) sort=Sort.real_;
+		else return false;
+		bool exact=sort!=Sort.real_;
+		enum realTest="GeometricMoments.NatTest.",exactTest="GeometricMoments.ExactTest.";
+		string scalarKind=sort==Sort.natural?".natural":sort==Sort.integer?".integer":".rational";
 		if(n.op==BoundOp.scalar){
 			auto t=arena.at(n.data);
 			Rational slope,c;
-			if(arena.sort(t)!=Sort.real_||!integralAffine(arena,t,Term.init,slope,c)||c.words>128) return false;
+			if(exact){
+				if(!arena.isNumber(t)) return false;
+				c=arena.number(t).re;
+			}else if(!integralAffine(arena,t,Term.init,slope,c)) return false;
+			if(c.words>128) return false;
 			result.coefficients=[c];
 			if(exporting){
 				auto q=SourceCertificates.q(c),name="n"~to!string(t.id);
 				result.polynomial="(.constant "~q~")";
-				result.proof="("~ns~"constant ("~name~".eval ξ) "~q~" (Numeric.calculate_sound ξ "~name~" "~q~" rfl))";
+				if(exact){
+					auto law=sort==Sort.natural?"constantN":sort==Sort.integer?"constantZ":"constantQ";
+					auto literal=sort==Sort.rational?q:"("~to!string(c.numerator)~(sort==Sort.natural?" : ℕ)":" : ℤ)");
+					result.proof="("~exactTest~law~" ("~name~".eval ξ) "~literal~" rfl)";
+				}else result.proof="("~realTest~"constant ("~name~".eval ξ) "~q~" (Numeric.calculate_sound ξ "~name~" "~q~" rfl))";
 			}
+			return true;
+		}
+		if(n.op==BoundOp.variable&&n.data==0&&sort==Sort.natural){
+			result.coefficients=[Rational(0),Rational(1)];
+			if(exporting){ result.polynomial=".index"; result.proof=exactTest~"index"; }
 			return true;
 		}
 		if(n.op!=BoundOp.primitive) return false;
-		auto op=arena.view(arena.at(n.data));
-		if(op.op==Op.builtin&&op.value==Builtin.castQR){
-			auto v=id;
-			foreach(c;[Builtin.castQR,Builtin.castZQ,Builtin.castNZ]){
-				if(!primitiveOp(v,Op.builtin)||arena.view(arena.at(nodes[v].data)).value!=c) return false;
-				v=nodes[v].a;
+		auto op=arena.view(arena.at(n.data)),operation=op.op;
+		if(operation==Op.builtin){
+			if(op.value>=Builtin.castNZ&&op.value<=Builtin.castQR){
+				// ExactTest embeds the native scalar using this same cast chain.
+				return momentPolynomial(n.a,result,exporting,depth+1);
 			}
-			if(nodes[v].op!=BoundOp.variable||nodes[v].data!=0) return false;
-			result.coefficients=[Rational(0),Rational(1)];
-			if(exporting){ result.polynomial=".index"; result.proof=ns~"index"; }
-			return true;
+			if(op.value==Builtin.addN||op.value==Builtin.addZ||op.value==Builtin.addQ) operation=Op.add;
+			else if(op.value==Builtin.mulN||op.value==Builtin.mulZ||op.value==Builtin.mulQ) operation=Op.mul;
+			else return false;
 		}
-		if(op.op!=Op.add&&op.op!=Op.mul&&op.op!=Op.pow) return false;
+		if(operation!=Op.add&&operation!=Op.mul&&operation!=Op.pow) return false;
 		MomentPolynomial a,b;
 		if(!momentPolynomial(n.a,a,exporting,depth+1)) return false;
-		if(op.op==Op.pow){
+		auto ns=exact?exactTest:realTest,args=exact?" "~scalarKind~" ":" ";
+		if(operation==Op.pow){
 			if(op.value>32||(a.coefficients.length-1)*op.value>32) return false;
 			result.coefficients=[Rational(1)];
 			foreach(i;0..op.value) result.coefficients=polyProduct(result.coefficients,a.coefficients);
 			if(exporting){
 				auto k=to!string(op.value);
 				result.polynomial="(.pow "~a.polynomial~" "~k~")";
-				result.proof="("~ns~"pow "~k~" "~a.proof~")";
+				result.proof="("~ns~"pow"~args~k~" "~a.proof~")";
 			}
 		}else{
 			if(!momentPolynomial(n.b,b,exporting,depth+1)) return false;
-			if(op.op==Op.mul&&a.coefficients.length+b.coefficients.length>34) return false;
-			result.coefficients=op.op==Op.add?polySum(a.coefficients,b.coefficients):polyProduct(a.coefficients,b.coefficients);
+			if(operation==Op.mul&&a.coefficients.length+b.coefficients.length>34) return false;
+			result.coefficients=operation==Op.add?polySum(a.coefficients,b.coefficients):polyProduct(a.coefficients,b.coefficients);
 			if(exporting){
-				auto law=op.op==Op.add?"add":"mul";
+				auto law=operation==Op.add?"add":"mul";
 				result.polynomial="(."~law~" "~a.polynomial~" "~b.polynomial~")";
-				result.proof="("~ns~law~" "~a.proof~" "~b.proof~")";
+				result.proof="("~ns~law~args~a.proof~" "~b.proof~")";
 			}
 		}
 		foreach(c;result.coefficients) if(c.words>128) return false;

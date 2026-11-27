@@ -414,6 +414,15 @@ struct Syntax{
 					auto f=cast(Builtin)n.value,info=builtinInfo(f),code=info.code;
 					if(conversion(n)){
 						p=memo[n.a]; auto base=a.view(uncast(n.a));
+						if(exactProduct(base)){
+							// Reparse can promote two scalar operands separately.
+							// Use the same variable order as a real product region.
+							auto l=uncast(base.a),r=uncast(base.b);
+							if(a.view(l).op==Op.variable&&a.view(r).op==Op.variable&&compare(a,l,r)>0){
+								auto first=base.a; base.a=base.b; base.b=first;
+								p=product(base);
+							}
+						}
 						p.liftedProduct|=exactProduct(base); p.lowerVariable|=base.op==Op.variable;
 					}
 					else if(code=="pi") p.text="π";

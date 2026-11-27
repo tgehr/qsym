@@ -2194,6 +2194,23 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("ExactMomentNatural","λ(q:ℝ).∑(n:ℕ). (((n^2+3*n+1):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(-q+2)+1)·((-q+1)^3)⁻¹"),
+	Case("ExactMomentInteger","λ(q:ℝ).∑(n:ℕ). ((((n:ℤ)*(-2)+(n:ℤ)^2):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(3·q-1)·((-q+1)^3)⁻¹"),
+	Case("ExactMomentRational","λ(q:ℝ).∑(n:ℕ). (((1/3*(n:ℚ)^2-(n:ℚ)/2):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q·(5/6)-1/6)·((-q+1)^3)⁻¹"),
+	Case("ExactMomentCrossed","λ(q:ℝ).∑(n:ℕ). (((3*n+1:ℤ)^2:ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(4·q+13)+1)·((-q+1)^3)⁻¹"),
+	Case("ExactMomentMixed","λ(q:ℝ).∑(n:ℕ). (((n^2:ℕ):ℝ)+(n:ℝ)+1/3)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(q·(1/3)+4/3)+1/3)·((-q+1)^3)⁻¹"),
+	Case("ExactMomentShiftSquare","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
+	Case("ExactMomentShiftStride","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(δ(3),scaleD(q,bindD(d,λ(n:ℕ).δ(n+2)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+3)·((-q+1)^2)⁻¹"),
+	Case("ExactMomentShiftStrideSquare","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(2),scaleD(q,bindD(d,λ(n:ℕ).δ(n+3)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (q·(q+13)+4)·((-q+1)^3)⁻¹"),
+	Case("ExactMomentNormalizedShift","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ","λ(q:{q:ℝ | q≤1∧0≤q}). [q≠1]·((guard(-1<q∧q<1,q·(q+1)·((-q+1)^3)⁻¹))·(-q+1))"),
+	Case("ExactMomentScaledShift","λ(w:ℝ).λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(scaleD(w,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ→ℝ","λ(w:ℝ). λ(q:{q:ℝ | 0≤w∧0≤q}). [w≠0]·(w·(guard(-1<q∧q<1,q·(q+1)·((-q+1)^3)⁻¹)))"),
+	Case("ExactMomentStrideHalf","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(δ(3),scaleD(q,bindD(d,λ(n:ℕ).δ(n+2))))))))(1/2)","ℝ","10"),
+	Case("ExactMomentShiftHalf","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(1/2)","ℝ","6"),
+	Case("ExactMomentShiftOne","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(1)","ℝ","∑(n:ℕ). (n^2:ℝ)"),
+	Case("ExactMomentShiftNegative","(λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))))(-1/2)","ℝ","undefined(ℝ)"),
+	Case("ExactMomentRawSigned","λ(q:ℝ).∑(n:ℕ). (((n^2+1:ℕ):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (q·(2·q-1)+1)·((-q+1)^3)⁻¹"),
+	Case("ExactMomentMissingAxis","λ(h:ℕ→ℕ).λ(q:ℝ).∑(n:ℕ). (((h(n)*n:ℕ):ℝ))*powRN(q,n)","(ℕ→ℕ)→ℝ→ℝ","λ(h:ℕ→ℕ). λ(q:ℝ). ∑(n:ℕ). n·h(n)·q^n"),
+	Case("ExactMomentPartialSub","λ(q:ℝ).∑(n:ℕ). (((n sub 1):ℝ))*powRN(q,n)","ℝ→ℝ","λ(q:ℝ). ∑(n:ℕ). (guard(n≠0,(n-1:ℝ)))·q^n"),
 	Case("NewtonMomentSquare","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
 	Case("NewtonMomentReverse","λ(q:ℝ).∑(n:ℕ). powRN(q,n)*(n:ℝ)^2","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
 	Case("NewtonMomentAffine","λ(q:ℝ).∑(n:ℕ). (2*(n:ℝ)+3)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). (-q+3)·((-q+1)^2)⁻¹"),
@@ -2204,8 +2221,8 @@ private Case[] cases(){
 	Case("NewtonMomentMissingOrigin","λ(q:ℝ).∑(n:ℕ). ((n:ℝ)*((n:ℝ)-1)*((n:ℝ)-2))*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). 6·((-q+1)^4)⁻¹·q^3"),
 	Case("NewtonMomentPartial","λ(h:ℕ→ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(h(0),n)","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | abs(h(0))<1}). h(0)·(h(0)+1)·((-h(0)+1)⁻¹)^3"),
 	Case("NewtonMomentLifted","λ(q:ℚ).∑(n:ℕ). ((n:ℝ)^2+1)*castQR(powQN(q,n))","ℚ→ℝ","λ(q:{q:ℚ | -1<q∧(q<1∧q≠1)}). ((q·(2·q-1)+1)·((-q+1)⁻¹)^3:ℝ)"),
-	Case("NewtonMomentShiftSquare","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). ∑(i:ℕ). i^2·q^i"),
-	Case("NewtonMomentShiftStride","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(δ(3),scaleD(q,bindD(d,λ(n:ℕ).δ(n+2)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q}). ∑(i:ℕ). (2·i+3)·q^i"),
+	Case("NewtonMomentShiftSquare","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ)^2,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). q·(q+1)·((-q+1)^3)⁻¹"),
+	Case("NewtonMomentShiftStride","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(δ(3),scaleD(q,bindD(d,λ(n:ℕ).δ(n+2)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+3)·((-q+1)^2)⁻¹"),
 	Case("NewtonMomentAtHalf","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(1/2)","ℝ","6"),
 	Case("NewtonMomentAlternating","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(-1/2)","ℝ","-2/27"),
 	Case("NewtonMomentAtZero","(λ(q:ℝ).∑(n:ℕ). ((n:ℝ)^2)*powRN(q,n))(0)","ℝ","0"),
@@ -3052,6 +3069,8 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="ExactMomentNatural"||c.name=="ExactMomentShiftStride"||c.name=="ExactMomentShiftSquare"||c.name=="ExactMomentRational")
+			enforce(certificate.indexOf("GeometricMoments.ExactTest")>=0,c.name);
 		if(c.name=="NewtonMomentSquare"||c.name=="NewtonMomentCubic"||c.name=="NewtonMomentAffine"||c.name=="NewtonMomentLifted")
 			enforce(certificate.indexOf("GeometricMoments.Newton.series")>=0,c.name);
 		if(c.name=="WeightedMomentLeft"||c.name=="WeightedMomentNormalizedShift"||c.name=="WeightedMomentPolynomial")
