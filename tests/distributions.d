@@ -2194,6 +2194,22 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("ParameterShiftRaw","λ(q:ℝ).(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))","ℝ→Distribution(ℕ)","λ(q:ℝ). μ(d:Distribution(ℕ)). Λ(x:ℕ). δ(0)[x]+(scaleD(q,Λ(x:ℕ). (∫(n:ℕ). (δ(n+1)[x])·(d[n]))))[x]"),
+	Case("ParameterShiftMass","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹"),
+	Case("ParameterShiftNormalized","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→ℝ","λ(q:{q:ℝ | q≤1∧0≤q}). ∑(i:ℕ). (-q+1)·q^i"),
+	Case("ParameterShiftProbe","λ(q:ℝ).λ(h:ℕ→ℝ).massD(weightD(h,(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→(ℕ→ℝ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℝ | 0≤q}). ∑(i:ℕ). h(i)·q^i"),
+	Case("ParameterShiftStride","λ(q:ℝ).λ(h:ℕ→ℝ).massD(weightD(h,(μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(3)),scaleD(q,bindD(d,λ(n:ℕ).δ(2+n)))))))","ℝ→(ℕ→ℝ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℝ | 0≤-q+1∧0≤q}). ∑(i:ℕ). h(3+i·2)·(-q+1)·q^i"),
+	Case("ParameterShiftIndependent","λ(w:ℝ).λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(w,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→ℝ→ℝ","λ(w:ℝ). λ(q:{q:ℝ | 0≤w∧0≤q}). ∑(i:ℕ). w·q^i"),
+	Case("ParameterShiftPartialStart","λ(q:ℝ).λ(h:ℕ→ℕ).massD((μ(d:Distribution(ℕ)).addD(δ(h(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ→(ℕ→ℕ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℕ | 0≤q∧(holds((0∈domain(h))))}). ∑(i:ℕ). (guard(holds((0∈domain(h))),(1:ℝ)))·q^i"),
+	Case("ParameterShiftPartialRate","λ(h:ℕ→ℝ).massD((μ(d:Distribution(ℕ)).addD(δ(0),scaleD(h(0),bindD(d,λ(n:ℕ).δ(n+1))))))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)∧abs(h(0))<1}). (-h(0)+1)⁻¹"),
+	Case("ParameterShiftPartialWeight","λ(h:ℕ→ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(h(0),δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)}). ∑(i:ℕ). h(0)·(1/2)^i"),
+	Case("ParameterShiftNegativeRatio","massD((μ(d:Distribution(ℕ)).addD(δ(0),scaleD(-1,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ","undefined(ℝ)"),
+	Case("ParameterShiftNegativeEmission","massD((μ(d:Distribution(ℕ)).addD(scaleD(-1,δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ","undefined(ℝ)"),
+	Case("ParameterShiftMissingEmission","massD((μ(d:Distribution(ℕ)).addD(scaleD(undefined(ℝ),δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))))","ℝ","undefined(ℝ)"),
+	Case("ParameterShiftUnbounded","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))(2)","ℝ","undefined(ℝ)"),
+	Case("ParameterShiftAtZero","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))(0)","ℝ","1"),
+	Case("ParameterShiftAtHalf","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))(1/2)","ℝ","1"),
+	Case("ParameterShiftUnitRate","(λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))(1)","ℝ","0"),
 	Case("NormalizedRetryMass","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ((0:ℕ))),scaleD(q,d))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q≤1}). [q<1]"),
 	Case("NormalizedRetryReverseSum","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD((-q)+1,δ((0:ℕ))),scaleD(q,d))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q≤1}). [q<1]"),
 	Case("NormalizedRetryReverseProduct","λ(q:ℝ).massD((μ(d:Distribution(ℕ)).addD(scaleD(1+q*(-1),δ((0:ℕ))),scaleD(q,d))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q≤1}). [q<1]"),
@@ -2955,6 +2971,8 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="ParameterShiftProbe"||c.name=="ParameterShiftStride"||c.name=="ParameterShiftNegativeRatio"||c.name=="ParameterShiftPartialStart")
+			enforce(certificate.indexOf("CountableObservation.nat_shift_parameter ")>=0,c.name);
 		if(c.name=="NormalizedRetryMass"||c.name=="NormalizedRetryRoundFunction"||c.name=="NormalizedRetryReverseBoth"||c.name=="WeightedRetryNormalized")
 			enforce(certificate.indexOf("CountableObservation.fixed_normalized ")>=0,c.name);
 		if(c.name=="WeightedRetryRaw"||c.name=="WeightedRetryPartialPoint")
@@ -4746,8 +4764,8 @@ private void run(string directory){
 	foreach(source;[
 		"μ(d:Distribution(ℝ)).addD(δ((1:ℝ)),scaleD(1/2,bindD(d,λ(x:ℝ).δ(5-2*x))))",
 		"μ(d:Distribution(ℝ)).addD(δ((1:ℝ)),scaleD(1/2,bindD(d,λ(x:ℝ).δ(5-x/0))))",
-		"μ(d:Distribution(ℕ)).addD(δ(0),scaleD(-1,bindD(d,λ(n:ℕ).δ(n+1))))",
-		"μ(d:Distribution(ℕ)).addD(scaleD(-1,δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))",
+		"μ(d:Distribution(ℕ)).addD(δ(0),scaleD(massD(d),bindD(d,λ(n:ℕ).δ(n+1))))",
+		"μ(d:Distribution(ℕ)).addD(scaleD(massD(d),δ(0)),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+1))))",
 		"μ(d:Distribution(ℕ)).addD(δ(0),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+n))))",
 		"μ(d:Distribution(ℝ)).scaleD(1/2,addD(δ(massD(d)),d))", "μ(d:Distribution(ℝ)).scaleD(-1,addD(δ(0),d))",
 		"μ(d:Distribution(ℝ)).addD(scaleD(-1,d),d)", "μ(d:Distribution(ℝ)).Λx. x·d[x]",

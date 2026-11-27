@@ -279,6 +279,12 @@ private theorem fixed_unrepresented {f : D α → Option (D α)} {n : ℕ} {d : 
     simpa only [trackedChain, Tracks] using (dif_neg missing : (if h : ∃ s, Tracks f s then some h.choose else none) = none)
   simp [fixedValue, noChain]
 
+theorem fixed_first_unrepresented {f : D α → Option (D α)}
+    (bad : ∀ d k, f .zero = some d → ¬ Represents d k) : fixedValue (some f) = none := by
+  cases first : f .zero with
+  | none => exact fixed_missing (n := 1) first
+  | some d => exact fixed_unrepresented (n := 1) first (fun k => bad d k first)
+
 /-- Identifying the source coefficient with a parameter leaves its domain
 to the actual iteration, including a missing or negative coefficient. -/
 theorem fixed_scaled_parameter (swap : Bool) (r : Option ℝ) {seed : Option (D α)}
