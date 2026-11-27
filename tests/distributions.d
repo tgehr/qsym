@@ -2786,6 +2786,10 @@ private void run(string directory){
 			enforce(certificate.indexOf("Distribution.Atomic.Observation.retry")>=0,c.name);
 			if(c.name=="RetryObservationMappedMoment") enforce(certificate.indexOf("Observation.realBind (Distribution.Atomic.Observation.weight")>=0,c.name);
 		}
+		if(c.name=="FlatFixedDistFunction"||c.name=="RecursiveDistributionState"||c.name=="DiscountFibreCaptured"){
+			enforce((certificate.indexOf("Recursion.program_unfold ")>=0)==(c.name=="RecursiveDistributionState"),c.name);
+			enforce((certificate.indexOf("theorem body")>=0)==(c.name!="DiscountFibreCaptured"),c.name);
+		}
 		if(c.name=="FlatFixedDistFunction"||c.name=="FlatFixedDistribution")
 			enforce((certificate.indexOf("Recursion.fixed_unit_first")>=0)==(c.name=="FlatFixedDistFunction"),c.name);
 		if(c.name.indexOf("ConditionalFix")==0){

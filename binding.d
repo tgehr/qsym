@@ -13427,6 +13427,13 @@ final class Bindings{
 			code~="noncomputable def t"~to!string(i)~dimDecl~" (γ : Binding.Globals) : Binding.Expr "~ctxName(n.context)~" "~leanType(types[n.type])~" := "~expr~"\n";
 		}
 		code~=stepDeclarations;
+		// A solved recurrence still certifies its source program. Its separate
+		// unfolding lemma is only needed by a step that actually unfolds it.
+		auto unrolled=new bool[nodes.length],firstStep=new bool[nodes.length];
+		foreach(p;result.proofs){
+			if(p.rule==BindingRule.fixedApp) unrolled[nodes[p.from].a]=true;
+			if(p.rule==BindingRule.fixedUnitFirst) firstStep[p.from]=true;
+		}
 		foreach(i,n;nodes) if(used[i]&&n.op==BoundOp.fixed){
 			auto v=pool.view(types[n.type]),a="("~leanType(v.fields[0])~" : Binding.Ty).denote",b="("~leanType(v.fields[1])~" : Binding.Ty).denote";
 			auto env="(Binding.Env.cons (a := "~leanType(v.fields[0])~") (some x) (Binding.Env.cons (a := "~leanType(types[n.type])~") (some (fun (_ : "~a~") => (none : Option "~b~"))) ρ))";
@@ -13464,11 +13471,16 @@ final class Bindings{
 				return bridge.length?"(Eq.trans "~proof~" ("~bridge~" _ _))":x=="rfl"&&(q.b==uint.max||y=="rfl")?"rfl":proof;
 			}
 			auto id=to!string(i),args=dimDecl~" (γ : Binding.Globals) (ξ : Env) (ρ : Binding.Env "~ctxName(n.context)~")";
-			auto h="(fun g => congrArg some (funext (fun x => "~programProof(nodes[n.a].a)~")))";
+			auto alignment="congrArg some (funext (fun x => "~programProof(nodes[n.a].a)~"))",h="(fun g => "~alignment~")";
 			code~="noncomputable def rec"~id~args~" : Recursion.Program "~a~" "~b~" "~b~" := "~program(nodes[n.a].a)~"\n";
+			if(unrolled[i]||firstStep[i]){
+				code~="theorem body"~id~args~" (g : "~a~" → Option "~b~") : "~name(n.a)~".eval ξ (ρ.cons (some g))"~
+					" = some (fun x => (rec"~id~dimArg~" γ ξ ρ).eval g x) := "~alignment~"\n";
+				h="(body"~id~dimArg~" γ ξ ρ)";
+			}
 			code~="theorem fixed"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = some (FixedPoint.value (rec"~id~dimArg~" γ ξ ρ).functional) := Recursion.fixed_program (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
-			code~="theorem unroll"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = (Binding.Expr.app (.lam "~name(n.a)~") "~name(cast(uint)i)~").eval ξ ρ := Recursion.program_unfold (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
-			if(v.fields[0]==pool.primitive(TypeKind.unit))
+			if(unrolled[i]) code~="theorem unroll"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = (Binding.Expr.app (.lam "~name(n.a)~") "~name(cast(uint)i)~").eval ξ ρ := Recursion.program_unfold (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
+			if(firstStep[i])
 				code~="theorem first"~id~args~" : "~name(cast(uint)i)~".eval ξ ρ = "~name(n.a)~
 					".eval ξ (ρ.cons (some (fun _ => none))) := Recursion.fixed_unit_first (rec"~id~dimArg~" γ ξ ρ) _ "~h~"\n";
 			foreach(ri,r;result.ranks) if(r.source==i){
