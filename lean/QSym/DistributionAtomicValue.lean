@@ -193,21 +193,27 @@ theorem retry_isSome {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q
   subst r
   exact retry_isSome_real (by exact_mod_cast h0) hs
 
+theorem observe_retry_real (observe : D α → Option β)
+    (invariant : ∀ {d e : D α} {m : Model α}, Presents d m → Presents e m → observe d = observe e)
+    {r : ℝ} (h0 : 0 ≤ r) (h1 : r < 1) {seed : Option (D α)} (hs : Admissible seed) :
+    (retryValue (some r) seed).bind observe = (scaleValue (some (1-r)⁻¹) seed).bind observe := by
+  cases seed with
+  | none => rfl
+  | some d =>
+    obtain ⟨m, hd⟩ := hs d rfl
+    have result := hd.retry h0 h1
+    obtain ⟨e, eq, he⟩ := realize_presents result
+    rw [retry_eq_chain hd h0, realizeChain_of_some eq]
+    exact invariant he result
+
 theorem observe_retry (observe : D α → Option β)
     (invariant : ∀ {d e : D α} {m : Model α}, Presents d m → Presents e m → observe d = observe e)
     {ratio gain : Option ℝ} (r c : ℚ) (h0 : 0 ≤ r) (h1 : r < 1) (hc : c = (1-r)⁻¹)
     (hr : ratio = some (r : ℝ)) (hk : gain = some (c : ℝ)) {seed : Option (D α)} (hs : Admissible seed) :
     (retryValue ratio seed).bind observe = (scaleValue gain seed).bind observe := by
   subst ratio gain c
-  cases seed with
-  | none => rfl
-  | some d =>
-    obtain ⟨m, hd⟩ := hs d rfl
-    have r0 : 0 ≤ (r : ℝ) := by exact_mod_cast h0
-    have result := hd.retry r0 (by exact_mod_cast h1)
-    obtain ⟨e, eq, he⟩ := realize_presents result
-    rw [retry_eq_chain hd r0, realizeChain_of_some eq]
-    simpa [scaleValue] using invariant he result
+  simpa only [Rat.cast_inv, Rat.cast_sub, Rat.cast_one] using
+    observe_retry_real observe invariant (r := (r : ℝ)) (by exact_mod_cast h0) (by exact_mod_cast h1) hs
 
 theorem mass_retry {r g : Option ℝ} (q c : ℚ) (h0 : 0 ≤ q) (h1 : q < 1) (hc : c = (1-q)⁻¹)
     (hr : r = some (q : ℝ)) (hg : g = some (c : ℝ)) {s : Option (D α)} (hs : Admissible s) :

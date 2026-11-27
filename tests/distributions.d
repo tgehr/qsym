@@ -2194,6 +2194,19 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("RetryMassClosedForm","λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d)))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹"),
+	Case("RetryMassSwapped","λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(scaleD(q,d),δ(3)))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹"),
+	Case("RetryMassPartialRate","λ(h:ℕ→ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(4),scaleD(h(0),d)))","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | 0≤h(0)∧h(0)<1}). (-h(0)+1)⁻¹"),
+	Case("RetryMassPartialPoint","λ(q:ℝ).λ(h:ℕ→ℕ).massD(μ(d:Distribution(ℕ)).addD(δ(h(0)),scaleD(q,d)))","ℝ→(ℕ→ℕ)→ℝ","λ(q:ℝ). λ(h:{h:ℕ→ℕ | 0≤q∧q<1∧(holds((0∈domain(h))))}). (-q+1)⁻¹"),
+	Case("RetryMassFunctionPoint","λ(q:ℝ).massD(μ(d:Distribution(ℕ→ℕ)).addD(δ(λ(n:ℕ).n),scaleD(q,d)))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹"),
+	Case("RetryMassDistributionPoint","λ(q:ℝ).massD(μ(d:Distribution(Distribution(ℕ))).addD(δ(zeroD(ℕ)),scaleD(q,d)))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). (-q+1)⁻¹"),
+	Case("RetryMassDomain","λ(q:ℝ).defined(massD(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d))))","ℝ→𝔹","λ(q:ℝ). 0≤q∧q<1"),
+	Case("RetryMassNegative","(λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d))))(-1/2)","ℝ","undefined(ℝ)"),
+	Case("RetryMassZero","(λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d))))(0)","ℝ","1"),
+	Case("RetryMassHalf","(λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d))))(1/2)","ℝ","2"),
+	Case("RetryMassBoundary","(λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d))))(1)","ℝ","undefined(ℝ)"),
+	Case("RetryMassUnbounded","(λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d))))(2)","ℝ","undefined(ℝ)"),
+	Case("RetryMassMissingPoint","λ(q:ℝ).massD(μ(d:Distribution(ℕ)).addD(δ(undefined(ℕ)),scaleD(q,d)))","ℝ→ℝ","λ(q:ℝ). undefined(ℝ)"),
 	Case("SymbolicRetryRate","λ(q:ℝ).μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d))","ℝ→Distribution(ℕ)","λ(q:ℝ). μ(d:Distribution(ℕ)). addD(δ(0),scaleD(q,d))"),
 	Case("SymbolicRetryDefined","λ(q:ℝ).defined(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d)))","ℝ→𝔹","λ(q:ℝ). 0≤q"),
 	Case("SymbolicRetrySwapped","λ(q:ℝ).defined(μ(d:Distribution(ℕ)).addD(scaleD(q,d),δ(0)))","ℝ→𝔹","λ(q:ℝ). 0≤q"),
@@ -2868,6 +2881,8 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="RetryMassClosedForm"||c.name=="RetryMassPartialPoint"||c.name=="RetryMassDistributionPoint")
+			enforce(certificate.indexOf("mass_retry_parameter_dirac ")>=0,c.name);
 		if(c.name=="SymbolicRetryDefined"||c.name=="SymbolicRetryPartialRate"||c.name=="SymbolicRetryNegative")
 			enforce(certificate.indexOf("fixed_scaled_parameter ")>=0,c.name);
 		if(c.name.indexOf("RestrictedCall")==0) enforce(certificate.indexOf("Pointwise.restricted ")>=0,c.name);

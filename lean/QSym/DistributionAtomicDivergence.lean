@@ -82,6 +82,46 @@ theorem probe_retry_noncontracting {d : D α} {m : Model α} (hd : Presents d m)
     exact singleton_retry_probe hd hr ha t
   · rw [probe_retry_of_series hd r0 h, geometric_noncontracting _ hr]
 
+/-- The total mass of a direct retry at any real rate. At a noncontracting
+rate a zero-mass round still has a finite sum. -/
+theorem mass_retry_cases (r : ℝ) {seed : Option (D α)} (hs : Admissible seed) :
+    massValue (retryValue (some r) seed) = if 0 ≤ r then
+      if r < 1 then Value.mul (some (1-r)⁻¹) (massValue seed)
+      else if massValue seed = some 0 then some 0 else none
+    else none := by
+  by_cases h0 : 0 ≤ r
+  · rw [if_pos h0]
+    by_cases h1 : r < 1
+    · rw [if_pos h1, ← mass_scaleValue]
+      exact observe_retry_real (fun d => integrate d (fun _ => some 1))
+        (fun hd he => (hd.eq_iff he).mp rfl _) h0 h1 hs
+    · rw [if_neg h1]
+      cases seed with
+      | none => rfl
+      | some d =>
+        obtain ⟨m, hd⟩ := hs d rfl
+        exact probe_retry_noncontracting hd (le_of_not_gt h1) (fun _ => some 1)
+  · rw [if_neg h0, retry_negative (lt_of_not_ge h0)]
+    rfl
+
+theorem mass_retry_parameter_dirac (r : Option ℝ) (p : Option α) :
+    massValue (retryValue r (diracValue p)) =
+      Binding.guardValue (Value.and (Value.le (some ((0 : ℚ) : ℝ)) r)
+        (Value.lt r (some ((1 : ℚ) : ℝ))))
+        (p.bind fun _ => Value.inv (Value.add (some ((1 : ℚ) : ℝ))
+          (Value.mul (some ((-1 : ℚ) : ℝ)) r))) := by
+  cases r with
+  | none => rfl
+  | some r =>
+    rw [mass_retry_cases r (admissible_dirac p), mass_diracValue]
+    by_cases h0 : 0 ≤ r
+    · by_cases h1 : r < 1
+      · have nz : 1 + -r ≠ 0 := by linarith
+        cases p <;> simp [h0, h1, nz, sub_eq_add_neg, Binding.guardValue, Value.le, Value.lt,
+          Value.and, Value.inv, Value.add, Value.mul]
+      · cases p <;> simp [h0, h1, Binding.guardValue, Value.le, Value.lt, Value.and]
+    · simp [h0, Binding.guardValue, Value.le, Value.and]
+
 /-- A scalar observer that also respects the grouping of countable sums.
 Finite linearity alone does not imply this law for a signed series. -/
 structure CountableObservation (o : Option (D α) → Option ℝ) : Prop where
