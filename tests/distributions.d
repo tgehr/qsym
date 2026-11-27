@@ -2194,6 +2194,22 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("GeometricFirstReal","λ(q:ℝ).∑(n:ℕ). (n:ℝ)*powRN(q,n)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·((-q+1)^2)⁻¹"),
+	Case("GeometricFirstReverse","λ(q:ℝ).∑(n:ℕ). powRN(q,n)*(n:ℝ)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q<1}). q·((-q+1)^2)⁻¹"),
+	Case("GeometricFirstPartial","λ(h:ℕ→ℝ).∑(n:ℕ). (n:ℝ)*powRN(h(0),n)","(ℕ→ℝ)→ℝ","λ(h:{h:ℕ→ℝ | abs(h(0))<1}). h(0)·((-h(0)+1)⁻¹)^2"),
+	Case("GeometricFirstLifted","λ(q:ℚ).∑(n:ℕ). (n:ℝ)*castQR(powQN(q,n))","ℚ→ℝ","λ(q:{q:ℚ | -1<q∧(q<1∧q≠1)}). (q·((-q+1)⁻¹)^2:ℝ)"),
+	Case("GeometricFirstCastRow","λ(q:ℚ).∑(n:ℕ). castQR((n:ℚ)*powQN(q,n))","ℚ→ℝ","λ(q:{q:ℚ | -1<q∧(q<1∧q≠1)}). (q·((-q+1)⁻¹)^2:ℝ)"),
+	Case("GeometricFirstLiftedRatio","λ(q:ℚ).∑(n:ℕ). (n:ℝ)*powRN(castQR(q),n)","ℚ→ℝ","λ(q:{q:ℚ | -1<q∧(q<1∧q≠1)}). (q·((-q+1)⁻¹)^2:ℝ)"),
+	Case("GeometricFirstNaturalShift","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ","λ(q:{q:ℝ | 0≤q∧q<1}). q·((-q+1)^2)⁻¹"),
+	Case("GeometricFirstNormalizedShift","λ(q:ℝ).massD(weightD(λ(n:ℕ).(n:ℝ),(μ(d:Distribution(ℕ)).addD(scaleD(1-q,δ(0)),scaleD(q,bindD(d,λ(n:ℕ).δ(n+1)))))))","ℝ→ℝ","λ(q:{q:ℝ | q≤1∧0≤q}). ∑(i:ℕ). (-q+1)·i·q^i"),
+	Case("GeometricFirstAtHalf","(λ(q:ℝ).∑(n:ℕ). (n:ℝ)*powRN(q,n))(1/2)","ℝ","2"),
+	Case("GeometricFirstAlternating","(λ(q:ℝ).∑(n:ℕ). (n:ℝ)*powRN(q,n))(-1/2)","ℝ","-2/9"),
+	Case("GeometricFirstAtZero","(λ(q:ℝ).∑(n:ℕ). (n:ℝ)*powRN(q,n))(0)","ℝ","0"),
+	Case("GeometricFirstAtOne","(λ(q:ℝ).∑(n:ℕ). (n:ℝ)*powRN(q,n))(1)","ℝ","undefined(ℝ)"),
+	Case("GeometricFirstNegativeOne","(λ(q:ℝ).∑(n:ℕ). (n:ℝ)*powRN(q,n))(-1)","ℝ","undefined(ℝ)"),
+	Case("GeometricFirstOutside","(λ(q:ℝ).∑(n:ℕ). (n:ℝ)*powRN(q,n))(-2)","ℝ","undefined(ℝ)"),
+	Case("GeometricFirstMissing","(λ(q:ℝ).∑(n:ℕ). (n:ℝ)*powRN(q,n))(undefined(ℝ))","ℝ","undefined(ℝ)"),
+	Case("GeometricFirstVariablePower","λ(q:ℝ).λ(h:ℕ→ℕ).∑(n:ℕ). (n:ℝ)*powRN(q,h(n))","ℝ→(ℕ→ℕ)→ℝ","λ(q:ℝ). λ(h:ℕ→ℕ). ∑(n:ℕ). n·q^h(n)"),
 	Case("ComplementSeriesClosedForm","λ(q:ℝ).∑(i:ℕ). (1-q)*powRN(q,i)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q≤1}). [q<1]"),
 	Case("ComplementSeriesRight","λ(q:ℝ).∑(i:ℕ). powRN(q,i)*(1-q)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q≤1}). [q<1]"),
 	Case("ComplementSeriesSwapped","λ(q:ℝ).∑(i:ℕ). (q*(-1)+1)*powRN(q,i)","ℝ→ℝ","λ(q:{q:ℝ | -1<q∧q≤1}). [q<1]"),
@@ -3001,6 +3017,8 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="GeometricFirstReal"||c.name=="GeometricFirstNaturalShift"||c.name=="GeometricFirstCastRow")
+			enforce(certificate.indexOf("SummationLinearity.first_geometric")>=0,c.name);
 		if(c.name=="ComplementSeriesClosedForm"||c.name=="ComplementSeriesNaturalShift"||c.name=="ComplementSeriesLifted")
 			enforce(certificate.indexOf("SummationLinearity.normalized_geometric")>=0,c.name);
 		if(c.name=="ScaledSeriesReal"||c.name=="ScaledSeriesRational"||c.name=="ScaledSeriesComplex"||c.name=="ScaledSeriesCastFactor")

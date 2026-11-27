@@ -224,4 +224,83 @@ theorem normalized_geometricQR (left : Bool) (q : Option ℚ) {c : Option ℝ}
   simp_rw [cast_power]
   exact normalized_geometricR left (Functions.castQR.apply q) hc
 
+/-- The first moment of the real geometric series, with the same absolute
+convergence requirement as the source summation. -/
+private theorem first_moment (q : ℝ) :
+    value norm (some (fun n : ℕ => some ((n : ℝ) * q ^ n))) =
+      if ‖q‖ < 1 then some (q / (1-q)^2) else none := by
+  classical
+  by_cases h : ‖q‖ < 1
+  · rw [if_pos h]
+    apply of_hasSum _ _ _ _ (fun _ => rfl) _ (hasSum_coe_mul_geometric_of_norm_lt_one h)
+    simpa only [pow_one] using summable_norm_pow_mul_geometric_of_norm_lt_one 1 h
+  · have hn : ¬ Summable (fun n : ℕ => ‖(n : ℝ) * q^n‖) := by
+      intro hs
+      apply h
+      apply summable_geometric_iff_norm_lt_one.mp
+      apply Summable.of_norm_bounded_eventually_nat _ hs
+      filter_upwards [Filter.eventually_ge_atTop (1 : ℕ)] with n hn
+      rw [norm_mul, Real.norm_natCast]
+      exact le_mul_of_one_le_left (norm_nonneg _) (by exact_mod_cast hn)
+    simp only [Real.norm_eq_abs] at h hn
+    simp [value, Real.norm_eq_abs, h, hn]
+
+private def firstValue (q one minus : Option ℝ) : Option ℝ :=
+  Binding.guardValue (Value.lt (Value.abs q) one) (Value.mul q
+    ((Value.inv (Value.add one (Value.mul minus q))).map (fun x => x^2)))
+
+private theorem first_rows (q one minus : Option ℝ) (h1 : one = some 1) (hm : minus = some (-1))
+    (row : ℕ → Option ℝ) (h : ∀ n, row n = q.map (fun r => (n : ℝ) * r^n)) :
+    value norm (some row) = firstValue q one minus := by
+  subst one minus
+  cases q with
+  | none => exact undefined_term _ _ 0 (h 0)
+  | some r =>
+    rw [funext h]
+    change value norm (some (fun n : ℕ => some ((n : ℝ) * r^n))) = _
+    rw [first_moment]
+    rw [Real.norm_eq_abs]
+    by_cases hr : |r| < 1
+    · have ne : 1-r ≠ 0 := by
+        intro hz
+        have : r = 1 := by linarith
+        simp [this] at hr
+      simp [firstValue, Value.abs, Value.lt, Value.mul, Value.inv, Value.add, Binding.guardValue,
+        Real.norm_eq_abs, ← sub_eq_add_neg, ne, hr, div_eq_mul_inv]
+    · simp [firstValue, Value.abs, Value.lt, Binding.guardValue, hr]
+
+private def natIndex (n : ℕ) : Option ℝ :=
+  Functions.castQR.apply (Functions.castZQ.apply (Functions.castNZ.apply (some n)))
+
+theorem first_geometricR (left : Bool) (q one minus : Option ℝ)
+    (h1 : one = some 1) (hm : minus = some (-1)) :
+    value norm (some (fun n : ℕ => if left then Value.mul (natIndex n) (Functions.powRN.apply q (some n))
+      else Value.mul (Functions.powRN.apply q (some n)) (natIndex n))) = firstValue q one minus := by
+  apply first_rows _ _ _ h1 hm
+  intro n
+  cases left <;> cases q <;> simp [natIndex, Value.mul, Functions.powRN, Function2.apply,
+    Functions.castQR, Functions.castZQ, Functions.castNZ, Function1.apply, mul_comm]
+
+theorem first_geometricQR (left : Bool) (q : Option ℚ) (one minus : Option ℝ)
+    (h1 : one = some 1) (hm : minus = some (-1)) :
+    let power := fun n : ℕ => Functions.castQR.apply (Functions.powQN.apply q (some n))
+    value norm (some (fun n : ℕ => if left then Value.mul (natIndex n) (power n)
+      else Value.mul (power n) (natIndex n))) = firstValue (Functions.castQR.apply q) one minus := by
+  dsimp only
+  simp_rw [cast_power]
+  exact first_geometricR left _ one minus h1 hm
+
+theorem first_geometric_cast_row (left : Bool) (q : Option ℚ) (one minus : Option ℝ)
+    (h1 : one = some 1) (hm : minus = some (-1)) :
+    let index := fun n : ℕ => Functions.castZQ.apply (Functions.castNZ.apply (some n))
+    let power := fun n : ℕ => Functions.powQN.apply q (some n)
+    value norm (some (fun n : ℕ => Functions.castQR.apply
+      (if left then Functions.mulQ.apply (index n) (power n) else Functions.mulQ.apply (power n) (index n)))) =
+      firstValue (Functions.castQR.apply q) one minus := by
+  apply first_rows _ _ _ h1 hm
+  intro n
+  cases left <;> cases q <;> simp [Functions.castQR, Functions.castZQ, Functions.castNZ, Functions.powQN,
+    Functions.mulQ, Function1.apply, Function2.apply, mul_comm]
+
+
 end QSym.SummationLinearity
