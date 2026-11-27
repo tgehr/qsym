@@ -99,6 +99,7 @@ import QSym.GeometricMomentsNewton
 import QSym.GeometricMomentsExact
 import QSym.DistributionSquareRootSheet
 import QSym.DistributionQuadraticRestriction
+import QSym.DistributionMaskedRootCover
 import QSym.DistributionRepeatedSheet
 import QSym.SummationAffine
 import QSym.SummationPowers

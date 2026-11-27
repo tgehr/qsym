@@ -40,7 +40,7 @@ theorem sourceRoots_cover (c a b y : ℝ) (ha : a ≠ 0) :
     simpa only [sourceRoots, if_neg hp.not_lt, if_neg hp.ne'] using transport (squareCover_positive shift hp
       (l := -√t+c) (r := √t+c) (by linarith) (Or.inl ⟨rfl, rfl⟩))
 
-private theorem derivative (c a b x : ℝ) :
+theorem derivative (c a b x : ℝ) :
     HasStrictDerivAt (fun u : ℝ => ((u-c)^2-b)/a) (2*(x-c)/a) x := by
   have h₁ : HasStrictDerivAt (fun u : ℝ => u-c) 1 x := (hasStrictDerivAt_id x).sub_const c
   have h₂ := (hasStrictDerivAt_pow 2 (x-c)).comp x h₁
