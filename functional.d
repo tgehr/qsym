@@ -653,7 +653,13 @@ struct FunctionSyntax{
 						if(r.op==BoundOp.scalar&&a.isNumber(a.at(r.data))&&a.number(a.at(r.data))==Number(-1)) return "-("~nested(q.b)~")";
 						if(b.node(b.at(q.b)).op==BoundOp.distributionDirac){
 							auto c=render(b.at(q.a),names,depth+level+1,scalarType(Sort.real_));
-							bool inverse=(r.op==BoundOp.primitive||r.op==BoundOp.scalar)&&a.view(a.at(r.data)).op==Op.inv;
+							import std.algorithm.searching:endsWith;
+							bool inverse;
+							if(c.endsWith("⁻¹")){
+								// Numeric casts and neutral products can disappear in the printed coefficient.
+								auto printed=Parser(c).parseRawExpression();
+								inverse=printed.name=="$pow"&&printed.args[1].name=="#"&&printed.args[1].number==-1;
+							}
 							return (numericLiteral(c)||inverse?c:"("~c~")")~"·"~nested(q.b);
 						}
 						return "(scaleD("~value(q.a)~","~value(q.b)~"))["~axis~"]";

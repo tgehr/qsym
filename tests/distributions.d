@@ -1040,6 +1040,27 @@ private Case[] cases(){
 	Case("QuadraticBranchesPartialPred","λ(h:ℕ→(ℝ→𝔹)).λ(y:ℝ).densityAtD(pushforwardOnD(h(0),λ(x:ℝ).x^2+1),y)","(ℕ→ℝ→𝔹)→ℝ→ℝ"),
 	Case("QuadraticBranchesSameInput","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).x≠y,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
 	Case("QuadraticBranchesControl","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^4+1),y)","ℝ→ℝ"),
+	Case("BranchedFibreFull","λ(y:ℝ).graphFibreD(λ(x:ℝ).x^2+1,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then (2·sqrt(y-1))⁻¹·δ(-sqrt(y-1))[x]+(2·sqrt(y-1))⁻¹·δ(sqrt(y-1))[x] else (guard(y<1,Λ(x:ℝ). 0))[x]"),
+	Case("BranchedFibreSource","λ(y:ℝ).(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then ([(guard(defined(sqrt(y-1)),0<-sqrt(y-1)))]·(2·sqrt(y-1))⁻¹)·δ(-sqrt(y-1))[x]+([(guard(defined(sqrt(y-1)),0<sqrt(y-1)))]·(2·sqrt(y-1))⁻¹)·δ(sqrt(y-1))[x] else if y<1 then 0 else 0·δ(0)[x]"),
+	Case("BranchedFibreJoint","λ(y:ℝ). Λx. λ[x]·δ(x^2+1)[y]//λ[y]","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then (2·sqrt(y-1))⁻¹·δ(-sqrt(y-1))[x]+(2·sqrt(y-1))⁻¹·δ(sqrt(y-1))[x] else (guard(y<1,Λ(x:ℝ). 0))[x]"),
+	Case("BranchedFibreJointMask","λ(y:ℝ). Λx. [0<x]·λ[x]·δ(x^2+1)[y]//λ[y]","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then ([(guard(defined(sqrt(y-1)),0<-sqrt(y-1)))]·(2·sqrt(y-1))⁻¹)·δ(-sqrt(y-1))[x]+([(guard(defined(sqrt(y-1)),0<sqrt(y-1)))]·(2·sqrt(y-1))⁻¹)·δ(sqrt(y-1))[x] else if y<1 then 0 else 0·δ(0)[x]"),
+	Case("BranchedFibreIrrational","graphFibreD(λ(x:ℝ).x^2+1,3)","Distribution(ℝ)","Λ(x:ℝ). (1/4·sqrt(2))·δ(-sqrt(2))[x]+(1/4·sqrt(2))·δ(sqrt(2))[x]"),
+	Case("BranchedFibreIrrationalMask","(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(3)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(-sqrt(2))[x]+(1/4·sqrt(2))·δ(sqrt(2))[x]"),
+	Case("BranchedFibreDown","λ(y:ℝ).graphFibreD(λ(x:ℝ).3-x^2,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if y<3 then (2·sqrt(-y+3))⁻¹·δ(-sqrt(-y+3))[x]+(2·sqrt(-y+3))⁻¹·δ(sqrt(-y+3))[x] else (guard(3<y,Λ(x:ℝ). 0))[x]"),
+	Case("BranchedFibreDownRoots","graphFibreD(λ(x:ℝ).3-x^2,1)","Distribution(ℝ)","Λ(x:ℝ). (1/4·sqrt(2))·δ(-sqrt(2))[x]+(1/4·sqrt(2))·δ(sqrt(2))[x]"),
+	Case("BranchedFibreTranslated","λ(y:ℝ).graphFibreD(λ(x:ℝ).2*x^2-2*x+1,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1/2<y then ((2·sqrt(y·(1/2)-1/4))⁻¹·(1/2))·δ(-sqrt(y·(1/2)-1/4)+1/2)[x]+((2·sqrt(y·(1/2)-1/4))⁻¹·(1/2))·δ(sqrt(y·(1/2)-1/4)+1/2)[x] else (guard(y<1/2,Λ(x:ℝ). 0))[x]"),
+	Case("BranchedFibreFraction","graphFibreD(λ(x:ℝ).2*x^2-x-1,0)","Distribution(ℝ)","Λ(x:ℝ). 1/3·δ(-1/2)[x]+1/3·δ(1)[x]"),
+	Case("BranchedFibreSourceHole","λ(y:ℝ).(maskedGraphD(λ(x:ℝ).0<1/x,λ(x:ℝ).x^2+1))(y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then ([(guard(defined(sqrt(y-1)),0<(-sqrt(y-1))⁻¹))]·(2·sqrt(y-1))⁻¹)·δ(-sqrt(y-1))[x]+([(guard(defined(sqrt(y-1)),0<sqrt(y-1)⁻¹))]·(2·sqrt(y-1))⁻¹)·δ(sqrt(y-1))[x] else (guard(y<1,Λ(x:ℝ). 0))[x]"),
+	Case("BranchedFibrePartial","λ(p:ℝ→𝔹).λ(y:ℝ).(maskedGraphD(p,λ(x:ℝ).x^2+1))(y)","(ℝ→𝔹)→ℝ→Distribution(ℝ)","λ(p:ℝ→𝔹). λ(y:{y:ℝ | defined(p)}). Λ(x:ℝ). if 1<y then ([p(-sqrt(y-1))]·(2·sqrt(y-1))⁻¹)·δ(-sqrt(y-1))[x]+([p(sqrt(y-1))]·(2·sqrt(y-1))⁻¹)·δ(sqrt(y-1))[x] else if y<1 then 0 else (guard(¬p(0),Λ(x:ℝ). 0·δ(0)[x]))[x]"),
+	Case("BranchedFibreAbsent","λ(p:ℝ→𝔹).(maskedGraphD(p,λ(x:ℝ).x^2+1))(undefined(ℝ))","(ℝ→𝔹)→Distribution(ℝ)","λ(p:ℝ→𝔹). undefined(Distribution(ℝ))"),
+	Case("BranchedFibreBadTarget","λ(y:ℝ).graphFibreD(λ(x:ℝ).x^2+1,1/y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if guard(y≠0,1<y⁻¹) then (2·sqrt(-1+y⁻¹))⁻¹·δ(-sqrt(-1+y⁻¹))[x]+(2·sqrt(-1+y⁻¹))⁻¹·δ(sqrt(-1+y⁻¹))[x] else (guard(guard(y≠0,y⁻¹<1),Λ(x:ℝ). 0))[x]"),
+	Case("BranchedFibreMissing","graphFibreD(λ(x:ℝ).x^2+1,undefined(ℝ))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("BranchedFibreTest","massD(weightD(λ(x:ℝ).x^2,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(3)))","ℝ","1/2·sqrt(2)"),
+	Case("BranchedFibreSum","massD(weightD(λ(x:ℝ).1,graphFibreD(λ(x:ℝ).x^2+1,3)))","ℝ","1/2·sqrt(2)"),
+	Case("BranchedFibreHigher","λ(h:ℕ→ℝ).graphFibreD(λ(x:ℝ).x^2+1,h(0))","(ℕ→ℝ)→Distribution(ℝ)","λ(h:ℕ→ℝ). Λ(x:ℝ). if 0<h(0)-1 then (2·sqrt(h(0)-1))⁻¹·δ(-sqrt(h(0)-1))[x]+(2·sqrt(h(0)-1))⁻¹·δ(sqrt(h(0)-1))[x] else (guard(h(0)-1<0,Λ(x:ℝ). 0))[x]"),
+	Case("BranchedFibreControl","λ(y:ℝ).graphFibreD(λ(x:ℝ).x^4+1,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). λ[x]·δ(x^4+1)[y]//λ[y]"),
+	Case("BranchedFibreProductWeight","λ(a:ℝ).λ(b:ℝ).scaleD(a*b⁻¹,δ((0:ℝ)))","ℝ→ℝ→Distribution(ℝ)","λ(a:ℝ). λ(b:ℝ). Λ(x:ℝ). (a·b⁻¹)·δ(0)[x]"),
+	Case("BranchedFibreSumWeight","λ(a:ℝ).λ(b:ℝ).scaleD(a+b⁻¹,δ((0:ℝ)))","ℝ→ℝ→Distribution(ℝ)","λ(a:ℝ). λ(b:ℝ). Λ(x:ℝ). (a+b⁻¹)·δ(0)[x]"),
 	Case("QuadraticAtomRegular","graphFibreD(λ(x:ℝ).x^2+1,5)","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(-2)[x]+1/4·δ(2)[x]"),
 	Case("QuadraticAtomOutside","graphFibreD(λ(x:ℝ).x^2+1,0)","Distribution(ℝ)","Λ(x:ℝ). 0"),
 	Case("QuadraticAtomVertex","graphFibreD(λ(x:ℝ).x^2+1,1)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
@@ -1054,15 +1075,15 @@ private Case[] cases(){
 	Case("QuadraticAtomRootHole","(maskedGraphD(λ(x:ℝ).0<1/(x-2),λ(x:ℝ).x^2+1))(5)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
 	Case("QuadraticAtomVertexHole","(maskedGraphD(λ(x:ℝ).0<1/x,λ(x:ℝ).x^2+1))(1)","Distribution(ℝ)","guard(¬(0<0⁻¹),Λ(x:ℝ). 0·δ(0)[x])"),
 	Case("QuadraticAtomMissingKernel","(maskedGraphD(undefined(ℝ→𝔹),λ(x:ℝ).x^2+1))(0)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
-	Case("QuadraticAtomMissingTarget","graphFibreD(λ(x:ℝ).x^2+1,undefined(ℝ))","Distribution(ℝ)","Λ(x:ℝ). (graphFibreD(λ(x:ℝ). x^2+1,undefined(ℝ)))[x]"),
-	Case("QuadraticAtomIrrational","graphFibreD(λ(x:ℝ).x^2+1,3)","Distribution(ℝ)","Λ(x:ℝ). (graphFibreD(λ(x:ℝ). x^2+1,(3:ℝ)))[x]"),
+	Case("QuadraticAtomMissingTarget","graphFibreD(λ(x:ℝ).x^2+1,undefined(ℝ))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("QuadraticAtomIrrational","graphFibreD(λ(x:ℝ).x^2+1,3)","Distribution(ℝ)","Λ(x:ℝ). (1/4·sqrt(2))·δ(-sqrt(2))[x]+(1/4·sqrt(2))·δ(sqrt(2))[x]"),
 	Case("QuadraticAtomQuartic","graphFibreD(λ(x:ℝ).x^4+1,5)","Distribution(ℝ)","Λ(x:ℝ). (graphFibreD(λ(x:ℝ). x^4+1,(5:ℝ)))[x]"),
 	Case("QuadraticAtomWeight","massD(weightD(λ(x:ℝ).x^2,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(5)))","ℝ","1"),
 	Case("QuadraticAtomWeightHole","massD(weightD(λ(x:ℝ).1/(x+2),(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(5)))","ℝ","undefined(ℝ)"),
 	Case("QuadraticAtomWeightZero","massD(weightD(λ(x:ℝ).1/x,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(1)))","ℝ","undefined(ℝ)"),
 	Case("QuadraticAtomHigher","λ(p:ℝ→𝔹).(maskedGraphD(p,λ(x:ℝ).x^2+1))(5)","(ℝ→𝔹)→Distribution(ℝ)","λ(p:ℝ→𝔹). Λ(x:ℝ). ([p(-2)]·(1/4))·δ(-2)[x]+([p(2)]·(1/4))·δ(2)[x]"),
 	Case("QuadraticAtomHigherAbsent","λ(h:ℕ→(ℝ→𝔹)).(maskedGraphD(h(0),λ(x:ℝ).x^2+1))(0)","(ℕ→ℝ→𝔹)→Distribution(ℝ)","λ(h:{h:ℕ→ℝ→𝔹 | holds((0∈domain(h)))}). Λ(x:ℝ). 0"),
-	Case("QuadraticAtomFunction","λ(y:ℝ).graphFibreD(λ(x:ℝ).x^2+1,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). λ[x]·δ(x^2+1)[y]//λ[y]"),
+	Case("QuadraticAtomFunction","λ(y:ℝ).graphFibreD(λ(x:ℝ).x^2+1,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). if 1<y then (2·sqrt(y-1))⁻¹·δ(-sqrt(y-1))[x]+(2·sqrt(y-1))⁻¹·δ(sqrt(y-1))[x] else (guard(y<1,Λ(x:ℝ). 0))[x]"),
 	Case("QuadraticAtomJoint","(λ(y:ℝ). Λx. λ[x]·δ(x^2+1)[y]//λ[y])(5)","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(-2)[x]+1/4·δ(2)[x]"),
 	Case("QuadraticAtomJointGuard","(λ(y:ℝ). Λx. [0<x]·λ[x]·δ(x^2+1)[y]//λ[y])(5)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(-2)[x]+1/4·δ(2)[x]"),
 	Case("FibreMarginalWindow","λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y]","ℝ→ℝ","λ(y:ℝ). [1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2))"),
@@ -3344,6 +3365,11 @@ private void run(string directory){
 		}
 		if(c.name=="FibreMarginalWindow"||c.name.indexOf("ActiveGuard")==0)
 			enforce(certificate.indexOf("Binding.guard_of_true ")>=0,c.name);
+		if(c.name.indexOf("BranchedFibre")==0){
+			bool symbolic=c.name!="BranchedFibreAbsent"&&c.name!="BranchedFibreControl"&&c.name!="BranchedFibreFraction"&&
+				c.name!="BranchedFibreSumWeight"&&c.name!="BranchedFibreProductWeight";
+			enforce((certificate.indexOf("Quadratic.fibre_symbolic ")>=0)==symbolic,c.name);
+		}
 		if(c.name.indexOf("QuadraticAtom")==0){
 			bool expanded=c.name!="QuadraticAtomMissingTarget"&&c.name!="QuadraticAtomIrrational"&&
 				c.name!="QuadraticAtomQuartic"&&c.name!="QuadraticAtomFunction";

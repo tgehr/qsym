@@ -9703,7 +9703,7 @@ final class Bindings{
 			auto n=node(term); QuadraticChart chart; ScalarDomain check;
 			bool full=n.op==BoundOp.distributionGraphFibre,masked=n.op==BoundOp.apply;
 			bool fibre=full||masked;
-			if(fibre&&(nodes[n.b].op!=BoundOp.scalar||!arena.isNumber(arena.at(nodes[n.b].data)))) return BoundTerm.init;
+			if(masked&&nodes[n.b].op==BoundOp.bottom) return BoundTerm.init;
 			uint predicate=uint.max;
 			if(n.op==BoundOp.distributionDensityAt&&nodes[n.a].op==BoundOp.distributionInverseCover){
 				CoverStep known;
@@ -9789,19 +9789,38 @@ final class Bindings{
 					if(value!=BoundTerm.init){evidence=rememberQuadratic(chart,check); return value;}
 				}catch(Limit e){}
 			}
-			if(fibre) return BoundTerm.init;
 			chart.point=QuadraticPoint.symbolic;
 			auto scaled=primitive(scalarOperator(type(y),TensorOp.mul),[scalar(ctx,chart.scale),y]);
 			auto radicand=primitive(arena.add(zero,zero,true),[scaled,scalar(ctx,chart.offset)]);
 			evidence=rememberQuadratic(chart,check);
-			if(predicate==uint.max) return maskedInverseRoot(radicand,arena.real_(j));
-			auto p=at(predicate),centre=scalar(ctx,chart.centre),plus=arena.add(zero,zero,true);
+			if(predicate==uint.max&&!fibre) return maskedInverseRoot(radicand,arena.real_(j));
+			auto p=predicate==uint.max?BoundTerm.init:at(predicate);
+			auto centre=scalar(ctx,chart.centre),plus=arena.add(zero,zero,true);
 			auto mul=scalarOperator(type(y),TensorOp.mul),mask=arena.mask(arena.boolean(true),zero);
 			auto root=primitive(arena.call(Builtin.sqrtR,[zero]),[radicand]);
 			auto lo=primitive(plus,[centre,primitive(mul,[scalar(ctx,arena.real_(-1)),root])]);
 			auto hi=primitive(plus,[centre,root]),denom=primitive(mul,[scalar(ctx,arena.real_(2)),root]);
 			auto weight=primitive(mul,[primitive(arena.inv(arena.real_(1)),[denom]),scalar(ctx,arena.real_(j))]);
-			auto left=primitive(mask,[apply(p,lo),weight]),right=primitive(mask,[apply(p,hi),weight]);
+			auto left=weight,right=weight;
+			if(p!=BoundTerm.init){
+				left=primitive(mask,[apply(p,lo),weight]); right=primitive(mask,[apply(p,hi),weight]);
+			}
+			if(fibre){
+				auto z=scalar(ctx,zero),lt=arena.lt(zero,zero);
+				BoundTerm atom(BoundTerm point,BoundTerm coefficient){
+					return distribution(ctx,BoundOp.distributionScale,[coefficient,distribution(ctx,BoundOp.distributionDirac,[point])]);
+				}
+				auto pair=distribution(ctx,BoundOp.distributionAdd,[atom(lo,left),atom(hi,right)]);
+				auto empty=distribution(ctx,BoundOp.distributionZero,[],type(y));
+				auto critical=bottom(ctx,type(empty));
+				if(p!=BoundTerm.init){
+					auto disabled=primitive(arena.not_(arena.boolean(true)),[apply(p,centre)]);
+					critical=guard(disabled,atom(centre,z));
+				}
+				auto outside=conditional(primitive(lt,[radicand,z]),empty,critical);
+				auto result=conditional(primitive(lt,[z,radicand]),pair,outside);
+				return p==BoundTerm.init?result:sequence(p,result);
+			}
 			auto support=primitive(arena.le(zero,zero),[scalar(ctx,zero),radicand]);
 			return sequence(p,primitive(mask,[support,primitive(plus,[left,right])]));
 		}
@@ -10238,11 +10257,10 @@ final class Bindings{
 				}
 			}
 			// Keep the scalar marginal on the direct density path before expanding
-			// a literal fibre into individual weighted atoms.
+			// a fibre into individual weighted atoms.
 			if(n.op==BoundOp.distributionMass&&nodes[n.a].op==BoundOp.apply&&steps<budget){
 				auto call=nodes[n.a],graph=nodes[call.a];
-				if(graph.op==BoundOp.distributionMaskedGraph&&nodes[call.b].op==BoundOp.scalar&&
-						arena.isNumber(arena.at(nodes[call.b].data))&&!powerMap(graph.b,true).degree){
+				if(graph.op==BoundOp.distributionMaskedGraph&&nodes[call.b].op!=BoundOp.bottom&&!powerMap(graph.b,true).degree){
 					uint witness; auto observed=maskedMarginal(t,witness);
 					if(observed!=BoundTerm.init){
 						++steps;
@@ -10252,12 +10270,12 @@ final class Bindings{
 					}
 				}
 			}
-			bool literalFibre=n.op==BoundOp.distributionGraphFibre||n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.distributionMaskedGraph;
-			if((n.op==BoundOp.distributionGraphMass||n.op==BoundOp.distributionDensityAt||literalFibre)&&steps<budget){
+			bool isGraphFibre=n.op==BoundOp.distributionGraphFibre||(n.op==BoundOp.apply&&nodes[n.a].op==BoundOp.distributionMaskedGraph);
+			if((n.op==BoundOp.distributionGraphMass||n.op==BoundOp.distributionDensityAt||isGraphFibre)&&steps<budget){
 				uint evidence; auto density=quadraticObservation(t,evidence);
 				if(density!=BoundTerm.init){
 					++steps;
-					auto rule=literalFibre?BindingRule.distributionQuadraticFibre:BindingRule.distributionQuadraticDensity;
+					auto rule=isGraphFibre?BindingRule.distributionQuadraticFibre:BindingRule.distributionQuadraticDensity;
 					auto step=emit(rule,t.id,density.id,uint.max,uint.max,evidence);
 					chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),step);
 					return Result(density.id,uint.max);
@@ -17037,9 +17055,15 @@ final class Bindings{
 							auto call=nodes[n.a],graph=nodes[call.a];
 							law=ns~"masked_marginal "~args~"(of_decide_eq_true rfl) "~nums~equation~
 								" ("~name(graph.a)~".eval ξ ρ) ("~name(call.b)~".eval ξ ρ)";
-						}else if(chart.predicate!=uint.max&&chart.point==QuadraticPoint.symbolic){
-							law=ns~"guarded_symbolic "~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
-								" ("~name(chart.predicate)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ)";
+						}else if((p.rule==BindingRule.distributionQuadraticFibre||chart.predicate!=uint.max)&&chart.point==QuadraticPoint.symbolic){
+							bool fibre=p.rule==BindingRule.distributionQuadraticFibre;
+							string query=".full";
+							if(chart.predicate!=uint.max){
+								auto pred="("~name(chart.predicate)~".eval ξ ρ)";
+								query=fibre?"(.masked "~pred~")":pred;
+							}
+							law=ns~(fibre?"fibre_symbolic ":"guarded_symbolic ")~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
+								" "~query~" ("~name(n.b)~".eval ξ ρ)";
 						}else if(chart.predicate!=uint.max||p.rule==BindingRule.distributionQuadraticFibre){
 							bool fibre=p.rule==BindingRule.distributionQuadraticFibre;
 							auto v=arena.at(nodes[n.b].data),z=q(chart.radicand);
