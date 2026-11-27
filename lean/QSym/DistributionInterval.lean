@@ -397,6 +397,10 @@ inductive IntervalTerms (a b m : Option ℝ) : (ℝ → Option ℝ) → Option �
   | add {v w : ℝ → Option ℝ} {s t : Option ℝ} :
       IntervalTerms a b m v s → IntervalTerms a b m w t →
       IntervalTerms a b m (fun x => Value.add (v x) (w x)) (Value.add s t)
+  /-- A parameter may be missing throughout the interval. Its strict product
+  stays inside the interval guard. -/
+  | factor {v : ℝ → Option ℝ} {out : Option ℝ} (c : Option ℝ) : IntervalTerms a b m v out →
+      IntervalTerms a b m (fun x => Value.mul c (v x)) (Value.mul c out)
   /-- A strict guard that does not mention the axis: where it does not hold
   the value is undefined everywhere, and so is the result. -/
   | guard {v : ℝ → Option ℝ} {out : Option ℝ} (q : Option Bool) :
@@ -461,6 +465,17 @@ theorem IntervalTerms.sound {a b m : Option ℝ} {v : ℝ → Option ℝ} {out :
     · refine Or.inr ⟨fun x => ?_, by rw [hs]; rfl⟩
       show Value.add (v x) (w x) = _
       rw [hv x]; rfl
+  | @factor v out c _ ih =>
+    cases c with
+    | none => exact Or.inr ⟨fun _ => rfl, rfl⟩
+    | some c =>
+      rcases ih with ⟨g, hc, hv, ho⟩ | ⟨hv, ho⟩
+      · refine Or.inl ⟨fun x => c * g x, continuous_const.mul hc, fun x => ?_, ?_⟩
+        · show Value.mul (some c) (v x) = _
+          rw [hv x]; rfl
+        · rw [ho, intervalIntegral.integral_const_mul]; rfl
+      · exact Or.inr ⟨fun x => by change Value.mul (some c) (v x) = none; rw [hv x]; rfl,
+          by rw [ho]; rfl⟩
   | @guard v out q _ ih =>
     by_cases hq : q = some true
     · subst hq
@@ -483,6 +498,14 @@ theorem IntervalTerms.sound {a b m : Option ℝ} {v : ℝ → Option ℝ} {out :
       simp only [Value.mul, Value.add, Option.some.injEq]
       ring
   | @value v g out hv hc ho => exact Or.inl ⟨g, hc, hv, ho l u rfl rfl rfl⟩
+
+theorem IntervalTerms.factorRight {a b m v out} (c : Option ℝ) (h : IntervalTerms a b m v out) :
+    IntervalTerms a b m (fun x => Value.mul (v x) c) (Value.mul c out) := by
+  have swap : (fun x => Value.mul (v x) c) = fun x => Value.mul c (v x) := by
+    funext x
+    cases c <;> cases v x <;> simp [Value.mul, mul_comm]
+  rw [swap]
+  exact .factor c h
 
 private theorem and_some (p q : Bool) : Value.and (some p) (some q) = some (p && q) := by
   cases p <;> rfl

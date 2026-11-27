@@ -484,6 +484,30 @@ private Case[] cases(){
 	Case("VariationMissing","defined(∫dx [undefined(ℝ)<x<1]·λ[x²])","𝔹","false"),
 	Case("VariationOscillating","∫dx [-4≤x≤4]·λ[sin(x)^2]","ℝ"),
 	Case("VariationJump","∫dx [-1≤x≤1]·λ[([0≤x]·2)^2]","ℝ"),
+	Case("IntervalFactorSigned","∫dx [0≤x≤2*π]·(-3/2*abs(cos(x)))·λ[x]","ℝ","-6"),
+	Case("IntervalFactorPositive","∫dx [0≤x≤2*π]·(3/2*abs(cos(x)))·λ[x]","ℝ","6"),
+	Case("IntervalFactorSymbolic","λ(c:ℝ).∫dx [0≤x≤2*π]·(c*abs(cos(x)))·λ[x]","ℝ→ℝ","λ(c:ℝ). 4·c"),
+	Case("IntervalFactorConstantRight","λ(c:ℝ).∫dx [0≤x≤2*π]·mulR(abs(cos(x)),c)·λ[x]","ℝ→ℝ","λ(c:ℝ). 4·c"),
+	Case("IntervalFactorSignedSine","λ(c:ℝ).∫dx [0≤x≤π]·mulR(c,sin(x))·λ[x]","ℝ→ℝ","λ(c:ℝ). 2·c"),
+	Case("IntervalFactorHigherOrder","λ(h:ℕ→ℝ).λ(n:ℕ).∫dx [0≤x≤2*π]·(abs(sin(x))*h(n))·λ[x]","(ℕ→ℝ)→ℕ→ℝ","λ(h:ℕ→ℝ). λ(n:ℕ). 4·h(n)"),
+	Case("IntervalFactorSum","λ(c:ℝ).∫dx [0≤x≤1]·(c*(abs(sin(x))+cos(x)))·λ[x]","ℝ→ℝ","λ(c:ℝ). c·(sin(1)-cos(1)+1)"),
+	Case("IntervalFactorTwoCoefficients","λ(c:ℝ).λ(d:ℝ).∫dx [0≤x≤π]·mulR(c,mulR(sin(x),d))·λ[x]","ℝ→ℝ→ℝ","λ(c:ℝ). λ(d:ℝ). 2·d·c"),
+	Case("IntervalFactorInsideSum","λ(c:ℝ).λ(d:ℝ).∫dx [0≤x≤π]·(c*abs(sin(x))+d*cos(x))·λ[x]","ℝ→ℝ→ℝ","λ(c:ℝ). λ(d:ℝ). 2·c"),
+	Case("IntervalFactorCauchy","λ(c:ℝ).∫dx [0≤x≤1]·mulR(c,(1+x²)⁻¹)·λ[x]","ℝ→ℝ","λ(c:ℝ). c·(1/4)·π"),
+	Case("IntervalFactorCauchySine","λ(c:ℝ).∫dx [0≤x≤1]·mulR(c,(1+x²)⁻¹+sin(x))·λ[x]","ℝ→ℝ","λ(c:ℝ). c·(-cos(1)+1/4·π+1)"),
+	Case("IntervalFactorBounds","λ(l:ℝ).λ(u:ℝ).λ(c:ℝ).∫dx [l<x<u]·mulR(sin(x),c)·λ[x]","ℝ→ℝ→ℝ→ℝ","λ(l:ℝ). λ(u:ℝ). λ(c:ℝ). [l<u]·(c·(cos(l)-cos(u)))"),
+	Case("IntervalFactorEmptyMissing","defined(∫dx [1≤x≤0]·mulR(undefined(ℝ),abs(cos(x)))·λ[x])","𝔹","true"),
+	Case("IntervalFactorClosedSingletonMissing","defined(∫dx [0≤x≤0]·mulR(undefined(ℝ),abs(cos(x)))·λ[x])","𝔹","false"),
+	Case("IntervalFactorOpenSingletonMissing","defined(∫dx [0<x≤0]·mulR(undefined(ℝ),abs(cos(x)))·λ[x])","𝔹","true"),
+	Case("IntervalFactorZeroAreaPartial","λ(h:ℕ→ℝ).∫dx [0≤x≤π]·mulR(h(0),cos(x))·λ[x]","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). 0·h(0)"),
+	Case("IntervalFactorActiveMissing","defined(∫dx [0≤x≤1]·mulR(undefined(ℝ),abs(cos(x)))·λ[x])","𝔹","false"),
+	Case("IntervalFactorActiveMissingZeroArea","defined(∫dx [-π≤x≤π]·mulR(undefined(ℝ),sin(x))·λ[x])","𝔹","false"),
+	Case("IntervalFactorSingular","defined(∫dx [0≤x≤1]·mulR(0,x⁻¹)·λ[x])","𝔹"),
+	Case("IntervalFactorOpaque","λ(c:ℝ).∫dx [0≤x≤1]·mulR(c,sin(x²))·λ[x]","ℝ→ℝ"),
+	Case("IntervalFactorImproper","λ(c:ℝ).∫dx [0≤x]·mulR(c,abs(sin(x)))·λ[x]","ℝ→ℝ"),
+	Case("PromotedLiteralGuard","λ(h:ℕ→𝔹).[h(0)]·toℝ(floor(3/2))","(ℕ→𝔹)→ℝ","λ(h:ℕ→𝔹). [h(0)]"),
+	Case("PromotedLiteralProduct","λ(h:ℕ→ℝ).mulR(h(0),toℝ(floor(9/2)))","(ℕ→ℝ)→ℝ","λ(h:ℕ→ℝ). 4·h(0)"),
+	Case("PromotedLiteralStrict","λ(h:ℕ→𝔹).λ(k:ℕ→ℝ).mulR([h(0)]·toℝ(floor(3/2)),k(0))","(ℕ→𝔹)→(ℕ→ℝ)→ℝ","λ(h:ℕ→𝔹). λ(k:ℕ→ℝ). mulR(k(0),[h(0)])"),
 	Case("TrigIntegralCosinePeriod","∫dx [0≤x≤2*π]·abs(cos(x))·λ[x]","ℝ","4"),
 	Case("TrigIntegralSinePeriod","∫dx [0≤x≤2*π]·abs(sin(x))·λ[x]","ℝ","4"),
 	Case("TrigIntegralAffinePeriod","∫dx [0≤x≤π]·abs(cos(2*x+1))·λ[x]","ℝ","2"),
@@ -1757,7 +1781,7 @@ private Case[] cases(){
 	Case("MultipliedSquare","∫dx [0≤x]*[x≤1]*(a+x)^2*λ[x]","ℝ","a^2+a+1/3"),
 	Case("MultipliedCube","∫dx [0≤x]*[x≤1]*(a+x)^3*λ[x]","ℝ","a^3+3/2·a^2+a+1/4"),
 	Case("MultipliedProduct","∫dx [0≤x]*[x≤1]*(a+x)*(b+x)*λ[x]","ℝ","a·b+a·(1/2)+b·(1/2)+1/3"),
-	Case("MultipliedFactor","∫dx [0≤x]*[x≤1]*a*(b+x)*λ[x]","ℝ","a·b+a·(1/2)"),
+	Case("MultipliedFactor","∫dx [0≤x]*[x≤1]*a*(b+x)*λ[x]","ℝ","a·(b+1/2)"),
 	Case("MultipliedSlope","∫dx [0≤x]*[x≤1]*(a*x+b)^2*λ[x]","ℝ","1/3·a^2+a·b+b^2"),
 	Case("MultipliedBound","∫dx [0≤x]*[x≤a]*(x-a)^2*λ[x]","ℝ","[0≤a]·(1/3·a^3)"),
 	Case("MultipliedCompeting","∫dx [0≤x]*[x≤1]*[x≤b]*(a+x)^2*λ[x]","ℝ","[b<1∧0≤b]·(1/3·b^3+a·b^2+b·a^2)+[1≤b]·(a^2+a+1/3)"),
@@ -2619,6 +2643,16 @@ private void run(string directory){
 		if(c.name.indexOf("Variation")==0){
 			bool changed=c.name!="VariationJump";
 			enforce((certificate.indexOf("Grid.VariationChange.interval ")>=0)==changed,c.name);
+		}
+		if(c.name.indexOf("IntervalFactor")==0){
+			bool factored=c.name=="IntervalFactorSigned"||c.name=="IntervalFactorPositive"||c.name=="IntervalFactorSymbolic"||
+				c.name=="IntervalFactorConstantRight"||c.name=="IntervalFactorSignedSine"||c.name=="IntervalFactorHigherOrder"||
+				c.name=="IntervalFactorSum"||c.name=="IntervalFactorTwoCoefficients"||c.name=="IntervalFactorInsideSum"||
+				c.name=="IntervalFactorCauchySine"||c.name=="IntervalFactorBounds"||c.name=="IntervalFactorZeroAreaPartial";
+			bool left=certificate.indexOf("StepSource.IntervalTerms.factor ")>=0,right=certificate.indexOf("StepSource.IntervalTerms.factorRight ")>=0;
+			enforce((left||right)==factored,c.name);
+			if(c.name=="IntervalFactorTwoCoefficients") enforce(left&&right,c.name);
+			if(c.name=="IntervalFactorOpaque"||c.name=="IntervalFactorImproper"||c.name=="IntervalFactorSingular") enforce(text.indexOf("∫")>=0,c.name);
 		}
 		if(c.name.indexOf("TrigIntegral")==0){
 			bool residual=c.name=="TrigIntegralMissing"||c.name=="TrigIntegralNonlinear"||
@@ -3601,7 +3635,9 @@ private void run(string directory){
 		if(c.name.indexOf("Opened")==0){
 			bool retained=c.name=="OpenedKept";
 			enforce((text.indexOf("∫dy")>=0)==retained,c.name~": "~text);
-			enforce((certificate.indexOf(".lamOpened ")>=0)==(!retained&&c.name!="OpenedDirect"),c.name~" variable of the function as a parameter");
+			bool simplex=c.name=="OpenedSimplex";
+			if(simplex) enforce(certificate.indexOf("StepSource.IntervalTerms.factor")>=0,c.name~" factor the outer parameter directly");
+			enforce((certificate.indexOf(".lamOpened ")>=0)==(!retained&&!simplex&&c.name!="OpenedDirect"),c.name~" variable of the function as a parameter");
 		}
 		// A weight whose value is a product or a power of sums that mention
 		// the axis: `(a+x)^2`, `(a+x)·(b+x)`, `(1-e^(-2·x))·e^(-x)`. The

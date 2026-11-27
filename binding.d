@@ -3538,6 +3538,15 @@ final class Bindings{
 		if(build){ axisQuadratic(n.a,c,true); offset=c[0].term; }
 		return true;
 	}
+	// Select the axis-independent operand of a strict product.
+	private uint intervalFactor(BoundNode n,out uint inside){
+		if(n.op!=BoundOp.primitive||arena.view(arena.at(n.data)).op!=Op.mul) return uint.max;
+		bool left=depends(at(n.a),0),right=depends(at(n.b),0);
+		if(left==right) return uint.max;
+		inside=left?n.a:n.b;
+		return left?n.b:n.a;
+	}
+
 	// A product of such factors and of factors that do not mention the
 	// innermost variable; these are the scale of the term, with the constant
 	// part of an exponential.
@@ -6276,7 +6285,10 @@ final class Bindings{
 				if(tailExponential(id,false,p,exponent,scaled,false,0,true)) return curve(p,exponent,R,E,rate,order)||vertex(p,exponent,r)||erf(p,exponent,r);
 				if(intervalTrig(id,r)||symbolicErf(id,r)||symbolicRateBetween(id,r)||intervalCauchy(id,r)) return true;
 				auto q=nodes[id];
-				return depth<=16&&solution.from.length==1&&isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
+				if(depth>16||solution.from.length!=1) return false;
+				uint inside;
+				if(!d.half&&intervalFactor(q,inside)!=uint.max) return admissible(inside,depth+1);
+				return isOp(q,Op.add)&&admissible(q.a,depth+1)&&admissible(q.b,depth+1);
 			}
 			// Between two bounds, a polynomial over a power of the axis of which
 			// a negative power is left. It is undefined at zero and not
@@ -6644,9 +6656,16 @@ final class Bindings{
 				auto symbolic=symbolicErfDifference(r,id);
 				if(symbolic==BoundTerm.init) symbolic=rateBetweenDifference(r,id);
 				if(symbolic!=BoundTerm.init) return symbolic;
-				// A sum is integrated term by term only without further weights.
-				auto q=nodes[id];
-				if(depth>16||d.terms.length>16||solution.from.length!=1||!isOp(q,Op.add)) return BoundTerm.init;
+				if(depth>16||d.terms.length>16||solution.from.length!=1) return BoundTerm.init;
+				auto q=nodes[id]; uint inside;
+				if(!d.half){
+					auto c=intervalFactor(q,inside);
+					if(c!=uint.max){
+						auto out_=build(inside,depth+1); if(out_==BoundTerm.init) return out_;
+						return primitive(mulOp,[dropIndex(at(c)),out_]);
+					}
+				}
+				if(!isOp(q,Op.add)) return BoundTerm.init;
 				auto a=build(q.a,depth+1); if(a==BoundTerm.init) return a;
 				auto b=build(q.b,depth+1); if(b==BoundTerm.init) return b;
 				return primitive(addOp,[a,b]);
@@ -12519,8 +12538,16 @@ final class Bindings{
 			string terms(uint id){
 				enforce(next<d.terms.length,"missing interval term");auto r=d.terms[next];
 				if(r.value!=id){
-					auto sum=nodes[id];enforce(sum.op==BoundOp.primitive&&arena.view(arena.at(sum.data)).op==Op.add,"bad interval sum");
-					auto left=terms(sum.a),right=terms(sum.b);
+					auto n=nodes[id]; uint inside;
+					if(!d.half){
+						auto c=intervalFactor(n,inside);
+						if(c!=uint.max){
+							auto h=terms(inside);
+							return "("~termsName~(c==n.b?".factorRight ":".factor ")~"(v := "~cert.functionAt(inside)~") "~cert.outside(c)~" "~h~")";
+						}
+					}
+					enforce(n.op==BoundOp.primitive&&arena.view(arena.at(n.data)).op==Op.add,"bad interval sum");
+					auto left=terms(n.a),right=terms(n.b);
 					return "("~termsName~".add "~left~" "~right~")";
 				}
 				++next;

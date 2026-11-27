@@ -108,6 +108,13 @@ struct Syntax{
 			while(conversion(a.view(t))) t=a.at(a.view(t).a);
 			return t;
 		}
+		// Casts disappear in the spelling. Sort a promoted numeric literal as
+		// the literal in the product's type that spelling will parse back to.
+		Term factorKey(Term t){
+			if(!conversion(a.view(t))) return t;
+			auto lit=uncast(t.id);
+			return a.isNumber(lit)?a.number(a.number(lit),a.sort(t)):t;
+		}
 		// Literal fractions reparse as products with a reciprocal. Preserve
 		// their spelling in exponents, including inside partial coefficients.
 		Piece exponent(uint id){
@@ -189,7 +196,7 @@ struct Syntax{
 		}
 		Operand[] ordered(Term t,Op op){
 			auto es=a.multisetTerms(a.multiset(t,op));
-			if(op==Op.mul) sort!((x,y)=>compare(a,x.term,y.term)<0)(es);
+			if(op==Op.mul) sort!((x,y)=>compare(a,factorKey(x.term),factorKey(y.term))<0)(es);
 			else{
 				struct Entry{ Operand e; Mono m; }
 				Entry[] entries; auto budget=new Budget(size_t.max,size_t.max,100_000);
@@ -315,7 +322,8 @@ struct Syntax{
 				case Op.lt,Op.le:p=comparison(n.a,n.b,n.op==Op.lt?"<":"≤"); break;
 				case Op.nonzero:p=zeroComparison(a.at(n.a),"≠"); break;
 				case Op.mask:
-					if(a.isNumber(a.at(n.b))&&a.number(a.at(n.b)).one){
+					auto weight=uncast(n.b);
+					if(a.isNumber(weight)&&a.number(weight).one){
 						p.text="["~arg(n.a)~"]";
 						p.indicatorConjunct=arg(n.a,41);
 					}else if(memo[n.b].indicatorConjunct.length&&!memo[n.b].negative){
