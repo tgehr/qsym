@@ -1055,6 +1055,30 @@ private Case[] cases(){
 	Case("OrdinaryQuadraticEmpty","Λy.∫dx [0<x<0]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). 0·λ[y]"),
 	Case("OrdinaryQuadraticScaleTwo","Λy.∫dx [0<x<2]·λ[x]·δ(x²/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([0<y∧y<2]·sqrt(2·y)⁻¹)·λ[y]"),
 	Case("OrdinaryQuadraticNegativeUnitGain","Λy.∫dx [-1<x≤0]·λ[x]·δ((1-(x+1)^2)/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([y<1/2∧0≤y]·sqrt(-2·y+1)⁻¹)·λ[y]"),
+	Case("PullbackMomentMean","massD(weightD(λ(y:ℝ).y,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","4/3"),
+	Case("PullbackMomentSecondMoment","massD(weightD(λ(y:ℝ).y²,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","28/15"),
+	Case("PullbackMomentQuartic","massD(weightD(λ(y:ℝ).y,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x^4+1)))","ℝ","6/5"),
+	Case("PullbackMomentQuarticSecond","massD(weightD(λ(y:ℝ).y²,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x^4+1)))","ℝ","68/45"),
+	Case("PullbackMomentSigned","massD(weightD(λ(y:ℝ).y-2,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","-2/3"),
+	Case("PullbackMomentThreshold","massD(weightD(λ(y:ℝ).[y≤5/4],Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","1/2"),
+	Case("PullbackMomentMissingMap","massD(weightD(λ(y:ℝ).y,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).1/x)))","ℝ","∫dx (guard(x≠0,[0<x∧x<1]·x⁻¹))·λ[x]"),
+	Case("PullbackMomentRealPartial","massD(weightD(λ(y:ℝ).1/y,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","∫dy (guard(y≠0,[1<y∧y<2]·(y⁻¹·sqrt(y-1)⁻¹·(1/2))))·λ[y]"),
+	Case("PullbackMomentOpaqueReal","λ(t:ℝ→ℝ).massD(weightD(t,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","(ℝ→ℝ)→ℝ","λ(t:{t:ℝ→ℝ | defined(t)}). ∫dx (mulR(t(x),[1<x∧x<2]·(sqrt(x-1)⁻¹·(1/2))))·λ[x]"),
+	Case("PullbackMomentBool","massD(weightD(λ(b:𝔹).if b then (2:ℝ) else 0,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x<1/2)))","ℝ","1"),
+	Case("PullbackMomentNat","massD(weightD(λ(n:ℕ).if n=2 then (3:ℝ) else 0,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).(2:ℕ))))","ℝ","3"),
+	Case("PullbackMomentFunction","massD(weightD(λ(h:ℝ→ℝ).h(1),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).λ(z:ℝ).x+z)))","ℝ","3/2"),
+	Case("PullbackMomentNested","massD(weightD(λ(d:Distribution(ℝ)).massD(d),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).δ(x))))","ℝ","1"),
+	Case("PullbackMomentBoolPartial","massD(weightD(λ(b:𝔹).if b then (2:ℝ) else undefined(ℝ),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x<1/2)))","ℝ","∫dx (mulR((guard(x<1/2,(2:ℝ))),[0<x∧x<1]))·λ[x]"),
+	Case("PullbackMomentOpaqueFunction","λ(t:(ℝ→ℝ)→ℝ).massD(weightD(t,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).λ(z:ℝ).x+z)))","((ℝ→ℝ)→ℝ)→ℝ","λ(t:{t:(ℝ→ℝ)→ℝ | defined(t)}). ∫dx (mulR(t(λ(z:ℝ). x+z),[0<x∧x<1]))·λ[x]"),
+	Case("PullbackMomentMissingTest","massD(weightD(undefined(ℕ→ℝ),pushforwardOnD(λ(x:ℝ).false,λ(x:ℝ).(2:ℕ))))","ℝ","undefined(ℝ)"),
+	Case("PullbackMomentType","massD(weightD(λ(T:Type).if T=ℝ then (5:ℝ) else 0,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).ℝ)))","ℝ","5"),
+	Case("PullbackMomentSubset","massD(weightD(λ(S:Set(ℝ)).if 0∈S then (2:ℝ) else 0,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).{z:ℝ|z<x})))","ℝ","2"),
+	Case("PullbackMomentSelectedPredicate","λ(h:ℕ→(ℝ→𝔹)).massD(weightD(λ(n:ℕ).(n:ℝ),pushforwardOnD(h(0),λ(x:ℝ).(3:ℕ))))","(ℕ→ℝ→𝔹)→ℝ","λ(h:{h:ℕ→ℝ→𝔹 | holds((0∈domain(h)))}). ∫dx (mulR(3,[(h(0))(x)]))·λ[x]"),
+	Case("PullbackMomentSelectedMap","λ(h:ℕ→(ℝ→ℕ)).massD(weightD(λ(n:ℕ).(n:ℝ),pushforwardOnD(λ(x:ℝ).0<x<1,h(0))))","(ℕ→ℝ→ℕ)→ℝ","λ(h:{h:ℕ→ℝ→ℕ | holds((0∈domain(h)))}). ∫dx (mulR((guard(holds((x∈domain(h(0)))),((h(0))(x):ℝ))),[0<x∧x<1]))·λ[x]"),
+	Case("PullbackMomentMissingMapValue","massD(weightD(λ(n:ℕ).(n:ℝ),pushforwardOnD(λ(x:ℝ).false,undefined(ℝ→ℕ))))","ℝ","undefined(ℝ)"),
+	Case("PullbackMomentMissingPredicateValue","massD(weightD(λ(n:ℕ).(n:ℝ),pushforwardOnD(undefined(ℝ→𝔹),λ(x:ℝ).(3:ℕ))))","ℝ","undefined(ℝ)"),
+	Case("PullbackMomentMissingRealMapValue","massD(weightD(λ(y:ℝ).y,pushforwardOnD(λ(x:ℝ).false,undefined(ℝ→ℝ))))","ℝ","undefined(ℝ)"),
+	Case("PullbackMomentConstant","massD(weightD(λ(y:ℝ).(2:ℝ),Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","2"),
 	Case("InvRootIntegralThird","∫dy ([1/3<y≤4/3]·(sqrt(y-1/3)⁻¹·(2/3)))·λ[y]","ℝ","4/3"),
 	Case("InvRootIntegralThirdPole","∫dy ([1/3≤y≤4/3]·(sqrt(y-1/3)⁻¹))·λ[y]","ℝ","undefined(ℝ)"),
 	Case("InvRootIntegralFifth","∫dy ([1≤y≤4]·((-2/5)·sqrt(y)⁻¹))·λ[y]","ℝ","-4/5"),
@@ -3528,6 +3552,14 @@ private void run(string directory){
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
+		if(c.name.indexOf("PullbackMoment")==0){
+			import std.algorithm : canFind;
+			auto form=c.name["PullbackMoment".length..$];
+			bool realChart=["Mean","SecondMoment","Quartic","QuarticSecond","Signed","Threshold","MissingMap","MissingRealMapValue"].canFind(form);
+			bool pulled=!["RealPartial","OpaqueReal","Constant"].canFind(form);
+			enforce((certificate.indexOf("Distribution.mass_weight_push_values ")>=0)==pulled,c.name);
+			enforce((certificate.indexOf("GraphFibre.mass_weight_real_push_total ")>=0)==realChart,c.name);
+		}
 		if(c.name.indexOf("StrictRootHole")==0||c.name=="InvRootIntegralStrictProduct"){
 			import std.algorithm : canFind;
 			auto form=c.name=="InvRootIntegralStrictProduct"?"StrictProduct":c.name["StrictRootHole".length..$];

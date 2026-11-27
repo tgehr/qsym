@@ -41,7 +41,7 @@ private enum BindingRule:ushort{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,pointwiseReordered,pointwiseRootSheet,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumNormalizedMoment,sumPolynomialGeometric,sumConstantMomentRows,sumPlainPolynomialZero,sumPlainPolynomialNonzero,sumPolynomialFactor,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,distributionMassTwoWeights,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassBindTest,distributionMassWeightBind,distributionMassConstantWeight,distributionMassLebesgue,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumCastGeometric,sumScaledGeometric,sumNormalizedGeometric,sumFirstGeometric,sumWeightedGeometric,sumNormalizedMoment,sumPolynomialGeometric,sumConstantMomentRows,sumPlainPolynomialZero,sumPlainPolynomialNonzero,sumPolynomialFactor,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,distributionMassTwoWeights,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassBindTest,distributionMassWeightBind,distributionMassWeightGraph,distributionMassConstantWeight,distributionMassLebesgue,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftParameter,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,distributionRetryParameterMassDirac,distributionRetryParameterDensity,distributionRetryParameterObservation,distributionNormalizedRetry,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionQuadraticChart,distributionQuadraticDensity,distributionQuadraticFibre,distributionMaskedQuadraticChart,distributionQuadraticBand,distributionRootIntervalMass,distributionMaskedMarginal,coordinateRepeatedSheet,coordinateSheetDomain,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -9449,6 +9449,38 @@ final class Bindings{
 			mapDomains.set(body,id);
 			return id;
 		}
+		BoundTerm weightedGraphMass(BoundTerm t,out uint domain){
+			domain=uint.max;
+			auto mass=node(t),weight=nodes[mass.a];
+			if(weight.op!=BoundOp.distributionWeight) return BoundTerm.init;
+			auto graph=nodes[weight.b];
+			// The singleton corner already has a zero pairing for every total test.
+			if(graph.op!=BoundOp.distributionPushforwardOn||cornerChart(weight.b)) return BoundTerm.init;
+			auto test=at(weight.a),predicate=at(graph.a),map=at(graph.b);
+			if(node(test).op==BoundOp.lambda){
+				Rational k;
+				if(literalFactor(node(test).a,k)&&!k.zero) return BoundTerm.init;
+			}
+			if(pool.view(type(map)).fields[1]==scalarType(Sort.real_)){
+				if(node(test).op!=BoundOp.lambda) return BoundTerm.init;
+				domain=totalMapDomain(node(test).a);
+				if(domain==uint.max) return BoundTerm.init;
+			}
+			auto ctx=context(t),inner=push(ctx,scalarType(Sort.real_)),x=variable(inner,0);
+			uint[] shift; foreach(i;0..contexts[ctx.index].length) shift~=i+1;
+			BoundTerm local(BoundTerm f){return rename(f,inner,shift);}
+			// A lambda row already binds this real parameter. Keeping its body also
+			// leaves a returned lambda available for ordinary beta reduction.
+			BoundTerm atAxis(BoundTerm f){return node(f).op==BoundOp.lambda?at(node(f).a):apply(local(f),x);}
+			auto one=arena.real_(1),mask=primitive(arena.mask(arena.boolean(true),one),[atAxis(predicate),scalar(inner,one)]);
+			auto observed=apply(local(test),atAxis(map));
+			auto row=primitive(scalarOperator(type(x),TensorOp.mul),[mask,observed]);
+			auto fn=hint(lambda(row),node(map).op==BoundOp.lambda?binderHint(map).name:"x");
+			auto d=distribution(ctx,BoundOp.distributionWeight,[fn,distribution(ctx,BoundOp.distributionLebesgue)]);
+			auto out_=distribution(ctx,BoundOp.distributionMass,[d]);
+			foreach(f;[test,map,predicate]) if(node(f).op!=BoundOp.lambda) out_=sequence(f,out_);
+			return out_;
+		}
 		BoundTerm integrateExcludedCoordinate(BoundTerm t,out IntegralSolution solution){
 			auto w=nodes[node(t).a];
 			if(w.op!=BoundOp.distributionWeight||nodes[w.a].op!=BoundOp.lambda||
@@ -10384,6 +10416,14 @@ final class Bindings{
 			if((n.op==BoundOp.distributionMass||n.op==BoundOp.distributionDensityAt)&&steps<budget){
 				BindingRule rule; BoundTerm target;
 				if(n.op==BoundOp.distributionMass){
+					uint total;
+					auto graphMass=weightedGraphMass(t,total);
+					if(graphMass!=BoundTerm.init){
+						++steps;
+						auto proof=emit(BindingRule.distributionMassWeightGraph,t.id,graphMass.id,uint.max,uint.max,total);
+						chain~=RewriteFrame(t.id,t.id,emit(BindingRule.refl,t.id,t.id),proof);
+						return Result(graphMass.id,uint.max);
+					}
 					auto rootMass=rootIntervalMass(t);
 					if(rootMass!=BoundTerm.init){
 						++steps;
@@ -17036,6 +17076,15 @@ final class Bindings{
 					auto eq="(Numeric.calculate_sound ξ n"~to!string(id)~" "~number~" rfl)";
 					if(q.one) eq="("~eq~".trans (congrArg some Rat.cast_one))";
 					proof=".ofEq (fun ξ ρ => Distribution."~law~" (n"~to!string(id)~".eval ξ) "~eq~")"; break;
+				}
+				case BindingRule.distributionMassWeightGraph:{
+					auto w=nodes[n.a],graph=nodes[w.b];
+					string value(uint id){return " ("~name(id)~".eval ξ ρ)";}
+					auto args=value(graph.a)~value(graph.b);
+					auto law="Distribution.mass_weight_push_values"~args~value(w.a);
+					if(p.extra!=uint.max)
+						law="(Distribution.GraphFibre.mass_weight_real_push_total"~args~" "~realBody(w.a)~" "~rowTotalProof(p.extra)~").trans ("~law~")";
+					proof=".ofEq (fun ξ ρ => "~law~")"; break;
 				}
 				case BindingRule.distributionMassWeightBind:{
 					auto w=nodes[n.a],d=nodes[w.b];

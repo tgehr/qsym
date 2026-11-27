@@ -5,6 +5,7 @@ import QSym.DistributionMaskedRootCover
 import QSym.DistributionBindObservation
 import QSym.DistributionTestScale
 import QSym.DistributionQuadraticBand
+import QSym.DistributionPushforwardObservation
 import QSym.DistributionRootIntervalSource
 import QSym.AxiomCheck
 
@@ -436,6 +437,9 @@ theorem charged_point_density (x w : ℝ) (hw : w ≠ 0) :
 #qsym_check_axioms GraphFibre.RootCover.masked_model
 #qsym_check_axioms GraphFibre.RootCover.masked_mass
 #qsym_check_axioms integrate_weight
+#qsym_check_axioms mass_weight_push
+#qsym_check_axioms mass_weight_push_values
+#qsym_check_axioms GraphFibre.mass_weight_real_push_total
 #qsym_check_axioms mass_weight_test
 #qsym_check_axioms mass_two_weights
 #qsym_check_axioms mass_weight_pair
