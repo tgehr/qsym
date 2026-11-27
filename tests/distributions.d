@@ -1040,6 +1040,31 @@ private Case[] cases(){
 	Case("QuadraticBranchesPartialPred","λ(h:ℕ→(ℝ→𝔹)).λ(y:ℝ).densityAtD(pushforwardOnD(h(0),λ(x:ℝ).x^2+1),y)","(ℕ→ℝ→𝔹)→ℝ→ℝ"),
 	Case("QuadraticBranchesSameInput","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).x≠y,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
 	Case("QuadraticBranchesControl","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^4+1),y)","ℝ→ℝ"),
+	Case("QuadraticAtomRegular","graphFibreD(λ(x:ℝ).x^2+1,5)","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(-2)[x]+1/4·δ(2)[x]"),
+	Case("QuadraticAtomOutside","graphFibreD(λ(x:ℝ).x^2+1,0)","Distribution(ℝ)","Λ(x:ℝ). 0"),
+	Case("QuadraticAtomVertex","graphFibreD(λ(x:ℝ).x^2+1,1)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("QuadraticAtomReverse","graphFibreD(λ(x:ℝ).3-x^2,-1)","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(-2)[x]+1/4·δ(2)[x]"),
+	Case("QuadraticAtomShift","graphFibreD(λ(x:ℝ).x^2+x,0)","Distribution(ℝ)","Λ(x:ℝ). 1·δ(-1)[x]+1·δ(0)[x]"),
+	Case("QuadraticAtomOne","(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(5)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(-2)[x]+1/4·δ(2)[x]"),
+	Case("QuadraticAtomBoth","(maskedGraphD(λ(x:ℝ).x≠0,λ(x:ℝ).x^2+1))(5)","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(-2)[x]+1/4·δ(2)[x]"),
+	Case("QuadraticAtomNeither","(maskedGraphD(λ(x:ℝ).-1<x∧x<1,λ(x:ℝ).x^2+1))(5)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(-2)[x]+0·δ(2)[x]"),
+	Case("QuadraticAtomAtVertex","(maskedGraphD(λ(x:ℝ).0≤x,λ(x:ℝ).x^2+1))(1)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("QuadraticAtomOffVertex","(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(1)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("QuadraticAtomEmpty","(maskedGraphD(λ(x:ℝ).0<1/x,λ(x:ℝ).x^2+1))(0)","Distribution(ℝ)","Λ(x:ℝ). 0"),
+	Case("QuadraticAtomRootHole","(maskedGraphD(λ(x:ℝ).0<1/(x-2),λ(x:ℝ).x^2+1))(5)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("QuadraticAtomVertexHole","(maskedGraphD(λ(x:ℝ).0<1/x,λ(x:ℝ).x^2+1))(1)","Distribution(ℝ)","guard(¬(0<0⁻¹),Λ(x:ℝ). 0·δ(0)[x])"),
+	Case("QuadraticAtomMissingKernel","(maskedGraphD(undefined(ℝ→𝔹),λ(x:ℝ).x^2+1))(0)","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("QuadraticAtomMissingTarget","graphFibreD(λ(x:ℝ).x^2+1,undefined(ℝ))","Distribution(ℝ)","Λ(x:ℝ). (graphFibreD(λ(x:ℝ). x^2+1,undefined(ℝ)))[x]"),
+	Case("QuadraticAtomIrrational","graphFibreD(λ(x:ℝ).x^2+1,3)","Distribution(ℝ)","Λ(x:ℝ). (graphFibreD(λ(x:ℝ). x^2+1,(3:ℝ)))[x]"),
+	Case("QuadraticAtomQuartic","graphFibreD(λ(x:ℝ).x^4+1,5)","Distribution(ℝ)","Λ(x:ℝ). (graphFibreD(λ(x:ℝ). x^4+1,(5:ℝ)))[x]"),
+	Case("QuadraticAtomWeight","massD(weightD(λ(x:ℝ).x^2,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(5)))","ℝ","1"),
+	Case("QuadraticAtomWeightHole","massD(weightD(λ(x:ℝ).1/(x+2),(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(5)))","ℝ","undefined(ℝ)"),
+	Case("QuadraticAtomWeightZero","massD(weightD(λ(x:ℝ).1/x,(maskedGraphD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1))(1)))","ℝ","undefined(ℝ)"),
+	Case("QuadraticAtomHigher","λ(p:ℝ→𝔹).(maskedGraphD(p,λ(x:ℝ).x^2+1))(5)","(ℝ→𝔹)→Distribution(ℝ)","λ(p:ℝ→𝔹). Λ(x:ℝ). ([p(-2)]·(1/4))·δ(-2)[x]+([p(2)]·(1/4))·δ(2)[x]"),
+	Case("QuadraticAtomHigherAbsent","λ(h:ℕ→(ℝ→𝔹)).(maskedGraphD(h(0),λ(x:ℝ).x^2+1))(0)","(ℕ→ℝ→𝔹)→Distribution(ℝ)","λ(h:{h:ℕ→ℝ→𝔹 | holds((0∈domain(h)))}). Λ(x:ℝ). 0"),
+	Case("QuadraticAtomFunction","λ(y:ℝ).graphFibreD(λ(x:ℝ).x^2+1,y)","ℝ→Distribution(ℝ)","λ(y:ℝ). Λ(x:ℝ). λ[x]·δ(x^2+1)[y]//λ[y]"),
+	Case("QuadraticAtomJoint","(λ(y:ℝ). Λx. λ[x]·δ(x^2+1)[y]//λ[y])(5)","Distribution(ℝ)","Λ(x:ℝ). 1/4·δ(-2)[x]+1/4·δ(2)[x]"),
+	Case("QuadraticAtomJointGuard","(λ(y:ℝ). Λx. [0<x]·λ[x]·δ(x^2+1)[y]//λ[y])(5)","Distribution(ℝ)","Λ(x:ℝ). 0·δ(-2)[x]+1/4·δ(2)[x]"),
 	Case("FibreMarginalWindow","λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y]","ℝ→ℝ","λ(y:ℝ). [1<y∧y<2]·(sqrt(y-1)⁻¹·(1/2))"),
 	Case("FibreMarginalWindowVertex","(λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y])(1)","ℝ","0"),
 	Case("FibreMarginalWindowEdge","(λ(y:ℝ).∫dx λ[x]·δ(x^2+1)[y]·[0<x<1]//λ[y])(2)","ℝ","0"),
@@ -3319,6 +3344,11 @@ private void run(string directory){
 		}
 		if(c.name=="FibreMarginalWindow"||c.name.indexOf("ActiveGuard")==0)
 			enforce(certificate.indexOf("Binding.guard_of_true ")>=0,c.name);
+		if(c.name.indexOf("QuadraticAtom")==0){
+			bool expanded=c.name!="QuadraticAtomMissingTarget"&&c.name!="QuadraticAtomIrrational"&&
+				c.name!="QuadraticAtomQuartic"&&c.name!="QuadraticAtomFunction";
+			enforce((certificate.indexOf("Quadratic.fibre_sample ")>=0)==expanded,c.name);
+		}
 		if(c.name.indexOf("FibreMarginal")==0){
 			import std.string:count;
 			bool supported=c.name!="FibreMarginalConstant"&&c.name!="FibreMarginalQuartic"&&c.name!="FibreMarginalMissing";

@@ -35,7 +35,7 @@ theorem guarded_vertex (c a : ℚ) (p : Option (ℝ → Option Bool)) {h : Optio
   subst h
   cases p <;> simp [rootObservation, sourceRoots, Value.inv, Value.add_zero_right, Value.mask]
 
-private theorem inverse_slope (a r d : ℝ) (ha : a ≠ 0) (hr : 0 < r) (hd : |d| = r) :
+theorem inverse_slope (a r d : ℝ) (ha : a ≠ 0) (hr : 0 < r) (hd : |d| = r) :
     Value.inv (some |2*d/a|) = some (|a|/(2*r)) := by
   have hv : 2*|d|/|a| ≠ 0 := div_ne_zero (mul_ne_zero (by norm_num) (hd ▸ hr.ne')) (abs_ne_zero.mpr ha)
   simp [abs_div, abs_mul, abs_of_pos (show (0:ℝ) < 2 by norm_num), Value.inv, hv, hd, hr.ne', ha,
