@@ -974,7 +974,7 @@ private Case[] cases(){
 	Case("QuadraticSourceMissingPredicate","densityAtD(pushforwardOnD(undefined(ℝ→𝔹),λ(x:ℝ).x^2+1),0)","ℝ","undefined(ℝ)"),
 	Case("QuadraticSourceMissingQuery","densityAtD(pushforwardOnD(λ(x:ℝ).x<0,λ(x:ℝ).x^2+1),undefined(ℝ))","ℝ","undefined(ℝ)"),
 	Case("QuadraticSourceUnknownAtGap","λ(h:ℕ→(ℝ→𝔹)).densityAtD(pushforwardOnD(h(0),λ(x:ℝ).x^2+1),0)","(ℕ→ℝ→𝔹)→ℝ","λ(h:{h:ℕ→ℝ→𝔹 | holds((0∈domain(h)))}). (0:ℝ)"),
-	Case("QuadraticSourceIrrational","densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1),3)","ℝ","(λ(x:ℝ). (∫dx1 λ[x1]·δ(x1^2+1)[x]·[0<x1])//λ[x])((3:ℝ))"),
+	Case("QuadraticSourceIrrational","densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1),3)","ℝ","1/4·sqrt(2)"),
 	Case("QuadraticSourceNonquadratic","densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^4+1),5)","ℝ","(λ(x:ℝ). (∫dx1 λ[x1]·δ(x1^4+1)[x]·[0<x1])//λ[x])((5:ℝ))"),
 	Case("QuadraticDensityIrrational","densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],3)","ℝ","1/2·sqrt(2)"),
 	Case("QuadraticDensityDefinedVertex","defined(densityAtD(Λy.∫dx λ[x]·δ(x^2+1)[y],1))","𝔹","false"),
@@ -1024,6 +1024,22 @@ private Case[] cases(){
 	Case("RepeatedSheetDifferentHole","Λy. λ[guard(y≠2,sqrt(y-1)),guard(y≠3,sqrt(y-1))]","Distribution(ℝ)","Λ(y:ℝ). λ[guard(y≠2,sqrt(y-1)), guard(y≠3,sqrt(y-1))]"),
 	Case("RepeatedSheetRestrictedRoots","Λy. λ[-sqrt(y-1),sqrt(y-1),-sqrt(y-1) | x. 0<x]","Distribution(ℝ)","Λ(y:ℝ). λ[-sqrt(y-1), sqrt(y-1) | x. 0<x]"),
 	Case("RepeatedSheetSum","addD(Λy.λ[y],Λy.λ[y])","Distribution(ℝ)","Λ(x:ℝ). λ[x]+λ[x]"),
+	Case("QuadraticBranchesBothIrrational","densityAtD(pushforwardOnD(λ(x:ℝ).x≠0,λ(x:ℝ).x^2+1),3)","ℝ","1/2·sqrt(2)"),
+	Case("QuadraticBranchesIrrationalHole","densityAtD(pushforwardOnD(λ(x:ℝ).0<1/(x^2-2),λ(x:ℝ).x^2+1),3)","ℝ","undefined(ℝ)"),
+	Case("QuadraticBranchesPositive","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
+	Case("QuadraticBranchesClosed","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0≤x,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
+	Case("QuadraticBranchesPunctured","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).x≠0,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
+	Case("QuadraticBranchesWindow","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x∧x<1,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
+	Case("QuadraticBranchesDown","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).4-2*x^2),y)","ℝ→ℝ"),
+	Case("QuadraticBranchesPredicate","λ(p:ℝ→𝔹).λ(y:ℝ).densityAtD(pushforwardOnD(p,λ(x:ℝ).x^2+1),y)","(ℝ→𝔹)→ℝ→ℝ"),
+	Case("QuadraticBranchesQueryFunction","λ(h:ℕ→ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^2+1),h(0))","(ℕ→ℝ)→ℝ"),
+	Case("QuadraticBranchesMissingOffRoot","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<1/(x-2),λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
+	Case("QuadraticBranchesGapReapplied","(λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<1/(x-2),λ(x:ℝ).x^2+1),y))(0)","ℝ","0"),
+	Case("QuadraticBranchesBoundaryReapplied","(λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0≤x,λ(x:ℝ).x^2+1),y))(1)","ℝ","undefined(ℝ)"),
+	Case("QuadraticBranchesIrrationalExcluded","densityAtD(pushforwardOnD(λ(x:ℝ).x^2<1,λ(x:ℝ).x^2+1),3)","ℝ","0"),
+	Case("QuadraticBranchesPartialPred","λ(h:ℕ→(ℝ→𝔹)).λ(y:ℝ).densityAtD(pushforwardOnD(h(0),λ(x:ℝ).x^2+1),y)","(ℕ→ℝ→𝔹)→ℝ→ℝ"),
+	Case("QuadraticBranchesSameInput","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).x≠y,λ(x:ℝ).x^2+1),y)","ℝ→ℝ"),
+	Case("QuadraticBranchesControl","λ(y:ℝ).densityAtD(pushforwardOnD(λ(x:ℝ).0<x,λ(x:ℝ).x^4+1),y)","ℝ→ℝ"),
 	Case("ClosedSquareDensity","λ(y:ℝ).densityAtD(Λz. ∫dx λ[x]·δ((1-2*x)^2)[z],y)","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMass","λ(y:ℝ).∫dx λ[x]·δ((1-2*x)^2)[y]//λ[y]","ℝ→ℝ","λ(y:{y:ℝ | y≠0}). [0≤y]·(sqrt(y)⁻¹·(1/2))"),
 	Case("ClosedSquareMissing","densityAtD(pushforwardOnD(λ(x:ℝ).true,λ(x:ℝ).(x/3-1)*(x/3-1)),undefined(ℝ))","ℝ","undefined(ℝ)"),
@@ -3274,6 +3290,10 @@ private void run(string directory){
 		if(c.name.indexOf("QuadraticSource")==0){
 			bool supported=c.name!="QuadraticSourceNonquadratic"&&c.name!="QuadraticSourceIrrational"&&c.name!="QuadraticSourceMissingQuery";
 			enforce((certificate.indexOf("Quadratic.guarded_observation ")>=0)==supported,c.name);
+		}
+		if(c.name.indexOf("QuadraticBranches")==0||c.name=="QuadraticSourceIrrational"||c.name=="QuadraticSourceMissingQuery"){
+			bool symbolic=c.name!="QuadraticBranchesControl"&&c.name!="QuadraticBranchesGapReapplied"&&c.name!="QuadraticBranchesBoundaryReapplied";
+			enforce((certificate.indexOf("Quadratic.guarded_symbolic ")>=0)==symbolic,c.name);
 		}
 		if(c.name.indexOf("RepeatedSheet")==0){
 			bool duplicate=c.name!="RepeatedSheetSum"&&c.name!="RepeatedSheetDifferentHole";

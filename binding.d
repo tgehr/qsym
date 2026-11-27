@@ -9656,10 +9656,7 @@ final class Bindings{
 					auto d=nodes[n.a];
 					if(d.op==BoundOp.distributionPushforwardOn){
 						map=d.b;
-						if(nodes[d.a].op!=BoundOp.lambda||!isTrue(nodes[d.a].a,true)){
-							if(nodes[n.b].op!=BoundOp.scalar||!arena.isNumber(arena.at(nodes[n.b].data))) return BoundTerm.init;
-							predicate=d.a;
-						}
+						if(nodes[d.a].op!=BoundOp.lambda||!isTrue(nodes[d.a].a,true)) predicate=d.a;
 					}else{
 						uint weight,point;
 						if(!realAtomRow(at(n.a),weight,point)||weight!=uint.max) return BoundTerm.init;
@@ -9710,11 +9707,20 @@ final class Bindings{
 					if(value!=BoundTerm.init){evidence=rememberQuadratic(chart,check); return value;}
 				}catch(Limit e){}
 			}
-			if(predicate!=uint.max) return BoundTerm.init;
+			chart.point=QuadraticPoint.symbolic;
 			auto scaled=primitive(scalarOperator(type(y),TensorOp.mul),[scalar(ctx,chart.scale),y]);
 			auto radicand=primitive(arena.add(zero,zero,true),[scaled,scalar(ctx,chart.offset)]);
 			evidence=rememberQuadratic(chart,check);
-			return maskedInverseRoot(radicand,arena.real_(j));
+			if(predicate==uint.max) return maskedInverseRoot(radicand,arena.real_(j));
+			auto p=at(predicate),centre=scalar(ctx,chart.centre),plus=arena.add(zero,zero,true);
+			auto mul=scalarOperator(type(y),TensorOp.mul),mask=arena.mask(arena.boolean(true),zero);
+			auto root=primitive(arena.call(Builtin.sqrtR,[zero]),[radicand]);
+			auto lo=primitive(plus,[centre,primitive(mul,[scalar(ctx,arena.real_(-1)),root])]);
+			auto hi=primitive(plus,[centre,root]),denom=primitive(mul,[scalar(ctx,arena.real_(2)),root]);
+			auto weight=primitive(mul,[primitive(arena.inv(arena.real_(1)),[denom]),scalar(ctx,arena.real_(j))]);
+			auto left=primitive(mask,[apply(p,lo),weight]),right=primitive(mask,[apply(p,hi),weight]);
+			auto support=primitive(arena.le(zero,zero),[scalar(ctx,zero),radicand]);
+			return sequence(p,primitive(mask,[support,primitive(plus,[left,right])]));
 		}
 		BoundTerm closedSquareDensity(PowerMap map,BoundTerm y,out uint evidence){
 			auto chart=sourceChart(map);
@@ -16894,7 +16900,10 @@ final class Bindings{
 						auto args=literal(chart.centre)~" "~literal(chart.scale)~" "~literal(chart.offset)~" ";
 						auto nums=number(chart.centre)~" "~number(chart.scale)~" "~number(chart.offset)~" ";
 						if(p.rule==BindingRule.distributionQuadraticChart) law=ns~"image "~args~"(of_decide_eq_true rfl) "~nums~equation;
-						else if(chart.predicate!=uint.max){
+						else if(chart.predicate!=uint.max&&chart.point==QuadraticPoint.symbolic){
+							law=ns~"guarded_symbolic "~args~literal(gain)~" (of_decide_eq_true rfl) rfl "~nums~number(gain)~" "~equation~
+								" ("~name(chart.predicate)~".eval ξ ρ) ("~name(n.b)~".eval ξ ρ)";
+						}else if(chart.predicate!=uint.max){
 							auto v=arena.at(nodes[n.b].data),z=q(chart.radicand);
 							auto pred="("~name(chart.predicate)~".eval ξ ρ)";
 							law=ns~"guarded_observation "~args~literal(v)~" "~z~" (of_decide_eq_true rfl) rfl "~nums~
