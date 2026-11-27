@@ -1055,6 +1055,24 @@ private Case[] cases(){
 	Case("OrdinaryQuadraticEmpty","Λy.∫dx [0<x<0]·λ[x]·δ(x²+1)[y]","Distribution(ℝ)","Λ(y:ℝ). 0·λ[y]"),
 	Case("OrdinaryQuadraticScaleTwo","Λy.∫dx [0<x<2]·λ[x]·δ(x²/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([0<y∧y<2]·sqrt(2·y)⁻¹)·λ[y]"),
 	Case("OrdinaryQuadraticNegativeUnitGain","Λy.∫dx [-1<x≤0]·λ[x]·δ((1-(x+1)^2)/2)[y]","Distribution(ℝ)","Λ(y:ℝ). ([y<1/2∧0≤y]·sqrt(-2·y+1)⁻¹)·λ[y]"),
+	Case("MaskedDomainOpen","∫dx ([0<x<1]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","2"),
+	Case("MaskedDomainFraction","∫dx ([1/3<x≤4/3]·guard(x≠1/3,(2:ℝ)))·λ[x]","ℝ","2"),
+	Case("MaskedDomainRightEdge","∫dx ([-1≤x<2/3]·guard(x≠2/3,(2:ℝ)))·λ[x]","ℝ","10/3"),
+	Case("MaskedDomainTwoHoles","∫dx ([0<x<1]·guard(x≠0∧x≠1,(2:ℝ)))·λ[x]","ℝ","2"),
+	Case("MaskedDomainInterior","∫dx ([3/4<x<5/4]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","1"),
+	Case("MaskedDomainNegative","∫dx ([-3<x≤-2]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","2"),
+	Case("MaskedDomainDisjoint","∫dx ([(-3<x∧x<-1)∨(1<x∧x<2)]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","6"),
+	Case("MaskedDomainPolynomial","∫dx ([0<x<1]·guard(x≠0,x²))·λ[x]","ℝ","1/3"),
+	Case("MaskedDomainOrdinary","Λx. ([0<x<1]·guard(x≠0,(2:ℝ)))·λ[x]","Distribution(ℝ)","Λ(x:ℝ). ([0<x∧x<1]·2)·λ[x]"),
+	Case("MaskedDomainEndpoint","densityAtD(Λx. ([0<x<1]·guard(x≠0,(2:ℝ)))·λ[x],0)","ℝ","0"),
+	Case("MaskedDomainInside","densityAtD(Λx. ([0<x<1]·guard(x≠0,(2:ℝ)))·λ[x],1/2)","ℝ","2"),
+	Case("MaskedDomainUnknownPayload","λ(f:ℝ→ℝ).∫dx ([0<x<1]·guard(x≠0,f(x)))·λ[x]","(ℝ→ℝ)→ℝ","λ(f:ℝ→ℝ). ∫dx ([0<x∧x<1]·f(x))·λ[x]"),
+	Case("MaskedDomainPartialPayload","∫dx ([0<x<1]·guard(x≠0,1/(x-1/2)))·λ[x]","ℝ","∫dx ([0<x∧x<1]·(guard(x≠0∧x≠1/2,(x-1/2)⁻¹)))·λ[x]"),
+	Case("MaskedDomainCrosses","∫dx ([-1<x<1]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","∫dx ([-1<x∧x<1]·(guard(x≠0,(2:ℝ))))·λ[x]"),
+	Case("MaskedDomainKeptEndpoint","∫dx ([0≤x≤1]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","∫dx ([0≤x∧x≤1]·(guard(x≠0,(2:ℝ))))·λ[x]"),
+	Case("MaskedDomainOutsideOnly","∫dx [0<x<1]·λ[x]·guard(x≠0,(2:ℝ))","ℝ","undefined(ℝ)"),
+	Case("MaskedDomainOpaque","λ(p:ℝ→𝔹).∫dx ([0<x<1]·guard(p(x),(2:ℝ)))·λ[x]","(ℝ→𝔹)→ℝ","λ(p:ℝ→𝔹). ∫dx ([0<x∧x<1]·(guard(p(x),(2:ℝ))))·λ[x]"),
+	Case("MaskedDomainPartialPredicate","∫dx ([0<1/x]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","∫dx ([(guard(x≠0,0<x))]·(guard(x≠0,(2:ℝ))))·λ[x]"),
 	Case("StrictGuardPointExcluded","massD(weightD(λ(x:ℝ).guard(x≠0,(1:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
 	Case("StrictGuardPointRational","massD(weightD(λ(x:ℝ).guard(x≠2/3,(1:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
 	Case("StrictGuardPointHalfSpace","massD(weightD(λ(x:ℝ).guard(2*x≤3,(7:ℝ)),lebesgueD()))","ℝ","undefined(ℝ)"),
@@ -1068,7 +1086,7 @@ private Case[] cases(){
 	Case("StrictGuardPointPullback","massD(weightD(λ(y:ℝ).y,pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).1/x)))","ℝ","undefined(ℝ)"),
 	Case("StrictGuardPointTarget","massD(weightD(λ(y:ℝ).1/y,Λy.∫dx [0<x<1]·λ[x]·δ(x²+1)[y]))","ℝ","undefined(ℝ)"),
 	Case("StrictGuardPointBoolean","massD(weightD(λ(b:𝔹).if b then (2:ℝ) else undefined(ℝ),pushforwardOnD(λ(x:ℝ).0<x<1,λ(x:ℝ).x<1/2)))","ℝ","undefined(ℝ)"),
-	Case("StrictGuardPointHidden","∫dx ([0<x<1]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","∫dx ([0<x∧x<1]·(guard(x≠0,(2:ℝ))))·λ[x]"),
+	Case("StrictGuardPointHidden","∫dx ([0<x<1]·guard(x≠0,(2:ℝ)))·λ[x]","ℝ","2"),
 	Case("StrictGuardPointMasked","∫dx ([0<x<1]·(2:ℝ))·λ[x]","ℝ","2"),
 	Case("StrictGuardPointTautology","∫dx guard(x<2/3∨2/3≤x,[0<x<1]·(2:ℝ))·λ[x]","ℝ","2"),
 	Case("StrictGuardPointNoWitness","λ(p:ℝ→𝔹).massD(weightD(λ(x:ℝ).guard(p(x),[0<x<1]·(1:ℝ)),lebesgueD()))","(ℝ→𝔹)→ℝ","λ(p:ℝ→𝔹). ∫dx (guard(p(x),[0<x∧x<1]))·λ[x]"),
@@ -3570,6 +3588,12 @@ private void run(string directory){
 		if(c.name.indexOf("OrderedMask")==0) enforce(certificate.indexOf("Binding.le_of_lt_true ")>=0,c.name);
 		if(c.name=="FibreMarginalPartial"||c.name=="SquareChartOverlap")
 			enforce(certificate.indexOf("export QSym.BindingScalar")>=0,c.name~" repeated scalar certificate");
+		if(c.name.indexOf("MaskedDomain")==0){
+			import std.algorithm : canFind;
+			auto form=c.name["MaskedDomain".length..$];
+			bool active=!["PartialPayload","Crosses","KeptEndpoint","OutsideOnly","Opaque","PartialPredicate"].canFind(form);
+			enforce((certificate.indexOf("Binding.mask_guard_implication ")>=0)==active,c.name);
+		}
 		if(c.name.indexOf("StrictGuardPoint")==0){
 			import std.algorithm : canFind;
 			auto form=c.name["StrictGuardPoint".length..$];

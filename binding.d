@@ -47,7 +47,7 @@ private enum BindingRule:ushort{
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
 	distributionCoverRadius,distributionCoverAffine,distributionMassSum,distributionWeightSum,distributionBindSum,
 	distributionCoverSinh,distributionCoverAsinh,distributionRadiusPairing,distributionSquarePartPairing,distributionSquarePartMass,distributionSquarePartDensity,distributionCoordinateSquare,distributionWeightWeightLebesgue,distributionCoordinateRayPower,distributionCoordinateRayLinear,distributionCoordinateTwoJumps,distributionCoordinateGrid,distributionSmoothCoordinate,distributionUniformCoordinate,distributionMissingOutput,distributionCornerPairing,distributionDensityAddWeight,distributionWeightWeightChart,
-	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated,maskActiveGuard,maskOpenBoundary
+	limitTerms,distributionMassStrictGuard,distributionMassSpread,scalarNeutral,conditionalUndefined,scalarMaskContext,distributionProductCountdown,distributionObserveGuard,distributionIndexedFibre,rangeDefinedProduct,rangeSelectedRow,distributionMassBounds,distributionMassSolve,distributionMassOrigin,distributionMassPoint,lambdaOpened,distributionMassCombine,maskRepeated,maskActiveGuard,maskGuardImplication,maskOpenBoundary
 }
 private struct BindingStep{ BindingRule rule; uint from,to,left=uint.max,right=uint.max,extra=uint.max; }
 // Bounds that compete in a guard: whether a third follows a lower and an
@@ -10328,6 +10328,25 @@ final class Bindings{
 			}
 			return Result(value.id,atPoint);
 		}
+		// Check the implication with the same scalar rules that the lambda will
+		// export. Only invoke the proof-producing path for a total, true result.
+		BoundTerm impliedMask(BoundTerm fn,out BoundTerm condition){
+			auto id=node(fn).a;
+			if(!primitiveOp(id,Op.mask)||pool.view(type(fn)).fields[0]!=scalarType(Sort.real_)) return BoundTerm.init;
+			auto mask=nodes[id],inner=nodes[mask.b];
+			if(inner.op!=BoundOp.guard) return BoundTerm.init;
+			auto axis=arena.variable(Sort.real_,freshScalarIndex(id));
+			auto activeTest=scalarBody(at(mask.a),axis),required=scalarBody(at(inner.a),axis);
+			if(activeTest==Term.init||required==Term.init) return BoundTerm.init;
+			auto source=arena.or_(arena.not_(activeTest),required),yes=arena.boolean(true);
+			auto options=Options(DensityMode.preserve,false),value=simplify(arena,source,options);
+			if(value.exhausted||value.output!=yes) return BoundTerm.init;
+			auto domain=simplifyDomain(arena,source,[],options);
+			if(domain.exhausted||domain.output!=yes) return BoundTerm.init;
+			auto neg=primitive(arena.not_(yes),[at(mask.a)]);
+			condition=primitive(arena.or_(yes,yes),[neg,at(inner.a)]);
+			return lambda(primitive(arena.at(mask.data),[at(mask.a),at(inner.b)]));
+		}
 		struct RewriteFrame { uint original,rebuilt,congruence,step; }
 		Result visitOnce(BoundTerm t,uint depth,ref RewriteFrame[] chain){
 			enforce(depth<512,"binding normalization depth exceeded");
@@ -12474,6 +12493,17 @@ final class Bindings{
 				bool[] path,conjuncts; GuardFact fact;
 				next=clearActiveGuard(result.output,path,conjuncts,fact); rule=BindingRule.maskActiveGuard;
 				if(next==BoundTerm.init){ next=openBoundaryMask(result.output); rule=BindingRule.maskOpenBoundary; }
+			}
+
+			if(next==BoundTerm.init&&steps<budget&&current.op==BoundOp.lambda){
+				BoundTerm condition;
+				auto target=impliedMask(at(result.output),condition);
+				if(target!=BoundTerm.init){
+					auto proved=visit(lambda(condition),depth+1);
+					if(steps<budget&&proved.output==lambda(scalar(context(condition),arena.boolean(true))).id){
+						next=target; rule=BindingRule.maskGuardImplication; predicateDomain=proved.proof;
+					}
+				}
 			}
 
 			if(next!=BoundTerm.init){
@@ -15739,8 +15769,9 @@ final class Bindings{
 			return "(p"~to!string(id)~dimArg~" γ)";
 		}
 		auto rootProof=proofName(result.proof);
-		string realBody(uint fn){ return "(fun x : ℝ => "~name(nodes[fn].a)~
+		string realRow(uint id){ return "(fun x : ℝ => "~name(id)~
 			".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ))"; }
+		string realBody(uint fn){ return realRow(nodes[fn].a); }
 		string densityProgram(uint[] bodies){
 			string value="Distribution.DensityProgram.lebesgue";
 			foreach(id;bodies) value="(Distribution.DensityProgram.weight (fun x : ℝ => "~name(id)~".eval ξ (Binding.Env.cons (a := .scalar .real) (some x) ρ)) "~value~")";
@@ -16302,6 +16333,10 @@ final class Bindings{
 					proof=".ofEq (fun ξ ρ => Binding."~law~val(closed.a)~val(closed.b)~val(payload);
 					if(zero) proof~=" (Numeric.calculate_real_zero ξ n"~to!string(nodes[payload].data)~" rfl)";
 					proof~=")"; break;
+				}
+				case BindingRule.maskGuardImplication:{
+					auto mask=nodes[n.a],inner=nodes[mask.b];
+					proof=".ofEq (fun ξ ρ => Binding.mask_guard_implication "~realRow(mask.a)~" "~realRow(inner.a)~" "~realRow(inner.b)~" ("~proofName(p.left)~".sound ξ ρ))"; break;
 				}
 				case BindingRule.maskActiveGuard:{
 					bool[] path,conjuncts; GuardFact fact;

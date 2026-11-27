@@ -185,6 +185,19 @@ theorem mask_closed_open_zero (a b zero : Option ℝ) (hz : zero = some 0) :
 theorem guard_of_true {p : Option Bool} (v : Option α) (h : p = some true) : guardValue p v = v :=
   h ▸ rfl
 
+/-- A mask can discard a payload guard when its predicate entails that guard
+at each input. This also applies when the payload is partial. -/
+theorem mask_guard_implication {α β : Type} [Zero β] (p q : α → Option Bool) (v : α → Option β)
+    (h : some (fun x => Value.or (Value.not (p x)) (q x)) = some (fun _ : α => some true)) :
+    some (fun x => Value.mask (p x) (guardValue (q x) (v x))) =
+      some (fun x => Value.mask (p x) (v x)) := by
+  apply congrArg some
+  funext x
+  apply Value.UnderMask.sound
+  intro active
+  apply guard_of_true
+  simpa [active, Value.not, Value.or] using congrFun (Option.some.inj h) x
+
 theorem atInput_guard (p : Option Bool) {x : α} {v : Option α} (h : Recursion.AtInput x v) :
     Recursion.AtInput x (guardValue p v) := by
   cases p with
