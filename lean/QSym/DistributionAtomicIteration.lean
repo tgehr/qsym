@@ -229,11 +229,12 @@ theorem Tail.add {f g : D α → Option (D α)} {a b : ℚ}
   exact ⟨.add x y, by rw [hx, hy]; rfl, by simpa [ENNReal.ofReal_add ha hb, add_mul] using kx.add ky,
     by simp [vx, vy]⟩
 
-theorem fixed_add_tail (swap : Bool) {r : Option ℝ} (q : ℚ) (hr : r = some (q : ℝ))
-    {seed : Option (D α)} (hs : Admissible seed) {g f : D α → Option (D α)} (tail : Tail g q)
+private theorem fixed_add_real_tail (swap : Bool) {r : ℝ} (r0 : 0 ≤ r)
+    {seed : Option (D α)} (hs : Admissible seed) {g f : D α → Option (D α)}
+    (tail : ∀ d k, Presents d k → ∃ e, g d = some e ∧
+      Represents e (fun x => ENNReal.ofReal r * k.1 x) ∧ visited e = k.2)
     (body : ∀ d, f d = if swap then addValue (g d) seed else addValue seed (g d)) :
-    fixedValue (some f) = retryValue r seed := by
-  subst r
+    fixedValue (some f) = retryValue (some r) seed := by
   cases seed with
   | none =>
     change fixedValue (some f) = none
@@ -243,11 +244,10 @@ theorem fixed_add_tail (swap : Bool) {r : Option ℝ} (q : ℚ) (hr : r = some (
     cases swap <;> cases g .zero <;> rfl
   | some b =>
     obtain ⟨m, hb⟩ := hs b rfl
-    have r0 : 0 ≤ (q : ℝ) := by exact_mod_cast tail.nonneg
     rw [retry_eq_chain hb r0]
     apply fixed_of_step _ _ (strictRetry_continuous _ _)
     intro d k hd
-    obtain ⟨e, he, htail, hvis⟩ := tail.step d k hd
+    obtain ⟨e, he, htail, hvis⟩ := tail d k hd
     cases swap with
     | false =>
       refine ⟨.add b e, by simp [body, he, addValue], hb.1.add htail, ?_⟩
@@ -256,6 +256,78 @@ theorem fixed_add_tail (swap : Bool) {r : Option ℝ} (q : ℚ) (hr : r = some (
       refine ⟨.add e b, by simp [body, he, addValue], ?_, ?_⟩
       · simpa [strictRetryStep, retryStep, add_comm] using htail.add hb.1
       · exact (visited_add _ _).trans ((congrArg₂ (· ∪ ·) hvis hb.2).trans (Set.union_comm _ _))
+
+theorem fixed_add_tail (swap : Bool) {r : Option ℝ} (q : ℚ) (hr : r = some (q : ℝ))
+    {seed : Option (D α)} (hs : Admissible seed) {g f : D α → Option (D α)} (tail : Tail g q)
+    (body : ∀ d, f d = if swap then addValue (g d) seed else addValue seed (g d)) :
+    fixedValue (some f) = retryValue r seed := by
+  subst r
+  exact fixed_add_real_tail swap (by exact_mod_cast tail.nonneg) hs tail.step body
+
+/-- A strictly scaled negative term has no presentation in the nonnegative
+atomic model, even when its argument has zero mass. -/
+private theorem fixed_unrepresented {f : D α → Option (D α)} {n : ℕ} {d : D α}
+    (hn : iterateBody f n = some d) (bad : ∀ k, ¬ Represents d k) :
+    fixedValue (some f) = none := by
+  classical
+  have missing : ¬ ∃ s, Tracks f s := by
+    rintro ⟨s, hs⟩
+    obtain ⟨e, he, hm⟩ := hs.2 n
+    cases Option.some.inj (he.symm.trans hn)
+    exact bad _ hm.1
+  have noChain : trackedChain (iterateBody f) = none := by
+    simpa only [trackedChain, Tracks] using (dif_neg missing : (if h : ∃ s, Tracks f s then some h.choose else none) = none)
+  simp [fixedValue, noChain]
+
+/-- Identifying the source coefficient with a parameter leaves its domain
+to the actual iteration, including a missing or negative coefficient. -/
+theorem fixed_scaled_parameter (swap : Bool) (r : Option ℝ) {seed : Option (D α)}
+    (hs : Admissible seed) {f : D α → Option (D α)}
+    (body : ∀ d, f d = retryBody swap false r seed d) :
+    fixedValue (some f) = retryValue r seed := by
+  classical
+  cases r with
+  | none =>
+    apply fixed_missing (n := 1)
+    change f .zero = none
+    rw [body]
+    cases swap <;> cases seed <;> rfl
+  | some r =>
+    by_cases hr : 0 ≤ r
+    · exact fixed_add_real_tail swap hr hs (g := retryTail false (some r))
+        (fun _ _ hd => tail_step false hd hr) body
+    · have bad (x : D α) (k : Weights α) : ¬ Represents (.scale r x) k := by
+        intro h
+        cases h with
+        | scale hx _ => exact hr hx
+      rw [retry_negative (lt_of_not_ge hr)]
+      cases seed with
+      | none =>
+        apply fixed_missing (n := 1)
+        change f .zero = none
+        rw [body]
+        cases swap <;> rfl
+      | some b =>
+        have first : iterateBody f 1 = some (if swap then .add (.scale r .zero) b else .add b (.scale r .zero)) := by
+          change f .zero = _
+          rw [body]
+          cases swap <;> rfl
+        apply fixed_unrepresented first
+        intro k h
+        cases swap with
+        | false => cases h with | add _ right => exact bad _ _ right
+        | true => cases h with | add left _ => exact bad _ _ left
+
+theorem defined_retry_parameter (r : Option ℝ) {seed : Option (D α)} (hs : Admissible seed) :
+    Binding.definedValue (retryValue r seed) =
+      Value.and (Binding.holdsValue (Value.le (some ((0 : ℚ) : ℝ)) r)) (Binding.definedValue seed) := by
+  classical
+  cases r with
+  | none => rfl
+  | some r =>
+    by_cases hr : 0 ≤ r
+    · simp [Binding.definedValue, Binding.holdsValue, Value.le, Value.and, hr, retry_isSome_real hr hs]
+    · simp [Binding.definedValue, Binding.holdsValue, Value.le, Value.and, hr, retry_negative (lt_of_not_ge hr)]
 
 theorem fixed_retry (swap weighted : Bool) {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q : ℝ))
     {seed : Option (D α)} (hs : Admissible seed) {f : D α → Option (D α)}

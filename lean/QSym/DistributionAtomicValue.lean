@@ -120,6 +120,16 @@ def retryValue (ratio : Option ℝ) (seed : Option (D α)) : Option (D α) := do
   let g := strictRetryStep m (ENNReal.ofReal r)
   if 0 ≤ r then realizeChain g.lfp (fun n => g^[n] ⊥) else none
 
+theorem retry_negative {r : ℝ} (hr : r < 0) (seed : Option (D α)) : retryValue (some r) seed = none := by
+  cases seed with
+  | none => rfl
+  | some d => cases h : modelOf d <;> simp [retryValue, h, not_le.mpr hr]
+
+theorem retry_negative_rational (q : ℚ) (hq : q < 0) {r : Option ℝ}
+    (hr : r = some (q : ℝ)) (seed : Option (D α)) : retryValue r seed = none := by
+  subst r
+  exact retry_negative (by exact_mod_cast hq) seed
+
 theorem retry_eq_chain {d : D α} {m : Model α} (hd : Presents d m) {r : ℝ} (h0 : 0 ≤ r) :
     let g := strictRetryStep m (ENNReal.ofReal r)
     retryValue (some r) (some d) = realizeChain g.lfp (fun n => g^[n] ⊥) := by
@@ -168,16 +178,20 @@ theorem admissible_scale {x : Option (D α)} {w : Option ℝ} (c : ℚ) (hc : 0 
     obtain ⟨k, ha⟩ := hx a rfl
     exact represented (ha.1.scale (r := (c : ℝ)) (by exact_mod_cast hc))
 
-theorem retry_isSome {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q : ℝ))
-    {seed : Option (D α)} (hs : Admissible seed) :
-    (retryValue r seed).isSome = seed.isSome := by
-  subst r
+theorem retry_isSome_real {r : ℝ} (h0 : 0 ≤ r) {seed : Option (D α)} (hs : Admissible seed) :
+    (retryValue (some r) seed).isSome = seed.isSome := by
   cases seed with
   | none => rfl
   | some d =>
     obtain ⟨m, hm⟩ := hs d rfl
-    rw [retry_eq_chain hm (by exact_mod_cast h0)]
+    rw [retry_eq_chain hm h0]
     exact realizeChain_defined _ _
+
+theorem retry_isSome {r : Option ℝ} (q : ℚ) (h0 : 0 ≤ q) (hr : r = some (q : ℝ))
+    {seed : Option (D α)} (hs : Admissible seed) :
+    (retryValue r seed).isSome = seed.isSome := by
+  subst r
+  exact retry_isSome_real (by exact_mod_cast h0) hs
 
 theorem observe_retry (observe : D α → Option β)
     (invariant : ∀ {d e : D α} {m : Model α}, Presents d m → Presents e m → observe d = observe e)

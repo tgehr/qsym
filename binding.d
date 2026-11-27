@@ -41,7 +41,7 @@ private enum BindingRule:ushort{
 	definedTotal,definedGuardFalse,guardTrue,scalarDomain,scalarHolds,scalarSimplify,
 	subsetRefl,subsetEmpty,subsetUniv,subsetUnivEmpty,definedMember,definedSubset,definedGuard,definedApp,domainGuardFalse,definedNot,
 	guardAnd,guardLeft,guardRight,guardMap,pointwise,holdsGuard,setHolds,typeEqSelf,typeEqValues,shortCircuit,fixedApp,fixedConstant,fixedIdentity,fixedUnitFirst,fixedPointwiseFirst,domainBottom,definedFixed,appBottom,appNowhere,seqMissing,guardMissing,productMissingRight,boolRight,boolMissingRight,maskChoiceMissing,appScalarUndefined,memberDomain,
-	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,distributionDefinedConstructor,distributionDefinedCover,
+	equalSelf,equalBottomLeft,equalBottomRight,definedEqual,equalUnivEmpty,equalEmptyUniv,fixedRecurrence,tensorEval,tensorPower,tensorDefined,getBottom,getScalarUndefined,domainFixedTotal,tensorSpectral,getCons,tensorSpectrumCast,tensorDomain,getDomain,sumZero,sumRange,rangeZero,rangeStep,rangeLift,rangeSolution,sumGeometric,sumDelta,sumRangeLe,sumConstant,sumInterval,sumDeltaOffset,rangeGeometric,sumBounds,sumRound,sumMaskAnd,rangeAdd,rangeMaskLt,rangeMaskGe,sumTail,sumMaskEqOffset,sumMaskNeOffset,sumTailNatural,sumTailStrict,sumShiftGeometric,sumRationalBound,sumDeltaZero,sumBoundedAdd,sumCastMask,sumCastAdd,sumExcludeOffset,addBottom,mulBottom,sumMissingConstant,sumMissingGuard,sumPowerNatural,sumPowerNegative,sumAffineNatural,sumNaturalBound,sumExcludeZero,sumTailInclusive,sumMaskMerge,sumAffineInteger,sumShiftInteger,sumRealEquality,sumRealIndex,sumAddLeft,sumAddRight,sumDistribute,sumScaleInteger,sumRealExclude,sumIntegerBound,sumRationalSelector,rangeUndefinedBound,distributionMassDirac,distributionDensityLebesgue,distributionDensityWeight,distributionMassWeightedDirac,rangeConstant,sumElementaryPower,sumElementaryAdd,sumGeneralPower,sumCastMul,sumNaturalPowerMul,sumPowerProduct,sumMulSwap,sumMulAssoc,rangeScale,sumTrigReal,sumHyperbolic,rangeProjection,sumExp2,distributionInterval,distributionIntegralAE,distributionMassZero,distributionMassAdd,distributionMassScale,rangeRootsUnity,rangeGuard,distributionMassIntegral,distributionMassBind,distributionMassCountdown,distributionFixedBranch,distributionFixedRetry,distributionFixedAffine,distributionFixedTail,distributionFixedBody,distributionRetryPoint,distributionRetryEmpty,distributionRetryZeroPoint,distributionRetryInfinitePoint,distributionDensityInfiniteSeries,distributionDensitySum,distributionCountingDensity,distributionRetryZero,distributionRetryMissing,distributionRetryMass,distributionRetryDensity,distributionRetryObservation,distributionRetryUnbounded,distributionShiftObservation,distributionShiftMoment,distributionInvolutionObservation,distributionInvolutionUnbounded,distributionDefinedRetry,distributionDefinedDirac,distributionDefinedBinary,distributionDefinedConstructor,distributionDefinedCover,distributionDefinedRetryParameter,distributionRetryNegative,
 	distributionDensityDirac,distributionDensityAtomAdd,distributionDensityFibre,distributionSquareGraph,distributionSquareMass,distributionGraphMass,distributionRestrictedSquare,distributionPushforwardMass,distributionSquareChart,distributionIdentityChart,distributionAffineChart,distributionWeightedAffine,distributionMassGuard,distributionAffineFibre,distributionAffineMass,distributionMaskedAffine,distributionMaskedSquare,distributionTotalGraphMass,distributionAtomRows,distributionMaskAbsorb,distributionChartMass,
 	distributionOddFibre,distributionOddMass,distributionMaskedOdd,distributionOddDensity,distributionOddChart,distributionScaleUndefined,distributionAffineOdd,distributionAffineSquare,distributionWeightedSquare,distributionWeightedSquareDensity,distributionClosedSquare,distributionRadiusChart,distributionRadiusDensity,distributionRadiusSublevel,distributionCutoffDensity,
 	distributionWeightDirac,distributionWeightAdd,distributionWeightScale,distributionWeightZero,distributionBindDirac,distributionBindAdd,distributionBindScale,distributionBindZero,distributionStrict,
@@ -1150,6 +1150,7 @@ final class Bindings{
 		Rational ratio;
 		bool swapped,weighted,direct;
 		AffineForm[uint] forms;
+		uint parameter=uint.max;
 	}
 	private bool nonnegativeReal(uint id,out Rational r){
 		auto t=nodes[id];
@@ -1245,8 +1246,13 @@ final class Bindings{
 		if(body.op==BoundOp.distributionAdd) foreach(swap;[false,true]){
 			auto seed=swap?body.b:body.a,tail=swap?body.a:body.b;
 			Rational q;
-			if(depends(at(seed),0)||!atomicSeed(seed)||!tailRatio(tail,q)) continue;
+			if(depends(at(seed),0)||!atomicSeed(seed)) continue;
 			auto n=nodes[tail];
+			if(!tailRatio(tail,q)){
+				if(n.op!=BoundOp.distributionScale||nodes[n.b].op!=BoundOp.variable||nodes[n.b].data!=0||depends(at(n.a),0)) continue;
+				parts.seed=seed; parts.tail=tail; parts.swapped=swap; parts.direct=true; parts.parameter=n.a;
+				return true;
+			}
 			bool weighted=n.op==BoundOp.distributionWeight;
 			bool direct=(weighted||n.op==BoundOp.distributionScale)&&nodes[n.b].op==BoundOp.variable;
 			parts=RetryParts(seed,tail,q,swap,weighted,direct); return true;
@@ -9342,7 +9348,8 @@ final class Bindings{
 							base=substitute(at(parts.seed),ctx,env);
 							rule=parts.direct?BindingRule.distributionFixedRetry:BindingRule.distributionFixedAffine;
 						}
-						target=distribution(ctx,BoundOp.distributionRetry,[scalar(ctx,arena.real_(parts.ratio)),base]);
+						auto ratio=parts.parameter==uint.max?scalar(ctx,arena.real_(parts.ratio)):substitute(at(parts.parameter),ctx,env);
+						target=distribution(ctx,BoundOp.distributionRetry,[ratio,base]);
 						inheritHint(at(n.a),target);
 					}
 					++steps; auto proof=emit(rule,t.id,target.id);
@@ -11018,6 +11025,9 @@ final class Bindings{
 						auto child=nodes[current.a]; Rational ratio;
 						if(child.op==BoundOp.distributionRetry&&nonnegativeReal(child.a,ratio)&&atomicSeed(child.b)){
 							next=defined(at(child.b)); rule=BindingRule.distributionDefinedRetry;
+						}else if(child.op==BoundOp.distributionRetry&&atomicSeed(child.b)){
+							auto z=arena.real_(0),accept=primitive(arena.le(z,z),[scalar(ctx,z),at(child.a)]);
+							next=both(holds(accept),defined(at(child.b))); rule=BindingRule.distributionDefinedRetryParameter;
 						}else if(child.op==BoundOp.distributionDirac){
 							next=defined(at(child.a)); rule=BindingRule.distributionDefinedDirac;
 						}else if(child.op==BoundOp.distributionInverseCover){
@@ -11116,7 +11126,11 @@ final class Bindings{
 			}
 			if(next==BoundTerm.init&&current.op==BoundOp.distributionRetry){
 				Rational r;
-				if(nodes[current.b].op==BoundOp.bottom){
+				if(nodes[current.a].op==BoundOp.bottom){
+					next=bottom(ctx,types[current.type]); rule=BindingRule.fold;
+				}else if(nodes[current.a].op==BoundOp.scalar&&arena.isNumber(arena.at(nodes[current.a].data))&&arena.number(arena.at(nodes[current.a].data)).re<Rational(0)){
+					next=bottom(ctx,types[current.type]); rule=BindingRule.distributionRetryNegative;
+				}else if(nodes[current.b].op==BoundOp.bottom){
 					next=at(current.b);rule=BindingRule.distributionRetryMissing;
 				}else if(nonnegativeReal(current.a,r)){
 					AtomicVisits[uint] shapes;
@@ -14987,6 +15001,8 @@ final class Bindings{
 				case BindingRule.distributionDefinedRetry:
 				case BindingRule.distributionRetryMass:
 				case BindingRule.distributionRetryDensity:
+				case BindingRule.distributionRetryNegative:
+				case BindingRule.distributionDefinedRetryParameter:
 				case BindingRule.distributionShiftObservation:
 				case BindingRule.distributionInvolutionObservation:
 				case BindingRule.distributionInvolutionUnbounded:
@@ -15081,6 +15097,7 @@ final class Bindings{
 							auto target=nodes[p.to],swap=parts.swapped?"true ":"false ";
 							if(parts.forms.length) law=ns~"fixed_affine "~q(parts.ratio)~" "~number(target.a)~
 								affine(parts.tail,target.b,parts.forms)~" (fun _ => rfl)";
+							else if(parts.parameter!=uint.max) law=ns~"fixed_scaled_parameter "~swap~ev(target.a)~" "~admissible(target.b)~" (fun _ => rfl)";
 							else if(parts.direct) law=ns~"fixed_retry "~swap~(parts.weighted?"true ":"false ")~q(parts.ratio)~yes~
 								" "~number(target.a)~" "~admissible(target.b)~" (fun _ => rfl)";
 							else law=ns~"fixed_add_tail "~swap~q(parts.ratio)~" "~number(target.a)~" "~admissible(target.b)~
@@ -15145,6 +15162,10 @@ final class Bindings{
 								massObserver(ops,true)~(factored?" ":weighted?" true ":" false ")~args~
 								" "~index~" (fun _ => rfl) (fun _ => rfl)";
 						}
+					}else if(p.rule==BindingRule.distributionRetryNegative){
+						law=ns~"retry_negative_rational "~q(literal(n.a))~yes~" "~number(n.a)~ev(n.b);
+					}else if(p.rule==BindingRule.distributionDefinedRetryParameter){
+						auto loop=nodes[n.a]; law=ns~"defined_retry_parameter"~ev(loop.a)~" "~admissible(loop.b);
 					}else if(p.rule==BindingRule.distributionDefinedRetry||p.rule==BindingRule.distributionRetryDensity){
 						auto loop=nodes[n.a];
 						auto args=q(literal(loop.a))~yes~" "~number(loop.a)~" "~admissible(loop.b);

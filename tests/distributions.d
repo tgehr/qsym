@@ -2194,6 +2194,22 @@ private Case[] cases(){
 	Case("LinearTailUnitGain","μ(d:Distribution(ℝ)).addD(δ(0),d)","Distribution(ℝ)","Λ(x:ℝ). (∑(i:ℤ). δ(0)[x])"),
 	Case("LinearTailNestedScale","μ(d:Distribution(ℝ)).addD(δ(3),scaleD(1/2,scaleD(1/2,d)))","Distribution(ℝ)","Λ(x:ℝ). 4/3·δ(3)[x]"),
 	Case("LinearTailZeroVisit","μ(d:Distribution(ℝ)).addD(addD(scaleD(0,d),scaleD(0,d)),scaleD(0,δ(0)))","Distribution(ℝ)","Λ(x:ℝ). 0·δ(0)[x]"),
+	Case("SymbolicRetryRate","λ(q:ℝ).μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d))","ℝ→Distribution(ℕ)","λ(q:ℝ). μ(d:Distribution(ℕ)). addD(δ(0),scaleD(q,d))"),
+	Case("SymbolicRetryDefined","λ(q:ℝ).defined(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d)))","ℝ→𝔹","λ(q:ℝ). 0≤q"),
+	Case("SymbolicRetrySwapped","λ(q:ℝ).defined(μ(d:Distribution(ℕ)).addD(scaleD(q,d),δ(0)))","ℝ→𝔹","λ(q:ℝ). 0≤q"),
+	Case("SymbolicRetryPartialRate","λ(h:ℕ→ℝ).defined(μ(d:Distribution(ℕ)).addD(δ(0),scaleD(h(0),d)))","(ℕ→ℝ)→𝔹","λ(h:ℕ→ℝ). holds(0≤h(0))"),
+	Case("SymbolicRetryPartialSeed","λ(q:ℝ).λ(h:ℕ→ℝ).defined(μ(d:Distribution(ℝ)).addD(δ(h(0)),scaleD(q,d)))","ℝ→(ℕ→ℝ)→𝔹","λ(q:ℝ). λ(h:ℕ→ℝ). (holds(0≤q))∧(holds((0∈domain(h))))"),
+	Case("SymbolicRetryNegative","μ(d:Distribution(ℝ)).addD(δ(0),scaleD(-1,d))","Distribution(ℝ)","undefined(Distribution(ℝ))"),
+	Case("SymbolicRetryEmptyNegative","defined(μ(d:Distribution(ℕ)).addD(zeroD(ℕ),scaleD(-1,d)))","𝔹","false"),
+	Case("SymbolicRetryUnset","μ(d:Distribution(ℕ)).addD(δ(0),scaleD(undefined(ℝ),d))","Distribution(ℕ)","undefined(Distribution(ℕ))"),
+	Case("SymbolicRetryAtHalf","massD((λ(q:ℝ).μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d)))(1/2))","ℝ","2"),
+	Case("SymbolicRetryAtOne","defined((λ(q:ℝ).μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d)))(1))","𝔹","true"),
+	Case("SymbolicRetryAtTwoMass","massD((λ(q:ℝ).μ(d:Distribution(ℕ)).addD(δ(0),scaleD(q,d)))(2))","ℝ","undefined(ℝ)"),
+	Case("SymbolicRetryConditional","λ(q:ℝ).defined(μ(d:Distribution(ℕ)).if q<0 then δ(9) else addD(scaleD(q,d),δ(2)))","ℝ→𝔹","λ(q:ℝ). true"),
+	Case("SymbolicRetryFunctionAtom","λ(q:ℝ).defined(μ(d:Distribution(ℕ→ℕ)).addD(δ(λ(n:ℕ).n),scaleD(q,d)))","ℝ→𝔹","λ(q:ℝ). 0≤q"),
+	Case("SymbolicRetryTwoSeeds","λ(q:ℝ).defined(μ(d:Distribution(ℕ)).addD(addD(δ(0),δ(1)),scaleD(q,d)))","ℝ→𝔹","λ(q:ℝ). 0≤q"),
+	Case("SymbolicRetryNegativeChoice","(μ(d:Distribution(ℝ)).if a<0 then addD(δ((1:ℝ)),scaleD(-1,d)) else addD(δ((2:ℝ)),scaleD(1/4,d)))","Distribution(ℝ)","guard(0≤a,Λ(x:ℝ). 4/3·δ(2)[x])"),
+	Case("SymbolicRetryNegativeChoiceDomain","λ(a:ℝ).defined(μ(d:Distribution(ℝ)).if a<0 then addD(δ((1:ℝ)),scaleD(-1,d)) else addD(δ((2:ℝ)),scaleD(1/4,d)))","ℝ→𝔹","λ(a:ℝ). 0≤a"),
 	Case("PartialBooleanMassPredicate","λ(d:Distribution(ℝ)). (massD(d)<2)∧true","Distribution(ℝ)→𝔹","λ(d:Distribution(ℝ)). (∫dx d[x])<2"),
 	Case("PartialBooleanDensityPredicate","λ(d:Distribution(ℝ)).λ(y:ℝ). (0<densityAtD(d,y))∨undefined(𝔹)","Distribution(ℝ)→ℝ→𝔹","λ(d:Distribution(ℝ)). λ(y:{y:ℝ | 0<(d[y]//λ[y])}). true"),
 	Case("CoverConstructionPartial","λ(f:ℝ→ℝ).defined(Λx.λ[(f(x))])","(ℝ→ℝ)→𝔹","λ(f:ℝ→ℝ). true"),
@@ -2852,6 +2868,8 @@ private void run(string directory){
 		}
 		if(c.name=="CoverConstructionOpaqueVector"||c.name=="CoverConstructionMissingCoordinate"||c.name=="CoverConstructionNowhere")
 			enforce(certificate.indexOf("Coordinates.value_isSome ")>=0,c.name);
+		if(c.name=="SymbolicRetryDefined"||c.name=="SymbolicRetryPartialRate"||c.name=="SymbolicRetryNegative")
+			enforce(certificate.indexOf("fixed_scaled_parameter ")>=0,c.name);
 		if(c.name.indexOf("RestrictedCall")==0) enforce(certificate.indexOf("Pointwise.restricted ")>=0,c.name);
 		if(c.name.indexOf("PointwiseFix")==0) enforce(certificate.indexOf("Recursion.fixed_pointwise_first ")>=0,c.name);
 		if(c.name=="FlatFixedDistFunction"||c.name=="RecursiveDistributionState"||c.name=="DiscountFibreCaptured"){
@@ -4632,11 +4650,10 @@ private void run(string directory){
 		"μ(d:Distribution(ℕ)).addD(δ(0),scaleD(1/2,bindD(d,λ(n:ℕ).δ(n+n))))",
 		"μ(d:Distribution(ℝ)).scaleD(1/2,addD(δ(massD(d)),d))", "μ(d:Distribution(ℝ)).scaleD(-1,addD(δ(0),d))",
 		"μ(d:Distribution(ℝ)).addD(scaleD(-1,d),d)", "μ(d:Distribution(ℝ)).Λx. x·d[x]",
-		"μ(d:Distribution(ℝ)).addD(δ(0),scaleD(-1,d))", "μ(d:Distribution(ℝ)).addD(Λx.λ[x],scaleD(1/2,d))",
+		"μ(d:Distribution(ℝ)).addD(δ(0),scaleD(massD(d),d))", "μ(d:Distribution(ℝ)).addD(Λx.λ[x],scaleD(1/2,d))",
 		"(μ(d:Distribution(ℝ)).guard(massD(d)=0,addD(δ((1:ℝ)),scaleD(1/2,d))))",
 		"(μ(d:Distribution(ℝ)).if massD(d)=0 then addD(δ((1:ℝ)),scaleD(1/2,d)) else addD(δ((2:ℝ)),scaleD(1/4,d)))",
 		"(μ(d:Distribution(ℝ)).if a<0 then addD(δ((1:ℝ)),scaleD(1/2,d)) else addD(δ(massD(d)),scaleD(1/2,d)))",
-		"(μ(d:Distribution(ℝ)).if a<0 then addD(δ((1:ℝ)),scaleD(-1,d)) else addD(δ((2:ℝ)),scaleD(1/4,d)))",
 		"μ(d:Distribution(ℝ)).addD(δ(massD(d)),scaleD(1/2,d))",
 		"if x<0 then δ(0)[x] else λ[x]", "(λ[x]·δ(x+y)[y])//λ[y]", "Λ(z:ℝ).(λ[x]·δ(x²)[y])//λ[y]",
 		"μ(f:ℝ→ℝ).λ(y:ℝ).massD((λ[x]·δ(f(x))[y])//λ[y])",
